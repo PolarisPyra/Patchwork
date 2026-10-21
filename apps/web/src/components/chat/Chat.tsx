@@ -677,7 +677,7 @@ export default function Chat({
           <span className="ml-auto text-fg-subtle">Read-only</span>
         </div>
       )}
-      <div className={`w-full flex-none box-border px-6 pb-4${thread?.parent ? " hidden" : ""}`}>
+      <div className={`w-full flex-none box-border px-6 pb-4 ${thread?.parent ? " hidden" : ""}`}>
         {plan.length > 0 && <TasksBadge steps={plan} />}
         {readyPlan !== null && (
           <div
