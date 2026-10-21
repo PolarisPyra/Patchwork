@@ -15,8 +15,16 @@ State lives in SQLite at `~/.config/patchwork/patchwork.db`, and future config f
 ```sh
 pnpm install
 pnpm tauri dev        # run the app
-pnpm tauri build      # release bundle
+scripts/build.sh appimage   # target/release/bundle/appimage/Patchwork_amd64.AppImage
+scripts/build.sh install    # release binary, icons, and launcher under ~/.local
 ```
+
+`scripts/build.sh appimage` builds the AppImage under a fixed name, `Patchwork_amd64.AppImage`, so
+it doesn't change with the version. `scripts/build.sh install` builds the release binary and
+installs it under `~/.local` with its icons and a launcher named **Patchwork (local build)**.
+Set `PREFIX` to install somewhere else. The launcher's id is
+`dev.patchwork.ade`, so it doesn't replace the launcher of an AppImage you already run. The
+install step refreshes the desktop, icon, and KDE caches.
 
 Requires Rust, pnpm, and the Tauri Linux prerequisites (webkit2gtk-4.1).
 
@@ -38,30 +46,17 @@ commit subjects with a leading verb, for example `Add ...`, `Fix ...`, or `Chang
 The tag sets the app version, so you never bump version numbers by hand. The version in the
 repo stays at `0.1.0` as a placeholder, which means a local build reports that version.
 
-To cut a release:
+To cut a release, run the script from a clean `main` that is up to date with `origin/main`:
 
-1. Preview the notes for the new version. Nothing is written:
+```sh
+scripts/release.sh 0.2.0
+```
 
-   ```sh
-   git cliff --unreleased --tag v0.2.0
-   ```
-
-2. Regenerate the changelog. Use a full rewrite rather than `--prepend`, because
-   `CHANGELOG.md` already has an Unreleased section and prepending would duplicate it:
-
-   ```sh
-   git cliff --tag v0.2.0 -o CHANGELOG.md
-   ```
-
-3. Commit the changelog, then tag and push. The release commit's subject is skipped by git-cliff,
-   so it doesn't appear in the notes:
-
-   ```sh
-   git add CHANGELOG.md
-   git commit -m "Release v0.2.0"
-   git tag -a v0.2.0 -m "Patchwork 0.2.0"
-   git push origin main v0.2.0
-   ```
+The script checks the version and the repo state, runs the typecheck, format check, Clippy, and
+the Rust tests, and prints the release notes for the new version. After you confirm, it
+regenerates `CHANGELOG.md` with a full rewrite (not `--prepend`, because the file already has an
+Unreleased section), commits it as `Release v0.2.0`, creates the annotated tag, and pushes `main`
+and the tag. Nothing is written until you confirm.
 
 Pushing the tag starts the **Release AppImage** workflow (`.github/workflows/release-appimage.yml`).
 Before it builds, the workflow writes the tag's version (`0.2.0`) into `package.json`,
