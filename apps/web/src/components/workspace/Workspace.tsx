@@ -122,6 +122,11 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   );
 
   const [view, setView] = useState<SidebarView | null>("tasks");
+  // The side nav Space reopens: the last view that was open.
+  const lastView = useRef<SidebarView>("tasks");
+  useEffect(() => {
+    if (view) lastView.current = view;
+  }, [view]);
   // Rows picked for removing together, in the view they were picked in; Ctrl+W and Delete act on them.
   // They live in a store the sidebar reads, so picking a row does not re-render the open chat.
   useEffect(() => {
@@ -425,6 +430,9 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
       } else if (e.key === "Tab" && !e.shiftKey && !isTypingTarget(document.activeElement)) {
         // Tab outside a text field jumps to the composer; inside one it keeps normal tabbing.
         document.querySelector<HTMLElement>(".composer-editor .ProseMirror")?.focus();
+      } else if (e.key === " " && !isTypingTarget(document.activeElement)) {
+        // Space outside a text field closes the open side panel, or reopens the last one, wherever focus sits after a click.
+        setView((current) => (current ? null : lastView.current));
       } else {
         return;
       }
