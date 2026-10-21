@@ -34,6 +34,7 @@
 
 - Never write tests. Do not add unit, integration, or frontend tests, test files, test runners, test dependencies, or test scripts, even when a change would benefit from one.
 - Exception: Playwright is allowed, only as the UI-check tool under `scripts/qa/` and its `qa:*` root scripts, for measuring and screenshotting the running dev session. Those scripts must not assert or run as tests. Do not add `*.test.*` files, a test runner, a `test` script, or any Playwright spec file.
+- Always push QA scripts you save under `scripts/qa/`. Do not leave them untracked: commit each one with the change it checks and push it with the next push, along with this file's other finished work.
 
 ## Committing
 
