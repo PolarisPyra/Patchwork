@@ -102,6 +102,8 @@ interface SidebarProps {
   threads: Thread[];
   /** Chats and tasks collapsing out of the list, on their way to the archive. */
   leavingIds: ReadonlySet<string>;
+  /** The tree's rows in on-screen order, kept current so archiving the open task can move on to the next one. */
+  treeRowsRef: { current: Target[] };
   selectedId: string | null;
   changes: FileChange[];
   /** Starts a new task in the given project. */
@@ -163,7 +165,7 @@ const collapseKey = (t: Target) => (t.kind === "folder" ? `folder:${t.id}` : t.i
 /** A tree row's fill: the selection colors while the tree is focused, a hover tint otherwise. */
 const selectionFill = (selected: boolean) =>
   selected
-    ? "bg-[var(--tree-inactive-selected,var(--bg-selected-muted))] group-focus-within/tree:bg-[var(--tree-selected,var(--bg-selected))] outline-transparent group-focus-within/tree:outline group-focus-within/tree:outline-1 group-focus-within/tree:-outline-offset-1 group-focus-within/tree:outline-[#3994bcb3]"
+    ? "bg-[var(--tree-inactive-selected,var(--bg-selected-muted))] hover:bg-[var(--tree-selected,var(--bg-selected))] group-focus-within/tree:bg-[var(--tree-selected,var(--bg-selected))] outline-transparent group-focus-within/tree:outline group-focus-within/tree:outline-1 group-focus-within/tree:-outline-offset-1 group-focus-within/tree:outline-[#3994bcb3]"
     : "bg-transparent hover:bg-[var(--tree-hover,var(--bg-hover))]";
 
 /** Ctrl+A picks the given rows, unless a text field has focus, where it selects the text. */
@@ -262,6 +264,7 @@ function TasksView({
   projects,
   threads,
   leavingIds,
+  treeRowsRef,
   folders,
   selectedId,
   onNewTask,
@@ -394,6 +397,14 @@ function TasksView({
     });
     setRenaming({ kind: "folder", id: folder.id });
   };
+  /** Opens a project, and the folder a task goes into, so the new task shows in the tree. */
+  const revealTask = (projectId: string, folderId?: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      next.delete(projectId);
+      if (folderId) next.delete(`folder:${folderId}`);
+      return next;
+    });
 
   // Ctrl+A picks the chats and tasks on screen: those in collapsed projects or folders are hidden.
   const visible = [
@@ -434,6 +445,9 @@ function TasksView({
     ))
       addRow({ kind: "thread", id: t.id }, projectRow);
   }
+  useEffect(() => {
+    treeRowsRef.current = treeRows;
+  });
 
   // The selected chat is the keyboard focus until the arrow keys or a click move it.
   // Switching chats replaces the selection with the new chat, or clears it when no chat is open.
@@ -621,7 +635,7 @@ function TasksView({
                   drag.attrs.onPointerDown(e);
                   if (!editing && isPlainPress(e)) pickRow(e, row);
                 }}
-                className={`group flex h-7 cursor-pointer items-center select-none border-none pr-1.5 pl-2 text-left text-fg ${selectionFill(isPicked(row))} ${drag.edge} ${drag.dragging ? "opacity-50" : ""}`}
+                className={`group mx-1 flex h-7 cursor-pointer items-center rounded-[var(--radius-sm)] select-none border-none pr-1.5 pl-1 text-left text-fg ${selectionFill(isPicked(row))} ${drag.edge} ${drag.dragging ? "opacity-50" : ""}`}
                 onClick={(e) => {
                   if (!pickRow(e, row)) toggle(p.id);
                 }}
@@ -658,6 +672,7 @@ function TasksView({
                   aria-label={`New task in ${p.name}`}
                   onClick={(e) => {
                     e.stopPropagation();
+                    revealTask(p.id);
                     onNewTask(p.id);
                   }}
                 >
@@ -695,7 +710,7 @@ function TasksView({
                           onPointerDown={(e) => {
                             if (!folderEditing && isPlainPress(e)) pickRow(e, folderRow);
                           }}
-                          className={`group flex h-7 cursor-pointer items-center select-none pr-1.5 pl-4 text-fg ${selectionFill(isPicked(folderRow))} ${target.edge}`}
+                          className={`group mx-1 flex h-7 cursor-pointer items-center rounded-[var(--radius-sm)] select-none pr-1.5 pl-3 text-fg ${selectionFill(isPicked(folderRow))} ${target.edge}`}
                           onClick={(e) => {
                             if (!pickRow(e, folderRow)) toggle(key);
                           }}
@@ -722,6 +737,7 @@ function TasksView({
                             aria-label={`New task in ${f.name}`}
                             onClick={(e) => {
                               e.stopPropagation();
+                              revealTask(p.id, f.id);
                               onNewTaskInFolder(
                                 p.id,
                                 f.id,
@@ -829,9 +845,9 @@ function ThreadRow({
   const goalActive = thread.goal?.status === "active";
   const last = thread.messages[thread.messages.length - 1];
   const needsApproval = last?.approvals.some((a) => a.status === "pending") ?? false;
-  // Tree rows are 28px tall and start at their depth's indent, as VS Code's explorer does.
+  // Tree rows are 28px tall, inset 4px so their rounded highlight has room, and start at their depth's indent, as VS Code's explorer does.
   const spacing = tree
-    ? `h-7 pr-2 ${nested ? "pl-6" : "pl-4"}`
+    ? `mx-1 h-7 rounded-[var(--radius-sm)] pr-2 ${nested ? "pl-5" : "pl-3"}`
     : `${nested ? "mb-1" : "my-0.5"} ${nested ? "ml-6 mr-1.5" : "mx-1.5"} px-2.5 py-1.5 rounded-[var(--radius-sm)]`;
   // The picked rows are the selection, and the open chat is always among them.
   const fill = picked

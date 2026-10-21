@@ -48,7 +48,6 @@
   --bg-selected: #2e436e;
   --bg-selected-muted: #43454a;
   /* The Tasks tree's selection and hover, matching VS Code's explorer. */
-  --tree-inactive-selected: #2c2d2e;
   --tree-selected: #ffffff22;
   --tree-hover: #ffffff14;
   --bg-accent-soft: rgba(53, 116, 240, 0.16);

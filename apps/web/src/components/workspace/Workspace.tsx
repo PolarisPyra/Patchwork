@@ -48,7 +48,7 @@ interface GitState {
 const CANVAS_MIN_PX = 340;
 const CANVAS_MAX_FRACTION = 0.7;
 // How long an archived row takes to collapse out of the list. Matches the sidebar's Collapse.
-const ARCHIVE_COLLAPSE_MS = 200;
+const ARCHIVE_COLLAPSE_MS = 120;
 
 // One shared empty list, so the chat's memoized rows see the same `changes` on every render.
 const NO_CHANGES: FileChange[] = [];
@@ -108,6 +108,8 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   }, [view]);
   // Chats and tasks being archived: their rows stay mounted, collapsing, until the archive lands.
   const [leavingIds, setLeavingIds] = useState<ReadonlySet<string>>(new Set());
+  // The sidebar's tree rows in on-screen order, written by the sidebar after each render.
+  const treeRowsRef = useRef<Target[]>([]);
   // Forgets a row once its chat is no longer live, so restoring it later opens at full height.
   useEffect(() => {
     setLeavingIds((prev) => {
@@ -204,9 +206,22 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     });
   };
 
+  /** The thread row after `id` in the tree, or before it when it is last, skipping `ids`. */
+  const nextThreadAfter = (id: string, ids: string[]) => {
+    const rowIds = treeRowsRef.current.flatMap((r) => (r.kind === "thread" ? [r.id] : []));
+    const at = rowIds.indexOf(id);
+    if (at < 0) return null;
+    const candidates = [...rowIds.slice(at + 1), ...rowIds.slice(0, at).reverse()];
+    return candidates.find((x) => !ids.includes(x)) ?? null;
+  };
+
   /** Collapses the chats' and tasks' rows out of the list, then archives them, so the rows below glide up instead of jumping. */
   const archiveThreads = async (ids: string[]) => {
     if (ids.length === 0) return;
+    // Archiving the open task opens the next one in the tree, so Ctrl+W can run down a list.
+    const next = selected && ids.includes(selected.id) ? nextThreadAfter(selected.id, ids) : null;
+    // The next task is selected at once, so another Ctrl+W during the collapse acts on it.
+    if (next) selectThread(next);
     setLeavingIds((prev) => new Set([...prev, ...ids]));
     try {
       await new Promise((resolve) => setTimeout(resolve, ARCHIVE_COLLAPSE_MS));
@@ -479,6 +494,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
             projects={settings.projects}
             threads={liveThreads}
             leavingIds={leavingIds}
+            treeRowsRef={treeRowsRef}
             archivedThreads={archivedThreads}
             onRestoreThread={(id) => attempt(() => setThreadArchived(id, false))}
             onDeleteArchived={deleteArchived}
