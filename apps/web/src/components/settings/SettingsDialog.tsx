@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
+  BellIcon,
   CaretDownIcon,
   DownloadSimpleIcon,
   FolderSimpleIcon,
@@ -28,6 +29,7 @@ import {
   type ImportSource,
   type Integrations,
   type ModelOption,
+  type NotificationSettings,
   type Settings,
   type Theme,
   type TokenSettings,
@@ -44,6 +46,7 @@ type Section =
   | "appearance"
   | "agent"
   | "tokens"
+  | "notifications"
   | "imports"
   | "integrations"
   | "environment"
@@ -54,6 +57,7 @@ const SECTIONS: { id: Section; label: string; Icon: Icon }[] = [
   { id: "appearance", label: "Appearance", Icon: PaletteIcon },
   { id: "agent", label: "Providers", Icon: RobotIcon },
   { id: "tokens", label: "AI Tokenomics", Icon: GaugeIcon },
+  { id: "notifications", label: "Notifications", Icon: BellIcon },
   { id: "imports", label: "Imports", Icon: DownloadSimpleIcon },
   { id: "integrations", label: "Integrations", Icon: PlugIcon },
   { id: "environment", label: "Environment", Icon: TerminalIcon },
@@ -117,6 +121,7 @@ export default function SettingsDialog({
             {section === "appearance" && <AppearancePane {...paneProps} />}
             {section === "agent" && <AgentPane {...paneProps} />}
             {section === "tokens" && <TokensPane {...paneProps} />}
+            {section === "notifications" && <NotificationsPane {...paneProps} />}
             {section === "imports" && <ImportsPane {...paneProps} onImported={onImported} />}
             {section === "integrations" && <IntegrationsPane {...paneProps} />}
             {section === "environment" && <EnvironmentPane {...paneProps} />}
@@ -349,6 +354,37 @@ function TokensPane({ settings, updateSettings }: PaneProps) {
           />
         </TokenRow>
       ))}
+    </>
+  );
+}
+
+/** Which finished work raises a desktop notification while Patchwork is not focused. */
+function NotificationsPane({ settings, updateSettings }: PaneProps) {
+  const notifications = settings.notifications;
+  const update = (patch: Partial<NotificationSettings>) =>
+    void updateSettings((s) => ({ ...s, notifications: { ...s.notifications, ...patch } }));
+  return (
+    <>
+      <TokenRow
+        title="Goal completed"
+        desc="When a task meets its goal, while Patchwork is not the focused window"
+      >
+        <TokenSwitch
+          label="Goal completed"
+          on={notifications.goalComplete}
+          onChange={(goalComplete) => update({ goalComplete })}
+        />
+      </TokenRow>
+      <TokenRow
+        title="Task completed"
+        desc="When an agent finishes replying in a task without a running goal"
+      >
+        <TokenSwitch
+          label="Task completed"
+          on={notifications.taskComplete}
+          onChange={(taskComplete) => update({ taskComplete })}
+        />
+      </TokenRow>
     </>
   );
 }

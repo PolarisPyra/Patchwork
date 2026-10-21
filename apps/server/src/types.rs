@@ -61,6 +61,26 @@ pub struct Settings {
     pub tokens: TokenSettings,
     /// Shell that agents run commands in. None follows the SHELL environment variable.
     pub shell: Option<String>,
+    pub notifications: NotificationSettings,
+}
+
+/// Desktop notifications shown while Patchwork is not the focused window.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct NotificationSettings {
+    /// When a task's goal is met.
+    pub goal_complete: bool,
+    /// When an agent finishes replying in a task that is not pursuing a goal.
+    pub task_complete: bool,
+}
+
+impl Default for NotificationSettings {
+    fn default() -> Self {
+        Self {
+            goal_complete: true,
+            task_complete: true,
+        }
+    }
 }
 
 /// Settings that trade a little convenience for fewer tokens spent.

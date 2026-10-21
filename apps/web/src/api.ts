@@ -34,6 +34,15 @@ export interface Settings {
   tokens: TokenSettings;
   /** Shell that agents run commands in; null follows the SHELL environment variable. */
   shell: string | null;
+  notifications: NotificationSettings;
+}
+
+/** Desktop notifications shown while Patchwork is not the focused window. */
+export interface NotificationSettings {
+  /** When a task's goal is met. */
+  goalComplete: boolean;
+  /** When an agent finishes replying in a task that is not pursuing a goal. */
+  taskComplete: boolean;
 }
 
 /** Settings that trade a little convenience for fewer tokens spent. */
@@ -288,6 +297,7 @@ export const DEFAULT_SETTINGS: Settings = {
     autoCompactAbove: 200_000,
     defaultModels: {},
   },
+  notifications: { goalComplete: true, taskComplete: true },
 };
 
 /** Agent used for new tasks: the first connected one, else Claude Code. */

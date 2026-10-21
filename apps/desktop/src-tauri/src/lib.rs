@@ -1,13 +1,17 @@
 //! Tauri shell: exposes `patchwork_server::Server` as commands and forwards
 //! agent events to the web UI on the `"agent-event"` channel.
 
+use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use patchwork_server::types::*;
 use patchwork_server::{Res, Server, persistence, provider};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::TrayIconBuilder;
+use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
+use tauri_plugin_notification::NotificationExt;
 
 type Srv<'a> = State<'a, Arc<Server>>;
 
@@ -348,10 +352,102 @@ fn open_in_editor(server: Srv, project_id: String, path: String) -> Res<()> {
     workspace::open_in_editor(&server.project_root(&project_id)?, &path)
 }
 
+// ---- tray & notifications ----------------------------------------------
+
+/// Whether the tray icon is up, so closing the window hides it instead of quitting.
+struct TrayAvailable(bool);
+
+fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        // Wayland ignores unminimize and focus requests, so remap the window to bring it forward.
+        let _ = window.hide();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+fn create_tray(app: &tauri::App) -> tauri::Result<()> {
+    let show = MenuItem::with_id(app, "show", "Show Patchwork", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    let mut tray = TrayIconBuilder::new()
+        .menu(&Menu::with_items(app, &[&show, &quit])?)
+        .tooltip("Patchwork")
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => show_main_window(app),
+            "quit" => app.exit(0),
+            _ => {}
+        });
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray.build(app)?;
+    Ok(())
+}
+
+/// Raises desktop notifications for finished goals and tasks while the window is not focused.
+#[derive(Default)]
+struct Notifier {
+    /// Tasks whose goal was just met, so the turn that met it does not notify a second time.
+    goal_met: Mutex<HashSet<String>>,
+}
+
+impl Notifier {
+    fn on_event(&self, app: &AppHandle, envelope: &AgentEventEnvelope) {
+        let Some(server) = app.try_state::<Arc<Server>>() else {
+            return;
+        };
+        let settings = server.store.settings().notifications;
+        let thread_id = &envelope.thread_id;
+        let mut goal_met = self.goal_met.lock().unwrap_or_else(PoisonError::into_inner);
+        let (title, body) = match &envelope.event {
+            AgentEvent::GoalUpdated { goal: Some(goal) } if goal.status == GoalStatus::Complete => {
+                goal_met.insert(thread_id.clone());
+                if !settings.goal_complete {
+                    return;
+                }
+                ("Goal complete", goal.objective.clone())
+            }
+            AgentEvent::TurnCompleted {
+                status: MessageStatus::Complete,
+                ..
+            } => {
+                if goal_met.remove(thread_id) || !settings.task_complete {
+                    return;
+                }
+                let Some(thread) = server.store.thread(thread_id) else {
+                    return;
+                };
+                // A goal's turns keep coming until it is met; only its outcome notifies.
+                if thread.goal.is_some_and(|g| g.status == GoalStatus::Active) {
+                    return;
+                }
+                ("Task complete", thread.title)
+            }
+            _ => return,
+        };
+        drop(goal_met);
+        let focused = app.get_webview_window("main").is_some_and(|window| {
+            window.is_visible().unwrap_or(false) && window.is_focused().unwrap_or(false)
+        });
+        if !focused {
+            let _ = app.notification().builder().title(title).body(body).show();
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event
+                && window.state::<TrayAvailable>().0
+            {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -364,16 +460,23 @@ pub fn run() {
             let config_dir = app.path().config_dir()?.join("patchwork");
             persistence::adopt_old_dir(&app.path().app_config_dir()?, &config_dir)?;
             let handle = app.handle().clone();
+            let notifier = Notifier::default();
             let server = Server::open(
                 config_dir,
                 &app.path().app_local_data_dir()?,
                 Box::new(move |event| {
+                    notifier.on_event(&handle, &event);
                     let _ = handle.emit("agent-event", event);
                 }),
             )?;
             server.start_idle_compaction();
             app.manage(server);
             app.manage(ProjectWatch::default());
+            let tray = create_tray(app);
+            if let Err(e) = &tray {
+                log::warn!("system tray unavailable, closing the window quits: {e}");
+            }
+            app.manage(TrayAvailable(tray.is_ok()));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
