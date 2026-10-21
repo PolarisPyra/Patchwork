@@ -790,6 +790,10 @@ const SHORTCUT_PAGES: { title: string; shortcuts: { keys: string[]; action: stri
         action:
           "Remove the selected chats or tasks, and the open one when the compose box is not active",
       },
+      {
+        keys: ["Space"],
+        action: "Open or close the side panel, outside a text field",
+      },
     ],
   },
   {
