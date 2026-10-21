@@ -9,5 +9,13 @@ fn main() {
         // SAFETY: runs first in main, before any other threads exist.
         unsafe { std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1") };
     }
+    // GTK sets the Wayland app id from the program name, and KWin uses it to find the desktop
+    // entry for the title bar icon. The local build's entry is dev.patchwork.ade.desktop, so it
+    // gets that id. The AppImage keeps the default id, which its own launcher matches. The AppImage
+    // runtime sets APPIMAGE.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("APPIMAGE").is_none() {
+        glib::set_prgname(Some("dev.patchwork.ade"));
+    }
     patchwork_lib::run();
 }

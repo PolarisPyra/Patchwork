@@ -2391,6 +2391,7 @@ dependencies = [
 name = "patchwork"
 version = "0.1.0"
 dependencies = [
+ "glib",
  "log",
  "notify",
  "patchwork-server",
