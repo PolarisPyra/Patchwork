@@ -3,13 +3,22 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { XIcon } from "@phosphor-icons/react";
 import { confirm } from "@tauri-apps/plugin-dialog";
-import { api, defaultAgentOf, type FileChange, type Message, type Settings } from "~/api";
+import {
+  api,
+  defaultAgentOf,
+  type FileChange,
+  type Message,
+  type Settings,
+  type Thread,
+} from "~/api";
 import type { UpdateSettings } from "~/app/App";
 import type { CanvasTab } from "~/components/canvas/Canvas";
 import { lastAccessMode } from "~/components/chat/AccessPicker";
@@ -99,6 +108,18 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   const defaultAgent = defaultAgentOf(settings);
   // Display order stays fixed; `settings.agents` order only marks the default.
   const connectedAgents = AGENT_KINDS.filter((k) => settings.agents.includes(k));
+  // The sidebar shows where threads sit and their status, never message text. Its props keep
+  // their identity until something it shows changes, so streamed text does not re-render it.
+  const sidebarKey = threads.map(sidebarSignature).join("\n");
+  const sidebarThreads = useMemo(
+    () => ({ live: liveThreads, archived: archivedThreads }),
+    [sidebarKey],
+  );
+  const agentsKey = connectedAgents.join();
+  const sidebarAgents = useMemo(
+    () => (connectedAgents.length > 0 ? connectedAgents : [defaultAgent]),
+    [agentsKey, defaultAgent],
+  );
 
   const [view, setView] = useState<SidebarView | null>("tasks");
   // Rows picked for removing together, in the view they were picked in; Ctrl+W and Delete act on them.
@@ -471,6 +492,27 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     })),
   ];
 
+  const sidebarHandlers = useStableHandlers({
+    onRestoreThread: (id: string) => attempt(() => setThreadArchived(id, false)),
+    onDeleteArchived: deleteArchived,
+    onClearChangeFocus: () => setChangeFocus(null),
+    onNewTask: newThreadIn,
+    onNewChat: newChat,
+    onSelectThread: selectThread,
+    onRenameThread: (id: string, title: string) => attempt(() => renameThread(id, title)),
+    onRenameProject: renameProjectTo,
+    onRemoveTargets: removeTargets,
+    onReorderProjects: reorderProjects,
+    onReorderThreads: reorderThreadsTo,
+    onNewFolder: newFolder,
+    onRenameFolder: (id: string, name: string) => attempt(() => renameFolder(id, name)),
+    onNewTaskInFolder: newThreadInFolder,
+    onOpenFolder: openFolder,
+    onRefreshChanges: () => attempt(refreshGit),
+    onOpenChange: (path: string) => openCanvasAt(path, null, "diff"),
+    onOpenPalette: () => setPaletteOpen(true),
+  });
+
   return (
     <div className="grid h-full grid-rows-[var(--toolbar-h)_minmax(0,1fr)_var(--statusbar-h)] bg-app text-fg">
       <Toolbar
@@ -489,35 +531,18 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
         {view && (
           <Sidebar
             view={view}
-            agents={connectedAgents.length > 0 ? connectedAgents : [defaultAgent]}
+            agents={sidebarAgents}
             project={project}
             projects={settings.projects}
-            threads={liveThreads}
+            threads={sidebarThreads.live}
             leavingIds={leavingIds}
             treeRowsRef={treeRowsRef}
-            archivedThreads={archivedThreads}
-            onRestoreThread={(id) => attempt(() => setThreadArchived(id, false))}
-            onDeleteArchived={deleteArchived}
+            archivedThreads={sidebarThreads.archived}
             selectedId={selected?.id ?? null}
             changes={changes}
             changeFocus={changeFocus}
-            onClearChangeFocus={() => setChangeFocus(null)}
-            onNewTask={newThreadIn}
-            onNewChat={newChat}
-            onSelectThread={selectThread}
-            onRenameThread={(id, title) => attempt(() => renameThread(id, title))}
-            onRenameProject={renameProjectTo}
-            onRemoveTargets={removeTargets}
-            onReorderProjects={reorderProjects}
-            onReorderThreads={reorderThreadsTo}
             folders={folders}
-            onNewFolder={newFolder}
-            onRenameFolder={(id, name) => attempt(() => renameFolder(id, name))}
-            onNewTaskInFolder={newThreadInFolder}
-            onOpenFolder={openFolder}
-            onRefreshChanges={() => attempt(refreshGit)}
-            onOpenChange={(path) => openCanvasAt(path, null, "diff")}
-            onOpenPalette={() => setPaletteOpen(true)}
+            {...sidebarHandlers}
           />
         )}
 
@@ -616,4 +641,46 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
       )}
     </div>
   );
+}
+
+/** What the sidebar shows of a thread; it re-renders only when one of these changes. */
+function sidebarSignature(t: Thread): string {
+  const last = t.messages[t.messages.length - 1];
+  const needsApproval = last?.approvals.some((a) => a.status === "pending") ?? false;
+  return [
+    t.id,
+    t.title,
+    t.projectId,
+    t.folderId,
+    t.archivedAt,
+    t.agent,
+    t.accessMode,
+    t.goal?.status,
+    last?.createdAt,
+    needsApproval,
+    isWorking(t),
+  ].join("|");
+}
+
+/**
+ * Stand-ins for `handlers` that keep their identity and call the latest render's versions,
+ * so a memoized child can skip renders without holding stale closures. Keys must not change.
+ */
+function useStableHandlers<T extends Record<string, (...args: never[]) => unknown>>(
+  handlers: T,
+): T {
+  const latest = useRef(handlers);
+  useLayoutEffect(() => {
+    latest.current = handlers;
+  });
+  const [stable] = useState(
+    () =>
+      Object.fromEntries(
+        Object.keys(handlers).map((key) => [
+          key,
+          (...args: never[]) => latest.current[key](...args),
+        ]),
+      ) as T,
+  );
+  return stable;
 }

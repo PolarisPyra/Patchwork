@@ -4,6 +4,7 @@ import {
   memo,
   Suspense,
   useContext,
+  useDeferredValue,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -247,6 +248,8 @@ const AssistantMessage = memo(function AssistantMessage({
     ? message.tools.filter((t) => t.status === "running" && !t.subagent).at(-1)
     : undefined;
   const live = useHeldTool(running);
+  // While text streams in, React may skip renders of the reply in favor of input and scrolling.
+  const text = useDeferredValue(message.text);
   return (
     <section className="flex min-w-0 flex-col gap-2.5">
       {/* While streaming, WorkingRow shows the agent instead, after the latest message. */}
@@ -257,9 +260,9 @@ const AssistantMessage = memo(function AssistantMessage({
           workedMs={message.finishedAt === null ? null : message.finishedAt - message.createdAt}
         />
       )}
-      {message.text && (
-        <Suspense fallback={<div className="whitespace-pre-wrap">{message.text}</div>}>
-          <Markdown text={message.text} />
+      {text && (
+        <Suspense fallback={<div className="whitespace-pre-wrap">{text}</div>}>
+          <Markdown text={text} />
         </Suspense>
       )}
       {streaming && message.thinking && <ThinkingLine text={message.thinking} />}

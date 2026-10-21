@@ -10,7 +10,7 @@ use patchwork_server::types::*;
 use patchwork_server::{Res, Server, persistence, provider};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
 use tauri_plugin_notification::NotificationExt;
 
 type Srv<'a> = State<'a, Arc<Server>>;
@@ -531,6 +531,14 @@ pub fn run() {
             revert_file,
             open_in_editor,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Patchwork");
+        .build(tauri::generate_context!())
+        .expect("error while building Patchwork")
+        .run(|app, event| {
+            // Agents run in their own scopes, so they would outlive the app.
+            if let RunEvent::Exit = event
+                && let Some(server) = app.try_state::<Arc<Server>>()
+            {
+                server.stop_agents();
+            }
+        });
 }

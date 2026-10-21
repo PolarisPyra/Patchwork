@@ -7,6 +7,7 @@ pub mod orchestration;
 pub mod persistence;
 pub mod provider;
 mod runner;
+mod scope;
 mod time;
 pub mod types;
 pub mod usage;
@@ -163,6 +164,7 @@ impl Server {
     /// `config_dir` holds the database and config files; `data_dir` holds chat scratch folders.
     pub fn open(config_dir: PathBuf, data_dir: &Path, sink: EventSink) -> Res<Arc<Self>> {
         provider::model_manifest::start(&config_dir);
+        std::thread::spawn(scope::prepare);
         let clis_dir = config_dir.join("clis");
         Ok(Arc::new(Self {
             store: Store::open(config_dir)?,
@@ -438,6 +440,11 @@ impl Server {
         }
         self.store
             .update_thread(id, |t| t.archived_at = archived.then(now_ms))
+    }
+
+    /// Stops every running agent; for quitting the app.
+    pub fn stop_agents(&self) {
+        self.runner.stop_all();
     }
 
     /// Permanently deletes a thread and its messages.

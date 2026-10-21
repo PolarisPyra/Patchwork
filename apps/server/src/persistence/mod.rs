@@ -206,6 +206,38 @@ impl Store {
         Ok(())
     }
 
+    /// Mutates one thread in place (no-op if missing) and saves its row and the message
+    /// `message_id`, if given. Unlike `update_thread` it copies nothing, so it is for
+    /// changes confined to that message and the thread's own fields; removing or
+    /// reordering messages goes through `update_thread`.
+    pub fn update_message(
+        &self,
+        id: &str,
+        message_id: Option<&str>,
+        f: impl FnOnce(&mut Thread),
+    ) -> Res<()> {
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        let Some(thread) = inner.threads.iter_mut().find(|t| t.id == id) else {
+            return Ok(());
+        };
+        f(thread);
+        let tx = inner.conn.transaction().map_err(err)?;
+        save_thread_row(&tx, thread).map_err(err)?;
+        let message = message_id.and_then(|mid| {
+            thread
+                .messages
+                .iter()
+                .enumerate()
+                .find(|(_, m)| m.id == mid)
+        });
+        if let Some((i, m)) = message {
+            save_message(&tx, &thread.id, i, m).map_err(err)?;
+        }
+        tx.commit().map_err(err)?;
+        Ok(())
+    }
+
     /// A value from the `app_state` table, if one was stored.
     pub fn state(&self, key: &str) -> Option<String> {
         self.lock()

@@ -1,4 +1,5 @@
 import {
+  memo,
   useEffect,
   useRef,
   useState,
@@ -191,7 +192,7 @@ function useSelectAll(targets: Target[], setPicked: (targets: Target[]) => void)
   }, [targets, setPicked]);
 }
 
-export default function Sidebar(props: SidebarProps) {
+export default memo(function Sidebar(props: SidebarProps) {
   return (
     <aside className="flex min-h-0 w-[340px] flex-none flex-col border-r border-border bg-panel text-[length:var(--fs-md)] [--fs-xs:13px] [--fs-sm:14px] [--fs-md:15px]">
       <button
@@ -208,7 +209,7 @@ export default function Sidebar(props: SidebarProps) {
       <UsagePopover agents={props.agents} />
     </aside>
   );
-}
+});
 
 /** Animates its children open and closed. Stays mounted so the height can transition. */
 function Collapse({

@@ -4,25 +4,32 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Stdio};
+use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
 
-use crate::Server;
 use crate::goal;
 use crate::orchestration;
 use crate::provider::{self, Parsed, TurnSpec};
+use crate::scope;
 use crate::types::*;
 use crate::workspace;
+use crate::{Res, Server};
 use serde_json::Value;
 
 /// How much of the agent's stderr is kept for error reporting.
 const STDERR_TAIL_BYTES: usize = 4096;
+
+/// How long a stopped agent gets to exit after SIGTERM before it is sent SIGKILL.
+const KILL_AFTER: Duration = Duration::from_secs(5);
+
+/// How long quitting the app waits for agents to exit after SIGTERM.
+const QUIT_GRACE: Duration = Duration::from_secs(2);
 
 /// The agent's stdin; None once the turn has finished.
 type Stdin = Arc<Mutex<Option<ChildStdin>>>;
@@ -64,6 +71,8 @@ type NativeTurn = Arc<Mutex<Option<String>>>;
 struct RunningTurn {
     pid: u32,
     cancelled: Arc<AtomicBool>,
+    /// Set once the agent process has exited and been reaped.
+    exited: Arc<AtomicBool>,
     agent: AgentKind,
     stdin: Stdin,
     pending: Pending,
@@ -141,7 +150,7 @@ impl Runner {
             args.extend(orchestration::claude::launch_args(&server.store.settings()));
         }
         let input = provider::turn_input(agent, &spec);
-        let mut cmd = provider::agent_command(agent)?;
+        let mut cmd = scope::scoped(provider::agent_command(agent)?);
         if let Some(shell) = server.store.settings().shell {
             cmd.env("SHELL", shell);
         }
@@ -170,6 +179,7 @@ impl Runner {
 
         let message = assistant_message();
         let cancelled = Arc::new(AtomicBool::new(false));
+        let exited = Arc::new(AtomicBool::new(false));
         let pending = Pending::default();
         let native_turn = NativeTurn::default();
         let steers = Steers::default();
@@ -181,6 +191,7 @@ impl Runner {
             message_id: message.id.clone(),
             agent,
             cancelled: cancelled.clone(),
+            exited: exited.clone(),
             baseline,
             stdin: stdin.clone(),
             pending: pending.clone(),
@@ -205,6 +216,7 @@ impl Runner {
                 RunningTurn {
                     pid: child.id(),
                     cancelled,
+                    exited,
                     agent,
                     stdin,
                     pending,
@@ -379,17 +391,44 @@ impl Runner {
                 .drain(..)
                 .map(|f| f.message_id)
                 .collect();
-            let pid = turn.pid;
+            let (pid, exited) = (turn.pid, turn.exited.clone());
             if last_line.is_some_and(|line| write_line(&turn.stdin, &line)) {
                 std::thread::spawn(move || {
                     std::thread::sleep(Duration::from_millis(300));
-                    workspace::signal_process_group(pid, libc::SIGTERM);
+                    terminate(pid, exited);
                 });
             } else {
-                workspace::signal_process_group(pid, libc::SIGTERM);
+                terminate(pid, exited);
             }
         }
         dropped
+    }
+
+    /// Stops every running agent, so none outlives the app when it quits. Agents that
+    /// are still running after `QUIT_GRACE` are sent SIGKILL.
+    pub fn stop_all(&self) {
+        let running: Vec<(u32, Arc<AtomicBool>)> = self
+            .turns
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .values()
+            .map(|turn| {
+                turn.cancelled.store(true, Ordering::SeqCst);
+                (turn.pid, turn.exited.clone())
+            })
+            .collect();
+        for (pid, _) in &running {
+            workspace::signal_process_group(*pid, libc::SIGTERM);
+        }
+        let deadline = Instant::now() + QUIT_GRACE;
+        while Instant::now() < deadline && running.iter().any(|(_, e)| !e.load(Ordering::SeqCst)) {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        for (pid, exited) in &running {
+            if !exited.load(Ordering::SeqCst) {
+                workspace::signal_process_group(*pid, libc::SIGKILL);
+            }
+        }
     }
 
     /// Sends the user's answer to a pending approval and records it.
@@ -450,13 +489,38 @@ fn write_to(stdin: &mut Option<ChildStdin>, line: &str) -> bool {
 
 /// Saves `event` onto the stored message, then streams it to the frontend.
 pub(crate) fn publish(server: &Server, thread_id: &str, event: AgentEvent) {
-    if let Err(e) = server.store.update_thread(thread_id, |t| apply(t, &event)) {
+    if let Err(e) = save_event(server, thread_id, &event) {
         log::warn!("failed to save agent event: {e}");
     }
     server.emit(AgentEventEnvelope {
         thread_id: thread_id.into(),
         event,
     });
+}
+
+/// Sends SIGTERM to the agent's process group, then SIGKILL if the agent has not exited
+/// after `KILL_AFTER`.
+fn terminate(pid: u32, exited: Arc<AtomicBool>) {
+    workspace::signal_process_group(pid, libc::SIGTERM);
+    std::thread::spawn(move || {
+        std::thread::sleep(KILL_AFTER);
+        if !exited.load(Ordering::SeqCst) {
+            workspace::signal_process_group(pid, libc::SIGKILL);
+        }
+    });
+}
+
+/// Why the agent's process ended, when it left no error message of its own.
+fn exit_error(exit: Option<ExitStatus>) -> String {
+    if let Some(code) = exit.and_then(|s| s.code()) {
+        return format!("Agent exited with code {code}");
+    }
+    // systemd sends SIGKILL to an agent whose scope ran out of memory.
+    #[cfg(unix)]
+    if exit.and_then(|s| std::os::unix::process::ExitStatusExt::signal(&s)) == Some(libc::SIGKILL) {
+        return "The agent was killed, likely for using too much memory".into();
+    }
+    "Agent exited unexpectedly".into()
 }
 
 /// A model request the agent made during a turn, and the tokens it used.
@@ -526,6 +590,7 @@ struct Turn {
     message_id: String,
     agent: AgentKind,
     cancelled: Arc<AtomicBool>,
+    exited: Arc<AtomicBool>,
     /// `git status` of the project when the turn started.
     baseline: Vec<FileChange>,
     stdin: Stdin,
@@ -585,11 +650,7 @@ impl Turn {
             message_id: self.message_id.clone(),
             text: std::mem::take(unsaved),
         };
-        if let Err(e) = self
-            .server
-            .store
-            .update_thread(&self.thread_id, |t| apply(t, &event))
-        {
+        if let Err(e) = save_event(&self.server, &self.thread_id, &event) {
             log::warn!("failed to save agent text: {e}");
         }
     }
@@ -955,6 +1016,7 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
     }
 
     let exit = child.wait().ok();
+    turn.exited.store(true, Ordering::SeqCst);
     let tail = stderr_tail.join().unwrap_or_default();
     let cancelled = turn.cancelled.load(Ordering::SeqCst);
     let (status, error) = if cancelled {
@@ -962,10 +1024,7 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
     } else if stream_error.is_some() || !exit.is_some_and(|s| s.success()) {
         let error = stream_error
             .or_else(|| last_lines(&tail))
-            .unwrap_or_else(|| match exit.and_then(|s| s.code()) {
-                Some(code) => format!("Agent exited with code {code}"),
-                None => "Agent exited unexpectedly".into(),
-            });
+            .unwrap_or_else(|| exit_error(exit));
         (MessageStatus::Error, Some(error))
     } else {
         (MessageStatus::Complete, None)
@@ -1136,8 +1195,45 @@ fn last_lines(tail: &str) -> Option<String> {
 }
 
 /// Applies one event to the stored message. Used for both persistence and replay.
-fn apply(thread: &mut Thread, event: &AgentEvent) {
+/// Applies `event` to the stored thread. Removing a message moves the ones after it, so
+/// that goes through `update_thread`; every other event changes at most one message in place.
+fn save_event(server: &Server, thread_id: &str, event: &AgentEvent) -> Res<()> {
+    if let AgentEvent::MessageRemoved { .. } = event {
+        return server.store.update_thread(thread_id, |t| apply(t, event));
+    }
     let message_id = match event {
+        AgentEvent::MessageStarted { message } => Some(message.id.as_str()),
+        _ => event_message(event),
+    };
+    server
+        .store
+        .update_message(thread_id, message_id, |t| apply(t, event))
+}
+
+/// The existing message `event` changes, if it changes one.
+fn event_message(event: &AgentEvent) -> Option<&str> {
+    match event {
+        AgentEvent::MessageStarted { .. }
+        | AgentEvent::GoalUpdated { .. }
+        | AgentEvent::MessageRemoved { .. } => None,
+        AgentEvent::TextDelta { message_id, .. }
+        | AgentEvent::Thinking { message_id, .. }
+        | AgentEvent::ToolStarted { message_id, .. }
+        | AgentEvent::ToolFinished { message_id, .. }
+        | AgentEvent::PlanUpdated { message_id, .. }
+        | AgentEvent::FileTouched { message_id, .. }
+        | AgentEvent::ApprovalRequested { message_id, .. }
+        | AgentEvent::ApprovalResolved { message_id, .. }
+        | AgentEvent::Usage { message_id, .. }
+        | AgentEvent::MessageQueued { message_id, .. }
+        | AgentEvent::BackgroundTaskStarted { message_id, .. }
+        | AgentEvent::BackgroundTaskEnded { message_id, .. }
+        | AgentEvent::TurnCompleted { message_id, .. } => Some(message_id),
+    }
+}
+
+fn apply(thread: &mut Thread, event: &AgentEvent) {
+    match event {
         AgentEvent::MessageStarted { message } => {
             if !thread.messages.iter().any(|m| m.id == message.id) {
                 thread.messages.push(message.clone());
@@ -1152,19 +1248,10 @@ fn apply(thread: &mut Thread, event: &AgentEvent) {
             thread.messages.retain(|m| m.id != *message_id);
             return;
         }
-        AgentEvent::TextDelta { message_id, .. }
-        | AgentEvent::Thinking { message_id, .. }
-        | AgentEvent::ToolStarted { message_id, .. }
-        | AgentEvent::ToolFinished { message_id, .. }
-        | AgentEvent::PlanUpdated { message_id, .. }
-        | AgentEvent::FileTouched { message_id, .. }
-        | AgentEvent::ApprovalRequested { message_id, .. }
-        | AgentEvent::ApprovalResolved { message_id, .. }
-        | AgentEvent::Usage { message_id, .. }
-        | AgentEvent::MessageQueued { message_id, .. }
-        | AgentEvent::BackgroundTaskStarted { message_id, .. }
-        | AgentEvent::BackgroundTaskEnded { message_id, .. }
-        | AgentEvent::TurnCompleted { message_id, .. } => message_id,
+        _ => {}
+    }
+    let Some(message_id) = event_message(event) else {
+        return;
     };
     let Some(msg) = thread.messages.iter_mut().find(|m| m.id == *message_id) else {
         return;

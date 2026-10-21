@@ -1,4 +1,4 @@
-import { Children, useEffect, useState, type ReactElement, type ReactNode } from "react";
+import { Children, memo, useEffect, useState, type ReactElement, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { TextAlignLeftIcon } from "@phosphor-icons/react";
@@ -87,7 +87,10 @@ const components: Components = {
   img: ({ alt }) => <span className="text-fg-muted">{alt || "Image"}</span>,
 };
 
-export default function Markdown({ text }: { text: string }) {
+/** Highlighting waits this long after a block last changed, so a block still streaming is not re-highlighted every frame. */
+const HIGHLIGHT_DELAY_MS = 150;
+
+export default memo(function Markdown({ text }: { text: string }) {
   return (
     <div className="min-w-0 leading-[1.6] [word-break:break-word] selectable [&>:last-child]:mb-0 [&_p]:mt-0 [&_p]:mb-2">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components} skipHtml>
@@ -95,22 +98,35 @@ export default function Markdown({ text }: { text: string }) {
       </ReactMarkdown>
     </div>
   );
-}
+});
 
 function CodeBlock({ lang, code, title }: { lang: string; code: string; title: string | null }) {
   // Highlighting loads on demand, so the chat does not pull every grammar up front.
-  const [html, setHtml] = useState<string | null>(null);
+  // The highlighted HTML is kept with the code it was made from; newer code shows plain until highlighted.
+  const [highlighted, setHighlighted] = useState<{ code: string; html: string | null } | null>(
+    null,
+  );
   // Long lines wrap by default; the toggle switches back to horizontal scroll.
   const [wrap, setWrap] = useState(true);
+  const upToDate = highlighted?.code === code;
+  const html = upToDate ? highlighted.html : null;
+  // A block is highlighted at once when it first shows, then only once it stops changing.
+  const delay = highlighted === null ? 0 : HIGHLIGHT_DELAY_MS;
   useEffect(() => {
+    if (upToDate) return;
     let current = true;
-    void import("~/components/canvas/highlight").then(({ highlightBlock }) => {
-      if (current) setHtml(highlightBlock(code, lang));
-    });
+    const timer = setTimeout(
+      () =>
+        void import("~/components/canvas/highlight").then(({ highlightBlock }) => {
+          if (current) setHighlighted({ code, html: highlightBlock(code, lang) });
+        }),
+      delay,
+    );
     return () => {
       current = false;
+      clearTimeout(timer);
     };
-  }, [code, lang]);
+  }, [code, lang, upToDate, delay]);
   return (
     <div className="my-2 overflow-hidden rounded-[var(--radius)] border border-border bg-panel">
       <div className="flex items-center justify-between border-b border-border py-0.5 pr-1 pl-2.5 text-[length:var(--fs-xs)] text-fg-subtle">
