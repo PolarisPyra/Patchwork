@@ -193,7 +193,7 @@ function useSelectAll(targets: Target[], setPicked: (targets: Target[]) => void)
 
 export default function Sidebar(props: SidebarProps) {
   return (
-    <aside className="flex min-h-0 w-[300px] flex-none flex-col border-r border-border bg-panel text-[length:var(--fs-md)] [--fs-xs:13px] [--fs-sm:14px] [--fs-md:15px]">
+    <aside className="flex min-h-0 w-[340px] flex-none flex-col border-r border-border bg-panel text-[length:var(--fs-md)] [--fs-xs:13px] [--fs-sm:14px] [--fs-md:15px]">
       <button
         className="mx-2 mt-3 mb-0.5 flex h-8 flex-none cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border border-border bg-input px-2 text-[length:var(--fs-sm)] text-fg-muted hover:border-border-strong hover:text-fg"
         onClick={props.onOpenPalette}
@@ -849,9 +849,9 @@ function ThreadRow({
   const goalActive = thread.goal?.status === "active";
   const last = thread.messages[thread.messages.length - 1];
   const needsApproval = last?.approvals.some((a) => a.status === "pending") ?? false;
-  // Tree rows are 28px tall, inset 4px so their rounded highlight has room, and start at their depth's indent, as VS Code's explorer does.
+  // Tree rows are 28px tall. The indent and the empty chevron column sit in the margin, so the highlight starts just before the title and the titles still line up with folder names.
   const spacing = tree
-    ? `mx-1 h-7 rounded-[var(--radius-sm)] pr-2 ${nested ? "pl-5" : "pl-3"}`
+    ? `h-7 rounded-[var(--radius-sm)] pr-2 pl-2 mr-1 ${nested ? "ml-[38px]" : "ml-[30px]"}`
     : `${nested ? "mb-1" : "my-0.5"} ${nested ? "ml-6 mr-1.5" : "mx-1.5"} px-2.5 py-1.5 rounded-[var(--radius-sm)]`;
   // The picked rows are the selection, and the open chat is always among them.
   const fill = picked
@@ -874,8 +874,6 @@ function ThreadRow({
       }}
       onContextMenu={(e) => onContextMenu(e, { kind: "thread", id: thread.id })}
     >
-      {/* In the tree, the chevron column above stays empty so titles line up with folder names. */}
-      {tree && <span aria-hidden className="w-4 flex-none" />}
       {editing ? (
         <InlineName
           initial={thread.title}
