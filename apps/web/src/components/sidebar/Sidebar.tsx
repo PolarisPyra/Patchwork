@@ -445,8 +445,12 @@ function TasksView({
     ))
       addRow({ kind: "thread", id: t.id }, projectRow);
   }
+  // The chats come first on screen, then the projects' rows, so archiving can step through them in that order.
   useEffect(() => {
-    treeRowsRef.current = treeRows;
+    const chatRows: Target[] = chats
+      .filter((t) => !leavingIds.has(t.id))
+      .map((t) => ({ kind: "thread", id: t.id }));
+    treeRowsRef.current = [...chatRows, ...treeRows];
   });
 
   // The selected chat is the keyboard focus until the arrow keys or a click move it.
