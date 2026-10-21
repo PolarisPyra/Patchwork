@@ -80,6 +80,8 @@ const MIGRATIONS: &[&str] = &[
     "ALTER TABLE messages ADD COLUMN queued INTEGER NOT NULL DEFAULT 0;",
     // 13: when a thread was archived; NULL keeps it in the task list.
     "ALTER TABLE threads ADD COLUMN archived_at INTEGER;",
+    // 14: titles of threads that began with `/goal` name the objective, not the command.
+    "UPDATE threads SET title = TRIM(SUBSTR(title, 7)) WHERE title GLOB '/goal *';",
 ];
 
 /// Brings the schema up to date. Returns the version the database was at before.

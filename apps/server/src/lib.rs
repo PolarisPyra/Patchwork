@@ -58,10 +58,16 @@ fn clean_name(name: &str) -> Res<String> {
     Ok(name.chars().take(120).collect())
 }
 
-/// A thread title from the first line of a message.
+/// A thread title from the first line of a message, without a leading `/goal`.
 pub fn title_from(text: &str) -> String {
     let line = text.lines().next().unwrap_or("").trim();
-    line.chars().take(60).collect()
+    let objective = if provider::is_goal_command(line) {
+        line["/goal".len()..].trim()
+    } else {
+        line
+    };
+    let title = if objective.is_empty() { line } else { objective };
+    title.chars().take(60).collect()
 }
 
 /// Whether a thread has gone idle just before its prompt cache expires, with a context large

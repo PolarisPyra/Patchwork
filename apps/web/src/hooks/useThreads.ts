@@ -27,10 +27,11 @@ export function isWorking(thread: Thread | null): boolean {
   return thread.goal?.status === "active" || thread.messages.some((m) => m.status === "streaming");
 }
 
-/** Same rule as the backend: first line, trimmed, at most 60 characters. */
+/** Same rule as the backend: first line without a leading `/goal`, at most 60 characters. */
 function titleFrom(text: string): string {
   const line = (text.split("\n")[0] ?? "").trim();
-  return Array.from(line).slice(0, 60).join("");
+  const objective = /^\/goal(\s|$)/.test(line) ? line.slice("/goal".length).trim() : line;
+  return Array.from(objective || line).slice(0, 60).join("");
 }
 
 /** Adds or replaces a message, keeping creation order. */
