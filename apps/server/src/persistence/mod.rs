@@ -567,7 +567,7 @@ fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
                     usage: r
                         .get::<_, Option<String>>(13)?
                         .and_then(|u| serde_json::from_str(&u).ok()),
-                    thinking: String::new(),
+                    parts: Vec::new(),
                 })
             })?
             .collect::<rusqlite::Result<_>>()?;
@@ -639,7 +639,7 @@ mod tests {
             steer: false,
             queued: false,
             background: Vec::new(),
-            thinking: String::new(),
+            parts: Vec::new(),
             finished_at: None,
             usage: None,
         }

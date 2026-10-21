@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 
 interface ChoicePanelProps {
+  /** What the agent asks, shown above the options. */
+  question?: string;
   /** The options the agent offered. */
   options: string[];
+  /** A line explaining each option, by index. */
+  descriptions?: string[];
   /** Sends the chosen option as the next message. */
   onPick: (option: string) => void;
   /** Hides the panel; the composer then unlocks and takes the focus to write an answer. */
@@ -15,7 +19,14 @@ interface ChoicePanelProps {
  * Numbered options above the composer. A number key or the arrows highlight an option; Enter
  * sends the highlighted one. The last row writes an answer instead of sending.
  */
-export default function ChoicePanel({ options, onPick, onOwn, onDismiss }: ChoicePanelProps) {
+export default function ChoicePanel({
+  question,
+  options,
+  descriptions,
+  onPick,
+  onOwn,
+  onDismiss,
+}: ChoicePanelProps) {
   // Rows are the options, then "Submit my own response" at index options.length.
   const own = options.length;
   const [active, setActive] = useState<number | null>(null);
@@ -79,6 +90,11 @@ export default function ChoicePanel({ options, onPick, onOwn, onDismiss }: Choic
       aria-label="Choose a reply"
       className="mb-1.5 flex flex-col gap-px rounded-[var(--radius)] border border-border bg-panel p-1"
     >
+      {question && (
+        <p className="m-0 px-2.5 pt-1 pb-1.5 text-[length:var(--fs-md)] font-semibold text-fg selectable">
+          {question}
+        </p>
+      )}
       {options.map((option, i) => (
         <button
           key={option}
@@ -89,6 +105,11 @@ export default function ChoicePanel({ options, onPick, onOwn, onDismiss }: Choic
         >
           <kbd className="kbd flex-none">{i + 1}</kbd>
           <span className="min-w-0 flex-1 truncate">{option}</span>
+          {descriptions?.[i] && (
+            <span className="min-w-0 flex-[2] truncate text-[length:var(--fs-sm)] text-fg-muted">
+              {descriptions[i]}
+            </span>
+          )}
         </button>
       ))}
       <button

@@ -104,7 +104,7 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                 out.push(tool_started(message_id, &id, name, summary, None, None));
                 if step["state"] == "DONE" {
                     let failed = tool["error"].as_str().is_some_and(|e| !e.is_empty());
-                    out.push(tool_finished(message_id, &id, failed));
+                    out.push(tool_finished(message_id, &id, failed, ""));
                 }
             }
         }

@@ -188,6 +188,44 @@ pub struct ToolCall {
     pub started_at: Option<u64>,
     #[serde(default)]
     pub ended_at: Option<u64>,
+    /// What the call returned, cut to its first `MAX_TOOL_OUTPUT` bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<String>,
+}
+
+/// The most of a tool call's output that is kept.
+pub const MAX_TOOL_OUTPUT: usize = 16 << 10;
+
+/// `output` cut to `MAX_TOOL_OUTPUT` bytes at a character boundary; None when empty.
+pub fn tool_output(output: &str) -> Option<String> {
+    let output = output.trim_end();
+    if output.is_empty() {
+        return None;
+    }
+    let mut end = output.len().min(MAX_TOOL_OUTPUT);
+    while !output.is_char_boundary(end) {
+        end -= 1;
+    }
+    Some(output[..end].to_string())
+}
+
+/// One step of a reply, in the order it happened.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum Part {
+    Text {
+        text: String,
+    },
+    /// The agent's reasoning; `ended_at` is None while it still streams.
+    Thinking {
+        text: String,
+        started_at: u64,
+        ended_at: Option<u64>,
+    },
+    /// A tool call, by its id in the message's `tools`.
+    Tool {
+        id: String,
+    },
 }
 
 /// A shell command the agent started in the background, still running.
@@ -251,6 +289,32 @@ pub struct Approval {
     /// The command, paths, or other detail being approved.
     pub detail: String,
     pub status: ApprovalStatus,
+    /// What the agent asks the user, when it asks rather than wanting permission.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub questions: Vec<Question>,
+    /// The user's answers, by question id.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub answers: HashMap<String, Vec<String>>,
+}
+
+/// A question the agent asks the user, with the answers it offers.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Question {
+    /// The key its answer goes back under.
+    pub id: String,
+    /// A short label, such as "Library".
+    pub header: String,
+    pub question: String,
+    pub options: Vec<QuestionOption>,
+    pub multi_select: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuestionOption {
+    pub label: String,
+    pub description: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -352,9 +416,10 @@ pub struct Message {
     /// Background shell commands still running after the reply ended; they keep the turn going.
     #[serde(default)]
     pub background: Vec<BackgroundTask>,
-    /// The agent's reasoning while it works. Live only: it is not stored.
+    /// The reply's text, reasoning, and tool calls in the order they happened. Replies saved
+    /// before this was kept have none.
     #[serde(default)]
-    pub thinking: String,
+    pub parts: Vec<Part>,
     /// When the reply finished (ms since epoch); None while it runs.
     #[serde(default)]
     pub finished_at: Option<u64>,
@@ -516,10 +581,15 @@ pub enum AgentEvent {
         message_id: String,
         text: String,
     },
-    /// Part of the agent's reasoning, shown while it works and not stored.
+    /// Part of the agent's reasoning. Streamed pieces carry no times; the saved block
+    /// carries when it started and ended.
     Thinking {
         message_id: String,
         text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        started_at: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ended_at: Option<u64>,
     },
     ToolStarted {
         message_id: String,
@@ -529,6 +599,8 @@ pub enum AgentEvent {
         message_id: String,
         tool_id: String,
         is_error: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        output: Option<String>,
     },
     /// Replace the message's plan with `steps`.
     PlanUpdated {
@@ -548,6 +620,9 @@ pub enum AgentEvent {
         message_id: String,
         approval_id: String,
         allowed: bool,
+        /// The user's answers to the agent's questions, by question id.
+        #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+        answers: HashMap<String, Vec<String>>,
     },
     /// The thread's goal changed; None once it is cleared.
     GoalUpdated {

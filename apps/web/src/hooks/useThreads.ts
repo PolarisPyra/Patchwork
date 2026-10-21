@@ -9,6 +9,7 @@ import {
   type Attachment,
   type Folder,
   type Message,
+  type Part,
   type StepStatus,
   type Thread,
 } from "~/api";
@@ -41,6 +42,13 @@ function upsertMessage(list: Message[], msg: Message): Message[] {
   return at === -1 ? [...rest, msg] : [...rest.slice(0, at), msg, ...rest.slice(at)];
 }
 
+/** Ends the reasoning block still streaming, if any, as the next step starts. */
+function endThinking(parts: Part[]): Part[] {
+  const last = parts.at(-1);
+  if (last?.type !== "thinking" || last.endedAt !== null) return parts;
+  return [...parts.slice(0, -1), { ...last, endedAt: Date.now() }];
+}
+
 function updateMessage(thread: Thread, messageId: string, fn: (m: Message) => Message): Thread {
   return { ...thread, messages: thread.messages.map((m) => (m.id === messageId ? fn(m) : m)) };
 }
@@ -56,24 +64,59 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
     }
     case "messageStarted":
       return { ...thread, messages: upsertMessage(thread.messages, event.message) };
+    // Parts follow the server's (runner.rs `apply`).
     case "textDelta": {
       const { messageId, text } = event;
-      return updateMessage(thread, messageId, (m) => ({ ...m, text: m.text + text }));
+      return updateMessage(thread, messageId, (m) => {
+        const parts = endThinking(m.parts);
+        const last = parts.at(-1);
+        return {
+          ...m,
+          text: m.text + text,
+          parts:
+            last?.type === "text"
+              ? [...parts.slice(0, -1), { type: "text", text: last.text + text }]
+              : [...parts, { type: "text", text }],
+        };
+      });
     }
     case "thinking": {
-      const { messageId, text } = event;
-      return updateMessage(thread, messageId, (m) => ({ ...m, thinking: m.thinking + text }));
+      const { messageId, text, startedAt, endedAt } = event;
+      return updateMessage(thread, messageId, (m) => {
+        const last = m.parts.at(-1);
+        return {
+          ...m,
+          parts:
+            last?.type === "thinking" && last.endedAt === null
+              ? [...m.parts.slice(0, -1), { ...last, text: last.text + text }]
+              : [
+                  ...m.parts,
+                  {
+                    type: "thinking",
+                    text,
+                    startedAt: startedAt ?? Date.now(),
+                    endedAt: endedAt ?? null,
+                  },
+                ],
+        };
+      });
     }
     case "toolStarted": {
       const { messageId, tool } = event;
-      return updateMessage(thread, messageId, (m) => ({ ...m, tools: [...m.tools, tool] }));
+      return updateMessage(thread, messageId, (m) => ({
+        ...m,
+        tools: [...m.tools, tool],
+        parts: [...endThinking(m.parts), { type: "tool", id: tool.id }],
+      }));
     }
     case "toolFinished": {
-      const { messageId, toolId, isError } = event;
+      const { messageId, toolId, isError, output } = event;
       const status: StepStatus = isError ? "error" : "done";
       return updateMessage(thread, messageId, (m) => ({
         ...m,
-        tools: m.tools.map((t) => (t.id === toolId ? { ...t, status, endedAt: Date.now() } : t)),
+        tools: m.tools.map((t) =>
+          t.id === toolId ? { ...t, status, output, endedAt: Date.now() } : t,
+        ),
       }));
     }
     case "planUpdated": {
@@ -94,11 +137,11 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
       }));
     }
     case "approvalResolved": {
-      const { messageId, approvalId, allowed } = event;
+      const { messageId, approvalId, allowed, answers } = event;
       const status = allowed ? "allowed" : "denied";
       return updateMessage(thread, messageId, (m) => ({
         ...m,
-        approvals: m.approvals.map((a) => (a.id === approvalId ? { ...a, status } : a)),
+        approvals: m.approvals.map((a) => (a.id === approvalId ? { ...a, status, answers } : a)),
       }));
     }
     case "messageQueued": {
@@ -131,6 +174,7 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
         status,
         error,
         finishedAt: endedAt,
+        parts: endThinking(m.parts),
         tools: m.tools.map((t) =>
           t.status === "running" ? { ...t, status: toolEnd, endedAt } : t,
         ),

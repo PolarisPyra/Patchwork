@@ -38,8 +38,9 @@ import BackgroundTasks from "~/components/chat/BackgroundTasks";
 import QueuedMessages from "~/components/chat/QueuedMessages";
 import LineageCard from "~/components/chat/LineageCard";
 import type { HistoryEntry } from "~/components/chat/Composer";
-import Messages, { ShellContext } from "~/components/chat/Messages";
+import Messages from "~/components/chat/Messages";
 import PendingApprovalBanner from "~/components/chat/PendingApprovalBanner";
+import TasksBadge from "~/components/chat/TasksBadge";
 import ResumePrompt from "~/components/chat/ResumePrompt";
 import { isWorking, type NewThreadOptions } from "~/hooks/useThreads";
 import { coldLargeSession } from "~/lib/tokens";
@@ -65,8 +66,6 @@ interface ChatProps {
   /** Connected agents offered in the composer's agent picker. */
   agents: AgentKind[];
   tokens: TokenSettings;
-  /** The shell the user chose for commands, or null to follow the system. */
-  shell: string | null;
   onUpdateTokens: (patch: Partial<TokenSettings>) => void;
   onOpenFolder: () => void;
   onOpenCanvas: (path: string, message: Message | null, tab: CanvasTab) => void;
@@ -107,7 +106,6 @@ export default function Chat({
   defaultAgent,
   agents,
   tokens,
-  shell,
   onUpdateTokens,
   onOpenFolder,
   onOpenCanvas,
@@ -325,6 +323,13 @@ export default function Chat({
 
   function submit(queue: boolean) {
     const text = draft.trim();
+    // An answer written in the composer goes to the agent's question, not into the chat.
+    if (asking && ownAnswer === asking.id) {
+      if (!text) return;
+      setDraft("");
+      answerQuestion(text);
+      return;
+    }
     if (text === "/clear" && attachments.length === 0) {
       void clearChat();
       return;
@@ -470,18 +475,45 @@ export default function Chat({
 
   const threadId = thread?.id;
   const respond = useCallback(
-    (approvalId: string, allow: boolean) => {
+    (approvalId: string, allow: boolean, answers?: Record<string, string[]>) => {
       if (!threadId) return;
       setError(null);
       api
-        .respondApproval(threadId, approvalId, allow)
+        .respondApproval(threadId, approvalId, allow, answers)
         .catch((e: unknown) => setError(errorText(e)));
     },
     [threadId],
   );
   const pendingApprovals =
     thread?.messages.flatMap((m) => m.approvals).filter((a) => a.status === "pending") ?? [];
+  // Questions the agent asks wait in a choice panel, one at a time; permission requests wait in
+  // the banner.
+  const asking = pendingApprovals.find((a) => a.questions?.length);
+  const permissions = pendingApprovals.filter((a) => !a.questions?.length);
+  const [picks, setPicks] = useState<{ id: string; answers: Record<string, string[]> } | null>(
+    null,
+  );
+  // The question the user is answering in the composer, by its approval's id.
+  const [ownAnswer, setOwnAnswer] = useState<string | null>(null);
+  const answered = asking && picks?.id === asking.id ? picks.answers : {};
+  const question = asking?.questions?.find((q) => !(q.id in answered));
+  const showQuestion = question !== undefined && ownAnswer !== asking?.id;
+  // Records the answer to the shown question, and sends them all once the last is answered.
+  function answerQuestion(answer: string) {
+    if (!asking?.questions || !question) return;
+    const answers = { ...answered, [question.id]: [answer] };
+    setOwnAnswer(null);
+    if (asking.questions.every((q) => q.id in answers)) {
+      setPicks(null);
+      respond(asking.id, true, answers);
+    } else {
+      setPicks({ id: asking.id, answers });
+    }
+  }
 
+  // The plan of the latest reply, while it has one.
+  const plan =
+    [...(thread?.messages ?? [])].reverse().find((m) => m.role === "assistant")?.plan ?? [];
   // Choices the agent offered in its last finished reply, until the user answers or dismisses them.
   const lastMessage = thread?.messages.at(-1);
   const choiceSource =
@@ -530,18 +562,16 @@ export default function Chat({
       )}
       <div className={`flex min-h-0 flex-col ${isNew ? "flex-none overflow-y-auto" : "flex-1"}`}>
         {!isNew ? (
-          <ShellContext.Provider value={shell}>
-            <Messages
-              key={thread.id}
-              thread={thread}
-              changes={changes}
-              busy={working}
-              onOpenCanvas={project ? openCanvas : undefined}
-              onShowChanges={showChanges}
-              onRetry={retry}
-              tokens={tokens}
-            />
-          </ShellContext.Provider>
+          <Messages
+            key={thread.id}
+            thread={thread}
+            changes={changes}
+            busy={working}
+            onOpenCanvas={project ? openCanvas : undefined}
+            onShowChanges={showChanges}
+            onRetry={retry}
+            tokens={tokens}
+          />
         ) : (
           <div className="flex h-auto flex-col items-center justify-center gap-4 p-6 text-center">
             <ProviderLogos kind={agent} size={40} />
@@ -574,8 +604,20 @@ export default function Chat({
         )}
       </div>
       <div className="w-full flex-none box-border px-6 pb-4">
-        {pendingApprovals.length > 0 && (
-          <PendingApprovalBanner approvals={pendingApprovals} onRespond={respond} />
+        {plan.length > 0 && <TasksBadge steps={plan} />}
+        {permissions.length > 0 && (
+          <PendingApprovalBanner approvals={permissions} onRespond={respond} />
+        )}
+        {asking && question && showQuestion && (
+          <ChoicePanel
+            key={question.id}
+            question={question.question}
+            options={question.options.map((o) => o.label)}
+            descriptions={question.options.map((o) => o.description)}
+            onPick={answerQuestion}
+            onOwn={() => setOwnAnswer(asking.id)}
+            onDismiss={() => respond(asking.id, false)}
+          />
         )}
         {thread && resumeAsk === thread.id && (
           <ResumePrompt
@@ -635,7 +677,7 @@ export default function Chat({
             dropping={dropping}
             history={history}
             files={files}
-            deferFocus={showChoices}
+            deferFocus={showChoices || showQuestion}
           />
         </Suspense>
       </div>

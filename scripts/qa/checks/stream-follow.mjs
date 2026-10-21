@@ -20,7 +20,7 @@ const script = `(() => {
   const now = Date.now();
   const messages = Array.from({ length: 40 }, (_, i) => ({
     id: "long" + i, role: i % 2 ? "assistant" : "user", text: "Paragraph " + i + ". " + "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(6),
-    thinking: "", createdAt: now - (40 - i) * 60000, finishedAt: i === 39 ? null : now - (40 - i) * 60000 + 1000,
+    parts: [], createdAt: now - (40 - i) * 60000, finishedAt: i === 39 ? null : now - (40 - i) * 60000 + 1000,
     status: i === 39 ? "streaming" : "complete",
     tools: [], plan: [], files: [], approvals: [], attachments: [], background: [], error: null, steer: false, queued: false, usage: null,
   }));

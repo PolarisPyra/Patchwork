@@ -266,8 +266,14 @@ async fn stop_goal(server: Srv<'_>, thread_id: String) -> Res<()> {
 }
 
 #[tauri::command]
-fn respond_approval(server: Srv, thread_id: String, approval_id: String, allow: bool) -> Res<()> {
-    server.respond_approval(&thread_id, &approval_id, allow)
+fn respond_approval(
+    server: Srv,
+    thread_id: String,
+    approval_id: String,
+    allow: bool,
+    answers: Option<std::collections::HashMap<String, Vec<String>>>,
+) -> Res<()> {
+    server.respond_approval(&thread_id, &approval_id, allow, answers.unwrap_or_default())
 }
 
 #[tauri::command]

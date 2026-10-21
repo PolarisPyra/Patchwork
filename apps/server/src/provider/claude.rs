@@ -70,10 +70,9 @@ pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
     ]
     .map(String::from)
     .into();
-    if spec.mode != AccessMode::FullAccess {
-        // Permission checks arrive as `can_use_tool` control requests on stdout.
-        args.extend(["--permission-prompt-tool".to_string(), "stdio".to_string()]);
-    }
+    // Permission checks arrive as `can_use_tool` control requests on stdout. Full access
+    // takes them too, since AskUserQuestion asks the user that way in every mode.
+    args.extend(["--permission-prompt-tool".to_string(), "stdio".to_string()]);
     if let Some(id) = spec.session_id {
         args.extend(["--resume".to_string(), id.to_string()]);
     }
@@ -127,9 +126,23 @@ pub fn stop_task(task_id: &str) -> String {
     .to_string()
 }
 
-pub fn approval_reply(reply: &Value, allow: bool) -> String {
+/// Answers go back in the tool's input, each under its question's text, with several picks
+/// joined by commas.
+pub fn approval_reply(
+    reply: &Value,
+    allow: bool,
+    answers: &HashMap<String, Vec<String>>,
+) -> String {
     let decision = if allow {
-        serde_json::json!({"behavior": "allow", "updatedInput": reply["input"]})
+        let mut input = reply["input"].clone();
+        if !answers.is_empty() {
+            input["answers"] = answers
+                .iter()
+                .map(|(question, picks)| (question.clone(), picks.join(", ").into()))
+                .collect::<serde_json::Map<_, _>>()
+                .into();
+        }
+        serde_json::json!({"behavior": "allow", "updatedInput": input})
     } else {
         serde_json::json!({"behavior": "deny", "message": "The user denied this action."})
     };
@@ -161,6 +174,19 @@ fn claude_control_request(v: &Value, root: &str) -> Parsed {
         );
     }
     let tool = request["tool_name"].as_str().unwrap_or("a tool");
+    let reply = serde_json::json!({"request_id": v["request_id"], "input": request["input"]});
+    if tool == "AskUserQuestion" {
+        let questions = claude_questions(&request["input"]);
+        return Parsed::Approval {
+            title: "Question".into(),
+            detail: questions
+                .first()
+                .map(|q| q.question.clone())
+                .unwrap_or_default(),
+            reply,
+            questions,
+        };
+    }
     let title = match tool {
         "Bash" => "Run command".to_string(),
         "Edit" | "Write" | "MultiEdit" | "NotebookEdit" => "Edit file".to_string(),
@@ -173,8 +199,36 @@ fn claude_control_request(v: &Value, root: &str) -> Parsed {
     Parsed::Approval {
         title,
         detail,
-        reply: serde_json::json!({"request_id": v["request_id"], "input": request["input"]}),
+        reply,
+        questions: vec![],
     }
+}
+
+/// AskUserQuestion's questions. Claude takes each answer back under the question's text.
+fn claude_questions(input: &Value) -> Vec<Question> {
+    let questions = input["questions"].as_array().map_or(&[][..], Vec::as_slice);
+    questions
+        .iter()
+        .filter_map(|q| {
+            let question = q["question"].as_str()?.to_string();
+            let options = q["options"].as_array().map_or(&[][..], Vec::as_slice);
+            Some(Question {
+                id: question.clone(),
+                header: q["header"].as_str().unwrap_or_default().into(),
+                question,
+                options: options
+                    .iter()
+                    .filter_map(|o| {
+                        Some(QuestionOption {
+                            label: o["label"].as_str()?.into(),
+                            description: o["description"].as_str().unwrap_or_default().into(),
+                        })
+                    })
+                    .collect(),
+                multi_select: q["multiSelect"].as_bool().unwrap_or(false),
+            })
+        })
+        .collect()
 }
 
 fn claude_step_status(status: Option<&str>) -> StepStatus {
@@ -321,10 +375,7 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
             if parent.is_none() && delta["type"] == "thinking_delta" {
                 let text = delta["thinking"].as_str().unwrap_or_default();
                 if !text.is_empty() {
-                    out.push(Parsed::Event(AgentEvent::Thinking {
-                        message_id: message_id.into(),
-                        text: text.into(),
-                    }));
+                    out.push(thinking(message_id, text));
                 }
             }
         }
@@ -348,7 +399,13 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
             for block in blocks.iter().filter(|b| b["type"] == "tool_result") {
                 let id = block["tool_use_id"].as_str().unwrap_or_default();
                 let is_error = block["is_error"].as_bool().unwrap_or(false);
-                out.push(tool_finished(message_id, id, is_error));
+                // Content is a string, or text blocks.
+                let content = &block["content"];
+                let output = content.as_str().map_or_else(
+                    || block_text(content.as_array().map_or(&[][..], Vec::as_slice)),
+                    String::from,
+                );
+                out.push(tool_finished(message_id, id, is_error, &output));
             }
             // Each `/goal` check that finds the goal unmet returns as Stop hook feedback.
             let content = &v["message"]["content"];
@@ -546,6 +603,7 @@ mod tests {
                 title,
                 detail,
                 reply,
+                ..
             },
         ] = out.as_slice()
         else {
@@ -556,14 +614,16 @@ mod tests {
             ("Run command", "rm -rf build")
         );
 
-        let allow: Value = serde_json::from_str(&approval_reply(reply, true)).unwrap();
+        let allow: Value =
+            serde_json::from_str(&approval_reply(reply, true, &HashMap::new())).unwrap();
         assert_eq!(allow["response"]["request_id"], "r1");
         assert_eq!(allow["response"]["response"]["behavior"], "allow");
         assert_eq!(
             allow["response"]["response"]["updatedInput"]["command"],
             "rm -rf build"
         );
-        let deny: Value = serde_json::from_str(&approval_reply(reply, false)).unwrap();
+        let deny: Value =
+            serde_json::from_str(&approval_reply(reply, false, &HashMap::new())).unwrap();
         assert_eq!(deny["response"]["response"]["behavior"], "deny");
 
         let other = json!({"type": "control_request", "request_id": "r2",
@@ -596,6 +656,8 @@ mod tests {
                 "--include-partial-messages",
                 "--permission-mode",
                 "bypassPermissions",
+                "--permission-prompt-tool",
+                "stdio",
                 "--resume",
                 "sid",
                 "--model",

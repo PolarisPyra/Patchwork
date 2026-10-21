@@ -257,7 +257,20 @@ pub fn steer_input(
     .to_string()
 }
 
-pub fn approval_reply(reply: &Value, allow: bool) -> String {
+/// A question's reply carries the answers by question id; declining it answers none.
+pub fn approval_reply(
+    reply: &Value,
+    allow: bool,
+    answers: &HashMap<String, Vec<String>>,
+) -> String {
+    if reply["question"] == true {
+        let answers: serde_json::Map<_, _> = answers
+            .iter()
+            .filter(|_| allow)
+            .map(|(id, picks)| (id.clone(), json!({"answers": picks})))
+            .collect();
+        return json!({"id": reply["id"], "result": {"answers": answers}}).to_string();
+    }
     let decision = if allow { "accept" } else { "decline" };
     json!({"id": reply["id"], "result": {"decision": decision}}).to_string()
 }
@@ -293,7 +306,8 @@ fn codex_item(completed: bool, item: &Value, root: &str, message_id: &str, out: 
             ));
             if completed {
                 let exit_failed = item["exitCode"].as_i64().is_some_and(|c| c != 0);
-                out.push(tool_finished(message_id, id, failed || exit_failed));
+                let output = item["aggregatedOutput"].as_str().unwrap_or_default();
+                out.push(tool_finished(message_id, id, failed || exit_failed, output));
             }
         }
         Some("mcpToolCall") => {
@@ -304,7 +318,7 @@ fn codex_item(completed: bool, item: &Value, root: &str, message_id: &str, out: 
             );
             out.push(tool_started(message_id, id, "MCP", summary, None, None));
             if completed {
-                out.push(tool_finished(message_id, id, failed));
+                out.push(tool_finished(message_id, id, failed, ""));
             }
         }
         Some("webSearch") => {
@@ -318,7 +332,7 @@ fn codex_item(completed: bool, item: &Value, root: &str, message_id: &str, out: 
                 None,
             ));
             if completed {
-                out.push(tool_finished(message_id, id, false));
+                out.push(tool_finished(message_id, id, false, ""));
             }
         }
         Some("fileChange") => {
@@ -341,7 +355,7 @@ fn codex_item(completed: bool, item: &Value, root: &str, message_id: &str, out: 
                 if !failed {
                     out.extend(paths.into_iter().map(|p| file_touched(message_id, p)));
                 }
-                out.push(tool_finished(message_id, id, failed));
+                out.push(tool_finished(message_id, id, failed, ""));
             }
         }
         _ => {}
@@ -363,6 +377,18 @@ fn codex_server_request(v: &Value) -> Parsed {
                 .or(params["grantRoot"].as_str())
                 .unwrap_or("Apply the proposed file changes"),
         ),
+        Some("item/tool/requestUserInput") if !codex_questions(&params["questions"]).is_empty() => {
+            let questions = codex_questions(&params["questions"]);
+            return Parsed::Approval {
+                title: "Question".into(),
+                detail: questions
+                    .first()
+                    .map(|q| q.question.clone())
+                    .unwrap_or_default(),
+                reply: json!({"id": v["id"], "question": true}),
+                questions,
+            };
+        }
         _ => {
             return Parsed::Send(
                 json!({"id": v["id"], "error": {"code": -32601, "message": "Not supported by Patchwork"}})
@@ -374,7 +400,34 @@ fn codex_server_request(v: &Value) -> Parsed {
         title: title.into(),
         detail: one_line(detail),
         reply: json!({"id": v["id"]}),
+        questions: vec![],
     }
+}
+
+/// The questions of a `request_user_input` call, each answered under its own id.
+fn codex_questions(questions: &Value) -> Vec<Question> {
+    let questions = questions.as_array().map_or(&[][..], Vec::as_slice);
+    questions
+        .iter()
+        .filter_map(|q| {
+            let options = q["options"].as_array().map_or(&[][..], Vec::as_slice);
+            Some(Question {
+                id: q["id"].as_str()?.into(),
+                header: q["header"].as_str().unwrap_or_default().into(),
+                question: q["question"].as_str()?.into(),
+                options: options
+                    .iter()
+                    .filter_map(|o| {
+                        Some(QuestionOption {
+                            label: o["label"].as_str()?.into(),
+                            description: o["description"].as_str().unwrap_or_default().into(),
+                        })
+                    })
+                    .collect(),
+                multi_select: false,
+            })
+        })
+        .collect()
 }
 
 /// Maps one JSON-RPC message from `codex app-server`.
@@ -441,6 +494,12 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
             out.extend(goal_of(&params["goal"]).map(|g| Parsed::Goal(GoalUpdate::Reported(g))));
         }
         (None, Some("thread/goal/cleared")) => out.push(Parsed::Goal(GoalUpdate::Cleared)),
+        (None, Some("item/reasoning/summaryTextDelta")) => {
+            let delta = params["delta"].as_str().unwrap_or_default();
+            if !delta.is_empty() {
+                out.push(thinking(message_id, delta));
+            }
+        }
         (None, Some("turn/started")) => {
             if let Some(turn_id) = params["turn"]["id"].as_str() {
                 out.push(Parsed::TurnStarted(turn_id.into()));
@@ -598,6 +657,7 @@ mod tests {
                 title,
                 detail,
                 reply,
+                ..
             },
         ] = out.as_slice()
         else {
@@ -607,7 +667,8 @@ mod tests {
             (title.as_str(), detail.as_str()),
             ("Run command", "rm -rf build")
         );
-        let answer: Value = serde_json::from_str(&approval_reply(reply, false)).unwrap();
+        let answer: Value =
+            serde_json::from_str(&approval_reply(reply, false, &HashMap::new())).unwrap();
         assert_eq!(answer, json!({"id": 7, "result": {"decision": "decline"}}));
 
         let input = json!({"id": 8, "method": "item/tool/requestUserInput", "params": {}});

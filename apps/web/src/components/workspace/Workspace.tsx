@@ -563,7 +563,6 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
               defaultAgent={defaultAgent}
               agents={connectedAgents}
               tokens={settings.tokens}
-              shell={settings.shell}
               onUpdateTokens={(patch) =>
                 void updateSettings((s) => ({ ...s, tokens: { ...s.tokens, ...patch } }))
               }

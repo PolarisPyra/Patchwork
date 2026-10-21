@@ -42,19 +42,6 @@
 - Do not push at all unless the user explicitly asks.
 - Commit subjects are short, sentence-case, imperative-style summaries with no prefix, such as "Nudge the header project dropdown 2px left". Describe the user-visible change.
 
-## Offering choices
-
-- When asking the user to pick between options, put them in a fenced block with the language `choices`, containing a JSON array of short option labels, and nothing else in the block. Example:
-
-  ````
-  ```choices
-  ["Commit and push", "Commit without pushing", "Leave uncommitted"]
-  ```
-  ````
-
-- The app shows the options as numbered keys above the compose box and adds "Submit my own response" itself, so do not list that option in the array.
-- Do not also write the options as a plain list.
-
 ## UI checks
 
 - For alignment, layout, spacing, or other UI and UX issues, measure and screenshot the running app before changing code, and again after the change. Use the in-repo harness in `scripts/qa/` (see its README): `pnpm qa:stripe` measures the tool stripe, and `pnpm qa:shot <out.png> [selector]` saves a screenshot. Add new checks under `scripts/qa/checks/`.

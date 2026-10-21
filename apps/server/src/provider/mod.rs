@@ -6,6 +6,7 @@ pub mod codex;
 pub mod antigravity;
 pub mod model_manifest;
 
+use std::collections::HashMap;
 use std::io::Read;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -341,17 +342,39 @@ pub fn turn_input(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
 /// Maps one line of the agent's JSONL output.
 pub fn parse_line(agent: AgentKind, v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
     match agent {
-        AgentKind::Claude => claude::parse(v, spec.root, message_id),
+        AgentKind::Claude => {
+            let parsed = claude::parse(v, spec.root, message_id);
+            if spec.mode != AccessMode::FullAccess {
+                return parsed;
+            }
+            // Full access still routes questions here; anything else is allowed at once.
+            parsed
+                .into_iter()
+                .map(|p| match p {
+                    Parsed::Approval {
+                        reply, questions, ..
+                    } if questions.is_empty() => {
+                        Parsed::Send(claude::approval_reply(&reply, true, &HashMap::new()))
+                    }
+                    p => p,
+                })
+                .collect()
+        }
         AgentKind::Codex => codex::parse(v, spec, message_id),
         AgentKind::Antigravity => antigravity::parse(v, spec, message_id),
     }
 }
 
 /// The stdin line answering an approval, from the `reply` the parser attached to it.
-pub fn approval_reply(agent: AgentKind, reply: &Value, allow: bool) -> String {
+pub fn approval_reply(
+    agent: AgentKind,
+    reply: &Value,
+    allow: bool,
+    answers: &HashMap<String, Vec<String>>,
+) -> String {
     match agent {
-        AgentKind::Claude => claude::approval_reply(reply, allow),
-        AgentKind::Codex => codex::approval_reply(reply, allow),
+        AgentKind::Claude => claude::approval_reply(reply, allow, answers),
+        AgentKind::Codex => codex::approval_reply(reply, allow, answers),
         // Antigravity runs headless and never asks.
         AgentKind::Antigravity => String::new(),
     }
@@ -396,6 +419,8 @@ pub enum Parsed {
         title: String,
         detail: String,
         reply: Value,
+        /// Set when the agent asks the user questions instead of asking permission.
+        questions: Vec<Question>,
     },
     /// The agent took a steering message (Codex acknowledges each one).
     Steered,
@@ -458,15 +483,26 @@ fn tool_started(
             parent: parent.map(String::from),
             started_at: Some(now_ms()),
             ended_at: None,
+            output: None,
         },
     })
 }
 
-fn tool_finished(message_id: &str, tool_id: &str, is_error: bool) -> Parsed {
+fn tool_finished(message_id: &str, tool_id: &str, is_error: bool, output: &str) -> Parsed {
     Parsed::Event(AgentEvent::ToolFinished {
         message_id: message_id.into(),
         tool_id: tool_id.into(),
         is_error,
+        output: tool_output(output),
+    })
+}
+
+fn thinking(message_id: &str, text: &str) -> Parsed {
+    Parsed::Event(AgentEvent::Thinking {
+        message_id: message_id.into(),
+        text: text.into(),
+        started_at: None,
+        ended_at: None,
     })
 }
 

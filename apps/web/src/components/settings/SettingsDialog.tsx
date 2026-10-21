@@ -103,7 +103,7 @@ export default function SettingsDialog({
           {SECTIONS.map(({ id, label, Icon }) => (
             <button
               key={id}
-              className={`flex h-7 cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border-none bg-transparent px-2 text-left text-fg ${section === id ? "bg-selected" : "hover:bg-hover"}`}
+              className={`flex h-7 cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border-none px-2 text-left text-fg ${section === id ? "bg-selected hover:bg-[color-mix(in_srgb,var(--bg-selected),var(--text)_8%)]" : "bg-transparent hover:bg-hover"}`}
               onClick={() => setSection(id)}
             >
               <Icon size={15} />

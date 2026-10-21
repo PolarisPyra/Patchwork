@@ -196,7 +196,7 @@ fn user_message(text: &str, attachments: Vec<Attachment>) -> Message {
         steer: false,
         queued: false,
         background: Vec::new(),
-        thinking: String::new(),
+        parts: Vec::new(),
         finished_at: None,
         usage: None,
     }
@@ -746,8 +746,10 @@ impl Server {
         thread_id: &str,
         approval_id: &str,
         allow: bool,
+        answers: std::collections::HashMap<String, Vec<String>>,
     ) -> Res<()> {
-        self.runner.respond(self, thread_id, approval_id, allow)
+        self.runner
+            .respond(self, thread_id, approval_id, allow, answers)
     }
 
     // ---- importing conversations ------------------------------------------

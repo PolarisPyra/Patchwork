@@ -34,10 +34,11 @@ fn build_slice() -> &'static str {
 /// slice. The command keeps systemd-run's pid, so signals and waits reach the agent
 /// itself. A scope stops as a whole when the kernel kills one of its processes for memory,
 /// and stopping it sends SIGKILL to whatever is left after 5 seconds.
-fn scope_command(run: &Path) -> Command {
+fn scope_command(run: &Path, unit: Option<&str>) -> Command {
     let mut cmd = Command::new(run);
     cmd.args(["--user", "--scope", "--quiet", "--collect"])
         .arg(format!("--slice={}", build_slice()))
+        .args(unit.map(|u| format!("--unit={u}")))
         .args([
             "--property=OOMPolicy=stop",
             "--property=TimeoutStopSec=5s",
@@ -60,7 +61,7 @@ fn systemd_run() -> Option<&'static PathBuf> {
         std::env::var_os("XDG_RUNTIME_DIR")?;
         let run = which::which("systemd-run").ok()?;
         systemctl(&["stop", build_slice()]);
-        let started = scope_command(&run)
+        let started = scope_command(&run, None)
             .arg("true")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -98,6 +99,12 @@ fn limit_slice() {
     }
 }
 
+/// Stops the agent's scope with whatever is still running in it, such as commands the agent
+/// started in sessions of their own, which its process group does not reach.
+pub fn stop(unit: &str) {
+    systemctl(&["stop", "--no-block", unit]);
+}
+
 /// Runs `systemctl --user` with `args`; whether it succeeded.
 fn systemctl(args: &[&str]) -> bool {
     Command::new("systemctl")
@@ -118,13 +125,14 @@ fn total_memory() -> Option<u64> {
     Some(kib * 1024)
 }
 
-/// `cmd` run in a new scope under the agents' slice, or `cmd` itself when scopes are
-/// unavailable. Arguments added afterwards still go to the agent.
-pub fn scoped(cmd: Command) -> Command {
+/// `cmd` run in a new scope under the agents' slice, with the scope's unit name, or `cmd`
+/// itself when scopes are unavailable. Arguments added afterwards still go to the agent.
+pub fn scoped(cmd: Command) -> (Command, Option<String>) {
     let Some(run) = systemd_run() else {
-        return cmd;
+        return (cmd, None);
     };
-    let mut scoped = scope_command(run);
+    let unit = format!("patchwork-agent-{}.scope", uuid::Uuid::new_v4().simple());
+    let mut scoped = scope_command(run, Some(&unit));
     scoped.arg(cmd.get_program()).args(cmd.get_args());
     for (key, value) in cmd.get_envs() {
         match value {
@@ -135,5 +143,5 @@ pub fn scoped(cmd: Command) -> Command {
     if let Some(dir) = cmd.get_current_dir() {
         scoped.current_dir(dir);
     }
-    scoped
+    (scoped, Some(unit))
 }

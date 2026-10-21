@@ -156,7 +156,7 @@ impl Runner {
             args.extend(orchestration::claude::launch_args(&server.store.settings()));
         }
         let input = provider::turn_input(agent, &spec);
-        let mut cmd = scope::scoped(provider::agent_command(agent)?);
+        let (mut cmd, scope) = scope::scoped(provider::agent_command(agent)?);
         if let Some(shell) = crate::effective_shell(server.store.settings().shell.as_deref()) {
             cmd.env("SHELL", shell);
         }
@@ -201,6 +201,7 @@ impl Runner {
             timed_out: timed_out.clone(),
             exited: exited.clone(),
             baseline,
+            scope,
             stdin: stdin.clone(),
             pending: pending.clone(),
             native_turn: native_turn.clone(),
@@ -235,6 +236,20 @@ impl Runner {
                 },
             );
         turn.publish(AgentEvent::MessageStarted { message });
+        // Claude restores an unmet goal whenever its session resumes, so this turn pursues it.
+        if agent == AgentKind::Claude && turn.session_id.is_some() {
+            let paused = server
+                .store
+                .thread(&turn.thread_id)
+                .and_then(|t| t.goal)
+                .filter(|g| g.status == GoalStatus::Paused);
+            if let Some(goal) = paused {
+                let status = GoalStatus::Active;
+                turn.publish(AgentEvent::GoalUpdated {
+                    goal: Some(Goal { status, ..goal }),
+                });
+            }
+        }
         let (pid, exited) = (child.id(), turn.exited.clone());
         std::thread::spawn(move || {
             std::thread::sleep(TURN_TIMEOUT);
@@ -454,6 +469,7 @@ impl Runner {
         thread_id: &str,
         approval_id: &str,
         allow: bool,
+        answers: HashMap<String, Vec<String>>,
     ) -> Result<(), String> {
         let (agent, stdin, (message_id, reply)) = {
             let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
@@ -468,7 +484,10 @@ impl Runner {
                 .ok_or("This request was already answered")?;
             (turn.agent, turn.stdin.clone(), reply)
         };
-        write_line(&stdin, &provider::approval_reply(agent, &reply, allow));
+        write_line(
+            &stdin,
+            &provider::approval_reply(agent, &reply, allow, &answers),
+        );
         publish(
             server,
             thread_id,
@@ -476,6 +495,7 @@ impl Runner {
                 message_id: message_id.clone(),
                 approval_id: approval_id.into(),
                 allowed: allow,
+                answers,
             },
         );
         Ok(())
@@ -611,6 +631,8 @@ struct Turn {
     exited: Arc<AtomicBool>,
     /// `git status` of the project when the turn started.
     baseline: Vec<FileChange>,
+    /// The agent's systemd scope, when agents run in scopes.
+    scope: Option<String>,
     stdin: Stdin,
     pending: Pending,
     native_turn: NativeTurn,
@@ -634,7 +656,7 @@ impl Turn {
 
     /// Starts a new assistant message for what the agent says after taking a steering
     /// message, so the answer follows that message instead of growing the reply above it.
-    fn next_segment(&mut self, unsaved: &mut String) {
+    fn next_segment(&mut self, unsaved: &mut Unsaved) {
         self.save_text(unsaved);
         let message = assistant_message();
         self.message_id = message.id.clone();
@@ -649,27 +671,65 @@ impl Turn {
 
     /// Streams a text delta to the frontend without saving it; the reader
     /// collects it in `unsaved` so it is stored in one write later.
-    fn stream_text(&self, event: AgentEvent, unsaved: &mut String) {
+    fn stream_text(&self, event: AgentEvent, unsaved: &mut Unsaved) {
+        self.save_thinking(unsaved);
         if let AgentEvent::TextDelta { text, .. } = &event {
-            unsaved.push_str(text);
+            unsaved.text.push_str(text);
         }
+        self.emit(event);
+    }
+
+    /// Streams reasoning like `stream_text`; it is stored as one block when it ends.
+    fn stream_thinking(&self, event: AgentEvent, unsaved: &mut Unsaved) {
+        self.save_only_text(unsaved);
+        if let AgentEvent::Thinking { text, .. } = &event {
+            if unsaved.thinking.is_empty() {
+                unsaved.thinking_since = now_ms();
+            }
+            unsaved.thinking.push_str(text);
+        }
+        self.emit(event);
+    }
+
+    fn emit(&self, event: AgentEvent) {
         self.server.emit(AgentEventEnvelope {
             thread_id: self.thread_id.clone(),
             event,
         });
     }
 
-    /// Saves text that was streamed but not yet stored.
-    fn save_text(&self, unsaved: &mut String) {
-        if unsaved.is_empty() {
+    /// Saves text and reasoning that were streamed but not yet stored.
+    fn save_text(&self, unsaved: &mut Unsaved) {
+        self.save_thinking(unsaved);
+        self.save_only_text(unsaved);
+    }
+
+    fn save_only_text(&self, unsaved: &mut Unsaved) {
+        if unsaved.text.is_empty() {
             return;
         }
         let event = AgentEvent::TextDelta {
             message_id: self.message_id.clone(),
-            text: std::mem::take(unsaved),
+            text: std::mem::take(&mut unsaved.text),
         };
         if let Err(e) = save_event(&self.server, &self.thread_id, &event) {
             log::warn!("failed to save agent text: {e}");
+        }
+    }
+
+    /// Saves the reasoning block that streamed since `thinking_since`; it ends now.
+    fn save_thinking(&self, unsaved: &mut Unsaved) {
+        if unsaved.thinking.is_empty() {
+            return;
+        }
+        let event = AgentEvent::Thinking {
+            message_id: self.message_id.clone(),
+            text: std::mem::take(&mut unsaved.thinking),
+            started_at: Some(unsaved.thinking_since),
+            ended_at: Some(now_ms()),
+        };
+        if let Err(e) = save_event(&self.server, &self.thread_id, &event) {
+            log::warn!("failed to save agent reasoning: {e}");
         }
     }
 
@@ -685,6 +745,14 @@ impl Turn {
             images: &self.images,
         }
     }
+}
+
+/// Streamed output not yet stored: text, or a block of reasoning and when it started.
+#[derive(Default)]
+struct Unsaved {
+    text: String,
+    thinking: String,
+    thinking_since: u64,
 }
 
 /// An empty assistant message the agent's output streams into.
@@ -704,7 +772,7 @@ fn assistant_message() -> Message {
         steer: false,
         queued: false,
         background: Vec::new(),
-        thinking: String::new(),
+        parts: Vec::new(),
         finished_at: None,
         usage: None,
     }
@@ -739,7 +807,7 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
     let goal_round = Arc::new(AtomicU64::new(0));
     // Text streamed to the frontend but not yet stored; saving every delta
     // stalls the reader, so it is stored before the next event and at the end.
-    let mut unsaved = String::new();
+    let mut unsaved = Unsaved::default();
     // Every model request the turn has made; each reply's usage is summed from these.
     let mut requests: Vec<Request> = Vec::new();
 
@@ -777,12 +845,15 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
                     title,
                     detail,
                     reply,
+                    questions,
                 } => {
                     let approval = Approval {
                         id: new_id(),
                         title,
                         detail,
                         status: ApprovalStatus::Pending,
+                        questions,
+                        answers: HashMap::new(),
                     };
                     turn.pending
                         .lock()
@@ -950,6 +1021,7 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
                             message_id: owner.clone(),
                             tool_id,
                             is_error: failed || call_failed,
+                            output: None,
                         });
                     }
                     let background = running_tasks.values().any(Option::is_some);
@@ -969,12 +1041,8 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
                     stream_error.get_or_insert(message);
                 }
                 Parsed::Event(mut event) => {
-                    // Reasoning is shown as it streams, but not saved.
                     if let AgentEvent::Thinking { .. } = &event {
-                        turn.server.emit(AgentEventEnvelope {
-                            thread_id: turn.thread_id.clone(),
-                            event,
-                        });
+                        turn.stream_thinking(event, &mut unsaved);
                         continue;
                     }
                     match &mut event {
@@ -1002,6 +1070,7 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
                             tool_id,
                             message_id,
                             is_error,
+                            ..
                         } => {
                             if let Some(owner) = tool_owner.get(tool_id) {
                                 message_id.clone_from(owner);
@@ -1035,9 +1104,12 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
     }
 
     let exit = child.wait().ok();
-    // Whatever the agent left running in its group (MCP servers, background commands)
-    // would otherwise outlive the turn and keep its memory in the agents' slice.
+    // Whatever the agent left running in its group or scope (MCP servers, background
+    // commands) would otherwise outlive the turn and keep its memory in the agents' slice.
     workspace::signal_process_group(pid, libc::SIGKILL);
+    if let Some(unit) = &turn.scope {
+        scope::stop(unit);
+    }
     turn.exited.store(true, Ordering::SeqCst);
     let tail = stderr_tail.join().unwrap_or_default();
     let cancelled = turn.cancelled.load(Ordering::SeqCst);
@@ -1300,6 +1372,13 @@ fn event_message(event: &AgentEvent) -> Option<&str> {
     }
 }
 
+/// Ends the reasoning block still streaming, if any, as the next step starts.
+fn end_thinking(msg: &mut Message) {
+    if let Some(Part::Thinking { ended_at, .. }) = msg.parts.last_mut() {
+        ended_at.get_or_insert_with(now_ms);
+    }
+}
+
 fn apply(thread: &mut Thread, event: &AgentEvent) {
     match event {
         AgentEvent::MessageStarted { message } => {
@@ -1325,13 +1404,46 @@ fn apply(thread: &mut Thread, event: &AgentEvent) {
         return;
     };
     match event {
-        AgentEvent::TextDelta { text, .. } => msg.text.push_str(text),
-        AgentEvent::Thinking { text, .. } => msg.thinking.push_str(text),
-        AgentEvent::ToolStarted { tool, .. } => msg.tools.push(tool.clone()),
+        AgentEvent::TextDelta { text, .. } => {
+            msg.text.push_str(text);
+            end_thinking(msg);
+            match msg.parts.last_mut() {
+                Some(Part::Text { text: last }) => last.push_str(text),
+                _ => msg.parts.push(Part::Text { text: text.clone() }),
+            }
+        }
+        AgentEvent::Thinking {
+            text,
+            started_at,
+            ended_at,
+            ..
+        } => match msg.parts.last_mut() {
+            Some(Part::Thinking {
+                text: last,
+                ended_at: None,
+                ..
+            }) => last.push_str(text),
+            _ => msg.parts.push(Part::Thinking {
+                text: text.clone(),
+                started_at: started_at.unwrap_or_else(now_ms),
+                ended_at: *ended_at,
+            }),
+        },
+        AgentEvent::ToolStarted { tool, .. } => {
+            end_thinking(msg);
+            msg.parts.push(Part::Tool {
+                id: tool.id.clone(),
+            });
+            msg.tools.push(tool.clone());
+        }
         AgentEvent::ToolFinished {
-            tool_id, is_error, ..
+            tool_id,
+            is_error,
+            output,
+            ..
         } => {
             if let Some(tool) = msg.tools.iter_mut().find(|t| t.id == *tool_id) {
+                tool.output.clone_from(output);
                 tool.ended_at = Some(now_ms());
                 tool.status = if *is_error {
                     StepStatus::Error
@@ -1356,9 +1468,11 @@ fn apply(thread: &mut Thread, event: &AgentEvent) {
         AgentEvent::ApprovalResolved {
             approval_id,
             allowed,
+            answers,
             ..
         } => {
             if let Some(approval) = msg.approvals.iter_mut().find(|a| a.id == *approval_id) {
+                approval.answers = answers.clone();
                 approval.status = if *allowed {
                     ApprovalStatus::Allowed
                 } else {
@@ -1367,6 +1481,7 @@ fn apply(thread: &mut Thread, event: &AgentEvent) {
             }
         }
         AgentEvent::TurnCompleted { status, error, .. } => {
+            end_thinking(msg);
             msg.status = *status;
             msg.error = error.clone();
             msg.finished_at = Some(now_ms());
@@ -1486,7 +1601,10 @@ mod tests {
                         write_line(&stdin, line);
                     }
                     Parsed::Approval { reply, .. } => {
-                        write_line(&stdin, &provider::approval_reply(agent, reply, true));
+                        write_line(
+                            &stdin,
+                            &provider::approval_reply(agent, reply, true, &HashMap::new()),
+                        );
                     }
                     Parsed::Finished => drop(stdin.lock().unwrap().take()),
                     _ => {}

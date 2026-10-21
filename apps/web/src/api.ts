@@ -93,7 +93,17 @@ export interface ToolCall {
   /** When the call started and ended (ms since epoch); null if unknown. */
   startedAt: number | null;
   endedAt: number | null;
+  /** What the call returned, cut to its first 16 KB. */
+  output?: string;
 }
+
+/** One step of a reply, in the order it happened. */
+export type Part =
+  | { type: "text"; text: string }
+  /** The agent's reasoning; `endedAt` is null while it still streams. */
+  | { type: "thinking"; text: string; startedAt: number; endedAt: number | null }
+  /** A tool call, by its id in the message's `tools`. */
+  | { type: "tool"; id: string };
 
 /** A shell command the agent started in the background, still running. */
 export interface BackgroundTask {
@@ -127,6 +137,20 @@ export interface Approval {
   title: string;
   detail: string;
   status: ApprovalStatus;
+  /** What the agent asks the user, when it asks rather than wanting permission. */
+  questions?: Question[];
+  /** The user's answers, by question id. */
+  answers?: Record<string, string[]>;
+}
+
+/** A question the agent asks the user, with the answers it offers. */
+export interface Question {
+  id: string;
+  /** A short label, such as "Library". */
+  header: string;
+  question: string;
+  options: { label: string; description: string }[];
+  multiSelect: boolean;
 }
 
 export interface Message {
@@ -147,8 +171,9 @@ export interface Message {
   queued: boolean;
   /** Background shell commands still running after the reply ended. */
   background: BackgroundTask[];
-  /** The agent's reasoning while it works; not stored, so empty after a reload. */
-  thinking: string;
+  /** The reply's text, reasoning, and tool calls in the order they happened; empty for replies
+   * saved before this was kept. */
+  parts: Part[];
   /** When the reply finished (ms since epoch); null while it runs. */
   finishedAt: number | null;
   /** Tokens the reply used; null for agents that do not report usage. */
@@ -264,13 +289,31 @@ export type AgentEvent =
   | { type: "usage"; messageId: string; usage: TokenUsage }
   | { type: "messageStarted"; message: Message }
   | { type: "textDelta"; messageId: string; text: string }
-  | { type: "thinking"; messageId: string; text: string }
+  | {
+      type: "thinking";
+      messageId: string;
+      text: string;
+      startedAt?: number;
+      endedAt?: number;
+    }
   | { type: "toolStarted"; messageId: string; tool: ToolCall }
-  | { type: "toolFinished"; messageId: string; toolId: string; isError: boolean }
+  | {
+      type: "toolFinished";
+      messageId: string;
+      toolId: string;
+      isError: boolean;
+      output?: string;
+    }
   | { type: "planUpdated"; messageId: string; steps: PlanStep[] }
   | { type: "fileTouched"; messageId: string; path: string }
   | { type: "approvalRequested"; messageId: string; approval: Approval }
-  | { type: "approvalResolved"; messageId: string; approvalId: string; allowed: boolean }
+  | {
+      type: "approvalResolved";
+      messageId: string;
+      approvalId: string;
+      allowed: boolean;
+      answers?: Record<string, string[]>;
+    }
   | { type: "messageQueued"; messageId: string; queued: boolean }
   | { type: "messageRemoved"; messageId: string }
   | { type: "backgroundTaskStarted"; messageId: string; task: BackgroundTask }
@@ -432,8 +475,12 @@ export const api = {
     invoke<void>("remove_queued", { threadId, messageId }),
   /** Cancels the running turn, if any, and clears the goal. */
   stopGoal: (threadId: string) => invoke<void>("stop_goal", { threadId }),
-  respondApproval: (threadId: string, approvalId: string, allow: boolean) =>
-    invoke<void>("respond_approval", { threadId, approvalId, allow }),
+  respondApproval: (
+    threadId: string,
+    approvalId: string,
+    allow: boolean,
+    answers?: Record<string, string[]>,
+  ) => invoke<void>("respond_approval", { threadId, approvalId, allow, answers }),
 
   readFile: (projectId: string, path: string) => invoke<string>("read_file", { projectId, path }),
   gitBranch: (projectId: string) => invoke<string | null>("git_branch", { projectId }),
