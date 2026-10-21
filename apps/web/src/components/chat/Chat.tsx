@@ -512,10 +512,6 @@ export default function Chat({
   const dismissChoices = () => {
     if (choiceSource) dismissChoice(choiceSource.id);
   };
-  const writeOwnAnswer = () => {
-    dismissChoices();
-    document.querySelector<HTMLElement>(".composer-editor .ProseMirror")?.focus();
-  };
   const isNew = !thread || empty;
   return (
     <div
@@ -585,9 +581,8 @@ export default function Chat({
           <ChoicePanel
             options={choices}
             onPick={answerChoice}
-            onOwn={writeOwnAnswer}
+            onOwn={dismissChoices}
             onDismiss={dismissChoices}
-            draftEmpty={!draft.trim() && attachments.length === 0}
           />
         )}
         <BackgroundTasks tasks={background} onStop={stopBackground} />
@@ -632,6 +627,7 @@ export default function Chat({
             dropping={dropping}
             history={history}
             files={files}
+            deferFocus={showChoices}
           />
         </Suspense>
       </div>

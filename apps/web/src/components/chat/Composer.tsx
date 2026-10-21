@@ -43,6 +43,8 @@ interface ComposerProps {
   history: HistoryEntry[];
   /** Project files an @ mention can refer to, relative to the project root. */
   files: string[];
+  /** A choice panel is open: the editor is read-only until the user picks writing their own answer. */
+  deferFocus: boolean;
 }
 
 export interface HistoryEntry {
@@ -140,6 +142,7 @@ export default function Composer({
   goalActive,
   history,
   files,
+  deferFocus,
 }: ComposerProps) {
   const models = useModels(agents);
   // The slash menu lists commands for a draft that is still one "/word"; Escape hides it
@@ -270,24 +273,45 @@ export default function Composer({
     if (editor.isFocused) editor.commands.focus("end");
   }, [editor, value]);
 
-  // Opening a chat puts the caret in the composer, unless the user is typing in another field.
+  // Opening a chat puts the caret in the composer, unless the user is typing in another field or
+  // a choice panel is open.
+  const deferFocusRef = useRef(deferFocus);
+  deferFocusRef.current = deferFocus;
   useEffect(() => {
     const active = document.activeElement;
     const typing =
       active instanceof HTMLElement &&
       (active.isContentEditable || active.matches("input, textarea, select"));
-    if (editor && !typing) editor.commands.focus("end");
+    if (editor && !typing && !deferFocusRef.current) editor.commands.focus("end");
   }, [editor]);
 
   // The Stop button holds focus once clicked, and it leaves the page when the turn or goal ends,
-  // which drops focus to the body. Focus the editor then, unless the user moved elsewhere.
+  // which drops focus to the body. Focus the editor then, unless the user moved elsewhere or the
+  // reply offered choices.
   const wasWorking = useRef(working);
   useEffect(() => {
-    if (wasWorking.current && !working && editor && document.activeElement === document.body) {
+    if (
+      wasWorking.current &&
+      !working &&
+      editor &&
+      !deferFocus &&
+      document.activeElement === document.body
+    ) {
       editor.commands.focus("end");
     }
     wasWorking.current = working;
-  }, [editor, working]);
+  }, [editor, working, deferFocus]);
+
+  // A choice panel takes the keys: the editor is read-only and unfocused while it is open, and
+  // takes the focus when it closes so the user can write their own answer.
+  const wasDeferred = useRef(deferFocus);
+  useEffect(() => {
+    if (!editor) return;
+    editor.setEditable(!deferFocus, false);
+    if (deferFocus && editor.isFocused) editor.commands.blur();
+    else if (!deferFocus && wasDeferred.current) editor.commands.focus("end");
+    wasDeferred.current = deferFocus;
+  }, [editor, deferFocus]);
 
   const recalled = useRef<Recalled | null>(null);
 

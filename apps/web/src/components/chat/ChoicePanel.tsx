@@ -5,33 +5,25 @@ interface ChoicePanelProps {
   options: string[];
   /** Sends the chosen option as the next message. */
   onPick: (option: string) => void;
-  /** Hides the panel and moves the focus to the composer to write an answer. */
+  /** Hides the panel; the composer then unlocks and takes the focus to write an answer. */
   onOwn: () => void;
   /** Hides the panel without an answer, on Escape. */
   onDismiss: () => void;
-  /** Keys act on the panel only while the draft is empty, so digits and Enter still work in a draft. */
-  draftEmpty: boolean;
 }
 
 /**
  * Numbered options above the composer. A number key or the arrows highlight an option; Enter
  * sends the highlighted one. The last row writes an answer instead of sending.
  */
-export default function ChoicePanel({
-  options,
-  onPick,
-  onOwn,
-  onDismiss,
-  draftEmpty,
-}: ChoicePanelProps) {
+export default function ChoicePanel({ options, onPick, onOwn, onDismiss }: ChoicePanelProps) {
   // Rows are the options, then "Submit my own response" at index options.length.
   const own = options.length;
   const [active, setActive] = useState<number | null>(null);
   const activeRef = useRef(active);
   activeRef.current = active;
 
+  // The composer is read-only while the panel is open, so the panel always takes these keys.
   useEffect(() => {
-    if (!draftEmpty) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
       // A field the user is typing in keeps its keys.
@@ -76,7 +68,7 @@ export default function ChoicePanel({
     // Capture phase, so the editor does not also act on these keys (history, send).
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [draftEmpty, options, onPick, onOwn, onDismiss, own]);
+  }, [options, onPick, onOwn, onDismiss, own]);
 
   const rowClass = (highlighted: boolean) =>
     `flex w-full cursor-pointer items-center gap-3 rounded-[var(--radius-sm)] border-none px-2.5 py-1.5 text-left text-[length:var(--fs-md)] text-fg ${highlighted ? "bg-selected" : "bg-transparent hover:bg-hover"}`;
