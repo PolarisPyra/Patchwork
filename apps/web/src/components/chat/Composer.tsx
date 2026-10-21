@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUpIcon, SquareIcon } from "@phosphor-icons/react";
+import { ArrowUpIcon, ListChecksIcon, SquareIcon } from "@phosphor-icons/react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { api, type AccessMode, type AgentKind, type Attachment, type ModelOption } from "~/api";
 import AccessPicker from "~/components/chat/AccessPicker";
@@ -12,7 +12,7 @@ import {
   type MentionSuggestion,
 } from "~/components/chat/composerExtensions";
 import FormatBar from "~/components/chat/FormatBar";
-import ModelPicker from "~/components/chat/ModelPicker";
+import ModelPicker, { CHIP_CLASS } from "~/components/chat/ModelPicker";
 
 interface ComposerProps {
   /** The draft as Markdown. */
@@ -31,6 +31,9 @@ interface ComposerProps {
   onPickModel: (agent: AgentKind, model: string | null) => void;
   accessMode: AccessMode;
   onPickAccess: (mode: AccessMode) => void;
+  /** Whether turns run in plan mode; null hides the toggle (the agent has no plan mode). */
+  planMode: boolean | null;
+  onTogglePlan: () => void;
   effort: string | null;
   onPickEffort: (effort: string | null) => void;
   attachments: Attachment[];
@@ -134,6 +137,8 @@ export default function Composer({
   onPickModel,
   accessMode,
   onPickAccess,
+  planMode,
+  onTogglePlan,
   effort,
   onPickEffort,
   attachments,
@@ -480,6 +485,18 @@ export default function Composer({
         />
         <EffortPicker agent={agent} effort={effort} onPick={onPickEffort} />
         <AccessPicker mode={accessMode} onPick={onPickAccess} />
+        {planMode !== null && (
+          <button
+            type="button"
+            aria-pressed={planMode}
+            title="Plan mode: the agent plans and proposes a plan without changing files"
+            onClick={onTogglePlan}
+            className={`${CHIP_CLASS} ${planMode ? "bg-selected-muted text-fg" : ""}`}
+          >
+            <ListChecksIcon size={14} />
+            <span>Plan</span>
+          </button>
+        )}
         <span className="flex-1" />
         {/* Hidden when the composer is too narrow for the pickers and the formatting buttons together. */}
         <div className="hidden @[640px]:block">

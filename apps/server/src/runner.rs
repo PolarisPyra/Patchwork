@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -58,6 +58,12 @@ type Steers = Arc<Mutex<VecDeque<FollowUp>>>;
 /// Subagents the agent started: tool call id → the agent's own task id.
 type Tasks = Arc<Mutex<HashMap<String, String>>>;
 
+/// Control requests waiting for the agent's answer, by request id.
+type Controls = Arc<Mutex<HashMap<String, mpsc::Sender<()>>>>;
+
+/// How long a steer waits for Claude to move its foreground subagents to the background.
+const BACKGROUND_WAIT: Duration = Duration::from_secs(5);
+
 /// Messages the agent could not take mid-turn; they start the next turn.
 type Queue = Arc<Mutex<Vec<FollowUp>>>;
 
@@ -86,6 +92,7 @@ struct RunningTurn {
     steers: Steers,
     queue: Queue,
     tasks: Tasks,
+    controls: Controls,
 }
 
 #[derive(Default)]
@@ -112,7 +119,7 @@ impl Runner {
         attachments: Vec<Attachment>,
         images: Vec<provider::Image>,
     ) -> Result<(), String> {
-        let (agent, root, session_id, model, mode, effort) = {
+        let (agent, root, session_id, model, mode, effort, plan) = {
             let thread = server.store.thread(&thread_id).ok_or("Task not found")?;
             let settings = server.store.settings();
             let root = match &thread.project_id {
@@ -135,6 +142,7 @@ impl Runner {
                 thread.model,
                 thread.access_mode,
                 thread.effort,
+                thread.plan_mode,
             )
         };
         let spec = TurnSpec {
@@ -143,6 +151,7 @@ impl Runner {
             model: model.as_deref(),
             text: &text,
             mode,
+            plan,
             effort: effort.as_deref(),
             attachments: &attachments,
             images: &images,
@@ -192,6 +201,7 @@ impl Runner {
         let steers = Steers::default();
         let queue = Queue::default();
         let tasks = Tasks::default();
+        let controls = Controls::default();
         let turn = Turn {
             server: server.clone(),
             thread_id: thread_id.clone(),
@@ -208,11 +218,13 @@ impl Runner {
             steers: steers.clone(),
             queue: queue.clone(),
             tasks: tasks.clone(),
+            controls: controls.clone(),
             root,
             session_id,
             model,
             text,
             mode,
+            plan,
             effort,
             attachments,
             images,
@@ -233,6 +245,7 @@ impl Runner {
                     steers,
                     queue,
                     tasks,
+                    controls,
                 },
             );
         turn.publish(AgentEvent::MessageStarted { message });
@@ -264,6 +277,8 @@ impl Runner {
 
     /// Hands a message to the turn running in `thread_id`: written to the agent when it
     /// can take input mid-turn, otherwise kept to start the next turn.
+    /// `subagents` are the subagent calls still running in the foreground.
+    #[allow(clippy::too_many_arguments)]
     pub fn steer(
         &self,
         thread_id: &str,
@@ -272,7 +287,9 @@ impl Runner {
         text: &str,
         attachments: &[Attachment],
         images: &[provider::Image],
+        subagents: &[String],
     ) -> Delivery {
+        self.background_subagents(thread_id, subagents);
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(turn) = turns.get(thread_id) else {
             return Delivery::NotRunning;
@@ -325,6 +342,43 @@ impl Runner {
             .unwrap_or_else(PoisonError::into_inner)
             .push(follow_up);
         Delivery::Queued
+    }
+
+    /// Claude takes a steer by cancelling the calls it is running, and a subagent working in the
+    /// foreground is one of them. Each is moved to the background first, where it keeps working
+    /// and reports back when done; this waits for Claude to confirm, up to `BACKGROUND_WAIT`.
+    fn background_subagents(&self, thread_id: &str, subagents: &[String]) {
+        let (stdin, controls) = {
+            let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+            let Some(turn) = turns.get(thread_id) else {
+                return;
+            };
+            if turn.agent != AgentKind::Claude || turn.cancelled.load(Ordering::SeqCst) {
+                return;
+            }
+            (turn.stdin.clone(), turn.controls.clone())
+        };
+        let answers: Vec<_> = subagents
+            .iter()
+            .filter_map(|tool_id| {
+                let request_id = new_id();
+                let (sent, answer) = mpsc::channel();
+                controls
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .insert(request_id.clone(), sent);
+                write_line(
+                    &stdin,
+                    &provider::claude::background_task(tool_id, &request_id),
+                )
+                .then_some(answer)
+            })
+            .collect();
+        let deadline = Instant::now() + BACKGROUND_WAIT;
+        for answer in answers {
+            let left = deadline.saturating_duration_since(Instant::now());
+            let _ = answer.recv_timeout(left);
+        }
     }
 
     /// Holds a message for the next turn of the one running in `thread_id`, even when the agent
@@ -639,11 +693,13 @@ struct Turn {
     steers: Steers,
     queue: Queue,
     tasks: Tasks,
+    controls: Controls,
     root: String,
     session_id: Option<String>,
     model: Option<String>,
     text: String,
     mode: AccessMode,
+    plan: bool,
     effort: Option<String>,
     attachments: Vec<Attachment>,
     images: Vec<provider::Image>,
@@ -740,11 +796,104 @@ impl Turn {
             model: self.model.as_deref(),
             text: &self.text,
             mode: self.mode,
+            plan: self.plan,
             effort: self.effort.as_deref(),
             attachments: &self.attachments,
             images: &self.images,
         }
     }
+}
+
+/// A subagent's own thread, which its frames stream into while it runs.
+struct SubagentThread {
+    thread_id: String,
+    /// The reply its work streams into.
+    message_id: String,
+    has_text: bool,
+}
+
+/// Opens a read-only thread for the subagent `tool` started, with its instructions as the
+/// first message and an empty reply for its work. None when the call starts no subagent.
+fn open_child(turn: &Turn, tool: &ToolCall) -> Option<SubagentThread> {
+    let sub = tool.subagent.as_ref()?;
+    let parent = turn.server.store.thread(&turn.thread_id)?;
+    let created_at = now_ms();
+    let mut asked = assistant_message();
+    asked.role = Role::User;
+    asked.text = sub
+        .prompt
+        .clone()
+        .unwrap_or_else(|| sub.description.clone());
+    asked.status = MessageStatus::Complete;
+    asked.finished_at = Some(created_at);
+    let reply = assistant_message();
+    let message_id = reply.id.clone();
+    let title = [&sub.description, &sub.kind]
+        .into_iter()
+        .find(|s| !s.is_empty())
+        .cloned()
+        .unwrap_or_else(|| "Subagent".into());
+    let thread = Thread {
+        id: new_id(),
+        project_id: parent.project_id,
+        title,
+        agent: parent.agent,
+        model: sub.model.clone().or(parent.model),
+        access_mode: parent.access_mode,
+        effort: None,
+        session_id: None,
+        created_at,
+        messages: vec![asked, reply],
+        goal: None,
+        position: 0,
+        folder_id: None,
+        archived_at: None,
+        parent: Some(ThreadParent {
+            thread_id: turn.thread_id.clone(),
+            tool_id: tool.id.clone(),
+        }),
+        plan_mode: false,
+    };
+    if let Err(e) = turn.server.store.insert_threads(vec![thread.clone()]) {
+        log::warn!("failed to save a subagent's thread: {e}");
+        return None;
+    }
+    let thread_id = thread.id.clone();
+    turn.server.emit(AgentEventEnvelope {
+        thread_id: thread_id.clone(),
+        event: AgentEvent::ThreadCreated { thread },
+    });
+    Some(SubagentThread {
+        thread_id,
+        message_id,
+        has_text: false,
+    })
+}
+
+/// Ends the reply in the thread of the subagent `tool_id` started, once that subagent is done.
+fn finish_child(
+    turn: &Turn,
+    children: &mut HashMap<String, SubagentThread>,
+    tool_id: &str,
+    failed: bool,
+) {
+    let Some(child) = children.remove(tool_id) else {
+        return;
+    };
+    let status = if failed {
+        MessageStatus::Error
+    } else {
+        MessageStatus::Complete
+    };
+    publish(
+        &turn.server,
+        &child.thread_id,
+        AgentEvent::TurnCompleted {
+            message_id: child.message_id,
+            status,
+            error: None,
+        },
+    );
 }
 
 /// Streamed output not yet stored: text, or a block of reasoning and when it started.
@@ -772,6 +921,7 @@ fn assistant_message() -> Message {
         steer: false,
         queued: false,
         background: Vec::new(),
+        cut_off: false,
         parts: Vec::new(),
         finished_at: None,
         usage: None,
@@ -786,6 +936,8 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
     let mut last_was_text = false;
     // Tool id → the message it was started in, which a steer may since have moved on from.
     let mut tool_owner: HashMap<String, String> = HashMap::new();
+    // The threads of the subagents still running, by the call that started each.
+    let mut children: HashMap<String, SubagentThread> = HashMap::new();
     // Subagents still running, and whether the call of one sent to the background, which
     // returns at once, failed; it is reported finished when the subagent ends.
     let mut running_tasks: HashMap<String, Option<bool>> = HashMap::new();
@@ -834,6 +986,23 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
             segments.push(turn.message_id.clone());
             (has_text, last_was_text) = (false, false);
             ended = false;
+        }
+        // A subagent's frames name the call that started it; they also go to its own thread.
+        if turn.agent == AgentKind::Claude
+            && let Some(child) = value["parent_tool_use_id"]
+                .as_str()
+                .and_then(|id| children.get_mut(id))
+        {
+            let events = provider::claude::subagent_events(&value, &turn.root, &child.message_id);
+            for mut event in events {
+                if let AgentEvent::TextDelta { text, .. } = &mut event {
+                    if child.has_text {
+                        text.insert_str(0, "\n\n");
+                    }
+                    child.has_text = true;
+                }
+                publish(&turn.server, &child.thread_id, event);
+            }
         }
         let parsed = provider::parse_line(turn.agent, &value, &turn.spec(), &turn.message_id);
         for item in parsed {
@@ -899,6 +1068,16 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
                     let background = running_tasks.values().any(Option::is_some);
                     if !background {
                         end_input(&turn, goal_run, &goal_round);
+                    }
+                }
+                Parsed::ControlResponse(id) => {
+                    let waiting = turn
+                        .controls
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .remove(&id);
+                    if let Some(waiting) = waiting {
+                        let _ = waiting.send(());
                     }
                 }
                 Parsed::Steered => {
@@ -1019,10 +1198,11 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
                         turn.save_text(&mut unsaved);
                         turn.publish(AgentEvent::ToolFinished {
                             message_id: owner.clone(),
-                            tool_id,
+                            tool_id: tool_id.clone(),
                             is_error: failed || call_failed,
                             output: None,
                         });
+                        finish_child(&turn, &mut children, &tool_id, failed || call_failed);
                     }
                     let background = running_tasks.values().any(Option::is_some);
                     if ended && !background {
@@ -1065,6 +1245,13 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
                                 continue;
                             }
                             tool_owner.insert(tool.id.clone(), message_id.clone());
+                            if turn.agent == AgentKind::Claude
+                                && tool.parent.is_none()
+                                && let Some(child) = open_child(&turn, tool)
+                            {
+                                tool.child_thread_id = Some(child.thread_id.clone());
+                                children.insert(tool.id.clone(), child);
+                            }
                         }
                         AgentEvent::ToolFinished {
                             tool_id,
@@ -1086,8 +1273,17 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
                     if last_was_text {
                         turn.stream_text(event, &mut unsaved);
                     } else {
+                        let finished = match &event {
+                            AgentEvent::ToolFinished {
+                                tool_id, is_error, ..
+                            } => Some((tool_id.clone(), *is_error)),
+                            _ => None,
+                        };
                         turn.save_text(&mut unsaved);
                         turn.publish(event);
+                        if let Some((tool_id, failed)) = finished {
+                            finish_child(&turn, &mut children, &tool_id, failed);
+                        }
                     }
                 }
             }
@@ -1131,6 +1327,18 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
     } else {
         (MessageStatus::Complete, None)
     };
+    // Subagents end with the agent that ran them.
+    for (_, child) in children.drain() {
+        publish(
+            &turn.server,
+            &child.thread_id,
+            AgentEvent::TurnCompleted {
+                message_id: child.message_id,
+                status,
+                error: None,
+            },
+        );
+    }
 
     let after = workspace::git_changes(&turn.root).unwrap_or_default();
     for path in changed_paths(&turn.baseline, &after) {
@@ -1355,6 +1563,7 @@ fn event_message(event: &AgentEvent) -> Option<&str> {
     match event {
         AgentEvent::MessageStarted { .. }
         | AgentEvent::GoalUpdated { .. }
+        | AgentEvent::ThreadCreated { .. }
         | AgentEvent::MessageRemoved { .. } => None,
         AgentEvent::TextDelta { message_id, .. }
         | AgentEvent::Thinking { message_id, .. }
@@ -1366,6 +1575,8 @@ fn event_message(event: &AgentEvent) -> Option<&str> {
         | AgentEvent::ApprovalResolved { message_id, .. }
         | AgentEvent::Usage { message_id, .. }
         | AgentEvent::MessageQueued { message_id, .. }
+        | AgentEvent::MessageCutOff { message_id }
+        | AgentEvent::PlanProposed { message_id, .. }
         | AgentEvent::BackgroundTaskStarted { message_id, .. }
         | AgentEvent::BackgroundTaskEnded { message_id, .. }
         | AgentEvent::TurnCompleted { message_id, .. } => Some(message_id),
@@ -1455,6 +1666,11 @@ fn apply(thread: &mut Thread, event: &AgentEvent) {
         AgentEvent::PlanUpdated { steps, .. } => msg.plan = steps.clone(),
         AgentEvent::Usage { usage, .. } => msg.usage = Some(*usage),
         AgentEvent::MessageQueued { queued, .. } => msg.queued = *queued,
+        AgentEvent::MessageCutOff { .. } => msg.cut_off = true,
+        AgentEvent::PlanProposed { text, .. } => {
+            end_thinking(msg);
+            msg.parts.push(Part::Plan { text: text.clone() });
+        }
         AgentEvent::BackgroundTaskStarted { task, .. } => msg.background.push(task.clone()),
         AgentEvent::BackgroundTaskEnded { tool_id, .. } => {
             msg.background.retain(|t| t.tool_id != *tool_id);
@@ -1517,6 +1733,7 @@ fn apply(thread: &mut Thread, event: &AgentEvent) {
         }
         AgentEvent::MessageStarted { .. }
         | AgentEvent::GoalUpdated { .. }
+        | AgentEvent::ThreadCreated { .. }
         | AgentEvent::MessageRemoved { .. } => {}
     }
 }
@@ -1566,6 +1783,7 @@ mod tests {
             model: (agent == AgentKind::Claude).then_some("haiku"),
             text: "Create a file named hello.txt whose only content is the two letters hi (no period). Do nothing else.",
             mode,
+            plan: false,
             effort: None,
             attachments: &[],
             images: &[],

@@ -19,6 +19,8 @@ export interface NewThreadOptions {
   model: string | null;
   accessMode: AccessMode;
   effort: string | null;
+  /** Start the thread in plan mode. */
+  planMode?: boolean;
 }
 
 /** True while a message is streaming, or a goal is active: between its turns the agent works
@@ -144,6 +146,15 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
         approvals: m.approvals.map((a) => (a.id === approvalId ? { ...a, status, answers } : a)),
       }));
     }
+    case "threadCreated":
+      return thread;
+    case "planProposed":
+      return updateMessage(thread, event.messageId, (m) => ({
+        ...m,
+        parts: [...endThinking(m.parts), { type: "plan", text: event.text }],
+      }));
+    case "messageCutOff":
+      return updateMessage(thread, event.messageId, (m) => ({ ...m, cutOff: true }));
     case "messageQueued": {
       const { messageId, queued } = event;
       return updateMessage(thread, messageId, (m) => ({ ...m, queued }));
@@ -254,13 +265,15 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
       queue = [];
       frame = 0;
       setThreads((prev) =>
-        batch.reduce(
-          (threads, { threadId, event }) =>
-            threads.some((t) => t.id === threadId)
-              ? threads.map((t) => (t.id === threadId ? applyAgentEvent(t, event) : t))
-              : threads,
-          prev,
-        ),
+        batch.reduce((threads, { threadId, event }) => {
+          // A thread the server made, such as a subagent's, joins the list.
+          if (event.type === "threadCreated") {
+            return threads.some((t) => t.id === threadId) ? threads : [...threads, event.thread];
+          }
+          return threads.some((t) => t.id === threadId)
+            ? threads.map((t) => (t.id === threadId ? applyAgentEvent(t, event) : t))
+            : threads;
+        }, prev),
       );
       if (batch.some(({ event }) => event.type === "turnCompleted")) turnDone.current();
     };
@@ -282,13 +295,17 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
 
   /** Creates a thread in `projectId` (null: a chat without a project) and selects it. */
   async function createThread(projectId: string | null, opts: NewThreadOptions): Promise<Thread> {
-    const thread = await api.createThread(
+    let thread = await api.createThread(
       projectId,
       opts.agent,
       opts.model,
       opts.accessMode,
       opts.effort,
     );
+    if (opts.planMode) {
+      await api.setThreadPlanMode(thread.id, true);
+      thread = { ...thread, planMode: true };
+    }
     setThreads((prev) => [thread, ...prev]);
     setSelectedId(thread.id);
     return thread;
@@ -355,6 +372,11 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
     setThreads((prev) => prev.map((t) => (t.id === id ? { ...t, accessMode } : t)));
   }
 
+  async function setPlanMode(id: string, planMode: boolean): Promise<void> {
+    await api.setThreadPlanMode(id, planMode);
+    setThreads((prev) => prev.map((t) => (t.id === id ? { ...t, planMode } : t)));
+  }
+
   async function setEffort(id: string, effort: string | null): Promise<void> {
     await api.setThreadEffort(id, effort);
     setThreads((prev) => prev.map((t) => (t.id === id ? { ...t, effort } : t)));
@@ -384,6 +406,23 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
     );
   }
 
+  /** Starts a thread in `projectId` with `text` as its first message, named `title`, and selects it. */
+  async function startThread(
+    projectId: string | null,
+    opts: NewThreadOptions,
+    title: string,
+    text: string,
+  ): Promise<void> {
+    const thread = await createThread(projectId, opts);
+    const message = await api.sendMessage(thread.id, text, [], false);
+    await api.renameThread(thread.id, title);
+    setThreads((prev) =>
+      prev.map((t) =>
+        t.id === thread.id ? { ...t, title, messages: upsertMessage(t.messages, message) } : t,
+      ),
+    );
+  }
+
   return {
     threads,
     folders,
@@ -401,7 +440,9 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
     reorderThreads,
     setModel,
     setAccessMode,
+    setPlanMode,
     setEffort,
     send,
+    startThread,
   };
 }

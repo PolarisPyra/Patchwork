@@ -10,6 +10,7 @@ import {
   XCircleIcon,
 } from "@phosphor-icons/react";
 import {
+  type AgentKind,
   type Approval,
   type FileChange,
   type Message,
@@ -31,6 +32,8 @@ type OpenCanvas = (path: string, message: Message | null, tab: CanvasTab) => voi
 
 interface MessagesProps {
   thread: Thread;
+  /** Opens another thread, such as a subagent's. */
+  onOpenThread: (id: string) => void;
   changes: FileChange[];
   busy: boolean;
   /** Omitted for chats without a project: the change summary is hidden. */
@@ -43,6 +46,7 @@ interface MessagesProps {
 
 export default function Messages({
   thread,
+  onOpenThread,
   changes,
   busy,
   onOpenCanvas,
@@ -109,6 +113,8 @@ export default function Messages({
                 ) : (
                   <AssistantMessage
                     message={item}
+                    agent={thread.agent}
+                    onOpenThread={onOpenThread}
                     changes={changes}
                     retryMessage={previous?.role === "user" ? previous : null}
                     busy={busy}
@@ -175,6 +181,8 @@ const UserMessage = memo(function UserMessage({ message }: { message: Message })
 
 interface AssistantProps {
   message: Message;
+  agent: AgentKind;
+  onOpenThread: (id: string) => void;
   changes: FileChange[];
   retryMessage: Message | null;
   busy: boolean;
@@ -185,6 +193,8 @@ interface AssistantProps {
 
 const AssistantMessage = memo(function AssistantMessage({
   message,
+  agent,
+  onOpenThread,
   changes,
   retryMessage,
   busy,
@@ -195,7 +205,7 @@ const AssistantMessage = memo(function AssistantMessage({
   const streaming = message.status === "streaming";
   return (
     <section className="flex min-w-0 flex-col gap-2.5">
-      <TurnTimeline message={message} />
+      <TurnTimeline message={message} agent={agent} onOpenThread={onOpenThread} />
       {/* A pending approval is answered in the banner above the composer. */}
       {message.approvals.map((approval) =>
         approval.status === "pending" ? (
@@ -225,7 +235,7 @@ const AssistantMessage = memo(function AssistantMessage({
         </div>
       )}
       {/* Copy, Retry, and the time belong to a reply; a turn stopped before it wrote one has none. */}
-      {!streaming && message.text.trim() && (
+      {!streaming && !message.cutOff && message.text.trim() && (
         <div className="flex gap-1">
           <CopyButton text={message.text} />
           {retryMessage !== null && (

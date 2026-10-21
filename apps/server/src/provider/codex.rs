@@ -99,6 +99,13 @@ pub fn turn_input(spec: &TurnSpec) -> Vec<String> {
     .into()
 }
 
+/// How Codex is asked to present its plan in plan mode, so it arrives as a plan item.
+const PLAN_INSTRUCTIONS: &str = "You are in plan mode: investigate and plan, but do not change \
+files. When the plan is ready, present it once, wrapped in a <proposed_plan> block with the \
+opening and closing tags each on their own line and Markdown inside. Give it a clear title, a \
+short summary, the key changes, how to test them, and any assumptions. Do not ask whether to \
+proceed; the user implements or refines the plan from there.";
+
 /// Request id of `turn/start`.
 const TURN_REQUEST: u64 = THREAD_REQUEST + 1;
 
@@ -225,6 +232,20 @@ fn turn_start(spec: &TurnSpec, thread_id: &str, text: &str) -> String {
     if let Some(e) = spec.effort {
         params["effort"] = json!(e);
     }
+    // Plan mode is a collaboration mode, which names its model; the turn leaves it again in
+    // default mode. Without a model to name, the mode is not sent.
+    if let Some(model) = spec.model.map(String::from).or_else(configured_model) {
+        let (mode, instructions) = if spec.plan {
+            ("plan", Some(PLAN_INSTRUCTIONS))
+        } else {
+            ("default", None)
+        };
+        params["collaborationMode"] = json!({"mode": mode, "settings": {
+            "model": model,
+            "reasoning_effort": spec.effort,
+            "developer_instructions": instructions,
+        }});
+    }
     json!({"id": TURN_REQUEST, "method": "turn/start", "params": params}).to_string()
 }
 
@@ -288,6 +309,15 @@ fn codex_item(completed: bool, item: &Value, root: &str, message_id: &str, out: 
     let id = item["id"].as_str().unwrap_or_default();
     let failed = matches!(item["status"].as_str(), Some("failed" | "declined"));
     match item["type"].as_str() {
+        Some("plan") if completed => {
+            let text = item["text"].as_str().unwrap_or_default().trim();
+            if !text.is_empty() {
+                out.push(Parsed::Event(AgentEvent::PlanProposed {
+                    message_id: message_id.into(),
+                    text: text.into(),
+                }));
+            }
+        }
         Some("agentMessage") if completed => {
             let text = item["text"].as_str().unwrap_or_default();
             if !text.is_empty() {
@@ -550,6 +580,7 @@ mod tests {
             model: Some("gpt"),
             text: "go",
             mode,
+            plan: false,
             effort: None,
             attachments: &[],
             images: &[],

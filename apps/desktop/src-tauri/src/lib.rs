@@ -207,19 +207,31 @@ fn set_thread_access_mode(server: Srv, id: String, mode: AccessMode) -> Res<()> 
 }
 
 #[tauri::command]
+fn save_text_file(server: Srv, path: String, text: String) -> Res<()> {
+    server.save_text_file(&path, &text)
+}
+
+#[tauri::command]
+fn set_thread_plan_mode(server: Srv, id: String, on: bool) -> Res<()> {
+    server.set_thread_plan_mode(&id, on)
+}
+
+#[tauri::command]
 fn set_thread_effort(server: Srv, id: String, effort: Option<String>) -> Res<()> {
     server.set_thread_effort(&id, effort)
 }
 
+/// Off the main thread: a steer can wait a few seconds for Claude to background its subagents.
 #[tauri::command]
-fn send_message(
-    server: Srv,
+async fn send_message(
+    server: Srv<'_>,
     thread_id: String,
     text: String,
     attachments: Vec<Attachment>,
     queue: bool,
 ) -> Res<Message> {
-    server.send_message(thread_id, text, attachments, queue)
+    let server = server.inner().clone();
+    blocking(move || server.send_message(thread_id, text, attachments, queue)).await?
 }
 
 #[tauri::command]
@@ -519,6 +531,8 @@ pub fn run() {
             set_thread_archived,
             set_thread_model,
             set_thread_access_mode,
+            set_thread_plan_mode,
+            save_text_file,
             set_thread_effort,
             send_message,
             attachment_for_path,

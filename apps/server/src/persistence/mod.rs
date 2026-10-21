@@ -414,12 +414,13 @@ fn save_thread_row(tx: &Transaction, t: &Thread) -> rusqlite::Result<()> {
     tx.execute(
         "INSERT INTO threads
              (id, project_id, title, agent, model, session_id, created_at, access_mode, goal,
-              position, folder_id, effort, archived_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+              position, folder_id, effort, archived_at, parent, plan_mode)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
          ON CONFLICT (id) DO UPDATE SET project_id = excluded.project_id,
              title = excluded.title, agent = excluded.agent, model = excluded.model,
              session_id = excluded.session_id, access_mode = excluded.access_mode,
-             goal = excluded.goal, effort = excluded.effort, archived_at = excluded.archived_at",
+             goal = excluded.goal, effort = excluded.effort, archived_at = excluded.archived_at,
+             parent = excluded.parent, plan_mode = excluded.plan_mode",
         params![
             t.id,
             t.project_id,
@@ -433,7 +434,9 @@ fn save_thread_row(tx: &Transaction, t: &Thread) -> rusqlite::Result<()> {
             t.position,
             t.folder_id,
             t.effort,
-            t.archived_at
+            t.archived_at,
+            t.parent.as_ref().map(json),
+            t.plan_mode
         ],
     )?;
     Ok(())
@@ -448,13 +451,15 @@ fn save_message(
     tx.execute(
         "INSERT INTO messages
              (id, thread_id, position, role, text, created_at, status, tools, plan, files, error,
-              approvals, attachments, steer, finished_at, usage, queued)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+              approvals, attachments, steer, finished_at, usage, queued, parts, cut_off)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
+                 ?19)
          ON CONFLICT (id) DO UPDATE SET position = excluded.position, text = excluded.text,
              status = excluded.status, tools = excluded.tools, plan = excluded.plan,
              files = excluded.files, error = excluded.error, approvals = excluded.approvals,
              attachments = excluded.attachments, finished_at = excluded.finished_at,
-             usage = excluded.usage, steer = excluded.steer, queued = excluded.queued",
+             usage = excluded.usage, steer = excluded.steer, queued = excluded.queued,
+             parts = excluded.parts, cut_off = excluded.cut_off",
         params![
             m.id,
             thread_id,
@@ -472,7 +477,9 @@ fn save_message(
             m.steer,
             m.finished_at,
             m.usage.as_ref().map(json),
-            m.queued
+            m.queued,
+            json(&m.parts),
+            m.cut_off
         ],
     )?;
     Ok(())
@@ -514,7 +521,7 @@ fn load_folders(conn: &Connection) -> rusqlite::Result<Vec<Folder>> {
 fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
     let mut stmt = conn.prepare(
         "SELECT id, project_id, title, agent, model, session_id, created_at, access_mode, goal,
-                position, folder_id, effort, archived_at
+                position, folder_id, effort, archived_at, parent, plan_mode
          FROM threads ORDER BY position",
     )?;
     let mut threads: Vec<Thread> = stmt
@@ -536,12 +543,16 @@ fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
                 folder_id: r.get(10)?,
                 effort: r.get(11)?,
                 archived_at: r.get(12)?,
+                parent: r
+                    .get::<_, Option<String>>(13)?
+                    .and_then(|p| serde_json::from_str(&p).ok()),
+                plan_mode: r.get(14)?,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
     let mut stmt = conn.prepare(
         "SELECT id, role, text, created_at, status, tools, plan, files, error, approvals,
-                attachments, steer, finished_at, usage, queued
+                attachments, steer, finished_at, usage, queued, parts, cut_off
          FROM messages WHERE thread_id = ?1 ORDER BY position",
     )?;
     for t in &mut threads {
@@ -567,7 +578,8 @@ fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
                     usage: r
                         .get::<_, Option<String>>(13)?
                         .and_then(|u| serde_json::from_str(&u).ok()),
-                    parts: Vec::new(),
+                    cut_off: r.get(16)?,
+                    parts: from_json(r.get(15)?),
                 })
             })?
             .collect::<rusqlite::Result<_>>()?;
@@ -639,6 +651,7 @@ mod tests {
             steer: false,
             queued: false,
             background: Vec::new(),
+            cut_off: false,
             parts: Vec::new(),
             finished_at: None,
             usage: None,
@@ -661,6 +674,8 @@ mod tests {
             folder_id: None,
             effort: None,
             archived_at: None,
+            parent: None,
+            plan_mode: false,
         }
     }
 

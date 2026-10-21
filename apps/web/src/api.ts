@@ -95,6 +95,8 @@ export interface ToolCall {
   endedAt: number | null;
   /** What the call returned, cut to its first 16 KB. */
   output?: string;
+  /** The thread holding the subagent's own transcript, for a call that started one. */
+  childThreadId?: string;
 }
 
 /** One step of a reply, in the order it happened. */
@@ -103,7 +105,9 @@ export type Part =
   /** The agent's reasoning; `endedAt` is null while it still streams. */
   | { type: "thinking"; text: string; startedAt: number; endedAt: number | null }
   /** A tool call, by its id in the message's `tools`. */
-  | { type: "tool"; id: string };
+  | { type: "tool"; id: string }
+  /** A plan the agent proposed in plan mode, as Markdown. */
+  | { type: "plan"; text: string };
 
 /** A shell command the agent started in the background, still running. */
 export interface BackgroundTask {
@@ -118,6 +122,8 @@ export interface SubAgent {
   description: string;
   /** null means the subagent inherits the parent's model. */
   model: string | null;
+  /** The instructions it was given. */
+  prompt?: string | null;
 }
 
 export interface PlanStep {
@@ -171,6 +177,8 @@ export interface Message {
   queued: boolean;
   /** Background shell commands still running after the reply ended. */
   background: BackgroundTask[];
+  /** Cut short by a steering message; the agent answered it in the next reply. */
+  cutOff: boolean;
   /** The reply's text, reasoning, and tool calls in the order they happened; empty for replies
    * saved before this was kept. */
   parts: Part[];
@@ -235,6 +243,11 @@ export interface Thread {
   folderId: string | null;
   /** When the thread was archived; null while it is in the task list. */
   archivedAt: number | null;
+  /** Set on a subagent's thread: the thread and call that started it. Such a thread is
+   * read-only and not listed in the sidebar. */
+  parent: { threadId: string; toolId: string } | null;
+  /** Turns run in plan mode: the agent plans and proposes, without changing files. */
+  planMode: boolean;
 }
 
 /** A folder inside a project; its tasks are the threads whose `folderId` is its id. */
@@ -315,6 +328,9 @@ export type AgentEvent =
       answers?: Record<string, string[]>;
     }
   | { type: "messageQueued"; messageId: string; queued: boolean }
+  | { type: "messageCutOff"; messageId: string }
+  | { type: "planProposed"; messageId: string; text: string }
+  | { type: "threadCreated"; thread: Thread }
   | { type: "messageRemoved"; messageId: string }
   | { type: "backgroundTaskStarted"; messageId: string; task: BackgroundTask }
   | { type: "backgroundTaskEnded"; messageId: string; toolId: string }
@@ -454,6 +470,10 @@ export const api = {
   /** Takes effect from the thread's next turn. */
   setThreadAccessMode: (id: string, mode: AccessMode) =>
     invoke<void>("set_thread_access_mode", { id, mode }),
+  /** Writes `text` to `path`, a file the user picked in a save dialog. */
+  saveTextFile: (path: string, text: string) => invoke<void>("save_text_file", { path, text }),
+  setThreadPlanMode: (id: string, on: boolean) =>
+    invoke<void>("set_thread_plan_mode", { id, on }),
   setThreadEffort: (id: string, effort: string | null) =>
     invoke<void>("set_thread_effort", { id, effort }),
   /** Returns the stored user message; assistant output streams via onAgentEvent. */

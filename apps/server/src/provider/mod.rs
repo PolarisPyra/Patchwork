@@ -213,6 +213,8 @@ pub struct TurnSpec<'a> {
     pub model: Option<&'a str>,
     pub text: &'a str,
     pub mode: AccessMode,
+    /// Plan mode: the agent plans and proposes a plan, without changing files.
+    pub plan: bool,
     /// Reasoning effort, e.g. "high"; None leaves the CLI's default.
     pub effort: Option<&'a str>,
     pub attachments: &'a [Attachment],
@@ -422,6 +424,8 @@ pub enum Parsed {
         /// Set when the agent asks the user questions instead of asking permission.
         questions: Vec<Question>,
     },
+    /// The agent answered the control request with this id.
+    ControlResponse(String),
     /// The agent took a steering message (Codex acknowledges each one).
     Steered,
     /// The agent refused a steering message, so it waits for the turn to end.
@@ -484,6 +488,7 @@ fn tool_started(
             started_at: Some(now_ms()),
             ended_at: None,
             output: None,
+            child_thread_id: None,
         },
     })
 }

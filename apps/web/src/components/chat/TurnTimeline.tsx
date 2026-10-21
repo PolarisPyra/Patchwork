@@ -12,8 +12,10 @@ import {
   WarningCircleIcon,
   WrenchIcon,
 } from "@phosphor-icons/react";
-import type { Message, Part, ToolCall } from "~/api";
-import { fullElapsed, titleOf } from "~/components/chat/LineageCard";
+import type { AgentKind, Message, Part, ToolCall } from "~/api";
+import { fullElapsed, isActive, titleOf } from "~/components/chat/LineageCard";
+import ProposedPlanCard from "~/components/chat/ProposedPlanCard";
+import ProviderLogos from "~/components/ProviderLogos";
 
 // Markdown pulls in the renderer, so it loads on first use; plain text shows until then.
 const Markdown = lazy(() => import("~/components/chat/Markdown"));
@@ -131,7 +133,13 @@ type Entry =
       kind: "tool";
       tool: ToolCall;
     };
-type Step = { kind: "text"; text: string; index: number } | { kind: "work"; entries: Entry[] };
+type Step =
+  | { kind: "text"; text: string; index: number }
+  | { kind: "work"; entries: Entry[] }
+  /** Subagents started one after another, shown as cards. */
+  | { kind: "agents"; tools: ToolCall[] }
+  /** A plan proposed in plan mode. */
+  | { kind: "plan"; text: string; index: number };
 
 /** The reply's parts as steps. Replies saved before parts were kept show their calls, then their
  * text. */
@@ -152,6 +160,10 @@ function stepsOf(message: Message): Step[] {
       if (part.text.trim()) steps.push({ kind: "text", text: part.text.trim(), index });
       return;
     }
+    if (part.type === "plan") {
+      steps.push({ kind: "plan", text: part.text, index });
+      return;
+    }
     let entry: Entry;
     if (part.type === "thinking") {
       if (!part.text.trim()) return;
@@ -159,6 +171,12 @@ function stepsOf(message: Message): Step[] {
     } else {
       const tool = byId.get(part.id);
       if (!shown(tool)) return;
+      if (tool.subagent) {
+        const last = steps.at(-1);
+        if (last?.kind === "agents") last.tools.push(tool);
+        else steps.push({ kind: "agents", tools: [tool] });
+        return;
+      }
       entry = { kind: "tool", tool };
     }
     const last = steps.at(-1);
@@ -190,16 +208,33 @@ function useNow(live: boolean): number {
  * "Working for" row heads it; once it is done, everything before the final text folds into one
  * "Worked for" row.
  */
-export default function TurnTimeline({ message }: { message: Message }) {
+export default function TurnTimeline({
+  message,
+  agent,
+  onOpenThread,
+}: {
+  message: Message;
+  agent: AgentKind;
+  /** Opens a subagent's thread. */
+  onOpenThread: (id: string) => void;
+}) {
   const streaming = message.status === "streaming";
   const steps = stepsOf(message);
   // The final text stays out of the fold, with any work after it. A failed reply stays open.
-  const lastText = steps.map((s) => s.kind).lastIndexOf("text");
-  const hidden = lastText === -1 ? steps.length : lastText;
+  // A proposed plan is the reply's result, like its final text.
+  const lastText = steps.map((s) => s.kind === "text" || s.kind === "plan").lastIndexOf(true);
+  const textHidden = lastText === -1 ? steps.length : lastText;
   const stopped = message.status === "cancelled";
-  const folds = !streaming && message.status !== "error" && (hidden > 0 || stopped);
+  // A reply a steer cut short folds whole, like a superseded attempt.
+  const hidden = message.cutOff ? steps.length : textHidden;
+  const folds =
+    !streaming && message.status !== "error" && (hidden > 0 || stopped || message.cutOff);
   const [open, setOpen] = useState(false);
-  const shown = folds && !open ? steps.slice(hidden) : steps;
+  // Subagents still working stay in view when the reply folds.
+  const shown =
+    folds && !open
+      ? steps.filter((s, i) => i >= hidden || (s.kind === "agents" && s.tools.some(isActive)))
+      : steps;
   const last = steps.at(-1);
   // Text still streaming in may skip renders in favor of input and scrolling.
   const tail = useDeferredValue(last?.kind === "text" ? last.text : "");
@@ -223,6 +258,18 @@ export default function TurnTimeline({ message }: { message: Message }) {
               <Markdown text={step === last && tail ? tail : step.text} />
             </Suspense>
           </div>
+        ) : step.kind === "plan" ? (
+          <div key={`p${step.index}`} className="px-1 py-0.5 pb-2">
+            <ProposedPlanCard markdown={step.text} />
+          </div>
+        ) : step.kind === "agents" ? (
+          <SubagentCards
+            key={`a${step.tools[0].id}`}
+            subagents={step.tools}
+            calls={message.tools}
+            agent={agent}
+            onOpenThread={onOpenThread}
+          />
         ) : (
           <WorkGroup key={workKey(step.entries[0])} entries={step.entries} live={streaming} />
         ),
@@ -260,6 +307,24 @@ function FoldRow({
   hidden: number;
 }) {
   const stopped = message.status === "cancelled";
+  if (message.cutOff) {
+    const Caret = open ? CaretDownIcon : CaretRightIcon;
+    return (
+      <div className="mb-1.5 flex items-center gap-2 border-b border-border pt-1 pb-2">
+        <button
+          type="button"
+          aria-expanded={open}
+          disabled={hidden === 0}
+          onClick={onToggle}
+          className="flex cursor-pointer items-center gap-1 rounded-[var(--radius-sm)] border-none bg-transparent px-1 text-[length:var(--fs-md)] text-fg-muted hover:text-fg disabled:cursor-default disabled:hover:text-fg-muted"
+        >
+          <span>Superseded attempt</span>
+          {hidden > 0 && <Caret size={13} />}
+        </button>
+        <span className="text-[length:var(--fs-sm)] text-fg-subtle">Cut off by steer</span>
+      </div>
+    );
+  }
   const took =
     message.finishedAt === null ? null : fullElapsed(message.finishedAt - message.createdAt);
   const label = stopped
@@ -412,5 +477,192 @@ function LiveRow({ icon, label }: { icon: ReactNode; label: string }) {
       <RowIcon>{icon}</RowIcon>
       <span className="tool-shine min-w-0 truncate">{label}</span>
     </div>
+  );
+}
+
+const SUBAGENT_STATUS: Record<ToolCall["status"], { dot: string; label: string }> = {
+  pending: { dot: "bg-accent", label: "Queued" },
+  running: { dot: "bg-accent", label: "Running" },
+  done: { dot: "bg-success", label: "Completed" },
+  error: { dot: "bg-danger", label: "Failed" },
+};
+
+/** Time from the start of the first subagent to the end of the last, or null while one runs. */
+function spanOf(subagents: ToolCall[]): number | null {
+  const starts = subagents.flatMap((t) => (t.startedAt === null ? [] : [t.startedAt]));
+  const ends = subagents.flatMap((t) => (t.endedAt === null ? [] : [t.endedAt]));
+  if (starts.length === 0 || ends.length < subagents.length) return null;
+  return Math.max(...ends) - Math.min(...starts);
+}
+
+/** One subagent as a card, or several under a summary row that opens to list them. */
+function SubagentCards({
+  subagents,
+  calls,
+  agent,
+  onOpenThread,
+}: {
+  subagents: ToolCall[];
+  /** Every call of the reply, including the ones the subagents made. */
+  calls: ToolCall[];
+  agent: AgentKind;
+  onOpenThread: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const active = subagents.some(isActive);
+  const now = useNow(active);
+  if (subagents.length === 1) {
+    return (
+      <div className="pb-2">
+        <SubagentCard tool={subagents[0]} calls={calls} agent={agent} onOpenThread={onOpenThread} />
+      </div>
+    );
+  }
+  const working = subagents.filter(isActive).length;
+  const done = subagents.filter((t) => t.status === "done").length;
+  const failed = subagents.filter((t) => t.status === "error").length;
+  const summary = [
+    working > 0 && `${working} working`,
+    done > 0 && `${done} done`,
+    failed > 0 && `${failed} failed`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const span = spanOf(subagents);
+  const first = Math.min(...subagents.map((t) => t.startedAt ?? now));
+  const elapsed = active ? now - first : span;
+  return (
+    <div className="pb-2">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={`${subagents.length} subagents`}
+        onClick={() => setOpen((o) => !o)}
+        className={`flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-[var(--radius-sm)] border-none bg-transparent px-2 py-1.5 text-left hover:bg-hover ${open || active ? "text-fg" : "text-fg-muted opacity-55"}`}
+      >
+        <span className="flex flex-none items-center -space-x-1.5">
+          {subagents.slice(0, 3).map((t) => (
+            <Avatar key={t.id} agent={agent} />
+          ))}
+          {subagents.length > 3 && (
+            <span className="grid h-6 min-w-6 place-items-center rounded-full bg-panel px-1 text-[10px] text-fg-muted ring-2 ring-[var(--color-editor)]">
+              +{subagents.length - 3}
+            </span>
+          )}
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-[length:var(--fs-xs)] font-semibold">
+            {subagents.length} subagents
+          </span>
+          <span
+            className={`truncate text-[length:var(--fs-xs)] ${failed > 0 ? "text-danger" : active ? "text-accent-text" : "text-fg-subtle"}`}
+          >
+            {summary}
+          </span>
+        </span>
+        {elapsed !== null && (
+          <span className="flex-none text-[length:var(--fs-xs)] text-fg-subtle tabular-nums">
+            {fullElapsed(Math.max(0, elapsed))}
+          </span>
+        )}
+        <CaretDownIcon
+          size={14}
+          className={`flex-none text-fg-muted transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && (
+        <div className="mt-1 flex flex-col gap-px rounded-[var(--radius)] border border-border bg-panel p-1">
+          {subagents.map((t) => (
+            <SubagentCard
+              key={t.id}
+              tool={t}
+              calls={calls}
+              agent={agent}
+              onOpenThread={onOpenThread}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Avatar({ agent, dot }: { agent: AgentKind; dot?: string }) {
+  return (
+    <span className="relative grid h-6 w-6 flex-none place-items-center rounded-full border border-border bg-panel ring-2 ring-[var(--color-editor)]">
+      <ProviderLogos kind={agent} size={13} />
+      {dot && (
+        <span
+          className={`absolute -right-0.5 -bottom-0.5 h-2 w-2 rounded-full ring-2 ring-[var(--color-editor)] ${dot}`}
+        />
+      )}
+    </span>
+  );
+}
+
+/** A subagent: what it was asked to do, what it is doing or found, and for how long. It opens
+ * its own thread when it has one. */
+function SubagentCard({
+  tool,
+  calls,
+  agent,
+  onOpenThread,
+}: {
+  tool: ToolCall;
+  calls: ToolCall[];
+  agent: AgentKind;
+  onOpenThread: (id: string) => void;
+}) {
+  const active = isActive(tool);
+  const now = useNow(active);
+  const status = SUBAGENT_STATUS[tool.status];
+  const title = titleOf(tool);
+  // While it works, what it is doing; once done, the first line of what it reported.
+  const current = [...calls].reverse().find((c) => c.parent === tool.id && isActive(c));
+  const result = tool.output
+    ?.replace(/[`*_#>]/g, "")
+    .split("\n")
+    .map((l) => l.trim())
+    .find(Boolean);
+  const detail = active ? (current ? toolLabel(current) : undefined) : result;
+  const elapsed =
+    tool.startedAt === null ? null : Math.max(0, (tool.endedAt ?? now) - tool.startedAt);
+  const body = (
+    <>
+      <Avatar agent={agent} dot={status.dot} />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span className="truncate text-[length:var(--fs-xs)] font-medium text-fg">{title}</span>
+          {detail && (active || tool.status !== "done") && (
+            <span
+              className={`flex-none text-[10px] ${tool.status === "error" ? "text-danger" : "text-fg-subtle"}`}
+            >
+              {status.label}
+            </span>
+          )}
+        </span>
+        <span className="truncate text-[11px] text-fg-muted">{detail ?? status.label}</span>
+      </span>
+      {elapsed !== null && (
+        <span className="flex-none text-[length:var(--fs-xs)] text-fg-subtle tabular-nums">
+          {fullElapsed(elapsed)}
+        </span>
+      )}
+      {tool.childThreadId && <CaretRightIcon size={14} className="flex-none text-fg-subtle" />}
+    </>
+  );
+  const className =
+    "flex w-full min-w-0 items-center gap-2.5 rounded-[var(--radius-sm)] border-none bg-transparent px-2 py-1.5 text-left";
+  const childThreadId = tool.childThreadId;
+  if (!childThreadId) return <div className={className}>{body}</div>;
+  return (
+    <button
+      type="button"
+      aria-label={`Open ${title}`}
+      onClick={() => onOpenThread(childThreadId)}
+      className={`${className} cursor-pointer hover:bg-hover`}
+    >
+      {body}
+    </button>
   );
 }

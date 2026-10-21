@@ -52,6 +52,7 @@ pub fn models() -> Vec<ModelOption> {
 /// The prompt is sent on stdin (`user_message`), so approvals can be answered there too.
 pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
     let mode = match spec.mode {
+        _ if spec.plan => "plan",
         AccessMode::Supervised => "default",
         AccessMode::AutoAcceptEdits => "acceptEdits",
         AccessMode::Auto => "auto",
@@ -116,6 +117,21 @@ fn user_line(text: &str, images: &[Image], priority: Option<&str>) -> String {
     message.to_string()
 }
 
+/// The answer to ExitPlanMode: the plan was taken, so Claude stops here.
+const PLAN_CAPTURED: &str = "The client captured your proposed plan. Stop here and wait for the \
+user's feedback or implementation request in a later turn.";
+
+/// Asks Claude to move the call `tool_id` (a subagent working in the foreground) to the
+/// background, where it keeps working; Claude answers with a control response.
+pub fn background_task(tool_id: &str, request_id: &str) -> String {
+    serde_json::json!({
+        "type": "control_request",
+        "request_id": request_id,
+        "request": {"subtype": "background_tasks", "tool_use_id": tool_id},
+    })
+    .to_string()
+}
+
 /// Asks Claude to stop one of its subagents.
 pub fn stop_task(task_id: &str) -> String {
     serde_json::json!({
@@ -155,6 +171,69 @@ pub fn approval_reply(
         },
     })
     .to_string()
+}
+
+/// What a subagent did in one of its frames (whole `assistant` and `user` messages that name the
+/// call that started it): its text, reasoning, and calls, for its own thread.
+pub fn subagent_events(v: &Value, root: &str, message_id: &str) -> Vec<AgentEvent> {
+    let blocks = v["message"]["content"]
+        .as_array()
+        .map_or(&[][..], Vec::as_slice);
+    let mut parsed = Vec::new();
+    match v["type"].as_str() {
+        Some("assistant") => {
+            for block in blocks {
+                match block["type"].as_str() {
+                    Some("text") => {
+                        let text = block["text"].as_str().unwrap_or_default();
+                        if !text.trim().is_empty() {
+                            parsed.push(text_delta(message_id, text));
+                        }
+                    }
+                    Some("thinking") => {
+                        let text = block["thinking"].as_str().unwrap_or_default();
+                        if !text.trim().is_empty() {
+                            let now = now_ms();
+                            parsed.push(Parsed::Event(AgentEvent::Thinking {
+                                message_id: message_id.into(),
+                                text: text.into(),
+                                started_at: Some(now),
+                                ended_at: Some(now),
+                            }));
+                        }
+                    }
+                    Some("tool_use") => claude_tool_use(block, root, message_id, None, &mut parsed),
+                    _ => {}
+                }
+            }
+        }
+        Some("user") => {
+            for block in blocks.iter().filter(|b| b["type"] == "tool_result") {
+                parsed.push(tool_result(block, message_id));
+            }
+        }
+        _ => {}
+    }
+    parsed
+        .into_iter()
+        .filter_map(|p| match p {
+            Parsed::Event(event) => Some(event),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A `tool_result` block: the call it answers is finished, with its output.
+fn tool_result(block: &Value, message_id: &str) -> Parsed {
+    let id = block["tool_use_id"].as_str().unwrap_or_default();
+    let is_error = block["is_error"].as_bool().unwrap_or(false);
+    // Content is a string, or text blocks.
+    let content = &block["content"];
+    let output = content.as_str().map_or_else(
+        || block_text(content.as_array().map_or(&[][..], Vec::as_slice)),
+        String::from,
+    );
+    tool_finished(message_id, id, is_error, &output)
 }
 
 /// A `can_use_tool` request becomes an approval; other control requests are refused.
@@ -245,6 +324,7 @@ fn subagent_of(input: &Value) -> Option<SubAgent> {
         kind: input["subagent_type"].as_str()?.into(),
         description: input["description"].as_str().unwrap_or_default().into(),
         model: input["model"].as_str().map(String::from),
+        prompt: input["prompt"].as_str().map(String::from),
     })
 }
 
@@ -397,15 +477,7 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
         }
         Some("user") => {
             for block in blocks.iter().filter(|b| b["type"] == "tool_result") {
-                let id = block["tool_use_id"].as_str().unwrap_or_default();
-                let is_error = block["is_error"].as_bool().unwrap_or(false);
-                // Content is a string, or text blocks.
-                let content = &block["content"];
-                let output = content.as_str().map_or_else(
-                    || block_text(content.as_array().map_or(&[][..], Vec::as_slice)),
-                    String::from,
-                );
-                out.push(tool_finished(message_id, id, is_error, &output));
+                out.push(tool_result(block, message_id));
             }
             // Each `/goal` check that finds the goal unmet returns as Stop hook feedback.
             let content = &v["message"]["content"];
@@ -426,6 +498,11 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
             let steered = v["terminal_reason"]
                 .as_str()
                 .is_some_and(|r| r.starts_with("aborted_"));
+            if steered {
+                out.push(Parsed::Event(AgentEvent::MessageCutOff {
+                    message_id: message_id.into(),
+                }));
+            }
             if (is_error || subtype != "success") && !steered {
                 let text = v["result"]
                     .as_str()
@@ -435,7 +512,37 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
             }
             out.push(Parsed::Finished);
         }
+        // In plan mode Claude asks to leave it once its plan is ready. The plan is kept and the
+        // request refused, so Claude stops and the user implements or refines it.
+        Some("control_request")
+            if v["request"]["subtype"] == "can_use_tool"
+                && v["request"]["tool_name"] == "ExitPlanMode" =>
+        {
+            let plan = v["request"]["input"]["plan"].as_str().unwrap_or_default().trim();
+            if !plan.is_empty() {
+                out.push(Parsed::Event(AgentEvent::PlanProposed {
+                    message_id: message_id.into(),
+                    text: plan.into(),
+                }));
+            }
+            out.push(Parsed::Send(
+                serde_json::json!({
+                    "type": "control_response",
+                    "response": {
+                        "subtype": "success",
+                        "request_id": v["request_id"],
+                        "response": {"behavior": "deny", "message": PLAN_CAPTURED},
+                    },
+                })
+                .to_string(),
+            ));
+        }
         Some("control_request") => out.push(claude_control_request(v, root)),
+        Some("control_response") => {
+            if let Some(id) = v["response"]["request_id"].as_str() {
+                out.push(Parsed::ControlResponse(id.into()));
+            }
+        }
         _ => {}
     }
     out
@@ -640,6 +747,7 @@ mod tests {
             model: Some("opus"),
             text: "do it",
             mode: AccessMode::FullAccess,
+            plan: false,
             effort: None,
             attachments: &[],
             images: &[],

@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { FolderPlusIcon } from "@phosphor-icons/react";
+import { FolderPlusIcon, ListChecksIcon } from "@phosphor-icons/react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   api,
@@ -41,6 +41,7 @@ import type { HistoryEntry } from "~/components/chat/Composer";
 import Messages from "~/components/chat/Messages";
 import PendingApprovalBanner from "~/components/chat/PendingApprovalBanner";
 import TasksBadge from "~/components/chat/TasksBadge";
+import { planTitle } from "~/components/chat/ProposedPlanCard";
 import ResumePrompt from "~/components/chat/ResumePrompt";
 import { isWorking, type NewThreadOptions } from "~/hooks/useThreads";
 import { coldLargeSession } from "~/lib/tokens";
@@ -61,6 +62,10 @@ const CHAT_SUGGESTIONS = [
 interface ChatProps {
   project: Project | null;
   thread: Thread | null;
+  /** The thread that started this one, when it is a subagent's. */
+  parentThread: Thread | null;
+  /** Opens another thread, such as a subagent's. */
+  onOpenThread: (id: string) => void;
   changes: FileChange[];
   defaultAgent: AgentKind;
   /** Connected agents offered in the composer's agent picker. */
@@ -79,6 +84,9 @@ interface ChatProps {
   onCancel: (threadId: string) => Promise<void>;
   onSetModel: (threadId: string, agent: AgentKind, model: string | null) => Promise<void>;
   onSetAccessMode: (threadId: string, mode: AccessMode) => Promise<void>;
+  onSetPlanMode: (threadId: string, on: boolean) => Promise<void>;
+  /** Starts a thread in this project with `text` as its first message, named `title`. */
+  onStartThread: (opts: NewThreadOptions, title: string, text: string) => Promise<void>;
   onSetEffort: (threadId: string, effort: string | null) => Promise<void>;
   /** Starts a fresh chat in this project; the current chat stays in the sidebar. */
   onNewChat: () => void;
@@ -102,6 +110,8 @@ const Composer = lazy(() => import("~/components/chat/Composer"));
 export default function Chat({
   project,
   thread,
+  parentThread,
+  onOpenThread,
   changes,
   defaultAgent,
   agents,
@@ -116,6 +126,8 @@ export default function Chat({
   onCancel,
   onSetModel,
   onSetAccessMode,
+  onSetPlanMode,
+  onStartThread,
   onSetEffort,
 }: ChatProps) {
   // Drafts are kept per thread ("new" when nothing is selected).
@@ -323,6 +335,11 @@ export default function Chat({
 
   function submit(queue: boolean) {
     const text = draft.trim();
+    // With a plan ready, sending nothing implements it; anything written refines it.
+    if (readyPlan !== null && !text && attachments.length === 0) {
+      void implementPlan(false);
+      return;
+    }
     // An answer written in the composer goes to the agent's question, not into the chat.
     if (asking && ownAnswer === asking.id) {
       if (!text) return;
@@ -464,6 +481,18 @@ export default function Chat({
     onSetEffort(thread.id, next).catch((e: unknown) => setError(errorText(e)));
   }
 
+  // Plan mode: the agent plans and proposes, without changing files. Antigravity has none.
+  const planMode = thread ? thread.planMode : (newOpts.planMode ?? false);
+  const planSupported = agent !== "antigravity";
+  function togglePlan() {
+    if (!thread) {
+      setPick({ ...newOpts, planMode: !planMode });
+      return;
+    }
+    setError(null);
+    onSetPlanMode(thread.id, !planMode).catch((e: unknown) => setError(errorText(e)));
+  }
+
   function pickAccess(mode: AccessMode) {
     if (!thread) {
       setPick({ ...newOpts, accessMode: mode });
@@ -516,6 +545,35 @@ export default function Chat({
     [...(thread?.messages ?? [])].reverse().find((m) => m.role === "assistant")?.plan ?? [];
   // Choices the agent offered in its last finished reply, until the user answers or dismisses them.
   const lastMessage = thread?.messages.at(-1);
+  // A plan the last reply proposed in plan mode, ready to implement or refine.
+  const proposed =
+    thread?.planMode && !working && !asking && lastMessage?.role === "assistant"
+      ? [...lastMessage.parts].reverse().find((p) => p.type === "plan")
+      : undefined;
+  const readyPlan = proposed?.type === "plan" ? proposed.text : null;
+  const IMPLEMENT = "PLEASE IMPLEMENT THIS PLAN:\n";
+  // Implementing leaves plan mode, in this thread or a new one named after the plan.
+  async function implementPlan(newThread: boolean) {
+    if (!thread || readyPlan === null) return;
+    const text = IMPLEMENT + readyPlan.trim();
+    setError(null);
+    if (newThread) {
+      const opts: NewThreadOptions = {
+        agent: thread.agent,
+        model: thread.model,
+        accessMode: thread.accessMode,
+        effort: thread.effort,
+      };
+      await onStartThread(opts, `Implement ${planTitle(readyPlan)}`.slice(0, 60), text);
+      return;
+    }
+    try {
+      await onSetPlanMode(thread.id, false);
+      await dispatch(text, [], false);
+    } catch (e) {
+      setError(errorText(e));
+    }
+  }
   const choiceSource =
     !working && lastMessage?.role === "assistant" && lastMessage.status === "complete"
       ? lastMessage
@@ -565,6 +623,7 @@ export default function Chat({
           <Messages
             key={thread.id}
             thread={thread}
+            onOpenThread={onOpenThread}
             changes={changes}
             busy={working}
             onOpenCanvas={project ? openCanvas : undefined}
@@ -603,8 +662,39 @@ export default function Chat({
           </div>
         )}
       </div>
-      <div className="w-full flex-none box-border px-6 pb-4">
+      {/* A subagent's thread is its transcript; it takes no messages. */}
+      {thread?.parent && (
+        <div className="flex w-full flex-none box-border items-center gap-2 border-t border-border px-6 py-2.5 text-[length:var(--fs-sm)] text-fg-muted">
+          <span>Subagent of</span>
+          <button
+            type="button"
+            className="cursor-pointer truncate rounded-[var(--radius-sm)] border-none bg-transparent px-1 text-fg hover:bg-hover"
+            onClick={() => parentThread && onOpenThread(parentThread.id)}
+            disabled={!parentThread}
+          >
+            {parentThread ? displayTitle(parentThread.title) : "a deleted thread"}
+          </button>
+          <span className="ml-auto text-fg-subtle">Read-only</span>
+        </div>
+      )}
+      <div className={`w-full flex-none box-border px-6 pb-4${thread?.parent ? " hidden" : ""}`}>
         {plan.length > 0 && <TasksBadge steps={plan} />}
+        {readyPlan !== null && (
+          <div
+            title="Write feedback to refine the plan, or send nothing to implement it"
+            className="mb-1.5 flex items-center gap-2 rounded-[var(--radius)] border border-border bg-panel px-2.5 py-1.5 text-[length:var(--fs-sm)]"
+          >
+            <ListChecksIcon size={14} className="flex-none text-fg-muted" />
+            <span className="flex-none font-medium text-fg-muted">Plan ready</span>
+            <span className="min-w-0 flex-1 truncate text-fg">{planTitle(readyPlan)}</span>
+            <button className="btn flex-none" onClick={() => void implementPlan(true)}>
+              Implement in a new thread
+            </button>
+            <button className="btn btn-primary flex-none" onClick={() => void implementPlan(false)}>
+              Implement
+            </button>
+          </div>
+        )}
         {permissions.length > 0 && (
           <PendingApprovalBanner approvals={permissions} onRespond={respond} />
         )}
@@ -670,6 +760,8 @@ export default function Chat({
             onPickModel={pickModel}
             accessMode={accessMode}
             onPickAccess={pickAccess}
+            planMode={planSupported ? planMode : null}
+            onTogglePlan={togglePlan}
             effort={effort}
             onPickEffort={pickEffort}
             attachments={attachments}

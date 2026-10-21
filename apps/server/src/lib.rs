@@ -196,6 +196,7 @@ fn user_message(text: &str, attachments: Vec<Attachment>) -> Message {
         steer: false,
         queued: false,
         background: Vec::new(),
+        cut_off: false,
         parts: Vec::new(),
         finished_at: None,
         usage: None,
@@ -490,6 +491,8 @@ impl Server {
             position: -(created_at as i64),
             folder_id: None,
             archived_at: None,
+            parent: None,
+            plan_mode: false,
         };
         self.store.insert_threads(vec![thread.clone()])?;
         Ok(thread)
@@ -529,6 +532,17 @@ impl Server {
         if let Err(e) = self.store.delete_thread(id) {
             log::warn!("failed to delete thread: {e}");
         }
+        // Its subagents' threads go with it.
+        let children = self
+            .store
+            .threads()
+            .into_iter()
+            .filter(|t| t.parent.as_ref().is_some_and(|p| p.thread_id == id));
+        for child in children {
+            if let Err(e) = self.store.delete_thread(&child.id) {
+                log::warn!("failed to delete a subagent's thread: {e}");
+            }
+        }
     }
 
     /// Sets the thread's model. The agent can only change before the first message,
@@ -547,6 +561,16 @@ impl Server {
     /// Takes effect from the thread's next turn.
     pub fn set_thread_access_mode(&self, id: &str, mode: AccessMode) -> Res<()> {
         self.store.update_thread(id, |t| t.access_mode = mode)
+    }
+
+    /// Writes `text` to `path`, a file the user picked in a save dialog.
+    pub fn save_text_file(&self, path: &str, text: &str) -> Res<()> {
+        std::fs::write(path, text).map_err(|e| e.to_string())
+    }
+
+    /// Takes effect from the thread's next turn.
+    pub fn set_thread_plan_mode(&self, id: &str, on: bool) -> Res<()> {
+        self.store.update_thread(id, |t| t.plan_mode = on)
     }
 
     /// Takes effect from the thread's next turn.
@@ -643,10 +667,21 @@ impl Server {
         // Stored before the agent sees it, so its answer is stored after it.
         let m = msg.clone();
         let mut session_id = None;
+        let mut subagents = Vec::new();
         self.store.update_thread(&thread_id, |t| {
             if t.messages.is_empty() {
                 t.title = title_from(&text);
             }
+            // Subagents of the running turn still working, which a steer must not cut off.
+            subagents = t
+                .messages
+                .iter()
+                .flat_map(|m| &m.tools)
+                .filter(|c| {
+                    c.subagent.is_some() && c.parent.is_none() && c.status == StepStatus::Running
+                })
+                .map(|c| c.id.clone())
+                .collect();
             t.messages.push(m);
             session_id = t.session_id.clone();
         })?;
@@ -666,6 +701,7 @@ impl Server {
                 &text,
                 &attachments,
                 &images,
+                &subagents,
             )
         };
         match delivery {

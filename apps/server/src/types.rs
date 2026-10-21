@@ -191,6 +191,9 @@ pub struct ToolCall {
     /// What the call returned, cut to its first `MAX_TOOL_OUTPUT` bytes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<String>,
+    /// The thread holding the subagent's own transcript, for a call that started one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub child_thread_id: Option<String>,
 }
 
 /// The most of a tool call's output that is kept.
@@ -226,6 +229,10 @@ pub enum Part {
     Tool {
         id: String,
     },
+    /// A plan the agent proposed in plan mode, as Markdown.
+    Plan {
+        text: String,
+    },
 }
 
 /// A shell command the agent started in the background, still running.
@@ -248,6 +255,9 @@ pub struct SubAgent {
     pub description: String,
     /// Model the agent chose for it; None means it inherits the parent's.
     pub model: Option<String>,
+    /// The instructions it was given.
+    #[serde(default)]
+    pub prompt: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -416,6 +426,9 @@ pub struct Message {
     /// Background shell commands still running after the reply ended; they keep the turn going.
     #[serde(default)]
     pub background: Vec<BackgroundTask>,
+    /// Cut short by a steering message; the agent answered it in the next reply.
+    #[serde(default)]
+    pub cut_off: bool,
     /// The reply's text, reasoning, and tool calls in the order they happened. Replies saved
     /// before this was kept have none.
     #[serde(default)]
@@ -458,6 +471,21 @@ pub struct Thread {
     /// When the thread was archived; None while it is in the task list.
     #[serde(default)]
     pub archived_at: Option<u64>,
+    /// Set on a subagent's thread: the thread and call that started it. Such a thread is
+    /// read-only and not listed in the sidebar.
+    #[serde(default)]
+    pub parent: Option<ThreadParent>,
+    /// Turns run in plan mode: the agent plans and proposes, without changing files.
+    #[serde(default)]
+    pub plan_mode: bool,
+}
+
+/// Where a subagent's thread came from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadParent {
+    pub thread_id: String,
+    pub tool_id: String,
 }
 
 /// A folder inside a project. Its threads are those whose `folder_id` names it.
@@ -633,6 +661,15 @@ pub enum AgentEvent {
         message_id: String,
         usage: TokenUsage,
     },
+    /// In plan mode, the agent proposed this plan (Markdown).
+    PlanProposed {
+        message_id: String,
+        text: String,
+    },
+    /// A steering message cut the reply short.
+    MessageCutOff {
+        message_id: String,
+    },
     /// A message sent mid-turn is now waiting for the turn to end (`queued`), or no longer is.
     MessageQueued {
         message_id: String,
@@ -657,6 +694,10 @@ pub enum AgentEvent {
         message_id: String,
         status: MessageStatus,
         error: Option<String>,
+    },
+    /// A thread the server created, such as a subagent's.
+    ThreadCreated {
+        thread: Thread,
     },
 }
 

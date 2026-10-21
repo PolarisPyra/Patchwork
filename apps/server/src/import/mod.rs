@@ -109,6 +109,8 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
         folder_id: None,
         effort: None,
         archived_at: None,
+        parent: None,
+        plan_mode: false,
         messages: session
             .messages
             .into_iter()
@@ -127,6 +129,7 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
                 steer: false,
                 queued: false,
                 background: Vec::new(),
+                cut_off: false,
                 parts: Vec::new(),
                 finished_at: None,
                 usage: None,

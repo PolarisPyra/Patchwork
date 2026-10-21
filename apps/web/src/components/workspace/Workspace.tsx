@@ -92,8 +92,10 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     reorderThreads,
     setModel,
     setAccessMode,
+    setPlanMode,
     setEffort,
     send,
+    startThread,
   } = useThreads(settings.activeProjectId, () => void refreshGit());
   // The selected thread decides the project (null: a chat without a project);
   // with nothing selected, the last active project does.
@@ -103,8 +105,9 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     ) ?? null;
   const projectId = project?.id ?? null;
   // Archived chats and tasks leave the task list and the palette; the Archived view lists them.
-  const liveThreads = threads.filter((t) => t.archivedAt === null);
-  const archivedThreads = threads.filter((t) => t.archivedAt !== null);
+  // Subagents' threads are opened from their cards, not listed.
+  const liveThreads = threads.filter((t) => t.archivedAt === null && !t.parent);
+  const archivedThreads = threads.filter((t) => t.archivedAt !== null && !t.parent);
   const defaultAgent = defaultAgentOf(settings);
   // Display order stays fixed; `settings.agents` order only marks the default.
   const connectedAgents = AGENT_KINDS.filter((k) => settings.agents.includes(k));
@@ -559,6 +562,11 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
             <Chat
               project={project}
               thread={selected}
+              parentThread={
+                (selected?.parent && threads.find((t) => t.id === selected.parent?.threadId)) ||
+                null
+              }
+              onOpenThread={select}
               changes={changes}
               defaultAgent={defaultAgent}
               agents={connectedAgents}
@@ -580,6 +588,12 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
               onCancel={(id) => api.cancelTurn(id)}
               onSetModel={setModel}
               onSetAccessMode={setAccessMode}
+              onSetPlanMode={setPlanMode}
+              onStartThread={(opts, title, text) =>
+                startThread(projectId, opts, title, text).catch((e: unknown) =>
+                  setError(errorText(e)),
+                )
+              }
               onSetEffort={setEffort}
             />
           </main>
