@@ -7,7 +7,6 @@
     "dev": "pnpm --filter patchwork-desktop dev",
     "dev:web": "pnpm --filter patchwork-web dev",
     "build": "pnpm --filter patchwork-desktop build",
-    "appimage": "pnpm --filter patchwork-desktop tauri build --bundles appimage && mv -f \"$(ls -t target/release/bundle/appimage/Patchwork_*_amd64.AppImage | head -n 1)\" target/release/bundle/appimage/Patchwork_amd64.AppImage",
     "typecheck": "pnpm --filter patchwork-web typecheck",
     "test": "cargo test --workspace",
     "tauri": "pnpm --filter patchwork-desktop tauri",
