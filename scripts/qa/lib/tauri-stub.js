@@ -9,7 +9,7 @@ const threads = [
   { ...chat("qa-working", "Refactor the diff view", [message("streaming", now - 60_000)], now - 60_000), folderId: "qa-folder" },
 ];
 const folders = [{ id: "qa-folder", projectId: "qa-project", name: "Old" }];
-const responses = { get_settings: settings, list_threads: threads, list_folders: folders, get_last_thread: null, save_pasted_image: { kind: "image", path: "/tmp/pasted-image.png", name: "Pasted image.png" }, get_collapsed: [], git_changes: [] };
+const responses = { get_settings: settings, list_threads: threads, list_folders: folders, get_last_thread: null, save_pasted_image: { kind: "image", path: "/tmp/pasted-image.png", name: "Pasted image.png" }, get_collapsed: [], git_changes: [], list_shells: { shells: ["/usr/bin/bash", "/usr/bin/fish", "/usr/bin/zsh"], default: "/usr/bin/zsh" } };
 window.__TAURI_INTERNALS__ = {
   invoke: async (cmd) => (cmd in responses ? responses[cmd] : null),
   transformCallback: () => 0,

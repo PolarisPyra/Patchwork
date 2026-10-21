@@ -31,6 +31,7 @@ import {
   type ModelOption,
   type NotificationSettings,
   type Settings,
+  type ShellChoices,
   type Theme,
   type TokenSettings,
 } from "~/api";
@@ -600,13 +601,14 @@ const basename = (path: string) => path.split("/").pop() ?? path;
 /** How the agents' shell is chosen. Shells come from /etc/shells; a saved shell that is no
  * longer listed stays in the menu so the choice is still visible. */
 function EnvironmentPane({ settings, updateSettings }: PaneProps) {
-  const [shells, setShells] = useState<string[]>([]);
+  const [choices, setChoices] = useState<ShellChoices>({ shells: [], default: null });
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.listShells().then(setShells, (e) => setError(errorText(e)));
+    api.listShells().then(setChoices, (e) => setError(errorText(e)));
   }, []);
 
+  const { shells, default: fallback } = choices;
   const shell = settings.shell ?? "";
   const options = shell && !shells.includes(shell) ? [shell, ...shells] : shells;
   const choose = (path: string | null) => void updateSettings((s) => ({ ...s, shell: path }));
@@ -621,7 +623,7 @@ function EnvironmentPane({ settings, updateSettings }: PaneProps) {
               aria-haspopup="menu"
               aria-expanded={open}
               aria-label={`Shell: ${shell ? basename(shell) : "System default"}`}
-              title={shell || "Follows the SHELL environment variable"}
+              title={shell || `Follows your login shell${fallback ? ` (${fallback})` : ""}`}
               onClick={toggle}
             >
               <span>{shell ? basename(shell) : "System default"}</span>
@@ -643,7 +645,9 @@ function EnvironmentPane({ settings, updateSettings }: PaneProps) {
                     choose(path);
                   }}
                 >
-                  {path ? basename(path) : "System default"}
+                  {path
+                    ? basename(path)
+                    : `System default${fallback ? ` (${basename(fallback)})` : ""}`}
                 </button>
               ))}
             </div>

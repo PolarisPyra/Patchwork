@@ -76,6 +76,12 @@ export interface ModelOption {
   defaultModel?: string | null;
 }
 
+/** Shells from /etc/shells, and the login shell that "System default" resolves to. */
+export interface ShellChoices {
+  shells: string[];
+  default: string | null;
+}
+
 export interface ToolCall {
   id: string;
   name: string;
@@ -344,8 +350,8 @@ export const api = {
   },
   /** Models for an agent, starting with "Default" (the CLI's own choice). */
   listModels: (kind: AgentKind) => invoke<ModelOption[]>("list_models", { kind }),
-  /** Installed login shells, as paths from /etc/shells. */
-  listShells: () => invoke<string[]>("list_shells"),
+  /** Installed login shells, as paths from /etc/shells, and the default shell's path. */
+  listShells: () => invoke<ShellChoices>("list_shells"),
   /** Subscription usage limits. Cached by the backend; `refresh` asks for new
    * numbers, which it still throttles to avoid provider rate limits. */
   getUsage: (kind: AgentKind, refresh = false) =>

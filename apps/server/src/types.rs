@@ -135,6 +135,14 @@ pub struct ModelOption {
     pub default_model: Option<String>,
 }
 
+/// The shells the Settings dropdown offers, and the one "System default" resolves to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShellChoices {
+    pub shells: Vec<String>,
+    pub default: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {

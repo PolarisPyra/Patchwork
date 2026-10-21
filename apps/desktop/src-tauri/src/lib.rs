@@ -42,8 +42,11 @@ fn save_settings(server: Srv, settings: Settings) -> Res<()> {
 }
 
 #[tauri::command]
-fn list_shells() -> Vec<String> {
-    patchwork_server::available_shells()
+fn list_shells() -> ShellChoices {
+    ShellChoices {
+        shells: patchwork_server::available_shells(),
+        default: patchwork_server::effective_shell(None),
+    }
 }
 
 #[tauri::command]

@@ -151,7 +151,7 @@ impl Runner {
         }
         let input = provider::turn_input(agent, &spec);
         let mut cmd = scope::scoped(provider::agent_command(agent)?);
-        if let Some(shell) = server.store.settings().shell {
+        if let Some(shell) = crate::effective_shell(server.store.settings().shell.as_deref()) {
             cmd.env("SHELL", shell);
         }
         cmd.args(&args)

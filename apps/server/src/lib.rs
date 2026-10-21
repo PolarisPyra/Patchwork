@@ -108,6 +108,48 @@ pub fn available_shells() -> Vec<String> {
         .collect()
 }
 
+/// The login shell in the passwd database for the current user. Windows has none.
+#[cfg(unix)]
+pub fn login_shell() -> Option<String> {
+    let mut buf = vec![0 as libc::c_char; 4096];
+    let mut entry: libc::passwd = unsafe { std::mem::zeroed() };
+    let mut found = std::ptr::null_mut();
+    let rc = unsafe {
+        libc::getpwuid_r(
+            libc::getuid(),
+            &mut entry,
+            buf.as_mut_ptr(),
+            buf.len(),
+            &mut found,
+        )
+    };
+    if rc != 0 || found.is_null() {
+        return None;
+    }
+    let shell = unsafe { std::ffi::CStr::from_ptr(entry.pw_shell) };
+    shell
+        .to_str()
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+#[cfg(not(unix))]
+pub fn login_shell() -> Option<String> {
+    None
+}
+
+/// The shell agents run commands in: the user's choice in Settings if it is still installed,
+/// otherwise the login shell, otherwise the SHELL environment variable. None when nothing is known.
+pub fn effective_shell(chosen: Option<&str>) -> Option<String> {
+    let installed = available_shells();
+    chosen
+        .filter(|shell| installed.iter().any(|s| s == shell))
+        .map(str::to_string)
+        .or_else(login_shell)
+        .or_else(|| std::env::var("SHELL").ok().filter(|s| !s.is_empty()))
+}
+
 fn idle_compaction_due(thread: &Thread, now: u64, tokens: &TokenSettings) -> bool {
     if thread.agent != AgentKind::Claude
         || thread
