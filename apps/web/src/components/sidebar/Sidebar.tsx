@@ -621,7 +621,7 @@ function TasksView({
                   drag.attrs.onPointerDown(e);
                   if (!editing && isPlainPress(e)) pickRow(e, row);
                 }}
-                className={`group flex h-[22px] cursor-pointer items-center select-none border-none pr-1.5 pl-2 text-left text-fg ${selectionFill(isPicked(row))} ${drag.edge} ${drag.dragging ? "opacity-50" : ""}`}
+                className={`group flex h-7 cursor-pointer items-center select-none border-none pr-1.5 pl-2 text-left text-fg ${selectionFill(isPicked(row))} ${drag.edge} ${drag.dragging ? "opacity-50" : ""}`}
                 onClick={(e) => {
                   if (!pickRow(e, row)) toggle(p.id);
                 }}
@@ -695,7 +695,7 @@ function TasksView({
                           onPointerDown={(e) => {
                             if (!folderEditing && isPlainPress(e)) pickRow(e, folderRow);
                           }}
-                          className={`group flex h-[22px] cursor-pointer items-center select-none pr-1.5 pl-4 text-fg ${selectionFill(isPicked(folderRow))} ${target.edge}`}
+                          className={`group flex h-7 cursor-pointer items-center select-none pr-1.5 pl-4 text-fg ${selectionFill(isPicked(folderRow))} ${target.edge}`}
                           onClick={(e) => {
                             if (!pickRow(e, folderRow)) toggle(key);
                           }}
@@ -829,9 +829,9 @@ function ThreadRow({
   const goalActive = thread.goal?.status === "active";
   const last = thread.messages[thread.messages.length - 1];
   const needsApproval = last?.approvals.some((a) => a.status === "pending") ?? false;
-  // Tree rows are 22px tall and start at their depth's indent, as VS Code's explorer does.
+  // Tree rows are 28px tall and start at their depth's indent, as VS Code's explorer does.
   const spacing = tree
-    ? `h-[22px] pr-2 ${nested ? "pl-6" : "pl-4"}`
+    ? `h-7 pr-2 ${nested ? "pl-6" : "pl-4"}`
     : `${nested ? "mb-1" : "my-0.5"} ${nested ? "ml-6 mr-1.5" : "mx-1.5"} px-2.5 py-1.5 rounded-[var(--radius-sm)]`;
   // The picked rows are the selection, and the open chat is always among them.
   const fill = picked
