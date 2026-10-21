@@ -28,7 +28,11 @@ import { lastAccessMode } from "~/components/chat/AccessPicker";
 import { effortFor, lastEffort } from "~/components/chat/EffortPicker";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import ChoicePanel from "~/components/chat/ChoicePanel";
-import { parseChoices } from "~/components/chat/choices";
+import {
+  dismissedChoiceIds,
+  parseChoices,
+  rememberDismissedChoice,
+} from "~/components/chat/choices";
 import GoalBanner from "~/components/chat/GoalBanner";
 import BackgroundTasks from "~/components/chat/BackgroundTasks";
 import QueuedMessages from "~/components/chat/QueuedMessages";
@@ -478,15 +482,35 @@ export default function Chat({
       ? lastMessage
       : null;
   const choices = choiceSource ? parseChoices(choiceSource.text) : null;
+  // A reply's choices are shown once: answering, dismissing, or leaving the thread records the reply as
+  // done, so reopening the thread or restarting the app does not bring the popup back.
   const [dismissedChoices, setDismissedChoices] = useState<string | null>(null);
   const showChoices =
-    choices !== null && choiceSource !== null && dismissedChoices !== choiceSource.id;
+    choices !== null &&
+    choiceSource !== null &&
+    dismissedChoices !== choiceSource.id &&
+    !dismissedChoiceIds().has(choiceSource.id);
+  const dismissChoice = (id: string) => {
+    rememberDismissedChoice(id);
+    setDismissedChoices(id);
+  };
+  const shownChoice = useRef<string | null>(null);
+  useEffect(() => {
+    shownChoice.current = showChoices && choiceSource ? choiceSource.id : null;
+  });
+  // Leaving the thread with its choices still open counts as dismissing them.
+  useEffect(
+    () => () => {
+      if (shownChoice.current) rememberDismissedChoice(shownChoice.current);
+    },
+    [thread?.id],
+  );
   const answerChoice = (option: string) => {
-    if (choiceSource) setDismissedChoices(choiceSource.id);
+    if (choiceSource) dismissChoice(choiceSource.id);
     void dispatch(option, [], true);
   };
   const dismissChoices = () => {
-    if (choiceSource) setDismissedChoices(choiceSource.id);
+    if (choiceSource) dismissChoice(choiceSource.id);
   };
   const writeOwnAnswer = () => {
     dismissChoices();

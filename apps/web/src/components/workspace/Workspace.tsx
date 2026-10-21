@@ -18,6 +18,7 @@ import Chat from "~/components/chat/Chat";
 import CommandPalette, { type PaletteItem } from "~/components/workspace/CommandPalette";
 import { openFolderAsProject, syncProjects } from "~/lib/projects";
 import Sidebar, { ToolStripe, type SidebarView, type Target } from "~/components/sidebar/Sidebar";
+import { getPicked, setPickedRows } from "~/components/sidebar/pickedRows";
 import StatusBar from "~/components/workspace/StatusBar";
 import Toolbar from "~/components/workspace/Toolbar";
 import { isWorking, useThreads } from "~/hooks/useThreads";
@@ -101,9 +102,9 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
 
   const [view, setView] = useState<SidebarView | null>("tasks");
   // Rows picked for removing together, in the view they were picked in; Ctrl+W and Delete act on them.
-  const [picked, setPicked] = useState<Target[]>([]);
+  // They live in a store the sidebar reads, so picking a row does not re-render the open chat.
   useEffect(() => {
-    setPicked([]);
+    setPickedRows([]);
   }, [view]);
   // Chats and tasks being archived: their rows stay mounted, collapsing, until the archive lands.
   const [leavingIds, setLeavingIds] = useState<ReadonlySet<string>>(new Set());
@@ -190,7 +191,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
       ...folderIds.map((id): Target => ({ kind: "folder", id })),
     ];
     if (removed.length > 0 && !(await confirmRemoval(removed))) return;
-    setPicked([]);
+    setPickedRows([]);
     // Projects go first: the backend deletes their tasks, so the thread list is reloaded after them.
     attempt(async () => {
       if (projectIds.length > 0) {
@@ -245,7 +246,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
       ))
     )
       return;
-    setPicked([]);
+    setPickedRows([]);
     attempt(async () => {
       for (const id of ids) await deleteThread(id);
     });
@@ -278,6 +279,8 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   };
 
   const selectThread = (id: string) => {
+    // Opening a chat makes it the whole selection, even when it was already the open chat.
+    setPickedRows([{ kind: "thread", id }]);
     select(id);
     const thread = threads.find((t) => t.id === id);
     if (thread) attempt(() => rememberProject(thread.projectId));
@@ -351,11 +354,12 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     function onKey(e: KeyboardEvent) {
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
+      const picked = getPicked();
       if (e.key === "Escape") {
         if (paletteOpen) setPaletteOpen(false);
         else if (settingsOpen) setSettingsOpen(false);
         else if (openCanvas) setCanvas(null);
-        else if (picked.length > 0) setPicked([]);
+        else if (picked.length > 0) setPickedRows([]);
         else return;
       } else if (mod && key === "k") {
         setPaletteOpen((o) => !o);
@@ -487,8 +491,6 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
             onSelectThread={selectThread}
             onRenameThread={(id, title) => attempt(() => renameThread(id, title))}
             onRenameProject={renameProjectTo}
-            picked={picked}
-            setPicked={setPicked}
             onRemoveTargets={removeTargets}
             onReorderProjects={reorderProjects}
             onReorderThreads={reorderThreadsTo}

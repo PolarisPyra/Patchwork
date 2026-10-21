@@ -15,3 +15,21 @@ export function parseChoices(text: string): string[] | null {
     return null;
   }
 }
+
+const DISMISSED_KEY = "patchwork.dismissedChoices";
+
+/** Ids of the replies whose choices were answered, dismissed, or left unanswered. Kept across restarts. */
+export function dismissedChoiceIds(): Set<string> {
+  try {
+    const ids: unknown = JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? "[]");
+    return new Set(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** Records that a reply's choices are done with, so reopening its thread does not show them again. */
+export function rememberDismissedChoice(id: string) {
+  const ids = [...dismissedChoiceIds(), id].slice(-200);
+  localStorage.setItem(DISMISSED_KEY, JSON.stringify(ids));
+}

@@ -2,11 +2,10 @@ import {
   useEffect,
   useRef,
   useState,
-  type Dispatch,
   type KeyboardEvent,
   type MouseEvent,
+  type PointerEvent,
   type ReactNode,
-  type SetStateAction,
 } from "react";
 import {
   ArchiveIcon,
@@ -14,7 +13,6 @@ import {
   ArrowLeftIcon,
   ArrowsClockwiseIcon,
   ArrowsInLineVerticalIcon,
-  CaretRightIcon,
   ChatCircleIcon,
   ChatsIcon,
   CircleNotchIcon,
@@ -43,6 +41,7 @@ import ProviderLogos from "~/components/ProviderLogos";
 import ContextMenu, { type MenuItem } from "~/components/sidebar/ContextMenu";
 import UsagePopover from "~/components/usage/UsagePopover";
 import { useRowReorder, type RowDrag } from "~/hooks/useRowReorder";
+import { setPickedRows, usePicked } from "./pickedRows";
 import { isWorking } from "~/hooks/useThreads";
 import { baseName, dirName, displayTitle, errorText, formatRelative } from "~/lib/util";
 
@@ -120,9 +119,6 @@ interface SidebarProps {
   /** Creates a folder in a project; null if that failed. */
   onNewFolder: (projectId: string) => Promise<Folder | null>;
   onRenameFolder: (id: string, name: string) => void;
-  /** Rows picked with Ctrl+click, kept by the parent so its shortcuts can remove them. */
-  picked: Target[];
-  setPicked: Dispatch<SetStateAction<Target[]>>;
   /** Archives chats and tasks; asks, then removes projects and folders. */
   onRemoveTargets: (targets: Target[]) => void;
   /** Chats and tasks in the archive, in sidebar order. */
@@ -150,6 +146,25 @@ export interface Target {
 }
 
 const sameTarget = (a: Target, b: Target) => a.kind === b.kind && a.id === b.id;
+/** The modifier keys a row click was made with. */
+type PickModifiers = Pick<MouseEvent, "ctrlKey" | "shiftKey">;
+/**
+ * A plain left press on a row, not on one of its buttons. It selects the row at once, as VS Code's list does,
+ * so a click that the browser swallows as a drag still selects.
+ */
+const isPlainPress = (e: PointerEvent<HTMLElement>) =>
+  e.button === 0 &&
+  !e.ctrlKey &&
+  !e.shiftKey &&
+  !(e.target instanceof Element && e.target.closest("button"));
+const rowKey = (t: Target) => `${t.kind}:${t.id}`;
+/** The collapsed-set key for a project or folder row. */
+const collapseKey = (t: Target) => (t.kind === "folder" ? `folder:${t.id}` : t.id);
+/** A tree row's fill: the selection colors while the tree is focused, a hover tint otherwise. */
+const selectionFill = (selected: boolean) =>
+  selected
+    ? "bg-[var(--tree-inactive-selected,var(--bg-selected-muted))] group-focus-within/tree:bg-[var(--tree-selected,var(--bg-selected))] outline-transparent group-focus-within/tree:outline group-focus-within/tree:outline-1 group-focus-within/tree:-outline-offset-1 group-focus-within/tree:outline-[#3994bcb3]"
+    : "bg-transparent hover:bg-[var(--tree-hover,var(--bg-hover))]";
 
 /** Ctrl+A picks the given rows, unless a text field has focus, where it selects the text. */
 function useSelectAll(targets: Target[], setPicked: (targets: Target[]) => void) {
@@ -194,14 +209,43 @@ export default function Sidebar(props: SidebarProps) {
 }
 
 /** Animates its children open and closed. Stays mounted so the height can transition. */
-function Collapse({ open, children }: { open: boolean; children: ReactNode }) {
+function Collapse({
+  open,
+  children,
+  overflowWhenOpen = false,
+}: {
+  open: boolean;
+  children: ReactNode;
+  /** Lets an open row's drop line reach past the row's edge. Closing still clips. */
+  overflowWhenOpen?: boolean;
+}) {
+  const clip = open && overflowWhenOpen ? "overflow-visible" : "overflow-hidden";
   return (
     <div
-      className={`grid transition-[grid-template-rows] duration-200 ease-out ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+      className={`grid grid-cols-[minmax(0,1fr)] transition-[grid-template-rows] duration-200 ease-out ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
       inert={!open}
     >
-      <div className="min-h-0 overflow-hidden">{children}</div>
+      <div className={`min-h-0 ${clip}`}>{children}</div>
     </div>
+  );
+}
+
+/** VS Code's tree twistie: the chevron-down codicon, turned to point right while a row is collapsed. */
+function Twistie({ open }: { open: boolean }) {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 16 16"
+      aria-hidden
+      className={`transition-transform duration-200 ${open ? "" : "-rotate-90"}`}
+    >
+      <path
+        fill="currentColor"
+        transform="translate(3 5.25) scale(0.0533333)"
+        d="M3.0 16.0 87.0 100.0Q90.0 103.0 94.0 103.0Q98.0 103.0 101.0 100.0L185.0 16.0Q188.0 13.0 188.0 9.0Q188.0 5.0 185.0 2.5Q182.0 0.0 178.0 0.0Q174.0 0.0 172.0 3.0L94.0 80.0L16.0 3.0Q14.0 0.0 10.0 0.0Q6.0 0.0 3.0 2.5Q0.0 5.0 0.0 9.0Q0.0 13.0 3.0 16.0Z"
+      />
+    </svg>
   );
 }
 
@@ -225,8 +269,6 @@ function TasksView({
   onSelectThread,
   onRenameThread,
   onRenameProject,
-  picked,
-  setPicked,
   onRemoveTargets,
   onReorderProjects,
   onReorderThreads,
@@ -252,6 +294,13 @@ function TasksView({
   }, [collapsed, loaded]);
   const [menu, setMenu] = useState<{ x: number; y: number; targets: Target[] } | null>(null);
   const [renaming, setRenaming] = useState<Target | null>(null);
+  // The keyboard focus in the tree: the row the arrow keys move from.
+  const [cursor, setCursor] = useState<Target | null>(null);
+  const treeRef = useRef<HTMLDivElement>(null);
+  // Set when a chat opens from the tree, so its composer does not take the focus from the tree.
+  const keepTreeFocus = useRef(false);
+  const picked = usePicked();
+  const setPicked = setPickedRows;
   const isPicked = (target: Target) => picked.some((p) => sameTarget(p, target));
   const reorder = useRowReorder((group, ids, folderId) =>
     group === PROJECTS_GROUP ? onReorderProjects(ids) : onReorderThreads(ids, folderId),
@@ -268,9 +317,20 @@ function TasksView({
   const chatIds = chats.map((t) => t.id);
 
   /** Ctrl+click adds or drops a row from the picked rows and returns true. A plain click clears them and returns false, so the row acts as usual. */
-  const pickRow = (e: MouseEvent, target: Target) => {
+  const pickRow = (e: PickModifiers, target: Target) => {
+    const anchor = cursor ? treeRows.findIndex((r) => sameTarget(r, cursor)) : -1;
+    const at = treeRows.findIndex((r) => sameTarget(r, target));
+    setCursor(target);
+    // Shift+click picks every tree row from the cursor to the clicked row, as VS Code's explorer does.
+    if (e.shiftKey && anchor >= 0 && at >= 0) {
+      const [from, to] = anchor < at ? [anchor, at] : [at, anchor];
+      setPicked(treeRows.slice(from, to + 1));
+      return true;
+    }
+    // A plain click selects only this row, and a chat opens there but keeps the tree's focus.
     if (!e.ctrlKey) {
-      setPicked([]);
+      setPicked([target]);
+      if (target.kind === "thread") keepTreeFocus.current = true;
       return false;
     }
     setPicked((prev) =>
@@ -313,7 +373,7 @@ function TasksView({
   };
   const rowProps = {
     // While rows are picked, the open thread is not shown as selected, so it reads as not being removed.
-    selectedId: picked.length > 0 ? null : selectedId,
+    selectedId,
     onSelectThread,
     onArchiveThread: (thread: Thread) => onRemoveTargets([{ kind: "thread", id: thread.id }]),
     isPicked,
@@ -351,11 +411,121 @@ function TasksView({
     .map((t): Target => ({ kind: "thread", id: t.id }));
   useSelectAll(visible, setPicked);
 
+  // The tree's rows in on-screen order, each with its parent, for the arrow keys and Shift+click.
+  const treeRows: Target[] = [];
+  const treeParent = new Map<string, Target>();
+  const addRow = (row: Target, parent?: Target) => {
+    treeRows.push(row);
+    if (parent) treeParent.set(rowKey(row), parent);
+  };
+  for (const p of projects) {
+    const projectRow: Target = { kind: "project", id: p.id };
+    addRow(projectRow);
+    if (collapsed.has(p.id)) continue;
+    for (const f of folders.filter((x) => x.projectId === p.id)) {
+      const folderRow: Target = { kind: "folder", id: f.id };
+      addRow(folderRow, projectRow);
+      if (collapsed.has(collapseKey(folderRow))) continue;
+      for (const t of threads.filter((x) => x.folderId === f.id && !leavingIds.has(x.id)))
+        addRow({ kind: "thread", id: t.id }, folderRow);
+    }
+    for (const t of threads.filter(
+      (x) => x.projectId === p.id && x.folderId === null && !leavingIds.has(x.id),
+    ))
+      addRow({ kind: "thread", id: t.id }, projectRow);
+  }
+
+  // The selected chat is the keyboard focus until the arrow keys or a click move it.
+  // Switching chats replaces the selection with the new chat, or clears it when no chat is open.
+  // The open chat stays the selection until a folder or project is picked after it.
+  useEffect(() => {
+    setCursor(selectedId ? { kind: "thread", id: selectedId } : null);
+    setPicked(selectedId ? [{ kind: "thread", id: selectedId }] : []);
+  }, [selectedId]);
+
+  // Opening a chat from the tree previews it: the composer's autofocus runs after this, so the tree takes the focus back.
+  useEffect(() => {
+    if (!keepTreeFocus.current) return;
+    keepTreeFocus.current = false;
+    setTimeout(() => treeRef.current?.focus(), 0);
+  }, [selectedId]);
+
+  /** The explorer's keys: arrows move the focus, Left and Right collapse and expand, Enter opens, F2 renames. */
+  const onTreeKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    // Rename fields and the row buttons keep their own keys.
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLButtonElement) return;
+    const keys = ["ArrowDown", "ArrowUp", "Home", "End", "ArrowLeft", "ArrowRight", "Enter", "F2"];
+    if (!keys.includes(e.key)) return;
+    e.preventDefault();
+    const at = cursor ? treeRows.findIndex((r) => sameTarget(r, cursor)) : -1;
+    const current = at >= 0 ? treeRows[at] : null;
+    const parent = current ? treeParent.get(rowKey(current)) : undefined;
+    const expanded = !!current && current.kind !== "thread" && !collapsed.has(collapseKey(current));
+    // Arrows select the row they land on, and a chat opens there but keeps the tree's focus.
+    const go = (t: Target | undefined) => {
+      if (!t) return;
+      setCursor(t);
+      setPicked([t]);
+      if (t.kind !== "thread") return;
+      keepTreeFocus.current = true;
+      onSelectThread(t.id);
+    };
+    switch (e.key) {
+      case "ArrowDown":
+        go(treeRows[Math.min(at + 1, treeRows.length - 1)]);
+        break;
+      case "ArrowUp":
+        go(treeRows[Math.max(at - 1, 0)]);
+        break;
+      case "Home":
+        go(treeRows[0]);
+        break;
+      case "End":
+        go(treeRows[treeRows.length - 1]);
+        break;
+      case "ArrowRight": {
+        if (!current || current.kind === "thread") break;
+        if (!expanded) {
+          toggle(collapseKey(current));
+          break;
+        }
+        const first = treeRows[at + 1];
+        const firstParent = first ? treeParent.get(rowKey(first)) : undefined;
+        if (firstParent && sameTarget(firstParent, current)) go(first);
+        break;
+      }
+      case "ArrowLeft":
+        if (current && expanded) toggle(collapseKey(current));
+        else go(parent);
+        break;
+      case "Enter":
+        if (!current) break;
+        // Enter opens the chat and moves the focus into it, as Enter does in VS Code's explorer.
+        if (current.kind === "thread") {
+          keepTreeFocus.current = false;
+          onSelectThread(current.id);
+          setTimeout(
+            () => document.querySelector<HTMLElement>(".composer-editor .ProseMirror")?.focus(),
+            0,
+          );
+        } else toggle(collapseKey(current));
+        break;
+      case "F2":
+        if (current) setRenaming(current);
+        break;
+    }
+  };
+
   if (!loaded) return null;
 
   // Rows keep their full height and the list scrolls, rather than squeezing rows to fit.
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-scroll overflow-x-hidden p-2 *:shrink-0">
+    <div
+      ref={treeRef}
+      className="group/tree flex min-h-0 flex-1 flex-col gap-px overflow-y-scroll overflow-x-hidden p-2 *:shrink-0 focus:outline-none"
+      tabIndex={-1}
+      onKeyDown={onTreeKey}
+    >
       <SectionLabel
         action={
           <button className="btn-icon" title="New chat" aria-label="New chat" onClick={onNewChat}>
@@ -412,171 +582,176 @@ function TasksView({
       {projects.length === 0 && (
         <div className="px-3 py-2 text-[length:var(--fs-sm)] text-fg-muted">No projects yet</div>
       )}
-      {projects.map((p) => {
-        const open = !collapsed.has(p.id);
-        const editing = renaming?.kind === "project" && renaming.id === p.id;
-        const drag = reorder.row(
-          PROJECTS_GROUP,
-          p.id,
-          projects.map((x) => x.id),
-          null,
-        );
-        const row: Target = { kind: "project", id: p.id };
-        const tasks = threads.filter((t) => t.projectId === p.id);
-        const projectFolders = folders.filter((f) => f.projectId === p.id);
-        const group = `${TASKS_GROUP_PREFIX}${p.id}`;
-        const topLevel = tasks.filter((t) => t.folderId === null);
-        const taskRow = (t: Thread, folderId: string | null, list: Thread[]) => (
-          <Collapse key={t.id} open={!leavingIds.has(t.id)}>
-            <ThreadRow
-              thread={t}
-              {...rowProps}
-              nested={folderId !== null}
-              drag={reorder.row(
-                group,
-                t.id,
-                list.map((x) => x.id),
-                folderId,
-              )}
-            />
-          </Collapse>
-        );
-        return (
-          <div key={p.id}>
-            <div
-              {...drag.attrs}
-              draggable={!editing}
-              className={`group mt-1.5 flex min-h-9 w-full cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border-none bg-transparent pr-2.5 pl-[3.5px] text-left text-fg hover:bg-hover ${drag.edge} ${drag.dragging ? "opacity-50" : ""} ${isPicked(row) ? "ring-1 ring-inset ring-border-focus" : ""}`}
-              onClick={(e) => {
-                if (!pickRow(e, row)) toggle(p.id);
-              }}
-              onContextMenu={(e) => openMenu(e, { kind: "project", id: p.id })}
-            >
-              <span className="inline-flex w-4 flex-none justify-center">
-                <CaretRightIcon
-                  size={17}
-                  className={`transition-transform duration-200 ${open ? "rotate-90" : ""}`}
-                />
-              </span>
-              <FolderIcon size={17} className="text-fg-muted" />
-              {editing ? (
-                <InlineName
-                  initial={p.name}
-                  onCommit={(name) => commitRename({ kind: "project", id: p.id }, name, p.name)}
-                  onCancel={() => setRenaming(null)}
-                />
-              ) : (
-                <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium">
-                  {p.name}
-                </span>
-              )}
-              <button
-                className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex"
-                title={`New folder in ${p.name}`}
-                aria-label={`New folder in ${p.name}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void addFolder(p.id);
-                }}
-              >
-                <FolderPlusIcon size={17} />
-              </button>
-              <button
-                className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex"
-                title={`New task in ${p.name}`}
-                aria-label={`New task in ${p.name}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onNewTask(p.id);
-                }}
-              >
-                <PlusIcon size={17} />
-              </button>
-            </div>
-            <Collapse open={open}>
-              <div className="flex flex-col gap-px pt-1 pb-1">
-                {tasks.length === 0 && projectFolders.length === 0 && (
-                  <div className="px-3 py-2 text-[length:var(--fs-sm)] text-fg-muted">
-                    No tasks yet
-                  </div>
+      <div className="-mx-2">
+        {projects.map((p) => {
+          const open = !collapsed.has(p.id);
+          const editing = renaming?.kind === "project" && renaming.id === p.id;
+          const drag = reorder.row(
+            PROJECTS_GROUP,
+            p.id,
+            projects.map((x) => x.id),
+            null,
+          );
+          const row: Target = { kind: "project", id: p.id };
+          const tasks = threads.filter((t) => t.projectId === p.id);
+          const projectFolders = folders.filter((f) => f.projectId === p.id);
+          const group = `${TASKS_GROUP_PREFIX}${p.id}`;
+          const topLevel = tasks.filter((t) => t.folderId === null);
+          const taskRow = (t: Thread, folderId: string | null, list: Thread[]) => (
+            <Collapse key={t.id} open={!leavingIds.has(t.id)} overflowWhenOpen>
+              <ThreadRow
+                thread={t}
+                {...rowProps}
+                tree
+                nested={folderId !== null}
+                drag={reorder.row(
+                  group,
+                  t.id,
+                  list.map((x) => x.id),
+                  folderId,
                 )}
-                {projectFolders.map((f) => {
-                  const key = `folder:${f.id}`;
-                  const inside = tasks.filter((t) => t.folderId === f.id);
-                  const folderOpen = !collapsed.has(key);
-                  const folderEditing = renaming?.kind === "folder" && renaming.id === f.id;
-                  const folderRow: Target = { kind: "folder", id: f.id };
-                  const start = reorder.start(
-                    group,
-                    inside[0]?.id,
-                    inside.map((x) => x.id),
-                    f.id,
-                  );
-                  const target = reorder.folder(
-                    group,
-                    key,
-                    inside.map((t) => t.id),
-                    f.id,
-                  );
-                  return (
-                    <div key={f.id}>
-                      <div
-                        {...target.attrs}
-                        className={`group ml-4 flex min-h-8 cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] px-1.5 py-1 text-fg hover:bg-hover ${target.edge} ${isPicked(folderRow) ? "ring-1 ring-inset ring-border-focus" : ""}`}
-                        onClick={(e) => {
-                          if (!pickRow(e, folderRow)) toggle(key);
-                        }}
-                        onContextMenu={(e) => openMenu(e, { kind: "folder", id: f.id })}
-                      >
-                        <span className="inline-flex w-4 flex-none justify-center">
-                          <CaretRightIcon
-                            size={15}
-                            className={`transition-transform duration-200 ${folderOpen ? "rotate-90" : ""}`}
-                          />
-                        </span>
-                        <FolderIcon size={16} className="text-fg-subtle" />
-                        {folderEditing ? (
-                          <InlineName
-                            initial={f.name}
-                            onCommit={(name) =>
-                              commitRename({ kind: "folder", id: f.id }, name, f.name)
-                            }
-                            onCancel={() => setRenaming(null)}
-                          />
-                        ) : (
-                          <span className="min-w-0 flex-1 truncate text-[length:var(--fs-sm)]">
-                            {f.name}
-                          </span>
-                        )}
-                        <button
-                          className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex"
-                          aria-label={`New task in ${f.name}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onNewTaskInFolder(
-                              p.id,
-                              f.id,
-                              inside.map((t) => t.id),
-                            );
-                          }}
-                        >
-                          <PlusIcon size={17} />
-                        </button>
-                      </div>
-                      <Collapse open={folderOpen}>
-                        <div className="pt-1" {...start.attrs}>
-                          {inside.map((t) => taskRow(t, f.id, inside))}
-                        </div>
-                      </Collapse>
-                    </div>
-                  );
-                })}
-                {topLevel.map((t) => taskRow(t, null, topLevel))}
-              </div>
+              />
             </Collapse>
-          </div>
-        );
-      })}
+          );
+          return (
+            <div key={p.id}>
+              <div
+                {...drag.attrs}
+                onPointerDown={(e) => {
+                  drag.attrs.onPointerDown(e);
+                  if (!editing && isPlainPress(e)) pickRow(e, row);
+                }}
+                className={`group flex h-[22px] cursor-pointer items-center select-none border-none pr-1.5 pl-2 text-left text-fg ${selectionFill(isPicked(row))} ${drag.edge} ${drag.dragging ? "opacity-50" : ""}`}
+                onClick={(e) => {
+                  if (!pickRow(e, row)) toggle(p.id);
+                }}
+                onContextMenu={(e) => openMenu(e, { kind: "project", id: p.id })}
+              >
+                <span className="mr-1.5 inline-flex w-4 flex-none translate-x-[3px] justify-center">
+                  <Twistie open={open} />
+                </span>
+                {editing ? (
+                  <InlineName
+                    initial={p.name}
+                    onCommit={(name) => commitRename({ kind: "project", id: p.id }, name, p.name)}
+                    onCancel={() => setRenaming(null)}
+                  />
+                ) : (
+                  <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium">
+                    {p.name}
+                  </span>
+                )}
+                <button
+                  className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex"
+                  title={`New folder in ${p.name}`}
+                  aria-label={`New folder in ${p.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void addFolder(p.id);
+                  }}
+                >
+                  <FolderPlusIcon size={17} />
+                </button>
+                <button
+                  className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex"
+                  title={`New task in ${p.name}`}
+                  aria-label={`New task in ${p.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onNewTask(p.id);
+                  }}
+                >
+                  <PlusIcon size={17} />
+                </button>
+              </div>
+              <Collapse open={open}>
+                <div className="relative flex flex-col py-px">
+                  {/* Indent guide from the project's chevron down through its rows. */}
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute top-0 bottom-0 left-4 w-px bg-[#58585866] opacity-0 transition-opacity group-hover/tree:opacity-100"
+                  />
+                  {tasks.length === 0 && projectFolders.length === 0 && (
+                    <div className="px-5 py-2 text-[length:var(--fs-sm)] text-fg-muted">
+                      No tasks yet
+                    </div>
+                  )}
+                  {projectFolders.map((f) => {
+                    const key = `folder:${f.id}`;
+                    const inside = tasks.filter((t) => t.folderId === f.id);
+                    const folderOpen = !collapsed.has(key);
+                    const folderEditing = renaming?.kind === "folder" && renaming.id === f.id;
+                    const folderRow: Target = { kind: "folder", id: f.id };
+                    const target = reorder.folder(
+                      group,
+                      key,
+                      inside.map((t) => t.id),
+                      f.id,
+                    );
+                    return (
+                      <div key={f.id}>
+                        <div
+                          {...target.attrs}
+                          onPointerDown={(e) => {
+                            if (!folderEditing && isPlainPress(e)) pickRow(e, folderRow);
+                          }}
+                          className={`group flex h-[22px] cursor-pointer items-center select-none pr-1.5 pl-4 text-fg ${selectionFill(isPicked(folderRow))} ${target.edge}`}
+                          onClick={(e) => {
+                            if (!pickRow(e, folderRow)) toggle(key);
+                          }}
+                          onContextMenu={(e) => openMenu(e, { kind: "folder", id: f.id })}
+                        >
+                          <span className="mr-1.5 inline-flex w-4 flex-none translate-x-[3px] justify-center">
+                            <Twistie open={folderOpen} />
+                          </span>
+                          {folderEditing ? (
+                            <InlineName
+                              initial={f.name}
+                              onCommit={(name) =>
+                                commitRename({ kind: "folder", id: f.id }, name, f.name)
+                              }
+                              onCancel={() => setRenaming(null)}
+                            />
+                          ) : (
+                            <span className="min-w-0 flex-1 truncate text-[length:var(--fs-sm)]">
+                              {f.name}
+                            </span>
+                          )}
+                          <button
+                            className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex"
+                            aria-label={`New task in ${f.name}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onNewTaskInFolder(
+                                p.id,
+                                f.id,
+                                inside.map((t) => t.id),
+                              );
+                            }}
+                          >
+                            <PlusIcon size={17} />
+                          </button>
+                        </div>
+                        <Collapse open={folderOpen}>
+                          <div className="relative py-px">
+                            {/* Indent guide from the folder's chevron down through its tasks. */}
+                            <span
+                              aria-hidden
+                              className="pointer-events-none absolute top-0 bottom-0 left-6 w-px bg-[#58585866] opacity-0 transition-opacity group-hover/tree:opacity-100"
+                            />
+                            {inside.map((t) => taskRow(t, f.id, inside))}
+                          </div>
+                        </Collapse>
+                      </div>
+                    );
+                  })}
+                  {topLevel.map((t) => taskRow(t, null, topLevel))}
+                </div>
+              </Collapse>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -630,19 +805,22 @@ function ThreadRow({
   onCancelRename,
   drag,
   nested = false,
+  tree = false,
 }: {
   thread: Thread;
   selectedId: string | null;
   onSelectThread: (id: string) => void;
   onArchiveThread: (thread: Thread) => void;
   isPicked: (target: Target) => boolean;
-  onPick: (e: MouseEvent, target: Target) => boolean;
+  onPick: (e: PickModifiers, target: Target) => boolean;
   renaming: Target | null;
   onContextMenu: (e: MouseEvent, target: Target) => void;
   onCommitRename: (target: Target, name: string, current: string) => void;
   onCancelRename: () => void;
   drag: RowDrag;
   nested?: boolean;
+  /** In the Tasks tree: fixed-height rows that line up with the folders and projects. */
+  tree?: boolean;
 }) {
   const target: Target = { kind: "thread", id: thread.id };
   const editing = renaming?.kind === "thread" && renaming.id === thread.id;
@@ -651,16 +829,33 @@ function ThreadRow({
   const goalActive = thread.goal?.status === "active";
   const last = thread.messages[thread.messages.length - 1];
   const needsApproval = last?.approvals.some((a) => a.status === "pending") ?? false;
+  // Tree rows are 22px tall and start at their depth's indent, as VS Code's explorer does.
+  const spacing = tree
+    ? `h-[22px] pr-2 ${nested ? "pl-6" : "pl-4"}`
+    : `${nested ? "mb-1" : "my-0.5"} ${nested ? "ml-6 mr-1.5" : "mx-1.5"} px-2.5 py-1.5 rounded-[var(--radius-sm)]`;
+  // The picked rows are the selection, and the open chat is always among them.
+  const fill = picked
+    ? tree
+      ? selectionFill(true)
+      : "bg-selected"
+    : tree
+      ? selectionFill(false)
+      : "bg-[color-mix(in_srgb,var(--bg-hover)_40%,transparent)] hover:bg-hover";
   return (
     <div
       {...drag.attrs}
-      draggable={!editing}
-      className={`group flex cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border-none ${nested ? "mb-1" : "my-0.5"} ${nested ? "ml-6 mr-1.5" : "mx-1.5"} px-2.5 py-1.5 text-left text-fg ${selected ? "bg-selected" : "bg-[color-mix(in_srgb,var(--bg-hover)_40%,transparent)] hover:bg-hover"} ${picked ? "ring-1 ring-inset ring-border-focus" : ""} ${goalActive ? "goal-ring" : ""} ${drag.edge} ${drag.dragging ? "opacity-50" : ""}`}
+      onPointerDown={(e) => {
+        drag.attrs.onPointerDown(e);
+        if (!editing && isPlainPress(e)) onPick(e, target);
+      }}
+      className={`group flex cursor-pointer items-center gap-1.5 border-none select-none ${spacing} text-left text-fg ${fill} ${goalActive ? "goal-ring" : ""} ${drag.edge} ${drag.dragging ? "opacity-50" : ""}`}
       onClick={(e) => {
         if (!onPick(e, target)) onSelectThread(thread.id);
       }}
       onContextMenu={(e) => onContextMenu(e, { kind: "thread", id: thread.id })}
     >
+      {/* In the tree, the chevron column above stays empty so titles line up with folder names. */}
+      {tree && <span aria-hidden className="w-4 flex-none" />}
       {editing ? (
         <InlineName
           initial={thread.title}
@@ -668,9 +863,7 @@ function ThreadRow({
           onCancel={onCancelRename}
         />
       ) : (
-        <span
-          className={`min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap ${selected ? "font-medium text-fg" : ""}`}
-        >
+        <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
           {displayTitle(thread.title)}
         </span>
       )}
@@ -716,13 +909,12 @@ function ThreadRow({
 /** Chats and tasks moved out of the task list. Restoring one puts it back where it was. */
 function ArchivedView({
   archivedThreads,
-  selectedId,
   onSelectThread,
   onRestoreThread,
   onDeleteArchived,
-  picked,
-  setPicked,
 }: SidebarProps) {
+  const picked = usePicked();
+  const setPicked = setPickedRows;
   const [menu, setMenu] = useState<{ x: number; y: number; thread: Thread } | null>(null);
   const targetOf = (id: string): Target => ({ kind: "thread", id });
   const isPicked = (id: string) => picked.some((p) => sameTarget(p, targetOf(id)));
@@ -752,7 +944,7 @@ function ArchivedView({
       {archivedThreads.map((t) => (
         <div
           key={t.id}
-          className={`group mx-1.5 mb-1.5 flex cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] px-2.5 py-1.5 text-fg ${t.id === selectedId ? "bg-selected font-medium" : "bg-[color-mix(in_srgb,var(--bg-hover)_40%,transparent)] hover:bg-hover"} ${isPicked(t.id) ? "ring-1 ring-inset ring-border-focus" : ""}`}
+          className={`group mx-1.5 mb-1.5 flex cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] px-2.5 py-1.5 text-fg ${isPicked(t.id) ? "bg-selected" : "bg-[color-mix(in_srgb,var(--bg-hover)_40%,transparent)] hover:bg-hover"}`}
           onClick={(e) => pick(e, t.id)}
           onContextMenu={(e) => {
             e.preventDefault();
