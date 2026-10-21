@@ -7,17 +7,19 @@ const ACTION =
   "flex-none cursor-pointer rounded-[var(--radius)] border-none bg-transparent px-2 py-0.5 text-[length:var(--fs-sm)] text-fg-muted hover:bg-hover hover:text-fg";
 
 /**
- * The goal, on the composer's top edge: its state and usage, then the objective. Resume and
- * Clear show once the agent is not working on the goal.
+ * The goal, on the composer's top edge: its state and usage, then the objective. Pause shows
+ * while the agent is pursuing the goal; Resume and Clear show once it is not working on it.
  */
 export default function GoalBanner({
   goal,
   working,
+  onPause,
   onResume,
   onClear,
 }: {
   goal: Goal;
   working: boolean;
+  onPause?: () => void;
   onResume: () => void;
   onClear: () => void;
 }) {
@@ -47,6 +49,11 @@ export default function GoalBanner({
         {usage && <span className="text-fg-subtle tabular-nums"> · {usage}</span>}
       </span>
       <span className="min-w-0 flex-1 truncate text-fg-muted">{goal.objective}</span>
+      {working && active && onPause && (
+        <button type="button" className={ACTION} onClick={onPause}>
+          Pause
+        </button>
+      )}
       {!working && goalCanResume(goal) && (
         <button type="button" className={ACTION} onClick={onResume}>
           Resume

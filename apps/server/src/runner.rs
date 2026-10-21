@@ -31,6 +31,12 @@ const KILL_AFTER: Duration = Duration::from_secs(5);
 /// How long quitting the app waits for agents to exit after SIGTERM.
 const QUIT_GRACE: Duration = Duration::from_secs(2);
 
+/// The longest line of agent output that is kept; longer lines are dropped whole.
+const MAX_LINE_BYTES: usize = 8 << 20;
+
+/// How long a turn may run before the agent is stopped as timed out.
+const TURN_TIMEOUT: Duration = Duration::from_secs(4 * 60 * 60);
+
 /// The agent's stdin; None once the turn has finished.
 type Stdin = Arc<Mutex<Option<ChildStdin>>>;
 
@@ -179,6 +185,7 @@ impl Runner {
 
         let message = assistant_message();
         let cancelled = Arc::new(AtomicBool::new(false));
+        let timed_out = Arc::new(AtomicBool::new(false));
         let exited = Arc::new(AtomicBool::new(false));
         let pending = Pending::default();
         let native_turn = NativeTurn::default();
@@ -191,6 +198,7 @@ impl Runner {
             message_id: message.id.clone(),
             agent,
             cancelled: cancelled.clone(),
+            timed_out: timed_out.clone(),
             exited: exited.clone(),
             baseline,
             stdin: stdin.clone(),
@@ -227,6 +235,14 @@ impl Runner {
                 },
             );
         turn.publish(AgentEvent::MessageStarted { message });
+        let (pid, exited) = (child.id(), turn.exited.clone());
+        std::thread::spawn(move || {
+            std::thread::sleep(TURN_TIMEOUT);
+            if !exited.load(Ordering::SeqCst) {
+                timed_out.store(true, Ordering::SeqCst);
+                terminate(pid, exited);
+            }
+        });
         std::thread::spawn(move || drive(turn, child, stdout, stderr_tail));
         Ok(())
     }
@@ -590,6 +606,8 @@ struct Turn {
     message_id: String,
     agent: AgentKind,
     cancelled: Arc<AtomicBool>,
+    /// Set when the turn ran past `TURN_TIMEOUT` and the agent was stopped for it.
+    timed_out: Arc<AtomicBool>,
     exited: Arc<AtomicBool>,
     /// `git status` of the project when the turn started.
     baseline: Vec<FileChange>,
@@ -694,6 +712,7 @@ fn assistant_message() -> Message {
 
 /// Reads the agent's stdout until it closes, then records the final status.
 fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: JoinHandle<String>) {
+    let pid = child.id();
     let mut has_text = false;
     // Antigravity streams one text block as many deltas; other agents send whole blocks.
     let mut last_was_text = false;
@@ -724,8 +743,8 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
     // Every model request the turn has made; each reply's usage is summed from these.
     let mut requests: Vec<Request> = Vec::new();
 
-    for line in BufReader::new(stdout).lines() {
-        let Ok(line) = line else { continue };
+    let mut stdout = BufReader::new(stdout);
+    while let Some(line) = next_line(&mut stdout) {
         let Ok(value) = serde_json::from_str::<Value>(&line) else {
             continue;
         };
@@ -1016,11 +1035,22 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
     }
 
     let exit = child.wait().ok();
+    // Whatever the agent left running in its group (MCP servers, background commands)
+    // would otherwise outlive the turn and keep its memory in the agents' slice.
+    workspace::signal_process_group(pid, libc::SIGKILL);
     turn.exited.store(true, Ordering::SeqCst);
     let tail = stderr_tail.join().unwrap_or_default();
     let cancelled = turn.cancelled.load(Ordering::SeqCst);
     let (status, error) = if cancelled {
         (MessageStatus::Cancelled, None)
+    } else if turn.timed_out.load(Ordering::SeqCst) {
+        let hours = TURN_TIMEOUT.as_secs() / 3600;
+        (
+            MessageStatus::Error,
+            Some(format!(
+                "The agent ran longer than {hours} hours and was stopped."
+            )),
+        )
     } else if stream_error.is_some() || !exit.is_some_and(|s| s.success()) {
         let error = stream_error
             .or_else(|| last_lines(&tail))
@@ -1051,9 +1081,7 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
             || (turn.agent == AgentKind::Claude && g.status == GoalStatus::Paused)
     };
     if let Some(g) = goal.as_ref().filter(pursued) {
-        let status = if cancelled {
-            Some(GoalStatus::Paused)
-        } else if turn.agent == AgentKind::Claude && status == MessageStatus::Complete {
+        let status = if turn.agent == AgentKind::Claude && status == MessageStatus::Complete {
             turn.session_id
                 .as_deref()
                 .map(|id| provider::claude::goal_outcome(id, &g.objective))
@@ -1061,7 +1089,8 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
             // Antigravity blocks stopping until its goal is verified, so a clean end meets it.
             Some(GoalStatus::Complete)
         } else {
-            None
+            // Cancelled, failed, or killed: no agent is left pursuing the goal, so it can be resumed.
+            Some(GoalStatus::Paused)
         };
         if let Some(status) = status.filter(|s| *s != g.status) {
             let goal = Some(Goal {
@@ -1161,6 +1190,45 @@ fn changed_paths(before: &[FileChange], after: &[FileChange]) -> Vec<String> {
         })
         .map(|a| a.path.clone())
         .collect()
+}
+
+/// The next line of agent output, or None once the output has ended or cannot be read.
+/// A line longer than `MAX_LINE_BYTES` is dropped whole, without being held in memory.
+fn next_line(reader: &mut impl BufRead) -> Option<String> {
+    let mut line = Vec::new();
+    let mut oversized = false;
+    loop {
+        let buf = match reader.fill_buf() {
+            Ok(buf) => buf,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => return None,
+        };
+        if buf.is_empty() {
+            return (!line.is_empty() && !oversized)
+                .then(|| String::from_utf8_lossy(&line).into_owned());
+        }
+        let (chunk, found) = match buf.iter().position(|&b| b == b'\n') {
+            Some(i) => (&buf[..i], true),
+            None => (buf, false),
+        };
+        let used = chunk.len() + usize::from(found);
+        if !oversized && line.len() + chunk.len() > MAX_LINE_BYTES {
+            oversized = true;
+            line = Vec::new();
+            log::warn!("dropped agent output line over {MAX_LINE_BYTES} bytes");
+        }
+        if !oversized {
+            line.extend_from_slice(chunk);
+        }
+        reader.consume(used);
+        if found {
+            if !oversized {
+                return Some(String::from_utf8_lossy(&line).into_owned());
+            }
+            oversized = false;
+            line.clear();
+        }
+    }
 }
 
 /// Reads all of stderr but keeps only roughly the last `STDERR_TAIL_BYTES`.

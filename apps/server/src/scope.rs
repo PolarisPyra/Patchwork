@@ -10,7 +10,6 @@ use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 
 const SLICE: &str = "app-patchwork-agents.slice";
-const GIB: u64 = 1 << 30;
 
 /// This build's slice inside `SLICE`, named after the AppImage or executable path.
 fn build_slice() -> &'static str {
@@ -78,17 +77,23 @@ fn systemd_run() -> Option<&'static PathBuf> {
     .as_ref()
 }
 
-/// Caps the agents together so the rest of the desktop keeps about 4 GB: they are
-/// throttled 2 GB before that, and systemd kills one at the cap. Small machines still
-/// give agents half of RAM before throttling and three quarters before a kill.
+/// Caps the agents together at a quarter of RAM before they are throttled and three
+/// eighths before systemd kills one. Agents get no swap, so they cannot push the rest of
+/// the desktop into swap.
 fn limit_slice() {
     let Some(total) = total_memory() else {
         return;
     };
-    let high = (total.saturating_sub(6 * GIB)).max(total / 2);
-    let max = (total.saturating_sub(4 * GIB)).max(total / 4 * 3);
-    let (high, max) = (format!("MemoryHigh={high}"), format!("MemoryMax={max}"));
-    if !systemctl(&["set-property", "--runtime", SLICE, &high, &max]) {
+    let high = format!("MemoryHigh={}", total / 4);
+    let max = format!("MemoryMax={}", total / 8 * 3);
+    if !systemctl(&[
+        "set-property",
+        "--runtime",
+        SLICE,
+        &high,
+        &max,
+        "MemorySwapMax=0",
+    ]) {
         log::warn!("could not set the memory limit on {SLICE}");
     }
 }

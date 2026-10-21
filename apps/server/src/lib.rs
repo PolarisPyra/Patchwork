@@ -208,8 +208,35 @@ impl Server {
         provider::model_manifest::start(&config_dir);
         std::thread::spawn(scope::prepare);
         let clis_dir = config_dir.join("clis");
+        let store = Store::open(config_dir)?;
+        // No agent outlives the app, so a goal or reply still marked active was cut off by a
+        // crash or quit.
+        for thread in store.threads() {
+            let goal_active = thread
+                .goal
+                .as_ref()
+                .is_some_and(|g| g.status == GoalStatus::Active);
+            let streaming = thread
+                .messages
+                .iter()
+                .any(|m| m.status == MessageStatus::Streaming);
+            if goal_active || streaming {
+                store.update_thread(&thread.id, |t| {
+                    if let Some(goal) = t.goal.as_mut().filter(|g| g.status == GoalStatus::Active) {
+                        goal.status = GoalStatus::Paused;
+                    }
+                    for message in &mut t.messages {
+                        if message.status == MessageStatus::Streaming {
+                            message.status = MessageStatus::Error;
+                            message.error =
+                                Some("Patchwork closed while this reply was running.".into());
+                        }
+                    }
+                })?;
+            }
+        }
         Ok(Arc::new(Self {
-            store: Store::open(config_dir)?,
+            store,
             usage: usage::UsageCache::default(),
             runner: Runner::default(),
             chats_dir: data_dir.join("chats"),

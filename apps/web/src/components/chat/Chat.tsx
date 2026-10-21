@@ -424,6 +424,13 @@ export default function Chat({
     api.stopGoal(thread.id).catch((e: unknown) => setError(errorText(e)));
   }
 
+  // Codex keeps a cancelled goal paused in its own session, so cancelling the turn pauses it.
+  function pauseGoal() {
+    if (!thread) return;
+    setError(null);
+    onCancel(thread.id).catch((e: unknown) => setError(errorText(e)));
+  }
+
   // Codex takes /goal resume; Claude and Antigravity have no such command, so a message carries
   // the goal on.
   function resumeGoal() {
@@ -596,6 +603,7 @@ export default function Chat({
           <GoalBanner
             goal={thread.goal}
             working={working}
+            onPause={thread.agent === "codex" ? pauseGoal : undefined}
             onResume={resumeGoal}
             onClear={stopGoal}
           />
