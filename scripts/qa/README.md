@@ -11,6 +11,8 @@ Start the dev session first (`pnpm tauri dev`). The commands below only connect 
     pnpm qa:stripe                          # tool-stripe icon centering
     pnpm qa:shot /tmp/workspace.png         # whole workspace
     pnpm qa:shot /tmp/stripe.png nav        # one element, by selector
+    pnpm qa:frames                          # frame rate and main-thread load while work runs
+    QA_URL=http://localhost:4173/ pnpm qa:frames   # a production build (vite preview)
 
 The first run needs Chromium: `pnpm exec playwright install chromium`.
 

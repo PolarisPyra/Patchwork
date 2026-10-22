@@ -13,6 +13,7 @@ import {
   type StepStatus,
   type Thread,
 } from "~/api";
+import { profileMark } from "~/lib/profile";
 
 export interface NewThreadOptions {
   agent: AgentKind;
@@ -261,6 +262,7 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
         }
         if (cancelled) return;
         setThreads(restored);
+        profileMark("boot:threads-set");
         setFolders(folderList);
         const live = restored.filter((t) => t.archivedAt === null);
         const fallback = live.find((t) => t.projectId === initialProject.current)?.id ?? null;

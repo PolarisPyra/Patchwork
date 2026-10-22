@@ -404,11 +404,11 @@
   cursor: default;
 }
 
-/* Animations that run for a whole reply step a few times a second rather than every frame: the
-   webview paints in software where the GPU renderer is off, so each step is a repaint. */
+/* Spinners turn at a steady rate, a full turn every 0.8 seconds. They used to step twelve times
+   per turn, which read as a stutter. */
 .spin,
 .animate-spin {
-  animation: spin 0.9s steps(12) infinite;
+  animation: spin 0.8s linear infinite;
 }
 @keyframes spin {
   to {
@@ -505,7 +505,7 @@
         #4285f4 360deg
       )
       border-box;
-  animation: goal-border-turn 4s steps(48) infinite;
+  animation: goal-border-turn 4s linear infinite;
 }
 
 @keyframes goal-border-turn {
@@ -526,7 +526,7 @@
     var(--bg-selected) 100%
   );
   background-size: 200% 100%;
-  animation: goal-row-drift 8s steps(32) infinite alternate;
+  animation: goal-row-drift 8s linear infinite alternate;
 }
 
 @keyframes goal-row-drift {
@@ -557,7 +557,7 @@
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
-  animation: goal-border-turn 4s steps(48) infinite;
+  animation: goal-border-turn 4s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

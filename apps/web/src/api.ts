@@ -1,7 +1,11 @@
 // Typed bridge to the Rust backend. Mirrors apps/server/src/types.rs and the
 // commands registered in apps/desktop/src-tauri/src/lib.rs — keep all three in sync.
-import { invoke } from "@tauri-apps/api/core";
+import { invoke as tauriInvoke, type InvokeArgs } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { profile } from "~/lib/profile";
+
+const invoke = <T>(cmd: string, args?: InvokeArgs) =>
+  profile(`ipc:${cmd}`, () => tauriInvoke<T>(cmd, args));
 
 export type AgentKind = "claude" | "codex" | "antigravity";
 export type Theme = "light" | "dark" | "system";
