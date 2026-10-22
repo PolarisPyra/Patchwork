@@ -1180,6 +1180,9 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
                     if turn.cancelled.load(Ordering::SeqCst) {
                         continue;
                     }
+                    if goal::update_is_dismissed(&turn.server.store, &turn.thread_id, &update) {
+                        continue;
+                    }
                     let next = goal::next_goal(goal.as_ref(), update);
                     if next != goal {
                         goal = next;
@@ -1449,9 +1452,8 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
             ..g.clone()
         });
     }
-    // A goal that is met or judged impossible is done with, and so is one whose turn the user
-    // stopped, so each clears without the user having to. Archiving, deleting, and clearing a
-    // chat also stop its turn, but leave its goal to those actions.
+    // Keep the final goal state visible until the user closes it. Clear the agent's internal
+    // goal instructions when pursuit ends, while retaining the app-side status for the banner.
     let user_stopped = cancelled
         && goal.as_ref().filter(pursued).is_some()
         && thread.as_ref().is_some_and(|t| t.archived_at.is_none());
@@ -1461,7 +1463,7 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
     // The agent is told to drop a goal it would otherwise take up again.
     let mut clear_in_agent = None;
     if user_stopped || done {
-        let ended = next.take().map_or(GoalStatus::Paused, |g| g.status);
+        let ended = next.as_ref().map_or(GoalStatus::Paused, |g| g.status);
         if turn.session_id.is_some() && goal::agent_keeps(turn.agent, ended) {
             clear_in_agent = Some(goal::clear_command(turn.agent));
         }

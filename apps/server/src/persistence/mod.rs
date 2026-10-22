@@ -184,6 +184,28 @@ impl Store {
         Ok(())
     }
 
+    /// Atomically remember the goal's dismissal and clear it from storage and memory.
+    pub fn dismiss_goal(&self, id: &str, signature: &str) -> Res<()> {
+        let mut inner = self.lock();
+        let index = inner
+            .threads
+            .iter()
+            .position(|thread| thread.id == id)
+            .ok_or("Thread not found")?;
+        let tx = inner.conn.transaction().map_err(err)?;
+        tx.execute(
+            "INSERT INTO app_state (key, value) VALUES (?1, ?2)
+             ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+            params![format!("dismissed-goal:{id}"), signature],
+        )
+        .map_err(err)?;
+        tx.execute("UPDATE threads SET goal = NULL WHERE id = ?1", [id])
+            .map_err(err)?;
+        tx.commit().map_err(err)?;
+        inner.threads[index].goal = None;
+        Ok(())
+    }
+
     /// Mutate one thread (no-op if missing) and persist what changed.
     pub fn update_thread(&self, id: &str, f: impl FnOnce(&mut Thread)) -> Res<()> {
         let mut inner = self.lock();
@@ -196,8 +218,21 @@ impl Store {
         let changed: Vec<usize> = (0..next.messages.len())
             .filter(|&i| before.messages.get(i) != Some(&next.messages[i]))
             .collect();
+        let removed: Vec<String> = before
+            .messages
+            .iter()
+            .filter(|old| !next.messages.iter().any(|message| message.id == old.id))
+            .map(|message| message.id.clone())
+            .collect();
         let tx = inner.conn.transaction().map_err(err)?;
         save_thread_row(&tx, &next).map_err(err)?;
+        for message_id in removed {
+            tx.execute(
+                "DELETE FROM messages WHERE id = ?1 AND thread_id = ?2",
+                params![message_id, next.id],
+            )
+            .map_err(err)?;
+        }
         for i in changed {
             save_message(&tx, &next.id, i, &next.messages[i]).map_err(err)?;
         }

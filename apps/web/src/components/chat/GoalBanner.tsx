@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
-import { TargetIcon } from "@phosphor-icons/react";
+import { CaretDownIcon, CaretRightIcon, TargetIcon, XIcon } from "@phosphor-icons/react";
 import type { Goal } from "~/api";
 import { goalCanResume, goalLabel, goalUsage } from "~/components/chat/goalPresentation";
 
 const ACTION =
-  "flex-none cursor-pointer rounded-[var(--radius)] border-none bg-transparent px-2 py-0.5 text-[length:var(--fs-sm)] text-fg-muted hover:bg-hover hover:text-fg";
+  "inline-flex h-6 flex-none cursor-pointer items-center justify-center rounded-[var(--radius-sm)] border border-border-strong bg-editor px-2.5 text-[length:var(--fs-xs)] text-fg hover:bg-hover";
 
 /**
- * The goal, on the composer's top edge: its state and usage, then the objective. Stop shows
- * while the agent is pursuing the goal; Resume and Clear show once it is not working on it.
+ * The goal, on the composer's top edge: its state and usage, then the objective. Its last state
+ * remains visible until the user closes it.
  */
 export default function GoalBanner({
   goal,
@@ -24,6 +24,7 @@ export default function GoalBanner({
   onClear: () => void;
 }) {
   const active = goal.status === "active";
+  const [open, setOpen] = useState(true);
   const [now, setNow] = useState(() => Date.now());
   // Only an active goal's elapsed time moves; the others show the time they stopped at.
   useEffect(() => {
@@ -36,33 +37,42 @@ export default function GoalBanner({
   const seconds = goal.timeUsedSeconds ?? Math.max(0, (now - goal.startedAt) / 1000);
   const usage = goalUsage(goal, seconds);
   return (
-    <div
-      className="mx-3 flex min-w-0 items-center gap-2 px-3 py-1.5 text-[length:var(--fs-sm)]"
-      title={goal.objective}
-    >
-      <TargetIcon
-        size={14}
-        className={`flex-none ${active ? "text-accent-text" : "text-fg-subtle"}`}
-      />
-      <span className="flex-none whitespace-nowrap">
-        <span className="font-semibold text-fg">{goalLabel(goal, working)}</span>
-        {usage && <span className="text-fg-subtle tabular-nums"> · {usage}</span>}
-      </span>
-      <span className="min-w-0 flex-1 truncate text-fg-muted">{goal.objective}</span>
-      {working && active && (
-        <button type="button" className={ACTION} onClick={onStop}>
-          Stop
+    <div className="mx-2 mb-1.5 overflow-hidden rounded-[var(--radius-sm)] border border-border-strong bg-panel text-[length:var(--fs-sm)] shadow-sm">
+      <div className="flex min-w-0 items-center gap-2 border-b border-border bg-app px-2.5 py-1.5">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 border-none bg-transparent p-0 text-left text-fg-muted hover:text-fg"
+          title={goal.objective}
+        >
+          <TargetIcon size={13} className={`flex-none ${active ? "text-accent-text" : "text-fg-subtle"}`} />
+          <span className="font-semibold text-fg">{goalLabel(goal, working)}</span>
+          {usage && <span className="min-w-0 truncate text-[length:var(--fs-xs)] text-fg-subtle tabular-nums">{usage}</span>}
+          {open ? <CaretDownIcon size={12} className="ml-auto flex-none" /> : <CaretRightIcon size={12} className="ml-auto flex-none" />}
         </button>
-      )}
-      {!working && goalCanResume(goal) && (
-        <button type="button" className={ACTION} onClick={onResume}>
-          Resume
-        </button>
-      )}
-      {!working && (
-        <button type="button" className={ACTION} onClick={onClear}>
-          Clear
-        </button>
+        {working && active && (
+          <button type="button" className={ACTION} onClick={onStop}>Stop</button>
+        )}
+        {!working && goalCanResume(goal) && (
+          <button type="button" className={ACTION} onClick={onResume}>Resume</button>
+        )}
+        {!working && (
+          <button
+            type="button"
+            className="grid h-6 w-6 flex-none cursor-pointer place-items-center rounded-[var(--radius-sm)] border-none bg-transparent text-fg-subtle hover:bg-hover hover:text-fg"
+            onClick={onClear}
+            title="Close goal"
+            aria-label="Close goal"
+          >
+            <XIcon size={13} />
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="min-w-0 truncate px-2.5 py-1.5 text-fg" title={goal.objective}>
+          {goal.objective}
+        </div>
       )}
     </div>
   );

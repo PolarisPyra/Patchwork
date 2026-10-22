@@ -213,6 +213,10 @@ impl Server {
         // No agent outlives the app, so a goal or reply still marked active was cut off by a
         // crash or quit.
         for thread in store.threads() {
+            let dismissed = thread
+                .goal
+                .as_ref()
+                .is_some_and(|g| goal::is_dismissed(&store, &thread.id, g));
             let goal_active = thread
                 .goal
                 .as_ref()
@@ -221,9 +225,13 @@ impl Server {
                 .messages
                 .iter()
                 .any(|m| m.status == MessageStatus::Streaming);
-            if goal_active || streaming {
+            if dismissed || goal_active || streaming {
                 store.update_thread(&thread.id, |t| {
-                    if let Some(goal) = t.goal.as_mut().filter(|g| g.status == GoalStatus::Active) {
+                    if dismissed {
+                        t.goal = None;
+                    } else if let Some(goal) =
+                        t.goal.as_mut().filter(|g| g.status == GoalStatus::Active)
+                    {
                         goal.status = GoalStatus::Paused;
                     }
                     for message in &mut t.messages {
@@ -662,6 +670,14 @@ impl Server {
                     "Claude has no /goal {arg}. Send a message to carry on with the goal, or /goal clear to drop it."
                 ));
             }
+            if !matches!(
+                arg.as_str(),
+                "" | "clear" | "stop" | "off" | "reset" | "none" | "cancel" | "pause"
+            ) {
+                // Only an explicit new goal or resume request can reopen a dismissed goal.
+                // A provider restating cached goal state must not erase the dismissal.
+                goal::clear_dismissal(&self.store, &thread_id)?;
+            }
         }
         // Checked before the message is stored, so a refused message leaves no trace.
         let mut msg = user_message(&text, attachments.clone());
@@ -769,7 +785,19 @@ impl Server {
 
     /// Takes back a message sent mid-turn that has not started yet, so it can be edited.
     pub fn remove_queued(&self, thread_id: &str, message_id: &str) -> Res<()> {
-        if !self.runner.withdraw(thread_id, message_id) {
+        let Some(thread) = self.store.thread(thread_id) else {
+            return Err("Thread not found".into());
+        };
+        let Some(message) = thread.messages.iter().find(|m| m.id == message_id) else {
+            // Makes startup cleanup safe to retry if an app refresh overlaps another cleanup.
+            return Ok(());
+        };
+        if !message.queued {
+            return Err("That message has already been sent".into());
+        }
+        let running = self.runner.is_running(thread_id);
+        let withdrawn = self.runner.withdraw(thread_id, message_id);
+        if running && !withdrawn {
             return Err("That message has already been sent".into());
         }
         runner::publish(

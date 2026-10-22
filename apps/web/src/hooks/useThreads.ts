@@ -235,11 +235,34 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
   useEffect(() => {
     let cancelled = false;
     Promise.all([api.listThreads(), api.listFolders(), api.getLastThread()]).then(
-      ([list, folderList, last]) => {
+      async ([list, folderList, last]) => {
+        // Follow-up queues are tied to the current app session. Discard any unsent messages
+        // restored from storage so a refresh cannot leave an old test prompt above the composer.
+        let restored = list;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const queued = restored.flatMap((thread) =>
+            thread.messages
+              .filter((message) => message.queued)
+              .map((message) => ({ threadId: thread.id, messageId: message.id })),
+          );
+          if (queued.length === 0) break;
+          await Promise.all(
+            queued.map(({ threadId, messageId }) =>
+              api.removeQueued(threadId, messageId).catch(() => undefined),
+            ),
+          );
+          // Use a fresh snapshot: a turn can finish while cleanup is running and change
+          // queued flags after the original list was read.
+          try {
+            restored = await api.listThreads();
+          } catch {
+            break;
+          }
+        }
         if (cancelled) return;
-        setThreads(list);
+        setThreads(restored);
         setFolders(folderList);
-        const live = list.filter((t) => t.archivedAt === null);
+        const live = restored.filter((t) => t.archivedAt === null);
         const fallback = live.find((t) => t.projectId === initialProject.current)?.id ?? null;
         setSelectedId(live.find((t) => t.id === last)?.id ?? fallback);
       },

@@ -6,6 +6,42 @@ use crate::provider::GoalUpdate;
 use crate::types::*;
 use crate::{Res, Server};
 
+fn dismissal_key(thread_id: &str) -> String {
+    format!("dismissed-goal:{thread_id}")
+}
+
+fn signature(goal: &Goal) -> String {
+    format!("{}:{}", goal.started_at, goal.objective)
+}
+
+pub(crate) fn is_dismissed(
+    store: &crate::persistence::Store,
+    thread_id: &str,
+    goal: &Goal,
+) -> bool {
+    let dismissed = store.state(&dismissal_key(thread_id));
+    dismissed.as_deref() == Some(signature(goal).as_str())
+}
+
+pub(crate) fn clear_dismissal(store: &crate::persistence::Store, thread_id: &str) -> Res<()> {
+    store.set_state(&dismissal_key(thread_id), "")
+}
+
+pub(crate) fn update_is_dismissed(
+    store: &crate::persistence::Store,
+    thread_id: &str,
+    update: &GoalUpdate,
+) -> bool {
+    match update {
+        GoalUpdate::Reported(goal) => is_dismissed(store, thread_id, goal),
+        GoalUpdate::Set { objective, .. } => store
+            .state(&dismissal_key(thread_id))
+            .and_then(|value| value.split_once(':').map(|(_, text)| text == objective))
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
 /// The thread's goal after the agent reports `update`.
 pub(crate) fn next_goal(current: Option<&Goal>, update: GoalUpdate) -> Option<Goal> {
     match update {
@@ -50,8 +86,8 @@ pub(crate) fn clear_command(agent: AgentKind) -> &'static str {
 
 impl Server {
     /// Clears the goal, in the agent's session too, so the agent does not pick it up again.
-    /// A goal also clears on its own once it is met or judged impossible, or when the user stops
-    /// the turn pursuing it (see the end of `runner::drive`).
+    /// A goal's final status remains in the thread until the user clears it. The agent's own
+    /// instructions are still cleared when pursuit ends (see the end of `runner::drive`).
     pub fn stop_goal(self: &Arc<Self>, thread_id: &str) -> Res<()> {
         let Some(thread) = self.store.thread(thread_id) else {
             return Ok(());
@@ -60,14 +96,17 @@ impl Server {
         if self.runner.is_running(thread_id) {
             return Err("Stop the running turn before clearing the goal".into());
         }
-        let status = thread.goal.map(|g| g.status);
-        self.store.update_thread(thread_id, |t| t.goal = None)?;
+        let Some(goal) = thread.goal.as_ref() else {
+            return Ok(());
+        };
+        self.store.dismiss_goal(thread_id, &signature(goal))?;
         self.emit(AgentEventEnvelope {
             thread_id: thread_id.into(),
             event: AgentEvent::GoalUpdated { goal: None },
         });
-        let unfinished = status.is_some_and(|s| agent_keeps(thread.agent, s));
-        if unfinished && thread.session_id.is_some() {
+        // Explicitly closing the banner must clear the CLI's session state too, including a
+        // goal marked complete: some CLIs can report that cached goal again on resume.
+        if thread.session_id.is_some() {
             let stop = clear_command(thread.agent);
             self.send_message(thread_id.into(), stop.into(), vec![], false)?;
         }
