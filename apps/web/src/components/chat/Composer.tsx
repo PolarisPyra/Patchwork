@@ -202,6 +202,11 @@ export default function Composer({
           .sort((a, b) => a.score - b.score);
   const menuOpen = !menuClosed && slash !== null;
   const activeCommand = matches[Math.min(commandIndex, matches.length - 1)];
+  const commandOptionRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (menuOpen) commandOptionRef.current?.scrollIntoView({ block: "nearest" });
+  }, [menuOpen, commandIndex, activeCommand?.name]);
 
   const overBy = value.length - PROMPT_LIMIT;
 
@@ -456,10 +461,12 @@ export default function Composer({
         return true;
       }
       if (event.key === "ArrowDown" && matches.length > 0) {
+        event.preventDefault();
         setCommandIndex((i) => (i + 1) % matches.length);
         return true;
       }
       if (event.key === "ArrowUp" && matches.length > 0) {
+        event.preventDefault();
         setCommandIndex((i) => (i + matches.length - 1) % matches.length);
         return true;
       }
@@ -517,7 +524,11 @@ export default function Composer({
       className={`relative flex flex-col gap-2 rounded-[8px] pt-3.5 pr-3 pb-2.5 pl-3 ${surface}`}
     >
       {menuOpen && (
-        <div className="absolute right-0 bottom-full left-0 mb-1.5 flex flex-col gap-px rounded-[var(--radius)] border border-border bg-panel p-1 shadow-[var(--shadow-popup)]">
+        <div
+          role="listbox"
+          aria-label="Slash commands"
+          className="absolute right-0 bottom-full left-0 mb-1.5 flex max-h-[min(50vh,32rem)] flex-col gap-px overflow-y-auto overscroll-contain rounded-[var(--radius)] border border-border bg-panel p-1 shadow-[var(--shadow-popup)]"
+        >
           {matches.length === 0 && (
             <div className="px-2 py-1.5 text-[length:var(--fs-sm)] text-fg-muted">
               No matching command.
@@ -526,7 +537,10 @@ export default function Composer({
           {matches.map((c) => (
             <button
               key={c.name}
-              className={`flex w-full cursor-pointer items-baseline gap-2.5 rounded-[var(--radius)] border-none px-2 py-1.5 text-left ${c.name === activeCommand?.name ? "bg-selected" : "bg-transparent hover:bg-hover"}`}
+              ref={c.name === activeCommand?.name ? commandOptionRef : undefined}
+              role="option"
+              aria-selected={c.name === activeCommand?.name}
+              className={`flex w-full flex-none cursor-pointer items-baseline gap-2.5 rounded-[var(--radius)] border-none px-2 py-1.5 text-left ${c.name === activeCommand?.name ? "bg-selected" : "bg-transparent hover:bg-hover"}`}
               // Keeps the focus in the editor.
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => selectCommand(c.name)}
