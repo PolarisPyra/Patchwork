@@ -259,6 +259,17 @@ export default function Composer({
     editorProps: {
       attributes: { class: EDITOR_CLASS },
       handleKeyDown: (_view, event) => keyDown.current(event),
+      // Plain multi-line text, such as terminal output, goes in as one code block with its lines
+      // and spaces kept. Text copied with HTML keeps the editor's default paste.
+      handlePaste: (view, event) => {
+        const data = event.clipboardData;
+        const text = data?.getData("text/plain").replace(/\r\n?/g, "\n").replace(/\n+$/, "") ?? "";
+        if (!text.includes("\n") || data?.types.includes("text/html")) return false;
+        const { state } = view;
+        const block = state.schema.nodes.codeBlock.create(null, state.schema.text(text));
+        view.dispatch(state.tr.replaceSelectionWith(block).scrollIntoView());
+        return true;
+      },
     },
     onCreate: ({ editor }) => {
       if (editor.markdown) keepDraftText(editor.markdown);
