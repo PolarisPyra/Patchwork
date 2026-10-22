@@ -102,6 +102,22 @@ const MarkdownLine = Extension.create({
   },
 });
 
+// These blocks deliberately stay plain paragraphs in the composer. Register their Markdown
+// tokens too, so recalling a heading or quote does not try to create a disabled schema node.
+const MarkdownTextBlocks = ["heading", "blockquote"].map((tokenName) =>
+  Extension.create({
+    name: `composerText${tokenName}`,
+    markdownTokenName: tokenName,
+    parseMarkdown: (token, helpers) =>
+      (token.raw ?? token.text ?? "")
+        .replace(/\n+$/, "")
+        .split("\n")
+        .map((line) =>
+          helpers.createNode("paragraph", undefined, line ? [helpers.createTextNode(line)] : []),
+        ),
+  }),
+);
+
 /** The suggestions behind the `@` trigger: the project's files, filtered as the user types. */
 export type MentionSuggestion = MentionOptions["suggestion"];
 
@@ -144,6 +160,7 @@ export function composerExtensions(placeholder: string, mentionSuggestion: Menti
     Markdown,
     GoalCommand,
     MarkdownLine,
+    ...MarkdownTextBlocks,
     FileMention.configure({
       HTMLAttributes: { class: MENTION_CLASS },
       renderText: ({ node }) => `@${node.attrs.label ?? node.attrs.id}`,

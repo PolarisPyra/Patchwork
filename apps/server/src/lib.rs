@@ -210,9 +210,16 @@ impl Server {
         std::thread::spawn(scope::prepare);
         let clis_dir = config_dir.join("clis");
         let store = Store::open(config_dir)?;
-        // No agent outlives the app, so a goal or reply still marked active was cut off by a
-        // crash or quit.
-        for thread in store.threads() {
+        // Finished goals remain visible for the session in which they ended. A new app
+        // session dismisses them, including cached reports from the provider on its next run.
+        // Unfinished goals survive, paused if their agent was interrupted by quitting.
+        for mut thread in store.threads() {
+            if let Some(finished) = thread.goal.as_ref().filter(|goal| {
+                matches!(goal.status, GoalStatus::Complete | GoalStatus::Blocked)
+            }) {
+                store.dismiss_goal(&thread.id, &goal::signature(finished))?;
+                thread.goal = None;
+            }
             let dismissed = thread
                 .goal
                 .as_ref()

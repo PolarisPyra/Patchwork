@@ -25,6 +25,7 @@ import {
   rememberDismissedChoice,
 } from "~/components/chat/choices";
 import GoalBanner from "~/components/chat/GoalBanner";
+import { ComposerStripPresence } from "~/components/chat/ComposerStrip";
 import BackgroundTasks from "~/components/chat/BackgroundTasks";
 import QueuedMessages from "~/components/chat/QueuedMessages";
 import LineageCard from "~/components/chat/LineageCard";
@@ -120,7 +121,11 @@ export default function Chat({
 }: ChatProps) {
   // Drafts are kept per thread ("new" when nothing is selected).
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [queuedEdit, setQueuedEdit] = useState<{ id: string; text: string; attachments: Attachment[] } | null>(null);
+  const [queuedEdit, setQueuedEdit] = useState<{
+    id: string;
+    text: string;
+    attachments: Attachment[];
+  } | null>(null);
   // Files and images dropped into the composer, kept per thread like drafts.
   const [pending, setPending] = useState<Record<string, Attachment[]>>({});
   const [dropping, setDropping] = useState(false);
@@ -163,11 +168,11 @@ export default function Chat({
   const composerDraft = queuedEdit?.text ?? draft;
   const composerAttachments = queuedEdit?.attachments ?? attachments;
   const setComposerDraft = (text: string) => {
-    if (queuedEdit) setQueuedEdit((edit) => edit ? { ...edit, text } : edit);
+    if (queuedEdit) setQueuedEdit((edit) => (edit ? { ...edit, text } : edit));
     else setDraft(text);
   };
   const setComposerAttachments = (next: Attachment[]) => {
-    if (queuedEdit) setQueuedEdit((edit) => edit ? { ...edit, attachments: next } : edit);
+    if (queuedEdit) setQueuedEdit((edit) => (edit ? { ...edit, attachments: next } : edit));
     else setAttachments(next);
   };
 
@@ -338,7 +343,8 @@ export default function Chat({
     const text = composerDraft.trim();
     if (queuedEdit) {
       if (!thread) return;
-      api.editQueued(thread.id, queuedEdit.id, text, composerAttachments)
+      api
+        .editQueued(thread.id, queuedEdit.id, text, composerAttachments)
         .then(() => setQueuedEdit(null))
         .catch((e: unknown) => setError(errorText(e)));
       return;
@@ -414,7 +420,12 @@ export default function Chat({
   function editLatestQueued() {
     if (queuedEdit || composerDraft.trim() || composerAttachments.length) return;
     const latestQueued = queued.at(-1);
-    if (latestQueued) setQueuedEdit({ id: latestQueued.id, text: latestQueued.text, attachments: latestQueued.attachments });
+    if (latestQueued)
+      setQueuedEdit({
+        id: latestQueued.id,
+        text: latestQueued.text,
+        attachments: latestQueued.attachments,
+      });
   }
 
   function resumeQueued() {
@@ -763,26 +774,30 @@ export default function Chat({
           />
         )}
         <BackgroundTasks tasks={background} onStop={stopBackground} />
-        <QueuedMessages
-          messages={queued}
-          canEdit={true}
-          canSteer={working}
-          onEdit={(message) => takeBack(message, true)}
-          onRemove={(message) => takeBack(message, false)}
-          onSteer={steerQueued}
-          onResume={resumeQueued}
-          editingId={queuedEdit?.id ?? null}
-          onCancelEdit={() => setQueuedEdit(null)}
-        />
-        {thread?.goal && (
-          <GoalBanner
-            goal={thread.goal}
-            working={working}
-            onStop={stop}
-            onResume={resumeGoal}
-            onClear={clearGoal}
+        <ComposerStripPresence key={`${key}-queue`} present={queued.length > 0}>
+          <QueuedMessages
+            messages={queued}
+            canEdit={true}
+            canSteer={working}
+            onEdit={(message) => takeBack(message, true)}
+            onRemove={(message) => takeBack(message, false)}
+            onSteer={steerQueued}
+            onResume={resumeQueued}
+            editingId={queuedEdit?.id ?? null}
+            onCancelEdit={() => setQueuedEdit(null)}
           />
-        )}
+        </ComposerStripPresence>
+        <ComposerStripPresence key={`${key}-goal`} present={Boolean(thread?.goal)}>
+          {thread?.goal && (
+            <GoalBanner
+              goal={thread.goal}
+              working={working}
+              onStop={stop}
+              onResume={resumeGoal}
+              onClear={clearGoal}
+            />
+          )}
+        </ComposerStripPresence>
         {/* Loaded with the chat, not on its own: a placeholder of another height moved the
             messages once the editor arrived. */}
         <Composer
@@ -813,7 +828,9 @@ export default function Chat({
           effort={effort}
           onPickEffort={pickEffort}
           attachments={composerAttachments}
-          onRemoveAttachment={(i) => setComposerAttachments(composerAttachments.filter((_, j) => j !== i))}
+          onRemoveAttachment={(i) =>
+            setComposerAttachments(composerAttachments.filter((_, j) => j !== i))
+          }
           dropping={dropping}
           history={history}
           files={files}

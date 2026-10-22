@@ -435,6 +435,54 @@
   }
 }
 
+/* Composer strips share one short height transition for mounting, collapsing, and dismissing.
+   The clipped grid child keeps the composer anchored while the strip's space changes. */
+.composer-strip-presence,
+.composer-strip-disclosure {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 180ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 140ms ease-out;
+}
+.composer-strip-presence[data-open="true"],
+.composer-strip-disclosure[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.composer-strip-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+.composer-strip-caret {
+  transition: transform 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+.composer-strip-caret[data-open="true"] {
+  transform: rotate(90deg);
+}
+.composer-strip button,
+.composer-strip-tone {
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease, opacity 120ms ease;
+}
+.composer-strip-state {
+  animation: composer-strip-state-in 140ms ease-out;
+}
+@keyframes composer-strip-state-in {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .composer-strip-presence,
+  .composer-strip-disclosure,
+  .composer-strip-caret,
+  .composer-strip button,
+  .composer-strip-tone {
+    transition: none;
+  }
+  .composer-strip-state { animation: none; }
+}
+
 /* The composer's border while a goal is active: two accent sweeps that turn around the box. The
    padding-box layer keeps the editor fill, and the border-box layer shows through the border. */
 @property --goal-angle {

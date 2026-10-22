@@ -191,10 +191,12 @@ export default function Composer({
   const matches =
     slash === null
       ? []
-      : commands.flatMap((c) => {
-          const score = commandScore(c.name, slash.slice(1));
-          return score === null ? [] : [{ ...c, score }];
-        }).sort((a, b) => a.score - b.score);
+      : commands
+          .flatMap((c) => {
+            const score = commandScore(c.name, slash.slice(1));
+            return score === null ? [] : [{ ...c, score }];
+          })
+          .sort((a, b) => a.score - b.score);
   const menuOpen = !menuClosed && slash !== null;
   const activeCommand = matches[Math.min(commandIndex, matches.length - 1)];
 
@@ -395,8 +397,8 @@ export default function Composer({
     complete(name);
   }
 
-  /** Up from the first line recalls the previous message, Down the next; past the newest, the
-   * draft empties. Editing a recalled message leaves the history. */
+  /** Unchanged recalled messages cycle directly, including Markdown with multiple blocks.
+   * Editing a recalled message returns the arrows to normal text navigation. */
   function stepHistory(event: KeyboardEvent, ed: NonNullable<typeof editor>): boolean {
     const back = event.key === "ArrowUp";
     if (
@@ -411,14 +413,16 @@ export default function Composer({
     if (attachments.length > 0) return false;
     const { selection, doc } = ed.state;
     if (!selection.empty) return false;
-    // Within a multi-line draft the arrows move between its lines first.
-    const pos = selection.from;
-    const lines = back
-      ? doc.textBetween(0, pos, "\n", "\n")
-      : doc.textBetween(pos, doc.content.size, "\n", "\n");
-    if (lines.includes("\n")) return false;
-
     const at = recalled.current?.text === value ? recalled.current : null;
+    // A new or edited multi-line draft keeps normal caret navigation. A recalled message
+    // stays in history navigation until edited, regardless of its formatting or caret position.
+    if (!at) {
+      const pos = selection.from;
+      const lines = back
+        ? doc.textBetween(0, pos, "\n", "\n")
+        : doc.textBetween(pos, doc.content.size, "\n", "\n");
+      if (lines.includes("\n")) return false;
+    }
     const index = at ? history.findIndex((h) => h.id === at.id) : -1;
     if (index < 0 && (value.length > 0 || !back)) return false;
     const next = back ? history[index < 0 ? history.length - 1 : index - 1] : history[index + 1];
@@ -588,9 +592,29 @@ export default function Composer({
             <button
               className={`grid h-8 w-8 cursor-pointer place-items-center ${working && !editingQueued ? "rounded-l-[var(--radius)]" : "rounded-[var(--radius)]"} border-none bg-accent text-on-accent enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-selected-muted disabled:text-fg-subtle`}
               onClick={() => sendDraft()}
-              disabled={(!value.trim() && attachments.length === 0) || overBy > 0 || (working && queueNext && !canQueueFollowUp && !editingQueued)}
-              title={editingQueued ? "Update queued message" : working ? (queueNext ? "Queue for after the turn" : "Steer the running turn") : "Send"}
-              aria-label={editingQueued ? "Update queued message" : working ? (queueNext ? "Queue message" : "Steer message") : "Send"}
+              disabled={
+                (!value.trim() && attachments.length === 0) ||
+                overBy > 0 ||
+                (working && queueNext && !canQueueFollowUp && !editingQueued)
+              }
+              title={
+                editingQueued
+                  ? "Update queued message"
+                  : working
+                    ? queueNext
+                      ? "Queue for after the turn"
+                      : "Steer the running turn"
+                    : "Send"
+              }
+              aria-label={
+                editingQueued
+                  ? "Update queued message"
+                  : working
+                    ? queueNext
+                      ? "Queue message"
+                      : "Steer message"
+                    : "Send"
+              }
             >
               {editingQueued ? <CheckIcon size={16} /> : <ArrowUpIcon size={16} />}
             </button>
@@ -609,13 +633,27 @@ export default function Composer({
                 </button>
                 {dispatchMenuOpen && (
                   <div className="absolute right-0 bottom-full z-50 mb-1.5 flex min-w-48 flex-col gap-px rounded-[var(--radius)] border border-border bg-panel p-1 shadow-[var(--shadow-popup)]">
-                    <button disabled={overBy > 0} className="w-full cursor-pointer rounded-[var(--radius-sm)] border-none bg-transparent px-2.5 py-2 text-left text-fg hover:bg-hover disabled:cursor-default disabled:opacity-40" onClick={() => submitAs(false)}>
+                    <button
+                      disabled={overBy > 0}
+                      className="w-full cursor-pointer rounded-[var(--radius-sm)] border-none bg-transparent px-2.5 py-2 text-left text-fg hover:bg-hover disabled:cursor-default disabled:opacity-40"
+                      onClick={() => submitAs(false)}
+                    >
                       Steer current turn
-                      <span className="mt-0.5 block text-[length:var(--fs-xs)] text-fg-subtle">Send this message into the active turn</span>
+                      <span className="mt-0.5 block text-[length:var(--fs-xs)] text-fg-subtle">
+                        Send this message into the active turn
+                      </span>
                     </button>
-                    <button disabled={overBy > 0 || !canQueueFollowUp} className="w-full cursor-pointer rounded-[var(--radius-sm)] border-none bg-transparent px-2.5 py-2 text-left text-fg hover:bg-hover disabled:cursor-default disabled:opacity-40" onClick={() => submitAs(true)}>
+                    <button
+                      disabled={overBy > 0 || !canQueueFollowUp}
+                      className="w-full cursor-pointer rounded-[var(--radius-sm)] border-none bg-transparent px-2.5 py-2 text-left text-fg hover:bg-hover disabled:cursor-default disabled:opacity-40"
+                      onClick={() => submitAs(true)}
+                    >
                       Queue for next turn
-                      <span className="mt-0.5 block text-[length:var(--fs-xs)] text-fg-subtle">{canQueueFollowUp ? "Wait until the active turn finishes" : "Edit or remove the queued message first"}</span>
+                      <span className="mt-0.5 block text-[length:var(--fs-xs)] text-fg-subtle">
+                        {canQueueFollowUp
+                          ? "Wait until the active turn finishes"
+                          : "Edit or remove the queued message first"}
+                      </span>
                     </button>
                   </div>
                 )}

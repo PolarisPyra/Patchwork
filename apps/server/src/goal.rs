@@ -10,7 +10,7 @@ fn dismissal_key(thread_id: &str) -> String {
     format!("dismissed-goal:{thread_id}")
 }
 
-fn signature(goal: &Goal) -> String {
+pub(crate) fn signature(goal: &Goal) -> String {
     format!("{}:{}", goal.started_at, goal.objective)
 }
 
