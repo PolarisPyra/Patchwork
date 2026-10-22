@@ -9,6 +9,8 @@ interface StatusBarProps {
   changeCount: number;
   agent: AgentKind;
   working: boolean;
+  /** Plan mode of the open thread; off when no thread is selected. */
+  planMode: boolean;
   onOpenChanges: () => void;
 }
 
@@ -19,6 +21,7 @@ export default function StatusBar({
   changeCount,
   agent,
   working,
+  planMode,
   onOpenChanges,
 }: StatusBarProps) {
   return (
@@ -46,7 +49,8 @@ export default function StatusBar({
       >
         {changeCount} changes
       </button>
-      <span className="inline-flex h-5 items-center gap-1">
+      <span className="inline-flex h-5 items-center px-1.5">{planMode ? "Plan" : "Default"}</span>
+      <span className="inline-flex h-5 items-center gap-1 px-1.5">
         {working ? (
           <>
             <CircleNotchIcon size={12} className="spin" />

@@ -133,6 +133,8 @@ pub struct ModelOption {
     pub label: String,
     /// Configured CLI default; not a claim about a resumed session's runtime model.
     pub default_model: Option<String>,
+    /// Superseded model, listed under the picker's "Legacy models" section.
+    pub is_legacy: bool,
 }
 
 /// A slash command advertised by a provider CLI for this thread/workspace.

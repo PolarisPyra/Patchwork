@@ -78,6 +78,8 @@ export interface ModelOption {
   id: string | null;
   label: string;
   defaultModel?: string | null;
+  /** Superseded model; the picker lists it under "Legacy models". */
+  isLegacy: boolean;
 }
 
 /** Shells from /etc/shells, and the login shell that "System default" resolves to. */

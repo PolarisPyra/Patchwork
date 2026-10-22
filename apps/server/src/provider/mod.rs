@@ -246,6 +246,7 @@ pub fn list_models(kind: AgentKind) -> Vec<ModelOption> {
         id: None,
         label: "Default".into(),
         default_model: default_model.filter(|m| !m.trim().is_empty()),
+        is_legacy: false,
     }];
     out.extend(models);
     out

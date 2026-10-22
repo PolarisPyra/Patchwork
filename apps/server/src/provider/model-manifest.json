@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-20T22:00:00Z",
+  "updatedAt": "2026-10-22T19:00:00Z",
   "providers": {
     "codex": [
       {
@@ -20,15 +20,18 @@
       },
       {
         "id": "gpt-5.6-sol",
-        "name": "GPT-5.6-Sol"
+        "name": "GPT-5.6-Sol",
+        "legacy": true
       },
       {
         "id": "gpt-5.6-terra",
-        "name": "GPT-5.6-Terra"
+        "name": "GPT-5.6-Terra",
+        "legacy": true
       },
       {
         "id": "gpt-5.6-luna",
-        "name": "GPT-5.6-Luna"
+        "name": "GPT-5.6-Luna",
+        "legacy": true
       },
       {
         "id": "gpt-daybreak-blue-latest",
@@ -51,6 +54,51 @@
       {
         "id": "claude-haiku-5-5",
         "name": "Haiku 5.5"
+      },
+      {
+        "id": "claude-fable-5",
+        "name": "Fable 5",
+        "legacy": true
+      },
+      {
+        "id": "claude-opus-5",
+        "name": "Opus 5",
+        "legacy": true
+      },
+      {
+        "id": "claude-opus-4-8",
+        "name": "Opus 4.8",
+        "legacy": true
+      },
+      {
+        "id": "claude-opus-4-7",
+        "name": "Opus 4.7",
+        "legacy": true
+      },
+      {
+        "id": "claude-opus-4-6",
+        "name": "Opus 4.6",
+        "legacy": true
+      },
+      {
+        "id": "claude-opus-4-5",
+        "name": "Opus 4.5",
+        "legacy": true
+      },
+      {
+        "id": "claude-sonnet-5",
+        "name": "Sonnet 5",
+        "legacy": true
+      },
+      {
+        "id": "claude-sonnet-4-6",
+        "name": "Sonnet 4.6",
+        "legacy": true
+      },
+      {
+        "id": "claude-haiku-4-5",
+        "name": "Haiku 4.5",
+        "legacy": true
       }
     ],
     "antigravity": [
@@ -68,11 +116,13 @@
       },
       {
         "id": "claude-sonnet-4-6",
-        "name": "Claude Sonnet 4.6 (Thinking)"
+        "name": "Claude Sonnet 4.6 (Thinking)",
+        "legacy": true
       },
       {
         "id": "claude-opus-4-6-thinking",
-        "name": "Claude Opus 4.6 (Thinking)"
+        "name": "Claude Opus 4.6 (Thinking)",
+        "legacy": true
       },
       {
         "id": "gpt-oss-120b-medium",

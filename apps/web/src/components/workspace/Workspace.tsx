@@ -652,6 +652,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
         changeCount={changes.length}
         agent={selected?.agent ?? defaultAgent}
         working={isWorking(selected)}
+        planMode={selected?.planMode ?? false}
         onOpenChanges={() => {
           setChangeFocus(null);
           setView("changes");

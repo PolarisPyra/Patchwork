@@ -113,6 +113,7 @@ fn models_in(text: &str, provider: &str) -> Vec<ModelOption> {
                 id: Some(m["id"].as_str()?.into()),
                 label: m["name"].as_str()?.into(),
                 default_model: None,
+                is_legacy: m["legacy"].as_bool().unwrap_or(false),
             })
         })
         .collect()
