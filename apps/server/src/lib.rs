@@ -652,7 +652,7 @@ impl Server {
                     "", "pause", "resume", "clear", "stop", "off", "reset", "none", "cancel",
                 ];
                 if subcommands.contains(&arg.as_str()) {
-                    return Err("Antigravity's /goal only sets a goal: /goal <objective>. Stop a goal with the stop button.".into());
+                    return Err("Antigravity's /goal only sets a goal: /goal <objective>. Clear a goal from the goal banner.".into());
                 }
             }
             // Claude would take either word as a new goal it can never meet, and loop on it.

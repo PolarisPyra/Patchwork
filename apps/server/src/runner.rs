@@ -85,6 +85,8 @@ struct RunningTurn {
     cancelled: Arc<AtomicBool>,
     /// Set once the agent process has exited and been reaped.
     exited: Arc<AtomicBool>,
+    /// The systemd scope the agent runs in, when scopes are on.
+    scope: Option<String>,
     agent: AgentKind,
     stdin: Stdin,
     pending: Pending,
@@ -238,6 +240,7 @@ impl Runner {
                     pid: child.id(),
                     cancelled,
                     exited,
+                    scope: turn.scope.clone(),
                     agent,
                     stdin,
                     pending,
@@ -463,7 +466,9 @@ impl Runner {
     }
 
     /// Stops the turn and drops the messages waiting for it. `last_line` is written
-    /// to the agent first, with a moment to act on it.
+    /// to the agent first, with a moment to act on it. The agent's scope is stopped along
+    /// with its process group, so a command it started in a session of its own, which
+    /// could keep its output open, ends with it.
     pub fn cancel(&self, thread_id: &str, last_line: Option<String>) -> Vec<String> {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         let mut dropped = Vec::new();
@@ -476,15 +481,19 @@ impl Runner {
                 .drain(..)
                 .map(|f| f.message_id)
                 .collect();
-            let (pid, exited) = (turn.pid, turn.exited.clone());
-            if last_line.is_some_and(|line| write_line(&turn.stdin, &line)) {
-                std::thread::spawn(move || {
-                    std::thread::sleep(Duration::from_millis(300));
-                    terminate(pid, exited);
-                });
+            let (pid, exited, scope) = (turn.pid, turn.exited.clone(), turn.scope.clone());
+            let grace = if last_line.is_some_and(|line| write_line(&turn.stdin, &line)) {
+                Duration::from_millis(300)
             } else {
+                Duration::ZERO
+            };
+            std::thread::spawn(move || {
+                std::thread::sleep(grace);
                 terminate(pid, exited);
-            }
+                if let Some(unit) = scope {
+                    scope::stop(&unit);
+                }
+            });
         }
         dropped
     }
@@ -1362,17 +1371,19 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
     };
     if let Some(g) = goal.as_ref().filter(pursued) {
         let status = if turn.agent == AgentKind::Claude && status == MessageStatus::Complete {
-            turn.session_id
-                .as_deref()
-                .map(|id| provider::claude::goal_outcome(id, &g.objective))
+            // Without a session there is no verdict to read, and nothing is left pursuing
+            // the goal.
+            turn.session_id.as_deref().map_or(GoalStatus::Paused, |id| {
+                provider::claude::goal_outcome(id, &g.objective)
+            })
         } else if turn.agent == AgentKind::Antigravity && status == MessageStatus::Complete {
             // Antigravity blocks stopping until its goal is verified, so a clean end meets it.
-            Some(GoalStatus::Complete)
+            GoalStatus::Complete
         } else {
             // Cancelled, failed, or killed: no agent is left pursuing the goal, so it can be resumed.
-            Some(GoalStatus::Paused)
+            GoalStatus::Paused
         };
-        if let Some(status) = status.filter(|s| *s != g.status) {
+        if status != g.status {
             let goal = Some(Goal {
                 status,
                 ..g.clone()

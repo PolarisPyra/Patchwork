@@ -493,7 +493,7 @@ export const api = {
   /** Takes back a message queued behind the running turn, so it can be edited. */
   removeQueued: (threadId: string, messageId: string) =>
     invoke<void>("remove_queued", { threadId, messageId }),
-  /** Cancels the running turn, if any, and clears the goal. */
+  /** Clears the goal, in the agent's session too. Refused while a turn runs. */
   stopGoal: (threadId: string) => invoke<void>("stop_goal", { threadId }),
   respondApproval: (
     threadId: string,

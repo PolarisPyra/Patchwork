@@ -270,7 +270,7 @@ fn remove_queued(server: Srv, thread_id: String, message_id: String) -> Res<()> 
 
 #[tauri::command]
 async fn stop_goal(server: Srv<'_>, thread_id: String) -> Res<()> {
-    // Waits for the stopped turn to end, so it runs off the main thread.
+    // Starts the turn that clears the agent's goal, so it runs off the main thread.
     let server = server.inner().clone();
     tauri::async_runtime::spawn_blocking(move || server.stop_goal(&thread_id))
         .await

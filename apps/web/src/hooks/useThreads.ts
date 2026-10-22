@@ -23,11 +23,11 @@ export interface NewThreadOptions {
   planMode?: boolean;
 }
 
-/** True while a message is streaming, or a goal is active: between its turns the agent works
- * on the goal without any message streaming. */
+/** True while a turn is running, that is a reply is streaming. A goal is pursued inside turns,
+ * so an active goal never outlasts the reply it runs in. */
 export function isWorking(thread: Thread | null): boolean {
   if (!thread) return false;
-  return thread.goal?.status === "active" || thread.messages.some((m) => m.status === "streaming");
+  return thread.messages.some((m) => m.status === "streaming");
 }
 
 /** Same rule as the backend: first line without a leading `/goal`, at most 60 characters. */

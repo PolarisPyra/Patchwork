@@ -429,28 +429,19 @@ export default function Chat({
   );
   const showChanges = useCallback((paths: string[]) => latest.current.onShowChanges(paths), []);
 
-  // Stops the running turn and, with a goal active, the goal too: between turns there is no
-  // turn to cancel, so the goal is what keeps the agent going.
+  // Stops the running turn, goal or not. A goal it was pursuing is left paused, to resume or
+  // clear from the banner.
   function stop() {
     if (!thread) return;
     setError(null);
-    if (thread.goal?.status === "active") stopGoal();
-    if (thread.messages.some((m) => m.status === "streaming")) {
-      onCancel(thread.id).catch((e: unknown) => setError(errorText(e)));
-    }
+    onCancel(thread.id).catch((e: unknown) => setError(errorText(e)));
   }
 
-  function stopGoal() {
+  // Clears the goal, in the agent's session too. The banner offers it once no turn is running.
+  function clearGoal() {
     if (!thread) return;
     setError(null);
     api.stopGoal(thread.id).catch((e: unknown) => setError(errorText(e)));
-  }
-
-  // Codex keeps a cancelled goal paused in its own session, so cancelling the turn pauses it.
-  function pauseGoal() {
-    if (!thread) return;
-    setError(null);
-    onCancel(thread.id).catch((e: unknown) => setError(errorText(e)));
   }
 
   // Codex takes /goal resume; Claude and Antigravity have no such command, so a message carries
@@ -735,9 +726,9 @@ export default function Chat({
           <GoalBanner
             goal={thread.goal}
             working={working}
-            onPause={thread.agent === "codex" ? pauseGoal : undefined}
+            onStop={stop}
             onResume={resumeGoal}
-            onClear={stopGoal}
+            onClear={clearGoal}
           />
         )}
         <Suspense
