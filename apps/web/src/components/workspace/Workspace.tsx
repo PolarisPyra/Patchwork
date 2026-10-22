@@ -25,6 +25,7 @@ import { lastAccessMode } from "~/components/chat/AccessPicker";
 import { lastEffort } from "~/components/chat/EffortPicker";
 import Chat from "~/components/chat/Chat";
 import CommandPalette, { type PaletteItem } from "~/components/workspace/CommandPalette";
+import SettingsDialog from "~/components/settings/SettingsDialog";
 import { openFolderAsProject, syncProjects } from "~/lib/projects";
 import Sidebar, { ToolStripe, type SidebarView, type Target } from "~/components/sidebar/Sidebar";
 import { getPicked, setPickedRows } from "~/components/sidebar/pickedRows";
@@ -69,12 +70,19 @@ function isTypingTarget(el: Element | null): boolean {
   );
 }
 
-// The canvas (with its syntax highlighter) and settings are only shown on demand, so
-// they load as separate chunks instead of making the first screen wait for them.
-const Canvas = lazy(() => import("~/components/canvas/Canvas"));
-const SettingsDialog = lazy(() => import("~/components/settings/SettingsDialog"));
+// The canvas (with its syntax highlighter) is only shown on demand, so it loads as a separate
+// chunk instead of making the first screen wait for it. Once loaded, its module is kept and
+// rendered directly: a lazy component suspends on every first render even when loaded, and
+// React holds a suspended reveal for most of a second.
+let canvasModule: typeof import("~/components/canvas/Canvas") | null = null;
+const loadCanvas = () => import("~/components/canvas/Canvas").then((m) => (canvasModule = m));
+const LazyCanvas = lazy(loadCanvas);
+/** How long after the workspace shows the canvas chunk starts loading, so it is ready before
+ * it is first opened. */
+const PRELOAD_AFTER_MS = 1500;
 
 export default function Workspace({ settings, updateSettings, toggleTheme }: WorkspaceProps) {
+  const Canvas = canvasModule?.default ?? LazyCanvas;
   const {
     threads,
     reload,
@@ -136,6 +144,10 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   useEffect(() => {
     if (view) lastView.current = view;
   }, [view]);
+  useEffect(() => {
+    const timer = setTimeout(() => void loadCanvas(), PRELOAD_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, []);
   // Rows picked for removing together, in the view they were picked in; Ctrl+W and Delete act on them.
   // They live in a store the sidebar reads, so picking a row does not re-render the open chat.
   useEffect(() => {
@@ -659,14 +671,12 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
       )}
       {paletteOpen && <CommandPalette items={paletteItems} onClose={() => setPaletteOpen(false)} />}
       {settingsOpen && (
-        <Suspense fallback={null}>
-          <SettingsDialog
-            settings={settings}
-            updateSettings={updateSettings}
-            onImported={() => void reload()}
-            onClose={() => setSettingsOpen(false)}
-          />
-        </Suspense>
+        <SettingsDialog
+          settings={settings}
+          updateSettings={updateSettings}
+          onImported={() => void reload()}
+          onClose={() => setSettingsOpen(false)}
+        />
       )}
     </div>
   );
