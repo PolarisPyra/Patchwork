@@ -1,4 +1,4 @@
-import { lazy, Suspense, useDeferredValue, useEffect, useState, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useState, type ReactNode } from "react";
 import {
   BrainIcon,
   CaretDownIcon,
@@ -17,8 +17,9 @@ import { fullElapsed, isActive, titleOf } from "~/components/chat/LineageCard";
 import ProposedPlanCard from "~/components/chat/ProposedPlanCard";
 import ProviderLogos from "~/components/ProviderLogos";
 
-// Markdown pulls in the renderer, so it loads on first use; plain text shows until then.
-const Markdown = lazy(() => import("~/components/chat/Markdown"));
+// Markdown loads with the chat, not on first use: its plain-text placeholder had another height,
+// so swapping it in moved the messages.
+import Markdown from "~/components/chat/Markdown";
 
 /** What a tool call does, which picks its icon, its verb, and how a group of calls is summed up. */
 type Action = "edit" | "command" | "read" | "search" | "web" | "agent" | "other";
@@ -254,9 +255,7 @@ export default function TurnTimeline({
       {shown.map((step) =>
         step.kind === "text" ? (
           <div key={`t${step.index}`} className="px-1 py-0.5 pb-2">
-            <Suspense fallback={<div className="whitespace-pre-wrap">{step.text}</div>}>
-              <Markdown text={step === last && tail ? tail : step.text} />
-            </Suspense>
+            <Markdown text={step === last && tail ? tail : step.text} />
           </div>
         ) : step.kind === "plan" ? (
           <div key={`p${step.index}`} className="px-1 py-0.5 pb-2">
@@ -452,9 +451,7 @@ function EntryDetails({ entry }: { entry: Entry }) {
   if (entry.kind === "thinking") {
     return (
       <div className={DETAILS_CLASS}>
-        <Suspense fallback={<div className="whitespace-pre-wrap">{entry.part.text}</div>}>
-          <Markdown text={entry.part.text} />
-        </Suspense>
+        <Markdown text={entry.part.text} />
       </div>
     );
   }

@@ -1,13 +1,4 @@
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { FolderPlusIcon, ListChecksIcon } from "@phosphor-icons/react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
@@ -37,7 +28,7 @@ import GoalBanner from "~/components/chat/GoalBanner";
 import BackgroundTasks from "~/components/chat/BackgroundTasks";
 import QueuedMessages from "~/components/chat/QueuedMessages";
 import LineageCard from "~/components/chat/LineageCard";
-import type { HistoryEntry } from "~/components/chat/Composer";
+import Composer, { type HistoryEntry } from "~/components/chat/Composer";
 import Messages from "~/components/chat/Messages";
 import PendingApprovalBanner from "~/components/chat/PendingApprovalBanner";
 import TasksBadge from "~/components/chat/TasksBadge";
@@ -103,9 +94,6 @@ function base64Of(file: Blob): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
-
-// The editor (Tiptap) is large and the chat can show before it loads, so it loads on its own.
-const Composer = lazy(() => import("~/components/chat/Composer"));
 
 export default function Chat({
   project,
@@ -731,38 +719,34 @@ export default function Chat({
             onClear={clearGoal}
           />
         )}
-        <Suspense
-          fallback={
-            <div className="h-[106px] rounded-[8px] border border-border-strong bg-editor" />
-          }
-        >
-          <Composer
-            key={key}
-            value={draft}
-            onChange={setDraft}
-            onSubmit={submit}
-            onStop={stop}
-            goalActive={thread?.goal?.status === "active"}
-            working={working}
-            error={error}
-            agent={agent}
-            model={model}
-            agents={empty ? offered : [agent]}
-            onPickModel={pickModel}
-            accessMode={accessMode}
-            onPickAccess={pickAccess}
-            planMode={planSupported ? planMode : null}
-            onTogglePlan={togglePlan}
-            effort={effort}
-            onPickEffort={pickEffort}
-            attachments={attachments}
-            onRemoveAttachment={(i) => setAttachments(attachments.filter((_, j) => j !== i))}
-            dropping={dropping}
-            history={history}
-            files={files}
-            deferFocus={showChoices || showQuestion}
-          />
-        </Suspense>
+        {/* Loaded with the chat, not on its own: a placeholder of another height moved the
+            messages once the editor arrived. */}
+        <Composer
+          key={key}
+          value={draft}
+          onChange={setDraft}
+          onSubmit={submit}
+          onStop={stop}
+          goalActive={thread?.goal?.status === "active"}
+          working={working}
+          error={error}
+          agent={agent}
+          model={model}
+          agents={empty ? offered : [agent]}
+          onPickModel={pickModel}
+          accessMode={accessMode}
+          onPickAccess={pickAccess}
+          planMode={planSupported ? planMode : null}
+          onTogglePlan={togglePlan}
+          effort={effort}
+          onPickEffort={pickEffort}
+          attachments={attachments}
+          onRemoveAttachment={(i) => setAttachments(attachments.filter((_, j) => j !== i))}
+          dropping={dropping}
+          history={history}
+          files={files}
+          deferFocus={showChoices || showQuestion}
+        />
       </div>
     </div>
   );

@@ -1,10 +1,11 @@
-import { lazy, Suspense, useState } from "react";
+import { useState } from "react";
 import { DotsThreeIcon } from "@phosphor-icons/react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { api } from "~/api";
 
-// Markdown pulls in the renderer, so it loads on first use; plain text shows until then.
-const Markdown = lazy(() => import("~/components/chat/Markdown"));
+// Markdown loads with the chat, not on first use: its plain-text placeholder had another height,
+// so swapping it in moved the messages.
+import Markdown from "~/components/chat/Markdown";
 
 /** The plan's first heading, which names it. */
 export function planTitle(markdown: string): string {
@@ -99,9 +100,7 @@ export default function ProposedPlanCard({ markdown }: { markdown: string }) {
         </div>
       </div>
       <div className={`relative mt-4 ${collapsed ? "max-h-104 overflow-hidden" : ""}`}>
-        <Suspense fallback={<div className="whitespace-pre-wrap">{preview}</div>}>
-          <Markdown text={preview} />
-        </Suspense>
+        <Markdown text={preview} />
         {collapsed && (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[var(--bg-panel)] to-transparent" />
         )}

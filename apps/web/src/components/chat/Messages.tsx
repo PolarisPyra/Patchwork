@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import {
   ArrowClockwiseIcon,
@@ -25,8 +25,9 @@ import TurnTimeline from "~/components/chat/TurnTimeline";
 import { formatTokens } from "~/lib/tokens";
 import { formatClock } from "~/lib/util";
 
-// Markdown pulls in the renderer, so it loads on first use; plain text shows until then.
-const Markdown = lazy(() => import("~/components/chat/Markdown"));
+// Markdown loads with the chat, not on first use: its plain-text placeholder had another height,
+// so swapping it in moved the messages.
+import Markdown from "~/components/chat/Markdown";
 
 type OpenCanvas = (path: string, message: Message | null, tab: CanvasTab) => void;
 
@@ -66,6 +67,23 @@ export default function Messages({
     [],
   );
 
+  // The list first places rows by estimated height and only reaches the end a frame or two later,
+  // once they are measured. It stays hidden until it has held the end for two frames, so opening a
+  // chat does not show it jumping. The frame cap shows it anyway if it never settles.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    let frame = 0;
+    let held = 0;
+    let frames = 0;
+    const check = () => {
+      held = listRef.current?.getState().isAtEnd ? held + 1 : 0;
+      if (held >= 2 || ++frames > 30) setSettled(true);
+      else frame = requestAnimationFrame(check);
+    };
+    frame = requestAnimationFrame(check);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
   // Start at the latest message and jump to it again after each send. While a reply streams, the
   // list keeps following the end as long as the reader is at the bottom.
   const lastUserMessageId = [...messages].reverse().find((m) => m.role === "user")?.id;
@@ -94,7 +112,7 @@ export default function Messages({
         initialScrollAtEnd
         maintainScrollAtEnd
         maintainVisibleContentPosition
-        className="min-h-0 flex-1 overflow-x-hidden [overflow-anchor:none]"
+        className={`min-h-0 flex-1 overflow-x-hidden [overflow-anchor:none]${settled ? "" : " invisible"}`}
         renderItem={({ item, index }) => {
           if (item.role === "user" && item.text.trim() === "/compact") {
             const before = [...messages.slice(0, index)].reverse().find((m) => m.usage)?.usage;
@@ -176,9 +194,7 @@ const UserMessage = memo(function UserMessage({ message }: { message: Message })
         // Line breaks the user typed are kept inside paragraphs only; between blocks they would show
         // as blank lines.
         <div className="rounded-[12px] bg-[color-mix(in_srgb,var(--text)_10%,var(--bg-editor))] px-4 py-2.5 leading-[1.55] text-fg [word-break:break-word] selectable [&_h3]:mt-0 [&_h3]:mb-0 [&_p]:whitespace-pre-wrap">
-          <Suspense fallback={<div className="whitespace-pre-wrap">{message.text}</div>}>
-            <Markdown text={message.text} />
-          </Suspense>
+          <Markdown text={message.text} />
         </div>
       )}
     </div>
