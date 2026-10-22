@@ -11,7 +11,7 @@ const threads = [
 const folders = [{ id: "qa-folder", projectId: "qa-project", name: "Old" }];
 const responses = { get_settings: settings, list_threads: threads, list_folders: folders, get_last_thread: null, save_pasted_image: { kind: "image", path: "/tmp/pasted-image.png", name: "Pasted image.png" }, get_collapsed: [], git_changes: [], list_shells: { shells: ["/usr/bin/bash", "/usr/bin/fish", "/usr/bin/zsh"], default: "/usr/bin/zsh" } };
 window.__TAURI_INTERNALS__ = {
-  invoke: async (cmd) => (cmd in responses ? responses[cmd] : null),
+  invoke: async (cmd, args) => (cmd === "get_thread" ? threads.find((t) => t.id === args.id) : cmd in responses ? responses[cmd] : null),
   transformCallback: () => 0,
   unregisterCallback: () => {},
   convertFileSrc: (p) => p,

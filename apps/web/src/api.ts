@@ -261,6 +261,9 @@ export interface Thread {
   /** An imported chat that has not been sent yet: its agent can still be picked, and its
    * transcript goes to the agent with the first message. */
   contextPending: boolean;
+  /** Set in the UI on a thread from `listThreads`, which carries only its last message and those
+   * still streaming, queued, or awaiting approval; `getThread` loads the rest. */
+  partial?: boolean;
 }
 
 /** A folder inside a project; its tasks are the threads whose `folderId` is its id. */
@@ -449,7 +452,10 @@ export const api = {
   removeProject: (id: string) => invoke<void>("remove_project", { id }),
 
   /** All threads (project tasks and project-less chats), in sidebar order. */
+  /** Every thread, each with only the messages the task list reads (see `Thread.partial`). */
   listThreads: () => invoke<Thread[]>("list_threads"),
+  /** One thread with all its messages. */
+  getThread: (id: string) => invoke<Thread>("get_thread", { id }),
   /** Puts threads in a folder (null: the top level) in the given order. */
   reorderThreads: (ids: string[], folderId: string | null) =>
     invoke<void>("reorder_threads", { ids, folderId }),

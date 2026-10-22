@@ -107,6 +107,11 @@ fn list_threads(server: Srv) -> Vec<Thread> {
 }
 
 #[tauri::command]
+fn get_thread(server: Srv, id: String) -> Res<Thread> {
+    server.thread(&id)
+}
+
+#[tauri::command]
 fn reorder_threads(server: Srv, ids: Vec<String>, folder_id: Option<String>) -> Res<()> {
     server.reorder_threads(&ids, folder_id.as_deref())
 }
@@ -533,6 +538,7 @@ pub fn run() {
             rename_thread,
             remove_project,
             list_threads,
+            get_thread,
             reorder_threads,
             list_folders,
             create_folder,

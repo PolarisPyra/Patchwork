@@ -150,6 +150,28 @@ pub fn effective_shell(chosen: Option<&str>) -> Option<String> {
         .or_else(|| std::env::var("SHELL").ok().filter(|s| !s.is_empty()))
 }
 
+/// `thread` with only its last message and those still streaming, queued, or waiting on an
+/// approval, so listing every thread does not send each one's whole history.
+fn thread_summary(thread: &Thread) -> Thread {
+    let last = thread.messages.len().saturating_sub(1);
+    let messages = thread
+        .messages
+        .iter()
+        .enumerate()
+        .filter(|(i, m)| {
+            *i == last
+                || m.status == MessageStatus::Streaming
+                || m.queued
+                || m.approvals.iter().any(|a| a.status == ApprovalStatus::Pending)
+        })
+        .map(|(_, m)| m.clone())
+        .collect();
+    Thread {
+        messages,
+        ..thread.clone()
+    }
+}
+
 fn idle_compaction_due(thread: &Thread, now: u64, tokens: &TokenSettings) -> bool {
     if thread.agent != AgentKind::Claude
         || thread
@@ -396,10 +418,19 @@ impl Server {
     // ---- threads & turns -------------------------------------------------
 
     /// Every thread (project tasks and project-less chats), in sidebar order.
+    /// Every thread, each with only the messages the task list reads: the last one, and any
+    /// still streaming, queued, or waiting on an approval. `thread` returns one in full.
     pub fn list_threads(&self) -> Vec<Thread> {
-        let mut ts = self.store.threads();
+        let mut ts: Vec<Thread> = self
+            .store
+            .with_threads(|threads| threads.iter().map(thread_summary).collect());
         ts.sort_by_key(|t| t.position);
         ts
+    }
+
+    /// One thread with all its messages.
+    pub fn thread(&self, id: &str) -> Res<Thread> {
+        Ok(self.store.thread(id).ok_or("Task not found")?)
     }
 
     /// Puts `ids` in `folder_id` (None: the top level) in their new order.

@@ -210,6 +210,31 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
   }
 }
 
+/** Takes a fresh `listThreads` result, keeping the messages of threads already loaded in full:
+ * events have kept those current, and the list carries only a few of them. */
+function mergeListed(prev: Thread[], list: Thread[]): Thread[] {
+  const loaded = new Map(prev.filter((t) => !t.partial).map((t) => [t.id, t]));
+  return list.map((t) => {
+    const old = loaded.get(t.id);
+    return old ? { ...t, messages: old.messages, partial: false } : { ...t, partial: true };
+  });
+}
+
+/** Fills a listed thread with its full history. Messages it already has are newer than the
+ * saved ones (streamed text is saved in batches), so they are kept. */
+function mergeFull(current: Thread, full: Thread): Thread {
+  const known = new Map(current.messages.map((m) => [m.id, m]));
+  const saved = new Set(full.messages.map((m) => m.id));
+  return {
+    ...current,
+    messages: [
+      ...full.messages.map((m) => known.get(m.id) ?? m),
+      ...current.messages.filter((m) => !saved.has(m.id)),
+    ],
+    partial: false,
+  };
+}
+
 /**
  * Every thread (project tasks and project-less chats) plus the selection.
  * `select(null)` means no thread is selected (the composer then creates one on
@@ -226,6 +251,34 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const turnDone = useRef(onTurnCompleted);
   const initialProject = useRef(initialProjectId);
+  const threadsRef = useRef(threads);
+  threadsRef.current = threads;
+  /** The thread last asked to open; a slower load for an earlier pick does not open it. */
+  const wantedId = useRef<string | null>(null);
+
+  /** Loads a listed thread's full history into the list. */
+  const loadThread = useCallback(async (id: string) => {
+    const full = await api.getThread(id);
+    setThreads((prev) => prev.map((t) => (t.id === id && t.partial ? mergeFull(t, full) : t)));
+  }, []);
+
+  /** Opens a thread, once its full history is loaded, so it never shows with part of it. */
+  const select = useCallback(
+    (id: string | null) => {
+      wantedId.current = id;
+      if (!id || !threadsRef.current.find((t) => t.id === id)?.partial) {
+        setSelectedId(id);
+        return;
+      }
+      // If loading fails, the thread opens with the messages it has.
+      void loadThread(id)
+        .catch(() => undefined)
+        .then(() => {
+          if (wantedId.current === id) setSelectedId(id);
+        });
+    },
+    [loadThread],
+  );
 
   useEffect(() => {
     turnDone.current = onTurnCompleted;
@@ -267,12 +320,14 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
           }
         }
         if (cancelled) return;
-        setThreads(restored);
+        setThreads((prev) => mergeListed(prev, restored));
         profileMark("boot:threads-set");
         setFolders(folderList);
         const live = restored.filter((t) => t.archivedAt === null);
         const fallback = live.find((t) => t.projectId === initialProject.current)?.id ?? null;
-        setSelectedId(live.find((t) => t.id === last)?.id ?? fallback);
+        const open = live.find((t) => t.id === last)?.id ?? fallback;
+        if (open) await loadThread(open).catch(() => undefined);
+        if (!cancelled && wantedId.current === null) setSelectedId(open);
       },
       () => {
         if (!cancelled) setThreads([]);
@@ -287,7 +342,7 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
   const reload = useCallback(
     () =>
       Promise.all([api.listThreads(), api.listFolders()]).then(([list, folderList]) => {
-        setThreads(list);
+        setThreads((prev) => mergeListed(prev, list));
         setFolders(folderList);
       }),
     [],
@@ -401,13 +456,15 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
   async function removeFolder(id: string): Promise<void> {
     await api.removeFolder(id);
     setFolders((prev) => prev.filter((f) => f.id !== id));
-    setThreads(await api.listThreads());
+    const list = await api.listThreads();
+    setThreads((prev) => mergeListed(prev, list));
   }
 
   /** Puts threads in a folder (null: the top level) in `ids` order, then re-reads the order. */
   async function reorderThreads(ids: string[], folderId: string | null): Promise<void> {
     await api.reorderThreads(ids, folderId);
-    setThreads(await api.listThreads());
+    const list = await api.listThreads();
+    setThreads((prev) => mergeListed(prev, list));
   }
 
   /** Moves a project's tasks into one folder per agent, named for it, creating those folders as needed. */
@@ -431,7 +488,8 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
     } finally {
       const before = tasks.map((t) => ({ id: t.id, folderId: t.folderId }));
       setSortUndo((prev) => ({ ...prev, [projectId]: before }));
-      setThreads(await api.listThreads());
+      const list = await api.listThreads();
+      setThreads((prev) => mergeListed(prev, list));
     }
   }
 
@@ -475,7 +533,8 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
       }
     } finally {
       setFolders(await api.listFolders());
-      setThreads(await api.listThreads());
+      const list = await api.listThreads();
+      setThreads((prev) => mergeListed(prev, list));
     }
   }
 
@@ -545,7 +604,7 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
     folders,
     reload,
     selected,
-    select: setSelectedId,
+    select,
     createThread,
     deleteThread,
     setThreadArchived,
