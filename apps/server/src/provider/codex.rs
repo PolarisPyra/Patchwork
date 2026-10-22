@@ -74,18 +74,24 @@ pub fn turn_args() -> Vec<String> {
 /// Request id of `thread/start` / `thread/resume`; its response carries the thread id.
 const THREAD_REQUEST: u64 = 2;
 
-/// Handshake, then start or resume the thread. `turn/start` follows once the thread id is known.
-pub fn turn_input(spec: &TurnSpec) -> Vec<String> {
+/// Parameters of `thread/start`, or of `thread/resume` when `resume` names the thread.
+fn thread_params(spec: &TurnSpec, resume: Option<&str>) -> Value {
     let mut thread = json!({"cwd": spec.root});
     if let Some(m) = spec.model {
         thread["model"] = json!(m);
     }
+    if let Some(id) = resume {
+        thread["threadId"] = json!(id);
+        thread["excludeTurns"] = json!(true);
+    }
+    thread
+}
+
+/// Handshake, then start or resume the thread. `turn/start` follows once the thread id is known.
+pub fn turn_input(spec: &TurnSpec) -> Vec<String> {
+    let thread = thread_params(spec, spec.session_id);
     let method = match spec.session_id {
-        Some(id) => {
-            thread["threadId"] = json!(id);
-            thread["excludeTurns"] = json!(true);
-            "thread/resume"
-        }
+        Some(_) => "thread/resume",
         None => "thread/start",
     };
     [
@@ -494,6 +500,16 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                 out.extend(
                     goal_of(&v["result"]["goal"]).map(|g| Parsed::Goal(GoalUpdate::Reported(g))),
                 );
+            } else if id == THREAD_REQUEST
+                && spec.session_id.is_some()
+                && error.is_some_and(|m| m.starts_with("no rollout found"))
+            {
+                // Codex saves a thread with its first turn, so one whose first turn failed cannot
+                // be resumed. It holds nothing, so a new thread takes its place.
+                out.push(Parsed::Send(
+                    json!({"id": THREAD_REQUEST, "method": "thread/start", "params": thread_params(spec, None)})
+                        .to_string(),
+                ));
             } else if let Some(message) = error {
                 out.extend([Parsed::Error(message.into()), Parsed::Finished]);
             } else if id == THREAD_REQUEST
