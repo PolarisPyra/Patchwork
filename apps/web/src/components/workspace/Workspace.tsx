@@ -32,6 +32,7 @@ import { getPicked, setPickedRows } from "~/components/sidebar/pickedRows";
 import StatusBar from "~/components/workspace/StatusBar";
 import Toolbar from "~/components/workspace/Toolbar";
 import { isWorking, useThreads } from "~/hooks/useThreads";
+import { keyLabel, useCommand, useContextKey, useKeybindings } from "~/lib/shortcuts";
 import { AGENT_KINDS, displayTitle, errorText } from "~/lib/util";
 
 export interface WorkspaceProps {
@@ -410,65 +411,52 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     document.addEventListener("mouseup", onUp);
   }
 
-  // Ctrl+W and Delete act on the picked rows only; with none picked they do nothing. Global
-  // shortcuts. Re-registered each render so handlers see current state.
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      const mod = e.ctrlKey || e.metaKey;
-      const key = e.key.toLowerCase();
-      const picked = getPicked();
-      if (e.key === "Escape") {
-        if (paletteOpen) setPaletteOpen(false);
-        else if (settingsOpen) setSettingsOpen(false);
-        else if (openCanvas) setCanvas(null);
-        else if (picked.length > 0) setPickedRows([]);
-        else return;
-      } else if (mod && key === "k") {
-        setPaletteOpen((o) => !o);
-      } else if (mod && key === "t") {
-        newThreadIn(projectId);
-      } else if (mod && key === "n") {
-        newThreadHere();
-      } else if (mod && key === "w") {
-        // Ctrl+W acts on the picked rows and, while the compose box is not active, on the open chat
-        // in the task list even when it is not picked.
-        const openChat =
-          view === "tasks" &&
-          selected &&
-          !isTypingTarget(document.activeElement) &&
-          !picked.some((p) => p.kind === "thread" && p.id === selected.id);
-        const targets = openChat
-          ? [...picked, { kind: "thread" as const, id: selected.id }]
-          : picked;
-        if (targets.length > 0) void removePicked(targets);
-      } else if (e.key === "Delete" && !isTypingTarget(document.activeElement)) {
-        // Delete acts on the picked rows; with none picked, it archives the open chat in the task list.
-        if (picked.length > 0) void removePicked(picked);
-        else if (view === "tasks" && selected)
-          void removeTargets([{ kind: "thread", id: selected.id }]);
-      } else if (mod && e.key === ",") {
-        setSettingsOpen(true);
-      } else if (e.key === "Tab" && !e.shiftKey && !isTypingTarget(document.activeElement)) {
-        // Tab outside a text field jumps to the composer; inside one it keeps normal tabbing.
-        document.querySelector<HTMLElement>(".composer-editor .ProseMirror")?.focus();
-      } else if (e.key === " " && !isTypingTarget(document.activeElement)) {
-        // Space outside a text field closes the open side panel, or reopens the last one, wherever focus sits after a click.
-        setView((current) => (current ? null : lastView.current));
-      } else {
-        return;
-      }
-      e.preventDefault();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+  // What each shortcut does; which key runs it is set in lib/shortcutDefaults.ts and the Shortcuts
+  // settings. The handlers read current state, so they need no re-registering.
+  useCommand("palette.toggle", () => setPaletteOpen((o) => !o));
+  useCommand("chat.new", () => newThreadIn(projectId));
+  useCommand("chat.newHere", newThreadHere);
+  useCommand("settings.open", () => setSettingsOpen(true));
+  useCommand("composer.focus", () =>
+    document.querySelector<HTMLElement>(".composer-editor .ProseMirror")?.focus(),
+  );
+  // Closes the open side panel, or reopens the last one, wherever focus sits after a click.
+  useCommand("sidePanel.toggle", () => setView((current) => (current ? null : lastView.current)));
+  // Acts on the picked rows and, while the compose box is not active, on the open chat in the task
+  // list even when it is not picked.
+  useCommand("workspace.closeChat", () => {
+    const picked = getPicked();
+    const openChat =
+      view === "tasks" &&
+      selected &&
+      !isTypingTarget(document.activeElement) &&
+      !picked.some((p) => p.kind === "thread" && p.id === selected.id);
+    const targets = openChat ? [...picked, { kind: "thread" as const, id: selected.id }] : picked;
+    if (targets.length > 0) void removePicked(targets);
   });
+  // Acts on the picked rows; with none picked, it archives the open chat in the task list.
+  useCommand("workspace.deleteChat", () => {
+    const picked = getPicked();
+    if (picked.length > 0) void removePicked(picked);
+    else if (view === "tasks" && selected)
+      void removeTargets([{ kind: "thread", id: selected.id }]);
+  });
+  useCommand("palette.close", () => setPaletteOpen(false));
+  useCommand("settings.close", () => setSettingsOpen(false));
+  useCommand("canvas.close", () => setCanvas(null));
+  useCommand("sidebar.clearPicked", () => setPickedRows([]));
+  useContextKey("paletteOpen", () => paletteOpen);
+  useContextKey("settingsOpen", () => settingsOpen);
+  useContextKey("canvasOpen", () => openCanvas !== null);
+  useContextKey("hasPickedRows", () => getPicked().length > 0);
 
+  const { rules } = useKeybindings();
   const paletteItems: PaletteItem[] = [
     {
       id: "new-chat",
       group: "Actions",
       label: "New chat",
-      hint: project ? undefined : "Ctrl T",
+      hint: project ? undefined : keyLabel(rules, "chat.new"),
       run: newChat,
     },
     ...(project
@@ -477,7 +465,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
             id: "new-task",
             group: "Actions",
             label: `New task in ${project.name}`,
-            hint: "Ctrl T",
+            hint: keyLabel(rules, "chat.new"),
             run: () => newThreadIn(project.id),
           },
         ]
@@ -487,7 +475,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
       id: "settings",
       group: "Actions",
       label: "Open settings",
-      hint: "Ctrl ,",
+      hint: keyLabel(rules, "settings.open"),
       run: () => setSettingsOpen(true),
     },
     { id: "open-folder", group: "Actions", label: "Open folder…", run: openFolder },

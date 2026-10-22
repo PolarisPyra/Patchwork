@@ -22,6 +22,7 @@ import type { CanvasTab } from "~/components/canvas/Canvas";
 import AttachmentChip, { AttachmentTile } from "~/components/chat/AttachmentChip";
 import { ACTION_CLASS, CopyButton } from "~/components/chat/CopyButton";
 import TurnTimeline from "~/components/chat/TurnTimeline";
+import { shortcutContext, useCommand } from "~/lib/shortcuts";
 import { formatTokens } from "~/lib/tokens";
 import { formatClock } from "~/lib/util";
 
@@ -100,8 +101,21 @@ export default function Messages({
     void listRef.current?.scrollToEnd();
   }, [lastUserMessageId, replyId]);
 
+  // The app disables text selection by default, so the browser's select-all would not reach the
+  // transcript. Focus lands here on click, and Ctrl/Cmd+A then selects what the list has rendered.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useCommand("transcript.selectAll", () => {
+    if (rootRef.current) window.getSelection()?.selectAllChildren(rootRef.current);
+  });
+  useCommand("transcript.clearSelection", () => window.getSelection()?.removeAllRanges());
+
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div
+      className="relative flex min-h-0 flex-1 flex-col outline-none"
+      ref={rootRef}
+      tabIndex={-1}
+      {...shortcutContext("transcriptFocus")}
+    >
       <LegendList
         ref={listRef}
         data={messages}

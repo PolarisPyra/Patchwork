@@ -36,6 +36,7 @@ import { formatTokens } from "~/lib/tokens";
 import { AGENT_KINDS, describeAgent, errorText } from "~/lib/util";
 import { CHIP_CLASS } from "~/components/chat/ModelPicker";
 import Dropdown from "~/components/workspace/Dropdown";
+import KeybindingsPane from "~/components/settings/KeybindingsPane";
 
 type Section =
   | "appearance"
@@ -118,7 +119,7 @@ export default function SettingsDialog({
             {section === "imports" && <ImportsPane {...paneProps} onImported={onImported} />}
             {section === "environment" && <EnvironmentPane {...paneProps} />}
             {section === "projects" && <ProjectsPane {...paneProps} />}
-            {section === "shortcuts" && <ShortcutsPane />}
+            {section === "shortcuts" && <KeybindingsPane />}
           </div>
         </div>
       </div>
@@ -695,99 +696,6 @@ function ProjectsPane({ settings, updateSettings }: PaneProps) {
           Run setup again
         </button>
       </div>
-    </>
-  );
-}
-
-const SHORTCUT_PAGES: { title: string; shortcuts: { keys: string[]; action: string }[] }[] = [
-  {
-    title: "Main",
-    shortcuts: [
-      { keys: ["Ctrl", "K"], action: "Open search" },
-      { keys: ["Ctrl", "T"], action: "New chat, or a task in the current project" },
-      {
-        keys: ["Ctrl", "N"],
-        action: "New chat, or a task in the selected chat's project or folder",
-      },
-      { keys: ["Ctrl", ","], action: "Open settings" },
-      { keys: ["Tab"], action: "Jump to the composer, outside a text field" },
-      {
-        keys: ["Esc"],
-        action: "Close search, settings or a canvas; otherwise clear the selection",
-      },
-    ],
-  },
-  {
-    title: "Sidebar",
-    shortcuts: [
-      { keys: ["Ctrl", "A"], action: "Select every chart or task on screen" },
-      { keys: ["Ctrl", "Click"], action: "Select or unselect a chart or task" },
-      {
-        keys: ["Delete"],
-        action: "Remove the selected chats or tasks, or the open one if none are selected",
-      },
-      {
-        keys: ["Ctrl", "W"],
-        action:
-          "Remove the selected chats or tasks, and the open one when the compose box is not active",
-      },
-      {
-        keys: ["Space"],
-        action: "Open or close the side panel, outside a text field",
-      },
-    ],
-  },
-  {
-    title: "Archive",
-    shortcuts: [
-      { keys: ["Ctrl", "A"], action: "Select every archived chat" },
-      { keys: ["Ctrl", "Click"], action: "Select or unselect an archived chat" },
-      { keys: ["Delete"], action: "Delete the selected chats for good" },
-    ],
-  },
-  {
-    title: "Composer",
-    shortcuts: [
-      { keys: ["Enter"], action: "Send the message" },
-      { keys: ["Shift", "Enter"], action: "New line" },
-      {
-        keys: ["Up", "Down"],
-        action: "Recall earlier messages from the first or last line",
-      },
-    ],
-  },
-];
-
-function ShortcutsPane() {
-  const [page, setPage] = useState(0);
-  return (
-    <>
-      <div className="mb-2 flex gap-1">
-        {SHORTCUT_PAGES.map(({ title }, i) => (
-          <button
-            key={title}
-            className={`h-7 cursor-pointer rounded-[var(--radius-sm)] border-none px-2.5 text-[length:var(--fs-sm)] ${i === page ? "bg-selected text-fg" : "bg-transparent text-fg-muted hover:bg-hover hover:text-fg"}`}
-            onClick={() => setPage(i)}
-          >
-            {title}
-          </button>
-        ))}
-      </div>
-      {SHORTCUT_PAGES[page].shortcuts.map(({ keys, action }) => (
-        <div
-          key={action}
-          className="flex items-center justify-between gap-4 border-b border-border py-2"
-        >
-          <span className="text-fg-muted">{action}</span>
-          <span className="flex flex-none items-center gap-1">
-            {keys.map((key) => (
-              <kbd key={key} className="kbd">
-                {key}
-              </kbd>
-            ))}
-          </span>
-        </div>
-      ))}
     </>
   );
 }

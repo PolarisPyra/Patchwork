@@ -45,6 +45,7 @@ import UsagePopover from "~/components/usage/UsagePopover";
 import { useRowReorder, type RowDrag } from "~/hooks/useRowReorder";
 import { setPickedRows, usePicked } from "./pickedRows";
 import { isWorking } from "~/hooks/useThreads";
+import { formatKey, keyFor, shortcutContext, useCommand, useKeybindings } from "~/lib/shortcuts";
 import {
   AGENT_FOLDER_NAMES,
   baseName,
@@ -181,30 +182,9 @@ const selectionFill = (selected: boolean) =>
     ? "bg-[var(--tree-inactive-selected,var(--bg-selected-muted))] hover:bg-[var(--tree-selected,var(--bg-selected))] group-focus-within/tree:bg-[var(--tree-selected,var(--bg-selected))] outline-transparent group-focus-within/tree:outline group-focus-within/tree:outline-1 group-focus-within/tree:-outline-offset-1 group-focus-within/tree:outline-[#3994bcb3]"
     : "bg-transparent hover:bg-[var(--tree-hover,var(--bg-hover))]";
 
-/** Ctrl+A picks the given rows, unless a text field has focus, where it selects the text. */
-function useSelectAll(targets: Target[], setPicked: (targets: Target[]) => void) {
-  useEffect(() => {
-    function onKey(e: globalThis.KeyboardEvent) {
-      const el = document.activeElement;
-      // The composer takes focus when a chat opens; an empty one has no text to select, so rows win.
-      const emptyComposer =
-        el instanceof HTMLElement && !!el.closest(".composer-editor") && !el.textContent?.trim();
-      const typing =
-        el instanceof HTMLElement &&
-        (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) &&
-        !emptyComposer;
-      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "a" || typing) return;
-      e.preventDefault();
-      // Leaves the composer, so Delete reaches the picked rows.
-      if (el instanceof HTMLElement && emptyComposer) el.blur();
-      setPicked(targets);
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [targets, setPicked]);
-}
-
 export default memo(function Sidebar(props: SidebarProps) {
+  const { rules } = useKeybindings();
+  const searchKey = keyFor(rules, "palette.toggle");
   return (
     <aside
       className="flex min-h-0 flex-none flex-col border-r border-border bg-panel text-[length:var(--fs-md)] [--fs-xs:13px] [--fs-sm:14px] [--fs-md:15px]"
@@ -216,7 +196,7 @@ export default memo(function Sidebar(props: SidebarProps) {
       >
         <MagnifyingGlassIcon size={18} />
         Search…
-        <kbd className="kbd ml-auto">Ctrl K</kbd>
+        {searchKey && <kbd className="kbd ml-auto">{formatKey(searchKey).join(" ")}</kbd>}
       </button>
       {props.view === "tasks" && <TasksView {...props} />}
       {props.view === "changes" && <ChangesView {...props} />}
@@ -445,7 +425,7 @@ function TasksView({
   ]
     .filter((t) => !leavingIds.has(t.id))
     .map((t): Target => ({ kind: "thread", id: t.id }));
-  useSelectAll(visible, setPicked);
+  useCommand("sidebar.selectAll", () => setPicked(visible));
 
   // The tree's rows in on-screen order, each with its parent, for the arrow keys and Shift+click.
   const treeRows: Target[] = [];
@@ -570,6 +550,7 @@ function TasksView({
       ref={treeRef}
       className="group/tree flex min-h-0 flex-1 flex-col gap-px overflow-y-scroll overflow-x-hidden p-2 *:shrink-0 focus:outline-none"
       tabIndex={-1}
+      {...shortcutContext("sidebarTreeFocus")}
       onKeyDown={onTreeKey}
     >
       <SectionLabel
@@ -1001,12 +982,15 @@ function ArchivedView({
         : [...prev, targetOf(id)],
     );
   };
-  useSelectAll(
-    archivedThreads.map((t) => targetOf(t.id)),
-    setPicked,
+  useCommand("sidebar.selectAllArchived", () =>
+    setPicked(archivedThreads.map((t) => targetOf(t.id))),
   );
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-scroll overflow-x-hidden p-2 *:shrink-0">
+    <div
+      tabIndex={-1}
+      {...shortcutContext("archivedListFocus")}
+      className="flex min-h-0 flex-1 flex-col gap-px overflow-y-scroll overflow-x-hidden p-2 *:shrink-0 focus:outline-none"
+    >
       <SectionLabel>Archived</SectionLabel>
       {archivedThreads.length === 0 && (
         <div className="px-3 py-2 text-[length:var(--fs-sm)] text-fg-muted">Nothing archived</div>
