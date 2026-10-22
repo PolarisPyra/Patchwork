@@ -49,7 +49,7 @@ Install and sign in to at least one agent CLI:
 
 - [Claude Code](https://docs.claude.com/en/docs/claude-code) (`claude`)
 - [Codex](https://github.com/openai/codex) (`codex`)
-- Antigravity (`agy`). **Settings** can install it for you.
+- [Antigravity](https://antigravity.google/) (`agy`)
 
 Patchwork detects which of these CLIs are installed. Claude Code and Codex also report whether
 you are signed in.
