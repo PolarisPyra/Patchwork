@@ -50,22 +50,24 @@ export default function TasksBadge({ steps }: { steps: PlanStep[] }) {
             title={`${done} of ${steps.length} tasks complete`}
           >
             {steps.slice(0, 8).map((step, i) => (
-            <span
-              key={i}
-              className={`h-1.5 w-3 rounded-full transition-colors ${
-                step.status === "done"
-                  ? "bg-accent-text"
-                  : step.status === "running"
-                    ? "bg-accent shadow-[0_0_6px_var(--color-accent)]"
-                    : step.status === "error"
-                      ? "bg-danger"
-                      : "bg-fg-subtle/25"
-              }`}
-              title={`${step.status}: ${step.text}`}
-            />
+              <span
+                key={i}
+                className={`h-1.5 w-3 rounded-full transition-colors ${
+                  step.status === "done"
+                    ? "bg-accent-text"
+                    : step.status === "running"
+                      ? "bg-accent shadow-[0_0_6px_var(--color-accent)]"
+                      : step.status === "error"
+                        ? "bg-danger"
+                        : "bg-fg-subtle/25"
+                }`}
+                title={`${step.status}: ${step.text}`}
+              />
             ))}
             {steps.length > 8 && (
-              <span className="ml-0.5 text-[length:var(--fs-xs)] text-fg-subtle">+{steps.length - 8}</span>
+              <span className="ml-0.5 text-[length:var(--fs-xs)] text-fg-subtle">
+                +{steps.length - 8}
+              </span>
             )}
           </span>
         )}
