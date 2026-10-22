@@ -70,11 +70,17 @@ export default function Messages({
   // list keeps following the end as long as the reader is at the bottom.
   const lastUserMessageId = [...messages].reverse().find((m) => m.role === "user")?.id;
   const lastSent = useRef(lastUserMessageId);
+  // The reply's first row can land just after the sent message, and is taller than the list's
+  // follow threshold, so the list does not always follow it on its own; it is jumped to as well.
+  const replyId = messages.at(-2)?.id === lastUserMessageId ? messages.at(-1)?.id : undefined;
+  const lastReply = useRef(replyId);
   useLayoutEffect(() => {
-    if (lastSent.current === lastUserMessageId) return; // mount: initialScrollAtEnd handles it
+    // mount: initialScrollAtEnd handles it
+    if (lastSent.current === lastUserMessageId && lastReply.current === replyId) return;
     lastSent.current = lastUserMessageId;
+    lastReply.current = replyId;
     void listRef.current?.scrollToEnd();
-  }, [lastUserMessageId]);
+  }, [lastUserMessageId, replyId]);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
