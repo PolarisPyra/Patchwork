@@ -63,6 +63,8 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
   switch (event.type) {
     case "goalUpdated":
       return { ...thread, goal: event.goal };
+    case "slashCommandsUpdated":
+      return { ...thread, slashCommands: event.commands };
     case "usage": {
       const { messageId, usage } = event;
       return updateMessage(thread, messageId, (m) => ({ ...m, usage }));
@@ -162,8 +164,12 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
       const { messageId, queued } = event;
       return updateMessage(thread, messageId, (m) => ({ ...m, queued }));
     }
+    case "messageSteered":
+      return updateMessage(thread, event.messageId, (m) => ({ ...m, queued: false, steer: true }));
     case "messageRemoved":
       return { ...thread, messages: thread.messages.filter((m) => m.id !== event.messageId) };
+    case "messageEdited":
+      return updateMessage(thread, event.message.id, () => event.message);
     case "backgroundTaskStarted": {
       const { messageId, task } = event;
       return updateMessage(thread, messageId, (m) => ({

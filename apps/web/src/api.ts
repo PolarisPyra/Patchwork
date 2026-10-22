@@ -131,6 +131,11 @@ export interface PlanStep {
   status: StepStatus;
 }
 
+export interface ProviderSlashCommand {
+  name: string;
+  description: string | null;
+}
+
 /** How much an agent may do without asking. */
 export type AccessMode = "supervised" | "auto-accept-edits" | "auto" | "full-access";
 
@@ -248,6 +253,7 @@ export interface Thread {
   parent: { threadId: string; toolId: string } | null;
   /** Turns run in plan mode: the agent plans and proposes, without changing files. */
   planMode: boolean;
+  slashCommands: ProviderSlashCommand[];
 }
 
 /** A folder inside a project; its tasks are the threads whose `folderId` is its id. */
@@ -299,6 +305,7 @@ export interface ImportScan {
 
 export type AgentEvent =
   | { type: "goalUpdated"; goal: Goal | null }
+  | { type: "slashCommandsUpdated"; commands: ProviderSlashCommand[] }
   | { type: "usage"; messageId: string; usage: TokenUsage }
   | { type: "messageStarted"; message: Message }
   | { type: "textDelta"; messageId: string; text: string }
@@ -328,10 +335,12 @@ export type AgentEvent =
       answers?: Record<string, string[]>;
     }
   | { type: "messageQueued"; messageId: string; queued: boolean }
+  | { type: "messageSteered"; messageId: string }
   | { type: "messageCutOff"; messageId: string }
   | { type: "planProposed"; messageId: string; text: string }
   | { type: "threadCreated"; thread: Thread }
   | { type: "messageRemoved"; messageId: string }
+  | { type: "messageEdited"; message: Message }
   | { type: "backgroundTaskStarted"; messageId: string; task: BackgroundTask }
   | { type: "backgroundTaskEnded"; messageId: string; toolId: string }
   | {
@@ -493,6 +502,11 @@ export const api = {
   /** Takes back a message queued behind the running turn, so it can be edited. */
   removeQueued: (threadId: string, messageId: string) =>
     invoke<void>("remove_queued", { threadId, messageId }),
+  editQueued: (threadId: string, messageId: string, text: string, attachments: Attachment[]) =>
+    invoke<void>("edit_queued", { threadId, messageId, text, attachments }),
+  resumeQueued: (threadId: string) => invoke<void>("resume_queued", { threadId }),
+  steerQueued: (threadId: string, messageId: string) =>
+    invoke<void>("steer_queued", { threadId, messageId }),
   /** Clears the goal, in the agent's session too. Refused while a turn runs. */
   stopGoal: (threadId: string) => invoke<void>("stop_goal", { threadId }),
   respondApproval: (

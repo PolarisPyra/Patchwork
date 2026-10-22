@@ -194,7 +194,10 @@ function useSelectAll(targets: Target[], setPicked: (targets: Target[]) => void)
 
 export default memo(function Sidebar(props: SidebarProps) {
   return (
-    <aside className="flex min-h-0 w-[340px] flex-none flex-col border-r border-border bg-panel text-[length:var(--fs-md)] [--fs-xs:13px] [--fs-sm:14px] [--fs-md:15px]">
+    <aside
+      className="flex min-h-0 flex-none flex-col border-r border-border bg-panel text-[length:var(--fs-md)] [--fs-xs:13px] [--fs-sm:14px] [--fs-md:15px]"
+      style={{ width: 256, flex: "0 0 256px" }}
+    >
       <button
         className="mx-2 mt-3 mb-0.5 flex h-8 flex-none cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border border-border bg-input px-2 text-[length:var(--fs-sm)] text-fg-muted hover:border-border-strong hover:text-fg"
         onClick={props.onOpenPalette}

@@ -432,6 +432,7 @@ pub fn approval_reply(
 pub enum Parsed {
     Event(AgentEvent),
     SessionId(String),
+    SlashCommands(Vec<ProviderSlashCommand>),
     /// The agent's own id for the subagent that the tool call `tool_id` started.
     TaskStarted {
         tool_id: String,

@@ -120,6 +120,7 @@ export default function Chat({
 }: ChatProps) {
   // Drafts are kept per thread ("new" when nothing is selected).
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [queuedEdit, setQueuedEdit] = useState<{ id: string; text: string; attachments: Attachment[] } | null>(null);
   // Files and images dropped into the composer, kept per thread like drafts.
   const [pending, setPending] = useState<Record<string, Attachment[]>>({});
   const [dropping, setDropping] = useState(false);
@@ -146,6 +147,7 @@ export default function Chat({
   }, [projectId]);
   // Agent/model/access chosen for the next thread; null means the defaults.
   const [pick, setPick] = useState<NewThreadOptions | null>(null);
+  const [modelPickerRequest, setModelPickerRequest] = useState(0);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The thread whose large, cold session is asking before a message is sent to it.
@@ -158,6 +160,16 @@ export default function Chat({
   const setDraft = (text: string) => setDrafts((d) => ({ ...d, [key]: text }));
   const attachments = pending[key] ?? [];
   const setAttachments = (next: Attachment[]) => setPending((p) => ({ ...p, [key]: next }));
+  const composerDraft = queuedEdit?.text ?? draft;
+  const composerAttachments = queuedEdit?.attachments ?? attachments;
+  const setComposerDraft = (text: string) => {
+    if (queuedEdit) setQueuedEdit((edit) => edit ? { ...edit, text } : edit);
+    else setDraft(text);
+  };
+  const setComposerAttachments = (next: Attachment[]) => {
+    if (queuedEdit) setQueuedEdit((edit) => edit ? { ...edit, attachments: next } : edit);
+    else setAttachments(next);
+  };
 
   const newOpts: NewThreadOptions = pick ?? {
     agent: defaultAgent,
@@ -192,6 +204,7 @@ export default function Chat({
 
   useEffect(() => {
     keyRef.current = key;
+    setQueuedEdit(null);
   }, [key]);
 
   // Tauri hands dropped files over as paths (HTML drop events carry none), so drops are
@@ -322,7 +335,14 @@ export default function Chat({
   }
 
   function submit(queue: boolean) {
-    const text = draft.trim();
+    const text = composerDraft.trim();
+    if (queuedEdit) {
+      if (!thread) return;
+      api.editQueued(thread.id, queuedEdit.id, text, composerAttachments)
+        .then(() => setQueuedEdit(null))
+        .catch((e: unknown) => setError(errorText(e)));
+      return;
+    }
     // With a plan ready, sending nothing implements it; anything written refines it.
     if (readyPlan !== null && !text && attachments.length === 0) {
       void implementPlan(false);
@@ -341,6 +361,20 @@ export default function Chat({
     }
     if (text === "/compact" && attachments.length === 0) {
       compactChat();
+      return;
+    }
+    if (text === "/model" && attachments.length === 0) {
+      setDraft("");
+      setModelPickerRequest((request) => request + 1);
+      return;
+    }
+    if ((text === "/plan" || text === "/default") && attachments.length === 0) {
+      if (!planSupported) {
+        setError("Plan mode is not supported by Antigravity.");
+      } else {
+        setPlanMode(text === "/plan");
+      }
+      setDraft("");
       return;
     }
     // /new starts a fresh chat; the current one is kept in the sidebar.
@@ -370,14 +404,27 @@ export default function Chat({
   // the composer; it only does so once the server has taken the message back.
   function takeBack(message: Message, edit: boolean) {
     if (!thread) return;
-    api
-      .removeQueued(thread.id, message.id)
-      .then(() => {
-        if (!edit) return;
-        setDraft(message.text);
-        setAttachments(message.attachments);
-      })
-      .catch((e: unknown) => setError(errorText(e)));
+    if (edit) {
+      setQueuedEdit({ id: message.id, text: message.text, attachments: message.attachments });
+      return;
+    }
+    api.removeQueued(thread.id, message.id).catch((e: unknown) => setError(errorText(e)));
+  }
+
+  function editLatestQueued() {
+    if (queuedEdit || composerDraft.trim() || composerAttachments.length) return;
+    const latestQueued = queued.at(-1);
+    if (latestQueued) setQueuedEdit({ id: latestQueued.id, text: latestQueued.text, attachments: latestQueued.attachments });
+  }
+
+  function resumeQueued() {
+    if (!thread || working) return;
+    api.resumeQueued(thread.id).catch((e: unknown) => setError(errorText(e)));
+  }
+
+  function steerQueued(message: Message) {
+    if (!thread || !working) return;
+    api.steerQueued(thread.id, message.id).catch((e: unknown) => setError(errorText(e)));
   }
 
   function stopBackground(task: BackgroundTask) {
@@ -417,8 +464,8 @@ export default function Chat({
   );
   const showChanges = useCallback((paths: string[]) => latest.current.onShowChanges(paths), []);
 
-  // Stops the running turn, goal or not. A goal it was pursuing is left paused, to resume or
-  // clear from the banner.
+  // Stops the running turn, goal or not. A goal it was pursuing is cleared once the agent has
+  // exited, in the agent's session too.
   function stop() {
     if (!thread) return;
     setError(null);
@@ -460,18 +507,27 @@ export default function Chat({
     onSetEffort(thread.id, next).catch((e: unknown) => setError(errorText(e)));
   }
 
-  // Plan mode: the agent plans and proposes, without changing files. Antigravity has none.
-  const planMode = thread ? thread.planMode : (newOpts.planMode ?? false);
   const planSupported = agent !== "antigravity";
-  function togglePlan() {
+  function setPlanMode(enabled: boolean) {
     if (!thread) {
-      setPick({ ...newOpts, planMode: !planMode });
+      setPick({ ...newOpts, planMode: enabled });
       return;
     }
     setError(null);
-    onSetPlanMode(thread.id, !planMode).catch((e: unknown) => setError(errorText(e)));
+    onSetPlanMode(thread.id, enabled).catch((e: unknown) => setError(errorText(e)));
   }
-
+  function selectSlashCommand(name: string): boolean {
+    if (name === "/model") {
+      setModelPickerRequest((request) => request + 1);
+      return true;
+    }
+    if (name === "/plan" || name === "/default") {
+      if (!planSupported) setError("Plan mode is not supported by Antigravity.");
+      else setPlanMode(name === "/plan");
+      return true;
+    }
+    return false;
+  }
   function pickAccess(mode: AccessMode) {
     if (!thread) {
       setPick({ ...newOpts, accessMode: mode });
@@ -519,11 +575,14 @@ export default function Chat({
     }
   }
 
-  // The plan of the latest reply, while it has one.
-  const plan =
-    [...(thread?.messages ?? [])].reverse().find((m) => m.role === "assistant")?.plan ?? [];
-  // Choices the agent offered in its last finished reply, until the user answers or dismisses them.
+  // Match T3's active-run scope: old plans must not leave a stale progress badge above the
+  // composer after the reply has finished.
   const lastMessage = thread?.messages.at(-1);
+  const plan =
+    working && lastMessage?.role === "assistant" && lastMessage.status === "streaming"
+      ? lastMessage.plan
+      : [];
+  // Choices the agent offered in its last finished reply, until the user answers or dismisses them.
   // A plan the last reply proposed in plan mode, ready to implement or refine.
   const proposed =
     thread?.planMode && !working && !asking && lastMessage?.role === "assistant"
@@ -706,9 +765,14 @@ export default function Chat({
         <BackgroundTasks tasks={background} onStop={stopBackground} />
         <QueuedMessages
           messages={queued}
-          canEdit={!draft.trim() && attachments.length === 0}
+          canEdit={true}
+          canSteer={working}
           onEdit={(message) => takeBack(message, true)}
           onRemove={(message) => takeBack(message, false)}
+          onSteer={steerQueued}
+          onResume={resumeQueued}
+          editingId={queuedEdit?.id ?? null}
+          onCancelEdit={() => setQueuedEdit(null)}
         />
         {thread?.goal && (
           <GoalBanner
@@ -723,9 +787,16 @@ export default function Chat({
             messages once the editor arrived. */}
         <Composer
           key={key}
-          value={draft}
-          onChange={setDraft}
+          value={composerDraft}
+          onChange={setComposerDraft}
           onSubmit={submit}
+          onEditLatestQueued={editLatestQueued}
+          onSteerQueued={() => {
+            if (queued[0]) steerQueued(queued[0]);
+          }}
+          canSteerQueued={working && queued.length > 0}
+          editingQueued={queuedEdit !== null}
+          canQueueFollowUp={queued.length === 0}
           onStop={stop}
           goalActive={thread?.goal?.status === "active"}
           working={working}
@@ -734,14 +805,15 @@ export default function Chat({
           model={model}
           agents={empty ? offered : [agent]}
           onPickModel={pickModel}
+          modelPickerRequest={modelPickerRequest}
+          providerSlashCommands={thread?.slashCommands ?? []}
+          onSelectSlashCommand={selectSlashCommand}
           accessMode={accessMode}
           onPickAccess={pickAccess}
-          planMode={planSupported ? planMode : null}
-          onTogglePlan={togglePlan}
           effort={effort}
           onPickEffort={pickEffort}
-          attachments={attachments}
-          onRemoveAttachment={(i) => setAttachments(attachments.filter((_, j) => j !== i))}
+          attachments={composerAttachments}
+          onRemoveAttachment={(i) => setComposerAttachments(composerAttachments.filter((_, j) => j !== i))}
           dropping={dropping}
           history={history}
           files={files}

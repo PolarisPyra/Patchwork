@@ -414,13 +414,14 @@ fn save_thread_row(tx: &Transaction, t: &Thread) -> rusqlite::Result<()> {
     tx.execute(
         "INSERT INTO threads
              (id, project_id, title, agent, model, session_id, created_at, access_mode, goal,
-              position, folder_id, effort, archived_at, parent, plan_mode)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+              position, folder_id, effort, archived_at, parent, plan_mode, slash_commands)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
          ON CONFLICT (id) DO UPDATE SET project_id = excluded.project_id,
              title = excluded.title, agent = excluded.agent, model = excluded.model,
              session_id = excluded.session_id, access_mode = excluded.access_mode,
              goal = excluded.goal, effort = excluded.effort, archived_at = excluded.archived_at,
-             parent = excluded.parent, plan_mode = excluded.plan_mode",
+             parent = excluded.parent, plan_mode = excluded.plan_mode,
+             slash_commands = excluded.slash_commands",
         params![
             t.id,
             t.project_id,
@@ -436,7 +437,8 @@ fn save_thread_row(tx: &Transaction, t: &Thread) -> rusqlite::Result<()> {
             t.effort,
             t.archived_at,
             t.parent.as_ref().map(json),
-            t.plan_mode
+            t.plan_mode,
+            json(&t.slash_commands)
         ],
     )?;
     Ok(())
@@ -521,7 +523,7 @@ fn load_folders(conn: &Connection) -> rusqlite::Result<Vec<Folder>> {
 fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
     let mut stmt = conn.prepare(
         "SELECT id, project_id, title, agent, model, session_id, created_at, access_mode, goal,
-                position, folder_id, effort, archived_at, parent, plan_mode
+                position, folder_id, effort, archived_at, parent, plan_mode, slash_commands
          FROM threads ORDER BY position",
     )?;
     let mut threads: Vec<Thread> = stmt
@@ -547,6 +549,7 @@ fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
                     .get::<_, Option<String>>(13)?
                     .and_then(|p| serde_json::from_str(&p).ok()),
                 plan_mode: r.get(14)?,
+                slash_commands: from_json(r.get(15)?),
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
@@ -676,6 +679,7 @@ mod tests {
             archived_at: None,
             parent: None,
             plan_mode: false,
+            slash_commands: vec![],
         }
     }
 
@@ -734,6 +738,10 @@ mod tests {
         store
             .update_thread(&t.id, |t| {
                 t.title = "renamed".into();
+                t.slash_commands = vec![crate::types::ProviderSlashCommand {
+                    name: "review".into(),
+                    description: Some("Review the current changes".into()),
+                }];
                 t.messages[0].text.push('b');
                 t.messages.push(message("c", MessageStatus::Complete));
             })
@@ -743,6 +751,8 @@ mod tests {
         let store = Store::open(dir.clone()).unwrap();
         let loaded = store.thread(&t.id).unwrap();
         assert_eq!(loaded.title, "renamed");
+        assert_eq!(loaded.slash_commands[0].name, "review");
+        assert_eq!(loaded.slash_commands[0].description.as_deref(), Some("Review the current changes"));
         let texts: Vec<_> = loaded.messages.iter().map(|m| m.text.as_str()).collect();
         assert_eq!(texts, ["ab", "c"]);
         assert_eq!(store.session_keys(), [(AgentKind::Antigravity, "s".to_string())]);

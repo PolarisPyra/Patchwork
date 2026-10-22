@@ -10,6 +10,7 @@ interface Props {
   agents: AgentKind[];
   models: Partial<Record<AgentKind, ModelOption[]>>;
   onPick: (agent: AgentKind, model: string | null) => void;
+  openRequest?: number;
 }
 const PROVIDER_NAMES: Record<AgentKind, string> = {
   claude: "Claude",
@@ -46,6 +47,12 @@ function readFavorites(): string[] {
 export default function ModelPicker(props: Props) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
+  const handledOpenRequest = useRef(props.openRequest ?? 0);
+  useEffect(() => {
+    if (props.openRequest === handledOpenRequest.current) return;
+    handledOpenRequest.current = props.openRequest ?? 0;
+    if (props.openRequest) setOpen(true);
+  }, [props.openRequest]);
   const label =
     props.models[props.agent]?.find((m) => m.id === props.model)?.label ?? props.model ?? "Default";
   const close = () => {

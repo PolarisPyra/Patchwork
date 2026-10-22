@@ -90,7 +90,9 @@ pub fn turn_input(spec: &TurnSpec) -> Vec<String> {
     };
     [
         json!({"id": 1, "method": "initialize", "params": {
-            "clientInfo": {"name": "patchwork", "title": "Patchwork", "version": env!("CARGO_PKG_VERSION")}
+            "clientInfo": {"name": "patchwork", "title": "Patchwork", "version": env!("CARGO_PKG_VERSION")},
+            // turn/start collaborationMode is part of Codex's experimental app-server API.
+            "capabilities": {"experimentalApi": true}
         }}),
         json!({"method": "initialized"}),
         json!({"id": THREAD_REQUEST, "method": method, "params": thread}),
@@ -111,12 +113,17 @@ const TURN_REQUEST: u64 = THREAD_REQUEST + 1;
 
 /// What the conversation's first request does once the thread id is known: start the
 /// turn, or carry out a `/goal` command.
-fn begin(spec: &TurnSpec, thread_id: &str) -> Vec<Parsed> {
+fn begin(spec: &TurnSpec, thread_id: &str, resolved_model: Option<&str>) -> Vec<Parsed> {
     let send = |v: Value| Parsed::Send(v.to_string());
     let goal =
         |params: Value| json!({"id": GOAL_REQUEST, "method": "thread/goal/set", "params": params});
     match goal_command(spec) {
-        None => vec![Parsed::Send(turn_start(spec, thread_id, &prompt(spec)))],
+        None => vec![Parsed::Send(turn_start(
+            spec,
+            thread_id,
+            &prompt(spec),
+            resolved_model,
+        ))],
         // The goal waits paused until its first turn runs, so Codex does not start one first.
         Some(GoalCommand::Set(objective)) => vec![
             send(
@@ -127,9 +134,14 @@ fn begin(spec: &TurnSpec, thread_id: &str) -> Vec<Parsed> {
                     "threadId": thread_id, "objective": objective, "status": "paused",
                 }}),
             ),
-            Parsed::Send(turn_start(spec, thread_id, objective)),
+            Parsed::Send(turn_start(spec, thread_id, objective, resolved_model)),
         ],
-        Some(GoalCommand::Resume) => vec![Parsed::Send(turn_start(spec, thread_id, ""))],
+        Some(GoalCommand::Resume) => vec![Parsed::Send(turn_start(
+            spec,
+            thread_id,
+            "",
+            resolved_model,
+        ))],
         Some(GoalCommand::Show) => vec![send(
             json!({"id": GOAL_REQUEST, "method": "thread/goal/get", "params": {"threadId": thread_id}}),
         )],
@@ -211,7 +223,7 @@ fn goal_reply(spec: &TurnSpec, result: &Value) -> String {
 }
 
 /// The approval policy, reviewer, and sandbox for each access mode.
-fn turn_start(spec: &TurnSpec, thread_id: &str, text: &str) -> String {
+fn turn_start(spec: &TurnSpec, thread_id: &str, text: &str, resolved_model: Option<&str>) -> String {
     let (policy, reviewer, sandbox) = match spec.mode {
         AccessMode::Supervised => ("untrusted", "user", "readOnly"),
         AccessMode::AutoAcceptEdits => ("on-request", "user", "workspaceWrite"),
@@ -234,7 +246,12 @@ fn turn_start(spec: &TurnSpec, thread_id: &str, text: &str) -> String {
     }
     // Plan mode is a collaboration mode, which names its model; the turn leaves it again in
     // default mode. Without a model to name, the mode is not sent.
-    if let Some(model) = spec.model.map(String::from).or_else(configured_model) {
+    if let Some(model) = spec
+        .model
+        .map(String::from)
+        .or_else(|| resolved_model.map(String::from))
+        .or_else(configured_model)
+    {
         let (mode, instructions) = if spec.plan {
             ("plan", Some(PLAN_INSTRUCTIONS))
         } else {
@@ -483,7 +500,11 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                 && let Some(thread_id) = v["result"]["thread"]["id"].as_str()
             {
                 out.push(Parsed::SessionId(thread_id.into()));
-                out.extend(begin(spec, thread_id));
+                out.extend(begin(
+                    spec,
+                    thread_id,
+                    v["result"]["thread"]["model"].as_str(),
+                ));
             } else if id == TURN_REQUEST
                 && matches!(
                     goal_command(spec),
@@ -603,6 +624,7 @@ mod tests {
             .map(|l| serde_json::from_str(l).unwrap())
             .collect();
         assert_eq!(new[0]["method"], "initialize");
+        assert_eq!(new[0]["params"]["capabilities"]["experimentalApi"], true);
         assert_eq!(new[1]["method"], "initialized");
         assert_eq!(new[2]["method"], "thread/start");
         assert_eq!(new[2]["params"]["cwd"], "/abs");
@@ -612,8 +634,13 @@ mod tests {
         assert_eq!(resume["method"], "thread/resume");
         assert_eq!(resume["params"]["threadId"], "sid");
 
-        let response = json!({"id": THREAD_REQUEST, "result": {"thread": {"id": "t1"}}});
-        let out = parse(&response, &spec(None, AccessMode::Supervised), "m1");
+        let response = json!({"id": THREAD_REQUEST, "result": {"thread": {
+            "id": "t1", "model": "codex-resolved-model"
+        }}});
+        let mut plan_spec = spec(None, AccessMode::Supervised);
+        plan_spec.model = None;
+        plan_spec.plan = true;
+        let out = parse(&response, &plan_spec, "m1");
         assert!(matches!(&out[0], Parsed::SessionId(id) if id == "t1"));
         let turn = &sent(&out)[0];
         assert_eq!(turn["method"], "turn/start");
@@ -621,6 +648,11 @@ mod tests {
         assert_eq!(turn["params"]["input"][0]["text"], "go");
         assert_eq!(turn["params"]["approvalPolicy"], "untrusted");
         assert_eq!(turn["params"]["sandboxPolicy"]["type"], "readOnly");
+        assert_eq!(turn["params"]["collaborationMode"]["mode"], "plan");
+        assert_eq!(
+            turn["params"]["collaborationMode"]["settings"]["model"],
+            "codex-resolved-model"
+        );
     }
 
     #[test]

@@ -31,11 +31,27 @@ pub(crate) fn next_goal(current: Option<&Goal>, update: GoalUpdate) -> Option<Go
     }
 }
 
+/// Whether the agent still holds a goal that ended in `status`, and so has to be told to drop
+/// it: Claude restores an unmet goal whenever its session resumes, Codex keeps a stopped goal
+/// paused, and Antigravity keeps a goal per conversation. Claude has already dropped a goal its
+/// evaluator judged impossible (blocked).
+pub(crate) fn agent_keeps(agent: AgentKind, status: GoalStatus) -> bool {
+    status != GoalStatus::Complete && !(agent == AgentKind::Claude && status == GoalStatus::Blocked)
+}
+
+/// The message that has the agent drop its goal. Antigravity has no command to clear a goal;
+/// its docs say to ask the agent.
+pub(crate) fn clear_command(agent: AgentKind) -> &'static str {
+    match agent {
+        AgentKind::Antigravity => "Stop the current goal.",
+        _ => "/goal clear",
+    }
+}
+
 impl Server {
-    /// Clears the goal, in the agent's session too: Claude restores an unmet goal whenever its
-    /// session resumes, Codex keeps a stopped goal paused, and Antigravity keeps a goal per
-    /// conversation, so each would otherwise pick it up again. Stopping a turn is separate
-    /// (`cancel_turn`), which leaves the goal paused.
+    /// Clears the goal, in the agent's session too, so the agent does not pick it up again.
+    /// A goal also clears on its own once it is met or judged impossible, or when the user stops
+    /// the turn pursuing it (see the end of `runner::drive`).
     pub fn stop_goal(self: &Arc<Self>, thread_id: &str) -> Res<()> {
         let Some(thread) = self.store.thread(thread_id) else {
             return Ok(());
@@ -50,17 +66,9 @@ impl Server {
             thread_id: thread_id.into(),
             event: AgentEvent::GoalUpdated { goal: None },
         });
-        // Claude has already dropped a goal its evaluator judged impossible (blocked).
-        let unfinished = status.is_some_and(|s| {
-            s != GoalStatus::Complete
-                && !(thread.agent == AgentKind::Claude && s == GoalStatus::Blocked)
-        });
+        let unfinished = status.is_some_and(|s| agent_keeps(thread.agent, s));
         if unfinished && thread.session_id.is_some() {
-            // Antigravity has no command to clear a goal; its docs say to ask the agent.
-            let stop = match thread.agent {
-                AgentKind::Antigravity => "Stop the current goal.",
-                _ => "/goal clear",
-            };
+            let stop = clear_command(thread.agent);
             self.send_message(thread_id.into(), stop.into(), vec![], false)?;
         }
         Ok(())

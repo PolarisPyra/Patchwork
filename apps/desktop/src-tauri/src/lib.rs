@@ -269,6 +269,26 @@ fn remove_queued(server: Srv, thread_id: String, message_id: String) -> Res<()> 
 }
 
 #[tauri::command]
+fn edit_queued(server: Srv, thread_id: String, message_id: String, text: String, attachments: Vec<Attachment>) -> Res<()> {
+    server.edit_queued(&thread_id, &message_id, text, attachments)
+}
+
+#[tauri::command]
+async fn resume_queued(server: Srv<'_>, thread_id: String) -> Res<()> {
+    let server = server.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || server.resume_queued(&thread_id))
+        .await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn steer_queued(server: Srv<'_>, thread_id: String, message_id: String) -> Res<()> {
+    let server = server.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || server.steer_queued(&thread_id, &message_id))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 async fn stop_goal(server: Srv<'_>, thread_id: String) -> Res<()> {
     // Starts the turn that clears the agent's goal, so it runs off the main thread.
     let server = server.inner().clone();
@@ -542,6 +562,9 @@ pub fn run() {
             stop_goal,
             stop_subagent,
             remove_queued,
+            edit_queued,
+            resume_queued,
+            steer_queued,
             respond_approval,
             scan_imports,
             import_threads,

@@ -135,6 +135,15 @@ pub struct ModelOption {
     pub default_model: Option<String>,
 }
 
+/// A slash command advertised by a provider CLI for this thread/workspace.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderSlashCommand {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
 /// The shells the Settings dropdown offers, and the one "System default" resolves to.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -478,6 +487,9 @@ pub struct Thread {
     /// Turns run in plan mode: the agent plans and proposes, without changing files.
     #[serde(default)]
     pub plan_mode: bool,
+    /// Provider-native commands discovered from the CLI's initialization frame.
+    #[serde(default)]
+    pub slash_commands: Vec<ProviderSlashCommand>,
 }
 
 /// Where a subagent's thread came from.
@@ -656,6 +668,10 @@ pub enum AgentEvent {
     GoalUpdated {
         goal: Option<Goal>,
     },
+    /// Provider-native slash command names advertised by the active CLI session.
+    SlashCommandsUpdated {
+        commands: Vec<ProviderSlashCommand>,
+    },
     /// The tokens a reply has used so far; replaces the count it had.
     Usage {
         message_id: String,
@@ -675,9 +691,17 @@ pub enum AgentEvent {
         message_id: String,
         queued: bool,
     },
+    /// A queued message was promoted into the running turn.
+    MessageSteered {
+        message_id: String,
+    },
     /// A queued message was taken back, so it leaves the thread.
     MessageRemoved {
         message_id: String,
+    },
+    /// A queued message was edited in place.
+    MessageEdited {
+        message: Message,
     },
     /// A background shell command started and is still running.
     BackgroundTaskStarted {

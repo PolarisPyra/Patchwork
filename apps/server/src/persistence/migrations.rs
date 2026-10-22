@@ -90,6 +90,8 @@ const MIGRATIONS: &[&str] = &[
     ALTER TABLE threads ADD COLUMN parent TEXT;
     ALTER TABLE threads ADD COLUMN plan_mode INTEGER NOT NULL DEFAULT 0;
     ",
+    // 16: provider-native slash commands discovered in the CLI initialization frame.
+    "ALTER TABLE threads ADD COLUMN slash_commands TEXT NOT NULL DEFAULT '[]';",
 ];
 
 /// Brings the schema up to date. Returns the version the database was at before.

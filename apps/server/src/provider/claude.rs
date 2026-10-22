@@ -441,6 +441,16 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
             if let Some(id) = v["session_id"].as_str() {
                 out.push(Parsed::SessionId(id.into()));
             }
+            let commands = v["slash_commands"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(|name| name.trim().trim_start_matches('/').to_owned())
+                .filter(|name| !name.is_empty())
+                .map(|name| ProviderSlashCommand { name, description: None })
+                .collect::<Vec<_>>();
+            out.push(Parsed::SlashCommands(commands));
         }
         // Text arrives token by token in `stream_event`s; the full `assistant` text is skipped.
         Some("stream_event") => {
@@ -625,12 +635,21 @@ mod tests {
         let init =
             json!({"type": "system", "subtype": "init", "cwd": "/abs", "session_id": "9578"});
         let out = parse(&init, "/abs", "m1");
-        assert!(matches!(out.as_slice(), [Parsed::SessionId(id)] if id == "9578"));
+        assert!(out.iter().any(|item| matches!(item, Parsed::SessionId(id) if id == "9578")));
+        assert!(out.iter().any(|item| matches!(item, Parsed::SlashCommands(commands) if commands.is_empty())));
 
         let hook = json!({"type": "system", "subtype": "hook_started"});
         assert!(parse(&hook, "/abs", "m1").is_empty());
         let rate = json!({"type": "rate_limit_event"});
         assert!(parse(&rate, "/abs", "m1").is_empty());
+    }
+
+    #[test]
+    fn init_advertises_native_slash_commands() {
+        let init = json!({"type":"system","subtype":"init","session_id":"s","slash_commands":["compact","review"]});
+        let parsed = parse(&init, "/", "m");
+        assert!(parsed.iter().any(|item| matches!(item, Parsed::SlashCommands(commands)
+            if commands.iter().map(|command| command.name.as_str()).collect::<Vec<_>>() == ["compact", "review"])));
     }
 
     #[test]

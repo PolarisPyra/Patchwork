@@ -114,8 +114,12 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   // The sidebar shows where threads sit and their status, never message text. Its props keep
   // their identity until something it shows changes, so streamed text does not re-render it.
   const sidebarKey = threads.map(sidebarSignature).join("\n");
+  const selectedId = selected?.id ?? null;
   const sidebarThreads = useMemo(
-    () => ({ live: liveThreads, archived: archivedThreads }),
+    () => ({
+      live: liveThreads,
+      archived: archivedThreads,
+    }),
     [sidebarKey],
   );
   const agentsKey = connectedAgents.join();
@@ -549,7 +553,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
             leavingIds={leavingIds}
             treeRowsRef={treeRowsRef}
             archivedThreads={sidebarThreads.archived}
-            selectedId={selected?.id ?? null}
+            selectedId={selectedId}
             changes={changes}
             changeFocus={changeFocus}
             folders={folders}

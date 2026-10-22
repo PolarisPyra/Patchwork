@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUpIcon, ListChecksIcon, SquareIcon } from "@phosphor-icons/react";
+import { ArrowUpIcon, CaretDownIcon, CheckIcon, SquareIcon } from "@phosphor-icons/react";
 import { EditorContent, useEditor } from "@tiptap/react";
-import { api, type AccessMode, type AgentKind, type Attachment, type ModelOption } from "~/api";
+import {
+  api,
+  type AccessMode,
+  type AgentKind,
+  type Attachment,
+  type ModelOption,
+  type ProviderSlashCommand,
+} from "~/api";
 import AccessPicker from "~/components/chat/AccessPicker";
 import EffortPicker from "~/components/chat/EffortPicker";
 import AttachmentChip from "~/components/chat/AttachmentChip";
@@ -12,7 +19,7 @@ import {
   type MentionSuggestion,
 } from "~/components/chat/composerExtensions";
 import FormatBar from "~/components/chat/FormatBar";
-import ModelPicker, { CHIP_CLASS } from "~/components/chat/ModelPicker";
+import ModelPicker from "~/components/chat/ModelPicker";
 
 interface ComposerProps {
   /** The draft as Markdown. */
@@ -20,6 +27,12 @@ interface ComposerProps {
   onChange: (text: string) => void;
   /** Sends the draft; `queue` holds it for after the running turn instead of steering the turn. */
   onSubmit: (queue: boolean) => void;
+  /** Promotes the first queued message while preserving the current draft. */
+  onSteerQueued: () => void;
+  onEditLatestQueued: () => void;
+  canSteerQueued: boolean;
+  editingQueued: boolean;
+  canQueueFollowUp: boolean;
   onStop: () => void;
   working: boolean;
   error: string | null;
@@ -29,11 +42,11 @@ interface ComposerProps {
   agents: AgentKind[];
   /** Picking another agent's model switches the agent too. */
   onPickModel: (agent: AgentKind, model: string | null) => void;
+  modelPickerRequest: number;
+  providerSlashCommands: ProviderSlashCommand[];
+  onSelectSlashCommand: (name: string) => boolean;
   accessMode: AccessMode;
   onPickAccess: (mode: AccessMode) => void;
-  /** Whether turns run in plan mode; null hides the toggle (the agent has no plan mode). */
-  planMode: boolean | null;
-  onTogglePlan: () => void;
   effort: string | null;
   onPickEffort: (effort: string | null) => void;
   attachments: Attachment[];
@@ -63,6 +76,9 @@ interface Recalled {
 
 /** Slash commands offered while the draft is a single "/word". */
 const COMMANDS = [
+  { name: "/model", description: "Switch the response model for this chat" },
+  { name: "/plan", description: "Switch this chat into plan mode" },
+  { name: "/default", description: "Switch this chat back to normal mode" },
   { name: "/goal", description: "Keep working until a condition is met" },
   { name: "/new", description: "Start a fresh chat in this project" },
   { name: "/clear", description: "Delete this chat's messages and start the agent fresh" },
@@ -128,6 +144,11 @@ export default function Composer({
   value,
   onChange,
   onSubmit,
+  onSteerQueued,
+  onEditLatestQueued,
+  canSteerQueued,
+  editingQueued,
+  canQueueFollowUp,
   onStop,
   working,
   error,
@@ -135,10 +156,11 @@ export default function Composer({
   model,
   agents,
   onPickModel,
+  modelPickerRequest,
+  providerSlashCommands,
+  onSelectSlashCommand,
   accessMode,
   onPickAccess,
-  planMode,
-  onTogglePlan,
   effort,
   onPickEffort,
   attachments,
@@ -153,12 +175,23 @@ export default function Composer({
   // The slash menu lists commands for a draft that is still one "/word"; Escape hides it
   // until the draft changes again.
   const [menuClosed, setMenuClosed] = useState(false);
+  const [dispatchMenuOpen, setDispatchMenuOpen] = useState(false);
   const [commandIndex, setCommandIndex] = useState(0);
   const slash = agent !== "antigravity" && /^\/\S*$/.test(value) ? value.toLowerCase() : null;
+  const builtInNames = new Set(COMMANDS.map((command) => command.name.slice(1)));
+  const commands = [
+    ...COMMANDS,
+    ...providerSlashCommands
+      .filter((command) => !builtInNames.has(command.name.replace(/^\//, "")))
+      .map((command) => ({
+        name: command.name.startsWith("/") ? command.name : `/${command.name}`,
+        description: command.description ?? "Claude Code command",
+      })),
+  ];
   const matches =
     slash === null
       ? []
-      : COMMANDS.flatMap((c) => {
+      : commands.flatMap((c) => {
           const score = commandScore(c.name, slash.slice(1));
           return score === null ? [] : [{ ...c, score }];
         }).sort((a, b) => a.score - b.score);
@@ -249,7 +282,14 @@ export default function Composer({
   const keyDown = useRef<(event: KeyboardEvent) => boolean>(() => false);
 
   // Holds the next message for after the running turn. Cleared by each send.
-  const [queueNext, setQueueNext] = useState(false);
+  // Match T3's default follow-up behavior: a message sent during generation queues.
+  const [queueNext, setQueueNext] = useState(true);
+  // While an autonomous goal is running, new follow-ups wait by default. Sending remains
+  // explicit: Enter or the send button enqueues the current draft, and the user can switch to
+  // Steer before sending when they want to interrupt the current step.
+  useEffect(() => {
+    setQueueNext(true);
+  }, [working, goalActive]);
 
   const editor = useEditor({
     extensions: composerExtensions("Reply or describe the next change…", mentionSuggestion),
@@ -346,6 +386,15 @@ export default function Composer({
     changed.current(editor.getMarkdown());
   }
 
+  function selectCommand(name: string) {
+    if (onSelectSlashCommand(name)) {
+      editor?.chain().focus().clearContent().run();
+      changed.current("");
+      return;
+    }
+    complete(name);
+  }
+
   /** Up from the first line recalls the previous message, Down the next; past the newest, the
    * draft empties. Editing a recalled message leaves the history. */
   function stepHistory(event: KeyboardEvent, ed: NonNullable<typeof editor>): boolean {
@@ -381,6 +430,15 @@ export default function Composer({
 
   function handleKey(event: KeyboardEvent): boolean {
     if (!editor || event.isComposing) return false;
+    if (
+      event.key === "Enter" &&
+      event.shiftKey &&
+      (event.metaKey || event.ctrlKey) &&
+      canSteerQueued
+    ) {
+      onSteerQueued();
+      return true;
+    }
     // While the @ menu is open, the editor's suggestion handler gets the keys.
     if (mentionOpen.current) return false;
     if (!menuOpen && stepHistory(event, editor)) return true;
@@ -407,6 +465,10 @@ export default function Composer({
         return true;
       }
     }
+    if (event.key === "ArrowUp" && event.altKey && !value.trim()) {
+      onEditLatestQueued();
+      return true;
+    }
     // Escape leaves the composer, so the page's keys work again.
     if (event.key === "Escape") {
       editor.commands.blur();
@@ -415,7 +477,7 @@ export default function Composer({
     // Enter sends, unless the draft is over the limit; Shift+Enter continues a list, or starts a
     // new line (the editor's default) elsewhere.
     if (event.key === "Enter" && !event.shiftKey) {
-      if (overBy <= 0) sendDraft();
+      if (overBy <= 0) sendDraft(working && (event.metaKey || event.ctrlKey));
       return true;
     }
     if (event.key === "Enter" && continueList(editor)) return true;
@@ -423,9 +485,18 @@ export default function Composer({
   }
   keyDown.current = handleKey;
 
-  function sendDraft() {
-    onSubmit(working && queueNext);
-    setQueueNext(false);
+  function sendDraft(alternate = false) {
+    const queue = working && (alternate ? !queueNext : queueNext);
+    if (queue && !canQueueFollowUp && !editingQueued) return;
+    onSubmit(queue);
+    setQueueNext(true);
+  }
+
+  function submitAs(queue: boolean) {
+    if (queue && !canQueueFollowUp) return;
+    onSubmit(queue);
+    setQueueNext(true);
+    setDispatchMenuOpen(false);
   }
 
   const surface = dropping
@@ -450,7 +521,7 @@ export default function Composer({
               className={`flex w-full cursor-pointer items-baseline gap-2.5 rounded-[var(--radius)] border-none px-2 py-1.5 text-left ${c.name === activeCommand?.name ? "bg-selected" : "bg-transparent hover:bg-hover"}`}
               // Keeps the focus in the editor.
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => complete(c.name)}
+              onClick={() => selectCommand(c.name)}
             >
               <span className="font-[family-name:var(--font-mono)] text-fg">{c.name}</span>
               <span className="text-[length:var(--fs-sm)] text-fg-muted">{c.description}</span>
@@ -493,21 +564,10 @@ export default function Composer({
           agents={agents}
           models={models}
           onPick={onPickModel}
+          openRequest={modelPickerRequest}
         />
         <EffortPicker agent={agent} effort={effort} onPick={onPickEffort} />
         <AccessPicker mode={accessMode} onPick={onPickAccess} />
-        {planMode !== null && (
-          <button
-            type="button"
-            aria-pressed={planMode}
-            title="Plan mode: the agent plans and proposes a plan without changing files"
-            onClick={onTogglePlan}
-            className={`${CHIP_CLASS} ${planMode ? "bg-selected-muted text-fg" : ""}`}
-          >
-            <ListChecksIcon size={16} />
-            <span>Plan</span>
-          </button>
-        )}
         <span className="flex-1" />
         {/* Hidden when the composer is too narrow for the pickers and the formatting buttons together. */}
         <div className="hidden @[640px]:block">
@@ -523,34 +583,45 @@ export default function Composer({
             <SquareIcon size={12} weight="fill" />
           </button>
         )}
-        {working && (
-          <button
-            className="h-8 flex-none cursor-pointer rounded-[var(--radius)] border border-border bg-transparent px-2 text-[length:var(--fs-sm)] text-fg-muted hover:bg-hover aria-[pressed=true]:bg-selected-muted aria-[pressed=true]:text-fg"
-            onClick={() => setQueueNext(!queueNext)}
-            aria-pressed={queueNext}
-            title={
-              queueNext
-                ? "Sends after the running turn ends. Click to steer the turn instead."
-                : "Steers the running turn. Click to send after it ends instead."
-            }
-          >
-            {queueNext ? "Queue" : "Steer"}
-          </button>
-        )}
         {(!working || value.trim() || attachments.length > 0) && (
-          <button
-            className="grid h-8 w-8 flex-none cursor-pointer place-items-center rounded-[var(--radius)] border-none bg-accent text-on-accent enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-selected-muted disabled:text-fg-subtle"
-            onClick={sendDraft}
-            disabled={(!value.trim() && attachments.length === 0) || overBy > 0}
-            title={
-              working ? (queueNext ? "Queue for after the turn" : "Steer the running turn") : "Send"
-            }
-            aria-label={
-              working ? (queueNext ? "Queue for after the turn" : "Steer the running turn") : "Send"
-            }
-          >
-            <ArrowUpIcon size={16} />
-          </button>
+          <div className="relative flex flex-none items-center">
+            <button
+              className={`grid h-8 w-8 cursor-pointer place-items-center ${working && !editingQueued ? "rounded-l-[var(--radius)]" : "rounded-[var(--radius)]"} border-none bg-accent text-on-accent enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-selected-muted disabled:text-fg-subtle`}
+              onClick={() => sendDraft()}
+              disabled={(!value.trim() && attachments.length === 0) || overBy > 0 || (working && queueNext && !canQueueFollowUp && !editingQueued)}
+              title={editingQueued ? "Update queued message" : working ? (queueNext ? "Queue for after the turn" : "Steer the running turn") : "Send"}
+              aria-label={editingQueued ? "Update queued message" : working ? (queueNext ? "Queue message" : "Steer message") : "Send"}
+            >
+              {editingQueued ? <CheckIcon size={16} /> : <ArrowUpIcon size={16} />}
+            </button>
+            {working && !editingQueued && (
+              <>
+                <button
+                  type="button"
+                  className="grid h-8 w-6 cursor-pointer place-items-center rounded-r-[var(--radius)] border-0 border-l border-l-on-accent/20 bg-accent text-on-accent hover:bg-accent-hover"
+                  onClick={() => setDispatchMenuOpen((open) => !open)}
+                  disabled={overBy > 0 || (!value.trim() && attachments.length === 0)}
+                  aria-expanded={dispatchMenuOpen}
+                  aria-label="Choose queue or steer"
+                  title="Choose queue or steer"
+                >
+                  <CaretDownIcon size={12} />
+                </button>
+                {dispatchMenuOpen && (
+                  <div className="absolute right-0 bottom-full z-50 mb-1.5 flex min-w-48 flex-col gap-px rounded-[var(--radius)] border border-border bg-panel p-1 shadow-[var(--shadow-popup)]">
+                    <button disabled={overBy > 0} className="w-full cursor-pointer rounded-[var(--radius-sm)] border-none bg-transparent px-2.5 py-2 text-left text-fg hover:bg-hover disabled:cursor-default disabled:opacity-40" onClick={() => submitAs(false)}>
+                      Steer current turn
+                      <span className="mt-0.5 block text-[length:var(--fs-xs)] text-fg-subtle">Send this message into the active turn</span>
+                    </button>
+                    <button disabled={overBy > 0 || !canQueueFollowUp} className="w-full cursor-pointer rounded-[var(--radius-sm)] border-none bg-transparent px-2.5 py-2 text-left text-fg hover:bg-hover disabled:cursor-default disabled:opacity-40" onClick={() => submitAs(true)}>
+                      Queue for next turn
+                      <span className="mt-0.5 block text-[length:var(--fs-xs)] text-fg-subtle">{canQueueFollowUp ? "Wait until the active turn finishes" : "Edit or remove the queued message first"}</span>
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         )}
       </div>
       {error && <div className="text-[length:var(--fs-sm)] text-danger">{error}</div>}

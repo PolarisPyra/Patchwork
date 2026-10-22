@@ -393,24 +393,47 @@ impl Runner {
         text: &str,
         attachments: &[Attachment],
         images: &[provider::Image],
-    ) -> bool {
+    ) -> Result<bool, String> {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(turn) = turns.get(thread_id) else {
-            return false;
+            return Ok(false);
         };
+        let mut queue = turn.queue.lock().unwrap_or_else(PoisonError::into_inner);
+        if !queue.is_empty() {
+            return Err("Only one message can be queued at a time. Edit or remove the queued message first.".into());
+        }
         self.handed_over
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .insert(message_id.into());
-        turn.queue
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(FollowUp {
-                message_id: message_id.into(),
-                text: text.into(),
-                attachments: attachments.to_vec(),
-                images: images.to_vec(),
-            });
+        queue.push(FollowUp {
+            message_id: message_id.into(),
+            text: text.into(),
+            attachments: attachments.to_vec(),
+            images: images.to_vec(),
+        });
+        Ok(true)
+    }
+
+    /// Replaces the payload of a queued message in the active turn. False if it has already
+    /// been promoted, withdrawn, or the turn ended.
+    pub fn edit_queued(
+        &self,
+        thread_id: &str,
+        message_id: &str,
+        text: &str,
+        attachments: &[Attachment],
+        images: &[provider::Image],
+    ) -> bool {
+        let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+        let Some(turn) = turns.get(thread_id) else { return false };
+        let mut queue = turn.queue.lock().unwrap_or_else(PoisonError::into_inner);
+        let Some(follow_up) = queue.iter_mut().find(|f| f.message_id == message_id) else {
+            return false;
+        };
+        follow_up.text = text.into();
+        follow_up.attachments = attachments.to_vec();
+        follow_up.images = images.to_vec();
         true
     }
 
@@ -435,6 +458,10 @@ impl Runner {
             let mut queue = turn.queue.lock().unwrap_or_else(PoisonError::into_inner);
             if let Some(index) = queue.iter().position(|f| f.message_id == message_id) {
                 queue.remove(index);
+                self.handed_over
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .remove(message_id);
                 return true;
             }
         }
@@ -443,6 +470,37 @@ impl Runner {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .contains(message_id)
+    }
+
+    /// Promotes an existing queued message into the active turn without removing and recreating
+    /// it. Returns false if the message is no longer queued or cannot be written to the agent.
+    pub fn promote_queued(
+        &self,
+        thread_id: &str,
+        message_id: &str,
+        session_id: Option<&str>,
+        subagents: &[String],
+    ) -> bool {
+        self.background_subagents(thread_id, subagents);
+        let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+        let Some(turn) = turns.get(thread_id) else { return false };
+        let mut queue = turn.queue.lock().unwrap_or_else(PoisonError::into_inner);
+        let Some(index) = queue.iter().position(|f| f.message_id == message_id) else { return false };
+        if turn.cancelled.load(Ordering::SeqCst) { return false; }
+        let follow_up = queue.remove(index);
+        let turn_id = turn.native_turn.lock().unwrap_or_else(PoisonError::into_inner).clone();
+        let line = provider::steer_input(
+            turn.agent, &follow_up.text, &follow_up.attachments, &follow_up.images,
+            session_id, turn_id.as_deref(),
+        );
+        let mut stdin = turn.stdin.lock().unwrap_or_else(PoisonError::into_inner);
+        if line.as_deref().is_some_and(|line| write_to(&mut stdin, line)) {
+            turn.steers.lock().unwrap_or_else(PoisonError::into_inner).push_back(follow_up);
+            true
+        } else {
+            queue.insert(index, follow_up);
+            false
+        }
     }
 
     /// Stops one subagent of the running turn, leaving the rest of the turn going.
@@ -662,7 +720,7 @@ fn close_stdin_unless_steered(stdin: &Stdin, steers: &Steers) {
 
 /// How long Codex has to start its next turn toward an active goal after one ends. It starts
 /// one within milliseconds, so a longer wait means the goal is not being pursued.
-const CODEX_GOAL_GRACE: Duration = Duration::from_secs(5);
+const CODEX_GOAL_GRACE: Duration = Duration::from_secs(30);
 
 /// Ends the agent's input once its turn is over. While Codex pursues a goal, the input stays
 /// open for the grace window: a turn started inside it continues the run, and otherwise the
@@ -862,6 +920,7 @@ fn open_child(turn: &Turn, tool: &ToolCall) -> Option<SubagentThread> {
             tool_id: tool.id.clone(),
         }),
         plan_mode: false,
+        slash_commands: vec![],
     };
     if let Err(e) = turn.server.store.insert_threads(vec![thread.clone()]) {
         log::warn!("failed to save a subagent's thread: {e}");
@@ -1145,6 +1204,9 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
                     }
                     turn.session_id = Some(id);
                 }
+                Parsed::SlashCommands(commands) => {
+                    turn.publish(AgentEvent::SlashCommandsUpdated { commands });
+                }
                 Parsed::TaskStarted { tool_id, task_id } => {
                     running_tasks.insert(tool_id.clone(), None);
                     turn.tasks
@@ -1357,18 +1419,16 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
         });
     }
 
-    // A stopped goal is paused; Claude's goal stands as its evaluator last judged it, which
-    // also covers a paused goal that Claude took up again with this run's message.
-    // The stored goal is read again, since the user may have cleared it meanwhile.
-    let goal = turn
-        .server
-        .store
-        .thread(&turn.thread_id)
-        .and_then(|t| t.goal);
+    // Claude's goal stands as its evaluator last judged it, which also covers a paused goal
+    // that Claude took up again with this run's message. The stored goal is read again, since
+    // the user may have cleared it meanwhile.
+    let thread = turn.server.store.thread(&turn.thread_id);
+    let goal = thread.as_ref().and_then(|t| t.goal.clone());
     let pursued = |g: &&Goal| {
         g.status == GoalStatus::Active
             || (turn.agent == AgentKind::Claude && g.status == GoalStatus::Paused)
     };
+    let mut next = goal.clone();
     if let Some(g) = goal.as_ref().filter(pursued) {
         let status = if turn.agent == AgentKind::Claude && status == MessageStatus::Complete {
             // Without a session there is no verdict to read, and nothing is left pursuing
@@ -1380,22 +1440,40 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
             // Antigravity blocks stopping until its goal is verified, so a clean end meets it.
             GoalStatus::Complete
         } else {
-            // Cancelled, failed, or killed: no agent is left pursuing the goal, so it can be resumed.
+            // Failed or killed (a crash, the app quitting, a timeout): no agent is left
+            // pursuing the goal, so it stays paused to resume.
             GoalStatus::Paused
         };
-        if status != g.status {
-            let goal = Some(Goal {
-                status,
-                ..g.clone()
-            });
-            turn.publish(AgentEvent::GoalUpdated { goal });
+        next = Some(Goal {
+            status,
+            ..g.clone()
+        });
+    }
+    // A goal that is met or judged impossible is done with, and so is one whose turn the user
+    // stopped, so each clears without the user having to. Archiving, deleting, and clearing a
+    // chat also stop its turn, but leave its goal to those actions.
+    let user_stopped = cancelled
+        && goal.as_ref().filter(pursued).is_some()
+        && thread.as_ref().is_some_and(|t| t.archived_at.is_none());
+    let done = next
+        .as_ref()
+        .is_some_and(|g| matches!(g.status, GoalStatus::Complete | GoalStatus::Blocked));
+    // The agent is told to drop a goal it would otherwise take up again.
+    let mut clear_in_agent = None;
+    if user_stopped || done {
+        let ended = next.take().map_or(GoalStatus::Paused, |g| g.status);
+        if turn.session_id.is_some() && goal::agent_keeps(turn.agent, ended) {
+            clear_in_agent = Some(goal::clear_command(turn.agent));
         }
     }
+    if next != goal {
+        turn.publish(AgentEvent::GoalUpdated { goal: next });
+    }
 
-    // Forget the turn before announcing it, so a follow-up message sent on
-    // TurnCompleted is not rejected as "already running". Messages that waited for
-    // the turn are taken at the same moment, so none is left behind.
-    let waiting = {
+    // Forget the turn before announcing it. Queued messages remain persisted in the
+    // thread until the user explicitly resumes them; unanswered steers were already
+    // delivered to the agent and continue automatically if needed.
+    let unanswered = {
         let mut turns = turn
             .server
             .runner
@@ -1403,20 +1481,28 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
         turns.remove(&turn.thread_id);
-        let mut waiting =
-            std::mem::take(&mut *turn.queue.lock().unwrap_or_else(PoisonError::into_inner));
-        // Steering messages the agent never answered wait too, unless the turn was
-        // stopped; messages sent after Stop still start the next turn.
+        // Queued messages stay in the thread as queued until the user presses Send.
+        // Steering messages the agent never answered continue automatically unless
+        // the turn was stopped; messages sent after Stop still start the next turn.
         let unanswered = turn
             .steers
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .drain(..)
             .collect::<Vec<_>>();
-        if !cancelled {
-            waiting.extend(unanswered);
+        let queued = std::mem::take(
+            &mut *turn.queue.lock().unwrap_or_else(PoisonError::into_inner),
+        );
+        let mut handed_over = turn
+            .server
+            .runner
+            .handed_over
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        for message in queued {
+            handed_over.remove(&message.message_id);
         }
-        waiting
+        if cancelled { Vec::new() } else { unanswered }
     };
     // Earlier messages of the turn were answered in full before a steer moved it on.
     for id in &segments[..segments.len() - 1] {
@@ -1432,8 +1518,30 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
         error,
     });
 
-    // Waiting messages are sent now, so they leave the queue before the next turn starts.
-    for f in &waiting {
+    // The agent drops the goal in a turn of its own; unanswered steers wait for that
+    // system turn instead. Queued messages remain for the user to send explicitly.
+    if let Some(command) = clear_in_agent {
+        let server = turn.server.clone();
+        match server.send_message(turn.thread_id.clone(), command.into(), vec![], false) {
+            Ok(_) => {
+                for f in &unanswered {
+                    let runner = &server.runner;
+                    let _ = runner.enqueue(
+                        &turn.thread_id,
+                        &f.message_id,
+                        &f.text,
+                        &f.attachments,
+                        &f.images,
+                    );
+                }
+                return;
+            }
+            Err(e) => log::warn!("failed to clear the goal in the agent's session: {e}"),
+        }
+    }
+    // Unanswered steers have already been delivered, so clear their pending UI state
+    // before continuing them in a new turn.
+    for f in &unanswered {
         publish(
             &turn.server,
             &turn.thread_id,
@@ -1443,13 +1551,13 @@ fn drive(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: Joi
             },
         );
     }
-    if !waiting.is_empty() {
-        let text = waiting
+    if !unanswered.is_empty() {
+        let text = unanswered
             .iter()
             .map(|f| f.text.as_str())
             .collect::<Vec<_>>()
             .join("\n\n");
-        let (attachments, images) = waiting.into_iter().map(|f| (f.attachments, f.images)).fold(
+        let (attachments, images) = unanswered.into_iter().map(|f| (f.attachments, f.images)).fold(
             (vec![], vec![]),
             |(mut a, mut i), (fa, fi)| {
                 a.extend(fa);
@@ -1574,8 +1682,10 @@ fn event_message(event: &AgentEvent) -> Option<&str> {
     match event {
         AgentEvent::MessageStarted { .. }
         | AgentEvent::GoalUpdated { .. }
+        | AgentEvent::SlashCommandsUpdated { .. }
         | AgentEvent::ThreadCreated { .. }
         | AgentEvent::MessageRemoved { .. } => None,
+        AgentEvent::MessageEdited { message } => Some(&message.id),
         AgentEvent::TextDelta { message_id, .. }
         | AgentEvent::Thinking { message_id, .. }
         | AgentEvent::ToolStarted { message_id, .. }
@@ -1586,6 +1696,7 @@ fn event_message(event: &AgentEvent) -> Option<&str> {
         | AgentEvent::ApprovalResolved { message_id, .. }
         | AgentEvent::Usage { message_id, .. }
         | AgentEvent::MessageQueued { message_id, .. }
+        | AgentEvent::MessageSteered { message_id }
         | AgentEvent::MessageCutOff { message_id }
         | AgentEvent::PlanProposed { message_id, .. }
         | AgentEvent::BackgroundTaskStarted { message_id, .. }
@@ -1613,8 +1724,18 @@ fn apply(thread: &mut Thread, event: &AgentEvent) {
             thread.goal = goal.clone();
             return;
         }
+        AgentEvent::SlashCommandsUpdated { commands } => {
+            thread.slash_commands = commands.clone();
+            return;
+        }
         AgentEvent::MessageRemoved { message_id } => {
             thread.messages.retain(|m| m.id != *message_id);
+            return;
+        }
+        AgentEvent::MessageEdited { message } => {
+            if let Some(stored) = thread.messages.iter_mut().find(|m| m.id == message.id) {
+                *stored = message.clone();
+            }
             return;
         }
         _ => {}
@@ -1677,6 +1798,7 @@ fn apply(thread: &mut Thread, event: &AgentEvent) {
         AgentEvent::PlanUpdated { steps, .. } => msg.plan = steps.clone(),
         AgentEvent::Usage { usage, .. } => msg.usage = Some(*usage),
         AgentEvent::MessageQueued { queued, .. } => msg.queued = *queued,
+        AgentEvent::MessageSteered { .. } => { msg.queued = false; msg.steer = true; }
         AgentEvent::MessageCutOff { .. } => msg.cut_off = true,
         AgentEvent::PlanProposed { text, .. } => {
             end_thinking(msg);
@@ -1744,8 +1866,10 @@ fn apply(thread: &mut Thread, event: &AgentEvent) {
         }
         AgentEvent::MessageStarted { .. }
         | AgentEvent::GoalUpdated { .. }
+        | AgentEvent::SlashCommandsUpdated { .. }
         | AgentEvent::ThreadCreated { .. }
-        | AgentEvent::MessageRemoved { .. } => {}
+        | AgentEvent::MessageRemoved { .. }
+        | AgentEvent::MessageEdited { .. } => {}
     }
 }
 
