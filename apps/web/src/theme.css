@@ -640,3 +640,15 @@
   display: flex;
   gap: 6px;
 }
+
+/* The dev session (`pnpm tauri dev`) is framed in yellow and black hazard stripes, so it cannot
+   be mistaken for the installed app. main.tsx sets `data-dev-session` only in development. The
+   stripes are the page background and the app is inset by the frame's width. */
+html[data-dev-session] {
+  --dev-frame: 6px;
+  background: repeating-linear-gradient(-45deg, #f5c400 0 10px, #111 10px 20px);
+}
+html[data-dev-session] body {
+  margin: var(--dev-frame);
+  height: calc(100% - 2 * var(--dev-frame));
+}

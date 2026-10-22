@@ -6,6 +6,7 @@
 - The user usually keeps a `pnpm tauri dev` session open and views changes there. Vite hot-reloads UI edits, and Rust changes rebuild on save, so a restart is rarely needed.
 - You may start or restart the dev session yourself when a change needs it or to verify work, with `pnpm tauri dev` from the repo root. Say so when you do, and check first that no reply is streaming, since a restart ends running agent turns. Take screenshots of it only for UI checks or when the user asks.
 - **Previewing the app:** when the user asks to run, preview, or check the app, start it from `~/Projects/PatchworkADE` with `pnpm tauri dev`. If a `pnpm tauri dev` session is already running, use that one rather than starting a second, since both need port 1420.
+- **Telling the dev session apart:** the dev session (`pnpm tauri dev`, or the Vite server at localhost:1420) draws a thick yellow and black hazard-stripe frame around the window, and sets `data-dev-session="true"` on `<html>`. The installed Patchwork has neither. If a screenshot or window has no stripes, it is not the dev session, so do not judge changes by it.
 - **Launch from the repo root.** The root `pnpm tauri` script forwards to `patchwork-desktop`, which owns `@tauri-apps/cli`. Do not run `pnpm exec tauri` from the root; it fails with `Command "tauri" not found`. To check the CLI, use `pnpm tauri --version`.
 
 ## Editing alongside the dev session

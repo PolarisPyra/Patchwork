@@ -5,6 +5,9 @@ import "@fontsource-variable/jetbrains-mono";
 import "./theme.css";
 import App from "~/app/App";
 
+// Marks the dev session: theme.css frames it in hazard stripes, and agents can read the flag.
+if (import.meta.env.DEV) document.documentElement.dataset.devSession = "true";
+
 // The desktop window has no reload shortcut, and the composer editor only rebuilds on a
 // fresh load, so Ctrl+R reloads the webview during development.
 if (import.meta.env.DEV) {
