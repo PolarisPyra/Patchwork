@@ -407,8 +407,9 @@ export default function Composer({
     complete(name);
   }
 
-  /** Unchanged recalled messages cycle directly, including Markdown with multiple blocks.
-   * Editing a recalled message returns the arrows to normal text navigation. */
+  /** Up and Down recall earlier messages only from the first or last line of the draft, counting
+   * wrapped lines. Anywhere else they move the caret a line at a time, so a multi-line draft or a
+   * recalled message can be walked through before the next one is reached. */
   function stepHistory(event: KeyboardEvent, ed: NonNullable<typeof editor>): boolean {
     const back = event.key === "ArrowUp";
     if (
@@ -424,15 +425,14 @@ export default function Composer({
     const { selection, doc } = ed.state;
     if (!selection.empty) return false;
     const at = recalled.current?.text === value ? recalled.current : null;
-    // A new or edited multi-line draft keeps normal caret navigation. A recalled message
-    // stays in history navigation until edited, regardless of its formatting or caret position.
-    if (!at) {
-      const pos = selection.from;
-      const lines = back
-        ? doc.textBetween(0, pos, "\n", "\n")
-        : doc.textBetween(pos, doc.content.size, "\n", "\n");
-      if (lines.includes("\n")) return false;
-    }
+    // The caret must be in the first (Up) or last (Down) block, on that block's top or bottom line.
+    let edgeBlock = -1;
+    doc.descendants((node, pos) => {
+      if (node.isTextblock && (!back || edgeBlock < 0)) edgeBlock = pos;
+      return !node.isTextblock;
+    });
+    if (selection.$from.before() !== edgeBlock) return false;
+    if (!ed.view.endOfTextblock(back ? "up" : "down")) return false;
     const index = at ? history.findIndex((h) => h.id === at.id) : -1;
     if (index < 0 && (value.length > 0 || !back)) return false;
     const next = back ? history[index < 0 ? history.length - 1 : index - 1] : history[index + 1];
