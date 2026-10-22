@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=Patchwork (local build)
+Name=Patchwork
 Comment=An agentic development environment
 Exec=@EXEC@
 Icon=dev.patchwork.ade
