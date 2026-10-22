@@ -5,15 +5,10 @@ import {
   DownloadSimpleIcon,
   FolderSimpleIcon,
   GaugeIcon,
-  GitPullRequestIcon,
-  GlobeIcon,
   KeyboardIcon,
-  PaintBrushIcon,
   PaletteIcon,
-  PlugIcon,
   RobotIcon,
   TerminalIcon,
-  TerminalWindowIcon,
   TrashIcon,
   XIcon,
   type Icon,
@@ -27,7 +22,6 @@ import {
   type AgentStatus,
   type ImportScan,
   type ImportSource,
-  type Integrations,
   type ModelOption,
   type NotificationSettings,
   type Settings,
@@ -49,7 +43,6 @@ type Section =
   | "tokens"
   | "notifications"
   | "imports"
-  | "integrations"
   | "environment"
   | "projects"
   | "shortcuts";
@@ -60,7 +53,6 @@ const SECTIONS: { id: Section; label: string; Icon: Icon }[] = [
   { id: "tokens", label: "AI Tokenomics", Icon: GaugeIcon },
   { id: "notifications", label: "Notifications", Icon: BellIcon },
   { id: "imports", label: "Imports", Icon: DownloadSimpleIcon },
-  { id: "integrations", label: "Integrations", Icon: PlugIcon },
   { id: "environment", label: "Environment", Icon: TerminalIcon },
   { id: "projects", label: "Projects", Icon: FolderSimpleIcon },
   { id: "shortcuts", label: "Shortcuts", Icon: KeyboardIcon },
@@ -124,7 +116,6 @@ export default function SettingsDialog({
             {section === "tokens" && <TokensPane {...paneProps} />}
             {section === "notifications" && <NotificationsPane {...paneProps} />}
             {section === "imports" && <ImportsPane {...paneProps} onImported={onImported} />}
-            {section === "integrations" && <IntegrationsPane {...paneProps} />}
             {section === "environment" && <EnvironmentPane {...paneProps} />}
             {section === "projects" && <ProjectsPane {...paneProps} />}
             {section === "shortcuts" && <ShortcutsPane />}
@@ -655,56 +646,6 @@ function EnvironmentPane({ settings, updateSettings }: PaneProps) {
         </Dropdown>
       </TokenRow>
       {error && <div className="text-[length:var(--fs-sm)] text-danger">{error}</div>}
-    </>
-  );
-}
-
-const INTEGRATIONS: { key: keyof Integrations; label: string; desc: string; Icon: Icon }[] = [
-  {
-    key: "github",
-    label: "GitHub",
-    desc: "Read repositories and pull requests",
-    Icon: GitPullRequestIcon,
-  },
-  {
-    key: "terminal",
-    label: "Terminal",
-    desc: "Let the agent run shell commands without asking",
-    Icon: TerminalWindowIcon,
-  },
-  { key: "figma", label: "Figma", desc: "Read designs from Figma files", Icon: PaintBrushIcon },
-  {
-    key: "browser",
-    label: "Browser",
-    desc: "Let the agent open pages in a browser",
-    Icon: GlobeIcon,
-  },
-];
-
-function IntegrationsPane({ settings, updateSettings }: PaneProps) {
-  return (
-    <>
-      {INTEGRATIONS.map(({ key, label, desc, Icon }) => (
-        <div key={key} className="flex items-center gap-3 border-b border-border py-2.5">
-          <Icon size={16} className="text-fg-subtle" />
-          <div className="min-w-0 flex-1">
-            <div className="font-semibold">{label}</div>
-            <div className="text-[length:var(--fs-sm)] text-fg-muted">{desc}</div>
-          </div>
-          <button
-            className="toggle"
-            role="switch"
-            aria-label={label}
-            aria-checked={settings.integrations[key]}
-            onClick={() =>
-              void updateSettings((s) => ({
-                ...s,
-                integrations: { ...s.integrations, [key]: !s.integrations[key] },
-              }))
-            }
-          />
-        </div>
-      ))}
     </>
   );
 }

@@ -5,7 +5,6 @@ import type { UpdateSettings } from "~/app/App";
 import AgentStep from "~/components/onboarding/AgentStep";
 import DevicesStep from "~/components/onboarding/DevicesStep";
 import ImportsStep, { useImportScans } from "~/components/onboarding/ImportsStep";
-import PluginsStep from "~/components/onboarding/PluginsStep";
 import ProjectsStep from "~/components/onboarding/ProjectsStep";
 import Stepper from "~/components/onboarding/Stepper";
 import { AGENT_KINDS, isReady, useAgentProbes } from "~/components/onboarding/agentProbes";
@@ -38,12 +37,6 @@ const STEPS = [
     title: "Set up your projects",
     subtitle: "Choose where Patchwork should work. You can add and manage projects later.",
     helper: "Projects are optional. You can add more later.",
-  },
-  {
-    label: "Plugins",
-    title: "Choose your integrations",
-    subtitle: "Enable the tools your workflow needs. Everything here is optional.",
-    helper: "Integrations can be changed at any time in Settings.",
   },
   {
     label: "Devices",
@@ -187,8 +180,6 @@ export default function Onboarding({
         );
       case 2:
         return <ProjectsStep settings={settings} updateSettings={updateSettings} />;
-      case 3:
-        return <PluginsStep settings={settings} updateSettings={updateSettings} />;
       default:
         return <DevicesStep />;
     }
