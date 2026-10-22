@@ -31,6 +31,8 @@ interface ComposerProps {
   onSteerQueued: () => void;
   onEditLatestQueued: () => void;
   canSteerQueued: boolean;
+  /** The queued strip is expanded, so Ctrl+Enter presses its Steer button. */
+  queueOpen: boolean;
   editingQueued: boolean;
   canQueueFollowUp: boolean;
   onStop: () => void;
@@ -147,6 +149,7 @@ export default function Composer({
   onSteerQueued,
   onEditLatestQueued,
   canSteerQueued,
+  queueOpen,
   editingQueued,
   canQueueFollowUp,
   onStop,
@@ -434,10 +437,11 @@ export default function Composer({
 
   function handleKey(event: KeyboardEvent): boolean {
     if (!editor || event.isComposing) return false;
+    // Same as clicking the queued strip's Steer button: Ctrl+Enter while it is expanded.
     if (
       event.key === "Enter" &&
-      event.shiftKey &&
       (event.metaKey || event.ctrlKey) &&
+      (event.shiftKey || queueOpen) &&
       canSteerQueued
     ) {
       onSteerQueued();

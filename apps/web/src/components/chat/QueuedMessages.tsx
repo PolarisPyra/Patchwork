@@ -5,7 +5,6 @@ import {
   PencilSimpleIcon,
   XIcon,
 } from "@phosphor-icons/react";
-import { useState } from "react";
 import type { Message } from "~/api";
 import { ComposerStripBody } from "~/components/chat/ComposerStrip";
 
@@ -20,6 +19,9 @@ export default function QueuedMessages({
   messages,
   canEdit,
   canSteer,
+  steerPressed,
+  open,
+  onToggle,
   onEdit,
   onRemove,
   onSteer,
@@ -31,6 +33,10 @@ export default function QueuedMessages({
   /** Queued messages can be edited without replacing the current draft. */
   canEdit: boolean;
   canSteer: boolean;
+  /** Shows the Steer button as pressed, for a steer started from the keyboard. */
+  steerPressed: boolean;
+  open: boolean;
+  onToggle: () => void;
   onEdit: (message: Message) => void;
   onRemove: (message: Message) => void;
   onSteer: (message: Message) => void;
@@ -38,7 +44,6 @@ export default function QueuedMessages({
   editingId: string | null;
   onCancelEdit: () => void;
 }) {
-  const [open, setOpen] = useState(true);
   if (messages.length === 0) return null;
   return (
     <div className="composer-strip mx-2 mb-1.5 overflow-hidden rounded-[var(--radius-sm)] border border-border-strong bg-panel text-[length:var(--fs-sm)] shadow-sm">
@@ -46,7 +51,7 @@ export default function QueuedMessages({
         <button
           type="button"
           aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
+          onClick={onToggle}
           className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 border-none bg-transparent p-0 text-left text-fg-muted hover:text-fg"
         >
           <ListBulletsIcon size={13} className="flex-none text-fg-subtle" />
@@ -105,7 +110,7 @@ export default function QueuedMessages({
               <PencilSimpleIcon size={13} />
             </button>
             <button
-              className="flex h-6 flex-none cursor-pointer items-center gap-1 rounded-[var(--radius-sm)] border border-transparent bg-transparent px-1.5 text-[length:var(--fs-xs)] text-accent-text hover:border-border hover:bg-hover disabled:cursor-default disabled:opacity-40 disabled:text-fg-subtle"
+              className={`flex h-6 flex-none cursor-pointer items-center gap-1 rounded-[var(--radius-sm)] border px-1.5 text-[length:var(--fs-xs)] text-accent-text hover:border-border hover:bg-hover disabled:cursor-default disabled:opacity-40 disabled:text-fg-subtle ${steerPressed ? "border-border bg-hover" : "border-transparent bg-transparent"}`}
               onClick={() => onSteer(message)}
               disabled={!canSteer}
               title="Send this queued message as a steer"

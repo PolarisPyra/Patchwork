@@ -157,6 +157,11 @@ export default function Chat({
   const [error, setError] = useState<string | null>(null);
   // The thread whose large, cold session is asking before a message is sent to it.
   const [resumeAsk, setResumeAsk] = useState<string | null>(null);
+  // Kept here so Ctrl+Enter in the composer can tell whether the queued strip is expanded.
+  const [queueOpen, setQueueOpen] = useState(true);
+  // Ctrl+Enter shows the Steer button as pressed for a moment, as a mouse click would.
+  const [steerPressed, setSteerPressed] = useState(false);
+  const steerPressedTimer = useRef(0);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const key = thread?.id ?? "new";
@@ -779,6 +784,9 @@ export default function Chat({
             messages={queued}
             canEdit={true}
             canSteer={working}
+            steerPressed={steerPressed}
+            open={queueOpen}
+            onToggle={() => setQueueOpen((value) => !value)}
             onEdit={(message) => takeBack(message, true)}
             onRemove={(message) => takeBack(message, false)}
             onSteer={steerQueued}
@@ -807,9 +815,14 @@ export default function Chat({
           onSubmit={submit}
           onEditLatestQueued={editLatestQueued}
           onSteerQueued={() => {
-            if (queued[0]) steerQueued(queued[0]);
+            if (!queued[0]) return;
+            setSteerPressed(true);
+            window.clearTimeout(steerPressedTimer.current);
+            steerPressedTimer.current = window.setTimeout(() => setSteerPressed(false), 150);
+            steerQueued(queued[0]);
           }}
           canSteerQueued={working && queued.length > 0}
+          queueOpen={queueOpen}
           editingQueued={queuedEdit !== null}
           canQueueFollowUp={queued.length === 0}
           onStop={stop}
