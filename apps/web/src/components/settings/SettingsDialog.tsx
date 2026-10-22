@@ -86,7 +86,7 @@ export default function SettingsDialog({
       onMouseDown={onClose}
     >
       <div
-        className="flex h-[460px] max-h-[calc(100vh_-_48px)] w-[640px] max-w-[calc(100vw_-_48px)] overflow-hidden rounded-[var(--radius-lg)] border border-border-strong bg-elevated shadow-[var(--shadow-popup)]"
+        className="flex h-[680px] max-h-[calc(100vh_-_48px)] w-[920px] max-w-[calc(100vw_-_48px)] overflow-hidden rounded-[var(--radius-lg)] border border-border-strong bg-elevated shadow-[var(--shadow-popup)]"
         role="dialog"
         aria-modal="true"
         aria-label="Settings"
