@@ -102,6 +102,7 @@ fn session(meta: &Value, cwd: &str, messages: Vec<SessionMessage>) -> Option<Ses
     Some(Session {
         agent: AgentKind::Antigravity,
         session_id: meta["sessionId"].as_str()?.to_string(),
+        imported: false,
         cwd: cwd.to_string(),
         title: None,
         model: None,

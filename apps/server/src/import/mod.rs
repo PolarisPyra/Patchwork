@@ -2,9 +2,10 @@
 //! outside Patchwork shows up as threads. Each imported thread keeps the CLI's
 //! session id, so follow-up messages resume the original conversation.
 
+mod antigravity;
 mod claude;
 mod codex;
-mod antigravity;
+mod opencode;
 mod t3;
 
 use std::path::Path;
@@ -12,12 +13,19 @@ use std::path::Path;
 use crate::provider;
 use crate::types::*;
 
+/// The longest transcript sent to an agent as context. The newest messages are kept.
+const MAX_CONTEXT_BYTES: usize = 200_000;
+
 /// A conversation read from an agent CLI's session files.
 #[derive(Debug, Clone)]
 pub struct Session {
-    /// The agent that ran the conversation, which resumes it.
+    /// The agent that runs the conversation: the one that resumes it, or for an imported
+    /// transcript, the agent the next turn is sent to.
     pub agent: AgentKind,
     pub session_id: String,
+    /// Read from another app's history. No agent can resume it, so the transcript is sent
+    /// as context instead.
+    pub imported: bool,
     /// Working directory the conversation ran in.
     pub cwd: String,
     pub title: Option<String>,
@@ -39,12 +47,14 @@ pub struct SessionMessage {
 
 /// Every conversation `source` has saved on disk, in no particular order.
 /// Unreadable files and conversations without a user message are skipped.
-pub fn sessions(source: ImportSource) -> Vec<Session> {
+/// `default_agent` continues the imported transcripts, which no agent can resume.
+pub fn sessions(source: ImportSource, default_agent: AgentKind) -> Vec<Session> {
     let all = match source {
         ImportSource::Claude => claude::sessions(),
         ImportSource::Codex => codex::sessions(),
         ImportSource::Antigravity => antigravity::sessions(),
         ImportSource::T3 => t3::sessions(),
+        ImportSource::OpenCode => opencode::sessions(default_agent),
     };
     all.into_iter()
         .filter(|s| s.messages.iter().any(|m| m.role == Role::User))
@@ -96,6 +106,12 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
                 .map(|m| crate::title_from(&m.text))
         })
         .unwrap_or_else(|| "Imported conversation".into());
+    // An imported transcript has no agent session to resume; its first turn sends the transcript.
+    let (session_id, imported_from) = if session.imported {
+        (None, Some(session.session_id))
+    } else {
+        (Some(session.session_id), None)
+    };
     Thread {
         id: new_id(),
         project_id,
@@ -103,7 +119,9 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
         agent: session.agent,
         model: session.model,
         access_mode: AccessMode::default(),
-        session_id: Some(session.session_id),
+        session_id,
+        imported_from,
+        context_pending: session.imported,
         created_at: session.created_at,
         position: -(session.created_at as i64),
         folder_id: None,
@@ -138,4 +156,25 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
             .collect(),
         goal: None,
     }
+}
+
+/// The imported conversation as text for the agent's first turn: the newest messages that fit
+/// in `MAX_CONTEXT_BYTES`, each labelled with who wrote it.
+pub fn transcript(messages: &[Message]) -> String {
+    let mut turns = Vec::new();
+    let mut size = 0;
+    for message in messages.iter().rev() {
+        let who = if message.role == Role::User { "User" } else { "Assistant" };
+        let turn = format!("{who}:\n{}", message.text);
+        size += turn.len();
+        if size > MAX_CONTEXT_BYTES {
+            break;
+        }
+        turns.push(turn);
+    }
+    turns.reverse();
+    format!(
+        "This conversation was imported from OpenCode. Continue it from where it stopped.\n\n{}\n\n---\n\n",
+        turns.join("\n\n")
+    )
 }

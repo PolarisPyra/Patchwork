@@ -121,8 +121,17 @@ impl Runner {
         attachments: Vec<Attachment>,
         images: Vec<provider::Image>,
     ) -> Result<(), String> {
-        let (agent, root, session_id, model, mode, effort, plan) = {
+        let (agent, root, session_id, model, mode, effort, plan, context) = {
             let thread = server.store.thread(&thread_id).ok_or("Task not found")?;
+            // The message being sent is the newest user message; the transcript is what came before.
+            let context = thread.context_pending.then(|| {
+                let end = thread
+                    .messages
+                    .iter()
+                    .rposition(|m| m.role == Role::User)
+                    .unwrap_or(thread.messages.len());
+                crate::import::transcript(&thread.messages[..end])
+            });
             let settings = server.store.settings();
             let root = match &thread.project_id {
                 Some(id) => settings
@@ -145,7 +154,13 @@ impl Runner {
                 thread.access_mode,
                 thread.effort,
                 thread.plan_mode,
+                context,
             )
+        };
+        let sends_context = context.is_some();
+        let text = match context {
+            Some(context) => format!("{context}{text}"),
+            None => text,
         };
         let spec = TurnSpec {
             root: &root,
@@ -188,6 +203,10 @@ impl Runner {
         let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
             return Err("Agent output is unavailable".into());
         };
+        // The agent has the transcript now, so later turns resume its session instead.
+        if sends_context {
+            server.store.update_thread(&thread_id, |t| t.context_pending = false)?;
+        }
         let stderr_tail = std::thread::spawn(move || read_stderr_tail(stderr));
         let stdin: Stdin = Arc::new(Mutex::new(child.stdin.take()));
         for line in &input {
@@ -921,6 +940,8 @@ fn open_child(turn: &Turn, tool: &ToolCall) -> Option<SubagentThread> {
         }),
         plan_mode: false,
         slash_commands: vec![],
+        imported_from: None,
+        context_pending: false,
     };
     if let Err(e) = turn.server.store.insert_threads(vec![thread.clone()]) {
         log::warn!("failed to save a subagent's thread: {e}");

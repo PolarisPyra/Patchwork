@@ -115,6 +115,7 @@ fn parse(reader: impl BufRead) -> Option<Session> {
     Some(Session {
         agent: AgentKind::Codex,
         session_id,
+        imported: false,
         cwd,
         title: None,
         model: None,

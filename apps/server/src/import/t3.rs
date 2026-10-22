@@ -108,6 +108,7 @@ fn read(conn: &Connection) -> rusqlite::Result<Vec<Session>> {
         out.push(Session {
             agent,
             session_id,
+            imported: false,
             // A thread run in a T3 worktree resumes from that worktree.
             cwd: payload["worktreePath"]
                 .as_str()

@@ -490,6 +490,13 @@ pub struct Thread {
     /// Provider-native commands discovered from the CLI's initialization frame.
     #[serde(default)]
     pub slash_commands: Vec<ProviderSlashCommand>,
+    /// The OpenCode session this thread was imported from, so a re-import does not add it again.
+    #[serde(default)]
+    pub imported_from: Option<String>,
+    /// An imported chat whose transcript the next turn sends as context, since no agent session
+    /// holds it yet. Cleared once a turn has started.
+    #[serde(default)]
+    pub context_pending: bool,
 }
 
 /// Where a subagent's thread came from.
@@ -573,7 +580,7 @@ pub struct ProviderUsage {
 }
 
 /// Where imported conversations come from: an agent CLI's own session
-/// files, or another app (T3 Code) that ran those agents.
+/// files, or another app (OpenCode, for one) that ran those agents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ImportSource {
@@ -582,6 +589,7 @@ pub enum ImportSource {
     #[serde(alias = "gemini")]
     Antigravity,
     T3,
+    OpenCode,
 }
 
 /// Conversations a source has saved on disk that can be imported.

@@ -258,6 +258,9 @@ export interface Thread {
   /** Turns run in plan mode: the agent plans and proposes, without changing files. */
   planMode: boolean;
   slashCommands: ProviderSlashCommand[];
+  /** An imported chat that has not been sent yet: its agent can still be picked, and its
+   * transcript goes to the agent with the first message. */
+  contextPending: boolean;
 }
 
 /** A folder inside a project; its tasks are the threads whose `folderId` is its id. */
@@ -294,8 +297,8 @@ export interface ProviderUsage {
   updatedAt: number | null;
 }
 
-/** Where imported conversations come from: an agent CLI, or T3 Code. */
-export type ImportSource = AgentKind | "t3";
+/** Where imported conversations come from: an agent CLI, another app, or OpenCode. */
+export type ImportSource = AgentKind | "t3" | "opencode";
 
 /** Conversations a source saved on disk that can be imported. */
 export interface ImportScan {
@@ -389,11 +392,15 @@ export const AGENT_LABELS: Record<AgentKind, string> = {
   antigravity: "Antigravity CLI",
 };
 
-export const SOURCE_LABELS: Record<ImportSource, string> = { ...AGENT_LABELS, t3: "T3 Code" };
+export const SOURCE_LABELS: Record<ImportSource, string> = {
+  ...AGENT_LABELS,
+  t3: "T3 Code",
+  opencode: "OpenCode",
+};
 
-/** Import sources to offer: each connected agent's own files, plus T3 Code. */
+/** Import sources to offer: each connected agent's own files, plus another app and OpenCode. */
 export function importSourcesFor(agents: AgentKind[]): ImportSource[] {
-  return [...agents, "t3"];
+  return [...agents, "t3", "opencode"];
 }
 
 const agentStatusCache: Partial<Record<AgentKind, AgentStatus>> = {};

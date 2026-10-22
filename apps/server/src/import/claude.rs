@@ -110,6 +110,7 @@ fn parse(text: &str, sidechain: bool) -> Option<Session> {
     Some(Session {
         agent: AgentKind::Claude,
         session_id: session_id?,
+        imported: false,
         cwd: cwd?,
         title: custom_title.or(ai_title),
         model: None,

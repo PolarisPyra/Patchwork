@@ -831,7 +831,7 @@ export default function Chat({
           error={error}
           agent={agent}
           model={model}
-          agents={empty ? offered : [agent]}
+          agents={empty || thread?.contextPending ? offered : [agent]}
           onPickModel={pickModel}
           modelPickerRequest={modelPickerRequest}
           providerSlashCommands={thread?.slashCommands ?? []}

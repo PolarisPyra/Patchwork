@@ -509,6 +509,8 @@ impl Server {
             parent: None,
             plan_mode: false,
             slash_commands: vec![],
+            imported_from: None,
+            context_pending: false,
         };
         self.store.insert_threads(vec![thread.clone()])?;
         Ok(thread)
@@ -562,10 +564,11 @@ impl Server {
     }
 
     /// Sets the thread's model. The agent can only change before the first message,
-    /// since the conversation session belongs to one CLI.
+    /// since the conversation session belongs to one CLI. An imported chat has no session yet,
+    /// so it can take any agent until its first turn.
     pub fn set_thread_model(&self, id: &str, agent: AgentKind, model: Option<String>) -> Res<()> {
         let thread = self.store.thread(id).ok_or("Task not found")?;
-        if thread.agent != agent && !thread.messages.is_empty() {
+        if thread.agent != agent && !thread.messages.is_empty() && !thread.context_pending {
             return Err("The agent can't change after the conversation has started".into());
         }
         self.store.update_thread(id, |t| {
@@ -922,14 +925,17 @@ impl Server {
     // ---- importing conversations ------------------------------------------
 
     /// Sessions `source` saved on disk that can be imported: ones whose folder
-    /// still exists, that Patchwork did not run as a chat, and whose
-    /// `(agent, session)` is not in `known`. Returns (found, importable).
+    /// still exists, that Patchwork did not run as a chat, and that are not already
+    /// threads: an agent session in `known`, or an imported transcript in `imported`.
+    /// Returns (found, importable).
     fn importable(
         &self,
         source: ImportSource,
         known: &[(AgentKind, String)],
+        imported: &[String],
     ) -> (u32, u32, Vec<import::Session>) {
-        let all = import::sessions(source);
+        let default_agent = self.store.settings().agents.first().copied().unwrap_or(AgentKind::Claude);
+        let all = import::sessions(source, default_agent);
         let subagents = all.iter().filter(|s| s.subagent).count() as u32;
         // Patchwork's own chats are not the user's imports, so they are not counted.
         let all: Vec<_> = all
@@ -940,6 +946,9 @@ impl Server {
         let new = all
             .into_iter()
             .filter(|s| {
+                if s.imported {
+                    return !imported.contains(&s.session_id);
+                }
                 !known
                     .iter()
                     .any(|(a, id)| *a == s.agent && *id == s.session_id)
@@ -949,7 +958,11 @@ impl Server {
     }
 
     pub fn scan_imports(&self, source: ImportSource) -> ImportScan {
-        let (found, subagents, new) = self.importable(source, &self.store.session_keys());
+        let (found, subagents, new) = self.importable(
+            source,
+            &self.store.session_keys(),
+            &self.store.imported_sources(),
+        );
         ImportScan {
             kind: source,
             found,
@@ -964,16 +977,24 @@ impl Server {
     /// Returns how many threads were added.
     pub fn import_threads(&self, sources: &[ImportSource]) -> Res<u32> {
         let mut known = self.store.session_keys();
+        let mut imported = self.store.imported_sources();
         let mut threads = Vec::new();
         for &source in sources {
-            for session in self.importable(source, &known).2 {
-                if known
-                    .iter()
-                    .any(|(a, id)| *a == session.agent && *id == session.session_id)
-                {
-                    continue;
+            for session in self.importable(source, &known, &imported).2 {
+                if session.imported {
+                    if imported.contains(&session.session_id) {
+                        continue;
+                    }
+                    imported.push(session.session_id.clone());
+                } else {
+                    if known
+                        .iter()
+                        .any(|(a, id)| *a == session.agent && *id == session.session_id)
+                    {
+                        continue;
+                    }
+                    known.push((session.agent, session.session_id.clone()));
                 }
-                known.push((session.agent, session.session_id.clone()));
                 let project_id = if import::is_chat_folder(Path::new(&session.cwd)) {
                     None
                 } else {

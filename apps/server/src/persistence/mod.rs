@@ -170,6 +170,15 @@ impl Store {
             .collect()
     }
 
+    /// OpenCode sessions already imported as threads.
+    pub fn imported_sources(&self) -> Vec<String> {
+        self.lock()
+            .threads
+            .iter()
+            .filter_map(|t| t.imported_from.clone())
+            .collect()
+    }
+
     pub fn insert_threads(&self, threads: Vec<Thread>) -> Res<()> {
         let mut inner = self.lock();
         let tx = inner.conn.transaction().map_err(err)?;
@@ -449,14 +458,16 @@ fn save_thread_row(tx: &Transaction, t: &Thread) -> rusqlite::Result<()> {
     tx.execute(
         "INSERT INTO threads
              (id, project_id, title, agent, model, session_id, created_at, access_mode, goal,
-              position, folder_id, effort, archived_at, parent, plan_mode, slash_commands)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+              position, folder_id, effort, archived_at, parent, plan_mode, slash_commands,
+              imported_from, context_pending)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
          ON CONFLICT (id) DO UPDATE SET project_id = excluded.project_id,
              title = excluded.title, agent = excluded.agent, model = excluded.model,
              session_id = excluded.session_id, access_mode = excluded.access_mode,
              goal = excluded.goal, effort = excluded.effort, archived_at = excluded.archived_at,
              parent = excluded.parent, plan_mode = excluded.plan_mode,
-             slash_commands = excluded.slash_commands",
+             slash_commands = excluded.slash_commands, imported_from = excluded.imported_from,
+             context_pending = excluded.context_pending",
         params![
             t.id,
             t.project_id,
@@ -473,7 +484,9 @@ fn save_thread_row(tx: &Transaction, t: &Thread) -> rusqlite::Result<()> {
             t.archived_at,
             t.parent.as_ref().map(json),
             t.plan_mode,
-            json(&t.slash_commands)
+            json(&t.slash_commands),
+            t.imported_from,
+            t.context_pending
         ],
     )?;
     Ok(())
@@ -558,7 +571,8 @@ fn load_folders(conn: &Connection) -> rusqlite::Result<Vec<Folder>> {
 fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
     let mut stmt = conn.prepare(
         "SELECT id, project_id, title, agent, model, session_id, created_at, access_mode, goal,
-                position, folder_id, effort, archived_at, parent, plan_mode, slash_commands
+                position, folder_id, effort, archived_at, parent, plan_mode, slash_commands,
+                imported_from, context_pending
          FROM threads ORDER BY position",
     )?;
     let mut threads: Vec<Thread> = stmt
@@ -585,6 +599,8 @@ fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
                     .and_then(|p| serde_json::from_str(&p).ok()),
                 plan_mode: r.get(14)?,
                 slash_commands: from_json(r.get(15)?),
+                imported_from: r.get(16)?,
+                context_pending: r.get(17)?,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
@@ -715,6 +731,8 @@ mod tests {
             parent: None,
             plan_mode: false,
             slash_commands: vec![],
+            imported_from: None,
+            context_pending: false,
         }
     }
 

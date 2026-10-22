@@ -92,6 +92,11 @@ const MIGRATIONS: &[&str] = &[
     ",
     // 16: provider-native slash commands discovered in the CLI initialization frame.
     "ALTER TABLE threads ADD COLUMN slash_commands TEXT NOT NULL DEFAULT '[]';",
+    // 17: an imported OpenCode chat, and whether its transcript still has to reach the agent.
+    "
+    ALTER TABLE threads ADD COLUMN imported_from TEXT;
+    ALTER TABLE threads ADD COLUMN context_pending INTEGER NOT NULL DEFAULT 0;
+    ",
 ];
 
 /// Brings the schema up to date. Returns the version the database was at before.
