@@ -138,6 +138,8 @@ export default function Messages({
                   <AssistantMessage
                     message={item}
                     agent={thread.agent}
+                    usage={usage ? item.usage : undefined}
+                    warnAbove={tokens.warnAbove}
                     onOpenThread={onOpenThread}
                     changes={changes}
                     retryMessage={previous?.role === "user" ? previous : null}
@@ -148,12 +150,6 @@ export default function Messages({
                   />
                 )}
               </div>
-              {usage && item.usage && (
-                // Pulled up into the message's bottom padding, and out to the column's right edge.
-                <div className="-mt-2 mb-1 flex justify-end">
-                  <UsageLine usage={item.usage} warnAbove={tokens.warnAbove} />
-                </div>
-              )}
             </div>
           );
         }}
@@ -204,6 +200,8 @@ const UserMessage = memo(function UserMessage({ message }: { message: Message })
 interface AssistantProps {
   message: Message;
   agent: AgentKind;
+  usage?: TokenUsage;
+  warnAbove: number;
   onOpenThread: (id: string) => void;
   changes: FileChange[];
   retryMessage: Message | null;
@@ -216,6 +214,8 @@ interface AssistantProps {
 const AssistantMessage = memo(function AssistantMessage({
   message,
   agent,
+  usage,
+  warnAbove,
   onOpenThread,
   changes,
   retryMessage,
@@ -227,7 +227,12 @@ const AssistantMessage = memo(function AssistantMessage({
   const streaming = message.status === "streaming";
   return (
     <section className="flex min-w-0 flex-col gap-2.5">
-      <TurnTimeline message={message} agent={agent} onOpenThread={onOpenThread} />
+      <TurnTimeline
+        message={message}
+        agent={agent}
+        onOpenThread={onOpenThread}
+        usageLine={usage && <UsageLine usage={usage} warnAbove={warnAbove} />}
+      />
       {/* A pending approval is answered in the banner above the composer. */}
       {message.approvals.map((approval) =>
         approval.status === "pending" ? (
@@ -279,7 +284,7 @@ function UsageLine({ usage, warnAbove }: { usage: TokenUsage; warnAbove: number 
   const large = usage.context > warnAbove;
   return (
     <p
-      className={`m-0 flex flex-wrap items-center justify-end gap-x-3 px-1 text-[length:var(--fs-xs)] tabular-nums ${large ? "text-warning" : "text-fg-muted"}`}
+      className={`m-0 flex flex-wrap items-center justify-start gap-x-3 px-1 text-[length:var(--fs-xs)] tabular-nums ${large ? "text-warning" : "text-fg-muted"}`}
     >
       <span className="inline-flex items-center gap-1">
         {large && <WarningIcon size={13} />}

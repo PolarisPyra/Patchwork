@@ -304,7 +304,7 @@ function TokensPane({ settings, updateSettings }: PaneProps) {
       </TokenRow>
       <TokenRow
         title="Warn above"
-        desc="Flags a reply whose context is larger, and asks before resuming a cold task that large"
+        desc="Shows an above-threshold context warning below Worked for and above the divider"
       >
         <ContextLevels
           label="Warn above"
