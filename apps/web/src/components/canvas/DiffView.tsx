@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { columns, LineBlock, toBlocks } from "~/components/canvas/LineBlocks";
 
 interface DiffRow {
   kind: "hunk" | "add" | "del" | "ctx";
@@ -54,6 +55,18 @@ const ROW_BG: Record<Exclude<DiffRow["kind"], "hunk">, string> = {
 
 export default function DiffView({ diff }: { diff: string }) {
   const rows = useMemo(() => parseDiff(diff), [diff]);
+  const blocks = useMemo(() => toBlocks(rows), [rows]);
+  // The widest line, as a floor for the view's width: blocks off screen are not measured.
+  const minWidth = useMemo(() => {
+    let line = 0;
+    let hunk = 0;
+    for (const row of rows) {
+      if (row.kind === "hunk") hunk = Math.max(hunk, columns(row.text));
+      else line = Math.max(line, columns(row.text));
+    }
+    // Rows have two 48px number columns and a 20px marker; hunk headers have 16px padding each side.
+    return `max(100%, calc(${line}ch + 116px), calc(${hunk}ch + 32px))`;
+  }, [rows]);
 
   if (rows.length === 0) {
     return (
@@ -64,27 +77,38 @@ export default function DiffView({ diff }: { diff: string }) {
   }
 
   return (
-    <div className="w-max min-w-full py-3 font-[family-name:var(--font-mono)] text-[length:var(--fs-md)] leading-[1.65] text-fg tab-2 select-text">
-      {rows.map((row, i) =>
-        row.kind === "hunk" ? (
-          <div className="py-1 px-4 bg-panel text-fg-subtle whitespace-pre" key={i}>
-            {row.text}
-          </div>
-        ) : (
-          <div className={`flex ${ROW_BG[row.kind]}`} key={i}>
-            <span className="flex-none min-w-[48px] pr-2 text-right text-fg-subtle select-none tabular-nums">
-              {row.oldNo ?? ""}
-            </span>
-            <span className="flex-none min-w-[48px] pr-2 text-right text-fg-subtle select-none tabular-nums">
-              {row.newNo ?? ""}
-            </span>
-            <span className="flex-none w-5 text-center text-fg-subtle select-none">
-              {MARKERS[row.kind]}
-            </span>
-            <span className="flex-[1_0_auto] whitespace-pre">{row.text}</span>
-          </div>
-        ),
-      )}
+    <div
+      className="w-max min-w-full py-3 font-[family-name:var(--font-mono)] text-[length:var(--fs-md)] leading-[1.65] text-fg tab-2 select-text"
+      style={{ minWidth }}
+    >
+      {blocks.map((block, b) => (
+        <LineBlock
+          key={b}
+          rows={block.length}
+          extraPx={block.filter((row) => row.kind === "hunk").length * 8}
+        >
+          {block.map((row, i) =>
+            row.kind === "hunk" ? (
+              <div className="py-1 px-4 bg-panel text-fg-subtle whitespace-pre" key={i}>
+                {row.text}
+              </div>
+            ) : (
+              <div className={`flex ${ROW_BG[row.kind]}`} key={i}>
+                <span className="flex-none min-w-[48px] pr-2 text-right text-fg-subtle select-none tabular-nums">
+                  {row.oldNo ?? ""}
+                </span>
+                <span className="flex-none min-w-[48px] pr-2 text-right text-fg-subtle select-none tabular-nums">
+                  {row.newNo ?? ""}
+                </span>
+                <span className="flex-none w-5 text-center text-fg-subtle select-none">
+                  {MARKERS[row.kind]}
+                </span>
+                <span className="flex-[1_0_auto] whitespace-pre">{row.text}</span>
+              </div>
+            ),
+          )}
+        </LineBlock>
+      ))}
     </div>
   );
 }
