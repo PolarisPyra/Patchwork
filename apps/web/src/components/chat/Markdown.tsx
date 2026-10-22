@@ -91,14 +91,88 @@ const components: Components = {
 const HIGHLIGHT_DELAY_MS = 150;
 
 export default memo(function Markdown({ text }: { text: string }) {
+  // Each block parses on its own, so a streaming reply re-parses only its last block.
   return (
     <div className="min-w-0 leading-[1.6] [word-break:break-word] selectable [&>:last-child]:mb-0 [&_p]:mt-0 [&_p]:mb-2">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components} skipHtml>
-        {text}
-      </ReactMarkdown>
+      {splitBlocks(text).map((block, i) => (
+        <MarkdownBlock key={i} text={block} />
+      ))}
     </div>
   );
 });
+
+const REMARK_PLUGINS = [remarkGfm];
+/** Blocks whose rendered output is kept, most recently used last. */
+const PARSED_LIMIT = 1000;
+const parsed = new Map<string, ReactElement>();
+/** The block parsed last; a streaming block replaces it as it grows, so its drafts do not crowd the cache. */
+let lastParsed = "";
+
+/** A block's rendered output, kept so a row the chat list remounts while scrolling is not parsed again. */
+function parseBlock(text: string): ReactElement {
+  let element = parsed.get(text);
+  if (element) {
+    parsed.delete(text);
+  } else {
+    // react-markdown's synchronous renderer uses no hooks, so its output can be reused.
+    element = ReactMarkdown({
+      children: text,
+      remarkPlugins: REMARK_PLUGINS,
+      components,
+      skipHtml: true,
+    });
+    if (lastParsed && text.startsWith(lastParsed)) parsed.delete(lastParsed);
+    if (parsed.size >= PARSED_LIMIT) parsed.delete(parsed.keys().next().value!);
+    lastParsed = text;
+  }
+  parsed.set(text, element);
+  return element;
+}
+
+const MarkdownBlock = memo(function MarkdownBlock({ text }: { text: string }) {
+  return parseBlock(text);
+});
+
+/** An opening or closing code fence: its marker, then the rest of the line. */
+const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+/** A link reference or footnote definition, which can be used from anywhere in the text. */
+const DEFINITION = /^ {0,3}\[[^\]\n]+\]:/m;
+/** A line that starts a new top-level block after a blank line and cannot join the one before it:
+ * not indented, and not a list item or quote, which would merge with a list or quote above. */
+const BLOCK_START = /^(?![-*+>]|\d{1,9}[.)])\S/;
+
+/** Cuts Markdown into pieces that render the same parsed apart as together: at blank lines outside
+ * code fences, before a line that `BLOCK_START` allows. Text with definitions stays whole. */
+function splitBlocks(text: string): string[] {
+  if (DEFINITION.test(text)) return [text];
+  const lines = text.split("\n");
+  const blocks: string[] = [];
+  let start = 0;
+  let fence: string | null = null;
+  for (let i = 0; i < lines.length; i++) {
+    const marker = FENCE.exec(lines[i]);
+    if (fence !== null) {
+      const closes =
+        marker &&
+        marker[1][0] === fence[0] &&
+        marker[1].length >= fence.length &&
+        !marker[2].trim();
+      if (closes) fence = null;
+    } else if (marker) {
+      fence = marker[1];
+    } else if (
+      i > start &&
+      !lines[i].trim() &&
+      i + 1 < lines.length &&
+      BLOCK_START.test(lines[i + 1])
+    ) {
+      blocks.push(lines.slice(start, i).join("\n"));
+      start = i + 1;
+    }
+  }
+  blocks.push(lines.slice(start).join("\n"));
+  return blocks;
+}
 
 function CodeBlock({ lang, code, title }: { lang: string; code: string; title: string | null }) {
   // Highlighting loads on demand, so the chat does not pull every grammar up front.
