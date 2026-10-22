@@ -7,10 +7,11 @@ pub mod antigravity;
 pub mod model_manifest;
 
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::io::Read;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -68,6 +69,7 @@ pub fn agent_command(kind: AgentKind) -> Result<Command, String> {
     let mut cmd = Command::new(&bin);
     if let Some(dir) = bin.parent() {
         let mut paths = vec![dir.to_path_buf()];
+        paths.extend(shell_path().into_iter().flat_map(std::env::split_paths));
         if let Some(existing) = std::env::var_os("PATH") {
             paths.extend(std::env::split_paths(&existing));
         }
@@ -76,6 +78,49 @@ pub fn agent_command(kind: AgentKind) -> Result<Command, String> {
         }
     }
     Ok(cmd)
+}
+
+/// Marks the PATH line in the login shell's output, since profile scripts may print too.
+const PATH_MARKER: &str = "__PATCHWORK_PATH__";
+
+/// The PATH the user's login shell sets up, read once. An app launched from the desktop gets
+/// the session's PATH, which lacks what shell profiles add (nvm, pnpm, cargo), so agents and
+/// the commands they run would not find those tools. None if the shell can't be read.
+fn shell_path() -> Option<&'static OsString> {
+    static PATH: OnceLock<Option<OsString>> = OnceLock::new();
+    PATH.get_or_init(read_shell_path).as_ref()
+}
+
+fn read_shell_path() -> Option<OsString> {
+    let shell = crate::login_shell().or_else(|| std::env::var("SHELL").ok())?;
+    let mut cmd = Command::new(shell);
+    cmd.args(["-l", "-c", &format!("printf '\\n{PATH_MARKER}%s\\n' \"$PATH\"")])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    #[cfg(unix)]
+    cmd.process_group(0);
+    let mut child = cmd.spawn().ok()?;
+    let (out, reader) = read_pipe(child.stdout.take()?);
+    let deadline = Instant::now() + PROBE_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
+            _ => {
+                stop(&mut child);
+                return None;
+            }
+        }
+    }
+    // Kill anything the profile left running, so it cannot hold the pipe open.
+    signal_process_group(child.id(), libc::SIGKILL);
+    let _ = reader.join();
+    let path = text(&out)
+        .lines()
+        .find_map(|line| line.strip_prefix(PATH_MARKER))?
+        .to_string();
+    (!path.is_empty()).then(|| path.into())
 }
 
 pub struct Probe {
