@@ -70,7 +70,7 @@ jobs:
           done
 
       - name: Build AppImage
-        run: pnpm appimage
+        run: scripts/build.sh appimage
 
       - name: Find AppImage
         id: find
@@ -79,6 +79,9 @@ jobs:
           echo "path=$path" >> "$GITHUB_OUTPUT"
 
       - name: Upload workflow artifact
+        # The release below attaches the AppImage itself, so a full artifact store
+        # shouldn't fail the run.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: patchwork-appimage

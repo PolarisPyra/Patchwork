@@ -36,7 +36,7 @@ require_tools() {
 
 build_appimage() {
   require_tools
-  pnpm --filter patchwork-desktop tauri build --bundles appimage
+  pnpm --filter patchwork-desktop exec tauri build --bundles appimage
   # Tauri names the file after the version. Rename it so the name stays the same across releases.
   local built="target/release/bundle/appimage/Patchwork_${version}_amd64.AppImage"
   local out="target/release/bundle/appimage/Patchwork_amd64.AppImage"
@@ -53,7 +53,7 @@ install_app() {
   local icons_dir="$prefix/share/icons/hicolor"
   local launcher="$apps_dir/$app_id.desktop"
 
-  pnpm --filter patchwork-desktop tauri build --no-bundle
+  pnpm --filter patchwork-desktop exec tauri build --no-bundle
   [[ -x target/release/patchwork ]] || die "Expected target/release/patchwork after the build."
 
   install -Dm755 target/release/patchwork "$bin_path"
