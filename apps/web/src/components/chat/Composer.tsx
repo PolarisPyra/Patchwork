@@ -504,7 +504,7 @@ export default function Composer({
             onClick={onTogglePlan}
             className={`${CHIP_CLASS} ${planMode ? "bg-selected-muted text-fg" : ""}`}
           >
-            <ListChecksIcon size={14} />
+            <ListChecksIcon size={16} />
             <span>Plan</span>
           </button>
         )}
