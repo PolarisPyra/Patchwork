@@ -30,6 +30,9 @@ export function isWorking(thread: Thread | null): boolean {
   return thread.messages.some((m) => m.status === "streaming");
 }
 
+/** How often streamed events are applied to the threads, in milliseconds. */
+const FLUSH_MS = 100;
+
 /** Same rule as the backend: first line without a leading `/goal`, at most 60 characters. */
 function titleFrom(text: string): string {
   const line = (text.split("\n")[0] ?? "").trim();
@@ -254,16 +257,17 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
   );
 
   // Subscribe once for the app's lifetime; events for unknown threads are ignored. Text arrives
-  // token by token, faster than the screen refreshes, so events are applied once per frame.
+  // token by token, so events are applied in batches every FLUSH_MS: the webview paints in
+  // software on some machines, and a re-render per frame kept the CPU busy for a whole reply.
   useEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | undefined;
     let queue: AgentEventEnvelope[] = [];
-    let frame = 0;
+    let timer = 0;
     const flush = () => {
       const batch = queue;
       queue = [];
-      frame = 0;
+      timer = 0;
       setThreads((prev) =>
         batch.reduce((threads, { threadId, event }) => {
           // A thread the server made, such as a subagent's, joins the list.
@@ -279,7 +283,7 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
     };
     void onAgentEvent((envelope) => {
       queue.push(envelope);
-      frame ||= requestAnimationFrame(flush);
+      timer ||= window.setTimeout(flush, FLUSH_MS);
     }).then((u) => {
       if (disposed) u();
       else unlisten = u;
@@ -287,7 +291,7 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
     return () => {
       disposed = true;
       unlisten?.();
-      cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
     };
   }, []);
 

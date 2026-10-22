@@ -404,8 +404,11 @@
   cursor: default;
 }
 
-.spin {
-  animation: spin 0.9s linear infinite;
+/* Animations that run for a whole reply step a few times a second rather than every frame: the
+   webview paints in software where the GPU renderer is off, so each step is a repaint. */
+.spin,
+.animate-spin {
+  animation: spin 0.9s steps(12) infinite;
 }
 @keyframes spin {
   to {
@@ -413,35 +416,22 @@
   }
 }
 
-/* A slanted band of light sweeping across the label of something still running. */
+/* The label of something still running breathes between muted and full text. A plain opacity
+   change repaints only the label; the gradient sweep this replaces cost several times more. */
 .tool-shine {
-  color: transparent;
-  background-image: linear-gradient(
-    105deg,
-    var(--text-muted) 40%,
-    var(--text) 50%,
-    var(--text-muted) 60%
-  );
-  background-size: 250% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  animation: tool-shine 1.6s linear infinite;
+  animation: tool-shine 1.6s steps(8) infinite alternate;
 }
 @keyframes tool-shine {
-  /* With a 250% background, the band is fully off the label at both ends (100% and 0%),
-     so one pass crosses all of it. */
   from {
-    background-position: 100% 0;
+    opacity: 0.55;
   }
   to {
-    background-position: 0% 0;
+    opacity: 1;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .tool-shine {
     animation: none;
-    background: none;
-    color: var(--text-muted);
   }
 }
 
@@ -467,7 +457,7 @@
         #4285f4 360deg
       )
       border-box;
-  animation: goal-border-turn 4s linear infinite;
+  animation: goal-border-turn 4s steps(48) infinite;
 }
 
 @keyframes goal-border-turn {
@@ -488,7 +478,7 @@
     var(--bg-selected) 100%
   );
   background-size: 200% 100%;
-  animation: goal-row-drift 8s ease-in-out infinite alternate;
+  animation: goal-row-drift 8s steps(32) infinite alternate;
 }
 
 @keyframes goal-row-drift {
@@ -519,7 +509,7 @@
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
-  animation: goal-border-turn 4s linear infinite;
+  animation: goal-border-turn 4s steps(48) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
