@@ -138,7 +138,7 @@ export default function Messages({
                   <AssistantMessage
                     message={item}
                     agent={thread.agent}
-                    usage={usage ? item.usage : undefined}
+                    usage={(usage && item.usage) || undefined}
                     warnAbove={tokens.warnAbove}
                     onOpenThread={onOpenThread}
                     changes={changes}
@@ -168,7 +168,28 @@ export default function Messages({
   );
 }
 
+/** User messages longer than this, such as pasted logs, show their first lines until expanded:
+ * laying out all of one stalled the chat for over 100ms each time it scrolled into view. */
+const LONG_MESSAGE_CHARS = 20000;
+const PREVIEW_LINES = 40;
+/** Long messages the user expanded; kept here because the chat list remounts rows as it scrolls. */
+const expandedMessages = new Set<string>();
+
 const UserMessage = memo(function UserMessage({ message }: { message: Message }) {
+  const long = message.text.length > LONG_MESSAGE_CHARS;
+  const [expanded, setExpanded] = useState(() => expandedMessages.has(message.id));
+  const lines = useMemo(() => (long ? message.text.split("\n") : []), [long, message.text]);
+  const text =
+    long && !expanded && lines.length > PREVIEW_LINES
+      ? lines.slice(0, PREVIEW_LINES).join("\n")
+      : long && !expanded
+        ? message.text.slice(0, LONG_MESSAGE_CHARS)
+        : message.text;
+  const toggle = () => {
+    if (expanded) expandedMessages.delete(message.id);
+    else expandedMessages.add(message.id);
+    setExpanded(!expanded);
+  };
   return (
     <div className="flex max-w-[75%] flex-col items-end gap-1 self-end">
       <div className="px-2 text-[length:var(--fs-xs)] text-fg-subtle">
@@ -190,8 +211,15 @@ const UserMessage = memo(function UserMessage({ message }: { message: Message })
         // Line breaks the user typed are kept inside paragraphs only; between blocks they would show
         // as blank lines.
         <div className="rounded-[12px] bg-[color-mix(in_srgb,var(--text)_10%,var(--bg-editor))] px-4 py-2.5 leading-[1.55] text-fg [word-break:break-word] selectable [&_h3]:mt-0 [&_h3]:mb-0 [&_p]:whitespace-pre-wrap">
-          <Markdown text={message.text} />
+          <Markdown text={text} />
         </div>
+      )}
+      {long && (
+        <button className={ACTION_CLASS} onClick={toggle}>
+          {expanded
+            ? "Show less"
+            : `Show full message (${Math.round(message.text.length / 1000)}k characters)`}
+        </button>
       )}
     </div>
   );
