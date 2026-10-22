@@ -339,16 +339,18 @@ export default function Composer({
     if (editor.isFocused) editor.commands.focus("end");
   }, [editor, value]);
 
-  // Opening a chat puts the caret in the composer, unless the user is typing in another field or
-  // a choice panel is open.
+  // Opening a chat puts the caret in the composer, unless the user is typing in another field,
+  // the task list keeps the focus (the chat opened from it), or a choice panel is open.
   const deferFocusRef = useRef(deferFocus);
   deferFocusRef.current = deferFocus;
   useEffect(() => {
     const active = document.activeElement;
-    const typing =
+    const focusStays =
       active instanceof HTMLElement &&
-      (active.isContentEditable || active.matches("input, textarea, select"));
-    if (editor && !typing && !deferFocusRef.current) editor.commands.focus("end");
+      (active.isContentEditable ||
+        active.matches("input, textarea, select") ||
+        active.closest("[data-keeps-focus]") !== null);
+    if (editor && !focusStays && !deferFocusRef.current) editor.commands.focus("end");
   }, [editor]);
 
   // The Stop button holds focus once clicked, and it leaves the page when the turn or goal ends,

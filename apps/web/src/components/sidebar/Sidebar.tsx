@@ -319,7 +319,14 @@ function TasksView({
   const [cursor, setCursor] = useState<Target | null>(null);
   const treeRef = useRef<HTMLDivElement>(null);
   // Set when a chat opens from the tree, so its composer does not take the focus from the tree.
+  // Only set when the selection changes, since the effect that clears it runs on that change.
   const keepTreeFocus = useRef(false);
+  /** Also marks the tree, so the composer leaves the focus there instead of taking it and handing
+   * it back: each move restyles every row that styles on the tree's focus. */
+  const holdTreeFocus = (on: boolean) => {
+    keepTreeFocus.current = on;
+    treeRef.current?.toggleAttribute("data-keeps-focus", on);
+  };
   const picked = usePicked();
   const setPicked = setPickedRows;
   const isPicked = (target: Target) => picked.some((p) => sameTarget(p, target));
@@ -351,7 +358,7 @@ function TasksView({
     // A plain click selects only this row, and a chat opens there but keeps the tree's focus.
     if (!e.ctrlKey) {
       setPicked([target]);
-      if (target.kind === "thread") keepTreeFocus.current = true;
+      if (target.kind === "thread" && target.id !== selectedId) holdTreeFocus(true);
       return false;
     }
     setPicked((prev) =>
@@ -483,7 +490,10 @@ function TasksView({
   useEffect(() => {
     if (!keepTreeFocus.current) return;
     keepTreeFocus.current = false;
-    setTimeout(() => treeRef.current?.focus(), 0);
+    setTimeout(() => {
+      treeRef.current?.focus();
+      treeRef.current?.removeAttribute("data-keeps-focus");
+    }, 0);
   }, [selectedId]);
 
   /** The explorer's keys: arrows move the focus, Left and Right collapse and expand, Enter opens, F2 renames. */
@@ -503,7 +513,7 @@ function TasksView({
       setCursor(t);
       setPicked([t]);
       if (t.kind !== "thread") return;
-      keepTreeFocus.current = true;
+      if (t.id !== selectedId) holdTreeFocus(true);
       onSelectThread(t.id);
     };
     switch (e.key) {
@@ -538,7 +548,7 @@ function TasksView({
         if (!current) break;
         // Enter opens the chat and moves the focus into it, as Enter does in VS Code's explorer.
         if (current.kind === "thread") {
-          keepTreeFocus.current = false;
+          holdTreeFocus(false);
           onSelectThread(current.id);
           setTimeout(
             () => document.querySelector<HTMLElement>(".composer-editor .ProseMirror")?.focus(),
