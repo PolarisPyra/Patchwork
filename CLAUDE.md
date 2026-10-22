@@ -2,12 +2,11 @@
 
 ## Development setup
 
-- The user runs PatchworkADE as an installed AppImage and builds it from this repo at the same time. Two app instances can exist; they are not interchangeable.
-- **AppImage (everyday app):** never kill, stop, restart, replace, or relaunch it, and do not run any AppImage or installed `patchwork` binary. Do not kill processes by broad name match (`pkill patchwork`, `killall`) because that can hit the AppImage. If the AppImage blocks dev work (port, lock, or window conflict), tell the user and leave it alone.
 - **Dev instance:** the only app instance that is ever started or restarted. Run it only with `pnpm tauri dev`. Never run `pnpm dev` on its own, `target/debug/patchwork`, or other build outputs directly.
 - The user keeps their own `pnpm tauri dev` session open and views changes there. Vite hot-reloads UI edits, and Rust changes rebuild on save, so a restart is rarely needed. If one is needed, restart only that `pnpm tauri dev` session and say so.
 - Do not start the dev app or take screenshots of it unless the user asks.
-- **Previewing the app:** when the user asks to run, preview, or check the app, start it from `~/Projects/PatchworkADE` with `pnpm tauri dev`, and never open or run the AppImage instead. If a `pnpm tauri dev` session is already running, use that one rather than starting a second, since both need port 1420.
+- **Previewing the app:** when the user asks to run, preview, or check the app, start it from `~/Projects/PatchworkADE` with `pnpm tauri dev`. If a `pnpm tauri dev` session is already running, use that one rather than starting a second, since both need port 1420.
+- **Launch from the repo root.** The root `pnpm tauri` script forwards to `patchwork-desktop`, which owns `@tauri-apps/cli`. Do not run `pnpm exec tauri` from the root; it fails with `Command "tauri" not found`. To check the CLI, use `pnpm tauri --version`.
 
 ## Editing alongside the dev session
 
@@ -19,10 +18,19 @@
 ## Project layout
 
 - pnpm workspace (`pnpm-workspace.yaml`) with packages under `apps/*`. Root `package.json` scripts use these filters:
-  - `patchwork-desktop` (Tauri app): `pnpm tauri dev`, `pnpm build`, `pnpm appimage`.
+  - `patchwork-desktop` (Tauri app): `pnpm tauri dev`, `pnpm build`.
   - `patchwork-web` (frontend): `pnpm typecheck`, `pnpm dev:web`.
 - Cargo workspace (`Cargo.toml`) with members `apps/server` and `apps/desktop/src-tauri`.
 - Formatting: `pnpm format` and `pnpm format:check` cover `apps/**/*.tsx`. Run `pnpm format` on TSX changes.
+
+## Commands
+
+- Dev app: `pnpm tauri dev` (from the repo root only; see Development setup).
+- Web typecheck: `pnpm typecheck`.
+- Format TSX: `pnpm format`. Check only: `pnpm format:check`. Both cover `apps/**/*.tsx` and nothing else.
+- Rust lint: `cargo clippy --workspace --all-targets`.
+- Rust tests: `cargo test --workspace`.
+- UI measurement and screenshots against the running dev session: `pnpm qa:stripe`, `pnpm qa:shot <out.png> [selector]`.
 
 ## Verification
 
@@ -33,6 +41,7 @@
 ## Tests
 
 - Never write tests. Do not add unit, integration, or frontend tests, test files, test runners, test dependencies, or test scripts, even when a change would benefit from one.
+- The root `test` script (`cargo test --workspace`) already exists. You may run it as a check, but do not add to it or add other test scripts.
 - Exception: Playwright is allowed, only as the UI-check tool under `scripts/qa/` and its `qa:*` root scripts, for measuring and screenshotting the running dev session. Those scripts must not assert or run as tests. Do not add `*.test.*` files, a test runner, a `test` script, or any Playwright spec file.
 - Always push QA scripts you save under `scripts/qa/`. Do not leave them untracked: commit each one with the change it checks and push it with the next push, along with this file's other finished work.
 
