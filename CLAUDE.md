@@ -3,8 +3,8 @@
 ## Development setup
 
 - **Dev instance:** the only app instance that is ever started or restarted. Run it only with `pnpm tauri dev`. Never run `pnpm dev` on its own, `target/debug/patchwork`, or other build outputs directly.
-- The user keeps their own `pnpm tauri dev` session open and views changes there. Vite hot-reloads UI edits, and Rust changes rebuild on save, so a restart is rarely needed. If one is needed, restart only that `pnpm tauri dev` session and say so.
-- Do not start the dev app or take screenshots of it unless the user asks.
+- The user usually keeps a `pnpm tauri dev` session open and views changes there. Vite hot-reloads UI edits, and Rust changes rebuild on save, so a restart is rarely needed.
+- You may start or restart the dev session yourself when a change needs it or to verify work, with `pnpm tauri dev` from the repo root. Say so when you do, and check first that no reply is streaming, since a restart ends running agent turns. Take screenshots of it only for UI checks or when the user asks.
 - **Previewing the app:** when the user asks to run, preview, or check the app, start it from `~/Projects/PatchworkADE` with `pnpm tauri dev`. If a `pnpm tauri dev` session is already running, use that one rather than starting a second, since both need port 1420.
 - **Launch from the repo root.** The root `pnpm tauri` script forwards to `patchwork-desktop`, which owns `@tauri-apps/cli`. Do not run `pnpm exec tauri` from the root; it fails with `Command "tauri" not found`. To check the CLI, use `pnpm tauri --version`.
 
@@ -45,6 +45,12 @@
 - Exception: Playwright is allowed, only as the UI-check tool under `scripts/qa/` and its `qa:*` root scripts, for measuring and screenshotting the running dev session. Those scripts must not assert or run as tests. Do not add `*.test.*` files, a test runner, a `test` script, or any Playwright spec file.
 - Always push QA scripts you save under `scripts/qa/`. Do not leave them untracked: commit each one with the change it checks and push it with the next push, along with this file's other finished work.
 
+## Finishing
+
+- Do not wait on the user. When the only remaining steps are ones you cannot take, such as the user trying a change in the app, reviewing it, or confirming a result, treat the work as finished: report what was done and what was not, then end the turn. Do not ask for confirmation or keep posting "waiting" messages.
+- If something cannot be done without the user, leave it undone and say so once. Never substitute a prompt to the user for the missing step.
+- The same applies to a `/goal` whose remaining condition depends only on the user: the goal counts as met once everything else is done.
+
 ## Committing
 
 - Do not commit or push until the user has reviewed the change and says to. Leave finished work uncommitted in the working tree.
@@ -54,6 +60,6 @@
 ## UI checks
 
 - For alignment, layout, spacing, or other UI and UX issues, measure and screenshot the running app before changing code, and again after the change. Use the in-repo harness in `scripts/qa/` (see its README): `pnpm qa:stripe` measures the tool stripe, and `pnpm qa:shot <out.png> [selector]` saves a screenshot. Add new checks under `scripts/qa/checks/`.
-- The harness connects to the user's running `pnpm tauri dev` session at localhost:1420. Never start the app to run it. If the server is not up, tell the user to start it.
-- This rule is the standing permission for those screenshots and measurements, which the "do not take screenshots unless asked" rule above would otherwise block.
+- The harness connects to the running `pnpm tauri dev` session at localhost:1420. If the server is not up, start it with `pnpm tauri dev` from the repo root and say so.
+- This rule is the standing permission for those screenshots and measurements.
 - Playwright is a root devDependency, so adding or upgrading it changes `package.json` and `pnpm-lock.yaml`. Say so when you do it.
