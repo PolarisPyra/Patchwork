@@ -21,6 +21,7 @@ import {
   FolderPlusIcon,
   GearSixIcon,
   GitDiffIcon,
+  MagicWandIcon,
   MagnifyingGlassIcon,
   PencilSimpleIcon,
   PlusIcon,
@@ -44,7 +45,14 @@ import UsagePopover from "~/components/usage/UsagePopover";
 import { useRowReorder, type RowDrag } from "~/hooks/useRowReorder";
 import { setPickedRows, usePicked } from "./pickedRows";
 import { isWorking } from "~/hooks/useThreads";
-import { baseName, dirName, displayTitle, errorText, formatRelative } from "~/lib/util";
+import {
+  AGENT_FOLDER_NAMES,
+  baseName,
+  dirName,
+  displayTitle,
+  errorText,
+  formatRelative,
+} from "~/lib/util";
 
 export type SidebarView = "tasks" | "changes" | "archived";
 
@@ -122,6 +130,10 @@ interface SidebarProps {
   /** Creates a folder in a project; null if that failed. */
   onNewFolder: (projectId: string) => Promise<Folder | null>;
   onRenameFolder: (id: string, name: string) => void;
+  /** Moves a project's tasks into one folder per agent, named for it. */
+  onSortByAgent: (projectId: string) => void;
+  /** Takes a project's tasks back out of the folders named for agents. */
+  onUndoSortByAgent: (projectId: string) => void;
   /** Archives chats and tasks; asks, then removes projects and folders. */
   onRemoveTargets: (targets: Target[]) => void;
   /** Chats and tasks in the archive, in sidebar order. */
@@ -281,6 +293,8 @@ function TasksView({
   onReorderThreads,
   onNewFolder,
   onRenameFolder,
+  onSortByAgent,
+  onUndoSortByAgent,
   onNewTaskInFolder,
   onOpenFolder,
 }: SidebarProps) {
@@ -663,6 +677,30 @@ function TasksView({
                     {p.name}
                   </span>
                 )}
+                {projectFolders.some((f) => AGENT_FOLDER_NAMES.has(f.name)) && (
+                  <button
+                    className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex"
+                    title={`Undo sorting tasks in ${p.name} by provider`}
+                    aria-label={`Undo sorting tasks in ${p.name} by provider`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUndoSortByAgent(p.id);
+                    }}
+                  >
+                    <ArrowCounterClockwiseIcon size={17} />
+                  </button>
+                )}
+                <button
+                  className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex"
+                  title={`Sort tasks in ${p.name} into folders by provider`}
+                  aria-label={`Sort tasks in ${p.name} into folders by provider`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSortByAgent(p.id);
+                  }}
+                >
+                  <MagicWandIcon size={17} />
+                </button>
                 <button
                   className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex"
                   title={`New folder in ${p.name}`}

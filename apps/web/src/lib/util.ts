@@ -1,6 +1,8 @@
 import { AGENT_LABELS, type AgentKind, type AgentStatus } from "~/api";
 
 export const AGENT_KINDS = Object.keys(AGENT_LABELS) as AgentKind[];
+/** Names of the folders a sort by agent puts tasks in. */
+export const AGENT_FOLDER_NAMES: ReadonlySet<string> = new Set(Object.values(AGENT_LABELS));
 
 const pad = (n: number) => String(n).padStart(2, "0");
 

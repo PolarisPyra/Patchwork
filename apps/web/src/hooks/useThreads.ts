@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  AGENT_LABELS,
   api,
   onAgentEvent,
   type AccessMode,
@@ -14,6 +15,7 @@ import {
   type Thread,
 } from "~/api";
 import { profileMark } from "~/lib/profile";
+import { AGENT_FOLDER_NAMES, AGENT_KINDS } from "~/lib/util";
 
 export interface NewThreadOptions {
   agent: AgentKind;
@@ -217,6 +219,10 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
 export function useThreads(initialProjectId: string | null, onTurnCompleted: () => void) {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
+  /** Per project, its tasks and the folder each sat in, in order, before its last sort by agent. */
+  const [sortUndo, setSortUndo] = useState<
+    Record<string, { id: string; folderId: string | null }[]>
+  >({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const turnDone = useRef(onTurnCompleted);
   const initialProject = useRef(initialProjectId);
@@ -381,6 +387,13 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
   }
 
   async function renameFolder(id: string, name: string): Promise<void> {
+    // Sorting by provider and undoing it treat folders with these names as their own.
+    const reserved = [...AGENT_FOLDER_NAMES].find((n) => n.toLowerCase() === name.toLowerCase());
+    if (reserved) {
+      throw new Error(
+        `"${reserved}" is reserved for sorting tasks by provider; undoing that sort would empty and remove this folder. Pick another name.`,
+      );
+    }
     await api.renameFolder(id, name);
     setFolders((prev) => prev.map((f) => (f.id === id ? { ...f, name } : f)));
   }
@@ -395,6 +408,75 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
   async function reorderThreads(ids: string[], folderId: string | null): Promise<void> {
     await api.reorderThreads(ids, folderId);
     setThreads(await api.listThreads());
+  }
+
+  /** Moves a project's tasks into one folder per agent, named for it, creating those folders as needed. */
+  async function sortByAgent(projectId: string): Promise<void> {
+    const tasks = threads.filter(
+      (t) => t.projectId === projectId && t.archivedAt === null && !t.parent,
+    );
+    try {
+      for (const agent of AGENT_KINDS) {
+        const ids = tasks.filter((t) => t.agent === agent).map((t) => t.id);
+        if (ids.length === 0) continue;
+        const name = AGENT_LABELS[agent];
+        let folder = folders.find((f) => f.projectId === projectId && f.name === name);
+        if (!folder) {
+          const created = await api.createFolder(projectId, name);
+          setFolders((prev) => [...prev, created]);
+          folder = created;
+        }
+        await api.reorderThreads(ids, folder.id);
+      }
+    } finally {
+      const before = tasks.map((t) => ({ id: t.id, folderId: t.folderId }));
+      setSortUndo((prev) => ({ ...prev, [projectId]: before }));
+      setThreads(await api.listThreads());
+    }
+  }
+
+  /** Takes a project's tasks out of the folders named for agents, back to the folder each was in before
+   * the last sort when that is known and still there, else to the top level; then removes those
+   * folders once empty. */
+  async function undoSortByAgent(projectId: string): Promise<void> {
+    const agentFolderIds = new Set(
+      folders
+        .filter((f) => f.projectId === projectId && AGENT_FOLDER_NAMES.has(f.name))
+        .map((f) => f.id),
+    );
+    const before = sortUndo[projectId] ?? [];
+    const priorFolder = new Map(before.map((b) => [b.id, b.folderId]));
+    const rank = new Map(before.map((b, i) => [b.id, i]));
+    const destination = (t: Thread): string | null => {
+      if (t.folderId === null || !agentFolderIds.has(t.folderId)) return t.folderId;
+      const prior = priorFolder.get(t.id) ?? null;
+      return prior !== null && !agentFolderIds.has(prior) && folders.some((f) => f.id === prior)
+        ? prior
+        : null;
+    };
+    const lists = new Map<string | null, Thread[]>();
+    for (const t of threads) {
+      if (t.projectId !== projectId || t.archivedAt !== null || t.parent) continue;
+      const to = destination(t);
+      lists.set(to, [...(lists.get(to) ?? []), t]);
+    }
+    setSortUndo(({ [projectId]: _, ...rest }) => rest);
+    try {
+      for (const [folderId, list] of lists) {
+        if (list.every((t) => t.folderId === folderId)) continue;
+        // Tasks the sort moved go back to their old order; others keep theirs after them.
+        const order = (t: Thread) => rank.get(t.id) ?? before.length;
+        const ids = [...list].sort((x, y) => order(x) - order(y)).map((t) => t.id);
+        await api.reorderThreads(ids, folderId);
+      }
+      const all = await api.listThreads();
+      for (const id of agentFolderIds) {
+        if (!all.some((t) => t.folderId === id)) await api.removeFolder(id);
+      }
+    } finally {
+      setFolders(await api.listFolders());
+      setThreads(await api.listThreads());
+    }
   }
 
   async function setModel(id: string, agent: AgentKind, model: string | null): Promise<void> {
@@ -473,6 +555,8 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
     renameFolder,
     removeFolder,
     reorderThreads,
+    sortByAgent,
+    undoSortByAgent,
     setModel,
     setAccessMode,
     setPlanMode,
