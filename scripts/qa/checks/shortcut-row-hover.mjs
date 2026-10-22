@@ -6,7 +6,7 @@ import { openWorkspace } from "../lib/open.mjs";
 const { browser, page } = await openWorkspace({ width: 1200, height: 800 });
 await page.keyboard.press("Control+,");
 await page.getByRole("button", { name: "Shortcuts" }).click();
-const button = page.getByRole("button", { name: "Change shortcut for Open or close search" });
+const button = page.getByRole("button", { name: "Change shortcut for Search" });
 await button.hover();
 await page.waitForTimeout(200);
 const box = await button.evaluate((el) => {

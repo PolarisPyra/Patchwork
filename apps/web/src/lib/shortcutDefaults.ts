@@ -1,34 +1,82 @@
 import type { CommandInfo, Rule } from "~/lib/shortcuts";
 
-/** Every command a key can run. The Shortcuts settings pane lists these, grouped by category. */
+/** The pages of the Shortcuts settings pane, in order. */
+export const SHORTCUT_PAGES = ["Main", "Chat", "Sidebar", "Archive", "Composer"] as const;
+export type ShortcutPage = (typeof SHORTCUT_PAGES)[number];
+
+/** Every command a key can run, with the page it is listed on. */
 export const COMMANDS: CommandInfo[] = [
-  { id: "palette.toggle", title: "Open or close search", category: "General" },
-  { id: "chat.new", title: "New chat, or task in the current project", category: "General" },
+  { id: "palette.toggle", page: "Main", title: "Search", description: "Open or close search" },
+  {
+    id: "chat.new",
+    page: "Main",
+    title: "New chat or task",
+    description: "A chat, or a task in the current project",
+  },
   {
     id: "chat.newHere",
-    title: "New chat, or task in the selected chat's project or folder",
-    category: "General",
+    page: "Main",
+    title: "New task here",
+    description: "In the selected chat's project or folder; a chat if none is selected",
   },
-  { id: "settings.open", title: "Open settings", category: "General" },
-  { id: "composer.focus", title: "Jump to the composer", category: "General" },
-  { id: "sidePanel.toggle", title: "Open or close the side panel", category: "General" },
-  { id: "palette.close", title: "Close search", category: "Dismiss" },
-  { id: "settings.close", title: "Close settings", category: "Dismiss" },
-  { id: "canvas.close", title: "Close the file panel", category: "Dismiss" },
-  { id: "sidebar.clearPicked", title: "Clear the selected chats and tasks", category: "Dismiss" },
-  { id: "transcript.clearSelection", title: "Clear highlighted chat text", category: "Dismiss" },
-  { id: "transcript.selectAll", title: "Select all text in the chat", category: "Chat" },
-  { id: "sidebar.selectAll", title: "Select every chat and task shown", category: "Sidebar" },
-  { id: "sidebar.selectAllArchived", title: "Select every archived chat", category: "Sidebar" },
+  { id: "settings.open", page: "Main", title: "Open settings" },
+  {
+    id: "composer.focus",
+    page: "Main",
+    title: "Jump to the composer",
+    description: "Outside a text field",
+  },
+  {
+    id: "sidePanel.toggle",
+    page: "Main",
+    title: "Side panel",
+    description: "Closes the open panel, or reopens the last one; outside a text field",
+  },
+  { id: "palette.close", page: "Main", title: "Close search" },
+  { id: "settings.close", page: "Main", title: "Close settings" },
+  { id: "canvas.close", page: "Main", title: "Close the file panel" },
+  {
+    id: "transcript.selectAll",
+    page: "Chat",
+    title: "Select all",
+    description: "Selects the text of the chat shown, once you click in it",
+  },
+  {
+    id: "transcript.clearSelection",
+    page: "Chat",
+    title: "Clear highlight",
+    description: "Unselects highlighted chat text",
+  },
+  {
+    id: "sidebar.selectAll",
+    page: "Sidebar",
+    title: "Select all",
+    description: "Every chat and task shown, once you click in the list",
+  },
+  {
+    id: "sidebar.clearPicked",
+    page: "Sidebar",
+    title: "Clear selection",
+    description: "Unselects the picked chats and tasks",
+  },
   {
     id: "workspace.closeChat",
-    title: "Remove selected chats and tasks, or the open one",
-    category: "Sidebar",
+    page: "Sidebar",
+    title: "Remove selected",
+    description: "The picked chats and tasks, and the open chat while the composer is not active",
   },
   {
     id: "workspace.deleteChat",
-    title: "Remove selected chats and tasks, or the open one outside a text field",
-    category: "Sidebar",
+    page: "Sidebar",
+    title: "Delete",
+    description:
+      "The picked chats and tasks, or the open chat if none; deletes them in the archive. Outside a text field",
+  },
+  {
+    id: "sidebar.selectAllArchived",
+    page: "Archive",
+    title: "Select all",
+    description: "Every archived chat, once you click in the list",
   },
 ];
 

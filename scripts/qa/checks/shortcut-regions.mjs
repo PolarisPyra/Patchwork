@@ -63,7 +63,7 @@ report.sidebarCtrlA = {
 // Remapping: Settings > Shortcuts, record Ctrl+J for "Open or close search", then use it.
 await page.keyboard.press("Control+,");
 await page.getByRole("button", { name: "Shortcuts" }).click();
-await page.getByRole("button", { name: "Change shortcut for Open or close search" }).click();
+await page.getByRole("button", { name: "Change shortcut for Search" }).click();
 await page.keyboard.press("Control+j");
 await page.screenshot({ path: "/tmp/shortcuts-pane.png" });
 await page.keyboard.press("Escape"); // closes settings

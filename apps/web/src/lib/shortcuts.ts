@@ -1,5 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { COMMANDS, DEFAULT_RULES } from "~/lib/shortcutDefaults";
+import { COMMANDS, DEFAULT_RULES, type ShortcutPage } from "~/lib/shortcutDefaults";
 
 /**
  * Keyboard shortcuts as commands, keys and contexts, in three parts that know nothing of each
@@ -16,7 +16,13 @@ import { COMMANDS, DEFAULT_RULES } from "~/lib/shortcutDefaults";
  */
 
 export type Rule = { key: string; command: string; when?: string };
-export type CommandInfo = { id: string; title: string; category: string };
+export type CommandInfo = {
+  id: string;
+  page: ShortcutPage;
+  title: string;
+  /** What the key does, where it is not clear from the title. */
+  description?: string;
+};
 
 // --- when clauses: flag names joined with !, && and || and grouped with parentheses ---
 
