@@ -42,6 +42,11 @@ Run the checks that match what you changed, and report the output if any fail.
 - Keep each edit complete and compiling. Hot reload applies every save, so do not leave half-finished files or broken imports between steps.
 - Do not delete, move, or rename files without asking first. Those changes can break the dev session's watchers and the user's view.
 
+## Design
+
+- Cut taglines, helper text and secondary labels. If a screen needs them to make sense, fix the layout.
+- Make the best decision that will elevate all three: the user experience (UX), developer experience (DX), and agent experience (AX), without breaking anything.
+
 ## UI checks
 
 - For alignment, layout, spacing, or other UI and UX issues, measure and screenshot the running dev session before changing code, and again after. Use the harness in `scripts/qa/`; add new checks under `scripts/qa/checks/`.
