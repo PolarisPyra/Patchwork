@@ -1,8 +1,9 @@
-name: Release AppImage
+name: Release
 
-# Builds the Linux AppImage when a version tag (v0.1.0, v0.2.0, ...) is pushed,
-# and attaches it to a GitHub release for that tag. Pushes to main don't build.
-# Run it by hand from the Actions tab to build without a tag.
+# Builds the Linux AppImage, the Windows installer, and the macOS (Apple silicon) disk image when a
+# version tag (v0.1.0, v0.2.0, ...) is pushed, then creates a GitHub release for that tag with all
+# three attached. Pushes to main don't build. Run it by hand from the Actions tab to build without a
+# tag; the release job only runs for tags.
 
 on:
   push:
@@ -23,9 +24,6 @@ jobs:
       APPIMAGE_EXTRACT_AND_RUN: 1
     steps:
       - uses: actions/checkout@v4
-        with:
-          # git-cliff needs the full history and tags to build the release notes.
-          fetch-depth: 0
 
       - name: Install Tauri Linux dependencies
         # Prebuilt Ubuntu packages, kept in the Actions cache: the WebKitGTK ones are large, and a
@@ -75,26 +73,134 @@ jobs:
           path=$(ls target/release/bundle/appimage/*.AppImage | head -n 1)
           echo "path=$path" >> "$GITHUB_OUTPUT"
 
-      - name: Upload workflow artifact
-        # The release below attaches the AppImage itself, so a full artifact store
-        # shouldn't fail the run.
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: patchwork-appimage
           path: ${{ steps.find.outputs.path }}
 
-      - name: Generate release notes
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set version from tag
         if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for file in package.json apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json; do
+            jq --arg v "$version" '.version = $v' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+          done
+          for file in apps/desktop/src-tauri/Cargo.toml apps/server/Cargo.toml; do
+            sed -i "0,/^version = /{s/^version = .*/version = \"$version\"/}" "$file"
+          done
+
+      - name: Build installer
+        run: pnpm --filter patchwork-desktop exec tauri build --bundles nsis
+
+      - name: Find installer
+        id: find
+        run: |
+          path=$(ls target/release/bundle/nsis/*-setup.exe | head -n 1)
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: patchwork-windows
+          path: ${{ steps.find.outputs.path }}
+
+  macos:
+    # macos-14 runs on Apple silicon, so the build is native arm64.
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for file in package.json apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json; do
+            jq --arg v "$version" '.version = $v' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+          done
+          for file in apps/desktop/src-tauri/Cargo.toml apps/server/Cargo.toml; do
+            sed -i '' "0,/^version = /{s/^version = .*/version = \"$version\"/}" "$file"
+          done
+
+      - name: Build disk image
+        run: pnpm --filter patchwork-desktop exec tauri build --bundles dmg
+
+      - name: Find disk image
+        id: find
+        run: |
+          path=$(ls target/release/bundle/dmg/*.dmg | head -n 1)
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: patchwork-macos-arm64
+          path: ${{ steps.find.outputs.path }}
+
+  release:
+    needs: [appimage, windows, macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # git-cliff needs the full history and tags to build the release notes.
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate release notes
         uses: orhun/git-cliff-action@v4
         with:
           args: --latest --strip header --output RELEASE_NOTES.md
 
       - name: Attach to GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "${{ steps.find.outputs.path }}" \
+          gh release create "$GITHUB_REF_NAME" dist/* \
             --title "Patchwork $GITHUB_REF_NAME" \
             --notes-file RELEASE_NOTES.md
