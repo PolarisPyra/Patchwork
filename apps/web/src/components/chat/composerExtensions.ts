@@ -13,7 +13,7 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import CodeBlockNodeView from "~/components/chat/CodeBlockNodeView";
 import { codeHighlightPlugin } from "~/components/chat/codeHighlight";
 
-const GOAL_CLASS =
+export const GOAL_CLASS =
   "rounded-[4px] bg-accent/30 px-1 py-0.5 font-[family-name:var(--font-mono)] text-fg";
 const MENTION_CLASS = "rounded-[4px] bg-selected-muted px-1 text-accent-text";
 

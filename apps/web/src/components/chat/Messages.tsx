@@ -23,6 +23,7 @@ import type { CanvasTab } from "~/components/canvas/Canvas";
 import AttachmentChip, { AttachmentTile } from "~/components/chat/AttachmentChip";
 import { ACTION_CLASS, CopyButton } from "~/components/chat/CopyButton";
 import TurnTimeline from "~/components/chat/TurnTimeline";
+import { GOAL_CLASS } from "~/components/chat/composerExtensions";
 import { shortcutContext, useCommand } from "~/lib/shortcuts";
 import { formatTokens } from "~/lib/tokens";
 import { formatClock } from "~/lib/util";
@@ -83,7 +84,10 @@ export default function Messages({
     let held = 0;
     let frames = 0;
     const check = () => {
-      held = listRef.current?.getState().isAtEnd ? held + 1 : 0;
+      // Measured rows can move the end after the first placement, so keep jumping to it until held.
+      const atEnd = listRef.current?.getState().isAtEnd ?? false;
+      if (!atEnd) listRef.current?.scrollToEnd();
+      held = atEnd ? held + 1 : 0;
       if (held >= 2 || ++frames > 30) setSettled(true);
       else frame = requestAnimationFrame(check);
     };
@@ -201,6 +205,9 @@ const PREVIEW_LINES = 40;
 /** Long messages the user expanded; kept here because the chat list remounts rows as it scrolls. */
 const expandedMessages = new Set<string>();
 
+/** A message that sets or acts on a goal, as the backend reads it. */
+const GOAL_PREFIX = /^\s*\/goal(\s|$)/;
+
 const UserMessage = memo(function UserMessage({
   message,
   onRestore,
@@ -255,7 +262,17 @@ const UserMessage = memo(function UserMessage({
         // Line breaks the user typed are kept inside paragraphs only; between blocks they would show
         // as blank lines.
         <div className="rounded-[12px] bg-[color-mix(in_srgb,var(--text)_10%,var(--bg-editor))] px-4 py-2.5 leading-[1.55] text-fg [word-break:break-word] selectable [&_h3]:mt-0 [&_h3]:mb-0 [&_p]:whitespace-pre-wrap">
-          <Markdown text={text} />
+          {GOAL_PREFIX.test(text) ? (
+            // The same chip the composer shows for `/goal`, then the objective.
+            <div className="flex items-baseline gap-1.5">
+              <span className={`flex-none ${GOAL_CLASS}`}>/goal</span>
+              <div className="min-w-0 flex-1">
+                <Markdown text={text.trim().slice("/goal".length).trim()} />
+              </div>
+            </div>
+          ) : (
+            <Markdown text={text} />
+          )}
         </div>
       )}
       {long && (
