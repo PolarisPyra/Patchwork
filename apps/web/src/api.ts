@@ -462,6 +462,8 @@ export const api = {
   createProject: (parent: string, name: string) =>
     invoke<Project>("create_project", { parent, name }),
   renameProject: (id: string, name: string) => invoke<void>("rename_project", { id, name }),
+  relocateProject: (id: string, path: string) => invoke<void>("relocate_project", { id, path }),
+  isFolder: (path: string) => invoke<boolean>("is_folder", { path }),
   removeProject: (id: string) => invoke<void>("remove_project", { id }),
 
   /** All threads (project tasks and project-less chats), in sidebar order. */

@@ -98,6 +98,8 @@ interface SidebarProps {
   onSelectThread: (id: string) => void;
   onRenameThread: (id: string, title: string) => void;
   onRenameProject: (id: string, name: string) => void;
+  /** Picks another folder for the project. */
+  onRelocateProject: (id: string) => void;
   /** Project ids in their new order. */
   onReorderProjects: (ids: string[]) => void;
   /** Thread ids of one list (chats, a project's top level, or a folder) in their new order. */
@@ -290,6 +292,7 @@ function TasksView({
   onSelectThread,
   onRenameThread,
   onRenameProject,
+  onRelocateProject,
   onRemoveTargets,
   onReorderProjects,
   onReorderThreads,
@@ -421,6 +424,15 @@ function TasksView({
     return [
       ...(targets.length === 1
         ? [{ label: "Rename", Icon: PencilSimpleIcon, onSelect: () => setRenaming(targets[0]) }]
+        : []),
+      ...(targets.length === 1 && targets[0].kind === "project"
+        ? [
+            {
+              label: "Change folder…",
+              Icon: FolderIcon,
+              onSelect: () => onRelocateProject(targets[0].id),
+            },
+          ]
         : []),
       {
         label: archiving ? `Archive${count}` : `Remove${count}`,

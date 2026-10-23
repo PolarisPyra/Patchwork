@@ -4,7 +4,8 @@ import type { Goal } from "~/api";
 import { goalCanResume, goalLabel, goalUsage } from "~/components/chat/goalPresentation";
 import { ComposerStripBody } from "~/components/chat/ComposerStrip";
 
-const ACTION =
+/** A small button on a strip above the composer. */
+export const STRIP_ACTION =
   "inline-flex h-6 flex-none cursor-pointer items-center justify-center rounded-[var(--radius-sm)] border border-border-strong bg-editor px-2.5 text-[length:var(--fs-xs)] text-fg hover:bg-hover";
 
 /**
@@ -82,14 +83,14 @@ export default function GoalBanner({
           className="composer-strip-state flex flex-none items-center gap-2"
         >
           {!clearing && working && active && (
-            <button type="button" className={ACTION} onClick={onStop} title="Pause the goal">
+            <button type="button" className={STRIP_ACTION} onClick={onStop} title="Pause the goal">
               Stop
             </button>
           )}
           {!clearing && !working && goalCanResume(goal) && (
             <button
               type="button"
-              className={ACTION}
+              className={STRIP_ACTION}
               onClick={onResume}
               title="Carry on with the goal"
             >
@@ -100,7 +101,7 @@ export default function GoalBanner({
             <span className="text-[length:var(--fs-xs)] text-danger">Couldn't clear goal</span>
           )}
           {!clearing && !working && (
-            <button type="button" className={ACTION} onClick={onClear} title="Drop the goal">
+            <button type="button" className={STRIP_ACTION} onClick={onClear} title="Drop the goal">
               {clearError ? "Retry" : "Clear goal"}
             </button>
           )}

@@ -26,7 +26,7 @@ import { lastEffort } from "~/components/chat/EffortPicker";
 import Chat from "~/components/chat/Chat";
 import CommandPalette, { type PaletteItem } from "~/components/workspace/CommandPalette";
 import SettingsDialog from "~/components/settings/SettingsDialog";
-import { addFolders, openFolderAsProject, syncProjects } from "~/lib/projects";
+import { addFolders, openFolderAsProject, relocateProject, syncProjects } from "~/lib/projects";
 import ActivityBar from "~/components/sidebar/ActivityBar";
 import Sidebar, { type SidebarView, type Target } from "~/components/sidebar/Sidebar";
 import { getCollapsed, setCollapsed } from "~/components/sidebar/collapsedState";
@@ -541,6 +541,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     onSelectThread: selectThread,
     onRenameThread: (id: string, title: string) => attempt(() => renameThread(id, title)),
     onRenameProject: renameProjectTo,
+    onRelocateProject: (id: string) => attempt(() => relocateProject(id, updateSettings)),
     onRemoveTargets: removeTargets,
     onReorderProjects: reorderProjects,
     onReorderThreads: reorderThreadsTo,
@@ -616,6 +617,9 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
                 send(text, attachments, draft, projectId, queue)
               }
               onNewChat={() => newThreadIn(projectId)}
+              onChangeFolder={() => {
+                if (projectId) attempt(() => relocateProject(projectId, updateSettings));
+              }}
               onClearThread={(id) => clearThread(id).catch((e: unknown) => setError(errorText(e)))}
               onRestoreCheckpoint={restoreCheckpoint}
               onCancel={(id) => api.cancelTurn(id)}

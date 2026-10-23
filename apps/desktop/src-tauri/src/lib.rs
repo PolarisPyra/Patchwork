@@ -90,6 +90,16 @@ fn rename_project(server: Srv, id: String, name: String) -> Res<()> {
 }
 
 #[tauri::command]
+fn relocate_project(server: Srv, id: String, path: String) -> Res<()> {
+    server.relocate_project(&id, &path)
+}
+
+#[tauri::command]
+fn is_folder(path: String) -> bool {
+    std::path::Path::new(&path).is_dir()
+}
+
+#[tauri::command]
 fn rename_thread(server: Srv, id: String, title: String) -> Res<()> {
     server.rename_thread(&id, &title)
 }
@@ -568,6 +578,8 @@ pub fn run() {
             add_project,
             create_project,
             rename_project,
+            relocate_project,
+            is_folder,
             rename_thread,
             remove_project,
             list_threads,

@@ -1,4 +1,5 @@
 import type { Thread } from "~/api";
+import { isCompactCommand } from "~/components/chat/composerActions";
 
 /** Claude's prompt cache lasts an hour; a thread idle longer has lost it. */
 export const COLD_AFTER_MS = 60 * 60 * 1000;
@@ -24,7 +25,7 @@ export function coldLargeSession(
   if (thread.agent !== "claude") return null;
   const last = thread.messages.at(-1);
   const lastUser = [...thread.messages].reverse().find((m) => m.role === "user");
-  if (!last?.usage || last.finishedAt === null || lastUser?.text.trim() === "/compact") {
+  if (!last?.usage || last.finishedAt === null || isCompactCommand(lastUser?.text ?? "")) {
     return null;
   }
   const idleMs = now - last.finishedAt;

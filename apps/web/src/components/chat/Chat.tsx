@@ -25,7 +25,11 @@ import {
   rememberDismissedChoice,
 } from "~/components/chat/choices";
 import GoalBanner from "~/components/chat/GoalBanner";
-import { isGoalClearCommand } from "~/components/chat/goalPresentation";
+import {
+  isGoalClearCommand,
+  localCommand,
+  type LocalCommand,
+} from "~/components/chat/composerActions";
 import { ComposerStripPresence } from "~/components/chat/ComposerStrip";
 import BackgroundTasks from "~/components/chat/BackgroundTasks";
 import QueuedMessages from "~/components/chat/QueuedMessages";
@@ -35,6 +39,7 @@ import Messages from "~/components/chat/Messages";
 import PendingApprovalBanner from "~/components/chat/PendingApprovalBanner";
 import TasksBadge from "~/components/chat/TasksBadge";
 import { planTitle } from "~/components/chat/ProposedPlanCard";
+import MissingFolderPrompt from "~/components/chat/MissingFolderPrompt";
 import ResumePrompt from "~/components/chat/ResumePrompt";
 import { isWorking, type NewThreadOptions } from "~/hooks/useThreads";
 import { coldLargeSession } from "~/lib/tokens";
@@ -83,6 +88,8 @@ interface ChatProps {
   onSetEffort: (threadId: string, effort: string | null) => Promise<void>;
   /** Starts a fresh chat in this project; the current chat stays in the sidebar. */
   onNewChat: () => void;
+  /** Picks another folder for the project, after it was moved or deleted. */
+  onChangeFolder: () => void;
   /** Deletes the chat's messages and agent session; the chat stays. */
   onClearThread: (threadId: string) => Promise<void>;
   /** Undoes the turn of a user message and everything after it, the project's files included. */
@@ -101,6 +108,7 @@ function base64Of(file: Blob): Promise<string> {
 
 export default function Chat({
   project,
+  onChangeFolder,
   thread,
   parentThread,
   onOpenThread,
@@ -154,11 +162,32 @@ export default function Chat({
       cancelled = true;
     };
   }, [projectId]);
+  // A project whose folder was moved or deleted cannot run its agent until it is pointed elsewhere.
+  const projectPath = project?.path ?? null;
+  const [folderMissing, setFolderMissing] = useState(false);
+  useEffect(() => {
+    setFolderMissing(false);
+    if (!projectPath) return;
+    let cancelled = false;
+    api.isFolder(projectPath).then(
+      (found) => {
+        if (!cancelled) setFolderMissing(!found);
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [projectPath]);
   // Agent/model/access chosen for the next thread; null means the defaults.
   const [pick, setPick] = useState<NewThreadOptions | null>(null);
   const [modelPickerRequest, setModelPickerRequest] = useState(0);
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Errors by the chat they happened in ("new" for the new-task screen), so one never shows in
+  // another chat.
+  const [errors, setErrors] = useState<Record<string, string | null>>({});
+  const setErrorFor = (chat: string, text: string | null) =>
+    setErrors((prev) => ({ ...prev, [chat]: text }));
   // A goal clear in the banner: pending while its error is null, failed otherwise. Keyed by the
   // goal, so a later goal never shows it.
   const [goalClear, setGoalClear] = useState<{ key: string; error: string | null } | null>(null);
@@ -173,6 +202,8 @@ export default function Chat({
 
   const key = thread?.id ?? "new";
   const keyRef = useRef(key);
+  const error = errors[key] ?? null;
+  const setError = (text: string | null) => setErrorFor(key, text);
   const draft = drafts[key] ?? "";
   const setDraft = (text: string) => setDrafts((d) => ({ ...d, [key]: text }));
   const attachments = pending[key] ?? [];
@@ -262,7 +293,7 @@ export default function Chat({
           return { ...prev, [sentKey]: [...current, ...fresh] };
         });
       } catch (e) {
-        setError(errorText(e));
+        setErrorFor(sentKey, errorText(e));
       }
     }
     function overChat(position: { x: number; y: number }) {
@@ -311,7 +342,7 @@ export default function Chat({
         );
         setPending((prev) => ({ ...prev, [sentKey]: [...(prev[sentKey] ?? []), ...found] }));
       } catch (e) {
-        setError(errorText(e));
+        setErrorFor(sentKey, errorText(e));
       }
     }
     function onPaste(event: ClipboardEvent) {
@@ -339,7 +370,8 @@ export default function Chat({
     try {
       await onSend(text, files, newOpts, queue);
     } catch (e) {
-      setError(errorText(e));
+      // A send from the new-task screen has opened its thread by now, if one was made.
+      setErrorFor(sentKey === "new" ? keyRef.current : sentKey, errorText(e));
       if (restoreOnError) {
         setDrafts((d) => (d[sentKey] ? d : { ...d, [sentKey]: text }));
         setPending((p) => (p[sentKey] ? p : { ...p, [sentKey]: files }));
@@ -397,6 +429,7 @@ export default function Chat({
 
   function submit(queue: boolean) {
     const text = composerDraft.trim();
+    if (folderMissing) return;
     if (queuedEdit) {
       if (!thread) return;
       api
@@ -417,32 +450,9 @@ export default function Chat({
       answerQuestion(text);
       return;
     }
-    if (text === "/clear" && attachments.length === 0) {
-      void clearChat();
-      return;
-    }
-    if (text === "/compact" && attachments.length === 0) {
-      compactChat();
-      return;
-    }
-    if (text === "/model" && attachments.length === 0) {
-      setDraft("");
-      setModelPickerRequest((request) => request + 1);
-      return;
-    }
-    if ((text === "/plan" || text === "/default") && attachments.length === 0) {
-      if (!planSupported) {
-        setError("Plan mode is not supported by Antigravity.");
-      } else {
-        setPlanMode(text === "/plan");
-      }
-      setDraft("");
-      return;
-    }
-    // /new starts a fresh chat; the current one is kept in the sidebar.
-    if (text === "/new" && attachments.length === 0) {
-      setDraft("");
-      onNewChat();
+    const command = attachments.length === 0 ? localCommand(text) : null;
+    if (command) {
+      runLocalCommand(command);
       return;
     }
     // Mid-turn, /goal clear is the Stop button: the agent's session drops the goal once it exits.
@@ -594,17 +604,36 @@ export default function Chat({
     setError(null);
     onSetPlanMode(thread.id, enabled).catch((e: unknown) => setError(errorText(e)));
   }
+  function runLocalCommand(command: LocalCommand) {
+    switch (command.name) {
+      case "/clear":
+        void clearChat();
+        return;
+      case "/compact":
+        compactChat();
+        return;
+      case "/model":
+        setDraft("");
+        setModelPickerRequest((request) => request + 1);
+        return;
+      case "/plan":
+      case "/default":
+        if (!planSupported) setError("Plan mode is not supported by Antigravity.");
+        else setPlanMode(command.name === "/plan");
+        setDraft("");
+        return;
+      // /new starts a fresh chat; the current one is kept in the sidebar.
+      case "/new":
+        setDraft("");
+        onNewChat();
+        return;
+    }
+  }
   function selectSlashCommand(name: string): boolean {
-    if (name === "/model") {
-      setModelPickerRequest((request) => request + 1);
-      return true;
-    }
-    if (name === "/plan" || name === "/default") {
-      if (!planSupported) setError("Plan mode is not supported by Antigravity.");
-      else setPlanMode(name === "/plan");
-      return true;
-    }
-    return false;
+    const command = localCommand(name);
+    if (command?.runs !== "pick") return false;
+    runLocalCommand(command);
+    return true;
   }
   function pickAccess(mode: AccessMode) {
     if (!thread) {
@@ -827,6 +856,9 @@ export default function Chat({
             onDismiss={() => respond(asking.id, false)}
           />
         )}
+        {folderMissing && projectPath && (
+          <MissingFolderPrompt path={projectPath} onChangeFolder={onChangeFolder} />
+        )}
         {thread && resumeAsk === thread.id && (
           <ResumePrompt
             idleMs={Date.now() - (thread.messages.at(-1)?.finishedAt ?? Date.now())}
@@ -914,6 +946,7 @@ export default function Chat({
           history={history}
           files={files}
           deferFocus={showChoices || showQuestion}
+          disabled={folderMissing}
         />
       </div>
     </div>

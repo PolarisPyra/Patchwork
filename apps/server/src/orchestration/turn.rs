@@ -100,12 +100,21 @@ impl Runner {
             });
             let settings = server.store.settings();
             let root = match &thread.project_id {
-                Some(id) => settings
-                    .projects
-                    .iter()
-                    .find(|p| &p.id == id)
-                    .map(|p| p.path.clone())
-                    .ok_or("Project not found")?,
+                Some(id) => {
+                    let project = settings
+                        .projects
+                        .iter()
+                        .find(|p| &p.id == id)
+                        .ok_or("Project not found")?;
+                    // Spawning in a missing folder fails with a bare "No such file or directory".
+                    if !std::path::Path::new(&project.path).is_dir() {
+                        return Err(format!(
+                            "The {} project's folder, {}, no longer exists",
+                            project.name, project.path
+                        ));
+                    }
+                    project.path.clone()
+                }
                 None => {
                     let dir = server.chat_dir(&thread_id);
                     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;

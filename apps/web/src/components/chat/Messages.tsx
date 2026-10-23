@@ -23,7 +23,11 @@ import type { CanvasTab } from "~/components/canvas/Canvas";
 import AttachmentChip, { AttachmentTile } from "~/components/chat/AttachmentChip";
 import { ACTION_CLASS, CopyButton } from "~/components/chat/CopyButton";
 import TurnTimeline from "~/components/chat/TurnTimeline";
-import { isGoalClearCommand } from "~/components/chat/goalPresentation";
+import {
+  goalObjective,
+  isCompactCommand,
+  isGoalClearCommand,
+} from "~/components/chat/composerActions";
 import { GOAL_CLASS } from "~/components/chat/composerExtensions";
 import { shortcutContext, useCommand } from "~/lib/shortcuts";
 import { formatTokens } from "~/lib/tokens";
@@ -142,7 +146,7 @@ export default function Messages({
         maintainVisibleContentPosition
         className={`min-h-0 flex-1 overflow-x-hidden [overflow-anchor:none]${settled ? "" : " invisible"}`}
         renderItem={({ item, index }) => {
-          if (item.role === "user" && item.text.trim() === "/compact") {
+          if (item.role === "user" && isCompactCommand(item.text)) {
             const before = [...messages.slice(0, index)].reverse().find((m) => m.usage)?.usage;
             return (
               <div className="px-6">
@@ -208,9 +212,6 @@ const PREVIEW_LINES = 40;
 /** Long messages the user expanded; kept here because the chat list remounts rows as it scrolls. */
 const expandedMessages = new Set<string>();
 
-/** A message that sets or acts on a goal, as the backend reads it. */
-const GOAL_PREFIX = /^\s*\/goal(\s|$)/;
-
 const UserMessage = memo(function UserMessage({
   message,
   onRestore,
@@ -228,6 +229,7 @@ const UserMessage = memo(function UserMessage({
       : long && !expanded
         ? message.text.slice(0, LONG_MESSAGE_CHARS)
         : message.text;
+  const objective = goalObjective(text);
   const toggle = () => {
     if (expanded) expandedMessages.delete(message.id);
     else expandedMessages.add(message.id);
@@ -265,12 +267,12 @@ const UserMessage = memo(function UserMessage({
         // Line breaks the user typed are kept inside paragraphs only; between blocks they would show
         // as blank lines.
         <div className="rounded-[12px] bg-[color-mix(in_srgb,var(--text)_10%,var(--bg-editor))] px-4 py-2.5 leading-[1.55] text-fg [word-break:break-word] selectable [&_h3]:mt-0 [&_h3]:mb-0 [&_p]:whitespace-pre-wrap">
-          {GOAL_PREFIX.test(text) ? (
+          {objective !== null ? (
             // The same chip the composer shows for `/goal`, then the objective.
             <div className="flex items-baseline gap-1.5">
               <span className={`flex-none ${GOAL_CLASS}`}>/goal</span>
               <div className="min-w-0 flex-1">
-                <Markdown text={text.trim().slice("/goal".length).trim()} />
+                <Markdown text={objective} />
               </div>
             </div>
           ) : (

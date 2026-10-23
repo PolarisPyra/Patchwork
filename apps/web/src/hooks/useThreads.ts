@@ -14,6 +14,7 @@ import {
   type StepStatus,
   type Thread,
 } from "~/api";
+import { goalObjective } from "~/components/chat/composerActions";
 import { profileMark } from "~/lib/profile";
 import { AGENT_FOLDER_NAMES, AGENT_KINDS } from "~/lib/util";
 
@@ -39,7 +40,7 @@ const FLUSH_MS = 100;
 /** Same rule as the backend: first line without a leading `/goal`, at most 60 characters. */
 function titleFrom(text: string): string {
   const line = (text.split("\n")[0] ?? "").trim();
-  const objective = /^\/goal(\s|$)/.test(line) ? line.slice("/goal".length).trim() : line;
+  const objective = goalObjective(line) ?? line;
   return Array.from(objective || line).slice(0, 60).join("");
 }
 

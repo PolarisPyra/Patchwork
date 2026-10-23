@@ -12,6 +12,7 @@ import {
 import AccessPicker from "~/components/chat/AccessPicker";
 import EffortPicker from "~/components/chat/EffortPicker";
 import AttachmentChip from "~/components/chat/AttachmentChip";
+import { commandScore, SLASH_COMMANDS } from "~/components/chat/composerActions";
 import {
   composerExtensions,
   continueList,
@@ -61,6 +62,8 @@ interface ComposerProps {
   files: string[];
   /** A choice panel is open: the editor is read-only until the user picks writing their own answer. */
   deferFocus: boolean;
+  /** Nothing can be written or sent, such as while the project's folder is missing. */
+  disabled: boolean;
 }
 
 export interface HistoryEntry {
@@ -74,33 +77,8 @@ interface Recalled {
   text: string;
 }
 
-/** Slash commands offered while the draft is a single "/word". */
-const COMMANDS = [
-  { name: "/model", description: "Switch the response model for this chat" },
-  { name: "/plan", description: "Switch this chat into plan mode" },
-  { name: "/default", description: "Switch this chat back to normal mode" },
-  { name: "/goal", description: "Keep working until a condition is met" },
-  { name: "/new", description: "Start a fresh chat in this project" },
-  { name: "/clear", description: "Delete this chat's messages and start the agent fresh" },
-  { name: "/compact", description: "Ask Claude to summarise the conversation to free context" },
-];
-
 /** Most characters a prompt can hold; a longer draft cannot be sent. */
 const PROMPT_LIMIT = 120_000;
-
-/**
- * How well a command name matches the typed query (without the "/"): lower is better, and null
- * drops the command. Prefixes rank above matches that start a word, which rank above any match.
- */
-function commandScore(name: string, query: string): number | null {
-  const bare = name.slice(1);
-  if (bare === query) return 0;
-  if (bare.startsWith(query)) return 2;
-  for (let i = bare.indexOf(query, 1); i > 0; i = bare.indexOf(query, i + 1)) {
-    if ("-_/".includes(bare[i - 1])) return 4;
-  }
-  return bare.includes(query) ? 6 : null;
-}
 
 /** An entry in the @ menu. */
 interface MentionItem {
@@ -170,6 +148,7 @@ export default function Composer({
   history,
   files,
   deferFocus,
+  disabled,
 }: ComposerProps) {
   const models = useModels(agents);
   // The slash menu lists commands for a draft that is still one "/word"; Escape hides it
@@ -182,9 +161,9 @@ export default function Composer({
     agent !== "antigravity" && agent !== "opencode" && /^\/\S*$/.test(value)
       ? value.toLowerCase()
       : null;
-  const builtInNames = new Set(COMMANDS.map((command) => command.name.slice(1)));
+  const builtInNames = new Set(SLASH_COMMANDS.map((command) => command.name.slice(1)));
   const commands = [
-    ...COMMANDS,
+    ...SLASH_COMMANDS,
     ...providerSlashCommands
       .filter((command) => !builtInNames.has(command.name.replace(/^\//, "")))
       .map((command) => ({
@@ -342,8 +321,8 @@ export default function Composer({
 
   // Opening a chat puts the caret in the composer, unless the user is typing in another field,
   // the task list keeps the focus (the chat opened from it), or a choice panel is open.
-  const deferFocusRef = useRef(deferFocus);
-  deferFocusRef.current = deferFocus;
+  const deferFocusRef = useRef(deferFocus || disabled);
+  deferFocusRef.current = deferFocus || disabled;
   useEffect(() => {
     const active = document.activeElement;
     const focusStays =
@@ -364,23 +343,26 @@ export default function Composer({
       !working &&
       editor &&
       !deferFocus &&
+      !disabled &&
       document.activeElement === document.body
     ) {
       editor.commands.focus("end");
     }
     wasWorking.current = working;
-  }, [editor, working, deferFocus]);
+  }, [editor, working, deferFocus, disabled]);
 
   // A choice panel takes the keys: the editor is read-only and unfocused while it is open, and
-  // takes the focus when it closes so the user can write their own answer.
-  const wasDeferred = useRef(deferFocus);
+  // takes the focus when it closes so the user can write their own answer. A disabled composer
+  // is read-only the same way.
+  const readOnly = deferFocus || disabled;
+  const wasDeferred = useRef(readOnly);
   useEffect(() => {
     if (!editor) return;
-    editor.setEditable(!deferFocus, false);
-    if (deferFocus && editor.isFocused) editor.commands.blur();
-    else if (!deferFocus && wasDeferred.current) editor.commands.focus("end");
-    wasDeferred.current = deferFocus;
-  }, [editor, deferFocus]);
+    editor.setEditable(!readOnly, false);
+    if (readOnly && editor.isFocused) editor.commands.blur();
+    else if (!readOnly && wasDeferred.current) editor.commands.focus("end");
+    wasDeferred.current = readOnly;
+  }, [editor, readOnly]);
 
   const recalled = useRef<Recalled | null>(null);
 
@@ -515,7 +497,9 @@ export default function Composer({
     ? "border border-dashed border-accent bg-editor"
     : goalActive
       ? "goal-border"
-      : "border border-border-strong bg-editor focus-within:border-accent";
+      : disabled
+        ? "border border-border-strong bg-editor"
+        : "border border-border-strong bg-editor focus-within:border-accent";
   return (
     <div
       className={`relative flex flex-col gap-2 rounded-[8px] pt-3.5 pr-3 pb-2.5 pl-3 ${surface}`}
@@ -575,7 +559,7 @@ export default function Composer({
           ))}
         </div>
       )}
-      <EditorContent editor={editor} className="composer-editor min-w-0" />
+      <EditorContent editor={editor} className={`composer-editor min-w-0 `} />
       <div className="@container flex flex-wrap items-center gap-1.5">
         <ModelPicker
           agent={agent}
@@ -608,6 +592,7 @@ export default function Composer({
               className={`grid h-8 w-8 cursor-pointer place-items-center ${working && !editingQueued ? "rounded-l-[var(--radius)]" : "rounded-[var(--radius)]"} border-none bg-accent text-on-accent enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-selected-muted disabled:text-fg-subtle`}
               onClick={() => sendDraft()}
               disabled={
+                disabled ||
                 (!value.trim() && attachments.length === 0) ||
                 overBy > 0 ||
                 (working && queueNext && !canQueueFollowUp && !editingQueued)

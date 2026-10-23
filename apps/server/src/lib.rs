@@ -385,6 +385,43 @@ impl Server {
         })?
     }
 
+    /// Points a project at another folder, such as after it was moved or renamed. Agents keep
+    /// their sessions by folder, so the project's tasks start new ones, sent their transcript.
+    pub fn relocate_project(&self, id: &str, path: &str) -> Res<()> {
+        let path = workspace::make_project(path)?.path;
+        let threads: Vec<String> = self
+            .store
+            .threads()
+            .into_iter()
+            .filter(|t| t.project_id.as_deref() == Some(id))
+            .map(|t| t.id)
+            .collect();
+        if threads.iter().any(|t| self.runner.is_running(t)) {
+            return Err("Stop this project's running tasks before changing its folder".into());
+        }
+        let moved = self.store.update_settings(|s| {
+            if let Some(other) = s.projects.iter().find(|p| p.path == path && p.id != id) {
+                return Err(format!("{path} is already the folder of {}", other.name));
+            }
+            let project = s.projects.iter_mut().find(|p| p.id == id);
+            let project = project.ok_or_else(|| format!("unknown project {id}"))?;
+            let moved = project.path != path;
+            project.path = path;
+            Ok(moved)
+        })??;
+        if moved {
+            for thread_id in &threads {
+                // An idle agent still runs in the old folder.
+                self.runner.retire_idle(thread_id);
+                self.store.update_thread(thread_id, |t| {
+                    t.session_id = None;
+                    t.context_pending = !t.messages.is_empty();
+                })?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn remove_project(&self, id: &str) -> Res<()> {
         self.store.update_settings(|s| {
             s.projects.retain(|p| p.id != id);

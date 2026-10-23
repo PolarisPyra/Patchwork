@@ -19,11 +19,6 @@ export function isGoalClearedReply(text: string): boolean {
   return /^(Goal cleared|No goal set|No goal to clear)/.test(text.trim());
 }
 
-/** `/goal clear` or one of its aliases, as the backend reads them. */
-export function isGoalClearCommand(text: string): boolean {
-  return /^\/goal\s+(clear|stop|off|reset|none|cancel)\s*$/i.test(text.trim());
-}
-
 /** A goal that stopped part way and can carry on. A blocked goal has been judged impossible. */
 export function goalCanResume(goal: Goal): boolean {
   return (

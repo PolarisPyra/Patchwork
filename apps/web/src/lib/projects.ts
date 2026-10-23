@@ -41,3 +41,12 @@ export async function openFolderAsProject(
   if (typeof path !== "string") return;
   await addFolders([path], known, updateSettings);
 }
+
+/** Folder picker, then points the project at the folder, such as after it was moved. No-op if
+ * cancelled. */
+export async function relocateProject(id: string, updateSettings: UpdateSettings): Promise<void> {
+  const path = await open({ directory: true, multiple: false });
+  if (typeof path !== "string") return;
+  await api.relocateProject(id, path);
+  await syncProjects(updateSettings);
+}
