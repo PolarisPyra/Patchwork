@@ -13,10 +13,16 @@ pub enum AgentKind {
     /// Saved as "gemini" before the rename; the alias keeps those threads and settings readable.
     #[serde(alias = "gemini")]
     Antigravity,
+    OpenCode,
 }
 
 impl AgentKind {
-    pub const ALL: [AgentKind; 3] = [AgentKind::Claude, AgentKind::Codex, AgentKind::Antigravity];
+    pub const ALL: [AgentKind; 4] = [
+        AgentKind::Claude,
+        AgentKind::Codex,
+        AgentKind::Antigravity,
+        AgentKind::OpenCode,
+    ];
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]

@@ -177,7 +177,11 @@ export default function Composer({
   const [menuClosed, setMenuClosed] = useState(false);
   const [dispatchMenuOpen, setDispatchMenuOpen] = useState(false);
   const [commandIndex, setCommandIndex] = useState(0);
-  const slash = agent !== "antigravity" && /^\/\S*$/.test(value) ? value.toLowerCase() : null;
+  // Antigravity and OpenCode read the message as a prompt, so there are no commands to offer.
+  const slash =
+    agent !== "antigravity" && agent !== "opencode" && /^\/\S*$/.test(value)
+      ? value.toLowerCase()
+      : null;
   const builtInNames = new Set(COMMANDS.map((command) => command.name.slice(1)));
   const commands = [
     ...COMMANDS,

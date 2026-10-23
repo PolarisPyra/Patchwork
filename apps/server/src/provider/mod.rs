@@ -4,6 +4,8 @@
 pub mod claude;
 pub mod codex;
 pub mod antigravity;
+pub mod opencode;
+pub mod opencode_bridge;
 pub mod model_manifest;
 
 use std::collections::HashMap;
@@ -64,6 +66,7 @@ pub fn agent_command(kind: AgentKind) -> Result<Command, String> {
         AgentKind::Antigravity => {
             antigravity::antigravity_bin().ok_or("Antigravity CLI is not installed")?
         }
+        AgentKind::OpenCode => opencode::opencode_bin().ok_or("OpenCode CLI is not installed")?,
     };
     let mut cmd = Command::new(&bin);
     if let Some(dir) = bin.parent() {
@@ -77,6 +80,16 @@ pub fn agent_command(kind: AgentKind) -> Result<Command, String> {
         }
     }
     Ok(cmd)
+}
+
+/// The command a turn runs. An OpenCode 2.x turn runs Patchwork's own binary as the bridge to
+/// `opencode serve`; every other turn runs the agent CLI.
+pub fn turn_command(kind: AgentKind) -> Result<Command, String> {
+    if kind == AgentKind::OpenCode && opencode::uses_serve() {
+        let exe = std::env::current_exe().map_err(|e| format!("Failed to find Patchwork: {e}"))?;
+        return Ok(Command::new(exe));
+    }
+    agent_command(kind)
 }
 
 /// Marks the PATH line in the login shell's output, since profile scripts may print too.
@@ -224,12 +237,14 @@ pub fn detect_agent(kind: AgentKind) -> AgentStatus {
     status.version = version
         .stdout
         .split_whitespace()
+        .map(|w| w.trim_start_matches('v'))
         .find(|w| w.starts_with(|c: char| c.is_ascii_digit()))
         .map(String::from);
     match kind {
         AgentKind::Claude => claude::auth(&mut status),
         AgentKind::Codex => codex::auth(&mut status),
         AgentKind::Antigravity => antigravity::auth(&mut status),
+        AgentKind::OpenCode => opencode::auth(&mut status),
     }
     status
 }
@@ -240,6 +255,7 @@ pub fn list_models(kind: AgentKind) -> Vec<ModelOption> {
         AgentKind::Claude => (claude::configured_model(), claude::models()),
         AgentKind::Codex => (codex::configured_model(), codex::models()),
         AgentKind::Antigravity => (None, antigravity::models()),
+        AgentKind::OpenCode => (None, opencode::models()),
     };
     let mut out = vec![ModelOption {
         id: None,
@@ -360,6 +376,9 @@ pub fn steer_input(
             attachments,
         )),
         AgentKind::Antigravity => None,
+        // `opencode run` reads one message per run; later ones start the next turn.
+        AgentKind::OpenCode => opencode::uses_serve()
+            .then(|| opencode::steer_line(&prompt_text(text, attachments), attachments)),
     }
 }
 
@@ -386,6 +405,19 @@ pub fn turn_args(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
         AgentKind::Claude => claude::turn_args(spec),
         AgentKind::Codex => codex::turn_args(),
         AgentKind::Antigravity => antigravity::turn_args(spec),
+        AgentKind::OpenCode => opencode::turn_args(spec),
+    }
+}
+
+/// Environment for one turn's agent process, on top of the app's own.
+pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)> {
+    match agent {
+        // The bridge sets up its own server.
+        AgentKind::OpenCode if opencode::uses_serve() => Vec::new(),
+        AgentKind::OpenCode => std::iter::once(("PWD", spec.root.to_string()))
+            .chain(opencode::permission_config(spec).map(|config| ("OPENCODE_CONFIG_CONTENT", config)))
+            .collect(),
+        AgentKind::Claude | AgentKind::Codex | AgentKind::Antigravity => Vec::new(),
     }
 }
 
@@ -398,7 +430,10 @@ pub fn turn_input(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
         AgentKind::Claude if is_goal_command(spec.text) => vec![claude::user_message(&prompt(spec), &[])],
         AgentKind::Claude => vec![claude::user_message(&prompt(spec), spec.images)],
         AgentKind::Codex => codex::turn_input(spec),
-        AgentKind::Antigravity => vec![],
+        // The OpenCode bridge reads its turn from stdin, and answers and steers after it.
+        AgentKind::OpenCode if opencode::uses_serve() => vec![opencode::bridge_request(spec)],
+        // Both read the prompt from their arguments, and stdin is closed so they do not wait on it.
+        AgentKind::Antigravity | AgentKind::OpenCode => vec![],
     }
 }
 
@@ -425,6 +460,7 @@ pub fn parse_line(agent: AgentKind, v: &Value, spec: &TurnSpec, message_id: &str
         }
         AgentKind::Codex => codex::parse(v, spec, message_id),
         AgentKind::Antigravity => antigravity::parse(v, spec, message_id),
+        AgentKind::OpenCode => opencode::parse(v, spec, message_id),
     }
 }
 
@@ -438,8 +474,9 @@ pub fn approval_reply(
     match agent {
         AgentKind::Claude => claude::approval_reply(reply, allow, answers),
         AgentKind::Codex => codex::approval_reply(reply, allow, answers),
-        // Antigravity runs headless and never asks.
-        AgentKind::Antigravity => String::new(),
+        AgentKind::OpenCode if opencode::uses_serve() => opencode::approval_reply(reply, allow, answers),
+        // Antigravity and `opencode run` run headless and never ask.
+        AgentKind::Antigravity | AgentKind::OpenCode => String::new(),
     }
 }
 

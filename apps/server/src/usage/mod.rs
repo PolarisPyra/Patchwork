@@ -59,6 +59,11 @@ fn fetch(kind: AgentKind) -> Result<ProviderUsage, Failure> {
         AgentKind::Claude => claude::usage(empty(kind)),
         AgentKind::Codex => codex::usage(empty(kind)).map_err(Failure::from),
         AgentKind::Antigravity => antigravity::usage(empty(kind)).map_err(Failure::from),
+        // OpenCode bills through the providers it is signed in to and reports no plan limits.
+        AgentKind::OpenCode => Ok(ProviderUsage {
+            error: Some("OpenCode has no plan limits to show".into()),
+            ..empty(kind)
+        }),
     }
 }
 

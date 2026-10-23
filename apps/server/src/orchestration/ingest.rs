@@ -356,12 +356,15 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                         continue;
                     }
                     match &mut event {
-                        // Separate successive text blocks so they do not run together. Antigravity
-                        // and Claude stream a block as chunks, so chunks after the first stay
-                        // together.
+                        // Separate successive text blocks so they do not run together. Antigravity,
+                        // Claude, and OpenCode's server stream a block as chunks, so chunks after the
+                        // first stay together.
                         AgentEvent::TextDelta { text, .. } => {
-                            let streams =
-                                matches!(turn.agent, AgentKind::Antigravity | AgentKind::Claude);
+                            let streams = match turn.agent {
+                                AgentKind::Antigravity | AgentKind::Claude => true,
+                                AgentKind::OpenCode => provider::opencode::uses_serve(),
+                                AgentKind::Codex => false,
+                            };
                             let continues = streams && last_was_text;
                             if has_text && !continues {
                                 text.insert_str(0, "\n\n");

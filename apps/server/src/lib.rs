@@ -669,6 +669,9 @@ impl Server {
             }
             let agent = self.store.thread(&thread_id).map(|t| t.agent);
             let arg = text.trim()["/goal".len()..].trim().to_lowercase();
+            if agent == Some(AgentKind::OpenCode) {
+                return Err("OpenCode has no /goal command. Describe the task in a message instead.".into());
+            }
             if agent == Some(AgentKind::Antigravity) {
                 if provider::antigravity::antigravity_bin().is_none() {
                     return Err("/goal needs the Antigravity CLI. Install it in Settings.".into());

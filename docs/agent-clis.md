@@ -53,6 +53,24 @@ point where it touches them.
 | Import | Chats saved by the earlier Gemini CLI, under `~/.gemini/tmp/<project>/chats`, with folders from `~/.gemini/projects.json`. |
 | Usage limits | `agy -p /usage --output-format json`. |
 
+## OpenCode (`opencode`)
+
+| | |
+| --- | --- |
+| Install | Not installed by Patchwork. `opencode` on `PATH` or in the usual install folders is used, else `~/.opencode/bin/opencode`, where its installer puts it. |
+| Detect | `opencode --version` (`1.19.4`, or `v2.1.3` for 2.x). Its free models need no account, so an installed CLI counts as signed in; other providers are added with `opencode auth login`. |
+| Models | `opencode models`, one `provider/model` per line. |
+| Run (2.x) | Each turn starts Patchwork's own binary with `--opencode-bridge` (`apps/server/src/provider/opencode_bridge.rs`). The bridge starts a private `opencode serve --hostname 127.0.0.1 --port 0` in the task's folder, with `PWD` set to it and a password it generates in `OPENCODE_PASSWORD`, and stops it when the turn ends. It creates or resumes the session (`POST /api/session`, `GET /api/session/<id>`, then `POST .../model` and `.../agent`), writes its permission rules (`PATCH /api/session/<id>`), subscribes to `GET /api/event`, and sends the message (`POST /api/session/<id>/prompt`, with images as `files`). The turn's first stdin line is the turn; later lines are approval answers and steering messages. |
+| Run (1.x) | `opencode run --format json --thinking [--auto] [--agent plan] [--session <id>] [--model <provider/model>] [--variant <effort>] [--file <image>]... -- <prompt>`. The prompt is an argument and stdin is closed, since `run` otherwise waits to read it. |
+| Effort | 2.x sends it as the model's `variant`, 1.x as `--variant`. |
+| Access modes | 2.x: Full access allows everything; Auto keeps OpenCode's own rules; Auto-accept edits and Supervised ask before `shell` and `external_directory`, and Supervised before `edit` too. Plan mode runs the `plan` agent and denies `edit`. 1.x: Full access `--auto`; Auto-accept edits and Supervised pass the same checks in `OPENCODE_CONFIG_CONTENT`, and since a run cannot ask, an `ask` rule refuses the call. |
+| Approvals and questions | 2.x only. `permission.asked` becomes an approval; it is answered with `POST /api/session/<id>/permission/<request>/reply` and `{"decision": "once"}` or `"reject"`. `question.asked` is answered with `.../question/<request>/reply` and the answers in order, or `.../reject`. |
+| Steering | 2.x only. A message sent during a turn is posted to `/prompt` with `"delivery": "steer"`; `session.inbox.delivered` confirms it was taken. 1.x waits for the next turn. |
+| Output used | 2.x, from the event stream: `session.text.delta`, `session.reasoning.delta`, `session.tool.called` / `.success` / `.failed` (the name comes from `session.tool.input.started`), `session.step.ended` (token counts), `session.execution.succeeded` / `.failed` / `.interrupted` (the turn ends). 1.x: `step_start` (session id), `reasoning`, `text`, `tool_use`, `step_finish` (token counts), `error`. |
+| Not available | Slash commands, `/goal` included. |
+| Import | Sessions from its SQLite database, `~/.local/share/opencode/opencode.db`. |
+| Usage limits | None to show: it bills through the providers it is signed in to. |
+
 ## T3 Code
 
 Imports only: `~/.t3/userdata/statev2.sqlite` is opened read-only, and its Claude and Codex

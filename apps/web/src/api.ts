@@ -7,7 +7,7 @@ import { profile } from "~/lib/profile";
 const invoke = <T>(cmd: string, args?: InvokeArgs) =>
   profile(`ipc:${cmd}`, () => tauriInvoke<T>(cmd, args));
 
-export type AgentKind = "claude" | "codex" | "antigravity";
+export type AgentKind = "claude" | "codex" | "antigravity" | "opencode";
 export type Theme = "light" | "dark" | "system";
 export type Role = "user" | "assistant";
 export type MessageStatus = "streaming" | "complete" | "error" | "cancelled";
@@ -395,6 +395,7 @@ export const AGENT_LABELS: Record<AgentKind, string> = {
   claude: "Claude Code",
   codex: "Codex",
   antigravity: "Antigravity CLI",
+  opencode: "OpenCode CLI",
 };
 
 export const SOURCE_LABELS: Record<ImportSource, string> = {

@@ -1,8 +1,8 @@
 # Patchwork
 
-**A desktop workspace for coding agents.** Patchwork runs Claude Code, Codex, and Antigravity
-on the subscriptions you already have, and keeps every task, project, and chat in one place.
-Each edit lands in your project, and you review it before you keep it.
+**A desktop workspace for coding agents.** Patchwork runs Claude Code, Codex, Antigravity, and
+OpenCode on the subscriptions you already have, and keeps every task, project, and chat in one
+place. Each edit lands in your project, and you review it before you keep it.
 
 <!-- TODO: add a screenshot or GIF of a task in the diff view, e.g. assets/screenshot.png -->
 
@@ -17,12 +17,12 @@ Each edit lands in your project, and you review it before you keep it.
 
 ## Features
 
-- **Three agents, one interface:** Claude Code, Codex, and Antigravity, with the same chat,
-  plan, and diff views for each.
+- **Four agents, one interface:** Claude Code, Codex, Antigravity, and OpenCode, with the same
+  chat, plan, and diff views for each.
 - **Access modes per task:** supervised, auto-accept edits, auto, or full access. Approval
   requests show up in the chat.
 - **Goals and steering:** set a `/goal` and let the agent work toward it, or send a message
-  while a turn is running to steer it (Claude Code and Codex).
+  while a turn is running to steer it (Claude Code, Codex, and OpenCode 2.x).
 - **Subscription usage:** the **Usage** button at the bottom of the sidebar shows each
   provider's limits.
 - **Import what you already have:** bring in conversations from Claude Code, Codex, the
@@ -50,6 +50,7 @@ Install and sign in to at least one agent CLI:
 - [Claude Code](https://docs.claude.com/en/docs/claude-code) (`claude`)
 - [Codex](https://github.com/openai/codex) (`codex`)
 - [Antigravity](https://antigravity.google/) (`agy`)
+- [OpenCode](https://opencode.ai/) (`opencode`)
 
 Patchwork detects which of these CLIs are installed. Claude Code and Codex also report whether
 you are signed in.

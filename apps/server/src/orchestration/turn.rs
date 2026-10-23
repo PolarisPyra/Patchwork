@@ -136,7 +136,7 @@ impl Runner {
         // Codex takes its instructions in the turn's input; Claude takes them as launch arguments.
         let instructions = match agent {
             AgentKind::Codex => codex::developer_instructions(&settings),
-            AgentKind::Claude | AgentKind::Antigravity => None,
+            AgentKind::Claude | AgentKind::Antigravity | AgentKind::OpenCode => None,
         };
         let spec = TurnSpec {
             root: &root,
@@ -162,11 +162,12 @@ impl Runner {
             args.extend(claude::launch_args(&settings));
         }
         let input = provider::turn_input(agent, &spec);
-        let (mut cmd, scope) = scope::scoped(provider::agent_command(agent)?);
+        let (mut cmd, scope) = scope::scoped(provider::turn_command(agent)?);
         if let Some(shell) = crate::effective_shell(server.store.settings().shell.as_deref()) {
             cmd.env("SHELL", shell);
         }
         cmd.args(&args)
+            .envs(provider::turn_env(agent, &spec))
             .current_dir(&root)
             .stdin(if input.is_empty() {
                 Stdio::null()

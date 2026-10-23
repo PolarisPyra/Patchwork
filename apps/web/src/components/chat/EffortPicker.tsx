@@ -19,6 +19,8 @@ export const EFFORTS: Record<AgentKind, string[]> = {
   claude: ["low", "medium", "high", "xhigh", "max"],
   codex: ["low", "medium", "high", "xhigh"],
   antigravity: ["low", "medium", "high", "xhigh", "max"],
+  // OpenCode passes these as the model's variant; the levels most providers share.
+  opencode: ["low", "medium", "high"],
 };
 
 /** `effort` if `agent` accepts it, else null (the CLI's default). */
