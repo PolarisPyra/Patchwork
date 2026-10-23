@@ -49,7 +49,13 @@ import {
   useIsRowSelected,
   useSelectedRows,
 } from "./selectionState";
-import { getCollapsed, loadCollapsed, setCollapsed, useIsCollapsed } from "./collapsedState";
+import {
+  getCollapsed,
+  loadCollapsed,
+  onCollapsedChange,
+  setCollapsed,
+  useIsCollapsed,
+} from "./collapsedState";
 import { isWorking } from "~/hooks/useThreads";
 import { formatKey, keyFor, shortcutContext, useCommand, useKeybindings } from "~/lib/shortcuts";
 import {
@@ -306,7 +312,6 @@ function TasksView({
    * collapsed set itself, so this does not re-render the tree. */
   const changeCollapsed = (update: (prev: ReadonlySet<string>) => ReadonlySet<string>) => {
     setCollapsed(update(getCollapsed()));
-    syncTreeRows();
   };
   const toggle = (id: string) =>
     changeCollapsed((prev) => {
@@ -481,6 +486,8 @@ function TasksView({
     treeRowsRef.current = [...chatRows, ...buildTree(getCollapsed()).rows];
   };
   useEffect(syncTreeRows);
+  // Opening or closing a folder from outside the sidebar, such as the palette, must refresh the list too.
+  useEffect(() => onCollapsedChange(syncTreeRows));
 
   // The selected chat is the keyboard focus until the arrow keys or a click move it.
   // Switching chats replaces the selection with the new chat, or clears it when no chat is open.
@@ -938,6 +945,7 @@ const ThreadRow = memo(function ThreadRow({
   return (
     <div
       {...drag.attrs}
+      data-thread-id={thread.id}
       onPointerDown={(e) => {
         drag.attrs.onPointerDown(e);
         if (!editing && isPlainPress(e)) onPick(e, target);

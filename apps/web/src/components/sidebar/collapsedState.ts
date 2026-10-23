@@ -8,6 +8,8 @@ import { api } from "~/api";
 let ids: ReadonlySet<string> = new Set();
 // Each row's subscribers, by id, so a change reaches only the rows whose state changed.
 const listeners = new Map<string, Set<() => void>>();
+// Whole-set subscribers, for code that needs the tree as a whole after any change.
+const allListeners = new Set<() => void>();
 
 export function getCollapsed(): ReadonlySet<string> {
   return ids;
@@ -19,6 +21,13 @@ function apply(next: ReadonlySet<string>) {
   for (const id of next) if (!ids.has(id)) changed.add(id);
   ids = next;
   for (const id of changed) listeners.get(id)?.forEach((listener) => listener());
+  if (changed.size > 0) allListeners.forEach((listener) => listener());
+}
+
+/** Calls `listener` after any project or folder opens or closes. Returns the unsubscribe. */
+export function onCollapsedChange(listener: () => void): () => void {
+  allListeners.add(listener);
+  return () => void allListeners.delete(listener);
 }
 
 /** Changes which projects and folders are collapsed, and saves it. */

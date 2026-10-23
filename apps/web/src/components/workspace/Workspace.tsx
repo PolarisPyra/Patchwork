@@ -29,6 +29,7 @@ import SettingsDialog from "~/components/settings/SettingsDialog";
 import { openFolderAsProject, syncProjects } from "~/lib/projects";
 import ActivityBar from "~/components/sidebar/ActivityBar";
 import Sidebar, { type SidebarView, type Target } from "~/components/sidebar/Sidebar";
+import { getCollapsed, setCollapsed } from "~/components/sidebar/collapsedState";
 import { getSelectedRows, setSelectedRows } from "~/components/sidebar/selectionState";
 import StatusBar from "~/components/workspace/StatusBar";
 import Toolbar from "~/components/workspace/Toolbar";
@@ -351,6 +352,24 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     if (thread) attempt(() => rememberProject(thread.projectId));
   };
 
+  /** Opens the project and folder a thread sits in, so the sidebar shows it, then selects it. */
+  const revealThread = (id: string) => {
+    const thread = threads.find((t) => t.id === id);
+    if (thread?.projectId) {
+      const open = new Set(getCollapsed());
+      open.delete(thread.projectId);
+      if (thread.folderId) open.delete(`folder:${thread.folderId}`);
+      setCollapsed(open);
+    }
+    selectThread(id);
+    // The folder opens in the same commit; scroll once the row is in the tree.
+    requestAnimationFrame(() =>
+      document
+        .querySelector(`[data-thread-id="${CSS.escape(id)}"]`)
+        ?.scrollIntoView({ block: "nearest" }),
+    );
+  };
+
   const selectProject = (id: string) => {
     select(threads.find((t) => t.projectId === id)?.id ?? null);
     attempt(() => rememberProject(id));
@@ -499,7 +518,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
       label: displayTitle(t.title),
       run: () => {
         setView("tasks");
-        selectThread(t.id);
+        revealThread(t.id);
       },
     })),
     ...settings.projects.map((p) => ({
