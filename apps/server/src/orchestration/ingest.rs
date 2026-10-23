@@ -11,6 +11,7 @@ use std::thread::JoinHandle;
 
 use serde_json::Value;
 
+use crate::provider::GoalUpdate;
 use crate::provider::Parsed;
 use crate::provider;
 use crate::scope;
@@ -75,6 +76,8 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
     let mut ended = false;
     // Codex reported this run's goal active, so it starts further turns toward it.
     let mut goal_run = false;
+    // Claude ended a reply while pursuing the goal, so its evaluator checked that reply.
+    let mut goal_checked = false;
     // Bumped whenever a turn starts, so a grace window that is still waiting does not close stdin.
     let goal_round = Arc::new(AtomicU64::new(0));
     // Text streamed to the frontend but not yet stored; saving every delta
@@ -232,16 +235,37 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                         turn.close_unless_steered();
                     }
                 }
+                Parsed::Goal(GoalUpdate::Checking) => {
+                    if !turn.cancelled.load(Ordering::SeqCst)
+                        && goal.as_ref().is_some_and(|g| goal::pursued(turn.agent, g))
+                    {
+                        goal_checked = true;
+                        turn.save_text(&mut unsaved);
+                        turn.publish(AgentEvent::GoalChecking {
+                            message_id: turn.message_id.clone(),
+                        });
+                    }
+                }
                 Parsed::Goal(update) => {
                     // Once stopped, the agent's last word on the goal no longer applies.
                     if turn.cancelled.load(Ordering::SeqCst) {
                         continue;
                     }
-                    if goal::update_is_dismissed(&turn.server.store, &turn.thread_id, &update) {
+                    if goal::update_is_dismissed(&turn.server.store, &turn.thread_id, &update)
+                        || goal::update_releases_held(
+                            &turn.server.store,
+                            &turn.thread_id,
+                            goal.as_ref(),
+                            &update,
+                        )
+                    {
                         continue;
                     }
+                    // Clearing from the banner drops the stored goal before the agent replies,
+                    // so the clear is published even when this turn started without a goal.
+                    let cleared = matches!(update, GoalUpdate::Cleared);
                     let next = goal::next_goal(goal.as_ref(), update);
-                    if next != goal {
+                    if next != goal || cleared {
                         goal = next;
                         turn.save_text(&mut unsaved);
                         turn.publish(AgentEvent::GoalUpdated { goal: goal.clone() });
@@ -487,7 +511,7 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
             });
         });
 
-    let clear_in_agent = goal::settle(&turn, status, cancelled);
+    let clear_in_agent = goal::settle(&turn, status, cancelled, goal_checked);
 
     let session_lost = session_lost && !cancelled;
     finish(

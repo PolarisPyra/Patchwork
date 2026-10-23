@@ -53,8 +53,29 @@ pub(crate) fn update_is_dismissed(
             .state(&dismissal_key(thread_id))
             .and_then(|value| value.split_once(':').map(|(_, text)| text == objective))
             .unwrap_or(false),
-        GoalUpdate::Checked | GoalUpdate::Cleared => false,
+        GoalUpdate::Checked | GoalUpdate::Checking | GoalUpdate::Cleared => false,
     }
+}
+
+fn held_key(thread_id: &str) -> String {
+    format!("held-goal:{thread_id}")
+}
+
+/// Whether `update` is Claude dropping a met goal it still held (see `settle`). The goal stays
+/// shown as complete, and only this one clear is taken that way.
+pub(crate) fn update_releases_held(
+    store: &crate::persistence::Store,
+    thread_id: &str,
+    current: Option<&Goal>,
+    update: &GoalUpdate,
+) -> bool {
+    let held = store.state(&held_key(thread_id));
+    let releases = matches!(update, GoalUpdate::Cleared)
+        && current.is_some_and(|g| held.as_deref() == Some(signature(g).as_str()));
+    if releases && let Err(e) = store.set_state(&held_key(thread_id), "") {
+        log::warn!("failed to forget a held goal: {e}");
+    }
+    releases
 }
 
 /// The thread's goal after the agent reports `update`.
@@ -77,6 +98,7 @@ pub(crate) fn next_goal(current: Option<&Goal>, update: GoalUpdate) -> Option<Go
             checks: Some(g.checks.unwrap_or(0) + 1),
             ..g.clone()
         }),
+        GoalUpdate::Checking => current.cloned(),
         GoalUpdate::Cleared => None,
         GoalUpdate::Reported(goal) => Some(goal),
     }
@@ -115,6 +137,7 @@ impl Server {
             return Ok(());
         };
         self.store.dismiss_goal(thread_id, &signature(goal))?;
+        self.store.set_state(&held_key(thread_id), "")?;
         // Claude and Codex report the clear back, so the banner stays until their reply, as it
         // does while the goal runs. Other agents report nothing, so the banner clears now.
         let reports_clear = matches!(thread.agent, AgentKind::Claude | AgentKind::Codex);
@@ -156,26 +179,51 @@ pub(super) fn end_input(turn: &Turn, goal_run: bool, round: &Arc<AtomicU64>) {
     });
 }
 
-/// Settles the goal once a turn ends, from how it ended. Returns the message that has the agent
-/// drop its goal in a turn of its own, when it would otherwise take the goal up again.
-pub(super) fn settle(turn: &Turn, status: MessageStatus, cancelled: bool) -> Option<&'static str> {
-    // Claude's goal stands as its evaluator last judged it, which also covers a paused goal
-    // that Claude took up again with this run's message. The stored goal is read again, since
-    // the user may have cleared it meanwhile.
+/// Whether the agent pursues `goal` in a run: an active one, or for Claude a paused one, which
+/// Claude takes up again with the next message.
+pub(super) fn pursued(agent: AgentKind, goal: &Goal) -> bool {
+    goal.status == GoalStatus::Active
+        || (agent == AgentKind::Claude && goal.status == GoalStatus::Paused)
+}
+
+/// Settles the goal once a turn ends, from how it ended. `checked` says Claude's evaluator
+/// checked a reply of this run against the goal. Returns the message that has the agent drop
+/// its goal in a turn of its own, when it would otherwise take the goal up again.
+pub(super) fn settle(
+    turn: &Turn,
+    status: MessageStatus,
+    cancelled: bool,
+    checked: bool,
+) -> Option<&'static str> {
+    // The stored goal is read again, since the user may have cleared it meanwhile.
     let thread = turn.server.store.thread(&turn.thread_id);
     let goal = thread.as_ref().and_then(|t| t.goal.clone());
-    let pursued = |g: &&Goal| {
-        g.status == GoalStatus::Active
-            || (turn.agent == AgentKind::Claude && g.status == GoalStatus::Paused)
-    };
+    let pursued = |g: &&Goal| pursued(turn.agent, g);
     let mut next = goal.clone();
+    // Claude ended its run while still holding the goal, which it would take up again.
+    let mut claude_holds = false;
     if let Some(g) = goal.as_ref().filter(pursued) {
         let status = if turn.agent == AgentKind::Claude && status == MessageStatus::Complete {
             // Without a session there is no verdict to read, and nothing is left pursuing
             // the goal.
-            turn.session_id.as_deref().map_or(GoalStatus::Paused, |id| {
+            let judged = turn.session_id.as_deref().map_or(GoalStatus::Paused, |id| {
                 provider::claude::goal_outcome(id, &g.objective)
-            })
+            });
+            // The evaluator only lets a checked reply end the run once the goal is met. When
+            // it records no verdict (it can give up after 30 seconds and let the reply stand),
+            // Claude still holds the goal, so it is cleared there too.
+            if judged == GoalStatus::Paused && checked {
+                claude_holds = turn.session_id.is_some();
+                if claude_holds
+                    && let Err(e) =
+                        turn.server.store.set_state(&held_key(&turn.thread_id), &signature(g))
+                {
+                    log::warn!("failed to note a held goal: {e}");
+                }
+                GoalStatus::Complete
+            } else {
+                judged
+            }
         } else if turn.agent == AgentKind::Antigravity && status == MessageStatus::Complete {
             // Antigravity blocks stopping until its goal is verified, so a clean end meets it.
             GoalStatus::Complete
@@ -201,7 +249,7 @@ pub(super) fn settle(turn: &Turn, status: MessageStatus, cancelled: bool) -> Opt
     let mut clear_in_agent = None;
     if user_stopped || done {
         let ended = next.as_ref().map_or(GoalStatus::Paused, |g| g.status);
-        if turn.session_id.is_some() && goal::agent_keeps(turn.agent, ended) {
+        if turn.session_id.is_some() && (claude_holds || goal::agent_keeps(turn.agent, ended)) {
             clear_in_agent = Some(goal::clear_command(turn.agent));
         }
     }

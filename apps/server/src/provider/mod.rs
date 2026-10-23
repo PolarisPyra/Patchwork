@@ -549,6 +549,8 @@ pub enum GoalUpdate {
     },
     /// Claude's evaluator found the goal not met yet, so the agent keeps going.
     Checked,
+    /// Claude ended a reply, so its evaluator checks the goal, if one is set.
+    Checking,
     Cleared,
     /// Codex reports the whole goal.
     Reported(Goal),

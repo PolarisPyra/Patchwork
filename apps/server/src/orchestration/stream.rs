@@ -136,6 +136,7 @@ pub(super) fn event_message(event: &AgentEvent) -> Option<&str> {
         | AgentEvent::MessageQueued { message_id, .. }
         | AgentEvent::MessageSteered { message_id }
         | AgentEvent::MessageCutOff { message_id }
+        | AgentEvent::GoalChecking { message_id }
         | AgentEvent::Refused { message_id, .. }
         | AgentEvent::PlanProposed { message_id, .. }
         | AgentEvent::BackgroundTaskStarted { message_id, .. }
@@ -302,6 +303,7 @@ pub(super) fn apply(thread: &mut Thread, event: &AgentEvent) {
         }
         AgentEvent::MessageStarted { .. }
         | AgentEvent::GoalUpdated { .. }
+        | AgentEvent::GoalChecking { .. }
         | AgentEvent::SlashCommandsUpdated { .. }
         | AgentEvent::ThreadCreated { .. }
         | AgentEvent::MessageRemoved { .. }

@@ -696,6 +696,11 @@ pub enum AgentEvent {
     GoalUpdated {
         goal: Option<Goal>,
     },
+    /// The reply ended and the agent is checking whether it met the goal (Claude). The
+    /// message's next output ends the check.
+    GoalChecking {
+        message_id: String,
+    },
     /// Provider-native slash command names advertised by the active CLI session.
     SlashCommandsUpdated {
         commands: Vec<ProviderSlashCommand>,

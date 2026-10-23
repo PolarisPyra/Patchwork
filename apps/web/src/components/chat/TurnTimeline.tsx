@@ -10,6 +10,7 @@ import {
   MagnifyingGlassIcon,
   NotePencilIcon,
   RobotIcon,
+  TargetIcon,
   TerminalIcon,
   WarningCircleIcon,
   WrenchIcon,
@@ -299,6 +300,9 @@ export default function TurnTimeline({
         ),
       )}
       {idle && !goalCleared && <LiveRow icon={<BrainIcon size={15} />} label="Thinking" />}
+      {streaming && message.checkingGoal && (
+        <LiveRow icon={<TargetIcon size={15} />} label="Checking goal" />
+      )}
     </div>
   );
 }

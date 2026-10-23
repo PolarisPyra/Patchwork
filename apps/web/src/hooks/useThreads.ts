@@ -66,7 +66,14 @@ function updateMessage(thread: Thread, messageId: string, fn: (m: Message) => Me
 export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
   switch (event.type) {
     case "goalUpdated":
-      return { ...thread, goal: event.goal };
+      // An unmet check sends the agent back to work, which ends the check.
+      return {
+        ...thread,
+        goal: event.goal,
+        messages: thread.messages.map((m) => (m.checkingGoal ? { ...m, checkingGoal: false } : m)),
+      };
+    case "goalChecking":
+      return updateMessage(thread, event.messageId, (m) => ({ ...m, checkingGoal: true }));
     case "slashCommandsUpdated":
       return { ...thread, slashCommands: event.commands };
     case "usage": {
@@ -83,6 +90,7 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
         const last = parts.at(-1);
         return {
           ...m,
+          checkingGoal: false,
           text: m.text + text,
           parts:
             last?.type === "text"
@@ -97,6 +105,7 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
         const last = m.parts.at(-1);
         return {
           ...m,
+          checkingGoal: false,
           parts:
             last?.type === "thinking" && last.endedAt === null
               ? [...m.parts.slice(0, -1), { ...last, text: last.text + text }]
@@ -116,6 +125,7 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
       const { messageId, tool } = event;
       return updateMessage(thread, messageId, (m) => ({
         ...m,
+        checkingGoal: false,
         tools: [...m.tools, tool],
         parts: [...endThinking(m.parts), { type: "tool", id: tool.id }],
       }));

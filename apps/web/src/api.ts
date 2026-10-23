@@ -190,6 +190,8 @@ export interface Message {
   background: BackgroundTask[];
   /** Cut short by a steering message; the agent answered it in the next reply. */
   cutOff: boolean;
+  /** The reply ended and the agent is checking it against the goal; not saved. */
+  checkingGoal?: boolean;
   /** A safety classifier blocked part of the reply; the agent's stated reason. */
   refusal: Refusal | null;
   /** The reply's text, reasoning, and tool calls in the order they happened; empty for replies
@@ -326,6 +328,7 @@ export interface ImportScan {
 
 export type AgentEvent =
   | { type: "goalUpdated"; goal: Goal | null }
+  | { type: "goalChecking"; messageId: string }
   | { type: "slashCommandsUpdated"; commands: ProviderSlashCommand[] }
   | { type: "usage"; messageId: string; usage: TokenUsage }
   | { type: "messageStarted"; message: Message }
