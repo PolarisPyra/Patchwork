@@ -28,18 +28,15 @@ jobs:
           fetch-depth: 0
 
       - name: Install Tauri Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            file \
-            libayatana-appindicator3-dev \
-            libfuse2 \
-            librsvg2-dev \
-            libssl-dev \
-            libwebkit2gtk-4.1-dev \
-            libxdo-dev \
-            patchelf
+        # Prebuilt Ubuntu packages, kept in the Actions cache: the WebKitGTK ones are large, and a
+        # slow Ubuntu mirror once held a release at this step for over 15 minutes. Change `version`
+        # to refresh the cached packages.
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: >-
+            build-essential file libayatana-appindicator3-dev libfuse2 librsvg2-dev libssl-dev
+            libwebkit2gtk-4.1-dev libxdo-dev patchelf
+          version: 1
 
       - uses: dtolnay/rust-toolchain@stable
 
