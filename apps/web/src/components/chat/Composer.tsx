@@ -31,8 +31,6 @@ interface ComposerProps {
   onSteerQueued: () => void;
   onEditLatestQueued: () => void;
   canSteerQueued: boolean;
-  /** The queued strip is expanded, so Ctrl+Enter presses its Steer button. */
-  queueOpen: boolean;
   editingQueued: boolean;
   canQueueFollowUp: boolean;
   onStop: () => void;
@@ -149,7 +147,6 @@ export default function Composer({
   onSteerQueued,
   onEditLatestQueued,
   canSteerQueued,
-  queueOpen,
   editingQueued,
   canQueueFollowUp,
   onStop,
@@ -444,13 +441,8 @@ export default function Composer({
 
   function handleKey(event: KeyboardEvent): boolean {
     if (!editor || event.isComposing) return false;
-    // Same as clicking the queued strip's Steer button: Ctrl+Enter while it is expanded.
-    if (
-      event.key === "Enter" &&
-      (event.metaKey || event.ctrlKey) &&
-      (event.shiftKey || queueOpen) &&
-      canSteerQueued
-    ) {
+    // Same as clicking the queued message's Steer button. The draft in the composer is not sent.
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && canSteerQueued) {
       onSteerQueued();
       return true;
     }
@@ -509,10 +501,9 @@ export default function Composer({
     setQueueNext(true);
   }
 
-  function submitAs(queue: boolean) {
-    if (queue && !canQueueFollowUp) return;
-    onSubmit(queue);
-    setQueueNext(true);
+  // Picks how the next send is dispatched. Enter and the send button use it; nothing is sent here.
+  function chooseMode(queue: boolean) {
+    setQueueNext(queue);
     setDispatchMenuOpen(false);
   }
 
@@ -655,21 +646,33 @@ export default function Composer({
                   <div className="absolute right-0 bottom-full z-50 mb-1.5 flex min-w-48 flex-col gap-px rounded-[var(--radius)] border border-border bg-panel p-1 shadow-[var(--shadow-popup)]">
                     <button
                       disabled={overBy > 0}
+                      aria-pressed={!queueNext}
                       className="w-full cursor-pointer rounded-[var(--radius-sm)] border-none bg-transparent px-2.5 py-2 text-left text-fg hover:bg-hover disabled:cursor-default disabled:opacity-40"
-                      onClick={() => submitAs(false)}
+                      onClick={() => chooseMode(false)}
                     >
-                      Steer current turn
-                      <span className="mt-0.5 block text-[length:var(--fs-xs)] text-fg-subtle">
-                        Send this message into the active turn
+                      <span className="flex items-center gap-2">
+                        <span className="grid w-3.5 flex-none place-items-center">
+                          {!queueNext && <CheckIcon size={14} />}
+                        </span>
+                        Steer current turn
+                      </span>
+                      <span className="mt-0.5 block pl-[22px] text-[length:var(--fs-xs)] text-fg-subtle">
+                        Send the next message into the active turn
                       </span>
                     </button>
                     <button
                       disabled={overBy > 0 || !canQueueFollowUp}
+                      aria-pressed={queueNext}
                       className="w-full cursor-pointer rounded-[var(--radius-sm)] border-none bg-transparent px-2.5 py-2 text-left text-fg hover:bg-hover disabled:cursor-default disabled:opacity-40"
-                      onClick={() => submitAs(true)}
+                      onClick={() => chooseMode(true)}
                     >
-                      Queue for next turn
-                      <span className="mt-0.5 block text-[length:var(--fs-xs)] text-fg-subtle">
+                      <span className="flex items-center gap-2">
+                        <span className="grid w-3.5 flex-none place-items-center">
+                          {queueNext && <CheckIcon size={14} />}
+                        </span>
+                        Queue for next turn
+                      </span>
+                      <span className="mt-0.5 block pl-[22px] text-[length:var(--fs-xs)] text-fg-subtle">
                         {canQueueFollowUp
                           ? "Wait until the active turn finishes"
                           : "Edit or remove the queued message first"}

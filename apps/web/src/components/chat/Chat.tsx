@@ -844,6 +844,7 @@ export default function Chat({
         <ComposerStripPresence key={`${key}-goal`} present={Boolean(thread?.goal)}>
           {thread?.goal && (
             <GoalBanner
+              key={thread.goal.startedAt}
               goal={thread.goal}
               working={working}
               onStop={stop}
@@ -868,7 +869,6 @@ export default function Chat({
             steerQueued(queued[0]);
           }}
           canSteerQueued={working && queued.length > 0}
-          queueOpen={queueOpen}
           editingQueued={queuedEdit !== null}
           canQueueFollowUp={queued.length === 0}
           onStop={stop}

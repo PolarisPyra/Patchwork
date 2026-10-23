@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CaretRightIcon, TargetIcon, XIcon } from "@phosphor-icons/react";
+import { CaretRightIcon, TargetIcon } from "@phosphor-icons/react";
 import type { Goal } from "~/api";
 import { goalCanResume, goalLabel, goalUsage } from "~/components/chat/goalPresentation";
 import { ComposerStripBody } from "~/components/chat/ComposerStrip";
@@ -9,7 +9,7 @@ const ACTION =
 
 /**
  * The goal, on the composer's top edge: its state and usage, then the objective. Its last state
- * remains visible until the user closes it.
+ * remains visible until the user clears the goal.
  */
 export default function GoalBanner({
   goal,
@@ -26,6 +26,8 @@ export default function GoalBanner({
 }) {
   const active = goal.status === "active";
   const [open, setOpen] = useState(true);
+  // Clearing the goal also closes the banner, so it does not linger while the agent clears it.
+  const [closed, setClosed] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   // Only an active goal's elapsed time moves; the others show the time they stopped at.
   useEffect(() => {
@@ -38,6 +40,7 @@ export default function GoalBanner({
   const seconds = goal.timeUsedSeconds ?? Math.max(0, (now - goal.startedAt) / 1000);
   const usage = goalUsage(goal, seconds);
   const label = goalLabel(goal, working);
+  if (closed) return null;
   return (
     <div className="composer-strip mx-2 mb-1.5 overflow-hidden rounded-[var(--radius-sm)] border border-border-strong bg-panel text-[length:var(--fs-sm)] shadow-sm">
       <div className="flex h-9 min-w-0 items-center gap-2 bg-app px-2.5">
@@ -86,12 +89,13 @@ export default function GoalBanner({
           {!working && (
             <button
               type="button"
-              className="grid h-6 w-6 flex-none cursor-pointer place-items-center rounded-[var(--radius-sm)] border-none bg-transparent text-fg-subtle hover:bg-hover hover:text-fg"
-              onClick={onClear}
-              title="Close goal"
-              aria-label="Close goal"
+              className={ACTION}
+              onClick={() => {
+                onClear();
+                setClosed(true);
+              }}
             >
-              <XIcon size={13} />
+              Clear goal
             </button>
           )}
         </div>

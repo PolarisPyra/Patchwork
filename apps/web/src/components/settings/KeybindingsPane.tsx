@@ -27,7 +27,10 @@ const FIXED: Record<ShortcutPage, { keys: string[]; action: string }[]> = {
     { keys: ["Shift", "Enter"], action: "New line" },
     { keys: ["Up", "Down"], action: "Recall earlier messages from the first or last line" },
     { keys: ["Alt", "Up"], action: "Edit the latest queued message, with an empty composer" },
-    { keys: [MOD, "Enter"], action: "Steer with the queued message, while the queue is open" },
+    {
+      keys: [MOD, "Enter"],
+      action: "Steer with the queued message; the composer draft is not sent",
+    },
   ],
 };
 
