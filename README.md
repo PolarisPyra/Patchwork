@@ -80,6 +80,14 @@ To try an agent without touching a project, start a chat from the top of the sid
 - [Releasing](docs/releasing.md): changelog, versioning, and the release workflow
 - [All docs](docs/README.md)
 
+Other Markdown files in the repo:
+
+- [CONTRIBUTING.md](CONTRIBUTING.md): how to send a bug report, fix, or guide
+- [CHANGELOG.md](CHANGELOG.md): release history, generated from commit subjects
+- [AGENTS.md](AGENTS.md): instructions for coding agents working in the repo
+- [CLAUDE.md](CLAUDE.md): project rules for Claude Code
+- [UI checks](scripts/qa/README.md): browser measurements and screenshots of the dev session
+
 ## Contributing
 
 Bug reports, fixes, and guides are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md).
