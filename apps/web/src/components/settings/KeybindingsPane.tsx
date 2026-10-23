@@ -28,9 +28,13 @@ const FIXED: Record<ShortcutPage, { keys: string[]; action: string }[]> = {
     { keys: ["Up", "Down"], action: "Recall earlier messages from the first or last line" },
     { keys: ["Alt", "Up"], action: "Edit the latest queued message, with an empty composer" },
     { keys: [MOD, "Enter"], action: "Steer with the queued message, while the queue is open" },
-    { keys: ["Esc"], action: "Close the slash menu, or leave the composer" },
   ],
 };
+
+/** The pages with something to show: a page whose shortcuts are all app-wide ones has no tab. */
+const PAGES = SHORTCUT_PAGES.filter(
+  (p) => FIXED[p].length > 0 || COMMANDS.some((c) => c.page === p && !c.fixed),
+);
 
 function Keys({ parts }: { parts: string[] }) {
   return (
@@ -46,7 +50,7 @@ function Keys({ parts }: { parts: string[] }) {
 
 export default function KeybindingsPane() {
   const { rules, overrides } = useKeybindings();
-  const [page, setPage] = useState<ShortcutPage>(SHORTCUT_PAGES[0]);
+  const [page, setPage] = useState<ShortcutPage>(PAGES[0]);
   const [query, setQuery] = useState("");
   // The command whose new key is being recorded, and why the last key tried was refused.
   const [recording, setRecording] = useState<string | null>(null);
@@ -100,9 +104,9 @@ export default function KeybindingsPane() {
     const needle = query.trim().toLowerCase();
     const matches = (...texts: (string | null | undefined)[]) =>
       texts.some((text) => text?.toLowerCase().includes(needle));
-    return SHORTCUT_PAGES.filter((p) => searching || p === page).flatMap((p) => {
+    return PAGES.filter((p) => searching || p === page).flatMap((p) => {
       const commands = COMMANDS.filter((c) => {
-        if (c.page !== p) return false;
+        if (c.page !== p || c.fixed) return false;
         const key = keyFor(rules, c.id);
         return !searching || matches(c.title, c.description, p, key && formatKey(key).join(" "));
       });
@@ -135,7 +139,7 @@ export default function KeybindingsPane() {
         </div>
         {!searching && (
           <div className="flex gap-1">
-            {SHORTCUT_PAGES.map((title) => (
+            {PAGES.map((title) => (
               <button
                 key={title}
                 className={`h-7 cursor-pointer rounded-[var(--radius-sm)] border-none px-2.5 text-[length:var(--fs-sm)] ${title === page ? "bg-selected text-fg" : "bg-transparent text-fg-muted hover:bg-hover hover:text-fg"}`}

@@ -22,6 +22,9 @@ export type CommandInfo = {
   title: string;
   /** What the key does, where it is not clear from the title. */
   description?: string;
+  /** An app-wide key, such as Esc or Ctrl+A: left out of the Shortcuts settings, never remapped,
+   * and no other command can take its key. */
+  fixed?: boolean;
 };
 
 // --- when clauses: flag names joined with !, && and || and grouped with parentheses ---
@@ -223,6 +226,8 @@ export function formatKey(key: string): string[] {
 /** Whether a rule could run while typing: a bare printable key (or Shift plus one) would take the
  * letters out of a text field unless the rule's `when` leaves text fields alone. */
 export function keyProblem(command: string, key: string): string | null {
+  if (DEFAULT_RULES.some((r) => r.key === key && isFixed(r.command)))
+    return `${formatKey(key).join("+")} is an app-wide shortcut and cannot be reassigned`;
   const parts = key.split("+");
   const bare = parts.at(-1)!;
   const printable = bare.length === 1 || bare === "space" || bare === "plus";
@@ -241,6 +246,8 @@ const STORAGE_KEY = "patchworkKeybindings";
 type Overrides = Record<string, string | null>;
 type Snapshot = { rules: Rule[]; overrides: Overrides };
 
+const isFixed = (command: string) => COMMANDS.some((c) => c.id === command && c.fixed);
+
 /** Commands that were renamed: a key the user saved under the old id carries over to the new one. */
 const RENAMED: Record<string, string> = {
   "sidePanel.toggle": "sidebar.toggle",
@@ -257,6 +264,7 @@ function load(): Overrides {
         .filter(
           (entry): entry is [string, string | null] =>
             COMMANDS.some((c) => c.id === entry[0]) &&
+            !isFixed(entry[0]) &&
             (entry[1] === null || typeof entry[1] === "string"),
         ),
     );
@@ -302,6 +310,7 @@ export function useKeybindings(): Snapshot {
 
 /** Gives `command` a new key, or null to unbind it. A key equal to the default clears the change. */
 export function setKeybinding(command: string, key: string | null) {
+  if (isFixed(command)) return;
   const { [command]: _dropped, ...rest } = store.snapshot.overrides;
   const base = DEFAULT_RULES.find((r) => r.command === command);
   store.set(key === base?.key ? rest : { ...rest, [command]: key });
