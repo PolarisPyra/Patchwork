@@ -7,12 +7,12 @@ reviewed in the app before you keep it.
 
 <table>
   <tr>
-    <td><img src="docs/screenshots/goal-running.png" alt="A /goal running in a chat, with the goal shown above the input" width="420"></td>
-    <td><img src="docs/screenshots/goal-stopped.png" alt="A stopped turn with its token usage and the goal cleared" width="420"></td>
+    <td><img src="docs/screenshots/1.png" alt="A /goal running in a chat, with the goal shown above the input" width="420"></td>
+    <td><img src="docs/screenshots/2.png" alt="A stopped turn with its token usage and the goal cleared" width="420"></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/appearance-settings.png" alt="The Appearance settings with Light, Dark, and System themes" width="420"></td>
-    <td><img src="docs/screenshots/goal-cleared.png" alt="The sidebar and an idle chat after the goal was cleared" width="420"></td>
+    <td><img src="docs/screenshots/3.png" alt="The Appearance settings with Light, Dark, and System themes" width="420"></td>
+    <td><img src="docs/screenshots/4.png" alt="The sidebar and an idle chat after the goal was cleared" width="420"></td>
   </tr>
 </table>
 
