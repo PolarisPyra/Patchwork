@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowsClockwiseIcon, ChartBarIcon } from "@phosphor-icons/react";
 import { api, AGENT_LABELS, type AgentKind, type AgentStatus, type ProviderUsage } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
@@ -16,9 +16,57 @@ function resetsIn(at: number): string {
 }
 
 function level(percent: number): string {
-  if (percent >= 90) return "bg-danger";
-  if (percent >= 70) return "bg-warning";
-  return "bg-accent";
+  if (percent >= 90) return "stroke-danger";
+  if (percent >= 70) return "stroke-warning";
+  return "stroke-accent";
+}
+
+/** A circular gauge filled to `percent`, with `children` centered inside. */
+function Ring({
+  percent,
+  size,
+  stroke,
+  children,
+}: {
+  percent: number | null;
+  size: number;
+  stroke: number;
+  children?: ReactNode;
+}) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const p = Math.min(100, Math.max(0, percent ?? 0));
+  return (
+    <div
+      className="relative grid flex-none place-items-center"
+      style={{ width: size, height: size }}
+    >
+      <svg width={size} height={size} className="absolute inset-0 -rotate-90" aria-hidden="true">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          strokeWidth={stroke}
+          className="stroke-selected-muted"
+        />
+        {p > 0 && (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={c}
+            strokeDashoffset={c * (1 - p / 100)}
+            className={`${level(p)} transition-[stroke-dashoffset] duration-500`}
+          />
+        )}
+      </svg>
+      {children}
+    </div>
+  );
 }
 
 type Entry = {
@@ -35,6 +83,8 @@ export default function UsagePopover({ agents }: { agents: AgentKind[] }) {
   const [entries, setEntries] = useState<Partial<Record<AgentKind, Entry>>>({});
   /** Agents whose usage is still being read; each one finishes on its own. */
   const [pending, setPending] = useState<AgentKind[]>([]);
+  const [selected, setSelected] = useState<AgentKind | null>(null);
+  const current = selected && agents.includes(selected) ? selected : agents[0];
   const inFlight = useRef(new Set<AgentKind>());
   const ref = useRef<HTMLDivElement>(null);
 
@@ -114,34 +164,103 @@ export default function UsagePopover({ agents }: { agents: AgentKind[] }) {
       </button>
       {open && (
         <div
-          className="absolute left-2 right-2 bottom-[calc(100%_+_4px)] z-20 min-w-[240px] max-h-[420px] overflow-y-auto pt-2 px-2.5 pb-2.5 flex flex-col gap-3 bg-elevated border border-border-strong rounded-[var(--radius)]"
+          className="absolute left-2 right-2 bottom-[calc(100%_+_10px)] z-20 flex bg-elevated border border-border-strong rounded-[var(--radius)] overflow-hidden shadow-[0_4px_12px_rgb(0_0_0/0.2)]"
           role="dialog"
           aria-label="Usage"
         >
-          <div className="flex items-center justify-between font-semibold">
-            <span>Usage</span>
-            <button
-              className="btn-icon"
-              title="Refresh"
-              aria-label="Refresh"
-              onClick={() => load(true)}
-            >
-              <ArrowsClockwiseIcon size={14} className={pending.length > 0 ? "spin" : undefined} />
-            </button>
-          </div>
-          {agents.length === 0 && (
-            <div className="text-fg-muted text-[length:var(--fs-sm)]">No agents connected</div>
+          {agents.length === 0 ? (
+            <div className="p-3 text-fg-muted text-[length:var(--fs-sm)]">No agents connected</div>
+          ) : (
+            <>
+              <div
+                className="flex flex-none flex-col items-center gap-1.5 p-2 border-r border-border bg-app/40"
+                role="tablist"
+                aria-orientation="vertical"
+              >
+                {agents.map((kind) => (
+                  <AgentTab
+                    key={kind}
+                    kind={kind}
+                    entry={entries[kind]}
+                    active={kind === current}
+                    onSelect={() => setSelected(kind)}
+                  />
+                ))}
+                <button
+                  className="btn-icon mt-auto w-10"
+                  title="Refresh"
+                  aria-label="Refresh"
+                  onClick={() => load(true)}
+                >
+                  <ArrowsClockwiseIcon
+                    size={14}
+                    className={pending.length > 0 ? "spin" : undefined}
+                  />
+                </button>
+              </div>
+              {/* Every panel shares one grid cell, so the popover keeps the tallest
+                  one's height and the tabs stay put while switching. */}
+              <div className="grid min-w-0 flex-1">
+                {agents.map((kind) => (
+                  <AgentUsage
+                    key={kind}
+                    kind={kind}
+                    entry={entries[kind]}
+                    hidden={kind !== current}
+                  />
+                ))}
+              </div>
+            </>
           )}
-          {agents.map((kind) => (
-            <AgentUsage key={kind} kind={kind} entry={entries[kind]} />
-          ))}
         </div>
       )}
     </div>
   );
 }
 
-function AgentUsage({ kind, entry }: { kind: AgentKind; entry: Entry | undefined }) {
+/** The highest used percentage across an agent's limits, or null before numbers arrive. */
+function peak(entry: Entry | undefined): number | null {
+  const windows = entry?.usage?.windows ?? [];
+  return windows.length > 0 ? Math.max(...windows.map((w) => w.usedPercent)) : null;
+}
+
+function AgentTab({
+  kind,
+  entry,
+  active,
+  onSelect,
+}: {
+  kind: AgentKind;
+  entry: Entry | undefined;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  const top = peak(entry);
+  return (
+    <button
+      className={`grid place-items-center w-10 h-10 p-0 border-none rounded-[var(--radius-sm)] cursor-pointer ${active ? "bg-hover" : "bg-transparent hover:bg-hover/60"}`}
+      role="tab"
+      aria-selected={active}
+      aria-label={AGENT_LABELS[kind]}
+      title={top == null ? AGENT_LABELS[kind] : `${AGENT_LABELS[kind]} · ${Math.round(top)}% used`}
+      onClick={onSelect}
+    >
+      <Ring percent={top} size={34} stroke={3}>
+        <ProviderLogos kind={kind} size={18} />
+      </Ring>
+    </button>
+  );
+}
+
+function AgentUsage({
+  kind,
+  entry,
+  hidden,
+}: {
+  kind: AgentKind;
+  entry: Entry | undefined;
+  hidden: boolean;
+}) {
   const usage = entry?.usage;
   const ready = entry?.status?.installed && entry.status.signedIn;
   const note = !entry
@@ -152,10 +271,13 @@ function AgentUsage({ kind, entry }: { kind: AgentKind; entry: Entry | undefined
         usage?.error ??
         (usage?.windows.length === 0 ? "No limits reported" : null));
   return (
-    <section className="flex flex-col gap-2">
-      <div className="flex items-center gap-1.5">
-        <ProviderLogos kind={kind} size={14} />
-        <span className="flex-1 font-medium">{AGENT_LABELS[kind]}</span>
+    <section
+      className={`[grid-area:1/1] flex min-w-0 flex-col gap-2.5 p-2.5${hidden ? " invisible" : ""}`}
+      role="tabpanel"
+      aria-label={AGENT_LABELS[kind]}
+    >
+      <div className="flex items-center gap-1.5 pb-2.5 border-b border-border">
+        <span className="min-w-0 flex-1 truncate font-semibold">{AGENT_LABELS[kind]}</span>
         {usage?.plan && <span className="badge">{usage.plan}</span>}
       </div>
       {note && <div className="text-fg-muted text-[length:var(--fs-sm)]">{note}</div>}
@@ -163,22 +285,20 @@ function AgentUsage({ kind, entry }: { kind: AgentKind; entry: Entry | undefined
         <div className="text-fg-subtle text-[length:var(--fs-xs)]">{entry.refreshNote}</div>
       )}
       {usage?.windows.map((w) => (
-        <div key={w.label} className="flex flex-col gap-1 text-[length:var(--fs-sm)]">
-          <div className="flex justify-between">
-            <span>{w.label}</span>
-            <span className="tabular-nums text-fg-muted">{Math.round(w.usedPercent)}%</span>
+        <div key={w.label} className="flex items-center gap-2">
+          <Ring percent={w.usedPercent} size={42} stroke={3.5}>
+            <span className="tabular-nums font-medium text-[length:11px]">
+              {Math.round(w.usedPercent)}%
+            </span>
+          </Ring>
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate text-[length:var(--fs-sm)]">{w.label}</span>
+            {w.resetsAt && (
+              <span className="truncate text-fg-subtle text-[length:var(--fs-xs)]">
+                Resets {resetsIn(w.resetsAt)}
+              </span>
+            )}
           </div>
-          <div className="h-1.5 rounded-[3px] bg-selected-muted overflow-hidden">
-            <div
-              className={`h-full rounded-[3px] ${level(w.usedPercent)}`}
-              style={{ width: `${Math.min(100, w.usedPercent)}%` }}
-            />
-          </div>
-          {w.resetsAt && (
-            <div className="text-fg-subtle text-[length:var(--fs-xs)]">
-              Resets {resetsIn(w.resetsAt)}
-            </div>
-          )}
         </div>
       ))}
     </section>
