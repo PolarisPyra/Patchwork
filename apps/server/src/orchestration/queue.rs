@@ -39,7 +39,8 @@ impl Runner {
     /// could take it now. False when no turn is running there.
     pub fn enqueue(&self, thread_id: &str, input: FollowUpInput<'_>) -> Result<bool, String> {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
-        let Some(turn) = turns.get(thread_id) else {
+        // An idle agent is not replying, so there is nothing to wait for.
+        let Some(turn) = turns.get(thread_id).filter(|t| !t.idle.load(Ordering::SeqCst)) else {
             return Ok(false);
         };
         let mut queue = turn.queue.lock().unwrap_or_else(PoisonError::into_inner);

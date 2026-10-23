@@ -20,6 +20,7 @@ use crate::types::Approval;
 use crate::types::ApprovalStatus;
 use crate::types::BackgroundTask;
 use crate::types::FileChange;
+use crate::types::Goal;
 use crate::types::GoalStatus;
 use crate::types::MessageStatus;
 use crate::types::new_id;
@@ -60,6 +61,8 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
     let mut shell_tasks: HashMap<String, String> = HashMap::new();
     // Every message of the turn: the first reply, then one per steering message taken.
     let mut segments = vec![turn.message_id.clone()];
+    // How many of `segments` were completed when the agent went idle.
+    let mut completed = 0;
     let mut stream_error: Option<String> = None;
     // The agent could not find the session the turn resumed, so the turn runs again without it.
     let mut session_lost = false;
@@ -86,14 +89,17 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
             continue;
         };
         // A message Claude took after it had already ended its reply (while a background
-        // subagent kept it running) is answered from here on, below that message.
+        // subagent kept it running) is answered from here on, below that message. So is
+        // a reply an idle Claude starts on its own, such as once a background command ends.
+        let starts_reply = value["type"] == "system" && value["subtype"] == "init";
         if ended
             && turn.agent == AgentKind::Claude
-            && !turn
-                .steers
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .is_empty()
+            && ((starts_reply && turn.idle.swap(false, Ordering::SeqCst))
+                || !turn
+                    .steers
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .is_empty())
         {
             turn.steers
                 .lock()
@@ -185,6 +191,8 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                     let background = running_tasks.values().any(Option::is_some);
                     if !background {
                         end_input(&turn, goal_run, &goal_round);
+                    } else if can_idle(&turn, &running_tasks, &shell_tasks, &goal, &stream_error) {
+                        go_idle(&mut turn, &segments, &mut completed, &mut unsaved);
                     }
                 }
                 Parsed::ControlResponse(id) => {
@@ -299,13 +307,16 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                     });
                 }
                 Parsed::TaskEnded { tool_id, failed } => {
-                    if let Some(message_id) = shell_tasks.remove(&tool_id) {
+                    let shell = shell_tasks.remove(&tool_id);
+                    if let Some(message_id) = &shell {
                         turn.publish(AgentEvent::BackgroundTaskEnded {
-                            message_id,
+                            message_id: message_id.clone(),
                             tool_id: tool_id.clone(),
                         });
                     }
+                    // A shell command's call was shown finished when it returned.
                     if let Some(Some(call_failed)) = running_tasks.remove(&tool_id)
+                        && shell.is_none()
                         && let Some(owner) = tool_owner.get(&tool_id)
                     {
                         turn.save_text(&mut unsaved);
@@ -320,6 +331,11 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                     let background = running_tasks.values().any(Option::is_some);
                     if ended && !background {
                         end_input(&turn, goal_run, &goal_round);
+                    } else if ended
+                        && completed < segments.len()
+                        && can_idle(&turn, &running_tasks, &shell_tasks, &goal, &stream_error)
+                    {
+                        go_idle(&mut turn, &segments, &mut completed, &mut unsaved);
                     }
                 }
                 Parsed::TurnStarted(id) => {
@@ -378,7 +394,11 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                             }
                             if let Some(held) = running_tasks.get_mut(tool_id.as_str()) {
                                 *held = Some(*is_error);
-                                continue;
+                                // A backgrounded shell command's call has returned; the command
+                                // itself is shown among the background tasks.
+                                if !shell_tasks.contains_key(tool_id.as_str()) {
+                                    continue;
+                                }
                             }
                         }
                         _ => {}
@@ -469,9 +489,54 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
     let session_lost = session_lost && !cancelled;
     finish(
         turn,
-        &segments,
+        &segments[completed..],
         TurnEnd { status, error, cancelled, clear_in_agent, session_lost },
     );
+}
+
+/// Whether Claude, having ended its reply cleanly, stays up only for shell commands it sent to
+/// the background, with no goal to pursue, so the thread can go idle around them.
+fn can_idle(
+    turn: &Turn,
+    running_tasks: &HashMap<String, Option<bool>>,
+    shell_tasks: &HashMap<String, String>,
+    goal: &Option<Goal>,
+    stream_error: &Option<String>,
+) -> bool {
+    let mut held = running_tasks.iter().filter(|(_, call)| call.is_some()).peekable();
+    turn.agent == AgentKind::Claude
+        && stream_error.is_none()
+        && !turn.cancelled.load(Ordering::SeqCst)
+        && !goal
+            .as_ref()
+            .is_some_and(|g| matches!(g.status, GoalStatus::Active | GoalStatus::Paused))
+        && held.peek().is_some()
+        && held.all(|(id, _)| shell_tasks.contains_key(id))
+}
+
+/// Completes the replies not yet completed, with the files they changed, and marks the turn
+/// idle: the agent stays up for its shell commands and takes the next message as a new reply.
+fn go_idle(turn: &mut Turn, segments: &[String], completed: &mut usize, unsaved: &mut Unsaved) {
+    turn.save_text(unsaved);
+    let after = workspace::git_changes(&turn.root).unwrap_or_default();
+    changed_paths(&turn.baseline, &after)
+        .into_iter()
+        .for_each(|path| {
+            turn.publish(AgentEvent::FileTouched {
+                message_id: turn.message_id.clone(),
+                path,
+            });
+        });
+    turn.baseline = after;
+    segments[*completed..].iter().for_each(|id| {
+        turn.publish(AgentEvent::TurnCompleted {
+            message_id: id.clone(),
+            status: MessageStatus::Complete,
+            error: None,
+        });
+    });
+    *completed = segments.len();
+    turn.idle.store(true, Ordering::SeqCst);
 }
 
 /// Paths whose git status or line counts differ between two snapshots.

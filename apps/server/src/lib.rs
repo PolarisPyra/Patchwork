@@ -632,8 +632,9 @@ impl Server {
                 .collect()
         });
         for id in due {
-            // A message sent since the check has started a turn, which keeps the thread.
-            if self.runner.is_running(&id) {
+            // A message sent since the check has started a turn, which keeps the thread. An
+            // idle agent is left up too, since compacting would stop the commands it runs.
+            if self.runner.has_agent(&id) {
                 continue;
             }
             if let Err(e) = self.compact_thread(&id) {
@@ -766,6 +767,7 @@ impl Server {
                     }
                 })?;
             }
+            Delivery::Resumed => self.capture_checkpoint(&thread_id, &msg.id),
             Delivery::NotRunning => {
                 self.runner
                     .start_turn(self, TurnRequest { thread_id, text, attachments, images })?

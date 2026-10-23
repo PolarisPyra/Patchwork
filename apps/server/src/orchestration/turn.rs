@@ -69,6 +69,9 @@ pub(super) struct RunningTurn {
     pub(super) queue: Queue,
     pub(super) tasks: Tasks,
     pub(super) controls: Controls,
+    /// The agent has finished its reply and stays up only for shell commands it left running;
+    /// the thread counts as idle, and the next message starts a new reply in this process.
+    pub(super) idle: Arc<AtomicBool>,
 }
 
 /// What a new turn sends to the agent, and the thread it belongs to.
@@ -82,6 +85,8 @@ pub struct TurnRequest {
 impl Runner {
     pub fn start_turn(&self, server: &Arc<Server>, request: TurnRequest) -> Result<(), String> {
         let TurnRequest { thread_id, text, attachments, images } = request;
+        // A turn of its own (a /goal, a compaction) replaces an idle agent process.
+        self.retire_idle(&thread_id);
         let (agent, root, session_id, model, mode, effort, plan, context, checkpoint) = {
             let thread = server.store.thread(&thread_id).ok_or("Task not found")?;
             // The message being sent is the newest user message; the transcript is what came before.
@@ -198,6 +203,7 @@ impl Runner {
         let queue = Queue::default();
         let tasks = Tasks::default();
         let controls = Controls::default();
+        let idle = Arc::new(AtomicBool::new(false));
         let turn = Turn {
             server: server.clone(),
             thread_id: thread_id.clone(),
@@ -215,6 +221,7 @@ impl Runner {
             queue: queue.clone(),
             tasks: tasks.clone(),
             controls: controls.clone(),
+            idle: idle.clone(),
             root,
             session_id,
             model,
@@ -244,6 +251,7 @@ impl Runner {
                     queue,
                     tasks,
                     controls,
+                    idle,
                 },
             );
         turn.publish(AgentEvent::MessageStarted { message });
@@ -295,6 +303,7 @@ pub(super) struct Turn {
     pub(super) queue: Queue,
     pub(super) tasks: Tasks,
     pub(super) controls: Controls,
+    pub(super) idle: Arc<AtomicBool>,
     pub(super) root: String,
     pub(super) session_id: Option<String>,
     pub(super) model: Option<String>,
@@ -393,7 +402,13 @@ pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
             .turns
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        turns.remove(&turn.thread_id);
+        // A retired idle turn may already have been replaced by a new one.
+        if turns
+            .get(&turn.thread_id)
+            .is_some_and(|t| Arc::ptr_eq(&t.exited, &turn.exited))
+        {
+            turns.remove(&turn.thread_id);
+        }
         // Queued messages stay in the thread as queued until the user presses Send.
         // Steering messages the agent never answered continue automatically unless
         // the turn was stopped; messages sent after Stop still start the next turn.
@@ -439,19 +454,22 @@ pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
             }
         }
     }
-    // Earlier messages of the turn were answered in full before a steer moved it on.
-    segments[..segments.len() - 1].iter().for_each(|id| {
-        turn.publish(AgentEvent::TurnCompleted {
-            message_id: id.clone(),
-            status: MessageStatus::Complete,
-            error: None,
+    // Earlier messages of the turn were answered in full before a steer moved it on. None are
+    // left when the agent went idle after its last reply, which was completed then.
+    if let Some((last, earlier)) = segments.split_last() {
+        earlier.iter().for_each(|id| {
+            turn.publish(AgentEvent::TurnCompleted {
+                message_id: id.clone(),
+                status: MessageStatus::Complete,
+                error: None,
+            });
         });
-    });
-    turn.publish(AgentEvent::TurnCompleted {
-        message_id: turn.message_id.clone(),
-        status,
-        error,
-    });
+        turn.publish(AgentEvent::TurnCompleted {
+            message_id: last.clone(),
+            status,
+            error,
+        });
+    }
 
     // The agent drops the goal in a turn of its own; unanswered steers wait for that
     // system turn instead. Queued messages remain for the user to send explicitly.

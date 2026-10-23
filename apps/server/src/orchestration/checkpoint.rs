@@ -152,6 +152,14 @@ impl Server {
         self.project_root(&project_id).ok()
     }
 
+    /// Snapshots the project before the reply to `message_id`, for a message that an idle
+    /// agent takes rather than a new turn.
+    pub(crate) fn capture_checkpoint(&self, thread_id: &str, message_id: &str) {
+        if let Some(root) = self.checkpoint_root(thread_id) {
+            capture(&root, thread_id, message_id);
+        }
+    }
+
     /// The user messages of the thread whose turn can be undone with `restore_checkpoint`.
     pub fn checkpoints(&self, thread_id: &str) -> Vec<String> {
         self.checkpoint_root(thread_id)
@@ -167,6 +175,8 @@ impl Server {
         if self.runner.is_running(thread_id) {
             return Err("Stop the running turn before restoring a checkpoint".into());
         }
+        // An idle agent still holds the session being undone.
+        self.runner.retire_idle(thread_id);
         let root = self
             .checkpoint_root(thread_id)
             .ok_or("Only project tasks have checkpoints")?;

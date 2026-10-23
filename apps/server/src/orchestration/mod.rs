@@ -83,6 +83,8 @@ pub enum Delivery {
     Steered,
     /// Waiting for the running turn to end.
     Queued,
+    /// Written to an idle agent, where it starts a new reply.
+    Resumed,
     /// No turn is running.
     NotRunning,
 }
@@ -97,17 +99,54 @@ pub struct Runner {
 }
 
 impl Runner {
+    /// Whether a reply is under way in the thread. An agent that is only kept up by shell
+    /// commands it left running does not count.
     pub fn is_running(&self, thread_id: &str) -> bool {
+        self.turns
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(thread_id)
+            .is_some_and(|turn| !turn.idle.load(Ordering::SeqCst))
+    }
+
+    /// Whether an agent process is up in the thread, replying or idle.
+    pub fn has_agent(&self, thread_id: &str) -> bool {
         self.turns
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .contains_key(thread_id)
     }
 
-    /// The threads with a turn running.
+    /// The threads with a reply under way.
     pub fn running(&self) -> Vec<String> {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
-        turns.keys().cloned().collect()
+        turns
+            .iter()
+            .filter(|(_, turn)| !turn.idle.load(Ordering::SeqCst))
+            .map(|(id, _)| id.clone())
+            .collect()
+    }
+
+    /// Stops the thread's idle agent, and the shell commands it left running, so a turn that
+    /// needs a process of its own can start. A turn that is replying is left alone.
+    pub fn retire_idle(&self, thread_id: &str) {
+        let mut turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+        if !turns
+            .get(thread_id)
+            .is_some_and(|turn| turn.idle.load(Ordering::SeqCst))
+        {
+            return;
+        }
+        let Some(turn) = turns.remove(thread_id) else {
+            return;
+        };
+        turn.cancelled.store(true, Ordering::SeqCst);
+        std::thread::spawn(move || {
+            terminate(turn.pid, turn.exited);
+            if let Some(unit) = turn.scope {
+                scope::stop(&unit);
+            }
+        });
     }
 
 
@@ -155,6 +194,23 @@ impl Runner {
         // Under the stdin lock, so the reader cannot close stdin between the write and
         // recording that an answer is due.
         let mut stdin = turn.stdin.lock().unwrap_or_else(PoisonError::into_inner);
+        if turn.idle.load(Ordering::SeqCst) {
+            // The agent's last reply is over; this message starts the next one, and if the agent
+            // can no longer take it, a new turn replaces the idle process.
+            if line.is_some_and(|line| write_to(&mut stdin, &line)) {
+                turn.idle.store(false, Ordering::SeqCst);
+                turn.steers
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .push_back(follow_up);
+                return Delivery::Resumed;
+            }
+            self.handed_over
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .remove(message_id);
+            return Delivery::NotRunning;
+        }
         if let Some(line) = line
             && write_to(&mut stdin, &line)
         {
