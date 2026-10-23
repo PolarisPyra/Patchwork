@@ -773,6 +773,12 @@ impl Server {
             }
             Delivery::Resumed => self.capture_checkpoint(&thread_id, &msg.id),
             Delivery::NotRunning => {
+                // The app adds a message it sent once this returns, but not one the server sends
+                // itself (a goal clear), so the chat learns of it before the reply starts.
+                self.emit(AgentEventEnvelope {
+                    thread_id: thread_id.clone(),
+                    event: AgentEvent::MessageStarted { message: msg.clone() },
+                });
                 self.runner
                     .start_turn(self, TurnRequest { thread_id, text, attachments, images })?
             }

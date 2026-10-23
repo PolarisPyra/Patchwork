@@ -25,6 +25,7 @@ import {
   rememberDismissedChoice,
 } from "~/components/chat/choices";
 import GoalBanner from "~/components/chat/GoalBanner";
+import { isGoalClearCommand } from "~/components/chat/goalPresentation";
 import { ComposerStripPresence } from "~/components/chat/ComposerStrip";
 import BackgroundTasks from "~/components/chat/BackgroundTasks";
 import QueuedMessages from "~/components/chat/QueuedMessages";
@@ -158,6 +159,9 @@ export default function Chat({
   const [modelPickerRequest, setModelPickerRequest] = useState(0);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A goal clear in the banner: pending while its error is null, failed otherwise. Keyed by the
+  // goal, so a later goal never shows it.
+  const [goalClear, setGoalClear] = useState<{ key: string; error: string | null } | null>(null);
   // The thread whose large, cold session is asking before a message is sent to it.
   const [resumeAsk, setResumeAsk] = useState<string | null>(null);
   // Kept here so Ctrl+Enter in the composer can tell whether the queued strip is expanded.
@@ -201,6 +205,13 @@ export default function Chat({
   const accessMode = thread?.accessMode ?? newOpts.accessMode;
   const effort = thread ? thread.effort : newOpts.effort;
   const working = sending || isWorking(thread);
+  // A clear still pending once its run has ended was not confirmed by the agent, so the banner
+  // goes back to offering it.
+  useEffect(() => {
+    if (!working) setGoalClear((clear) => (clear?.error === null ? null : clear));
+  }, [working]);
+  const goalClearKey = thread?.goal ? `${thread.id}:${thread.goal.startedAt}` : null;
+  const clearOfGoal = goalClear?.key === goalClearKey ? goalClear : null;
   // The user messages whose turn can be undone. Each turn takes a checkpoint as it starts, so the
   // list is read again whenever a turn starts or ends.
   const [checkpoints, setCheckpoints] = useState<ReadonlySet<string>>(() => new Set());
@@ -434,6 +445,12 @@ export default function Chat({
       onNewChat();
       return;
     }
+    // Mid-turn, /goal clear is the Stop button: the agent's session drops the goal once it exits.
+    if (working && thread?.goal && isGoalClearCommand(text) && attachments.length === 0) {
+      setDraft("");
+      stop();
+      return;
+    }
     // While a turn runs, a message steers it (the server decides whether the agent can).
     if (!text && attachments.length === 0) return;
     // Resuming a large session whose cache has expired re-reads all of it at full price.
@@ -534,9 +551,10 @@ export default function Chat({
 
   // Clears the goal, in the agent's session too. The banner offers it once no turn is running.
   function clearGoal() {
-    if (!thread) return;
-    setError(null);
-    api.stopGoal(thread.id).catch((e: unknown) => setError(errorText(e)));
+    if (!thread?.goal) return;
+    const key = `${thread.id}:${thread.goal.startedAt}`;
+    setGoalClear({ key, error: null });
+    api.stopGoal(thread.id).catch((e: unknown) => setGoalClear({ key, error: errorText(e) }));
   }
 
   // Codex takes /goal resume; Claude and Antigravity have no such command, so a message carries
@@ -847,6 +865,8 @@ export default function Chat({
               key={thread.goal.startedAt}
               goal={thread.goal}
               working={working}
+              clearing={clearOfGoal?.error === null}
+              clearError={clearOfGoal?.error ?? null}
               onStop={stop}
               onResume={resumeGoal}
               onClear={clearGoal}

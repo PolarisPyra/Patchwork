@@ -9,25 +9,27 @@ const ACTION =
 
 /**
  * The goal, on the composer's top edge: its state and usage, then the objective. Its last state
- * remains visible until the user clears the goal.
+ * remains visible until the agent confirms the goal is cleared.
  */
 export default function GoalBanner({
   goal,
   working,
+  clearing,
+  clearError,
   onStop,
   onResume,
   onClear,
 }: {
   goal: Goal;
   working: boolean;
+  clearing: boolean;
+  clearError: string | null;
   onStop: () => void;
   onResume: () => void;
   onClear: () => void;
 }) {
   const active = goal.status === "active";
   const [open, setOpen] = useState(true);
-  // Clearing the goal also closes the banner, so it does not linger while the agent clears it.
-  const [closed, setClosed] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   // Only an active goal's elapsed time moves; the others show the time they stopped at.
   useEffect(() => {
@@ -39,8 +41,7 @@ export default function GoalBanner({
 
   const seconds = goal.timeUsedSeconds ?? Math.max(0, (now - goal.startedAt) / 1000);
   const usage = goalUsage(goal, seconds);
-  const label = goalLabel(goal, working);
-  if (closed) return null;
+  const label = clearing ? "Clearing goal" : goalLabel(goal, working);
   return (
     <div className="composer-strip mx-2 mb-1.5 overflow-hidden rounded-[var(--radius-sm)] border border-border-strong bg-panel text-[length:var(--fs-sm)] shadow-sm">
       <div className="flex h-9 min-w-0 items-center gap-2 bg-app px-2.5">
@@ -61,6 +62,10 @@ export default function GoalBanner({
           >
             {label}
           </span>
+          {/* Kept mounted so screen readers announce each change of state. */}
+          <span className="sr-only" aria-live="polite">
+            {label}
+          </span>
           {usage && (
             <span className="min-w-0 truncate text-[length:var(--fs-xs)] text-fg-subtle tabular-nums">
               {usage}
@@ -73,29 +78,30 @@ export default function GoalBanner({
           />
         </button>
         <div
-          key={`${goal.status}-${working}`}
+          key={`${goal.status}-${working}-${clearing}`}
           className="composer-strip-state flex flex-none items-center gap-2"
         >
-          {working && active && (
-            <button type="button" className={ACTION} onClick={onStop}>
+          {!clearing && working && active && (
+            <button type="button" className={ACTION} onClick={onStop} title="Pause the goal">
               Stop
             </button>
           )}
-          {!working && goalCanResume(goal) && (
-            <button type="button" className={ACTION} onClick={onResume}>
-              Resume
-            </button>
-          )}
-          {!working && (
+          {!clearing && !working && goalCanResume(goal) && (
             <button
               type="button"
               className={ACTION}
-              onClick={() => {
-                onClear();
-                setClosed(true);
-              }}
+              onClick={onResume}
+              title="Carry on with the goal"
             >
-              Clear goal
+              Resume
+            </button>
+          )}
+          {!clearing && !working && clearError && (
+            <span className="text-[length:var(--fs-xs)] text-danger">Couldn't clear goal</span>
+          )}
+          {!clearing && !working && (
+            <button type="button" className={ACTION} onClick={onClear} title="Drop the goal">
+              {clearError ? "Retry" : "Clear goal"}
             </button>
           )}
         </div>

@@ -23,6 +23,7 @@ import type { CanvasTab } from "~/components/canvas/Canvas";
 import AttachmentChip, { AttachmentTile } from "~/components/chat/AttachmentChip";
 import { ACTION_CLASS, CopyButton } from "~/components/chat/CopyButton";
 import TurnTimeline from "~/components/chat/TurnTimeline";
+import { isGoalClearCommand } from "~/components/chat/goalPresentation";
 import { GOAL_CLASS } from "~/components/chat/composerExtensions";
 import { shortcutContext, useCommand } from "~/lib/shortcuts";
 import { formatTokens } from "~/lib/tokens";
@@ -151,6 +152,8 @@ export default function Messages({
               </div>
             );
           }
+          // The green notice in the reply already says the goal was cleared.
+          if (item.role === "user" && isGoalClearCommand(item.text)) return <div />;
           const previous = messages[index - 1];
           const usage =
             item.role === "assistant" && item.status !== "streaming" && tokens.showUsage;
@@ -314,11 +317,13 @@ const AssistantMessage = memo(function AssistantMessage({
   onRetry,
 }: AssistantProps) {
   const streaming = message.status === "streaming";
+  const clearsGoal = retryMessage !== null && isGoalClearCommand(retryMessage.text);
   return (
     <section className="flex min-w-0 flex-col gap-2.5">
       <TurnTimeline
         message={message}
         agent={agent}
+        clearsGoal={clearsGoal}
         onOpenThread={onOpenThread}
         usageLine={usage && <UsageLine usage={usage} warnAbove={warnAbove} />}
       />
@@ -361,7 +366,8 @@ const AssistantMessage = memo(function AssistantMessage({
         </div>
       )}
       {/* Copy, Retry, and the time belong to a reply; a turn stopped before it wrote one has none. */}
-      {!streaming && !message.cutOff && message.text.trim() && (
+      {/* A cleared goal's status line has nothing to copy or retry. */}
+      {!streaming && !message.cutOff && message.text.trim() && !clearsGoal && (
         <div className="flex gap-1">
           <CopyButton text={message.text} />
           {retryMessage !== null && (

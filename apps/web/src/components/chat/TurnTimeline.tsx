@@ -3,6 +3,8 @@ import {
   BrainIcon,
   CaretDownIcon,
   CaretRightIcon,
+  CheckIcon,
+  CircleNotchIcon,
   EyeIcon,
   GlobeIcon,
   MagnifyingGlassIcon,
@@ -19,6 +21,7 @@ import ProviderLogos from "~/components/ProviderLogos";
 
 // Markdown loads with the chat, not on first use: its plain-text placeholder had another height,
 // so swapping it in moved the messages.
+import { isGoalClearedReply } from "~/components/chat/goalPresentation";
 import Markdown from "~/components/chat/Markdown";
 
 /** What a tool call does, which picks its icon, its verb, and how a group of calls is summed up. */
@@ -212,11 +215,14 @@ function useNow(live: boolean): number {
 export default function TurnTimeline({
   message,
   agent,
+  clearsGoal = false,
   onOpenThread,
   usageLine,
 }: {
   message: Message;
   agent: AgentKind;
+  /** The reply answers `/goal clear`, so it shows no working row even before its text arrives. */
+  clearsGoal?: boolean;
   usageLine?: ReactNode;
   /** Opens a subagent's thread. */
   onOpenThread: (id: string) => void;
@@ -243,9 +249,20 @@ export default function TurnTimeline({
   const tail = useDeferredValue(last?.kind === "text" ? last.text : "");
   const idle =
     streaming && (last === undefined || (last.kind === "work" && !last.entries.some(entryActive)));
+  // A reply that only reports a cleared goal did no work, so it shows as a status, not a turn.
+  const goalCleared =
+    clearsGoal ||
+    (steps.length > 0 && steps.every((s) => s.kind === "text" && isGoalClearedReply(s.text)));
   return (
     <div className="flex min-w-0 flex-col">
-      {streaming && <WorkingRow since={message.createdAt} />}
+      {streaming && !goalCleared && <WorkingRow since={message.createdAt} />}
+      {/* Holds the status line's place until the agent's reply fills it, so the chat does not
+          grow as the goal banner above the composer closes. */}
+      {streaming && clearsGoal && steps.length === 0 && (
+        <div className="px-1 py-0.5 pb-2">
+          <GoalClearedNotice text="Clearing goal" live pending />
+        </div>
+      )}
       {folds && (
         <FoldRow
           message={message}
@@ -259,7 +276,11 @@ export default function TurnTimeline({
       {shown.map((step) =>
         step.kind === "text" ? (
           <div key={`t${step.index}`} className="px-1 py-0.5 pb-2">
-            <Markdown text={step === last && tail ? tail : step.text} />
+            {goalCleared ? (
+              <GoalClearedNotice text={step.text} live={streaming && !clearsGoal} />
+            ) : (
+              <Markdown text={step === last && tail ? tail : step.text} />
+            )}
           </div>
         ) : step.kind === "plan" ? (
           <div key={`p${step.index}`} className="px-1 py-0.5 pb-2">
@@ -277,13 +298,38 @@ export default function TurnTimeline({
           <WorkGroup key={workKey(step.entries[0])} entries={step.entries} live={streaming} />
         ),
       )}
-      {idle && <LiveRow icon={<BrainIcon size={15} />} label="Thinking" />}
+      {idle && !goalCleared && <LiveRow icon={<BrainIcon size={15} />} label="Thinking" />}
     </div>
   );
 }
 
 function workKey(entry: Entry): string {
   return entry.kind === "tool" ? entry.tool.id : `r${entry.part.startedAt}`;
+}
+
+/** The result of `/goal clear`: a status line, like "Worked for". It fades in as it arrives, not
+ * each time the chat list mounts it again. */
+function GoalClearedNotice({
+  text,
+  live,
+  pending = false,
+}: {
+  text: string;
+  live: boolean;
+  pending?: boolean;
+}) {
+  return (
+    <p
+      className={`${live ? "goal-cleared-in " : ""}m-0 flex min-h-6 items-center gap-1.5 text-[length:var(--fs-md)] text-fg-muted [word-break:break-word]`}
+    >
+      {pending ? (
+        <CircleNotchIcon size={14} className="spin flex-none text-fg-subtle" />
+      ) : (
+        <CheckIcon size={14} className="flex-none text-fg-subtle" />
+      )}
+      {text}
+    </p>
+  );
 }
 
 function WorkingRow({ since }: { since: number }) {

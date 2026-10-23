@@ -14,6 +14,16 @@ export function goalLabel(goal: Goal, working: boolean): string {
   return goal.status === "active" && !working ? "Goal set" : GOAL_LABELS[goal.status];
 }
 
+/** The agent's reply to `/goal clear`, which reports the goal cleared or none to clear. */
+export function isGoalClearedReply(text: string): boolean {
+  return /^(Goal cleared|No goal set|No goal to clear)/.test(text.trim());
+}
+
+/** `/goal clear` or one of its aliases, as the backend reads them. */
+export function isGoalClearCommand(text: string): boolean {
+  return /^\/goal\s+(clear|stop|off|reset|none|cancel)\s*$/i.test(text.trim());
+}
+
 /** A goal that stopped part way and can carry on. A blocked goal has been judged impossible. */
 export function goalCanResume(goal: Goal): boolean {
   return (

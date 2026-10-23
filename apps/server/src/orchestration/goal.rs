@@ -115,10 +115,15 @@ impl Server {
             return Ok(());
         };
         self.store.dismiss_goal(thread_id, &signature(goal))?;
-        self.emit(AgentEventEnvelope {
-            thread_id: thread_id.into(),
-            event: AgentEvent::GoalUpdated { goal: None },
-        });
+        // Claude and Codex report the clear back, so the banner stays until their reply, as it
+        // does while the goal runs. Other agents report nothing, so the banner clears now.
+        let reports_clear = matches!(thread.agent, AgentKind::Claude | AgentKind::Codex);
+        if thread.session_id.is_none() || !reports_clear {
+            self.emit(AgentEventEnvelope {
+                thread_id: thread_id.into(),
+                event: AgentEvent::GoalUpdated { goal: None },
+            });
+        }
         // Explicitly closing the banner must clear the CLI's session state too, including a
         // goal marked complete: some CLIs can report that cached goal again on resume.
         if thread.session_id.is_some() {

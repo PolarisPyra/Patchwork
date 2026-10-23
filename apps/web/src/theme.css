@@ -474,6 +474,17 @@
   from { opacity: 0.35; }
   to { opacity: 1; }
 }
+/* A cleared goal's status line settles in rather than appearing at once. */
+.goal-cleared-in {
+  animation: goal-cleared-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes goal-cleared-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .goal-cleared-in { animation: none; }
+}
 /* The model picker slides out to the right of its chip instead of dropping down. */
 .model-picker-panel {
   animation: model-picker-out 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
