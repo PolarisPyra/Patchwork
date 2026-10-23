@@ -33,6 +33,8 @@ Run the checks that match what you changed, and report the output if any fail.
 - The user usually keeps a `pnpm tauri dev` session open and views changes there. If one is already running, use it rather than starting a second, since both need port 1420.
 - When the user asks to run, preview, or check the app, use that session, or start it from `~/Projects/PatchworkADE` with `pnpm tauri dev`.
 - You may start or restart it yourself when a change needs it or to verify work. Say so when you do, and check first that no reply is streaming, since a restart ends running agent turns.
+- Before starting one, check whether a session is already up: `ss -ltnp | grep 1420` (process-name matches can miss it). If none is running, start one with `pnpm tauri dev` in the background.
+- Stop a session you started once you are done with it: kill its whole process tree by PID (`pnpm tauri dev`, the Vite server, and `target/debug/patchwork`), then confirm port 1420 is free. Never stop a session the user started.
 - Telling it apart: the dev session (`pnpm tauri dev`, or the Vite server at localhost:1420) draws a yellow and black hazard-stripe frame around the window and sets `data-dev-session="true"` on `<html>`. The installed Patchwork has neither. If a screenshot or window has no stripes, it is not the dev session, so do not judge changes by it.
 - Vite hot-reloads UI edits and Rust changes rebuild on save, so a restart is rarely needed. Say explicitly when a change needs a restart, a new Cargo or pnpm dependency, or a config change (`tauri.conf.json`, capabilities, Vite config); hot reload does not pick these up.
 
