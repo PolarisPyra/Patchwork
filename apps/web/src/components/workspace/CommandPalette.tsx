@@ -24,24 +24,39 @@ export default function CommandPalette({ items, onClose }: CommandPaletteProps) 
   const [index, setIndex] = useState(0);
 
   const needle = query.trim().toLowerCase();
-  const filtered = items.filter((it) => it.label.toLowerCase().includes(needle));
-  const active = Math.max(0, Math.min(index, filtered.length - 1));
+  const matches = items.filter((it) => it.label.toLowerCase().includes(needle));
 
-  // Group in first-seen order; `index` is the position in the flat `filtered` list.
+  // Group in first-seen order. `index` numbers the rows in the order they show, so the arrow keys step
+  // through the screen one row at a time, even when the items of one group are not next to each other.
   const groups: GroupRows[] = [];
-  filtered.forEach((item, i) => {
+  matches.forEach((item) => {
     let group = groups.find((g) => g.name === item.group);
     if (!group) {
       group = { name: item.group, rows: [] };
       groups.push(group);
     }
-    group.rows.push({ item, index: i });
+    group.rows.push({ item, index: 0 });
   });
+  const filtered: PaletteItem[] = [];
+  for (const group of groups)
+    for (const row of group.rows) {
+      row.index = filtered.length;
+      filtered.push(row.item);
+    }
+  const active = Math.max(0, Math.min(index, filtered.length - 1));
 
   const listRef = useRef<HTMLDivElement>(null);
   const activeRow = useRef<HTMLButtonElement>(null);
   // True only after keyboard input, so hovering never scrolls the list.
   const scrollOnActive = useRef(false);
+  // Where the pointer last was. WebKit sends a mousemove with an unchanged position when the list
+  // scrolls under a resting pointer, which would move the highlight to whatever row lands there.
+  const pointer = useRef<{ x: number; y: number } | null>(null);
+  const pointerMoved = (e: { screenX: number; screenY: number }) => {
+    const last = pointer.current;
+    pointer.current = { x: e.screenX, y: e.screenY };
+    return last !== null && (last.x !== e.screenX || last.y !== e.screenY);
+  };
 
   useEffect(() => {
     if (!scrollOnActive.current) return;
@@ -54,10 +69,18 @@ export default function CommandPalette({ items, onClose }: CommandPaletteProps) 
     const list = listRef.current;
     const row = activeRow.current;
     if (!list || !row) return;
-    if (row.offsetTop < list.scrollTop) {
-      list.scrollTop = row.offsetTop;
-    } else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight) {
-      list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight;
+    // The first row of a group also brings its header into view. EDGE matches the list's p-2 padding,
+    // so a row that stops at the edge keeps the same gap as the list's padding.
+    const EDGE = 8;
+    const group = row.parentElement;
+    const isFirst = row.previousElementSibling === group?.firstElementChild;
+    const target = isFirst && group ? group : row;
+    const top = target.offsetTop - EDGE;
+    const bottom = row.offsetTop + row.offsetHeight + EDGE;
+    if (top < list.scrollTop) {
+      list.scrollTop = top;
+    } else if (bottom > list.scrollTop + list.clientHeight) {
+      list.scrollTop = bottom - list.clientHeight;
     }
   }, [active, needle]);
 
@@ -131,7 +154,8 @@ export default function CommandPalette({ items, onClose }: CommandPaletteProps) 
                     ref={isActive ? activeRow : undefined}
                     className={`flex h-9 w-full cursor-pointer items-center gap-3 rounded-[var(--radius)] border-none px-3 text-left text-[length:var(--fs-md)] text-fg ${isActive ? "bg-selected" : "bg-transparent hover:bg-hover"}`}
                     // mousemove, not mouseenter: rows scrolling under a resting pointer must not move the highlight.
-                    onMouseMove={() => {
+                    onMouseMove={(e) => {
+                      if (!pointerMoved(e)) return;
                       scrollOnActive.current = false;
                       setIndex(i);
                     }}
