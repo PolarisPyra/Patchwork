@@ -45,6 +45,32 @@ build_appimage() {
   echo "AppImage: $repo_root/$out"
 }
 
+stop_running_instances() {
+  local dev_bin="$repo_root/target/debug/patchwork"
+  local pids=() pid exe
+  for pid in $(pgrep -x patchwork || true); do
+    exe="$(readlink "/proc/$pid/exe" 2>/dev/null || true)"
+    # The dev session runs the debug build from this repo. Leave it running.
+    [[ "$exe" == "$dev_bin" ]] && continue
+    pids+=("$pid")
+  done
+  (( ${#pids[@]} )) || return 0
+
+  echo "Stopping running Patchwork: ${pids[*]}"
+  kill -TERM "${pids[@]}" 2>/dev/null || true
+  local _ alive
+  for _ in {1..50}; do
+    alive=0
+    for pid in "${pids[@]}"; do
+      kill -0 "$pid" 2>/dev/null && alive=1
+    done
+    (( alive )) || return 0
+    sleep 0.2
+  done
+  echo "Some instances ignored SIGTERM; killing them."
+  kill -KILL "${pids[@]}" 2>/dev/null || true
+}
+
 install_app() {
   require_tools
   local prefix="${PREFIX:-$HOME/.local}"
@@ -53,6 +79,7 @@ install_app() {
   local icons_dir="$prefix/share/icons/hicolor"
   local launcher="$apps_dir/$app_id.desktop"
 
+  stop_running_instances
   pnpm --filter patchwork-desktop exec tauri build --no-bundle
   [[ -x target/release/patchwork ]] || die "Expected target/release/patchwork after the build."
 
