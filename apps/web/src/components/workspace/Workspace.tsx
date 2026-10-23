@@ -177,6 +177,14 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   const [canvas, setCanvas] = useState<CanvasState | null>(null);
   const [canvasWidth, setCanvasWidth] = useState<number | null>(null);
   const [git, setGit] = useState<GitState | null>(null);
+  // A project whose folder was added again; the sidebar flashes its row for as long as the CSS
+  // animation runs.
+  const [flashId, setFlashId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!flashId) return;
+    const timer = setTimeout(() => setFlashId(null), 900);
+    return () => clearTimeout(timer);
+  }, [flashId]);
   const [error, setError] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -204,9 +212,16 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     fn().catch((e: unknown) => setError(errorText(e)));
   }
 
-  const openFolder = () => attempt(() => openFolderAsProject(settings.projects, updateSettings));
+  /** A folder that is already a project flashes that project in the sidebar instead. */
+  const addingFolders = (add: () => Promise<string[]>) =>
+    attempt(async () => {
+      const existing = await add();
+      if (existing.length > 0) setFlashId(existing[existing.length - 1]);
+    });
+  const openFolder = () =>
+    addingFolders(() => openFolderAsProject(settings.projects, updateSettings));
   const dropFolders = (paths: string[]) =>
-    attempt(() => addFolders(paths, settings.projects, updateSettings));
+    addingFolders(() => addFolders(paths, settings.projects, updateSettings));
   const renameProjectTo = (id: string, name: string) =>
     attempt(async () => {
       await api.renameProject(id, name);
@@ -586,6 +601,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
             changes={changes}
             changeFocus={changeFocus}
             folders={folders}
+            flashId={flashId}
             {...sidebarHandlers}
           />
         )}

@@ -15,31 +15,34 @@ export async function syncProjects(updateSettings: UpdateSettings): Promise<void
 
 /** Registers folders as projects; the last becomes the active one. New projects start collapsed like
  * the rest of the list, and a folder that is already a project keeps its state. A file fails with
- * the backend's error. */
+ * the backend's error. Resolves to the ids of the folders that were already projects. */
 export async function addFolders(
   paths: string[],
   known: Project[],
   updateSettings: UpdateSettings,
-): Promise<void> {
+): Promise<string[]> {
+  const existing: string[] = [];
   try {
     for (const path of paths) {
       const added = await api.addProject(path);
-      if (!known.some((p) => p.id === added.id))
-        setCollapsed(new Set([...getCollapsed(), added.id]));
+      if (known.some((p) => p.id === added.id)) existing.push(added.id);
+      else setCollapsed(new Set([...getCollapsed(), added.id]));
     }
   } finally {
     await syncProjects(updateSettings);
   }
+  return existing;
 }
 
-/** Folder picker, then registers the folder as the active project. No-op if cancelled. */
+/** Folder picker, then registers the folder as the active project. No-op if cancelled. Resolves
+ * like `addFolders`. */
 export async function openFolderAsProject(
   known: Project[],
   updateSettings: UpdateSettings,
-): Promise<void> {
+): Promise<string[]> {
   const path = await open({ directory: true, multiple: false });
-  if (typeof path !== "string") return;
-  await addFolders([path], known, updateSettings);
+  if (typeof path !== "string") return [];
+  return addFolders([path], known, updateSettings);
 }
 
 /** Folder picker, then points the project at the folder, such as after it was moved. No-op if

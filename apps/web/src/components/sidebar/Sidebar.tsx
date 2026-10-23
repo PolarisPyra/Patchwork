@@ -124,6 +124,8 @@ interface SidebarProps {
   onOpenFolder: () => void;
   /** Adds folders dropped on the Projects section as projects. */
   onDropFolders: (paths: string[]) => void;
+  /** A project whose folder was added again; its row is scrolled to and flashes. */
+  flashId: string | null;
   onRefreshChanges: () => void;
   onOpenChange: (path: string) => void;
   /** Files of the reply the Changes view was opened from, if any. */
@@ -255,9 +257,37 @@ function PickRow({
   target,
   className,
   ...rest
-}: HTMLAttributes<HTMLDivElement> & { target: Target; className: string }) {
+}: HTMLAttributes<HTMLDivElement> & {
+  target: Target;
+  className: string;
+  ref?: Ref<HTMLDivElement>;
+}) {
   const picked = useIsRowSelected(target);
   return <div {...rest} className={`${className} ${selectionFill(picked)}`} />;
+}
+
+/** For projects that share a name, the end of each one's path that tells them apart, by project id.
+ * A folder named like its project is left out, since the name already shows it. */
+function telltalePaths(projects: Project[]): Map<string, string> {
+  const labels = new Map<string, string>();
+  const byName = new Map<string, Project[]>();
+  for (const p of projects) byName.set(p.name, [...(byName.get(p.name) ?? []), p]);
+  for (const group of byName.values()) {
+    if (group.length < 2) continue;
+    const parts = group.map((p) => {
+      const segs = p.path.split(/[\\/]/).filter(Boolean);
+      return segs.at(-1) === p.name ? segs.slice(0, -1) : segs;
+    });
+    const longest = Math.max(...parts.map((s) => s.length));
+    for (let depth = 1; depth <= longest; depth++) {
+      const tails = parts.map((s) => s.slice(-depth).join("/"));
+      if (new Set(tails).size === tails.length || depth === longest) {
+        group.forEach((p, i) => labels.set(p.id, tails[i]));
+        break;
+      }
+    }
+  }
+  return labels;
 }
 
 function SectionLabel({
@@ -303,6 +333,7 @@ function TasksView({
   onNewTaskInFolder,
   onOpenFolder,
   onDropFolders,
+  flashId,
 }: SidebarProps) {
   // Collapsed state is restored before the lists show, so nothing animates shut on launch.
   const [loaded, setLoaded] = useState(false);
@@ -314,6 +345,7 @@ function TasksView({
   // The keyboard focus in the tree: the row the arrow keys move from.
   const cursorRef = useRef<Target | null>(null);
   const treeRef = useRef<HTMLDivElement>(null);
+  const telltales = useMemo(() => telltalePaths(projects), [projects]);
   const projectsLabelRef = useRef<HTMLDivElement>(null);
   // True while folders from the file manager are dragged over the Projects section.
   const [folderDrop, setFolderDrop] = useState(false);
@@ -744,11 +776,14 @@ function TasksView({
               <PickRow
                 target={row}
                 {...drag.attrs}
+                ref={
+                  flashId === p.id ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined
+                }
                 onPointerDown={(e) => {
                   drag.attrs.onPointerDown(e);
                   if (!editing && isPlainPress(e)) pickRow(e, row);
                 }}
-                className={`group mx-1 flex h-7 cursor-pointer items-center rounded-[var(--radius-sm)] select-none border-none pr-1.5 pl-1 text-left text-fg ${drag.edge} ${drag.dragging ? "opacity-50" : ""}`}
+                className={`group mx-1 flex h-7 cursor-pointer items-center rounded-[var(--radius-sm)] select-none border-none pr-1.5 pl-1 text-left text-fg ${drag.edge} ${drag.dragging ? "opacity-50" : ""} ${flashId === p.id ? "project-flash" : ""}`}
                 onClick={(e) => {
                   if (!pickRow(e, row)) toggle(p.id);
                 }}
@@ -766,6 +801,11 @@ function TasksView({
                 ) : (
                   <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium">
                     {p.name}
+                    {telltales.has(p.id) && (
+                      <span className="ml-1.5 font-normal text-fg-muted">
+                        {telltales.get(p.id)}
+                      </span>
+                    )}
                   </span>
                 )}
                 {projectFolders.some((f) => AGENT_FOLDER_NAMES.has(f.name)) && (
