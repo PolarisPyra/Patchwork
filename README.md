@@ -5,6 +5,16 @@ OpenCode through the CLIs already installed on your machine, so there are no new
 keys to manage. Projects, tasks, and chats share one sidebar, and every change an agent makes is
 reviewed in the app before you keep it.
 
+<table>
+  <tr>
+    <td><img src="docs/screenshots/goal-running.png" alt="A /goal running in a chat, with the goal shown above the input" width="420"></td>
+    <td><img src="docs/screenshots/goal-stopped.png" alt="A stopped turn with its token usage and the goal cleared" width="420"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/appearance-settings.png" alt="The Appearance settings with Light, Dark, and System themes" width="420"></td>
+    <td><img src="docs/screenshots/goal-cleared.png" alt="The sidebar and an idle chat after the goal was cleared" width="420"></td>
+  </tr>
+</table>
 
 ## Features
 
