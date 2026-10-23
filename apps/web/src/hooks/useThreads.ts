@@ -163,6 +163,8 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
       }));
     case "messageCutOff":
       return updateMessage(thread, event.messageId, (m) => ({ ...m, cutOff: true }));
+    case "refused":
+      return updateMessage(thread, event.messageId, (m) => ({ ...m, refusal: event.refusal }));
     case "messageQueued": {
       const { messageId, queued } = event;
       return updateMessage(thread, messageId, (m) => ({ ...m, queued }));

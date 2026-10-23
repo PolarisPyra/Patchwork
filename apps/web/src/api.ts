@@ -190,6 +190,8 @@ export interface Message {
   background: BackgroundTask[];
   /** Cut short by a steering message; the agent answered it in the next reply. */
   cutOff: boolean;
+  /** A safety classifier blocked part of the reply; the agent's stated reason. */
+  refusal: Refusal | null;
   /** The reply's text, reasoning, and tool calls in the order they happened; empty for replies
    * saved before this was kept. */
   parts: Part[];
@@ -197,6 +199,13 @@ export interface Message {
   finishedAt: number | null;
   /** Tokens the reply used; null for agents that do not report usage. */
   usage: TokenUsage | null;
+}
+
+/** Why a safety classifier blocked a reply, as the agent reports it. */
+export interface Refusal {
+  /** The policy area, such as `cyber`; null when the agent names none. */
+  category: string | null;
+  explanation: string;
 }
 
 /** Tokens a reply used, summed over the model requests it made. */
@@ -349,6 +358,7 @@ export type AgentEvent =
   | { type: "messageQueued"; messageId: string; queued: boolean }
   | { type: "messageSteered"; messageId: string }
   | { type: "messageCutOff"; messageId: string }
+  | { type: "refused"; messageId: string; refusal: Refusal }
   | { type: "planProposed"; messageId: string; text: string }
   | { type: "threadCreated"; thread: Thread }
   | { type: "messageRemoved"; messageId: string }

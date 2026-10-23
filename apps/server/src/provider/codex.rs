@@ -16,6 +16,7 @@ use crate::types::ModelOption;
 use crate::types::PlanStep;
 use crate::types::Question;
 use crate::types::QuestionOption;
+use crate::types::Refusal;
 use crate::types::StepStatus;
 use super::file_touched;
 use super::GoalUpdate;
@@ -608,22 +609,50 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
             }));
         }
         (None, Some("error")) if params["willRetry"] != true => {
-            let message = params["error"]["message"]
-                .as_str()
-                .unwrap_or("Codex reported an error");
-            out.push(Parsed::Error(message.into()));
+            if let Some(refusal) = policy_refusal(&params["error"]) {
+                out.push(refused(message_id, refusal));
+            } else {
+                let message = params["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Codex reported an error");
+                out.push(Parsed::Error(message.into()));
+            }
         }
         (None, Some("turn/completed")) => {
             let turn = &params["turn"];
             if turn["status"] == "failed" {
-                let message = turn["error"]["message"].as_str().unwrap_or("Turn failed");
-                out.push(Parsed::Error(message.into()));
+                if let Some(refusal) = policy_refusal(&turn["error"]) {
+                    out.push(refused(message_id, refusal));
+                } else {
+                    let message = turn["error"]["message"].as_str().unwrap_or("Turn failed");
+                    out.push(Parsed::Error(message.into()));
+                }
             }
             out.push(Parsed::Finished);
         }
         _ => {}
     }
     out
+}
+
+/// A Codex error that means a safety check blocked the request, not that the turn broke.
+fn policy_refusal(error: &Value) -> Option<Refusal> {
+    let category = match error["codexErrorInfo"].as_str()? {
+        "cyberPolicy" => "cyber",
+        "misalignmentPolicyViolation" => "misalignment",
+        _ => return None,
+    };
+    Some(Refusal {
+        category: Some(category.into()),
+        explanation: error["message"]
+            .as_str()
+            .unwrap_or("Codex blocked this request under its usage policy.")
+            .into(),
+    })
+}
+
+fn refused(message_id: &str, refusal: Refusal) -> Parsed {
+    Parsed::Event(AgentEvent::Refused { message_id: message_id.into(), refusal })
 }
 
 #[cfg(test)]

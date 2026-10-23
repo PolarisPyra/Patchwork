@@ -105,6 +105,11 @@ const MIGRATIONS: &[Migration] = &[
         name: "imported_threads",
         sql: include_str!("0017_imported_threads.sql"),
     },
+    Migration {
+        id: 18,
+        name: "message_refusal",
+        sql: include_str!("0018_message_refusal.sql"),
+    },
 ];
 
 fn fail(m: &Migration, e: impl std::fmt::Display) -> String {

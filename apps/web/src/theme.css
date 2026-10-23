@@ -70,6 +70,7 @@
   --danger: #db5c5c;
   --danger-soft: rgba(219, 92, 92, 0.14);
   --warning: #f2c55c;
+  --warning-soft: rgba(242, 197, 92, 0.14);
 
   --diff-add-bg: rgba(84, 155, 90, 0.18);
   --diff-del-bg: rgba(219, 92, 92, 0.18);
@@ -117,6 +118,7 @@
   --danger: #e55765;
   --danger-soft: #fdeef0;
   --warning: #c27d04;
+  --warning-soft: #fdf5e1;
 
   --diff-add-bg: #e6f5ea;
   --diff-del-bg: #fdeef0;

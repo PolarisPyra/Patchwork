@@ -52,15 +52,15 @@ pub(super) fn save_message(
     tx.execute(
         "INSERT INTO messages
              (id, thread_id, position, role, text, created_at, status, tools, plan, files, error,
-              approvals, attachments, steer, finished_at, usage, queued, parts, cut_off)
+              approvals, attachments, steer, finished_at, usage, queued, parts, cut_off, refusal)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                 ?19)
+                 ?19, ?20)
          ON CONFLICT (id) DO UPDATE SET position = excluded.position, text = excluded.text,
              status = excluded.status, tools = excluded.tools, plan = excluded.plan,
              files = excluded.files, error = excluded.error, approvals = excluded.approvals,
              attachments = excluded.attachments, finished_at = excluded.finished_at,
              usage = excluded.usage, steer = excluded.steer, queued = excluded.queued,
-             parts = excluded.parts, cut_off = excluded.cut_off",
+             parts = excluded.parts, cut_off = excluded.cut_off, refusal = excluded.refusal",
         params![
             m.id,
             thread_id,
@@ -80,7 +80,8 @@ pub(super) fn save_message(
             m.usage.as_ref().map(json),
             m.queued,
             json(&m.parts),
-            m.cut_off
+            m.cut_off,
+            m.refusal.as_ref().map(json)
         ],
     )?;
     Ok(())
@@ -140,7 +141,7 @@ pub(super) fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
         .collect::<rusqlite::Result<_>>()?;
     let mut stmt = conn.prepare(
         "SELECT id, role, text, created_at, status, tools, plan, files, error, approvals,
-                attachments, steer, finished_at, usage, queued, parts, cut_off
+                attachments, steer, finished_at, usage, queued, parts, cut_off, refusal
          FROM messages WHERE thread_id = ?1 ORDER BY position",
     )?;
     for t in &mut threads {
@@ -167,6 +168,9 @@ pub(super) fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
                         .get::<_, Option<String>>(13)?
                         .and_then(|u| serde_json::from_str(&u).ok()),
                     cut_off: r.get(16)?,
+                    refusal: r
+                        .get::<_, Option<String>>(17)?
+                        .and_then(|j| serde_json::from_str(&j).ok()),
                     parts: from_json(r.get(15)?),
                 })
             })?

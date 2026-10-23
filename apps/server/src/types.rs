@@ -398,6 +398,15 @@ impl Attachment {
     }
 }
 
+/// Why a safety classifier blocked a reply, as the agent reports it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Refusal {
+    /// The policy area, such as `cyber`; None when the agent names none.
+    pub category: Option<String>,
+    pub explanation: String,
+}
+
 /// Tokens a reply used, summed over the model requests it made.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -446,6 +455,9 @@ pub struct Message {
     /// Cut short by a steering message; the agent answered it in the next reply.
     #[serde(default)]
     pub cut_off: bool,
+    /// A safety classifier blocked part of the reply; the agent's stated reason.
+    #[serde(default)]
+    pub refusal: Option<Refusal>,
     /// The reply's text, reasoning, and tool calls in the order they happened. Replies saved
     /// before this was kept have none.
     #[serde(default)]
@@ -701,6 +713,11 @@ pub enum AgentEvent {
     /// A steering message cut the reply short.
     MessageCutOff {
         message_id: String,
+    },
+    /// A safety classifier blocked the reply, or part of it.
+    Refused {
+        message_id: String,
+        refusal: Refusal,
     },
     /// A message sent mid-turn is now waiting for the turn to end (`queued`), or no longer is.
     MessageQueued {

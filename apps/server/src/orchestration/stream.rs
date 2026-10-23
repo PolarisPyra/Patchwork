@@ -136,6 +136,7 @@ pub(super) fn event_message(event: &AgentEvent) -> Option<&str> {
         | AgentEvent::MessageQueued { message_id, .. }
         | AgentEvent::MessageSteered { message_id }
         | AgentEvent::MessageCutOff { message_id }
+        | AgentEvent::Refused { message_id, .. }
         | AgentEvent::PlanProposed { message_id, .. }
         | AgentEvent::BackgroundTaskStarted { message_id, .. }
         | AgentEvent::BackgroundTaskEnded { message_id, .. }
@@ -241,6 +242,7 @@ pub(super) fn apply(thread: &mut Thread, event: &AgentEvent) {
         AgentEvent::MessageQueued { queued, .. } => msg.queued = *queued,
         AgentEvent::MessageSteered { .. } => { msg.queued = false; msg.steer = true; }
         AgentEvent::MessageCutOff { .. } => msg.cut_off = true,
+        AgentEvent::Refused { refusal, .. } => msg.refusal = Some(refusal.clone()),
         AgentEvent::PlanProposed { text, .. } => {
             end_thinking(msg);
             msg.parts.push(Part::Plan { text: text.clone() });

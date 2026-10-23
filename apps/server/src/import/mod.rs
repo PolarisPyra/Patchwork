@@ -149,6 +149,7 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
                 queued: false,
                 background: Vec::new(),
                 cut_off: false,
+                refusal: None,
                 parts: Vec::new(),
                 finished_at: None,
                 usage: None,

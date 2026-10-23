@@ -17,6 +17,7 @@ use crate::types::ProviderSlashCommand;
 use crate::types::Question;
 use crate::types::QuestionOption;
 use crate::types::StepStatus;
+use crate::types::Refusal;
 use crate::types::SubAgent;
 use crate::types::TokenUsage;
 use super::file_touched;
@@ -510,6 +511,21 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
             out.extend(goal_from_command(&text).map(Parsed::Goal));
         }
         Some("assistant") => {
+            // A safety classifier stopped this reply. The CLI tells Claude so and the turn goes on,
+            // so the turn does not fail; the reason is on the message.
+            if parent.is_none() && v["message"]["stop_reason"] == "refusal" {
+                let details = &v["message"]["stop_details"];
+                out.push(Parsed::Event(AgentEvent::Refused {
+                    message_id: message_id.into(),
+                    refusal: Refusal {
+                        category: details["category"].as_str().map(String::from),
+                        explanation: details["explanation"]
+                            .as_str()
+                            .unwrap_or("Claude's response was stopped by a safety classifier.")
+                            .into(),
+                    },
+                }));
+            }
             for block in blocks {
                 if block["type"] == "tool_use" {
                     claude_tool_use(block, root, message_id, parent, &mut out);
