@@ -2,11 +2,12 @@ import { Children, memo, useEffect, useState, type ReactElement, type ReactNode 
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { TextAlignLeftIcon } from "@phosphor-icons/react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { SYNTAX_CLASSES } from "~/components/canvas/syntaxClasses";
 import { ACTION_CLASS, CopyButton } from "~/components/chat/CopyButton";
 import { CHOICES_LANG } from "~/components/chat/choices";
 
-/** Links are shown as text unless they use one of these protocols. Nothing is opened from a reply. */
+/** Links open in the system browser only with one of these protocols; others are shown as text. */
 const SAFE_LINK = /^(https?:|mailto:)/i;
 /** Matches title="...", file=..., or filename='...' in a fence's info string. */
 const TITLE_ATTR = /(?:^|\s)(?:title|file|filename)=(?:"([^"]*)"|'([^']*)'|([^\s"']+))/;
@@ -77,9 +78,18 @@ const components: Components = {
   },
   a: ({ href, children }) =>
     href && SAFE_LINK.test(href) ? (
-      <span className="cursor-text text-accent-text" title={href}>
+      <a
+        href={href}
+        className="text-accent-text underline underline-offset-2"
+        title={href}
+        onClick={(event) => {
+          // The webview must not navigate away; the system browser opens the link instead.
+          event.preventDefault();
+          void openUrl(href);
+        }}
+      >
         {children}
-      </span>
+      </a>
     ) : (
       <span>{children}</span>
     ),
