@@ -1,6 +1,7 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import { api } from "~/api";
+import { api, type Project } from "~/api";
 import type { UpdateSettings } from "~/app/App";
+import { getCollapsed, setCollapsed } from "~/components/sidebar/collapsedState";
 
 /** Re-reads the project list from the backend; never overwrites it with stale local copies. */
 export async function syncProjects(updateSettings: UpdateSettings): Promise<void> {
@@ -12,10 +13,31 @@ export async function syncProjects(updateSettings: UpdateSettings): Promise<void
   }));
 }
 
+/** Registers folders as projects; the last becomes the active one. New projects start collapsed like
+ * the rest of the list, and a folder that is already a project keeps its state. A file fails with
+ * the backend's error. */
+export async function addFolders(
+  paths: string[],
+  known: Project[],
+  updateSettings: UpdateSettings,
+): Promise<void> {
+  try {
+    for (const path of paths) {
+      const added = await api.addProject(path);
+      if (!known.some((p) => p.id === added.id))
+        setCollapsed(new Set([...getCollapsed(), added.id]));
+    }
+  } finally {
+    await syncProjects(updateSettings);
+  }
+}
+
 /** Folder picker, then registers the folder as the active project. No-op if cancelled. */
-export async function openFolderAsProject(updateSettings: UpdateSettings): Promise<void> {
+export async function openFolderAsProject(
+  known: Project[],
+  updateSettings: UpdateSettings,
+): Promise<void> {
   const path = await open({ directory: true, multiple: false });
   if (typeof path !== "string") return;
-  await api.addProject(path);
-  await syncProjects(updateSettings);
+  await addFolders([path], known, updateSettings);
 }

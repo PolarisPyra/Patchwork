@@ -10,6 +10,7 @@ import {
   type MouseEvent,
   type PointerEvent,
   type ReactNode,
+  type Ref,
 } from "react";
 import {
   ArchiveIcon,
@@ -38,6 +39,7 @@ import {
   type Project,
   type Thread,
 } from "~/api";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import ProviderLogos from "~/components/ProviderLogos";
 import ContextMenu, { type MenuItem } from "~/components/sidebar/ContextMenu";
@@ -118,6 +120,8 @@ interface SidebarProps {
   /** Starts a task at the top of a folder; `threadIds` are the folder's tasks in order. */
   onNewTaskInFolder: (projectId: string, folderId: string, threadIds: string[]) => void;
   onOpenFolder: () => void;
+  /** Adds folders dropped on the Projects section as projects. */
+  onDropFolders: (paths: string[]) => void;
   onRefreshChanges: () => void;
   onOpenChange: (path: string) => void;
   /** Files of the reply the Changes view was opened from, if any. */
@@ -254,9 +258,20 @@ function PickRow({
   return <div {...rest} className={`${className} ${selectionFill(picked)}`} />;
 }
 
-function SectionLabel({ children, action }: { children: ReactNode; action?: ReactNode }) {
+function SectionLabel({
+  children,
+  action,
+  ref,
+}: {
+  children: ReactNode;
+  action?: ReactNode;
+  ref?: Ref<HTMLDivElement>;
+}) {
   return (
-    <div className="flex items-center justify-between px-1.5 pt-2.5 pb-1 text-[length:var(--fs-xs)] tracking-[0.06em] text-fg-muted uppercase">
+    <div
+      ref={ref}
+      className="flex items-center justify-between px-1.5 pt-2.5 pb-1 text-[length:var(--fs-xs)] tracking-[0.06em] text-fg-muted uppercase"
+    >
       <span>{children}</span>
       {action}
     </div>
@@ -284,6 +299,7 @@ function TasksView({
   onUndoSortByAgent,
   onNewTaskInFolder,
   onOpenFolder,
+  onDropFolders,
 }: SidebarProps) {
   // Collapsed state is restored before the lists show, so nothing animates shut on launch.
   const [loaded, setLoaded] = useState(false);
@@ -295,6 +311,46 @@ function TasksView({
   // The keyboard focus in the tree: the row the arrow keys move from.
   const cursorRef = useRef<Target | null>(null);
   const treeRef = useRef<HTMLDivElement>(null);
+  const projectsLabelRef = useRef<HTMLDivElement>(null);
+  // True while folders from the file manager are dragged over the Projects section.
+  const [folderDrop, setFolderDrop] = useState(false);
+  // Tauri hands dropped files over as paths (HTML drop events carry none), so drops are listened
+  // for on the webview and kept only when they land on the Projects section: from its label down.
+  useEffect(() => {
+    function overProjects(position: { x: number; y: number }) {
+      const tree = treeRef.current;
+      const label = projectsLabelRef.current;
+      if (!tree || !label) return false;
+      // Positions are physical pixels; the rects are in CSS pixels.
+      const scale = window.devicePixelRatio;
+      const x = position.x / scale;
+      const y = position.y / scale;
+      const r = tree.getBoundingClientRect();
+      const top = Math.max(r.top, label.getBoundingClientRect().top);
+      return x >= r.left && x <= r.right && y >= top && y <= r.bottom;
+    }
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    void getCurrentWebview()
+      .onDragDropEvent(({ payload }) => {
+        if (payload.type === "leave") {
+          setFolderDrop(false);
+        } else if (payload.type === "drop") {
+          setFolderDrop(false);
+          if (overProjects(payload.position)) onDropFolders(payload.paths);
+        } else {
+          setFolderDrop(overProjects(payload.position));
+        }
+      })
+      .then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [onDropFolders]);
   // Set when a chat opens from the tree, so its composer does not take the focus from the tree.
   // Only set when the selection changes, since the effect that clears it runs on that change.
   const keepTreeFocus = useRef(false);
@@ -619,6 +675,7 @@ function TasksView({
       )}
 
       <SectionLabel
+        ref={projectsLabelRef}
         action={
           <div className="flex items-center gap-1">
             <button
@@ -641,7 +698,7 @@ function TasksView({
       >
         Projects
       </SectionLabel>
-      {projects.length === 0 && (
+      {projects.length === 0 && !folderDrop && (
         <div className="px-3 py-2 text-[length:var(--fs-sm)] text-fg-muted">No projects yet</div>
       )}
       <div className="-mx-2">
@@ -832,6 +889,15 @@ function TasksView({
           );
         })}
       </div>
+      {folderDrop && (
+        <div
+          ref={(el) => el?.scrollIntoView({ block: "nearest" })}
+          className="mx-1 flex h-7 items-center gap-1.5 rounded-[var(--radius-sm)] border border-dashed border-accent px-2 text-[length:var(--fs-sm)] text-fg-muted"
+        >
+          <FolderPlusIcon size={15} />
+          Add Folder
+        </div>
+      )}
     </div>
   );
 }

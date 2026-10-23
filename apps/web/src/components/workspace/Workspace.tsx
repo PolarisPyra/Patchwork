@@ -26,7 +26,7 @@ import { lastEffort } from "~/components/chat/EffortPicker";
 import Chat from "~/components/chat/Chat";
 import CommandPalette, { type PaletteItem } from "~/components/workspace/CommandPalette";
 import SettingsDialog from "~/components/settings/SettingsDialog";
-import { openFolderAsProject, syncProjects } from "~/lib/projects";
+import { addFolders, openFolderAsProject, syncProjects } from "~/lib/projects";
 import ActivityBar from "~/components/sidebar/ActivityBar";
 import Sidebar, { type SidebarView, type Target } from "~/components/sidebar/Sidebar";
 import { getCollapsed, setCollapsed } from "~/components/sidebar/collapsedState";
@@ -204,7 +204,9 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     fn().catch((e: unknown) => setError(errorText(e)));
   }
 
-  const openFolder = () => attempt(() => openFolderAsProject(updateSettings));
+  const openFolder = () => attempt(() => openFolderAsProject(settings.projects, updateSettings));
+  const dropFolders = (paths: string[]) =>
+    attempt(() => addFolders(paths, settings.projects, updateSettings));
   const renameProjectTo = (id: string, name: string) =>
     attempt(async () => {
       await api.renameProject(id, name);
@@ -548,6 +550,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     onRenameFolder: (id: string, name: string) => attempt(() => renameFolder(id, name)),
     onNewTaskInFolder: newThreadInFolder,
     onOpenFolder: openFolder,
+    onDropFolders: dropFolders,
     onRefreshChanges: () => attempt(refreshGit),
     onOpenChange: (path: string) => openCanvasAt(path, null, "diff"),
     onOpenPalette: () => setPaletteOpen(true),
