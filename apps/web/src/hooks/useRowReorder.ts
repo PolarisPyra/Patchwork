@@ -63,10 +63,14 @@ export function useRowReorder(
   const finish = () => {
     stopListening.current?.();
     stopListening.current = null;
+    // A press that never became a drag has nothing to clear; setting the state anyway re-renders
+    // the whole tree on every click.
+    const wasDragging = dragRef.current !== null;
+    const hadTarget = targetRef.current !== null;
     dragRef.current = null;
     targetRef.current = null;
-    setDrag(null);
-    setTarget(null);
+    if (wasDragging) setDrag(null);
+    if (hadTarget) setTarget(null);
   };
 
   /** Starts tracking a press on a row. It turns into a drag once the pointer moves far enough. */

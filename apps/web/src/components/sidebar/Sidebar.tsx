@@ -1,8 +1,11 @@
 import {
   memo,
+  useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
+  type HTMLAttributes,
   type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
@@ -15,11 +18,9 @@ import {
   ArrowsClockwiseIcon,
   ArrowsInLineVerticalIcon,
   ChatCircleIcon,
-  ChatsIcon,
   CircleNotchIcon,
   FolderIcon,
   FolderPlusIcon,
-  GearSixIcon,
   GitDiffIcon,
   MagicWandIcon,
   MagnifyingGlassIcon,
@@ -27,7 +28,6 @@ import {
   PlusIcon,
   ShieldWarningIcon,
   TrashIcon,
-  type Icon,
 } from "@phosphor-icons/react";
 import {
   AGENT_LABELS,
@@ -43,7 +43,13 @@ import ProviderLogos from "~/components/ProviderLogos";
 import ContextMenu, { type MenuItem } from "~/components/sidebar/ContextMenu";
 import UsagePopover from "~/components/usage/UsagePopover";
 import { useRowReorder, type RowDrag } from "~/hooks/useRowReorder";
-import { setPickedRows, usePicked } from "./pickedRows";
+import {
+  getSelectedRows,
+  setSelectedRows,
+  useIsRowSelected,
+  useSelectedRows,
+} from "./selectionState";
+import { getCollapsed, loadCollapsed, setCollapsed, useIsCollapsed } from "./collapsedState";
 import { isWorking } from "~/hooks/useThreads";
 import { formatKey, keyFor, shortcutContext, useCommand, useKeybindings } from "~/lib/shortcuts";
 import {
@@ -61,45 +67,6 @@ export type SidebarView = "tasks" | "changes" | "archived";
 const CHATS_GROUP = "chats";
 const PROJECTS_GROUP = "projects";
 const TASKS_GROUP_PREFIX = "tasks:";
-
-const STRIPE: { view: SidebarView; label: string; Icon: Icon }[] = [
-  { view: "tasks", label: "Tasks", Icon: ChatsIcon },
-  { view: "changes", label: "Changes", Icon: GitDiffIcon },
-  { view: "archived", label: "Archived", Icon: ArchiveIcon },
-];
-
-interface StripeProps {
-  view: SidebarView | null;
-  onSelect: (view: SidebarView) => void;
-  onOpenSettings: () => void;
-}
-
-export function ToolStripe({ view, onSelect, onOpenSettings }: StripeProps) {
-  return (
-    <nav className="flex w-[var(--stripe-w)] flex-none flex-col items-center gap-1 border-r border-border bg-app py-1.5">
-      {STRIPE.map(({ view: v, label, Icon }) => (
-        <button
-          key={v}
-          className={`grid h-7 w-7 cursor-pointer place-items-center rounded-[var(--radius)] border-none p-0 ${view === v ? "bg-selected text-fg" : "bg-transparent text-fg-muted hover:bg-hover hover:text-fg"}`}
-          title={label}
-          aria-label={label}
-          aria-pressed={view === v}
-          onClick={() => onSelect(v)}
-        >
-          <Icon size={20} />
-        </button>
-      ))}
-      <button
-        className="mt-auto grid h-7 w-7 cursor-pointer place-items-center rounded-[var(--radius)] border-none bg-transparent p-0 text-fg-muted hover:bg-hover hover:text-fg"
-        title="Settings"
-        aria-label="Settings"
-        onClick={onOpenSettings}
-      >
-        <GearSixIcon size={20} />
-      </button>
-    </nav>
-  );
-}
 
 interface SidebarProps {
   view: SidebarView;
@@ -174,6 +141,10 @@ const isPlainPress = (e: PointerEvent<HTMLElement>) =>
   !e.shiftKey &&
   !(e.target instanceof Element && e.target.closest("button"));
 const rowKey = (t: Target) => `${t.kind}:${t.id}`;
+/** A click on the list's own blank space, not on a row or its label, clears the selection. */
+const clearSelectionOnBlank = (e: MouseEvent<HTMLElement>) => {
+  if (e.target === e.currentTarget) setSelectedRows([]);
+};
 /** The collapsed-set key for a project or folder row. */
 const collapseKey = (t: Target) => (t.kind === "folder" ? `folder:${t.id}` : t.id);
 /** A tree row's fill: the selection colors while the tree is focused, a hover tint otherwise. */
@@ -206,6 +177,13 @@ export default memo(function Sidebar(props: SidebarProps) {
   );
 });
 
+/** A function with one identity for the life of the component that always calls the latest `fn`. */
+function useStable<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
+  const latest = useRef(fn);
+  latest.current = fn;
+  return useCallback((...args: A) => latest.current(...args), []);
+}
+
 /** Animates its children open and closed. Stays mounted so the height can transition. */
 function Collapse({
   open,
@@ -220,7 +198,7 @@ function Collapse({
   const clip = open && overflowWhenOpen ? "overflow-visible" : "overflow-hidden";
   return (
     <div
-      className={`grid grid-cols-[minmax(0,1fr)] transition-[grid-template-rows] duration-200 ease-out ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+      className={`grid grid-cols-[minmax(0,1fr)] transition-[grid-template-rows] duration-150 ease-[cubic-bezier(0.2,0,0,1)] ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
       inert={!open}
     >
       <div className={`min-h-0 ${clip}`}>{children}</div>
@@ -236,7 +214,7 @@ function Twistie({ open }: { open: boolean }) {
       height={16}
       viewBox="0 0 16 16"
       aria-hidden
-      className={`transition-transform duration-200 ${open ? "" : "-rotate-90"}`}
+      className={`transition-transform duration-150 ease-[cubic-bezier(0.2,0,0,1)] will-change-transform ${open ? "" : "-rotate-90"}`}
     >
       <path
         fill="currentColor"
@@ -245,6 +223,29 @@ function Twistie({ open }: { open: boolean }) {
       />
     </svg>
   );
+}
+
+/** The twistie and the collapsible region of a project or folder follow the collapsed set themselves,
+ * so opening or closing one re-renders these two and not every row in the tree. */
+function TreeTwistie({ id }: { id: string }) {
+  const collapsed = useIsCollapsed(id);
+  return <Twistie open={!collapsed} />;
+}
+
+function TreeCollapse({ id, children }: { id: string; children: ReactNode }) {
+  const collapsed = useIsCollapsed(id);
+  return <Collapse open={!collapsed}>{children}</Collapse>;
+}
+
+/** A tree row's box, filled by whether it is picked. It follows the picked rows itself, so a pick
+ * re-renders the rows it changes and not the whole tree. */
+function PickRow({
+  target,
+  className,
+  ...rest
+}: HTMLAttributes<HTMLDivElement> & { target: Target; className: string }) {
+  const picked = useIsRowSelected(target);
+  return <div {...rest} className={`${className} ${selectionFill(picked)}`} />;
 }
 
 function SectionLabel({ children, action }: { children: ReactNode; action?: ReactNode }) {
@@ -278,25 +279,15 @@ function TasksView({
   onNewTaskInFolder,
   onOpenFolder,
 }: SidebarProps) {
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   // Collapsed state is restored before the lists show, so nothing animates shut on launch.
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
-    api.getCollapsed().then(
-      (ids) => {
-        setCollapsed(new Set(ids));
-        setLoaded(true);
-      },
-      () => setLoaded(true),
-    );
+    void loadCollapsed().then(() => setLoaded(true));
   }, []);
-  useEffect(() => {
-    if (loaded) void api.setCollapsed([...collapsed]);
-  }, [collapsed, loaded]);
   const [menu, setMenu] = useState<{ x: number; y: number; targets: Target[] } | null>(null);
   const [renaming, setRenaming] = useState<Target | null>(null);
   // The keyboard focus in the tree: the row the arrow keys move from.
-  const [cursor, setCursor] = useState<Target | null>(null);
+  const cursorRef = useRef<Target | null>(null);
   const treeRef = useRef<HTMLDivElement>(null);
   // Set when a chat opens from the tree, so its composer does not take the focus from the tree.
   // Only set when the selection changes, since the effect that clears it runs on that change.
@@ -307,28 +298,34 @@ function TasksView({
     keepTreeFocus.current = on;
     treeRef.current?.toggleAttribute("data-keeps-focus", on);
   };
-  const picked = usePicked();
-  const setPicked = setPickedRows;
-  const isPicked = (target: Target) => picked.some((p) => sameTarget(p, target));
+  const setPicked = setSelectedRows;
   const reorder = useRowReorder((group, ids, folderId) =>
     group === PROJECTS_GROUP ? onReorderProjects(ids) : onReorderThreads(ids, folderId),
   );
+  /** Changes which projects and folders are collapsed, and saves it. The rows animate from the
+   * collapsed set itself, so this does not re-render the tree. */
+  const changeCollapsed = (update: (prev: ReadonlySet<string>) => ReadonlySet<string>) => {
+    setCollapsed(update(getCollapsed()));
+    syncTreeRows();
+  };
   const toggle = (id: string) =>
-    setCollapsed((prev) => {
+    changeCollapsed((prev) => {
       const next = new Set(prev);
       if (!next.delete(id)) next.add(id);
       return next;
     });
   const collapseAll = () =>
-    setCollapsed((prev) => new Set([...prev, ...projects.map((p) => p.id)]));
+    changeCollapsed((prev) => new Set([...prev, ...projects.map((p) => p.id)]));
   const chats = threads.filter((t) => t.projectId === null);
   const chatIds = chats.map((t) => t.id);
 
   /** Ctrl+click adds or drops a row from the picked rows and returns true. A plain click clears them and returns false, so the row acts as usual. */
   const pickRow = (e: PickModifiers, target: Target) => {
+    const { rows: treeRows } = buildTree(getCollapsed());
+    const cursor = cursorRef.current;
     const anchor = cursor ? treeRows.findIndex((r) => sameTarget(r, cursor)) : -1;
     const at = treeRows.findIndex((r) => sameTarget(r, target));
-    setCursor(target);
+    cursorRef.current = target;
     // Shift+click picks every tree row from the cursor to the clicked row, as VS Code's explorer does.
     if (e.shiftKey && anchor >= 0 && at >= 0) {
       const [from, to] = anchor < at ? [anchor, at] : [at, anchor];
@@ -351,8 +348,10 @@ function TasksView({
   const openMenu = (e: MouseEvent, target: Target) => {
     e.preventDefault();
     // A right-click on a picked row acts on all picked rows; on any other row, on that row alone.
-    const targets = isPicked(target) ? picked : [target];
-    if (!isPicked(target)) setPicked([]);
+    const picked = getSelectedRows();
+    const isPicked = picked.some((p) => sameTarget(p, target));
+    const targets = isPicked ? picked : [target];
+    if (!isPicked) setPicked([]);
     setMenu({ x: e.clientX, y: e.clientY, targets });
   };
   const menuItems = (targets: Target[]): MenuItem[] => {
@@ -379,23 +378,38 @@ function TasksView({
     else if (target.kind === "folder") onRenameFolder(target.id, trimmed);
     else onRenameProject(target.id, trimmed);
   };
-  const rowProps = {
-    // While rows are picked, the open thread is not shown as selected, so it reads as not being removed.
-    selectedId,
-    onSelectThread,
-    onArchiveThread: (thread: Thread) => onRemoveTargets([{ kind: "thread", id: thread.id }]),
-    isPicked,
-    onPick: pickRow,
-    renaming,
-    onContextMenu: openMenu,
-    onCommitRename: commitRename,
-    onCancelRename: () => setRenaming(null),
-  };
+  const onSelect = useStable(onSelectThread);
+  const onArchive = useStable((thread: Thread) =>
+    onRemoveTargets([{ kind: "thread", id: thread.id }]),
+  );
+  const onPick = useStable(pickRow);
+  const onContextMenu = useStable(openMenu);
+  const onCommitRename = useStable(commitRename);
+  const onCancelRename = useStable(() => setRenaming(null));
+  const actions = useMemo<RowActions>(
+    () => ({
+      onSelectThread: onSelect,
+      onArchiveThread: onArchive,
+      onPick,
+      onContextMenu,
+      onCommitRename,
+      onCancelRename,
+    }),
+    [onSelect, onArchive, onPick, onContextMenu, onCommitRename, onCancelRename],
+  );
+  const minute = Math.floor(Date.now() / 60_000);
+  /** What a row shows that depends on the tree's state. */
+  const rowState = (t: Thread) => ({
+    selected: t.id === selectedId,
+    editing: renaming?.kind === "thread" && renaming.id === t.id,
+    minute,
+    actions,
+  });
   /** New folders open for renaming, in an expanded project so they show. */
   const addFolder = async (projectId: string) => {
     const folder = await onNewFolder(projectId);
     if (!folder) return;
-    setCollapsed((prev) => {
+    changeCollapsed((prev) => {
       const next = new Set(prev);
       next.delete(projectId);
       return next;
@@ -404,7 +418,7 @@ function TasksView({
   };
   /** Opens a project, and the folder a task goes into, so the new task shows in the tree. */
   const revealTask = (projectId: string, folderId?: string) =>
-    setCollapsed((prev) => {
+    changeCollapsed((prev) => {
       const next = new Set(prev);
       next.delete(projectId);
       if (folderId) next.delete(`folder:${folderId}`);
@@ -412,57 +426,67 @@ function TasksView({
     });
 
   // Ctrl+A picks the chats and tasks on screen: those in collapsed projects or folders are hidden.
-  const visible = [
-    ...chats,
-    ...projects
-      .filter((p) => !collapsed.has(p.id))
-      .flatMap((p) =>
-        threads.filter(
-          (t) =>
-            t.projectId === p.id && (t.folderId === null || !collapsed.has(`folder:${t.folderId}`)),
-        ),
-      ),
-  ]
-    .filter((t) => !leavingIds.has(t.id))
-    .map((t): Target => ({ kind: "thread", id: t.id }));
-  useCommand("sidebar.selectAll", () => setPicked(visible));
+  useCommand("sidebar.selectAll", () => {
+    const hidden = getCollapsed();
+    setPicked(
+      [
+        ...chats,
+        ...projects
+          .filter((p) => !hidden.has(p.id))
+          .flatMap((p) =>
+            threads.filter(
+              (t) =>
+                t.projectId === p.id &&
+                (t.folderId === null || !hidden.has(`folder:${t.folderId}`)),
+            ),
+          ),
+      ]
+        .filter((t) => !leavingIds.has(t.id))
+        .map((t): Target => ({ kind: "thread", id: t.id })),
+    );
+  });
 
   // The tree's rows in on-screen order, each with its parent, for the arrow keys and Shift+click.
-  const treeRows: Target[] = [];
-  const treeParent = new Map<string, Target>();
-  const addRow = (row: Target, parent?: Target) => {
-    treeRows.push(row);
-    if (parent) treeParent.set(rowKey(row), parent);
-  };
-  for (const p of projects) {
-    const projectRow: Target = { kind: "project", id: p.id };
-    addRow(projectRow);
-    if (collapsed.has(p.id)) continue;
-    for (const f of folders.filter((x) => x.projectId === p.id)) {
-      const folderRow: Target = { kind: "folder", id: f.id };
-      addRow(folderRow, projectRow);
-      if (collapsed.has(collapseKey(folderRow))) continue;
-      for (const t of threads.filter((x) => x.folderId === f.id && !leavingIds.has(x.id)))
-        addRow({ kind: "thread", id: t.id }, folderRow);
+  // Built when a key or click needs it, from the collapsed set as it is then.
+  const buildTree = (hidden: ReadonlySet<string>) => {
+    const rows: Target[] = [];
+    const parent = new Map<string, Target>();
+    const addRow = (row: Target, of?: Target) => {
+      rows.push(row);
+      if (of) parent.set(rowKey(row), of);
+    };
+    for (const p of projects) {
+      const projectRow: Target = { kind: "project", id: p.id };
+      addRow(projectRow);
+      if (hidden.has(p.id)) continue;
+      for (const f of folders.filter((x) => x.projectId === p.id)) {
+        const folderRow: Target = { kind: "folder", id: f.id };
+        addRow(folderRow, projectRow);
+        if (hidden.has(collapseKey(folderRow))) continue;
+        for (const t of threads.filter((x) => x.folderId === f.id && !leavingIds.has(x.id)))
+          addRow({ kind: "thread", id: t.id }, folderRow);
+      }
+      for (const t of threads.filter(
+        (x) => x.projectId === p.id && x.folderId === null && !leavingIds.has(x.id),
+      ))
+        addRow({ kind: "thread", id: t.id }, projectRow);
     }
-    for (const t of threads.filter(
-      (x) => x.projectId === p.id && x.folderId === null && !leavingIds.has(x.id),
-    ))
-      addRow({ kind: "thread", id: t.id }, projectRow);
-  }
+    return { rows, parent };
+  };
   // The chats come first on screen, then the projects' rows, so archiving can step through them in that order.
-  useEffect(() => {
+  const syncTreeRows = () => {
     const chatRows: Target[] = chats
       .filter((t) => !leavingIds.has(t.id))
       .map((t) => ({ kind: "thread", id: t.id }));
-    treeRowsRef.current = [...chatRows, ...treeRows];
-  });
+    treeRowsRef.current = [...chatRows, ...buildTree(getCollapsed()).rows];
+  };
+  useEffect(syncTreeRows);
 
   // The selected chat is the keyboard focus until the arrow keys or a click move it.
   // Switching chats replaces the selection with the new chat, or clears it when no chat is open.
   // The open chat stays the selection until a folder or project is picked after it.
   useEffect(() => {
-    setCursor(selectedId ? { kind: "thread", id: selectedId } : null);
+    cursorRef.current = selectedId ? { kind: "thread", id: selectedId } : null;
     setPicked(selectedId ? [{ kind: "thread", id: selectedId }] : []);
   }, [selectedId]);
 
@@ -483,14 +507,17 @@ function TasksView({
     const keys = ["ArrowDown", "ArrowUp", "Home", "End", "ArrowLeft", "ArrowRight", "Enter", "F2"];
     if (!keys.includes(e.key)) return;
     e.preventDefault();
+    const hidden = getCollapsed();
+    const { rows: treeRows, parent: treeParent } = buildTree(hidden);
+    const cursor = cursorRef.current;
     const at = cursor ? treeRows.findIndex((r) => sameTarget(r, cursor)) : -1;
     const current = at >= 0 ? treeRows[at] : null;
     const parent = current ? treeParent.get(rowKey(current)) : undefined;
-    const expanded = !!current && current.kind !== "thread" && !collapsed.has(collapseKey(current));
+    const expanded = !!current && current.kind !== "thread" && !hidden.has(collapseKey(current));
     // Arrows select the row they land on, and a chat opens there but keeps the tree's focus.
     const go = (t: Target | undefined) => {
       if (!t) return;
-      setCursor(t);
+      cursorRef.current = t;
       setPicked([t]);
       if (t.kind !== "thread") return;
       if (t.id !== selectedId) holdTreeFocus(true);
@@ -552,6 +579,7 @@ function TasksView({
       tabIndex={-1}
       {...shortcutContext("sidebarTreeFocus")}
       onKeyDown={onTreeKey}
+      onClick={clearSelectionOnBlank}
     >
       <SectionLabel
         action={
@@ -569,7 +597,7 @@ function TasksView({
         <Collapse key={t.id} open={!leavingIds.has(t.id)}>
           <ThreadRow
             thread={t}
-            {...rowProps}
+            {...rowState(t)}
             drag={reorder.row(CHATS_GROUP, t.id, chatIds, null)}
           />
         </Collapse>
@@ -611,7 +639,6 @@ function TasksView({
       )}
       <div className="-mx-2">
         {projects.map((p) => {
-          const open = !collapsed.has(p.id);
           const editing = renaming?.kind === "project" && renaming.id === p.id;
           const drag = reorder.row(
             PROJECTS_GROUP,
@@ -624,38 +651,35 @@ function TasksView({
           const projectFolders = folders.filter((f) => f.projectId === p.id);
           const group = `${TASKS_GROUP_PREFIX}${p.id}`;
           const topLevel = tasks.filter((t) => t.folderId === null);
-          const taskRow = (t: Thread, folderId: string | null, list: Thread[]) => (
+          const topLevelIds = topLevel.map((t) => t.id);
+          const taskRow = (t: Thread, folderId: string | null, ids: string[]) => (
             <Collapse key={t.id} open={!leavingIds.has(t.id)} overflowWhenOpen>
               <ThreadRow
                 thread={t}
-                {...rowProps}
+                {...rowState(t)}
                 tree
                 nested={folderId !== null}
-                drag={reorder.row(
-                  group,
-                  t.id,
-                  list.map((x) => x.id),
-                  folderId,
-                )}
+                drag={reorder.row(group, t.id, ids, folderId)}
               />
             </Collapse>
           );
           return (
             <div key={p.id}>
-              <div
+              <PickRow
+                target={row}
                 {...drag.attrs}
                 onPointerDown={(e) => {
                   drag.attrs.onPointerDown(e);
                   if (!editing && isPlainPress(e)) pickRow(e, row);
                 }}
-                className={`group mx-1 flex h-7 cursor-pointer items-center rounded-[var(--radius-sm)] select-none border-none pr-1.5 pl-1 text-left text-fg ${selectionFill(isPicked(row))} ${drag.edge} ${drag.dragging ? "opacity-50" : ""}`}
+                className={`group mx-1 flex h-7 cursor-pointer items-center rounded-[var(--radius-sm)] select-none border-none pr-1.5 pl-1 text-left text-fg ${drag.edge} ${drag.dragging ? "opacity-50" : ""}`}
                 onClick={(e) => {
                   if (!pickRow(e, row)) toggle(p.id);
                 }}
                 onContextMenu={(e) => openMenu(e, { kind: "project", id: p.id })}
               >
                 <span className="mr-1.5 inline-flex w-4 flex-none translate-x-[3px] justify-center">
-                  <Twistie open={open} />
+                  <TreeTwistie id={p.id} />
                 </span>
                 {editing ? (
                   <InlineName
@@ -715,8 +739,8 @@ function TasksView({
                 >
                   <PlusIcon size={17} />
                 </button>
-              </div>
-              <Collapse open={open}>
+              </PickRow>
+              <TreeCollapse id={p.id}>
                 <div className="relative flex flex-col py-px">
                   {/* Indent guide from the project's chevron down through its rows. */}
                   <span
@@ -731,30 +755,26 @@ function TasksView({
                   {projectFolders.map((f) => {
                     const key = `folder:${f.id}`;
                     const inside = tasks.filter((t) => t.folderId === f.id);
-                    const folderOpen = !collapsed.has(key);
+                    const insideIds = inside.map((t) => t.id);
                     const folderEditing = renaming?.kind === "folder" && renaming.id === f.id;
                     const folderRow: Target = { kind: "folder", id: f.id };
-                    const target = reorder.folder(
-                      group,
-                      key,
-                      inside.map((t) => t.id),
-                      f.id,
-                    );
+                    const target = reorder.folder(group, key, insideIds, f.id);
                     return (
                       <div key={f.id}>
-                        <div
+                        <PickRow
+                          target={folderRow}
                           {...target.attrs}
                           onPointerDown={(e) => {
                             if (!folderEditing && isPlainPress(e)) pickRow(e, folderRow);
                           }}
-                          className={`group mx-1 flex h-7 cursor-pointer items-center rounded-[var(--radius-sm)] select-none pr-1.5 pl-3 text-fg ${selectionFill(isPicked(folderRow))} ${target.edge}`}
+                          className={`group mx-1 flex h-7 cursor-pointer items-center rounded-[var(--radius-sm)] select-none pr-1.5 pl-3 text-fg ${target.edge}`}
                           onClick={(e) => {
                             if (!pickRow(e, folderRow)) toggle(key);
                           }}
                           onContextMenu={(e) => openMenu(e, { kind: "folder", id: f.id })}
                         >
                           <span className="mr-1.5 inline-flex w-4 flex-none translate-x-[3px] justify-center">
-                            <Twistie open={folderOpen} />
+                            <TreeTwistie id={key} />
                           </span>
                           {folderEditing ? (
                             <InlineName
@@ -784,23 +804,23 @@ function TasksView({
                           >
                             <PlusIcon size={17} />
                           </button>
-                        </div>
-                        <Collapse open={folderOpen}>
+                        </PickRow>
+                        <TreeCollapse id={key}>
                           <div className="relative py-px">
                             {/* Indent guide from the folder's chevron down through its tasks. */}
                             <span
                               aria-hidden
                               className="pointer-events-none absolute top-0 bottom-0 left-6 w-px bg-[#58585866] opacity-0 transition-opacity group-hover/tree:opacity-100"
                             />
-                            {inside.map((t) => taskRow(t, f.id, inside))}
+                            {inside.map((t) => taskRow(t, f.id, insideIds))}
                           </div>
-                        </Collapse>
+                        </TreeCollapse>
                       </div>
                     );
                   })}
-                  {topLevel.map((t) => taskRow(t, null, topLevel))}
+                  {topLevel.map((t) => taskRow(t, null, topLevelIds))}
                 </div>
-              </Collapse>
+              </TreeCollapse>
             </div>
           );
         })}
@@ -845,40 +865,61 @@ function InlineName({
   );
 }
 
-function ThreadRow({
-  thread,
-  selectedId,
-  onSelectThread,
-  onArchiveThread,
-  isPicked,
-  onPick,
-  renaming,
-  onContextMenu,
-  onCommitRename,
-  onCancelRename,
-  drag,
-  nested = false,
-  tree = false,
-}: {
-  thread: Thread;
-  selectedId: string | null;
+/** What a row does when used. These keep one identity across renders, so a row is not re-rendered
+ * just because the tree around it was. */
+interface RowActions {
   onSelectThread: (id: string) => void;
   onArchiveThread: (thread: Thread) => void;
-  isPicked: (target: Target) => boolean;
   onPick: (e: PickModifiers, target: Target) => boolean;
-  renaming: Target | null;
   onContextMenu: (e: MouseEvent, target: Target) => void;
   onCommitRename: (target: Target, name: string, current: string) => void;
   onCancelRename: () => void;
+}
+
+interface ThreadRowProps {
+  thread: Thread;
+  /** The open chat. */
+  selected: boolean;
+  /** Being renamed. */
+  editing: boolean;
+  /** The current minute, so the row's relative time is redrawn when it changes. */
+  minute: number;
+  actions: RowActions;
   drag: RowDrag;
   nested?: boolean;
   /** In the Tasks tree: fixed-height rows that line up with the folders and projects. */
   tree?: boolean;
-}) {
+}
+
+/** A row redraws only when something it shows changes. `drag.attrs` is left out of the comparison:
+ * its handlers are rebuilt every render but act on refs and fixed ids, so an older copy works. */
+function sameRow(a: ThreadRowProps, b: ThreadRowProps): boolean {
+  return (
+    a.thread === b.thread &&
+    a.selected === b.selected &&
+    a.editing === b.editing &&
+    a.minute === b.minute &&
+    a.actions === b.actions &&
+    a.nested === b.nested &&
+    a.tree === b.tree &&
+    a.drag.edge === b.drag.edge &&
+    a.drag.dragging === b.drag.dragging
+  );
+}
+
+const ThreadRow = memo(function ThreadRow({
+  thread,
+  selected,
+  editing,
+  actions,
+  drag,
+  nested = false,
+  tree = false,
+}: ThreadRowProps) {
+  const { onSelectThread, onArchiveThread, onPick, onContextMenu, onCommitRename, onCancelRename } =
+    actions;
   const target: Target = { kind: "thread", id: thread.id };
-  const editing = renaming?.kind === "thread" && renaming.id === thread.id;
-  const selected = thread.id === selectedId;
-  const picked = isPicked(target);
+  const picked = useIsRowSelected(target);
   const goalActive = thread.goal?.status === "active";
   const last = thread.messages[thread.messages.length - 1];
   const needsApproval = last?.approvals.some((a) => a.status === "pending") ?? false;
@@ -955,7 +996,7 @@ function ThreadRow({
       </span>
     </div>
   );
-}
+}, sameRow);
 
 /** Chats and tasks moved out of the task list. Restoring one puts it back where it was. */
 function ArchivedView({
@@ -964,8 +1005,8 @@ function ArchivedView({
   onRestoreThread,
   onDeleteArchived,
 }: SidebarProps) {
-  const picked = usePicked();
-  const setPicked = setPickedRows;
+  const picked = useSelectedRows();
+  const setPicked = setSelectedRows;
   const [menu, setMenu] = useState<{ x: number; y: number; thread: Thread } | null>(null);
   const targetOf = (id: string): Target => ({ kind: "thread", id });
   const isPicked = (id: string) => picked.some((p) => sameTarget(p, targetOf(id)));
@@ -989,6 +1030,7 @@ function ArchivedView({
     <div
       tabIndex={-1}
       {...shortcutContext("archivedListFocus")}
+      onClick={clearSelectionOnBlank}
       className="flex min-h-0 flex-1 flex-col gap-px overflow-y-scroll overflow-x-hidden p-2 *:shrink-0 focus:outline-none"
     >
       <SectionLabel>Archived</SectionLabel>

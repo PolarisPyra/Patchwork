@@ -241,15 +241,24 @@ const STORAGE_KEY = "patchworkKeybindings";
 type Overrides = Record<string, string | null>;
 type Snapshot = { rules: Rule[]; overrides: Overrides };
 
+/** Commands that were renamed: a key the user saved under the old id carries over to the new one. */
+const RENAMED: Record<string, string> = {
+  "sidePanel.toggle": "sidebar.toggle",
+  "sidebar.clearPicked": "sidebar.clearSelection",
+};
+
 function load(): Overrides {
   try {
     const saved: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
     if (!saved || typeof saved !== "object") return {};
     return Object.fromEntries(
-      Object.entries(saved).filter(
-        ([id, key]) =>
-          COMMANDS.some((c) => c.id === id) && (key === null || typeof key === "string"),
-      ),
+      Object.entries(saved)
+        .map(([id, key]): [string, unknown] => [RENAMED[id] ?? id, key])
+        .filter(
+          (entry): entry is [string, string | null] =>
+            COMMANDS.some((c) => c.id === entry[0]) &&
+            (entry[1] === null || typeof entry[1] === "string"),
+        ),
     );
   } catch {
     return {};

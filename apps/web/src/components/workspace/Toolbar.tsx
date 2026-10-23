@@ -37,7 +37,7 @@ export default function Toolbar({
   const name = project?.name ?? "";
 
   return (
-    <header className="flex min-w-0 items-center gap-1.5 border-b border-border bg-app pr-2 pl-[calc((var(--stripe-w)_+_4px_-_20px)/2_-_6px)]">
+    <header className="flex min-w-0 items-center gap-1.5 border-b border-border bg-app pr-2 pl-[calc((var(--activity-bar-w)_+_4px_-_20px)/2_-_6px)]">
       <div className="flex min-w-0 items-center gap-1.5">
         <Dropdown
           trigger={({ toggle }) => (

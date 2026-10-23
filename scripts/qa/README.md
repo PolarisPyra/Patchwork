@@ -8,7 +8,7 @@ or runs under a test runner.
 
 Start the dev session first (`pnpm tauri dev`). The commands below only connect to it.
 
-    pnpm qa:stripe                          # tool-stripe icon centering
+    pnpm qa:activity-bar                    # activity bar icon centering
     pnpm qa:shot /tmp/workspace.png         # whole workspace
     pnpm qa:shot /tmp/stripe.png nav        # one element, by selector
     pnpm qa:frames                          # frame rate and main-thread load while work runs

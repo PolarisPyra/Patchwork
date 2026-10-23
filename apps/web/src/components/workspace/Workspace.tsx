@@ -27,8 +27,9 @@ import Chat from "~/components/chat/Chat";
 import CommandPalette, { type PaletteItem } from "~/components/workspace/CommandPalette";
 import SettingsDialog from "~/components/settings/SettingsDialog";
 import { openFolderAsProject, syncProjects } from "~/lib/projects";
-import Sidebar, { ToolStripe, type SidebarView, type Target } from "~/components/sidebar/Sidebar";
-import { getPicked, setPickedRows } from "~/components/sidebar/pickedRows";
+import ActivityBar from "~/components/sidebar/ActivityBar";
+import Sidebar, { type SidebarView, type Target } from "~/components/sidebar/Sidebar";
+import { getSelectedRows, setSelectedRows } from "~/components/sidebar/selectionState";
 import StatusBar from "~/components/workspace/StatusBar";
 import Toolbar from "~/components/workspace/Toolbar";
 import { isWorking, useThreads } from "~/hooks/useThreads";
@@ -152,7 +153,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   // Rows picked for removing together, in the view they were picked in; Ctrl+W and Delete act on them.
   // They live in a store the sidebar reads, so picking a row does not re-render the open chat.
   useEffect(() => {
-    setPickedRows([]);
+    setSelectedRows([]);
   }, [view]);
   // Chats and tasks being archived: their rows stay mounted, collapsing, until the archive lands.
   const [leavingIds, setLeavingIds] = useState<ReadonlySet<string>>(new Set());
@@ -241,7 +242,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
       ...folderIds.map((id): Target => ({ kind: "folder", id })),
     ];
     if (removed.length > 0 && !(await confirmRemoval(removed))) return;
-    setPickedRows([]);
+    setSelectedRows([]);
     // Projects go first: the backend deletes their tasks, so the thread list is reloaded after them.
     attempt(async () => {
       if (projectIds.length > 0) {
@@ -309,7 +310,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
       ))
     )
       return;
-    setPickedRows([]);
+    setSelectedRows([]);
     attempt(async () => {
       for (const id of ids) await deleteThread(id);
     });
@@ -343,7 +344,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
 
   const selectThread = (id: string) => {
     // Opening a chat makes it the whole selection, even when it was already the open chat.
-    setPickedRows([{ kind: "thread", id }]);
+    setSelectedRows([{ kind: "thread", id }]);
     select(id);
     const thread = threads.find((t) => t.id === id);
     if (thread) attempt(() => rememberProject(thread.projectId));
@@ -420,12 +421,12 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   useCommand("composer.focus", () =>
     document.querySelector<HTMLElement>(".composer-editor .ProseMirror")?.focus(),
   );
-  // Closes the open side panel, or reopens the last one, wherever focus sits after a click.
-  useCommand("sidePanel.toggle", () => setView((current) => (current ? null : lastView.current)));
+  // Closes the open sidebar, or reopens the last one, wherever focus sits after a click.
+  useCommand("sidebar.toggle", () => setView((current) => (current ? null : lastView.current)));
   // Acts on the picked rows and, while the compose box is not active, on the open chat in the task
   // list even when it is not picked.
   useCommand("workspace.closeChat", () => {
-    const picked = getPicked();
+    const picked = getSelectedRows();
     const openChat =
       view === "tasks" &&
       selected &&
@@ -436,7 +437,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   });
   // Acts on the picked rows; with none picked, it archives the open chat in the task list.
   useCommand("workspace.deleteChat", () => {
-    const picked = getPicked();
+    const picked = getSelectedRows();
     if (picked.length > 0) void removePicked(picked);
     else if (view === "tasks" && selected)
       void removeTargets([{ kind: "thread", id: selected.id }]);
@@ -444,11 +445,11 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   useCommand("palette.close", () => setPaletteOpen(false));
   useCommand("settings.close", () => setSettingsOpen(false));
   useCommand("canvas.close", () => setCanvas(null));
-  useCommand("sidebar.clearPicked", () => setPickedRows([]));
+  useCommand("sidebar.clearSelection", () => setSelectedRows([]));
   useContextKey("paletteOpen", () => paletteOpen);
   useContextKey("settingsOpen", () => settingsOpen);
   useContextKey("canvasOpen", () => openCanvas !== null);
-  useContextKey("hasPickedRows", () => getPicked().length > 0);
+  useContextKey("hasSelection", () => getSelectedRows().length > 0);
 
   const { rules } = useKeybindings();
   const paletteItems: PaletteItem[] = [
@@ -542,7 +543,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
       />
 
       <div className="flex min-h-0 min-w-0" ref={bodyRef}>
-        <ToolStripe
+        <ActivityBar
           view={view}
           onSelect={(v) => setView(view === v ? null : v)}
           onOpenSettings={() => setSettingsOpen(true)}

@@ -12,7 +12,7 @@
     "tauri": "pnpm --filter patchwork-desktop tauri",
     "format": "prettier --write --log-level warn \"apps/**/*.tsx\"",
     "format:check": "prettier --check \"apps/**/*.tsx\"",
-    "qa:stripe": "node scripts/qa/checks/measure-stripe.mjs",
+    "qa:activity-bar": "node scripts/qa/checks/measure-activity-bar.mjs",
     "qa:shot": "node scripts/qa/checks/screenshot.mjs",
     "qa:frames": "node scripts/qa/checks/frame-rate.mjs",
     "qa:profile": "node scripts/qa/checks/profile-heavy.mjs"
