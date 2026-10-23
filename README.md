@@ -45,7 +45,8 @@ chmod +x Patchwork_amd64.AppImage
 ./Patchwork_amd64.AppImage
 ```
 
-Release builds are currently Linux only. To build from source, see
+Patchwork supports Linux, macOS, and Windows. Each release includes an AppImage for Linux, an
+installer for Windows, and a disk image for macOS on Apple silicon. To build from source, see
 [Development](docs/development.md).
 
 ## Requirements
