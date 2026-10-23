@@ -760,6 +760,17 @@ impl Server {
             t.messages.push(m);
             session_id = t.session_id.clone();
         })?;
+        // A goal that has ended is over: the next message starts unrelated work, so its banner
+        // goes. The agent has already dropped the goal, or `settle` told it to with a /goal
+        // command, which is why those leave the banner alone.
+        if !provider::is_goal_command(&text)
+            && let Some(goal) = self.store.thread(&thread_id).and_then(|t| t.goal)
+            && matches!(goal.status, GoalStatus::Complete | GoalStatus::Blocked)
+        {
+            self.store
+                .dismiss_goal(&thread_id, &orchestration::goal::signature(&goal))?;
+            orchestration::publish(self, &thread_id, AgentEvent::GoalUpdated { goal: None });
+        }
         // While a turn runs, the message steers it, or waits for it to end when the
         // agent cannot take it now.
         let delivery = if queue {
