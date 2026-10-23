@@ -58,11 +58,11 @@ pub(super) fn write_to(stdin: &mut Option<ChildStdin>, line: &str) -> bool {
 /// Sends SIGTERM to the agent's process group, then SIGKILL if the agent has not exited
 /// after `KILL_AFTER`.
 pub(super) fn terminate(pid: u32, exited: Arc<AtomicBool>) {
-    workspace::signal_process_group(pid, libc::SIGTERM);
+    workspace::signal_process_group(pid, workspace::SIGTERM);
     std::thread::spawn(move || {
         std::thread::sleep(KILL_AFTER);
         if !exited.load(Ordering::SeqCst) {
-            workspace::signal_process_group(pid, libc::SIGKILL);
+            workspace::signal_process_group(pid, workspace::SIGKILL);
         }
     });
 }

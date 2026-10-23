@@ -22,6 +22,15 @@ pub fn signal_process_group(pid: u32, signal: i32) {
 #[cfg(not(unix))]
 pub fn signal_process_group(_pid: u32, _signal: i32) {}
 
+/// Signals for `signal_process_group`. Windows libc has no SIGKILL; the call is a no-op
+/// there, so the values only need to exist.
+#[cfg(unix)]
+pub use libc::{SIGKILL, SIGTERM};
+#[cfg(not(unix))]
+pub const SIGKILL: i32 = 9;
+#[cfg(not(unix))]
+pub const SIGTERM: i32 = 15;
+
 pub fn make_project(path: &str) -> Result<Project, String> {
     let canonical = std::fs::canonicalize(path).map_err(|e| format!("Cannot open {path}: {e}"))?;
     if !canonical.is_dir() {

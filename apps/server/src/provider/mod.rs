@@ -22,7 +22,7 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 
 use crate::types::{AgentKind, AgentStatus, ModelOption, ProviderSlashCommand, StepStatus, ToolCall, tool_output, SubAgent, AccessMode, Question, AttachmentKind, Attachment, image_media_type, TokenUsage, Goal, UsageWindow, AgentEvent, now_ms};
-use crate::workspace::signal_process_group;
+use crate::workspace::{signal_process_group, SIGKILL};
 
 /// Upper bound for any single agent CLI probe (`--version`, `auth status`, ...).
 const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -126,7 +126,7 @@ fn read_shell_path() -> Option<OsString> {
         }
     }
     // Kill anything the profile left running, so it cannot hold the pipe open.
-    signal_process_group(child.id(), libc::SIGKILL);
+    signal_process_group(child.id(), SIGKILL);
     let _ = reader.join();
     let path = text(&out)
         .lines()
@@ -167,7 +167,7 @@ pub fn probe_until(kind: AgentKind, args: &[&str], done: impl Fn(&str) -> bool) 
         match child.try_wait() {
             Ok(Some(status)) => {
                 // Kill leftover group members so a grandchild cannot hold the pipes open.
-                signal_process_group(child.id(), libc::SIGKILL);
+                signal_process_group(child.id(), SIGKILL);
                 let _ = out_reader.join();
                 let _ = err_reader.join();
                 break status.success();
@@ -192,7 +192,7 @@ pub fn probe_until(kind: AgentKind, args: &[&str], done: impl Fn(&str) -> bool) 
 
 /// Kills the CLI and anything it started in its process group.
 fn stop(child: &mut Child) {
-    signal_process_group(child.id(), libc::SIGKILL);
+    signal_process_group(child.id(), SIGKILL);
     let _ = child.kill();
     let _ = child.wait();
 }

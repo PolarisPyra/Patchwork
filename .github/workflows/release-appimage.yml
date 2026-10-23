@@ -159,7 +159,8 @@ jobs:
             jq --arg v "$version" '.version = $v' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
           done
           for file in apps/desktop/src-tauri/Cargo.toml apps/server/Cargo.toml; do
-            sed -i '' "0,/^version = /{s/^version = .*/version = \"$version\"/}" "$file"
+            # BSD sed has no `0,/re/` address, so perl replaces only the first match instead.
+            perl -0pi -e "s/^version = .*/version = \"$version\"/m" "$file"
           done
 
       - name: Build disk image

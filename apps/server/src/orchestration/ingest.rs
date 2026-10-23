@@ -439,7 +439,7 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
     let exit = child.wait().ok();
     // Whatever the agent left running in its group or scope (MCP servers, background
     // commands) would otherwise outlive the turn and keep its memory in the agents' slice.
-    workspace::signal_process_group(pid, libc::SIGKILL);
+    workspace::signal_process_group(pid, workspace::SIGKILL);
     if let Some(unit) = &turn.scope {
         scope::stop(unit);
     }

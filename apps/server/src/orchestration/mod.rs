@@ -274,7 +274,7 @@ impl Runner {
                 (turn.pid, turn.exited.clone())
             })
             .collect();
-        running.iter().for_each(|(pid, _)| workspace::signal_process_group(*pid, libc::SIGTERM));
+        running.iter().for_each(|(pid, _)| workspace::signal_process_group(*pid, workspace::SIGTERM));
         let deadline = Instant::now() + QUIT_GRACE;
         while Instant::now() < deadline && running.iter().any(|(_, e)| !e.load(Ordering::SeqCst)) {
             std::thread::sleep(Duration::from_millis(50));
@@ -282,7 +282,7 @@ impl Runner {
         running
             .iter()
             .filter(|(_, exited)| !exited.load(Ordering::SeqCst))
-            .for_each(|(pid, _)| workspace::signal_process_group(*pid, libc::SIGKILL));
+            .for_each(|(pid, _)| workspace::signal_process_group(*pid, workspace::SIGKILL));
     }
 
     /// Sends the user's answer to a pending approval and records it.
