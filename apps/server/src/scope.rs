@@ -78,22 +78,27 @@ fn systemd_run() -> Option<&'static PathBuf> {
     .as_ref()
 }
 
-/// Caps the agents together at a quarter of RAM before they are throttled and three
-/// eighths before systemd kills one. Agents get no swap, so they cannot push the rest of
-/// the desktop into swap.
+/// Caps the agents together so they leave about 6 GiB free before they are throttled and
+/// 4 GiB before the kernel kills one; small machines still give them half of RAM before
+/// throttling and three quarters before a kill. Throttling stalls the whole user session,
+/// and systemd-oomd kills an agent once that stall lasts, so it has to start late. Swap
+/// stays allowed: files agents leave in a tmpfs /tmp stay charged to the slice after they
+/// exit, and without swap that memory could never be reclaimed.
 fn limit_slice() {
+    const GIB: u64 = 1 << 30;
     let Some(total) = total_memory() else {
         return;
     };
-    let high = format!("MemoryHigh={}", total / 4);
-    let max = format!("MemoryMax={}", total / 8 * 3);
+    let high = format!("MemoryHigh={}", total.saturating_sub(6 * GIB).max(total / 2));
+    let max = format!("MemoryMax={}", total.saturating_sub(4 * GIB).max(total / 4 * 3));
     if !systemctl(&[
         "set-property",
         "--runtime",
         SLICE,
         &high,
         &max,
-        "MemorySwapMax=0",
+        // Lifts the no-swap limit that earlier builds set on the slice for this boot.
+        "MemorySwapMax=infinity",
     ]) {
         log::warn!("could not set the memory limit on {SLICE}");
     }
@@ -127,8 +132,9 @@ fn total_memory() -> Option<u64> {
 
 /// `cmd` run in a new scope under the agents' slice, with the scope's unit name, or `cmd`
 /// itself when scopes are unavailable. Arguments added afterwards still go to the agent.
-pub fn scoped(cmd: Command) -> (Command, Option<String>) {
+pub fn scoped(mut cmd: Command) -> (Command, Option<String>) {
     let Some(run) = systemd_run() else {
+        raise_oom_score(&mut cmd);
         return (cmd, None);
     };
     let unit = format!("patchwork-agent-{}.scope", uuid::Uuid::new_v4().simple());
@@ -143,5 +149,29 @@ pub fn scoped(cmd: Command) -> (Command, Option<String>) {
     if let Some(dir) = cmd.get_current_dir() {
         scoped.current_dir(dir);
     }
+    raise_oom_score(&mut scoped);
     (scoped, Some(unit))
+}
+
+/// Makes the kernel kill agents before the app or the desktop when memory runs out.
+/// Everything the agent starts inherits the score.
+fn raise_oom_score(cmd: &mut Command) {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::process::CommandExt;
+        // SAFETY: the hook runs between fork and exec, and only calls open, write and
+        // close, which are async-signal-safe and allocate nothing.
+        unsafe {
+            cmd.pre_exec(|| {
+                let fd = libc::open(c"/proc/self/oom_score_adj".as_ptr(), libc::O_WRONLY);
+                if fd >= 0 {
+                    libc::write(fd, b"800".as_ptr().cast(), 3);
+                    libc::close(fd);
+                }
+                Ok(())
+            });
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = cmd;
 }

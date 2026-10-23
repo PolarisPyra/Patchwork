@@ -72,10 +72,10 @@ pub(super) fn exit_error(exit: Option<ExitStatus>) -> String {
     if let Some(code) = exit.and_then(|s| s.code()) {
         return format!("Agent exited with code {code}");
     }
-    // systemd sends SIGKILL to an agent whose scope ran out of memory.
+    // The kernel, or systemd-oomd under memory pressure, sends SIGKILL to the agent.
     #[cfg(unix)]
     if exit.and_then(|s| std::os::unix::process::ExitStatusExt::signal(&s)) == Some(libc::SIGKILL) {
-        return "The agent was killed, likely for using too much memory".into();
+        return "The agent was stopped because the system ran low on memory".into();
     }
     "Agent exited unexpectedly".into()
 }
