@@ -36,15 +36,6 @@ reviewed in the app before you keep it.
 
 ## Installation
 
-Download `Patchwork_amd64.AppImage` from the
-[latest release](https://github.com/PolarisPyra/patchwork/releases/latest), make it executable, and
-run it:
-
-```sh
-chmod +x Patchwork_amd64.AppImage
-./Patchwork_amd64.AppImage
-```
-
 Patchwork supports Linux, macOS, and Windows. Each release includes an AppImage for Linux, an
 installer for Windows, and a disk image for macOS on Apple silicon. To build from source, see
 [Development](docs/development.md).
