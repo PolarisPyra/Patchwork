@@ -71,7 +71,30 @@ Rules for coding agents working in the Rust code in this repo (`apps/server` and
 
 ## Release and build setup for a Tauri project
 
-Use this to give a new pnpm + Cargo Tauri project the same release and build setup. Everything it needs is below, so nothing has to be copied from another repo.
+Use this to give a new pnpm + Cargo Tauri project the same layout, release, and build setup. Everything it needs is below, so nothing has to be copied from another repo.
+
+### Repo layout
+
+Every Tauri app uses this pnpm + Cargo monorepo layout, the one Patchwork uses. Run every command from the repo root.
+
+```
+.
+├── Cargo.toml              # Cargo workspace: members = ["apps/server", "apps/desktop/src-tauri"]
+├── package.json            # root package `@<name>/monorepo`; its scripts forward to the apps
+├── pnpm-workspace.yaml     # packages: ["apps/*"]
+├── scripts/                # release.sh, build.sh, and other repo scripts
+├── packaging/              # <bin_name>.desktop
+└── apps/
+    ├── desktop/            # <desktop_pkg>: owns @tauri-apps/cli; scripts dev, build, tauri
+    │   └── src-tauri/      # Tauri crate <bin_name>: window, plugins, and commands
+    ├── web/                # <name>-web: Vite frontend; scripts dev, build, typecheck
+    └── server/             # <name>-server: Rust library crate with the app's logic
+```
+
+- The frontend lives in `apps/web`, not inside `apps/desktop`. In `tauri.conf.json`, `frontendDist` is `../../web/dist`, `beforeDevCommand` is `pnpm --filter <name>-web dev`, and `beforeBuildCommand` is `pnpm --filter <name>-web build`.
+- The app's logic lives in the `apps/server` library crate. The Tauri crate depends on it by path (`<name>-server = { path = "../../server" }`) and only exposes it as Tauri commands.
+- Root scripts call the apps with `pnpm --filter`: `dev`, `dev:web`, `build`, `typecheck`, `tauri`, and `test` (`cargo test --workspace`). Run the app with `pnpm tauri dev`.
+- A new package or crate goes under `apps/`. Add each new crate to `members` in the root `Cargo.toml`.
 
 ### Values to set
 
@@ -85,7 +108,7 @@ Set these before you write the files. The examples are placeholders.
 | `desktop_pkg` | `name` in the desktop package's `package.json` | `my-app-desktop` |
 | `tauri_dir` | Folder with `tauri.conf.json` and `Cargo.toml` | `apps/desktop/src-tauri` |
 
-The repo must have a pnpm workspace whose desktop package owns `@tauri-apps/cli` and has a `tauri` script. The Tauri crate must have `icons/` with `32x32.png`, `128x128.png`, `128x128@2x.png`, and `icon.png`, which `pnpm tauri icon` generates.
+The repo must follow the layout above. The Tauri crate must have `icons/` with `32x32.png`, `128x128.png`, `128x128@2x.png`, and `icon.png`, which `pnpm tauri icon` generates.
 
 ### Files
 
