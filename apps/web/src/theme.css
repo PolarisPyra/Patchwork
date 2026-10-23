@@ -148,7 +148,7 @@
   --radius-lg: 10px;
   --toolbar-h: 40px;
   --statusbar-h: 27px;
-  --stripe-w: 40px;
+  --activity-bar-w: 40px;
 }
 
 /* ---- base -------------------------------------------------------------- */
@@ -643,10 +643,20 @@
 
 /* The dev session (`pnpm tauri dev`) is framed in yellow and black hazard stripes, so it cannot
    be mistaken for the installed app. main.tsx sets `data-dev-session` only in development. The
-   stripes are the page background and the app is inset by the frame's width. */
+   app is inset by the frame's width, and the stripes are a fixed overlay's border over that gap.
+   They are not the page background: the webview paints without the GPU, and a gradient there is
+   repainted across the whole window on every animated frame, which ran animations at about 20fps. */
 html[data-dev-session] {
   --dev-frame: 6px;
-  background: repeating-linear-gradient(-45deg, #f5c400 0 10px, #111 10px 20px);
+}
+html[data-dev-session]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+  border: var(--dev-frame) solid transparent;
+  border-image: repeating-linear-gradient(-45deg, #f5c400 0 10px, #111 10px 20px) 6;
 }
 html[data-dev-session] body {
   margin: var(--dev-frame);
