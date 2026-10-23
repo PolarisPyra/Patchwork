@@ -68,3 +68,536 @@ Rules for coding agents working in the Rust code in this repo (`apps/server` and
 - To check the build without a release, run the workflow by hand from the Actions tab (**Run workflow**). It builds with the placeholder version and creates no release.
 - Never edit `CHANGELOG.md` by hand, and never set version numbers by hand. Tags must start with `v` followed by a digit.
 - Full details are in [docs/releasing.md](docs/releasing.md).
+
+## Release and build setup for a Tauri project
+
+Use this to give a new pnpm + Cargo Tauri project the same release and build setup. Everything it needs is below, so nothing has to be copied from another repo.
+
+### Values to set
+
+Set these before you write the files. The examples are placeholders.
+
+| Value | Where it comes from | Example |
+| --- | --- | --- |
+| `app_name` | `productName` in `tauri.conf.json` | `My App` |
+| `app_id` | `identifier` in `tauri.conf.json` (reverse-DNS) | `com.example.myapp` |
+| `bin_name` | `name` in the desktop crate's `Cargo.toml` | `myapp` |
+| `desktop_pkg` | `name` in the desktop package's `package.json` | `my-app-desktop` |
+| `tauri_dir` | Folder with `tauri.conf.json` and `Cargo.toml` | `apps/desktop/src-tauri` |
+
+The repo must have a pnpm workspace whose desktop package owns `@tauri-apps/cli` and has a `tauri` script. The Tauri crate must have `icons/` with `32x32.png`, `128x128.png`, `128x128@2x.png`, and `icon.png`, which `pnpm tauri icon` generates.
+
+### Files
+
+- `scripts/release.sh`: runs the checks, shows the release notes, and on confirmation commits `CHANGELOG.md`, tags, and pushes.
+- `scripts/build.sh`: `appimage` builds a fixed-name AppImage. `install` builds the release binary and installs it with icons and a launcher under `$PREFIX` (default `~/.local`).
+- `cliff.toml`: git-cliff config for `CHANGELOG.md` and the release notes.
+- `.github/workflows/release.yml`: on a `v*` tag, builds each platform and creates the GitHub release.
+- `packaging/<bin_name>.desktop`: launcher template. `@EXEC@` is replaced with the binary path at install time.
+
+Make the scripts executable with `chmod +x scripts/*.sh`.
+
+### scripts/release.sh
+
+```bash
+#!/usr/bin/env bash
+# Cuts a release: checks the repo and the build, regenerates CHANGELOG.md with git-cliff, commits
+# it, tags the version, and pushes both. Pushing the tag starts the release workflow.
+#
+# Usage: scripts/release.sh 0.2.0
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+die() {
+  echo "$*" >&2
+  exit 1
+}
+
+version="${1:-}"
+version="${version#v}"
+if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  die "Usage: scripts/release.sh X.Y.Z (for example 0.2.0)"
+fi
+tag="v$version"
+
+for tool in git git-cliff pnpm cargo; do
+  command -v "$tool" > /dev/null || die "$tool is required."
+done
+
+if [[ "$(git branch --show-current)" != main ]]; then
+  die "Release from main."
+fi
+if [[ -n "$(git status --porcelain)" ]]; then
+  die "The working tree has uncommitted changes. Commit them before releasing."
+fi
+
+git fetch --quiet --tags origin
+if git rev-parse --quiet --verify "refs/tags/$tag" > /dev/null; then
+  die "$tag already exists."
+fi
+if ! git merge-base --is-ancestor origin/main HEAD; then
+  die "main is behind or has diverged from origin/main. Pull or rebase first."
+fi
+
+# Replace these with the project's own checks. Keep them to commands that already exist.
+echo "Checking the web app and the Rust crates..."
+pnpm typecheck
+pnpm format:check
+cargo clippy --workspace --all-targets
+cargo test --workspace
+
+echo
+echo "Release notes for $tag:"
+git cliff --config cliff.toml --unreleased --tag "$tag"
+echo
+
+read -r -p "Commit CHANGELOG.md, tag $tag, and push main and the tag to origin? [y/N] " answer
+if [[ "$answer" != y && "$answer" != Y ]]; then
+  die "Release cancelled. Nothing was changed."
+fi
+
+git cliff --config cliff.toml --tag "$tag" --output CHANGELOG.md
+git add CHANGELOG.md
+git commit -m "Release $tag"
+git tag -a "$tag" -m "$version"
+git push origin main "$tag"
+
+echo "Pushed $tag. The release workflow is building the installers and will create the"
+echo "GitHub release. Follow it in the Actions tab."
+```
+
+### scripts/build.sh
+
+```bash
+#!/usr/bin/env bash
+# Builds the app. `appimage` writes <bin_name>_amd64.AppImage. `install` builds the release binary
+# and installs it under $PREFIX (default ~/.local) with its icons and a launcher. The launcher has
+# the app id, so it leaves the launcher of an AppImage you already run untouched.
+#
+# Usage: scripts/build.sh appimage | install
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+# Set these for the project. See "Values to set" in AGENTS.md.
+app_name="My App"
+app_id="com.example.myapp"
+bin_name="myapp"
+desktop_pkg="my-app-desktop"
+tauri_dir="apps/desktop/src-tauri"
+
+die() {
+  echo "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<EOF
+Usage: scripts/build.sh appimage | install
+
+  appimage  Build target/release/bundle/appimage/${bin_name}_amd64.AppImage
+  install   Build the release binary and install it under \$PREFIX (default ~/.local):
+            bin/${bin_name}, the icons, and share/applications/${app_id}.desktop
+EOF
+}
+
+version="$(jq -r .version "$tauri_dir/tauri.conf.json")"
+
+require_tools() {
+  local tool
+  for tool in pnpm jq; do
+    command -v "$tool" > /dev/null || die "$tool is required."
+  done
+}
+
+build_appimage() {
+  require_tools
+  pnpm --filter "$desktop_pkg" exec tauri build --bundles appimage
+  # Tauri names the file after the product and version. Take the newest one and rename it, so the
+  # name stays the same across releases.
+  local built out="target/release/bundle/appimage/${bin_name}_amd64.AppImage"
+  built="$(ls -t target/release/bundle/appimage/*.AppImage 2> /dev/null | head -n 1 || true)"
+  [[ -n "$built" ]] || die "No AppImage found after the build."
+  mv -f "$built" "$out"
+  echo "AppImage: $repo_root/$out"
+}
+
+stop_running_instances() {
+  local dev_bin="$repo_root/target/debug/$bin_name"
+  local pids=() pid exe
+  # pgrep -x matches up to 15 characters of the process name on Linux, which is enough for most names.
+  for pid in $(pgrep -x "$bin_name" || true); do
+    exe="$(readlink "/proc/$pid/exe" 2>/dev/null || true)"
+    # The dev session runs the debug build from this repo. Leave it running.
+    [[ "$exe" == "$dev_bin" ]] && continue
+    pids+=("$pid")
+  done
+  (( ${#pids[@]} )) || return 0
+
+  echo "Stopping running $app_name: ${pids[*]}"
+  kill -TERM "${pids[@]}" 2>/dev/null || true
+  local _ alive
+  for _ in {1..50}; do
+    alive=0
+    for pid in "${pids[@]}"; do
+      kill -0 "$pid" 2>/dev/null && alive=1
+    done
+    (( alive )) || return 0
+    sleep 0.2
+  done
+  echo "Some instances ignored SIGTERM; killing them."
+  kill -KILL "${pids[@]}" 2>/dev/null || true
+}
+
+install_app() {
+  require_tools
+  local prefix="${PREFIX:-$HOME/.local}"
+  local bin_path="$prefix/bin/$bin_name"
+  local apps_dir="$prefix/share/applications"
+  local icons_dir="$prefix/share/icons/hicolor"
+  local launcher="$apps_dir/$app_id.desktop"
+
+  stop_running_instances
+  pnpm --filter "$desktop_pkg" exec tauri build --no-bundle
+  [[ -x "target/release/$bin_name" ]] || die "Expected target/release/$bin_name after the build."
+
+  install -Dm755 "target/release/$bin_name" "$bin_path"
+  echo "Binary: $bin_path"
+
+  local pair
+  for pair in 32x32.png:32x32 128x128.png:128x128 128x128@2x.png:256x256 icon.png:512x512; do
+    install -Dm644 "$tauri_dir/icons/${pair%%:*}" \
+      "$icons_dir/${pair##*:}/apps/$app_id.png"
+  done
+  echo "Icons: $icons_dir"
+
+  # The launcher's Exec is the absolute binary path, so it goes stale when the prefix or the
+  # template changes. Compare the rendered launcher with the installed copy before rewriting it.
+  local rendered
+  rendered="$(sed "s|@EXEC@|$bin_path|" "packaging/$bin_name.desktop")"
+  mkdir -p "$apps_dir"
+  if [[ ! -f "$launcher" ]]; then
+    echo "Launcher: new install, writing $launcher"
+  elif [[ "$rendered" == "$(cat "$launcher")" ]]; then
+    echo "Launcher: up to date"
+  else
+    echo "Launcher: stale, rewriting $launcher"
+  fi
+  printf '%s\n' "$rendered" > "$launcher"
+  if command -v desktop-file-validate > /dev/null; then
+    desktop-file-validate "$launcher"
+  fi
+
+  refresh_caches "$apps_dir" "$icons_dir"
+
+  case ":$PATH:" in
+    *":$prefix/bin:"*) ;;
+    *) echo "Note: $prefix/bin is not on PATH, so the '$bin_name' command won't resolve." ;;
+  esac
+  echo "Installed $app_name $version. Open it from the application menu."
+}
+
+refresh_caches() {
+  local apps_dir="$1" icons_dir="$2"
+  if command -v update-desktop-database > /dev/null; then
+    update-desktop-database -q "$apps_dir"
+  fi
+  if command -v gtk-update-icon-cache > /dev/null && [[ -f "$icons_dir/index.theme" ]]; then
+    gtk-update-icon-cache -q -t -f "$icons_dir"
+  fi
+  # Plasma 6 keeps its own application cache, which is what the KDE menu reads.
+  if command -v kbuildsycoca6 > /dev/null; then
+    kbuildsycoca6 --noincremental > /dev/null 2>&1 \
+      || echo "Warning: kbuildsycoca6 failed; the KDE menu may update after you log in again."
+  fi
+}
+
+case "${1:-}" in
+  appimage) build_appimage ;;
+  install) install_app ;;
+  -h | --help) usage ;;
+  *)
+    usage >&2
+    exit 1
+    ;;
+esac
+```
+
+### packaging/<bin_name>.desktop
+
+```ini
+[Desktop Entry]
+Type=Application
+Name=My App
+Comment=One-line description of the app
+Exec=@EXEC@
+Icon=com.example.myapp
+Terminal=false
+Categories=Development;
+StartupWMClass=myapp
+```
+
+Set `Icon` to `app_id` and `StartupWMClass` to `bin_name`.
+
+### cliff.toml
+
+```toml
+# git-cliff configuration for CHANGELOG.md and the release notes.
+
+[changelog]
+header = """
+# Changelog
+
+All notable changes to My App are documented here.
+This file is generated by git-cliff from the commit history.
+
+"""
+body = """
+{% if version %}\
+    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+    ## [Unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | upper_first }}
+    {% for commit in commits %}
+        - {{ commit.message | upper_first | split(pat="\n") | first }}\
+    {% endfor %}
+{% endfor %}\n
+"""
+footer = ""
+trim = true
+
+[git]
+conventional_commits = false
+filter_unconventional = false
+split_commits = false
+commit_parsers = [
+    { message = "^(Fix|Fixed|Repair|Stop|Prevent|Correct)", group = "Fixed" },
+    { message = "^(Add|Show|Support|Allow|Introduce|Let|Remember|Reopen|Animate|Draw|Track|List|Render|Enable|Create)", group = "Added" },
+    { message = "^(Remove|Drop|Delete|Deprecate)", group = "Removed" },
+    { message = "^(Update|Change|Polish|Tighten|Refactor|Rename|Move|Align|Make|Improve|Describe|Sidebar|Choice|Use|Replace)", group = "Changed" },
+    { message = "^(Release|Bump|Merge|Chore)", skip = true },
+    { message = ".*", group = "Other" },
+]
+protect_breaking_commits = false
+filter_commits = false
+tag_pattern = "v[0-9].*"
+skip_tags = ""
+ignore_tags = ""
+topo_order = false
+topo_order_commits = true
+sort_commits = "oldest"
+```
+
+### .github/workflows/release.yml
+
+Runs on a `v*` tag, or by hand from the Actions tab to test the build. The release job only runs for tags, so a manual run builds the installers and creates no release.
+
+```yaml
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  appimage:
+    # Build on the oldest Ubuntu runner still available so the AppImage links against an older glibc.
+    runs-on: ubuntu-22.04
+    env:
+      # linuxdeploy is itself an AppImage; this lets it run without FUSE.
+      APPIMAGE_EXTRACT_AND_RUN: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri Linux dependencies
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: >-
+            build-essential file libayatana-appindicator3-dev libfuse2 librsvg2-dev libssl-dev
+            libwebkit2gtk-4.1-dev libxdo-dev patchelf
+          version: 1
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set version from tag
+        # The tag is the source of truth. The repo keeps a placeholder version.
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for file in package.json apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json; do
+            jq --arg v "$version" '.version = $v' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+          done
+          for file in apps/desktop/src-tauri/Cargo.toml; do
+            perl -0pi -e "s/^version = .*/version = \"$version\"/m" "$file"
+          done
+
+      - name: Build AppImage
+        run: scripts/build.sh appimage
+
+      - name: Find AppImage
+        id: find
+        run: echo "path=$(ls target/release/bundle/appimage/*.AppImage | head -n 1)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-appimage
+          path: ${{ steps.find.outputs.path }}
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for file in package.json apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json; do
+            jq --arg v "$version" '.version = $v' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+          done
+          for file in apps/desktop/src-tauri/Cargo.toml; do
+            perl -0pi -e "s/^version = .*/version = \"$version\"/m" "$file"
+          done
+
+      - name: Build installer
+        run: pnpm --filter my-app-desktop exec tauri build --bundles nsis
+
+      - name: Find installer
+        id: find
+        run: echo "path=$(ls target/release/bundle/nsis/*-setup.exe | head -n 1)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-windows
+          path: ${{ steps.find.outputs.path }}
+
+  macos:
+    # macos-14 runs on Apple silicon, so the build is native arm64.
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for file in package.json apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json; do
+            jq --arg v "$version" '.version = $v' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+          done
+          for file in apps/desktop/src-tauri/Cargo.toml; do
+            perl -0pi -e "s/^version = .*/version = \"$version\"/m" "$file"
+          done
+
+      - name: Build disk image
+        run: pnpm --filter my-app-desktop exec tauri build --bundles dmg
+
+      - name: Find disk image
+        id: find
+        run: echo "path=$(ls target/release/bundle/dmg/*.dmg | head -n 1)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-macos-arm64
+          path: ${{ steps.find.outputs.path }}
+
+  release:
+    needs: [appimage, windows, macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # git-cliff needs the full history and tags to build the release notes.
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate release notes
+        uses: orhun/git-cliff-action@v4
+        with:
+          args: --latest --strip header --output RELEASE_NOTES.md
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "My App $GITHUB_REF_NAME" \
+            --notes-file RELEASE_NOTES.md
+```
+
+In the workflow, replace the `apps/desktop` paths and `my-app-desktop` with the project's `tauri_dir` and `desktop_pkg`. Drop any platform job the project doesn't ship. Add the `Cargo.toml` of each crate that the app ships to the version loops.
+
+### Rules to keep
+
+- The tag sets the version. Keep the placeholder version (`0.1.0`) in the repo, and never set version numbers by hand.
+- Never edit `CHANGELOG.md` by hand. `release.sh` regenerates it.
+- Tags must start with `v` followed by a digit, such as `v0.2.0`.
+- Commit subjects start with a verb such as `Add`, `Fix`, or `Change`. git-cliff sorts commits by that word, and it skips `Release`, `Bump`, `Merge`, and `Chore` commits.
+- Run `release.sh` only when the user asks for a release. It pushes `main` and the tag. To test the build without a release, run the workflow by hand with **Run workflow**.
+- Install `git-cliff` on the machine that runs `release.sh` (for example `cargo install git-cliff --locked`). Also install `jq`.
