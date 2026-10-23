@@ -174,7 +174,7 @@ pub fn transcript(messages: &[Message]) -> String {
     }
     turns.reverse();
     format!(
-        "This conversation was imported from OpenCode. Continue it from where it stopped.\n\n{}\n\n---\n\n",
+        "Here is the conversation so far, from an earlier session. Continue it from where it stopped.\n\n{}\n\n---\n\n",
         turns.join("\n\n")
     )
 }

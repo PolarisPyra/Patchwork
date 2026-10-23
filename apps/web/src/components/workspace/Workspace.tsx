@@ -95,6 +95,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     setThreadArchived,
     renameThread,
     clearThread,
+    restoreCheckpoint,
     folders,
     createFolder,
     renameFolder,
@@ -594,6 +595,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
               }
               onNewChat={() => newThreadIn(projectId)}
               onClearThread={(id) => clearThread(id).catch((e: unknown) => setError(errorText(e)))}
+              onRestoreCheckpoint={restoreCheckpoint}
               onCancel={(id) => api.cancelTurn(id)}
               onSetModel={setModel}
               onSetAccessMode={setAccessMode}

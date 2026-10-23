@@ -1,12 +1,10 @@
 //! Patchwork's backend. The desktop shell exposes these methods as Tauri
 //! commands and forwards agent events to the UI.
 
-mod goal;
 pub mod import;
 pub mod orchestration;
 pub mod persistence;
 pub mod provider;
-mod runner;
 mod scope;
 mod time;
 pub mod types;
@@ -17,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use persistence::Store;
-use runner::{Delivery, Runner};
+use orchestration::{Delivery, Runner};
 use types::*;
 
 pub type Res<T> = Result<T, String>;
@@ -29,6 +27,8 @@ pub struct Server {
     pub store: Store,
     pub usage: usage::UsageCache,
     runner: Runner,
+    /// Threads whose turns the last app session cut off, until `continue_interrupted` takes them.
+    interrupted: std::sync::Mutex<Vec<String>>,
     /// Parent of the scratch folders that project-less chats run in.
     chats_dir: PathBuf,
     /// Images pasted into a chat, saved as files so they attach like dropped ones.
@@ -232,51 +232,12 @@ impl Server {
         std::thread::spawn(scope::prepare);
         let clis_dir = config_dir.join("clis");
         let store = Store::open(config_dir)?;
-        // Finished goals remain visible for the session in which they ended. A new app
-        // session dismisses them, including cached reports from the provider on its next run.
-        // Unfinished goals survive, paused if their agent was interrupted by quitting.
-        for mut thread in store.threads() {
-            if let Some(finished) = thread.goal.as_ref().filter(|goal| {
-                matches!(goal.status, GoalStatus::Complete | GoalStatus::Blocked)
-            }) {
-                store.dismiss_goal(&thread.id, &goal::signature(finished))?;
-                thread.goal = None;
-            }
-            let dismissed = thread
-                .goal
-                .as_ref()
-                .is_some_and(|g| goal::is_dismissed(&store, &thread.id, g));
-            let goal_active = thread
-                .goal
-                .as_ref()
-                .is_some_and(|g| g.status == GoalStatus::Active);
-            let streaming = thread
-                .messages
-                .iter()
-                .any(|m| m.status == MessageStatus::Streaming);
-            if dismissed || goal_active || streaming {
-                store.update_thread(&thread.id, |t| {
-                    if dismissed {
-                        t.goal = None;
-                    } else if let Some(goal) =
-                        t.goal.as_mut().filter(|g| g.status == GoalStatus::Active)
-                    {
-                        goal.status = GoalStatus::Paused;
-                    }
-                    for message in &mut t.messages {
-                        if message.status == MessageStatus::Streaming {
-                            message.status = MessageStatus::Error;
-                            message.error =
-                                Some("Patchwork closed while this reply was running.".into());
-                        }
-                    }
-                })?;
-            }
-        }
+        let interrupted = orchestration::recovery::recover(&store)?;
         Ok(Arc::new(Self {
             store,
             usage: usage::UsageCache::default(),
             runner: Runner::default(),
+            interrupted: std::sync::Mutex::new(interrupted),
             chats_dir: data_dir.join("chats"),
             pasted_dir: data_dir.join("pasted"),
             clis_dir,
@@ -565,12 +526,14 @@ impl Server {
 
     /// Stops every running agent; for quitting the app.
     pub fn stop_agents(&self) {
+        orchestration::recovery::remember_interrupted(&self.store, &self.runner.running());
         self.runner.stop_all();
     }
 
     /// Permanently deletes a thread and its messages.
     pub fn delete_thread(&self, id: &str) {
         self.runner.cancel(id, None);
+        self.remove_checkpoints(id);
         if self
             .store
             .thread(id)
@@ -670,7 +633,7 @@ impl Server {
     /// Sends `/compact` as a turn of its own, shown in the thread like a typed one.
     fn compact_thread(self: &Arc<Self>, thread_id: &str) -> Res<()> {
         let message = user_message("/compact", vec![]);
-        runner::publish(self, thread_id, AgentEvent::MessageStarted { message });
+        orchestration::publish(self, thread_id, AgentEvent::MessageStarted { message });
         self.runner
             .start_turn(self, thread_id.into(), "/compact".into(), vec![], vec![])
     }
@@ -717,7 +680,7 @@ impl Server {
             ) {
                 // Only an explicit new goal or resume request can reopen a dismissed goal.
                 // A provider restating cached goal state must not erase the dismissal.
-                goal::clear_dismissal(&self.store, &thread_id)?;
+                orchestration::goal::clear_dismissal(&self.store, &thread_id)?;
             }
         }
         // Checked before the message is stored, so a refused message leaves no trace.
@@ -813,7 +776,7 @@ impl Server {
             provider::goal_pause(t.agent, t.session_id.as_deref()?).filter(|_| active)
         });
         for message_id in self.runner.cancel(thread_id, pause) {
-            runner::publish(
+            orchestration::publish(
                 self,
                 thread_id,
                 AgentEvent::MessageQueued {
@@ -841,7 +804,7 @@ impl Server {
         if running && !withdrawn {
             return Err("That message has already been sent".into());
         }
-        runner::publish(
+        orchestration::publish(
             self,
             thread_id,
             AgentEvent::MessageRemoved {
@@ -877,7 +840,7 @@ impl Server {
                 m.attachments = edited.attachments.clone();
             }
         })?;
-        runner::publish(self, thread_id, AgentEvent::MessageEdited { message: edited });
+        orchestration::publish(self, thread_id, AgentEvent::MessageEdited { message: edited });
         Ok(())
     }
 
@@ -900,7 +863,7 @@ impl Server {
             }
         })?;
         for m in &queued {
-            runner::publish(self, thread_id, AgentEvent::MessageQueued { message_id: m.id.clone(), queued: false });
+            orchestration::publish(self, thread_id, AgentEvent::MessageQueued { message_id: m.id.clone(), queued: false });
         }
         if let Err(error) = self.runner.start_turn(self, thread_id.into(), text, attachments, images) {
             self.store.update_thread(thread_id, |t| {
@@ -909,7 +872,7 @@ impl Server {
                 }
             })?;
             for m in &queued {
-                runner::publish(self, thread_id, AgentEvent::MessageQueued { message_id: m.id.clone(), queued: true });
+                orchestration::publish(self, thread_id, AgentEvent::MessageQueued { message_id: m.id.clone(), queued: true });
             }
             return Err(error);
         }
@@ -926,7 +889,7 @@ impl Server {
         if !self.runner.promote_queued(thread_id, message_id, thread.session_id.as_deref(), &subagents) {
             return Err("That message is no longer queued or could not be sent".into());
         }
-        runner::publish(self, thread_id, AgentEvent::MessageSteered { message_id: message_id.into() });
+        orchestration::publish(self, thread_id, AgentEvent::MessageSteered { message_id: message_id.into() });
         Ok(())
     }
 
@@ -938,6 +901,7 @@ impl Server {
     /// deleted. The chat stays in the sidebar, empty.
     pub fn clear_thread(&self, thread_id: &str) -> Res<()> {
         self.cancel_turn(thread_id);
+        self.remove_checkpoints(thread_id);
         self.store.clear_thread(thread_id)
     }
 

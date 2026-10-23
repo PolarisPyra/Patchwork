@@ -1,13 +1,13 @@
 //! Tauri shell: exposes `patchwork_server::Server` as commands and forwards
 //! agent events to the web UI on the `"agent-event"` channel.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use patchwork_server::types::*;
-use patchwork_server::{Res, Server, persistence, provider};
+use patchwork_server::{Res, Server, orchestration, persistence, provider};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
@@ -157,6 +157,16 @@ async fn install_antigravity(server: Srv<'_>) -> Res<()> {
 #[tauri::command]
 fn clear_thread(server: Srv, id: String) -> Res<()> {
     server.clear_thread(&id)
+}
+
+#[tauri::command]
+fn checkpoints(server: Srv, thread_id: String) -> Vec<String> {
+    server.checkpoints(&thread_id)
+}
+
+#[tauri::command]
+fn restore_checkpoint(server: Srv, thread_id: String, message_id: String) -> Res<Thread> {
+    server.restore_checkpoint(&thread_id, &message_id)
 }
 
 #[tauri::command]
@@ -431,8 +441,13 @@ fn create_tray(app: &tauri::App) -> tauri::Result<()> {
 }
 
 /// Raises desktop notifications for finished goals and tasks while the window is not focused.
+/// Only the user's own tasks notify: not a subagent's thread, an archived task, or upkeep the app
+/// runs by itself.
 #[derive(Default)]
 struct Notifier {
+    /// Each task's goal status as last reported this session. A goal notifies when it is met only
+    /// if it was seen being pursued, so an agent restating a goal that already ended stays quiet.
+    goals: Mutex<HashMap<String, GoalStatus>>,
     /// Tasks whose goal was just met, so the turn that met it does not notify a second time.
     goal_met: Mutex<HashSet<String>>,
 }
@@ -446,7 +461,19 @@ impl Notifier {
         let thread_id = &envelope.thread_id;
         let mut goal_met = self.goal_met.lock().unwrap_or_else(PoisonError::into_inner);
         let (title, body) = match &envelope.event {
-            AgentEvent::GoalUpdated { goal: Some(goal) } if goal.status == GoalStatus::Complete => {
+            AgentEvent::GoalUpdated { goal } => {
+                let mut goals = self.goals.lock().unwrap_or_else(PoisonError::into_inner);
+                let before = match goal {
+                    Some(goal) => goals.insert(thread_id.clone(), goal.status),
+                    None => goals.remove(thread_id),
+                };
+                let pursued = matches!(before, Some(GoalStatus::Active | GoalStatus::Paused));
+                let Some(goal) = goal.as_ref().filter(|g| g.status == GoalStatus::Complete) else {
+                    return;
+                };
+                if !pursued {
+                    return;
+                }
                 goal_met.insert(thread_id.clone());
                 if !settings.goal_complete {
                     return;
@@ -463,8 +490,19 @@ impl Notifier {
                 let Some(thread) = server.store.thread(thread_id) else {
                     return;
                 };
-                // A goal's turns keep coming until it is met; only its outcome notifies.
-                if thread.goal.is_some_and(|g| g.status == GoalStatus::Active) {
+                // A steered turn completes each of its replies in turn; the last one notifies.
+                let still_running = thread
+                    .messages
+                    .iter()
+                    .any(|m| m.status == MessageStatus::Streaming);
+                let asked = thread.messages.iter().rev().find(|m| m.role == Role::User);
+                if thread.parent.is_some()
+                    || thread.archived_at.is_some()
+                    || still_running
+                    || asked.is_some_and(|m| orchestration::is_upkeep(&m.text))
+                    // A goal's turns keep coming until it is met; only its outcome notifies.
+                    || thread.goal.is_some_and(|g| g.status == GoalStatus::Active)
+                {
                     return;
                 }
                 ("Task complete", thread.title)
@@ -516,6 +554,7 @@ pub fn run() {
                 }),
             )?;
             server.start_idle_compaction();
+            server.continue_interrupted();
             app.manage(server);
             app.manage(ProjectWatch::default());
             let tray = create_tray(app);
@@ -548,6 +587,8 @@ pub fn run() {
             antigravity_installed,
             install_antigravity,
             clear_thread,
+            checkpoints,
+            restore_checkpoint,
             get_last_thread,
             set_last_thread,
             get_collapsed,

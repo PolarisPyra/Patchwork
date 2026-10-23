@@ -266,6 +266,8 @@ pub struct TurnSpec<'a> {
     pub attachments: &'a [Attachment],
     /// The image attachments, read from disk by `load_images`.
     pub images: &'a [Image],
+    /// Instructions added to the agent's own, for agents that take them in the turn's input.
+    pub instructions: Option<&'a str>,
 }
 
 /// An attached image, base64-encoded for the agent's input.
@@ -461,6 +463,8 @@ pub enum Parsed {
     TurnStarted(String),
     /// The turn failed with this message.
     Error(String),
+    /// The agent has no conversation under the session id the turn resumed.
+    SessionLost,
     /// Write this line to the agent's stdin.
     Send(String),
     /// The agent waits for the user; `reply` is what `approval_reply` needs to answer it.

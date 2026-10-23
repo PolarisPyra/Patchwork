@@ -84,6 +84,8 @@ interface ChatProps {
   onNewChat: () => void;
   /** Deletes the chat's messages and agent session; the chat stays. */
   onClearThread: (threadId: string) => Promise<void>;
+  /** Undoes the turn of a user message and everything after it, the project's files included. */
+  onRestoreCheckpoint: (threadId: string, messageId: string) => Promise<void>;
 }
 
 /** The file's bytes, base64-encoded, for sending to the backend. */
@@ -112,6 +114,7 @@ export default function Chat({
   onSend,
   onNewChat,
   onClearThread,
+  onRestoreCheckpoint,
   onCancel,
   onSetModel,
   onSetAccessMode,
@@ -198,6 +201,24 @@ export default function Chat({
   const accessMode = thread?.accessMode ?? newOpts.accessMode;
   const effort = thread ? thread.effort : newOpts.effort;
   const working = sending || isWorking(thread);
+  // The user messages whose turn can be undone. Each turn takes a checkpoint as it starts, so the
+  // list is read again whenever a turn starts or ends.
+  const [checkpoints, setCheckpoints] = useState<ReadonlySet<string>>(() => new Set());
+  useEffect(() => {
+    const threadId = thread?.id;
+    if (!threadId || !projectId) {
+      setCheckpoints(new Set());
+      return;
+    }
+    let live = true;
+    api.checkpoints(threadId).then(
+      (ids) => live && setCheckpoints(new Set(ids)),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [thread?.id, projectId, working]);
   // Before the first message any connected agent's models are offered.
   const offered = agents.includes(agent) ? agents : [agent, ...agents];
   // What the user sent in this chat, for Up/Down in the composer; repeats count once.
@@ -333,6 +354,25 @@ export default function Chat({
     await onClearThread(thread.id);
   }
 
+  // Restoring rewrites the project's files, so it asks first. The undone message goes back into
+  // the composer, to edit or send again.
+  async function restoreCheckpoint(message: Message) {
+    if (!thread || working) return;
+    const ok = await confirm(
+      "Put the project's files back as they were before this message? Changes made since, by the agent or by you, are discarded, and this message and the ones after it are removed.",
+      { title: "Restore checkpoint", kind: "warning" },
+    );
+    if (!ok) return;
+    setError(null);
+    try {
+      await onRestoreCheckpoint(thread.id, message.id);
+      setDraft(message.text);
+      setAttachments(message.attachments);
+    } catch (e) {
+      setError(errorText(e));
+    }
+  }
+
   // /compact is passed to Claude Code, which compacts its own context. Other agents have no
   // such command, so the request is refused here rather than sent as plain text.
   function compactChat() {
@@ -464,9 +504,9 @@ export default function Chat({
 
   // The latest render's values, so the callbacks handed to Messages keep one identity
   // and its memoized rows skip re-rendering.
-  const latest = useRef({ dispatch, working, onOpenCanvas, onShowChanges });
+  const latest = useRef({ dispatch, working, onOpenCanvas, onShowChanges, restoreCheckpoint });
   useLayoutEffect(() => {
-    latest.current = { dispatch, working, onOpenCanvas, onShowChanges };
+    latest.current = { dispatch, working, onOpenCanvas, onShowChanges, restoreCheckpoint };
   });
 
   const retry = useCallback((message: Message) => {
@@ -479,6 +519,10 @@ export default function Chat({
     [],
   );
   const showChanges = useCallback((paths: string[]) => latest.current.onShowChanges(paths), []);
+  const restore = useCallback(
+    (message: Message) => void latest.current.restoreCheckpoint(message),
+    [],
+  );
 
   // Stops the running turn, goal or not. A goal it was pursuing is cleared once the agent has
   // exited, in the agent's session too.
@@ -683,6 +727,8 @@ export default function Chat({
             onOpenCanvas={project ? openCanvas : undefined}
             onShowChanges={showChanges}
             onRetry={retry}
+            checkpoints={checkpoints}
+            onRestore={restore}
             tokens={tokens}
           />
         ) : (

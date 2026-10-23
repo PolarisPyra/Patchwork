@@ -74,7 +74,7 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
     }
     case "messageStarted":
       return { ...thread, messages: upsertMessage(thread.messages, event.message) };
-    // Parts follow the server's (runner.rs `apply`).
+    // Parts follow the server's (orchestration/stream.rs `apply`).
     case "textDelta": {
       const { messageId, text } = event;
       return updateMessage(thread, messageId, (m) => {
@@ -189,7 +189,7 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
     }
     case "turnCompleted": {
       const { messageId, status, error } = event;
-      // Nothing can still be running once the turn has ended (mirrors runner.rs).
+      // Nothing can still be running once the turn has ended (mirrors orchestration/stream.rs).
       const toolEnd = status === "complete" ? "done" : "error";
       const endedAt = Date.now();
       return updateMessage(thread, messageId, (m) => ({
@@ -430,6 +430,12 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
     );
   }
 
+  /** Undoes a user message's turn and the ones after it; the thread comes back as it is now. */
+  async function restoreCheckpoint(threadId: string, messageId: string): Promise<void> {
+    const restored = await api.restoreCheckpoint(threadId, messageId);
+    setThreads((prev) => prev.map((t) => (t.id === threadId ? restored : t)));
+  }
+
   async function renameThread(id: string, title: string): Promise<void> {
     await api.renameThread(id, title);
     setThreads((prev) => prev.map((t) => (t.id === id ? { ...t, title } : t)));
@@ -610,6 +616,7 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
     setThreadArchived,
     renameThread,
     clearThread,
+    restoreCheckpoint,
     createFolder,
     renameFolder,
     removeFolder,

@@ -53,7 +53,7 @@ pub fn models() -> Vec<ModelOption> {
 pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
     let mode = match spec.mode {
         _ if spec.plan => "plan",
-        AccessMode::Supervised => "default",
+        AccessMode::Supervised => "manual",
         AccessMode::AutoAcceptEdits => "acceptEdits",
         AccessMode::Auto => "auto",
         AccessMode::FullAccess => "bypassPermissions",
@@ -66,6 +66,8 @@ pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
         "stream-json",
         "--verbose",
         "--include-partial-messages",
+        // A subagent's own text and reasoning, for its thread; without this only its calls arrive.
+        "--forward-subagent-text",
         "--permission-mode",
         mode,
     ]
@@ -513,10 +515,23 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
                     message_id: message_id.into(),
                 }));
             }
-            if (is_error || subtype != "success") && !steered {
+            // The CLI can end a turn that failed without flagging it; its reason says so.
+            let reason_error = v["terminal_reason"].as_str().and_then(terminal_error);
+            if (is_error || subtype != "success" || reason_error.is_some()) && !steered {
+                // Failures before the model runs, like a session it cannot find, come in `errors`.
+                let errors = v["errors"].as_array().map_or(&[][..], Vec::as_slice);
+                let listed = errors
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .find(|e| !e.starts_with("[ede_diagnostic]"));
+                if listed.is_some_and(|e| e.starts_with("No conversation found with session ID")) {
+                    out.push(Parsed::SessionLost);
+                }
                 let text = v["result"]
                     .as_str()
                     .filter(|s| !s.is_empty())
+                    .or(listed)
+                    .or(reason_error)
                     .unwrap_or(subtype);
                 out.push(Parsed::Error(text.into()));
             }
@@ -556,6 +571,30 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
         _ => {}
     }
     out
+}
+
+/// What went wrong, for a `terminal_reason` that ends a turn as failed.
+fn terminal_error(reason: &str) -> Option<&'static str> {
+    const CONTEXT_FULL: &str =
+        "Claude stopped: the prompt exceeds the model's context window. Run /compact or start a new task.";
+    Some(match reason {
+        "api_error" => "Claude gave up after repeated API errors.",
+        "malformed_tool_use_exhausted" => "Claude gave up after repeated malformed tool calls.",
+        "budget_exhausted" => "Claude stopped: the turn's token budget ran out.",
+        "structured_output_retry_exhausted" => {
+            "Claude could not produce the requested structured output."
+        }
+        "tool_deferred_unavailable" => {
+            "Claude could not resume a tool call: the tool is no longer available."
+        }
+        "turn_setup_failed" => "Claude could not start the turn.",
+        // The CLI also reports a full context window this way.
+        "blocking_limit" | "prompt_too_long" => CONTEXT_FULL,
+        "rapid_refill_breaker" => "Claude stopped: the context refilled too quickly after compaction.",
+        "image_error" => "Claude stopped: an image in the conversation could not be processed.",
+        "model_error" => "Claude stopped: the model returned an error.",
+        _ => return None,
+    })
 }
 
 fn block_text(blocks: &[Value]) -> String {
@@ -770,6 +809,7 @@ mod tests {
             effort: None,
             attachments: &[],
             images: &[],
+            instructions: None,
         };
         assert_eq!(
             turn_args(&spec),
@@ -781,6 +821,7 @@ mod tests {
                 "stream-json",
                 "--verbose",
                 "--include-partial-messages",
+                "--forward-subagent-text",
                 "--permission-mode",
                 "bypassPermissions",
                 "--permission-prompt-tool",
@@ -795,7 +836,7 @@ mod tests {
         let args = turn_args(&spec);
         assert!(
             args.windows(2)
-                .any(|w| w == ["--permission-mode", "default"])
+                .any(|w| w == ["--permission-mode", "manual"])
         );
         assert!(
             args.windows(2)

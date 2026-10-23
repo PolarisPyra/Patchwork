@@ -2,6 +2,7 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "rea
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import {
   ArrowClockwiseIcon,
+  ArrowCounterClockwiseIcon,
   ArrowDownIcon,
   CheckCircleIcon,
   GitDiffIcon,
@@ -43,6 +44,9 @@ interface MessagesProps {
   /** Opens the sidebar's Changes view. */
   onShowChanges: (paths: string[]) => void;
   onRetry: (message: Message) => void;
+  /** User messages whose turn can be undone, and undoing one. */
+  checkpoints: ReadonlySet<string>;
+  onRestore: (message: Message) => void;
   tokens: TokenSettings;
 }
 
@@ -54,6 +58,8 @@ export default function Messages({
   onOpenCanvas,
   onShowChanges,
   onRetry,
+  checkpoints,
+  onRestore,
   tokens,
 }: MessagesProps) {
   // Queued messages wait above the composer until the turn ends, so they are not shown here.
@@ -101,6 +107,9 @@ export default function Messages({
     void listRef.current?.scrollToEnd();
   }, [lastUserMessageId, replyId]);
 
+  // Rows re-render when these change, since the list keeps them memoized.
+  const rowData = useMemo(() => ({ tokens, checkpoints, busy }), [tokens, checkpoints, busy]);
+
   // The app disables text selection by default, so the browser's select-all would not reach the
   // transcript. Focus lands here on click, and Ctrl/Cmd+A then selects what the list has rendered.
   const rootRef = useRef<HTMLDivElement>(null);
@@ -120,7 +129,7 @@ export default function Messages({
         ref={listRef}
         data={messages}
         keyExtractor={(row) => row.id}
-        extraData={tokens}
+        extraData={rowData}
         getItemType={(row) => row.role}
         estimatedItemSize={90}
         initialScrollAtEnd
@@ -147,7 +156,10 @@ export default function Messages({
                 className={`flex flex-col pb-5${index === 0 ? " pt-6" : ""}${item.role === "user" ? "" : " max-w-[820px]"}`}
               >
                 {item.role === "user" ? (
-                  <UserMessage message={item} />
+                  <UserMessage
+                    message={item}
+                    onRestore={!busy && checkpoints.has(item.id) ? onRestore : undefined}
+                  />
                 ) : (
                   <AssistantMessage
                     message={item}
@@ -189,7 +201,14 @@ const PREVIEW_LINES = 40;
 /** Long messages the user expanded; kept here because the chat list remounts rows as it scrolls. */
 const expandedMessages = new Set<string>();
 
-const UserMessage = memo(function UserMessage({ message }: { message: Message }) {
+const UserMessage = memo(function UserMessage({
+  message,
+  onRestore,
+}: {
+  message: Message;
+  /** Set when the message's turn can be undone. */
+  onRestore?: (message: Message) => void;
+}) {
   const long = message.text.length > LONG_MESSAGE_CHARS;
   const [expanded, setExpanded] = useState(() => expandedMessages.has(message.id));
   const lines = useMemo(() => (long ? message.text.split("\n") : []), [long, message.text]);
@@ -205,10 +224,21 @@ const UserMessage = memo(function UserMessage({ message }: { message: Message })
     setExpanded(!expanded);
   };
   return (
-    <div className="flex max-w-[75%] flex-col items-end gap-1 self-end">
-      <div className="px-2 text-[length:var(--fs-xs)] text-fg-subtle">
-        You · {formatClock(message.createdAt)}
-        {message.steer && " · Steer"}
+    <div className="group flex max-w-[75%] flex-col items-end gap-1 self-end">
+      <div className="flex items-center gap-1 px-2 text-[length:var(--fs-xs)] text-fg-subtle">
+        {onRestore && (
+          <button
+            className={`${ACTION_CLASS} opacity-0 group-hover:opacity-100 focus-visible:opacity-100`}
+            title="Put the project's files back as they were before this message"
+            onClick={() => onRestore(message)}
+          >
+            <ArrowCounterClockwiseIcon size={13} /> Restore
+          </button>
+        )}
+        <span>
+          You · {formatClock(message.createdAt)}
+          {message.steer && " · Steer"}
+        </span>
       </div>
       {message.attachments.length > 0 && (
         <div className="flex flex-wrap justify-end gap-1.5">

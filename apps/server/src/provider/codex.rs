@@ -80,6 +80,9 @@ fn thread_params(spec: &TurnSpec, resume: Option<&str>) -> Value {
     if let Some(m) = spec.model {
         thread["model"] = json!(m);
     }
+    if let Some(text) = spec.instructions {
+        thread["developerInstructions"] = json!(text);
+    }
     if let Some(id) = resume {
         thread["threadId"] = json!(id);
         thread["excludeTurns"] = json!(true);
@@ -621,6 +624,7 @@ mod tests {
             effort: None,
             attachments: &[],
             images: &[],
+            instructions: None,
         }
     }
 

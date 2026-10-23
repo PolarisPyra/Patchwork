@@ -470,6 +470,12 @@ export const api = {
   installAntigravity: () => invoke<void>("install_antigravity"),
   /** Deletes a chat's messages and agent session; the chat stays, empty. */
   clearThread: (id: string) => invoke<void>("clear_thread", { id }),
+  /** The user messages of a thread whose turn can be undone: the project was snapshotted before it. */
+  checkpoints: (threadId: string) => invoke<string[]>("checkpoints", { threadId }),
+  /** Puts the project's files back as they were before the message's turn, and removes that message
+   * and the ones after it. Returns the thread as it is now. */
+  restoreCheckpoint: (threadId: string, messageId: string) =>
+    invoke<Thread>("restore_checkpoint", { threadId, messageId }),
   /** The thread that was open when the app last closed. */
   getLastThread: () => invoke<string | null>("get_last_thread"),
   setLastThread: (id: string) => invoke<void>("set_last_thread", { id }),

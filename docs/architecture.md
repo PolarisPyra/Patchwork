@@ -7,7 +7,7 @@ The repo is split into `apps/web`, `apps/server`, and `apps/desktop`:
 - `apps/server` — the backend, a Rust crate with no Tauri dependency
   - `src/lib.rs` — `Server`, the operations the UI calls
   - `src/provider/` — one module per agent CLI: detection, models, turn arguments, JSONL parsing
-  - `src/runner.rs` — spawns agent CLIs, turns their output into agent events
+  - `src/orchestration/` — runs turns: spawns agent CLIs, turns their output into agent events, handles steering, queues, subagents, goals, per-turn file checkpoints (`checkpoint.rs`), and continuing turns cut off by a restart (`recovery.rs`); `claude.rs` and `codex.rs` hold the instructions each agent is launched with
   - `src/persistence/` — SQLite store and schema migrations
   - `src/import/` — reads each CLI's saved sessions for importing
   - `src/usage/` — subscription usage limits per provider
