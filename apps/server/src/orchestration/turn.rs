@@ -1,6 +1,52 @@
 //! One running turn: its shared state, and the spawn that starts it.
+use std::collections::HashMap;
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
+use std::process::Stdio;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::Mutex;
+use std::sync::PoisonError;
 
-use super::*;
+use serde_json::Value;
+
+use crate::provider::TurnSpec;
+use crate::provider;
+use crate::scope;
+use crate::Server;
+use crate::types::AccessMode;
+use crate::types::AgentEvent;
+use crate::types::AgentKind;
+use crate::types::Attachment;
+use crate::types::FileChange;
+use crate::types::Goal;
+use crate::types::GoalStatus;
+use crate::types::Message;
+use crate::types::MessageStatus;
+use crate::types::new_id;
+use crate::types::now_ms;
+use crate::types::Role;
+use crate::workspace;
+use super::FollowUpInput;
+use super::checkpoint;
+use super::claude;
+use super::codex;
+use super::ingest::ingest;
+use super::process::close_stdin_unless_steered;
+use super::process::read_stderr_tail;
+use super::process::Stdin;
+use super::process::terminate;
+use super::process::TURN_TIMEOUT;
+use super::process::write_line;
+use super::queue::Queue;
+use super::queue::Steers;
+use super::Runner;
+use super::stream::publish;
+use super::stream::Unsaved;
+use super::subagents::Controls;
+use super::subagents::Tasks;
+
 
 /// Pending approvals of one turn: approval id → its message and the provider's reply context.
 pub(super) type Pending = Arc<Mutex<HashMap<String, (String, Value)>>>;
@@ -25,15 +71,17 @@ pub(super) struct RunningTurn {
     pub(super) controls: Controls,
 }
 
+/// What a new turn sends to the agent, and the thread it belongs to.
+pub struct TurnRequest {
+    pub thread_id: String,
+    pub text: String,
+    pub attachments: Vec<Attachment>,
+    pub images: Vec<provider::Image>,
+}
+
 impl Runner {
-    pub fn start_turn(
-        &self,
-        server: &Arc<Server>,
-        thread_id: String,
-        text: String,
-        attachments: Vec<Attachment>,
-        images: Vec<provider::Image>,
-    ) -> Result<(), String> {
+    pub fn start_turn(&self, server: &Arc<Server>, request: TurnRequest) -> Result<(), String> {
+        let TurnRequest { thread_id, text, attachments, images } = request;
         let (agent, root, session_id, model, mode, effort, plan, context, checkpoint) = {
             let thread = server.store.thread(&thread_id).ok_or("Task not found")?;
             // The message being sent is the newest user message; the transcript is what came before.
@@ -83,7 +131,7 @@ impl Runner {
         // Codex takes its instructions in the turn's input; Claude takes them as launch arguments.
         let instructions = match agent {
             AgentKind::Codex => codex::developer_instructions(&settings),
-            _ => None,
+            AgentKind::Claude | AgentKind::Antigravity => None,
         };
         let spec = TurnSpec {
             root: &root,
@@ -136,9 +184,9 @@ impl Runner {
         }
         let stderr_tail = std::thread::spawn(move || read_stderr_tail(stderr));
         let stdin: Stdin = Arc::new(Mutex::new(child.stdin.take()));
-        for line in &input {
+        input.iter().for_each(|line| {
             write_line(&stdin, line);
-        }
+        });
 
         let message = assistant_message();
         let cancelled = Arc::new(AtomicBool::new(false));
@@ -324,15 +372,17 @@ pub(super) fn assistant_message() -> Message {
 /// the turn that drops its goal or answers the steering messages it never took. When the agent lost
 /// the session the turn resumed (`session_lost`), the turn runs again in a new session instead,
 /// given the conversation so far as a transcript.
-pub(super) fn finish(
-    turn: Turn,
-    segments: &[String],
-    status: MessageStatus,
-    error: Option<String>,
-    cancelled: bool,
-    clear_in_agent: Option<&'static str>,
-    session_lost: bool,
-) {
+/// How an agent's turn ended, as `finish` needs to record it.
+pub(super) struct TurnEnd {
+    pub(super) status: MessageStatus,
+    pub(super) error: Option<String>,
+    pub(super) cancelled: bool,
+    pub(super) clear_in_agent: Option<&'static str>,
+    pub(super) session_lost: bool,
+}
+
+pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
+    let TurnEnd { status, error, cancelled, clear_in_agent, session_lost } = end;
     // Forget the turn before announcing it. Queued messages remain persisted in the
     // thread until the user explicitly resumes them; unanswered steers were already
     // delivered to the agent and continue automatically if needed.
@@ -362,13 +412,13 @@ pub(super) fn finish(
             .handed_over
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        for message in queued {
+        queued.iter().for_each(|message| {
             handed_over.remove(&message.message_id);
-        }
+        });
         if cancelled { Vec::new() } else { unanswered }
     };
     if session_lost && unanswered.is_empty() {
-        let server = turn.server.clone();
+        let server = &turn.server;
         let reset = server.store.update_thread(&turn.thread_id, |t| {
             t.session_id = None;
             t.context_pending = true;
@@ -379,9 +429,10 @@ pub(super) fn finish(
             turn.publish(AgentEvent::MessageRemoved { message_id: turn.message_id.clone() });
             let (thread_id, text) = (turn.thread_id.clone(), turn.text.clone());
             let (attachments, images) = (turn.attachments.clone(), turn.images.clone());
-            let started = server
-                .runner
-                .start_turn(&server, thread_id, text, attachments, images);
+            let started = server.runner.start_turn(
+                server,
+                TurnRequest { thread_id, text, attachments, images },
+            );
             match started {
                 Ok(()) => return,
                 Err(e) => log::warn!("failed to rerun the turn in a new session: {e}"),
@@ -389,13 +440,13 @@ pub(super) fn finish(
         }
     }
     // Earlier messages of the turn were answered in full before a steer moved it on.
-    for id in &segments[..segments.len() - 1] {
+    segments[..segments.len() - 1].iter().for_each(|id| {
         turn.publish(AgentEvent::TurnCompleted {
             message_id: id.clone(),
             status: MessageStatus::Complete,
             error: None,
         });
-    }
+    });
     turn.publish(AgentEvent::TurnCompleted {
         message_id: turn.message_id.clone(),
         status,
@@ -405,19 +456,21 @@ pub(super) fn finish(
     // The agent drops the goal in a turn of its own; unanswered steers wait for that
     // system turn instead. Queued messages remain for the user to send explicitly.
     if let Some(command) = clear_in_agent {
-        let server = turn.server.clone();
+        let server = &turn.server;
         match server.send_message(turn.thread_id.clone(), command.into(), vec![], false) {
             Ok(_) => {
-                for f in &unanswered {
-                    let runner = &server.runner;
+                let runner = &server.runner;
+                unanswered.iter().for_each(|f| {
                     let _ = runner.enqueue(
                         &turn.thread_id,
-                        &f.message_id,
-                        &f.text,
-                        &f.attachments,
-                        &f.images,
+                        FollowUpInput {
+                            message_id: &f.message_id,
+                            text: &f.text,
+                            attachments: &f.attachments,
+                            images: &f.images,
+                        },
                     );
-                }
+                });
                 return;
             }
             Err(e) => log::warn!("failed to clear the goal in the agent's session: {e}"),
@@ -425,7 +478,7 @@ pub(super) fn finish(
     }
     // Unanswered steers have already been delivered, so clear their pending UI state
     // before continuing them in a new turn.
-    for f in &unanswered {
+    unanswered.iter().for_each(|f| {
         publish(
             &turn.server,
             &turn.thread_id,
@@ -434,7 +487,7 @@ pub(super) fn finish(
                 queued: false,
             },
         );
-    }
+    });
     if !unanswered.is_empty() {
         let text = unanswered
             .iter()
@@ -449,11 +502,14 @@ pub(super) fn finish(
                 (a, i)
             },
         );
-        let server = turn.server.clone();
+        let server = &turn.server;
         if let Err(e) =
             server
                 .runner
-                .start_turn(&server, turn.thread_id.clone(), text, attachments, images)
+                .start_turn(
+                    server,
+                    TurnRequest { thread_id: turn.thread_id.clone(), text, attachments, images },
+                )
         {
             log::warn!("failed to start the turn for queued messages: {e}");
         }

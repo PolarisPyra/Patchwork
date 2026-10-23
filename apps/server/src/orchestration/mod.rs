@@ -16,34 +16,30 @@ mod subagents;
 mod turn;
 mod usage;
 
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, ExitStatus, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, PoisonError, mpsc};
-use std::thread::JoinHandle;
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
-#[cfg(unix)]
-use std::os::unix::process::CommandExt;
+use process::{QUIT_GRACE, terminate, write_line, write_to};
+use queue::FollowUp;
+pub use queue::FollowUpInput;
+pub use turn::TurnRequest;
 
-use crate::provider::{self, Parsed, TurnSpec};
-use crate::scope;
-use crate::types::*;
-use crate::workspace;
-use crate::{Res, Server};
-use serde_json::Value;
-
-use ingest::*;
-use process::*;
-use queue::*;
-use stream::*;
-use subagents::*;
-use turn::*;
-use usage::*;
-use goal::end_input;
+/// The user's answer to an approval request: whether it was allowed, and any answers to questions.
+pub struct ApprovalDecision<'a> {
+    pub approval_id: &'a str,
+    pub allow: bool,
+    pub answers: HashMap<String, Vec<String>>,
+}
+use turn::RunningTurn;
 
 pub(crate) use stream::publish;
+use crate::provider;
+use crate::scope;
+use crate::Server;
+use crate::types::{AgentKind, Settings, AgentEvent};
+use crate::workspace;
 
 /// Whether `text` is upkeep the app also sends on its own rather than work for the agent: an idle
 /// `/compact`, or the message that has the agent drop its goal.
@@ -118,17 +114,14 @@ impl Runner {
     /// Hands a message to the turn running in `thread_id`: written to the agent when it
     /// can take input mid-turn, otherwise kept to start the next turn.
     /// `subagents` are the subagent calls still running in the foreground.
-    #[allow(clippy::too_many_arguments)]
     pub fn steer(
         &self,
         thread_id: &str,
-        message_id: &str,
+        input: FollowUpInput<'_>,
         session_id: Option<&str>,
-        text: &str,
-        attachments: &[Attachment],
-        images: &[provider::Image],
         subagents: &[String],
     ) -> Delivery {
+        let FollowUpInput { message_id, text, attachments, images } = input;
         self.background_subagents(thread_id, subagents);
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(turn) = turns.get(thread_id) else {
@@ -157,14 +150,8 @@ impl Runner {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone();
-        let line = provider::steer_input(
-            turn.agent,
-            text,
-            attachments,
-            images,
-            session_id,
-            turn_id.as_deref(),
-        );
+        let prompt = provider::Prompt { text, attachments, images };
+        let line = provider::steer_input(turn.agent, prompt, session_id, turn_id.as_deref());
         // Under the stdin lock, so the reader cannot close stdin between the write and
         // recording that an answer is due.
         let mut stdin = turn.stdin.lock().unwrap_or_else(PoisonError::into_inner);
@@ -231,18 +218,15 @@ impl Runner {
                 (turn.pid, turn.exited.clone())
             })
             .collect();
-        for (pid, _) in &running {
-            workspace::signal_process_group(*pid, libc::SIGTERM);
-        }
+        running.iter().for_each(|(pid, _)| workspace::signal_process_group(*pid, libc::SIGTERM));
         let deadline = Instant::now() + QUIT_GRACE;
         while Instant::now() < deadline && running.iter().any(|(_, e)| !e.load(Ordering::SeqCst)) {
             std::thread::sleep(Duration::from_millis(50));
         }
-        for (pid, exited) in &running {
-            if !exited.load(Ordering::SeqCst) {
-                workspace::signal_process_group(*pid, libc::SIGKILL);
-            }
-        }
+        running
+            .iter()
+            .filter(|(_, exited)| !exited.load(Ordering::SeqCst))
+            .for_each(|(pid, _)| workspace::signal_process_group(*pid, libc::SIGKILL));
     }
 
     /// Sends the user's answer to a pending approval and records it.
@@ -250,10 +234,9 @@ impl Runner {
         &self,
         server: &Server,
         thread_id: &str,
-        approval_id: &str,
-        allow: bool,
-        answers: HashMap<String, Vec<String>>,
+        decision: ApprovalDecision<'_>,
     ) -> Result<(), String> {
+        let ApprovalDecision { approval_id, allow, answers } = decision;
         let (agent, stdin, (message_id, reply)) = {
             let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
             let turn = turns

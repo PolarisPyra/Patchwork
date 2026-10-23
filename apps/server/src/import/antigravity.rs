@@ -127,9 +127,7 @@ fn parse_jsonl(text: &str, cwd: &str) -> Option<Session> {
         .and_then(parse_rfc3339_ms)
         .unwrap_or(0);
     let mut messages = Vec::new();
-    for record in lines {
-        push_record(&mut messages, &record, start);
-    }
+    lines.for_each(|record| push_record(&mut messages, &record, start));
     session(&meta, cwd, messages)
 }
 
@@ -140,9 +138,11 @@ fn parse_document(v: &Value, cwd: &str) -> Option<Session> {
         .and_then(parse_rfc3339_ms)
         .unwrap_or(0);
     let mut messages = Vec::new();
-    for record in v["messages"].as_array().into_iter().flatten() {
-        push_record(&mut messages, record, start);
-    }
+    v["messages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .for_each(|record| push_record(&mut messages, record, start));
     session(v, cwd, messages)
 }
 

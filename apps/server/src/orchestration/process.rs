@@ -1,6 +1,20 @@
 //! Starting and stopping the agent process, reading its output, and writing to its stdin.
+use std::io::BufRead;
+use std::io::BufReader;
+use std::io::Write;
+use std::process::ChildStderr;
+use std::process::ChildStdin;
+use std::process::ExitStatus;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::Mutex;
+use std::sync::PoisonError;
+use std::time::Duration;
 
-use super::*;
+use crate::workspace;
+use super::queue::Steers;
+
 
 /// How much of the agent's stderr is kept for error reporting.
 pub(super) const STDERR_TAIL_BYTES: usize = 4096;

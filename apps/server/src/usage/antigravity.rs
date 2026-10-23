@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use crate::provider::probe_until;
 use crate::time::parse_rfc3339_ms;
-use crate::types::*;
+use crate::types::{AgentKind, UsageWindow, ProviderUsage};
 
 pub fn usage(mut out: ProviderUsage) -> Result<ProviderUsage, String> {
     // The CLI prints one JSON object and then keeps running, so stop once that object is complete.
@@ -28,19 +28,23 @@ pub fn usage(mut out: ProviderUsage) -> Result<ProviderUsage, String> {
         .as_array()
         .into_iter()
         .flatten();
-    for group in groups {
-        for bucket in group["buckets"].as_array().into_iter().flatten() {
-            let remaining = bucket["remaining_fraction"].as_f64().unwrap_or(1.0);
-            out.windows.push(UsageWindow {
-                label: format!(
-                    "{} · {}",
-                    group["name"].as_str().unwrap_or_default(),
-                    bucket["window"].as_str().unwrap_or_default()
-                ),
-                used_percent: ((1.0 - remaining) * 100.0).clamp(0.0, 100.0),
-                resets_at: bucket["reset_time"].as_str().and_then(parse_rfc3339_ms),
-            });
-        }
-    }
+    out.windows.extend(groups.flat_map(|group| {
+        group["buckets"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(move |bucket| {
+                let remaining = bucket["remaining_fraction"].as_f64().unwrap_or(1.0);
+                UsageWindow {
+                    label: format!(
+                        "{} · {}",
+                        group["name"].as_str().unwrap_or_default(),
+                        bucket["window"].as_str().unwrap_or_default()
+                    ),
+                    used_percent: ((1.0 - remaining) * 100.0).clamp(0.0, 100.0),
+                    resets_at: bucket["reset_time"].as_str().and_then(parse_rfc3339_ms),
+                }
+            })
+    }));
     Ok(out)
 }

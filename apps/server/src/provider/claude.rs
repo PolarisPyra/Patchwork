@@ -1,10 +1,42 @@
 //! Claude Code (`claude -p` with stream-json input and output).
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use serde_json::Value;
 
-use super::*;
+use crate::types::AccessMode;
+use crate::types::AgentEvent;
+use crate::types::AgentKind;
+use crate::types::AgentStatus;
+use crate::types::GoalStatus;
+use crate::types::ModelOption;
+use crate::types::now_ms;
+use crate::types::PlanStep;
+use crate::types::ProviderSlashCommand;
+use crate::types::Question;
+use crate::types::QuestionOption;
+use crate::types::StepStatus;
+use crate::types::SubAgent;
+use crate::types::TokenUsage;
+use super::file_touched;
+use super::GoalUpdate;
+use super::home_dir;
+use super::Image;
+use super::model_manifest;
+use super::without_attachments;
+use super::one_line;
+use super::Parsed;
+use super::probe;
+use super::relative;
+use super::summarize;
+use super::text_delta;
+use super::thinking;
+use super::tool_finished;
+use super::tool_started;
+use super::ToolStart;
+use super::TurnSpec;
+
 
 /// `$CLAUDE_CONFIG_DIR`, else `~/.claude`.
 pub fn home() -> Option<PathBuf> {
@@ -210,9 +242,12 @@ pub fn subagent_events(v: &Value, root: &str, message_id: &str) -> Vec<AgentEven
             }
         }
         Some("user") => {
-            for block in blocks.iter().filter(|b| b["type"] == "tool_result") {
-                parsed.push(tool_result(block, message_id));
-            }
+            parsed.extend(
+                blocks
+                    .iter()
+                    .filter(|b| b["type"] == "tool_result")
+                    .map(|block| tool_result(block, message_id)),
+            );
         }
         _ => {}
     }
@@ -340,14 +375,7 @@ fn claude_tool_use(
     let id = block["id"].as_str().unwrap_or_default();
     let name = block["name"].as_str().unwrap_or("Tool");
     let input = &block["input"];
-    out.push(tool_started(
-        message_id,
-        id,
-        name,
-        summarize(input, root),
-        subagent_of(input),
-        parent,
-    ));
+    out.push(tool_started(message_id, ToolStart { id, name, summary: summarize(input, root), subagent: subagent_of(input), parent }));
 
     let path_of = |key: &str| input[key].as_str().map(|p| relative(root, p));
     let touched = match name {
@@ -474,8 +502,10 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
         // Command output such as `/goal` comes as a whole synthetic message, not streamed.
         Some("assistant") if parent.is_none() && v["message"]["model"] == "<synthetic>" => {
             let text = block_text(blocks);
-            if !text.is_empty() {
-                out.push(text_delta(message_id, &text));
+            // A goal echoes the attachment list it was sent with; the message already shows them.
+            let shown = without_attachments(&text);
+            if !shown.is_empty() {
+                out.push(text_delta(message_id, shown));
             }
             out.extend(goal_from_command(&text).map(Parsed::Goal));
         }
@@ -488,9 +518,12 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
             out.extend(request_usage(&v["message"], parent.is_none()));
         }
         Some("user") => {
-            for block in blocks.iter().filter(|b| b["type"] == "tool_result") {
-                out.push(tool_result(block, message_id));
-            }
+            out.extend(
+                blocks
+                    .iter()
+                    .filter(|b| b["type"] == "tool_result")
+                    .map(|block| tool_result(block, message_id)),
+            );
             // Each `/goal` check that finds the goal unmet returns as Stop hook feedback.
             let content = &v["message"]["content"];
             let text = content
@@ -612,7 +645,7 @@ fn block_text(blocks: &[Value]) -> String {
 fn goal_from_command(text: &str) -> Option<GoalUpdate> {
     if let Some(objective) = text.strip_prefix("Goal set: ") {
         return Some(GoalUpdate::Set {
-            objective: objective.trim().into(),
+            objective: without_attachments(objective).trim().into(),
             checks: Some(0),
         });
     }
@@ -621,7 +654,11 @@ fn goal_from_command(text: &str) -> Option<GoalUpdate> {
     }
     let rest = text.strip_prefix("Goal active: ")?;
     let line = rest.lines().next().unwrap_or(rest);
-    let (objective, count) = line.rsplit_once(" (")?;
+    // A goal that names attachments spans several lines, with the turn count after the list.
+    let (objective, count) = match line.rsplit_once(" (") {
+        Some(split) => split,
+        None => (without_attachments(rest), rest.rsplit_once(" (")?.1),
+    };
     let checks = count
         .split_whitespace()
         .next()
@@ -654,7 +691,10 @@ pub fn goal_outcome(session_id: &str, objective: &str) -> GoalStatus {
         .filter(|l| l.contains("\"goal_status\""))
         .filter_map(|l| serde_json::from_str::<Value>(l).ok())
         .map(|v| v["attachment"].clone())
-        .find(|a| a["type"] == "goal_status" && a["condition"] == objective);
+        .find(|a| {
+            a["type"] == "goal_status"
+                && a["condition"].as_str().map(without_attachments) == Some(objective)
+        });
     match verdict {
         Some(a) if a["met"] == true => GoalStatus::Complete,
         Some(a) if a["failed"] == true => GoalStatus::Blocked,

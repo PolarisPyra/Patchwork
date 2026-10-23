@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
-use crate::types::*;
+use crate::types::{AgentKind, UsageWindow, ProviderUsage, now_ms};
 
 /// How long fetched usage is reused before it is fetched again.
 const FRESH_FOR: Duration = Duration::from_secs(5 * 60);

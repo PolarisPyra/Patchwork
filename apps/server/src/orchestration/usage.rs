@@ -1,6 +1,6 @@
 //! Tokens each model request used, summed per message.
+use crate::types::TokenUsage;
 
-use super::*;
 
 /// A model request the agent made during a turn, and the tokens it used.
 pub(super) struct Request {

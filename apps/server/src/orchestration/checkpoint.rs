@@ -2,9 +2,15 @@
 //! git tree of every file git does not ignore, built in a temporary index so the user's own index
 //! and branches are untouched, and kept alive by a ref under `refs/patchwork/checkpoints`.
 
-use super::*;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::process::{Command, Output};
+
+use crate::Res;
+use crate::Server;
+use crate::types::new_id;
+use crate::types::Thread;
 
 const REFS: &str = "refs/patchwork/checkpoints";
 
@@ -134,9 +140,9 @@ pub fn remove(root: &str, thread_id: &str, message_ids: Option<&[String]>) {
         Some(ids) => ids.to_vec(),
         None => list(root, thread_id),
     };
-    for id in ids {
+    ids.into_iter().for_each(|id| {
         let _ = git(root, &["update-ref", "-d", &ref_name(thread_id, &id)]);
-    }
+    });
 }
 
 impl Server {

@@ -493,7 +493,10 @@ export const api = {
     model: string | null,
     accessMode: AccessMode,
     effort: string | null,
-  ) => invoke<Thread>("create_thread", { projectId, agent, model, accessMode, effort }),
+  ) =>
+    invoke<Thread>("create_thread", {
+      request: { projectId, agent, model, accessMode, effort },
+    }),
   deleteThread: (id: string) => invoke<void>("delete_thread", { id }),
   setThreadArchived: (id: string, archived: boolean) =>
     invoke<void>("set_thread_archived", { id, archived }),

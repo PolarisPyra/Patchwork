@@ -1,8 +1,25 @@
 //! A thread's `/goal`: how the agent's reports change it, how stopping it works, and how
 //! long the agent's input stays open while Codex pursues one.
 
-use super::*;
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+
 use crate::provider::GoalUpdate;
+use crate::provider;
+use crate::Res;
+use crate::Server;
+use crate::types::AgentEvent;
+use crate::types::AgentEventEnvelope;
+use crate::types::AgentKind;
+use crate::types::Goal;
+use crate::types::GoalStatus;
+use crate::types::MessageStatus;
+use crate::types::now_ms;
+use super::goal;
+use super::process::close_stdin_unless_steered;
+use super::turn::Turn;
 
 fn dismissal_key(thread_id: &str) -> String {
     format!("dismissed-goal:{thread_id}")
@@ -36,7 +53,7 @@ pub(crate) fn update_is_dismissed(
             .state(&dismissal_key(thread_id))
             .and_then(|value| value.split_once(':').map(|(_, text)| text == objective))
             .unwrap_or(false),
-        _ => false,
+        GoalUpdate::Checked | GoalUpdate::Cleared => false,
     }
 }
 
@@ -78,7 +95,7 @@ pub(crate) fn agent_keeps(agent: AgentKind, status: GoalStatus) -> bool {
 pub(crate) fn clear_command(agent: AgentKind) -> &'static str {
     match agent {
         AgentKind::Antigravity => "Stop the current goal.",
-        _ => "/goal clear",
+        AgentKind::Claude | AgentKind::Codex => "/goal clear",
     }
 }
 

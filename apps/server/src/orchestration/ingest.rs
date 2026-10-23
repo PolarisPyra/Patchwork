@@ -1,6 +1,47 @@
 //! Reads an agent's output for one turn and hands each event to the modules that handle it.
+use std::collections::HashMap;
+use std::io::BufReader;
+use std::process::Child;
+use std::process::ChildStdout;
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::sync::PoisonError;
+use std::thread::JoinHandle;
 
-use super::*;
+use serde_json::Value;
+
+use crate::provider::Parsed;
+use crate::provider;
+use crate::scope;
+use crate::types::AgentEvent;
+use crate::types::AgentKind;
+use crate::types::Approval;
+use crate::types::ApprovalStatus;
+use crate::types::BackgroundTask;
+use crate::types::FileChange;
+use crate::types::GoalStatus;
+use crate::types::MessageStatus;
+use crate::types::new_id;
+use crate::workspace;
+use super::goal::end_input;
+use super::goal;
+use super::process::exit_error;
+use super::process::last_lines;
+use super::process::next_line;
+use super::process::TURN_TIMEOUT;
+use super::process::write_line;
+use super::stream::publish;
+use super::stream::Unsaved;
+use super::subagents::finish_child;
+use super::subagents::open_child;
+use super::subagents::SubagentThread;
+use super::turn::{TurnEnd, finish};
+use super::turn::Turn;
+use super::usage::message_usage;
+use super::usage::record_request;
+use super::usage::Request;
+
 
 /// Reads the agent's stdout until it closes, then records the final status.
 pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: JoinHandle<String>) {
@@ -365,12 +406,12 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
     // The stream has closed, whether the turn finished, failed, or was cancelled.
     turn.save_text(&mut unsaved);
     // The agent process is gone, and the background commands it started with it.
-    for (tool_id, message_id) in shell_tasks.drain() {
+    shell_tasks.drain().for_each(|(tool_id, message_id)| {
         turn.publish(AgentEvent::BackgroundTaskEnded {
             message_id,
             tool_id,
         });
-    }
+    });
 
     let exit = child.wait().ok();
     // Whatever the agent left running in its group or scope (MCP servers, background
@@ -401,7 +442,7 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
         (MessageStatus::Complete, None)
     };
     // Subagents end with the agent that ran them.
-    for (_, child) in children.drain() {
+    children.drain().for_each(|(_, child)| {
         publish(
             &turn.server,
             &child.thread_id,
@@ -411,20 +452,26 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                 error: None,
             },
         );
-    }
+    });
 
     let after = workspace::git_changes(&turn.root).unwrap_or_default();
-    for path in changed_paths(&turn.baseline, &after) {
-        turn.publish(AgentEvent::FileTouched {
-            message_id: turn.message_id.clone(),
-            path,
+    changed_paths(&turn.baseline, &after)
+        .into_iter()
+        .for_each(|path| {
+            turn.publish(AgentEvent::FileTouched {
+                message_id: turn.message_id.clone(),
+                path,
+            });
         });
-    }
 
     let clear_in_agent = goal::settle(&turn, status, cancelled);
 
     let session_lost = session_lost && !cancelled;
-    finish(turn, &segments, status, error, cancelled, clear_in_agent, session_lost);
+    finish(
+        turn,
+        &segments,
+        TurnEnd { status, error, cancelled, clear_in_agent, session_lost },
+    );
 }
 
 /// Paths whose git status or line counts differ between two snapshots.
@@ -444,6 +491,12 @@ pub(super) fn changed_paths(before: &[FileChange], after: &[FileChange]) -> Vec<
 
 #[cfg(test)]
 mod tests {
+    use std::io::BufRead;
+    use crate::types::AccessMode;
+    use std::sync::Mutex;
+    use crate::orchestration::process::Stdin;
+    use std::process::Stdio;
+    use crate::provider::TurnSpec;
     use super::*;
 
     pub(super) fn change(path: &str, status: &str, additions: u32) -> FileChange {

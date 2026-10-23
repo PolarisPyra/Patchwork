@@ -1,6 +1,15 @@
 //! Messages sent while a turn runs: steered into it, or queued for the next turn.
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
+use std::sync::Mutex;
+use std::sync::PoisonError;
 
-use super::*;
+use crate::provider;
+use crate::types::Attachment;
+use super::process::write_to;
+use super::Runner;
+
 
 /// A message sent during a turn, kept until the agent answers it or the turn ends.
 pub(super) struct FollowUp {
@@ -9,6 +18,14 @@ pub(super) struct FollowUp {
     pub(super) text: String,
     pub(super) attachments: Vec<Attachment>,
     pub(super) images: Vec<provider::Image>,
+}
+
+/// A message to hold for a running turn, borrowed from the caller.
+pub struct FollowUpInput<'a> {
+    pub message_id: &'a str,
+    pub text: &'a str,
+    pub attachments: &'a [Attachment],
+    pub images: &'a [provider::Image],
 }
 
 /// Steering messages written to the agent that it has not yet answered, oldest first.
@@ -20,14 +37,7 @@ pub(super) type Queue = Arc<Mutex<Vec<FollowUp>>>;
 impl Runner {
     /// Holds a message for the next turn of the one running in `thread_id`, even when the agent
     /// could take it now. False when no turn is running there.
-    pub fn enqueue(
-        &self,
-        thread_id: &str,
-        message_id: &str,
-        text: &str,
-        attachments: &[Attachment],
-        images: &[provider::Image],
-    ) -> Result<bool, String> {
+    pub fn enqueue(&self, thread_id: &str, input: FollowUpInput<'_>) -> Result<bool, String> {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(turn) = turns.get(thread_id) else {
             return Ok(false);
@@ -39,35 +49,28 @@ impl Runner {
         self.handed_over
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .insert(message_id.into());
+            .insert(input.message_id.into());
         queue.push(FollowUp {
-            message_id: message_id.into(),
-            text: text.into(),
-            attachments: attachments.to_vec(),
-            images: images.to_vec(),
+            message_id: input.message_id.into(),
+            text: input.text.into(),
+            attachments: input.attachments.to_vec(),
+            images: input.images.to_vec(),
         });
         Ok(true)
     }
 
     /// Replaces the payload of a queued message in the active turn. False if it has already
     /// been promoted, withdrawn, or the turn ended.
-    pub fn edit_queued(
-        &self,
-        thread_id: &str,
-        message_id: &str,
-        text: &str,
-        attachments: &[Attachment],
-        images: &[provider::Image],
-    ) -> bool {
+    pub fn edit_queued(&self, thread_id: &str, input: FollowUpInput<'_>) -> bool {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(turn) = turns.get(thread_id) else { return false };
         let mut queue = turn.queue.lock().unwrap_or_else(PoisonError::into_inner);
-        let Some(follow_up) = queue.iter_mut().find(|f| f.message_id == message_id) else {
+        let Some(follow_up) = queue.iter_mut().find(|f| f.message_id == input.message_id) else {
             return false;
         };
-        follow_up.text = text.into();
-        follow_up.attachments = attachments.to_vec();
-        follow_up.images = images.to_vec();
+        follow_up.text = input.text.into();
+        follow_up.attachments = input.attachments.to_vec();
+        follow_up.images = input.images.to_vec();
         true
     }
 
@@ -123,10 +126,12 @@ impl Runner {
         if turn.cancelled.load(Ordering::SeqCst) { return false; }
         let follow_up = queue.remove(index);
         let turn_id = turn.native_turn.lock().unwrap_or_else(PoisonError::into_inner).clone();
-        let line = provider::steer_input(
-            turn.agent, &follow_up.text, &follow_up.attachments, &follow_up.images,
-            session_id, turn_id.as_deref(),
-        );
+        let prompt = provider::Prompt {
+            text: &follow_up.text,
+            attachments: &follow_up.attachments,
+            images: &follow_up.images,
+        };
+        let line = provider::steer_input(turn.agent, prompt, session_id, turn_id.as_deref());
         let mut stdin = turn.stdin.lock().unwrap_or_else(PoisonError::into_inner);
         if line.as_deref().is_some_and(|line| write_to(&mut stdin, line)) {
             turn.steers.lock().unwrap_or_else(PoisonError::into_inner).push_back(follow_up);

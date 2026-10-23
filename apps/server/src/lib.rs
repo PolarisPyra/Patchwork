@@ -14,14 +14,26 @@ pub mod workspace;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use orchestration::{ApprovalDecision, Delivery, FollowUpInput, Runner, TurnRequest};
 use persistence::Store;
-use orchestration::{Delivery, Runner};
-use types::*;
+
+use crate::types::{AgentKind, Project, Settings, TokenSettings, Role, MessageStatus, StepStatus, AccessMode, ApprovalStatus, Attachment, Message, Thread, Folder, GoalStatus, ImportSource, ImportScan, AgentEventEnvelope, AgentEvent, now_ms, new_id};
 
 pub type Res<T> = Result<T, String>;
 
 /// Receives every agent event, e.g. to forward it to the UI.
 pub type EventSink = Box<dyn Fn(AgentEventEnvelope) + Send + Sync>;
+
+/// The options for a new task or chat, as the desktop app sends them.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewThread {
+    pub project_id: Option<String>,
+    pub agent: AgentKind,
+    pub model: Option<String>,
+    pub access_mode: AccessMode,
+    pub effort: Option<String>,
+}
 
 pub struct Server {
     pub store: Store,
@@ -112,8 +124,12 @@ pub fn available_shells() -> Vec<String> {
 #[cfg(unix)]
 pub fn login_shell() -> Option<String> {
     let mut buf = vec![0 as libc::c_char; 4096];
+    // SAFETY: passwd is plain C data, so the all-zero bit pattern is a valid value; getpwuid_r
+    // overwrites it before it is read.
     let mut entry: libc::passwd = unsafe { std::mem::zeroed() };
     let mut found = std::ptr::null_mut();
+    // SAFETY: entry, buf, and found are valid for the lengths passed, and getpwuid_r writes only
+    // within them.
     let rc = unsafe {
         libc::getpwuid_r(
             libc::getuid(),
@@ -126,6 +142,8 @@ pub fn login_shell() -> Option<String> {
     if rc != 0 || found.is_null() {
         return None;
     }
+    // SAFETY: the rc and null checks passed, so pw_shell points at a NUL-terminated string inside
+    // buf, which is still alive here.
     let shell = unsafe { std::ffi::CStr::from_ptr(entry.pw_shell) };
     shell
         .to_str()
@@ -466,14 +484,8 @@ impl Server {
         self.store.delete_folder(id)
     }
 
-    pub fn create_thread(
-        &self,
-        project_id: Option<String>,
-        agent: AgentKind,
-        model: Option<String>,
-        access_mode: AccessMode,
-        effort: Option<String>,
-    ) -> Res<Thread> {
+    pub fn create_thread(&self, new: NewThread) -> Res<Thread> {
+        let NewThread { project_id, agent, model, access_mode, effort } = new;
         if let Some(id) = &project_id {
             self.project_root(id)?;
         }
@@ -550,11 +562,11 @@ impl Server {
             .threads()
             .into_iter()
             .filter(|t| t.parent.as_ref().is_some_and(|p| p.thread_id == id));
-        for child in children {
+        children.for_each(|child| {
             if let Err(e) = self.store.delete_thread(&child.id) {
                 log::warn!("failed to delete a subagent's thread: {e}");
             }
-        }
+        });
     }
 
     /// Sets the thread's model. The agent can only change before the first message,
@@ -635,7 +647,7 @@ impl Server {
         let message = user_message("/compact", vec![]);
         orchestration::publish(self, thread_id, AgentEvent::MessageStarted { message });
         self.runner
-            .start_turn(self, thread_id.into(), "/compact".into(), vec![], vec![])
+            .start_turn(self, TurnRequest { thread_id: thread_id.into(), text: "/compact".into(), attachments: vec![], images: vec![] })
     }
 
     /// Appends the user message, then starts the agent turn in the background.
@@ -711,16 +723,13 @@ impl Server {
         let delivery = if queue {
             match self
                 .runner
-                .enqueue(&thread_id, &msg.id, &text, &attachments, &images)
+                .enqueue(&thread_id, FollowUpInput { message_id: &msg.id, text: &text, attachments: &attachments, images: &images })
             {
                 Ok(true) => Delivery::Queued,
                 Ok(false) => self.runner.steer(
                     &thread_id,
-                    &msg.id,
+                    FollowUpInput { message_id: &msg.id, text: &text, attachments: &attachments, images: &images },
                     session_id.as_deref(),
-                    &text,
-                    &attachments,
-                    &images,
                     &subagents,
                 ),
                 Err(error) => {
@@ -733,11 +742,8 @@ impl Server {
         } else {
             self.runner.steer(
                 &thread_id,
-                &msg.id,
+                FollowUpInput { message_id: &msg.id, text: &text, attachments: &attachments, images: &images },
                 session_id.as_deref(),
-                &text,
-                &attachments,
-                &images,
                 &subagents,
             )
         };
@@ -762,7 +768,7 @@ impl Server {
             }
             Delivery::NotRunning => {
                 self.runner
-                    .start_turn(self, thread_id, text, attachments, images)?
+                    .start_turn(self, TurnRequest { thread_id, text, attachments, images })?
             }
         }
         Ok(msg)
@@ -775,7 +781,7 @@ impl Server {
             let active = t.goal.is_some_and(|g| g.status == GoalStatus::Active);
             provider::goal_pause(t.agent, t.session_id.as_deref()?).filter(|_| active)
         });
-        for message_id in self.runner.cancel(thread_id, pause) {
+        self.runner.cancel(thread_id, pause).into_iter().for_each(|message_id| {
             orchestration::publish(
                 self,
                 thread_id,
@@ -784,7 +790,7 @@ impl Server {
                     queued: false,
                 },
             );
-        }
+        });
     }
 
     /// Takes back a message sent mid-turn that has not started yet, so it can be edited.
@@ -827,7 +833,7 @@ impl Server {
         let original = thread.messages.iter().find(|m| m.id == message_id && m.queued)
             .ok_or("That message is no longer queued")?;
         if self.runner.is_running(thread_id)
-            && !self.runner.edit_queued(thread_id, message_id, &text, &attachments, &images)
+            && !self.runner.edit_queued(thread_id, FollowUpInput { message_id, text: &text, attachments: &attachments, images: &images })
         {
             return Err("That message has already been promoted".into());
         }
@@ -858,22 +864,14 @@ impl Server {
         let attachments: Vec<_> = queued.iter().flat_map(|m| m.attachments.clone()).collect();
         let images = provider::load_images(&attachments)?;
         self.store.update_thread(thread_id, |t| {
-            for m in &mut t.messages {
-                if queued.iter().any(|q| q.id == m.id) { m.queued = false; }
-            }
+            t.messages.iter_mut().filter(|m| queued.iter().any(|q| q.id == m.id)).for_each(|m| m.queued = false);
         })?;
-        for m in &queued {
-            orchestration::publish(self, thread_id, AgentEvent::MessageQueued { message_id: m.id.clone(), queued: false });
-        }
-        if let Err(error) = self.runner.start_turn(self, thread_id.into(), text, attachments, images) {
+        queued.iter().for_each(|m| orchestration::publish(self, thread_id, AgentEvent::MessageQueued { message_id: m.id.clone(), queued: false }));
+        if let Err(error) = self.runner.start_turn(self, TurnRequest { thread_id: thread_id.into(), text, attachments, images }) {
             self.store.update_thread(thread_id, |t| {
-                for m in &mut t.messages {
-                    if queued.iter().any(|q| q.id == m.id) { m.queued = true; }
-                }
+                t.messages.iter_mut().filter(|m| queued.iter().any(|q| q.id == m.id)).for_each(|m| m.queued = true);
             })?;
-            for m in &queued {
-                orchestration::publish(self, thread_id, AgentEvent::MessageQueued { message_id: m.id.clone(), queued: true });
-            }
+            queued.iter().for_each(|m| orchestration::publish(self, thread_id, AgentEvent::MessageQueued { message_id: m.id.clone(), queued: true }));
             return Err(error);
         }
         Ok(())
@@ -913,8 +911,11 @@ impl Server {
         allow: bool,
         answers: std::collections::HashMap<String, Vec<String>>,
     ) -> Res<()> {
-        self.runner
-            .respond(self, thread_id, approval_id, allow, answers)
+        self.runner.respond(
+            self,
+            thread_id,
+            ApprovalDecision { approval_id, allow, answers },
+        )
     }
 
     // ---- importing conversations ------------------------------------------

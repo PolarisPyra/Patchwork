@@ -72,11 +72,12 @@ pub(super) fn import_legacy_json(conn: &mut Connection, dir: &Path) -> Res<()> {
         }
     }
     tx.commit().map_err(err)?;
-    for path in [settings_path, threads_path] {
-        if path.exists() {
+    [settings_path, threads_path]
+        .into_iter()
+        .filter(|path| path.exists())
+        .for_each(|path| {
             let _ = std::fs::rename(&path, path.with_extension("json.bak"));
-        }
-    }
+        });
     Ok(())
 }
 

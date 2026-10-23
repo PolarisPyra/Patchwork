@@ -5,7 +5,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-use crate::types::*;
+use crate::types::{Project, FileChange, new_id};
 
 /// Largest file `read_file` returns.
 const MAX_READ_BYTES: u64 = 2 * 1024 * 1024;

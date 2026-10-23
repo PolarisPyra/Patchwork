@@ -6,10 +6,10 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
-use super::{Failure, RATE_LIMIT_BACKOFF};
 use crate::provider;
 use crate::time::parse_rfc3339_ms;
-use crate::types::*;
+use crate::types::{UsageWindow, ProviderUsage, now_ms};
+use super::{Failure, RATE_LIMIT_BACKOFF};
 
 const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 const PROFILE_URL: &str = "https://api.anthropic.com/api/oauth/profile";

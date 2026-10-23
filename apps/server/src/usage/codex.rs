@@ -8,7 +8,7 @@ use serde_json::Value;
 
 use crate::provider;
 use crate::time::parse_rfc3339_ms;
-use crate::types::*;
+use crate::types::{UsageWindow, ProviderUsage, now_ms};
 
 /// How many of the most recently modified rollout files are searched.
 const RECENT_FILES: usize = 30;
@@ -94,6 +94,7 @@ fn window(w: &Value, reported_at: u64) -> Option<UsageWindow> {
 
 #[cfg(test)]
 mod tests {
+    use crate::types::new_id;
     use super::*;
     use serde_json::json;
 

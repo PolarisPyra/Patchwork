@@ -1,6 +1,30 @@
 //! Subagents a turn starts: their own threads, moving them to the background, and stopping one.
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc;
+use std::sync::Mutex;
+use std::sync::PoisonError;
+use std::time::Duration;
+use std::time::Instant;
 
-use super::*;
+use crate::provider;
+use crate::types::AgentEvent;
+use crate::types::AgentEventEnvelope;
+use crate::types::AgentKind;
+use crate::types::MessageStatus;
+use crate::types::new_id;
+use crate::types::now_ms;
+use crate::types::Role;
+use crate::types::Thread;
+use crate::types::ThreadParent;
+use crate::types::ToolCall;
+use super::process::write_line;
+use super::Runner;
+use super::stream::publish;
+use super::turn::assistant_message;
+use super::turn::Turn;
+
 
 /// Subagents the agent started: tool call id → the agent's own task id.
 pub(super) type Tasks = Arc<Mutex<HashMap<String, String>>>;
@@ -43,10 +67,10 @@ impl Runner {
             })
             .collect();
         let deadline = Instant::now() + BACKGROUND_WAIT;
-        for answer in answers {
+        answers.into_iter().for_each(|answer| {
             let left = deadline.saturating_duration_since(Instant::now());
             let _ = answer.recv_timeout(left);
-        }
+        });
     }
 
     /// Stops one subagent of the running turn, leaving the rest of the turn going.

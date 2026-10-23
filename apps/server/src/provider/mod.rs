@@ -9,18 +9,17 @@ pub mod model_manifest;
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::Read;
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-#[cfg(unix)]
-use std::os::unix::process::CommandExt;
-
 use serde_json::Value;
 
-use crate::types::*;
+use crate::types::{AgentKind, AgentStatus, ModelOption, ProviderSlashCommand, StepStatus, ToolCall, tool_output, SubAgent, AccessMode, Question, AttachmentKind, Attachment, image_media_type, TokenUsage, Goal, UsageWindow, AgentEvent, now_ms};
 use crate::workspace::signal_process_group;
 
 /// Upper bound for any single agent CLI probe (`--version`, `auth status`, ...).
@@ -307,6 +306,11 @@ pub fn prompt(spec: &TurnSpec) -> String {
     prompt_text(spec.text, spec.attachments)
 }
 
+/// `text` without the attachment list that `prompt_text` appends.
+pub(crate) fn without_attachments(text: &str) -> &str {
+    text.split_once("\n\nAttached:\n").map_or(text, |(text, _)| text).trim_end()
+}
+
 fn prompt_text(text: &str, attachments: &[Attachment]) -> String {
     if attachments.is_empty() {
         return text.to_string();
@@ -330,14 +334,20 @@ fn prompt_text(text: &str, attachments: &[Attachment]) -> String {
 /// The stdin line that adds a message to a turn that is already running, or None when
 /// the agent cannot take one now and the message waits for the turn to end. Antigravity reads
 /// its whole prompt up front; Codex needs the turn's id, which it reports once started.
+/// A message's content as a provider receives it: its text, attachments, and decoded images.
+pub struct Prompt<'a> {
+    pub text: &'a str,
+    pub attachments: &'a [Attachment],
+    pub images: &'a [Image],
+}
+
 pub fn steer_input(
     agent: AgentKind,
-    text: &str,
-    attachments: &[Attachment],
-    images: &[Image],
+    prompt: Prompt<'_>,
     session_id: Option<&str>,
     turn_id: Option<&str>,
 ) -> Option<String> {
+    let Prompt { text, attachments, images } = prompt;
     match agent {
         AgentKind::Claude => Some(claude::steer_message(
             &prompt_text(text, attachments),
@@ -383,6 +393,9 @@ pub fn turn_args(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
 /// agent takes no input, and stdin is closed.
 pub fn turn_input(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
     match agent {
+        // Claude only runs `/goal` from a text-only message, so a goal names its attachments by
+        // path and Claude opens them with its own tools.
+        AgentKind::Claude if is_goal_command(spec.text) => vec![claude::user_message(&prompt(spec), &[])],
         AgentKind::Claude => vec![claude::user_message(&prompt(spec), spec.images)],
         AgentKind::Codex => codex::turn_input(spec),
         AgentKind::Antigravity => vec![],
@@ -432,6 +445,9 @@ pub fn approval_reply(
 
 /// What one JSONL line means for the turn.
 #[derive(Debug)]
+// Each event is built once and moved straight into the turn, so boxing the large variant would
+// only add an allocation per event.
+#[allow(clippy::large_enum_variant)]
 pub enum Parsed {
     Event(AgentEvent),
     SessionId(String),
@@ -519,23 +535,25 @@ fn relative(root: &str, path: &str) -> String {
         .to_string()
 }
 
-fn tool_started(
-    message_id: &str,
-    id: &str,
-    name: &str,
+/// A tool call the agent has begun, as the provider's events describe it.
+struct ToolStart<'a> {
+    id: &'a str,
+    name: &'a str,
     summary: String,
     subagent: Option<SubAgent>,
-    parent: Option<&str>,
-) -> Parsed {
+    parent: Option<&'a str>,
+}
+
+fn tool_started(message_id: &str, start: ToolStart<'_>) -> Parsed {
     Parsed::Event(AgentEvent::ToolStarted {
         message_id: message_id.into(),
         tool: ToolCall {
-            id: id.into(),
-            name: name.into(),
-            summary,
+            id: start.id.into(),
+            name: start.name.into(),
+            summary: start.summary,
             status: StepStatus::Running,
-            subagent,
-            parent: parent.map(String::from),
+            subagent: start.subagent,
+            parent: start.parent.map(String::from),
             started_at: Some(now_ms()),
             ended_at: None,
             output: None,

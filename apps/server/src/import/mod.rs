@@ -11,7 +11,7 @@ mod t3;
 use std::path::Path;
 
 use crate::provider;
-use crate::types::*;
+use crate::types::{AgentKind, Role, MessageStatus, AccessMode, Message, Thread, ImportSource, new_id};
 
 /// The longest transcript sent to an agent as context. The newest messages are kept.
 const MAX_CONTEXT_BYTES: usize = 200_000;

@@ -6,8 +6,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use patchwork_server::types::*;
-use patchwork_server::{Res, Server, orchestration, persistence, provider};
+use patchwork_server::types::{AgentKind, Project, Settings, AgentStatus, ModelOption, ShellChoices, Role, MessageStatus, AccessMode, Attachment, Message, Thread, Folder, GoalStatus, FileChange, ProviderUsage, ImportSource, ImportScan, AgentEventEnvelope, AgentEvent};
+use patchwork_server::{NewThread, Res, Server, orchestration, persistence, provider};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
@@ -190,15 +190,8 @@ fn set_collapsed(server: Srv, ids: Vec<String>) -> Res<()> {
 }
 
 #[tauri::command]
-fn create_thread(
-    server: Srv,
-    project_id: Option<String>,
-    agent: AgentKind,
-    model: Option<String>,
-    access_mode: AccessMode,
-    effort: Option<String>,
-) -> Res<Thread> {
-    server.create_thread(project_id, agent, model, access_mode, effort)
+fn create_thread(server: Srv, request: NewThread) -> Res<Thread> {
+    server.create_thread(request)
 }
 
 #[tauri::command]

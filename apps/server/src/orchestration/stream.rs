@@ -1,6 +1,17 @@
 //! Streaming agent output to the frontend, and saving events onto the stored thread.
+use crate::Res;
+use crate::Server;
+use crate::types::AgentEvent;
+use crate::types::AgentEventEnvelope;
+use crate::types::ApprovalStatus;
+use crate::types::Message;
+use crate::types::MessageStatus;
+use crate::types::now_ms;
+use crate::types::Part;
+use crate::types::StepStatus;
+use crate::types::Thread;
+use super::turn::Turn;
 
-use super::*;
 
 impl Turn {
     /// Streams a text delta to the frontend without saving it; the reader
@@ -94,9 +105,10 @@ pub(super) fn save_event(server: &Server, thread_id: &str, event: &AgentEvent) -
     if let AgentEvent::MessageRemoved { .. } = event {
         return server.store.update_thread(thread_id, |t| apply(t, event));
     }
-    let message_id = match event {
-        AgentEvent::MessageStarted { message } => Some(message.id.as_str()),
-        _ => event_message(event),
+    let message_id = if let AgentEvent::MessageStarted { message } = event {
+        Some(message.id.as_str())
+    } else {
+        event_message(event)
     };
     server
         .store
@@ -178,7 +190,10 @@ pub(super) fn apply(thread: &mut Thread, event: &AgentEvent) {
             end_thinking(msg);
             match msg.parts.last_mut() {
                 Some(Part::Text { text: last }) => last.push_str(text),
-                _ => msg.parts.push(Part::Text { text: text.clone() }),
+                None
+                | Some(Part::Thinking { .. } | Part::Tool { .. } | Part::Plan { .. }) => {
+                    msg.parts.push(Part::Text { text: text.clone() })
+                }
             }
         }
         AgentEvent::Thinking {
@@ -261,34 +276,27 @@ pub(super) fn apply(thread: &mut Thread, event: &AgentEvent) {
             msg.error = error.clone();
             msg.finished_at = Some(now_ms());
             // Unanswered requests lapse with the turn.
-            for approval in msg
-                .approvals
+            msg.approvals
                 .iter_mut()
                 .filter(|a| a.status == ApprovalStatus::Pending)
-            {
-                approval.status = ApprovalStatus::Denied;
-            }
+                .for_each(|approval| approval.status = ApprovalStatus::Denied);
             // Nothing can still be running once the turn has ended.
             let tool_end = if *status == MessageStatus::Complete {
                 StepStatus::Done
             } else {
                 StepStatus::Error
             };
-            for tool in msg
-                .tools
+            msg.tools
                 .iter_mut()
                 .filter(|t| t.status == StepStatus::Running)
-            {
-                tool.status = tool_end;
-                tool.ended_at = Some(now_ms());
-            }
-            for step in msg
-                .plan
+                .for_each(|tool| {
+                    tool.status = tool_end;
+                    tool.ended_at = Some(now_ms());
+                });
+            msg.plan
                 .iter_mut()
                 .filter(|s| s.status == StepStatus::Running)
-            {
-                step.status = StepStatus::Pending;
-            }
+                .for_each(|step| step.status = StepStatus::Pending);
         }
         AgentEvent::MessageStarted { .. }
         | AgentEvent::GoalUpdated { .. }

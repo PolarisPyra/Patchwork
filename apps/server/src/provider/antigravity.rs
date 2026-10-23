@@ -4,7 +4,23 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
-use super::*;
+use crate::types::AccessMode;
+use crate::types::AgentStatus;
+use crate::types::ModelOption;
+use super::GoalUpdate;
+use super::home_dir;
+use super::is_goal_command;
+use super::model_manifest;
+use super::Parsed;
+use super::prompt;
+use super::relative;
+use super::summarize;
+use super::text_delta;
+use super::tool_finished;
+use super::tool_started;
+use super::ToolStart;
+use super::TurnSpec;
+
 
 /// The Antigravity CLI: Patchwork's own install (`patchwork/clis` in the config folder),
 /// else `agy` on PATH.
@@ -101,7 +117,7 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                     || summarize(params, spec.root),
                     |path| relative(spec.root, path),
                 );
-                out.push(tool_started(message_id, &id, name, summary, None, None));
+                out.push(tool_started(message_id, ToolStart { id: &id, name, summary, subagent: None, parent: None }));
                 if step["state"] == "DONE" {
                     let failed = tool["error"].as_str().is_some_and(|e| !e.is_empty());
                     out.push(tool_finished(message_id, &id, failed, ""));

@@ -1,10 +1,40 @@
 //! Codex (`codex app-server`, JSON-RPC over stdio).
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
-use super::*;
+use crate::types::AccessMode;
+use crate::types::AgentEvent;
+use crate::types::AgentKind;
+use crate::types::AgentStatus;
+use crate::types::Attachment;
+use crate::types::AttachmentKind;
+use crate::types::Goal;
+use crate::types::ModelOption;
+use crate::types::PlanStep;
+use crate::types::Question;
+use crate::types::QuestionOption;
+use crate::types::StepStatus;
+use super::file_touched;
+use super::GoalUpdate;
+use super::home_dir;
+use super::is_goal_command;
+use super::model_manifest;
+use super::one_line;
+use super::Parsed;
+use super::probe;
+use super::prompt;
+use super::prompt_text;
+use super::relative;
+use super::text_delta;
+use super::thinking;
+use super::tool_finished;
+use super::tool_started;
+use super::ToolStart;
+use super::TurnSpec;
+
 
 /// `$CODEX_HOME`, else `~/.codex`.
 pub fn home() -> Option<PathBuf> {
@@ -143,7 +173,13 @@ fn begin(spec: &TurnSpec, thread_id: &str, resolved_model: Option<&str>) -> Vec<
                     "threadId": thread_id, "objective": objective, "status": "paused",
                 }}),
             ),
-            Parsed::Send(turn_start(spec, thread_id, objective, resolved_model)),
+            // The turn carries the attachments; the goal itself is the objective alone.
+            Parsed::Send(turn_start(
+                spec,
+                thread_id,
+                &prompt_text(objective, spec.attachments),
+                resolved_model,
+            )),
         ],
         Some(GoalCommand::Resume) => vec![Parsed::Send(turn_start(
             spec,
@@ -179,7 +215,7 @@ enum GoalCommand<'a> {
 /// `/goal` alone shows the goal; `clear` (or one of Claude's aliases for it), `pause`, and
 /// `resume` act on it; anything else is a new objective.
 fn goal_command<'a>(spec: &TurnSpec<'a>) -> Option<GoalCommand<'a>> {
-    if !spec.attachments.is_empty() || !is_goal_command(spec.text) {
+    if !is_goal_command(spec.text) {
         return None;
     }
     let arg = spec.text.trim()["/goal".len()..].trim();
@@ -224,10 +260,12 @@ fn goal_reply(spec: &TurnSpec, result: &Value) -> String {
         Some(GoalCommand::Clear) if result["cleared"] == true => "Goal cleared.".into(),
         Some(GoalCommand::Clear) => "No goal to clear.".into(),
         Some(GoalCommand::Pause) => "Goal paused. Send /goal resume to continue.".into(),
-        _ => match goal_of(&result["goal"]) {
-            Some(goal) => format!("Goal: {}", goal.objective),
-            None => "No goal is set.".into(),
-        },
+        Some(GoalCommand::Set(_) | GoalCommand::Resume | GoalCommand::Show) | None => {
+            match goal_of(&result["goal"]) {
+                Some(goal) => format!("Goal: {}", goal.objective),
+                None => "No goal is set.".into(),
+            }
+        }
     }
 }
 
@@ -352,14 +390,7 @@ fn codex_item(completed: bool, item: &Value, root: &str, message_id: &str, out: 
         }
         Some("commandExecution") => {
             let command = item["command"].as_str().unwrap_or_default();
-            out.push(tool_started(
-                message_id,
-                id,
-                "Shell",
-                one_line(command),
-                None,
-                None,
-            ));
+            out.push(tool_started(message_id, ToolStart { id, name: "Shell", summary: one_line(command), subagent: None, parent: None }));
             if completed {
                 let exit_failed = item["exitCode"].as_i64().is_some_and(|c| c != 0);
                 let output = item["aggregatedOutput"].as_str().unwrap_or_default();
@@ -372,21 +403,14 @@ fn codex_item(completed: bool, item: &Value, root: &str, message_id: &str, out: 
                 item["server"].as_str().unwrap_or_default(),
                 item["tool"].as_str().unwrap_or_default()
             );
-            out.push(tool_started(message_id, id, "MCP", summary, None, None));
+            out.push(tool_started(message_id, ToolStart { id, name: "MCP", summary, subagent: None, parent: None }));
             if completed {
                 out.push(tool_finished(message_id, id, failed, ""));
             }
         }
         Some("webSearch") => {
             let query = item["query"].as_str().unwrap_or_default();
-            out.push(tool_started(
-                message_id,
-                id,
-                "WebSearch",
-                one_line(query),
-                None,
-                None,
-            ));
+            out.push(tool_started(message_id, ToolStart { id, name: "WebSearch", summary: one_line(query), subagent: None, parent: None }));
             if completed {
                 out.push(tool_finished(message_id, id, false, ""));
             }
@@ -399,14 +423,7 @@ fn codex_item(completed: bool, item: &Value, root: &str, message_id: &str, out: 
                 .filter_map(|c| c["path"].as_str())
                 .map(|p| relative(root, p))
                 .collect();
-            out.push(tool_started(
-                message_id,
-                id,
-                "Edit",
-                one_line(&paths.join(", ")),
-                None,
-                None,
-            ));
+            out.push(tool_started(message_id, ToolStart { id, name: "Edit", summary: one_line(&paths.join(", ")), subagent: None, parent: None }));
             if completed {
                 if !failed {
                     out.extend(paths.into_iter().map(|p| file_touched(message_id, p)));

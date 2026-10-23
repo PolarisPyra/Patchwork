@@ -1,8 +1,22 @@
 //! What a new app session does with the turns and goals the last one left behind: replies that
 //! were cut off end, and their turns continue where they left off.
 
-use super::*;
+use std::sync::Arc;
+use std::sync::PoisonError;
+use std::time::Duration;
+
 use crate::persistence::Store;
+use crate::Res;
+use crate::Server;
+use super::TurnRequest;
+use crate::types::AgentEvent;
+use crate::types::ApprovalStatus;
+use crate::types::GoalStatus;
+use crate::types::MessageStatus;
+use crate::types::now_ms;
+use crate::types::Thread;
+use super::goal;
+use super::stream::publish;
 
 /// `app_state` key for the threads whose turns were running when the app last quit (JSON array).
 const INTERRUPTED_KEY: &str = "interrupted_turns";
@@ -147,10 +161,12 @@ impl Server {
                 publish(&server, &thread_id, AgentEvent::MessageStarted { message });
                 let started = server.runner.start_turn(
                     &server,
-                    thread_id,
-                    CONTINUE_PROMPT.into(),
-                    vec![],
-                    vec![],
+                    TurnRequest {
+                        thread_id,
+                        text: CONTINUE_PROMPT.into(),
+                        attachments: vec![],
+                        images: vec![],
+                    },
                 );
                 if let Err(e) = started {
                     log::warn!("failed to continue a cut-off turn: {e}");
