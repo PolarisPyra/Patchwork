@@ -549,7 +549,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
 
   const sidebarHandlers = useStableHandlers({
     onRestoreThread: (id: string) => attempt(() => setThreadArchived(id, false)),
-    onDeleteArchived: deleteArchived,
+    onDeleteArchived: deleteArchivedMany,
     onClearChangeFocus: () => setChangeFocus(null),
     onNewTask: newThreadIn,
     onNewChat: newChat,

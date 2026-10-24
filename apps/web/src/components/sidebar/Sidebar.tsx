@@ -117,8 +117,8 @@ interface SidebarProps {
   /** Chats and tasks in the archive, in sidebar order. */
   archivedThreads: Thread[];
   onRestoreThread: (id: string) => void;
-  /** Asks, then deletes an archived chat or task for good. */
-  onDeleteArchived: (id: string) => void;
+  /** Asks once, then deletes archived chats or tasks for good. */
+  onDeleteArchived: (ids: string[]) => void;
   /** Starts a task at the top of a folder; `threadIds` are the folder's tasks in order. */
   onNewTaskInFolder: (projectId: string, folderId: string, threadIds: string[]) => void;
   onOpenFolder: () => void;
@@ -1124,16 +1124,31 @@ const ThreadRow = memo(function ThreadRow({
   );
 }, sameRow);
 
-/** Chats and tasks moved out of the task list. Restoring one puts it back where it was. */
+/** Chats and tasks moved out of the task list, under the project and folder each came from, in
+ * their task-list order. Restoring one puts it back where it was. */
 function ArchivedView({
   archivedThreads,
+  projects,
+  folders,
   onSelectThread,
   onRestoreThread,
   onDeleteArchived,
 }: SidebarProps) {
   const picked = useSelectedRows();
   const setPicked = setSelectedRows;
-  const [menu, setMenu] = useState<{ x: number; y: number; thread: Thread } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  const openMenu = (e: MouseEvent, items: MenuItem[]) => {
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY, items });
+  };
+  // Closed groups here are this view's own, so closing one leaves the task list as it was.
+  const [collapsed, setCollapsedGroups] = useState<ReadonlySet<string>>(new Set());
+  const toggle = (key: string) =>
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
   const targetOf = (id: string): Target => ({ kind: "thread", id });
   const isPicked = (id: string) => picked.some((p) => sameTarget(p, targetOf(id)));
   // Ctrl+click picks a thread for deleting together; a plain click clears the picks and opens it.
@@ -1149,65 +1164,182 @@ function ArchivedView({
         : [...prev, targetOf(id)],
     );
   };
+  const chats = archivedThreads.filter((t) => t.projectId === null);
+  const groups = projects
+    .map((p) => {
+      const tasks = archivedThreads.filter((t) => t.projectId === p.id);
+      const projectFolders = folders
+        .filter((f) => f.projectId === p.id)
+        .map((f) => ({ folder: f, tasks: tasks.filter((t) => t.folderId === f.id) }))
+        .filter((g) => g.tasks.length > 0);
+      const topLevel = tasks.filter((t) => !projectFolders.some((g) => g.folder.id === t.folderId));
+      return { project: p, folders: projectFolders, topLevel };
+    })
+    .filter((g) => g.folders.length > 0 || g.topLevel.length > 0);
+  const collapseAll = () =>
+    setCollapsedGroups(
+      (prev) =>
+        new Set([
+          ...prev,
+          ...(chats.length > 0 ? ["chats"] : []),
+          ...groups.map((g) => g.project.id),
+        ]),
+    );
   useCommand("sidebar.selectAllArchived", () =>
-    setPicked(archivedThreads.map((t) => targetOf(t.id))),
+    setPicked(
+      [
+        ...chats,
+        ...groups.flatMap((g) => [...g.folders.flatMap((f) => f.tasks), ...g.topLevel]),
+      ].map((t) => targetOf(t.id)),
+    ),
   );
+
+  /** A project's, folder's or the chats' row, which opens and closes the rows under it.
+   * Its menu deletes every archived chat or task under it. */
+  const header = (key: string, name: ReactNode, folder: boolean, inside: Thread[]) => (
+    <div
+      className={`group mx-1 flex h-7 cursor-pointer items-center rounded-[var(--radius-sm)] select-none pr-1.5 text-left text-fg ${folder ? "pl-3" : "pl-1"} ${selectionFill(false)}`}
+      onClick={() => toggle(key)}
+      onContextMenu={(e) =>
+        openMenu(e, [
+          {
+            label: "Delete permanently",
+            Icon: TrashIcon,
+            danger: true,
+            onSelect: () => onDeleteArchived(inside.map((t) => t.id)),
+          },
+        ])
+      }
+    >
+      <span className="mr-1.5 inline-flex w-4 flex-none translate-x-[3px] justify-center">
+        <Twistie open={!collapsed.has(key)} />
+      </span>
+      <span
+        className={`min-w-0 flex-1 truncate ${folder ? "text-[length:var(--fs-sm)]" : "font-medium"}`}
+      >
+        {name}
+      </span>
+    </div>
+  );
+  const row = (t: Thread, nested: boolean) => (
+    <div
+      key={t.id}
+      className={`group mr-1 flex h-7 cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] select-none pr-2 pl-2 text-fg ${nested ? "ml-[38px]" : "ml-[30px]"} ${selectionFill(isPicked(t.id))}`}
+      onClick={(e) => pick(e, t.id)}
+      onContextMenu={(e) =>
+        openMenu(e, [
+          {
+            label: "Restore",
+            Icon: ArrowCounterClockwiseIcon,
+            onSelect: () => onRestoreThread(t.id),
+          },
+          {
+            label: "Delete permanently",
+            Icon: TrashIcon,
+            danger: true,
+            onSelect: () => onDeleteArchived([t.id]),
+          },
+        ])
+      }
+    >
+      <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+        {displayTitle(t.title)}
+      </span>
+      <button
+        className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex hover:bg-border-strong"
+        title="Restore"
+        aria-label="Restore"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRestoreThread(t.id);
+        }}
+      >
+        <ArrowCounterClockwiseIcon size={16} />
+      </button>
+      <span
+        className="inline-flex h-5 w-5 flex-none items-center justify-center"
+        title={AGENT_LABELS[t.agent]}
+      >
+        <ProviderLogos kind={t.agent} size={16} />
+      </span>
+    </div>
+  );
+  /** The rows under a header, with the indent guide that shows on hover. */
+  const body = (key: string, guide: string, children: ReactNode) => (
+    <Collapse open={!collapsed.has(key)}>
+      <div className="relative flex flex-col py-px">
+        <span
+          aria-hidden
+          className={`pointer-events-none absolute top-0 bottom-0 ${guide} w-px bg-[#58585866] opacity-0 transition-opacity group-hover/tree:opacity-100`}
+        />
+        {children}
+      </div>
+    </Collapse>
+  );
+
   return (
     <div
       tabIndex={-1}
       {...shortcutContext("archivedListFocus")}
       onClick={clearSelectionOnBlank}
-      className="flex min-h-0 flex-1 flex-col gap-px overflow-y-scroll overflow-x-hidden p-2 *:shrink-0 focus:outline-none"
+      className="group/tree flex min-h-0 flex-1 flex-col gap-px overflow-y-scroll overflow-x-hidden p-2 *:shrink-0 focus:outline-none"
     >
-      <SectionLabel>Archived</SectionLabel>
+      <SectionLabel
+        action={
+          archivedThreads.length > 0 && (
+            <button
+              className="flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 normal-case tracking-normal text-fg-muted hover:text-fg"
+              onClick={collapseAll}
+            >
+              <ArrowsInLineVerticalIcon size={15} />
+              Collapse all
+            </button>
+          )
+        }
+      >
+        Archived
+      </SectionLabel>
       {archivedThreads.length === 0 && (
         <div className="px-3 py-2 text-[length:var(--fs-sm)] text-fg-muted">Nothing archived</div>
       )}
-      {archivedThreads.map((t) => (
-        <div
-          key={t.id}
-          className={`group mx-1.5 mb-1.5 flex cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] px-2.5 py-1.5 text-fg ${isPicked(t.id) ? "bg-selected" : "bg-[color-mix(in_srgb,var(--bg-hover)_40%,transparent)] hover:bg-hover"}`}
-          onClick={(e) => pick(e, t.id)}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            setMenu({ x: e.clientX, y: e.clientY, thread: t });
-          }}
-        >
-          <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-            {displayTitle(t.title)}
-          </span>
-          <button
-            className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex hover:bg-border-strong"
-            title="Restore"
-            aria-label="Restore"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRestoreThread(t.id);
-            }}
-          >
-            <ArrowCounterClockwiseIcon size={16} />
-          </button>
-        </div>
-      ))}
+      <div className="-mx-2">
+        {chats.length > 0 && (
+          <div>
+            {header("chats", "Chats", false, chats)}
+            {body(
+              "chats",
+              "left-4",
+              chats.map((t) => row(t, false)),
+            )}
+          </div>
+        )}
+        {groups.map((g) => (
+          <div key={g.project.id}>
+            {header(g.project.id, g.project.name, false, [
+              ...g.folders.flatMap((f) => f.tasks),
+              ...g.topLevel,
+            ])}
+            {body(g.project.id, "left-4", [
+              ...g.folders.map(({ folder, tasks }) => {
+                const key = `folder:${folder.id}`;
+                return (
+                  <div key={folder.id}>
+                    {header(key, folder.name, true, tasks)}
+                    {body(
+                      key,
+                      "left-6",
+                      tasks.map((t) => row(t, true)),
+                    )}
+                  </div>
+                );
+              }),
+              ...g.topLevel.map((t) => row(t, false)),
+            ])}
+          </div>
+        ))}
+      </div>
       {menu && (
-        <ContextMenu
-          x={menu.x}
-          y={menu.y}
-          items={[
-            {
-              label: "Restore",
-              Icon: ArrowCounterClockwiseIcon,
-              onSelect: () => onRestoreThread(menu.thread.id),
-            },
-            {
-              label: "Delete permanently",
-              Icon: TrashIcon,
-              danger: true,
-              onSelect: () => onDeleteArchived(menu.thread.id),
-            },
-          ]}
-          onClose={() => setMenu(null)}
-        />
+        <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />
       )}
     </div>
   );

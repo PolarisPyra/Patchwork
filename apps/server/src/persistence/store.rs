@@ -294,8 +294,39 @@ impl Store {
 
     /// Puts `ids` in `folder_id` (None: the top level) in that order. The ids are the
     /// whole destination list, so a thread that came from elsewhere joins it here.
+    /// Archived threads are not in `ids`; they keep their slots in the list, so restoring
+    /// one puts it back where it was.
     pub fn reorder_threads(&self, ids: &[String], folder_id: Option<&str>) -> Res<()> {
         let mut inner = self.lock();
+        let ids = {
+            let project_id = ids
+                .first()
+                .and_then(|id| inner.threads.iter().find(|t| t.id == *id))
+                .map(|t| t.project_id.clone());
+            let mut list: Vec<&Thread> = inner
+                .threads
+                .iter()
+                .filter(|t| {
+                    Some(&t.project_id) == project_id.as_ref()
+                        && t.folder_id.as_deref() == folder_id
+                        && (t.archived_at.is_some() || ids.contains(&t.id))
+                })
+                .collect();
+            list.sort_by_key(|t| t.position);
+            let mut moved = ids.iter();
+            let mut order: Vec<String> = list
+                .iter()
+                .filter_map(|t| {
+                    if t.archived_at.is_some() && !ids.contains(&t.id) {
+                        Some(t.id.clone())
+                    } else {
+                        moved.next().cloned()
+                    }
+                })
+                .collect();
+            order.extend(moved.cloned());
+            order
+        };
         let tx = inner.conn.transaction().map_err(err)?;
         for (i, id) in ids.iter().enumerate() {
             tx.execute(
