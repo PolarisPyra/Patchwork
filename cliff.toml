@@ -39,6 +39,7 @@ commit_parsers = [
     { message = "^(Remove|Drop|Delete|Deprecate)", group = "Removed" },
     { message = "^(Update|Change|Polish|Tighten|Refactor|Rename|Move|Align|Make|Improve|Describe|Sidebar|Choice|Use|Replace)", group = "Changed" },
     { message = "^(Release|Bump|Merge|Chore)", skip = true },
+    { message = "^Reword the v[0-9.]+ changelog", skip = true },
     { message = ".*", group = "Other" },
 ]
 protect_breaking_commits = false
