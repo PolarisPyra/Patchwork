@@ -67,6 +67,12 @@ Rules for coding agents working in the Rust code in this repo (`apps/server` and
 - Pushing the tag starts the **Release** workflow (`.github/workflows/release-appimage.yml`). It runs `scripts/set-version.sh` with the tag's version, builds the Linux, Windows, and macOS installers, and creates a GitHub release named `Patchwork v<version>`.
 - To check the build without a release, run the workflow by hand from the Actions tab (**Run workflow**). It builds with the last released version and creates no release.
 - Never edit `CHANGELOG.md` by hand, and never set version numbers by hand. Tags must start with `v` followed by a digit.
+- **Version numbers** are `MAJOR.MINOR.PATCH` with no leading zeros and no suffixes (the release script only accepts `X.Y.Z`). Read the current version with `git describe --tags --abbrev=0`, then raise one part by one:
+  - **Patch** for fixes and small changes: `0.4.11` → `0.4.12`.
+  - **Minor** for larger features, resetting the patch: `0.4.11` → `0.5.0`.
+  - **Major** only when the user asks for it.
+- **Hotfixes** are ordinary patch releases. Fix the bug on `main`, then release the next patch number: a hotfix after `0.4.9` is `0.4.10`, not `0.4.91`. Each part is compared as a whole number, so `0.4.91` would sort above every release from `0.4.10` to `0.4.90` and break update and release ordering. If the user asks for a version like that, explain this and confirm before tagging.
+- Never reuse, move, or delete a pushed tag. A broken release is followed by the next patch release.
 - Full details are in [docs/releasing.md](docs/releasing.md).
 
 ## Release and build setup for a Tauri project
