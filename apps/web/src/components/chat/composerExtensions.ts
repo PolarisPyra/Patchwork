@@ -151,8 +151,8 @@ import.meta.hot?.accept(() => window.location.reload());
  */
 export function composerExtensions(placeholder: string, mentionSuggestion: MentionSuggestion) {
   return [
-    // Links keep their Markdown form; clicking one in a draft does not open it. Pasted text only
-    // links URLs with a protocol, so file names such as start.sh or main.rs stay plain text.
+    // Links keep their Markdown form; clicking one in a draft does not open it. Text dropped in
+    // only links URLs with a protocol, so file names such as start.sh or main.rs stay plain text.
     // Dropped files become attachments (see Chat.tsx), so the drop cursor would point at a
     // place nothing is inserted.
     // Headings and quotes stay as typed text (see MarkdownLine), so they do not become block nodes.

@@ -45,6 +45,9 @@ import { isWorking, type NewThreadOptions } from "~/hooks/useThreads";
 import { coldLargeSession } from "~/lib/tokens";
 import { displayTitle, errorText } from "~/lib/util";
 
+/** A pasted text at least this long is attached as a file instead of going into the draft. */
+const PASTE_ATTACH_CHARS = 10_000;
+
 const SUGGESTIONS = [
   { label: "Explain this codebase", prefill: "Explain this codebase" },
   { label: "Find and fix a bug", prefill: "Find and fix a bug" },
@@ -345,14 +348,33 @@ export default function Chat({
         setErrorFor(sentKey, errorText(e));
       }
     }
+    async function attachPastedText(text: string) {
+      const sentKey = keyRef.current;
+      try {
+        const found = await api.savePastedText(text);
+        setPending((prev) => ({ ...prev, [sentKey]: [...(prev[sentKey] ?? []), found] }));
+      } catch (e) {
+        setErrorFor(sentKey, errorText(e));
+      }
+    }
     function onPaste(event: ClipboardEvent) {
       const images = Array.from(event.clipboardData?.files ?? []).filter((file) =>
         file.type.startsWith("image/"),
       );
-      if (images.length === 0) return;
+      if (images.length > 0) {
+        event.preventDefault();
+        event.stopPropagation();
+        void attachPasted(images);
+        return;
+      }
+      // A long paste, such as a full log, is attached as a file the agent opens, rather than
+      // filling the composer.
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      const inComposer = event.target instanceof Element && event.target.closest(".ProseMirror");
+      if (!inComposer || text.trim().length < PASTE_ATTACH_CHARS) return;
       event.preventDefault();
       event.stopPropagation();
-      void attachPasted(images);
+      void attachPastedText(text);
     }
     el.addEventListener("paste", onPaste, true);
     return () => el.removeEventListener("paste", onPaste, true);

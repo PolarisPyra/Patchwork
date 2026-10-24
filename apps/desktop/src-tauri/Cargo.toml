@@ -1,6 +1,6 @@
 [package]
 name = "patchwork"
-version = "0.1.0"
+version = "0.4.8"
 description = "Patchwork — an agentic development environment"
 edition = "2024"
 rust-version = "1.90"
@@ -23,4 +23,5 @@ notify = "8"
 tauri-plugin-opener = "2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
+wl-clipboard-rs = "0.9"
 glib = "0.18"

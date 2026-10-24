@@ -335,6 +335,17 @@ impl Server {
         Ok(attachment)
     }
 
+    /// Saves text pasted from the clipboard as a file, and returns it as an attachment the agent
+    /// opens itself, so a long paste does not fill the composer.
+    pub fn save_pasted_text(&self, text: &str) -> Res<Attachment> {
+        std::fs::create_dir_all(&self.pasted_dir).map_err(|e| e.to_string())?;
+        let path = self.pasted_dir.join(format!("{}.txt", new_id()));
+        std::fs::write(&path, text).map_err(|e| e.to_string())?;
+        let mut attachment = Attachment::from_path(&path.to_string_lossy())?;
+        attachment.name = "Pasted text.txt".to_string();
+        Ok(attachment)
+    }
+
     pub fn project_root(&self, project_id: &str) -> Res<String> {
         self.store
             .settings()

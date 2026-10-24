@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpIcon, CaretDownIcon, CheckIcon, SquareIcon } from "@phosphor-icons/react";
 import { EditorContent, useEditor } from "@tiptap/react";
+import { Fragment, Slice } from "@tiptap/pm/model";
 import { TextSelection } from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
 import {
   api,
   type AccessMode,
@@ -11,6 +13,7 @@ import {
   type ProviderSlashCommand,
 } from "~/api";
 import AccessPicker from "~/components/chat/AccessPicker";
+import { detectLanguage } from "~/components/chat/languageDetection";
 import EffortPicker from "~/components/chat/EffortPicker";
 import AttachmentChip from "~/components/chat/AttachmentChip";
 import { commandScore, SLASH_COMMANDS } from "~/components/chat/composerActions";
@@ -104,6 +107,72 @@ function isMonospaceHtml(html: string): boolean {
   const body = new DOMParser().parseFromString(html, "text/html").body;
   if (body.querySelector("p, h1, h2, h3, h4, h5, h6, li, table, blockquote")) return false;
   return /<pre[\s>]|monospace|white-space:\s*pre/i.test(html);
+}
+
+/** VS Code language ids that code blocks name differently. */
+const VSCODE_LANGUAGES: Record<string, string | null> = {
+  typescriptreact: "tsx",
+  javascriptreact: "jsx",
+  shellscript: "bash",
+  jsonc: "json",
+  makefile: "make",
+  plaintext: null,
+};
+
+/** The language of a copy from VS Code's editor, from its clipboard metadata, or null. */
+function vscodeLanguage(metadata: string | null): string | null {
+  try {
+    const mode = (JSON.parse(metadata ?? "") as { mode?: unknown }).mode;
+    if (typeof mode !== "string") return null;
+    return mode in VSCODE_LANGUAGES ? VSCODE_LANGUAGES[mode] : mode;
+  } catch {
+    return null;
+  }
+}
+
+/** Short language names that web pages use in class names, by the id code blocks use. */
+const LANGUAGE_ALIASES: Record<string, string> = {
+  js: "javascript",
+  ts: "typescript",
+  py: "python",
+  rs: "rust",
+  sh: "bash",
+  shell: "bash",
+  yml: "yaml",
+};
+
+/**
+ * The language a web page gave copied code, from a `language-rust`, `lang-rust` or
+ * `highlight-source-rust` class in the copied HTML, or null.
+ */
+function htmlLanguage(html: string): string | null {
+  const match = /class="[^"]*\b(?:language|lang|highlight-source)-([\w+#-]+)/i.exec(html);
+  if (!match) return null;
+  const id = match[1].toLowerCase();
+  return LANGUAGE_ALIASES[id] ?? id;
+}
+
+/**
+ * Labels a pasted code block once the block is in. A copy from VS Code or another Electron editor
+ * names its language in clipboard metadata that the webview does not show to the page, so the app
+ * reads it from the system clipboard. Other code gets the language VS Code would detect for it.
+ */
+function labelPastedCode(view: EditorView, text: string) {
+  void api
+    .clipboardEditorData()
+    .catch(() => null)
+    .then((metadata) => vscodeLanguage(metadata) ?? detectLanguage(text))
+    .then((language) => {
+      if (!language || view.isDestroyed) return;
+      let at: number | null = null;
+      view.state.doc.descendants((node, pos) => {
+        if (at === null && node.type.name === "codeBlock" && !node.attrs.language) {
+          if (node.textContent === text) at = pos;
+        }
+        return at === null;
+      });
+      if (at !== null) view.dispatch(view.state.tr.setNodeAttribute(at, "language", language));
+    });
 }
 
 /** Models per agent, fetched once per agent kind. */
@@ -298,18 +367,42 @@ export default function Composer({
     editorProps: {
       attributes: { class: EDITOR_CLASS },
       handleKeyDown: (_view, event) => keyDown.current(event),
-      // Plain multi-line text, such as terminal output, goes in as one code block with its lines
-      // and spaces kept. Terminals and editors that also copy styled monospace HTML count as
-      // plain text; other HTML keeps the editor's default paste.
+      // Pastes go in as plain text; copied HTML is only read to tell what was copied, never
+      // parsed into the draft. A copy from this editor keeps its blocks and mentions.
       handlePaste: (view, event) => {
         const data = event.clipboardData;
-        const text = data?.getData("text/plain").replace(/\r\n?/g, "\n").replace(/\n+$/, "") ?? "";
-        if (!text.includes("\n")) return false;
-        if (data?.types.includes("text/html") && !isMonospaceHtml(data.getData("text/html"))) {
-          return false;
-        }
+        if (!data) return false;
+        const html = data.getData("text/html");
+        if (html.includes("data-pm-slice")) return false;
+        const text = data.getData("text/plain").replace(/\r\n?/g, "\n").replace(/\n+$/, "");
+        if (!text) return true;
         const { state } = view;
-        const block = state.schema.nodes.codeBlock.create(null, state.schema.text(text));
+        // Inside a code block, and on a single line, the text goes in exactly as copied.
+        if (state.selection.$from.parent.type.spec.code || !text.includes("\n")) {
+          view.dispatch(state.tr.insertText(text).scrollIntoView());
+          return true;
+        }
+        // Multi-line text from a page or document keeps its paragraphs and line breaks.
+        if (html && !isMonospaceHtml(html)) {
+          const paragraphs = text.split(/\n{2,}/).map((paragraph) =>
+            state.schema.nodes.paragraph.create(
+              null,
+              paragraph
+                .split("\n")
+                .flatMap((line, i) => [
+                  ...(i > 0 ? [state.schema.nodes.hardBreak.create()] : []),
+                  ...(line ? [state.schema.text(line)] : []),
+                ]),
+            ),
+          );
+          const slice = new Slice(Fragment.from(paragraphs), 1, 1);
+          view.dispatch(state.tr.replaceSelection(slice).scrollIntoView());
+          return true;
+        }
+        // Terminal output, code, and plain multi-line text go in as one code block, in the
+        // language VS Code or the web page gave the copy.
+        const language = vscodeLanguage(data.getData("vscode-editor-data")) ?? htmlLanguage(html);
+        const block = state.schema.nodes.codeBlock.create({ language }, state.schema.text(text));
         const tr = state.tr.replaceSelectionWith(block);
         // The caret goes to the line after the block, which is added when there is none, so
         // typing goes on outside the pasted code.
@@ -320,6 +413,7 @@ export default function Composer({
         }
         tr.setSelection(TextSelection.create(tr.doc, after + 1));
         view.dispatch(tr.scrollIntoView());
+        if (!language) labelPastedCode(view, text);
         return true;
       },
     },

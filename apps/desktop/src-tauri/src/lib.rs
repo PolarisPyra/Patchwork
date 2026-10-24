@@ -1,6 +1,8 @@
 //! Tauri shell: exposes `patchwork_server::Server` as commands and forwards
 //! agent events to the web UI on the `"agent-event"` channel.
 
+mod clipboard;
+
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -260,6 +262,19 @@ fn attachment_for_path(path: String) -> Res<Attachment> {
 #[tauri::command]
 fn save_pasted_image(server: Srv, mime_type: String, data: String) -> Res<Attachment> {
     server.save_pasted_image(&mime_type, &data)
+}
+
+#[tauri::command]
+fn save_pasted_text(server: Srv, text: String) -> Res<Attachment> {
+    server.save_pasted_text(&text)
+}
+
+/// The `vscode-editor-data` of the clipboard's copy, which holds its language when it came
+/// from VS Code or another Electron editor. Runs off the main thread, since reading the
+/// clipboard waits on the app that owns it.
+#[tauri::command(async)]
+fn clipboard_editor_data() -> Option<String> {
+    clipboard::editor_data()
 }
 
 /// Lets the webview load an image for its thumbnail. The asset scope is not kept across restarts,
@@ -610,6 +625,8 @@ pub fn run() {
             send_message,
             attachment_for_path,
             save_pasted_image,
+            save_pasted_text,
+            clipboard_editor_data,
             allow_preview,
             cancel_turn,
             stop_goal,
