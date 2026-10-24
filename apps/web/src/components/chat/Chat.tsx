@@ -35,14 +35,14 @@ import BackgroundTasks from "~/components/chat/BackgroundTasks";
 import QueuedMessages from "~/components/chat/QueuedMessages";
 import LineageCard from "~/components/chat/LineageCard";
 import Composer, { type HistoryEntry } from "~/components/chat/Composer";
-import Messages from "~/components/chat/Messages";
+import Messages, { UsageLine } from "~/components/chat/Messages";
 import PendingApprovalBanner from "~/components/chat/PendingApprovalBanner";
 import TasksBadge from "~/components/chat/TasksBadge";
 import { planTitle } from "~/components/chat/ProposedPlanCard";
 import MissingFolderPrompt from "~/components/chat/MissingFolderPrompt";
 import ResumePrompt from "~/components/chat/ResumePrompt";
 import { isWorking, type NewThreadOptions } from "~/hooks/useThreads";
-import { coldLargeSession } from "~/lib/tokens";
+import { coldLargeSession, threadUsage } from "~/lib/tokens";
 import { displayTitle, errorText } from "~/lib/util";
 
 /** A pasted text at least this long is attached as a file instead of going into the draft. */
@@ -239,6 +239,7 @@ export default function Chat({
   const accessMode = thread?.accessMode ?? newOpts.accessMode;
   const effort = thread ? thread.effort : newOpts.effort;
   const working = sending || isWorking(thread);
+  const usage = thread && threadUsage(thread.messages);
   // A clear still pending once its run has ended was not confirmed by the agent, so the banner
   // goes back to offering it.
   useEffect(() => {
@@ -927,6 +928,7 @@ export default function Chat({
             />
           )}
         </ComposerStripPresence>
+        {usage && tokens.showUsage && <UsageLine usage={usage} warnAbove={tokens.warnAbove} />}
         {/* Loaded with the chat, not on its own: a placeholder of another height moved the
             messages once the editor arrived. */}
         <Composer

@@ -218,13 +218,11 @@ export default function TurnTimeline({
   agent,
   clearsGoal = false,
   onOpenThread,
-  usageLine,
 }: {
   message: Message;
   agent: AgentKind;
   /** The reply answers `/goal clear`, so it shows no working row even before its text arrives. */
   clearsGoal?: boolean;
-  usageLine?: ReactNode;
   /** Opens a subagent's thread. */
   onOpenThread: (id: string) => void;
 }) {
@@ -270,10 +268,8 @@ export default function TurnTimeline({
           open={open}
           onToggle={() => setOpen((o) => !o)}
           hidden={hidden}
-          usageLine={usageLine}
         />
       )}
-      {!folds && usageLine}
       {shown.map((step) =>
         step.kind === "text" ? (
           <div key={`t${step.index}`} className="px-1 py-0.5 pb-2">
@@ -352,14 +348,12 @@ function FoldRow({
   open,
   onToggle,
   hidden,
-  usageLine,
 }: {
   message: Message;
   open: boolean;
   onToggle: () => void;
   /** How many steps the fold holds; nothing to unfold when 0. */
   hidden: number;
-  usageLine?: ReactNode;
 }) {
   const stopped = message.status === "cancelled";
   if (message.cutOff) {
@@ -377,7 +371,6 @@ function FoldRow({
           {hidden > 0 && <Caret size={13} />}
         </button>
         <span className="text-[length:var(--fs-sm)] text-fg-subtle">Cut off by steer</span>
-        {usageLine}
       </div>
     );
   }
@@ -403,7 +396,6 @@ function FoldRow({
         <span>{label}</span>
         {hidden > 0 && <Caret size={13} />}
       </button>
-      {usageLine}
     </div>
   );
 }

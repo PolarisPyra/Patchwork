@@ -1,4 +1,4 @@
-import type { Thread } from "~/api";
+import type { Message, Thread, TokenUsage } from "~/api";
 import { isCompactCommand } from "~/components/chat/composerActions";
 
 /** Claude's prompt cache lasts an hour; a thread idle longer has lost it. */
@@ -10,6 +10,30 @@ export function formatTokens(n: number): string {
   if (n < 100_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
   if (n < 1_000_000) return `${Math.round(n / 1000)}k`;
   return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}m`;
+}
+
+/**
+ * A thread's tokens: the context of its latest reply, and what all its replies used together.
+ * Null when no reply has reported usage.
+ */
+export function threadUsage(messages: Message[]): TokenUsage | null {
+  const last = [...messages].reverse().find((m) => m.usage)?.usage;
+  if (!last) return null;
+  const total: TokenUsage = {
+    input: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    output: 0,
+    context: last.context,
+  };
+  for (const { usage } of messages) {
+    if (!usage) continue;
+    total.input += usage.input;
+    total.cacheRead += usage.cacheRead;
+    total.cacheWrite += usage.cacheWrite;
+    total.output += usage.output;
+  }
+  return total;
 }
 
 /**

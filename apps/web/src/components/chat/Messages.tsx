@@ -159,8 +159,6 @@ export default function Messages({
           // The green notice in the reply already says the goal was cleared.
           if (item.role === "user" && isGoalClearCommand(item.text)) return <div />;
           const previous = messages[index - 1];
-          const usage =
-            item.role === "assistant" && item.status !== "streaming" && tokens.showUsage;
           return (
             <div className="px-6">
               <div
@@ -175,8 +173,6 @@ export default function Messages({
                   <AssistantMessage
                     message={item}
                     agent={thread.agent}
-                    usage={(usage && item.usage) || undefined}
-                    warnAbove={tokens.warnAbove}
                     onOpenThread={onOpenThread}
                     changes={changes}
                     retryMessage={previous?.role === "user" ? previous : null}
@@ -294,8 +290,6 @@ const UserMessage = memo(function UserMessage({
 interface AssistantProps {
   message: Message;
   agent: AgentKind;
-  usage?: TokenUsage;
-  warnAbove: number;
   onOpenThread: (id: string) => void;
   changes: FileChange[];
   retryMessage: Message | null;
@@ -308,8 +302,6 @@ interface AssistantProps {
 const AssistantMessage = memo(function AssistantMessage({
   message,
   agent,
-  usage,
-  warnAbove,
   onOpenThread,
   changes,
   retryMessage,
@@ -327,7 +319,6 @@ const AssistantMessage = memo(function AssistantMessage({
         agent={agent}
         clearsGoal={clearsGoal}
         onOpenThread={onOpenThread}
-        usageLine={usage && <UsageLine usage={usage} warnAbove={warnAbove} />}
       />
       {/* A pending approval is answered in the banner above the composer. */}
       {message.approvals.map((approval) =>
@@ -386,12 +377,12 @@ const AssistantMessage = memo(function AssistantMessage({
   );
 });
 
-/** The tokens a reply used. A context over `warnAbove` is flagged, since every turn re-reads it. */
-function UsageLine({ usage, warnAbove }: { usage: TokenUsage; warnAbove: number }) {
+/** The thread's tokens, shown above the composer. A context over `warnAbove` is flagged, since every turn re-reads it. */
+export function UsageLine({ usage, warnAbove }: { usage: TokenUsage; warnAbove: number }) {
   const large = usage.context > warnAbove;
   return (
     <p
-      className={`m-0 flex flex-wrap items-center justify-start gap-x-3 px-1 text-[length:var(--fs-xs)] tabular-nums ${large ? "text-warning" : "text-fg-muted"}`}
+      className={`m-0 mb-1.5 flex flex-wrap items-center justify-end gap-x-3 text-[length:var(--fs-xs)] tabular-nums ${large ? "text-warning" : "text-fg-muted"}`}
     >
       <span className="inline-flex items-center gap-1">
         {large && <WarningIcon size={13} />}
