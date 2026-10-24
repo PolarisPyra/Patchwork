@@ -1,6 +1,6 @@
 [package]
 name = "patchwork-server"
-version = "0.4.13"
+version = "0.5.0"
 description = "Patchwork backend: providers, persistence, usage, and thread import"
 edition = "2024"
 rust-version = "1.90"
