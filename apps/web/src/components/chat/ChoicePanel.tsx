@@ -16,8 +16,8 @@ interface ChoicePanelProps {
 }
 
 /**
- * Numbered options above the composer. A number key or the arrows highlight an option; Enter
- * sends the highlighted one. The last row writes an answer instead of sending.
+ * Numbered options above the composer. A click, a number key, or the arrows highlight an option;
+ * Enter or a double-click sends it. The last row writes an answer instead of sending.
  */
 export default function ChoicePanel({
   question,
@@ -102,6 +102,7 @@ export default function ChoicePanel({
           aria-selected={active === i}
           className={rowClass(active === i)}
           onClick={() => setActive(i)}
+          onDoubleClick={() => onPick(option)}
         >
           <kbd className="kbd flex-none">{i + 1}</kbd>
           <span className="min-w-0 flex-1 truncate">{option}</span>
