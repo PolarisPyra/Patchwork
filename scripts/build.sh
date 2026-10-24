@@ -86,11 +86,7 @@ install_app() {
   install -Dm755 target/release/patchwork "$bin_path"
   echo "Binary: $bin_path"
 
-  local pair
-  for pair in 32x32.png:32x32 128x128.png:128x128 128x128@2x.png:256x256 icon.png:512x512; do
-    install -Dm644 "apps/desktop/src-tauri/icons/${pair%%:*}" \
-      "$icons_dir/${pair##*:}/apps/$app_id.png"
-  done
+  install -Dm644 apps/desktop/src-tauri/icons/logo.png "$icons_dir/512x512/apps/$app_id.png"
   echo "Icons: $icons_dir"
 
   # The launcher's Exec is the absolute binary path, so it goes stale when the prefix or the

@@ -114,7 +114,7 @@ Set these before you write the files. The examples are placeholders.
 | `desktop_pkg` | `name` in the desktop package's `package.json` | `my-app-desktop` |
 | `tauri_dir` | Folder with `tauri.conf.json` and `Cargo.toml` | `apps/desktop/src-tauri` |
 
-The repo must follow the layout above. The Tauri crate must have `icons/` with `32x32.png`, `128x128.png`, `128x128@2x.png`, and `icon.png`, which `pnpm tauri icon` generates.
+The repo must follow the layout above. The Tauri crate must have `icons/` with `logo.png` (512x512) and `icon.ico`, which Windows builds require.
 
 ### Files
 
@@ -296,11 +296,7 @@ install_app() {
   install -Dm755 "target/release/$bin_name" "$bin_path"
   echo "Binary: $bin_path"
 
-  local pair
-  for pair in 32x32.png:32x32 128x128.png:128x128 128x128@2x.png:256x256 icon.png:512x512; do
-    install -Dm644 "$tauri_dir/icons/${pair%%:*}" \
-      "$icons_dir/${pair##*:}/apps/$app_id.png"
-  done
+  install -Dm644 "$tauri_dir/icons/logo.png" "$icons_dir/512x512/apps/$app_id.png"
   echo "Icons: $icons_dir"
 
   # The launcher's Exec is the absolute binary path, so it goes stale when the prefix or the
