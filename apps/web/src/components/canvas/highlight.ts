@@ -5,8 +5,10 @@ import c from "highlight.js/lib/languages/c";
 import cpp from "highlight.js/lib/languages/cpp";
 import csharp from "highlight.js/lib/languages/csharp";
 import css from "highlight.js/lib/languages/css";
+import diff from "highlight.js/lib/languages/diff";
 import dockerfile from "highlight.js/lib/languages/dockerfile";
 import go from "highlight.js/lib/languages/go";
+import graphql from "highlight.js/lib/languages/graphql";
 import ini from "highlight.js/lib/languages/ini";
 import java from "highlight.js/lib/languages/java";
 import javascript from "highlight.js/lib/languages/javascript";
@@ -20,6 +22,8 @@ import powershell from "highlight.js/lib/languages/powershell";
 import python from "highlight.js/lib/languages/python";
 import ruby from "highlight.js/lib/languages/ruby";
 import rust from "highlight.js/lib/languages/rust";
+import scss from "highlight.js/lib/languages/scss";
+import shell from "highlight.js/lib/languages/shell";
 import sql from "highlight.js/lib/languages/sql";
 import swift from "highlight.js/lib/languages/swift";
 import typescript from "highlight.js/lib/languages/typescript";
@@ -31,8 +35,10 @@ hljs.registerLanguage("c", c);
 hljs.registerLanguage("cpp", cpp);
 hljs.registerLanguage("csharp", csharp);
 hljs.registerLanguage("css", css);
+hljs.registerLanguage("diff", diff);
 hljs.registerLanguage("dockerfile", dockerfile);
 hljs.registerLanguage("go", go);
+hljs.registerLanguage("graphql", graphql);
 hljs.registerLanguage("ini", ini);
 hljs.registerLanguage("java", java);
 hljs.registerLanguage("javascript", javascript);
@@ -46,6 +52,8 @@ hljs.registerLanguage("powershell", powershell);
 hljs.registerLanguage("python", python);
 hljs.registerLanguage("ruby", ruby);
 hljs.registerLanguage("rust", rust);
+hljs.registerLanguage("scss", scss);
+hljs.registerLanguage("shell", shell);
 hljs.registerLanguage("sql", sql);
 hljs.registerLanguage("swift", swift);
 hljs.registerLanguage("typescript", typescript);
@@ -67,6 +75,8 @@ const KINDS: Record<string, FileKind | undefined> = {
   tsx: { label: "TypeScript", grammar: "typescript" },
   js: { label: "JavaScript", grammar: "javascript" },
   jsx: { label: "JavaScript", grammar: "javascript" },
+  mjs: { label: "JavaScript", grammar: "javascript" },
+  cjs: { label: "JavaScript", grammar: "javascript" },
   rs: { label: "Rust", grammar: "rust" },
   py: { label: "Python", grammar: "python" },
   json: { label: "JSON", grammar: "json" },
@@ -76,7 +86,28 @@ const KINDS: Record<string, FileKind | undefined> = {
   yml: { label: "YAML", grammar: "yaml" },
   yaml: { label: "YAML", grammar: "yaml" },
   sh: { label: "Shell", grammar: "bash" },
+  bash: { label: "Shell", grammar: "bash" },
+  zsh: { label: "Shell", grammar: "bash" },
   go: { label: "Go", grammar: "go" },
+  c: { label: "C", grammar: "c" },
+  h: { label: "C", grammar: "c" },
+  cpp: { label: "C++", grammar: "cpp" },
+  hpp: { label: "C++", grammar: "cpp" },
+  cs: { label: "C#", grammar: "csharp" },
+  java: { label: "Java", grammar: "java" },
+  kt: { label: "Kotlin", grammar: "kotlin" },
+  swift: { label: "Swift", grammar: "swift" },
+  rb: { label: "Ruby", grammar: "ruby" },
+  php: { label: "PHP", grammar: "php" },
+  lua: { label: "Lua", grammar: "lua" },
+  sql: { label: "SQL", grammar: "sql" },
+  ps1: { label: "PowerShell", grammar: "powershell" },
+  xml: { label: "XML", grammar: "xml" },
+  svg: { label: "SVG", grammar: "xml" },
+  scss: { label: "SCSS", grammar: "scss" },
+  graphql: { label: "GraphQL", grammar: "graphql" },
+  diff: { label: "Diff", grammar: "diff" },
+  patch: { label: "Diff", grammar: "diff" },
 };
 
 export function describeFile(path: string): FileKind {

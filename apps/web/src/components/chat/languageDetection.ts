@@ -32,9 +32,28 @@ function isJson(text: string): boolean {
   }
 }
 
+/**
+ * Lines only terminal output has: a stack frame, a Python traceback, a log level tag, a shell
+ * prompt, or a colour escape. The model reads the JSON and paths around them as code.
+ */
+const TERMINAL_LINE = new RegExp(
+  [
+    String.raw`^\s+at \S.*:\d+(:\d+)?\)?$`,
+    String.raw`^Traceback \(most recent call last\):`,
+    String.raw`^\s+File ".+", line \d+`,
+    String.raw`^\s*\[(ERROR|WARN|WARNING|INFO|DEBUG|TRACE|FATAL|error|warn|warning|info|debug|trace|fatal)\]`,
+    String.raw`^\s*(ERROR|WARN|WARNING|INFO|DEBUG|TRACE|FATAL):\s`,
+    String.raw`^(\S+@\S+:)?~?\/\S*.*\s[$#%>❯]\s*$`,
+    String.raw`^\s*[$❯] \S`,
+    String.raw`\x1b\[`,
+  ].join("|"),
+  "m",
+);
+
 /** The language of a piece of code as VS Code would detect it, or null when it is unclear. */
 export function detectLanguage(text: string): Promise<string | null> {
   if (isJson(text)) return Promise.resolve("json");
+  if (TERMINAL_LINE.test(text)) return Promise.resolve(null);
   return new Promise((resolve) => {
     const id = nextId++;
     pending.set(id, resolve);

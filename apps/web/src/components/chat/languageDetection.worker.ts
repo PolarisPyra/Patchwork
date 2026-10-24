@@ -80,6 +80,22 @@ function adjusted({ languageId, confidence }: ModelResult): number {
 }
 
 /**
+ * Whether VS Code would take the model's best guess: confident enough before and after the
+ * corrections, and clearly ahead of the guesses close behind it.
+ */
+function isClearWinner([top, ...rest]: ModelResult[]): boolean {
+  if (!top || top.confidence < MIN_CONFIDENCE || adjusted(top) < MIN_CONFIDENCE) return false;
+  let kept = adjusted(top);
+  for (const result of rest) {
+    const confidence = adjusted(result);
+    if (kept - confidence >= MIN_CONFIDENCE) return true;
+    if (confidence <= MIN_CONFIDENCE) return false;
+    kept = confidence;
+  }
+  return false;
+}
+
+/**
  * Runs the package's webpack bundle, which loads its CPU backend with a CommonJS `require` that
  * the browser lacks, as VS Code's loader does.
  */
@@ -109,9 +125,10 @@ self.onmessage = async (e: MessageEvent<{ id: number; text: string }>) => {
   try {
     // VS Code reads the first 10,000 characters.
     const sample = text.slice(0, 10_000);
-    const [top] = await getModel().runModel(sample);
+    const results = await getModel().runModel(sample);
+    const top = results[0];
     const guess = top ? (LANGUAGES[top.languageId] ?? null) : null;
-    if (guess && adjusted(top) >= MIN_CONFIDENCE) language = guess;
+    if (guess && isClearWinner(results)) language = guess;
     else if (
       guess &&
       SHORT_CODE_LANGUAGES.has(guess) &&
