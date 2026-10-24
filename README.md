@@ -1,3 +1,5 @@
+<a href="https://github.com/PolarisPyra/Patchwork-ADE/releases/latest"><img align="right" src="https://img.shields.io/github/v/release/PolarisPyra/Patchwork-ADE?label=version" alt="Latest version"></a>
+
 # Patchwork
 
 Patchwork is a desktop workspace for coding agents. It runs Claude Code, Codex, Antigravity, and
