@@ -50,10 +50,15 @@ const TERMINAL_LINE = new RegExp(
   "m",
 );
 
+/** Whether the text has a line only terminal output has. */
+export function isTerminalOutput(text: string): boolean {
+  return TERMINAL_LINE.test(text);
+}
+
 /** The language of a piece of code as VS Code would detect it, or null when it is unclear. */
 export function detectLanguage(text: string): Promise<string | null> {
   if (isJson(text)) return Promise.resolve("json");
-  if (TERMINAL_LINE.test(text)) return Promise.resolve(null);
+  if (isTerminalOutput(text)) return Promise.resolve(null);
   return new Promise((resolve) => {
     const id = nextId++;
     pending.set(id, resolve);

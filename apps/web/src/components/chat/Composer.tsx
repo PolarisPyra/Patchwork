@@ -13,7 +13,7 @@ import {
   type ProviderSlashCommand,
 } from "~/api";
 import AccessPicker from "~/components/chat/AccessPicker";
-import { detectLanguage } from "~/components/chat/languageDetection";
+import { detectLanguage, isTerminalOutput } from "~/components/chat/languageDetection";
 import EffortPicker from "~/components/chat/EffortPicker";
 import AttachmentChip from "~/components/chat/AttachmentChip";
 import { commandScore, SLASH_COMMANDS } from "~/components/chat/composerActions";
@@ -107,6 +107,29 @@ function isMonospaceHtml(html: string): boolean {
   const body = new DOMParser().parseFromString(html, "text/html").body;
   if (body.querySelector("p, h1, h2, h3, h4, h5, h6, li, table, blockquote")) return false;
   return /<pre[\s>]|monospace|white-space:\s*pre/i.test(html);
+}
+
+/** Characters a line of prose is made of: letters, digits, spaces and sentence punctuation. */
+const PROSE_CHAR = /[\p{L}\p{N}\s.,!?'"’“”:()\-–—/]/u;
+
+/**
+ * Whether plain text reads as sentences rather than code or output: no line is indented, symbol
+ * heavy, or terminal output, and most lines are long or end like a sentence.
+ */
+function isProse(text: string): boolean {
+  if (isTerminalOutput(text)) return false;
+  const lines = text.split("\n").filter((line) => line.trim());
+  let sentences = 0;
+  let words = 0;
+  for (const line of lines) {
+    if (/^\s/.test(line)) return false;
+    const chars = [...line];
+    if (chars.filter((c) => PROSE_CHAR.test(c)).length < chars.length * 0.97) return false;
+    const count = line.split(/\s+/).filter((word) => /\p{L}/u.test(word)).length;
+    words += count;
+    if (count >= 8 || /[.!?:,]$/.test(line)) sentences++;
+  }
+  return words >= 8 && sentences * 2 >= lines.length;
 }
 
 /** VS Code language ids that code blocks name differently. */
@@ -382,8 +405,10 @@ export default function Composer({
           view.dispatch(state.tr.insertText(text).scrollIntoView());
           return true;
         }
-        // Multi-line text from a page or document keeps its paragraphs and line breaks.
-        if (html && !isMonospaceHtml(html)) {
+        const language = vscodeLanguage(data.getData("vscode-editor-data")) ?? htmlLanguage(html);
+        // Multi-line text from a page or document, or plain text that reads as sentences, keeps
+        // its paragraphs and line breaks.
+        if ((html && !isMonospaceHtml(html)) || (!language && isProse(text))) {
           const paragraphs = text.split(/\n{2,}/).map((paragraph) =>
             state.schema.nodes.paragraph.create(
               null,
@@ -399,9 +424,8 @@ export default function Composer({
           view.dispatch(state.tr.replaceSelection(slice).scrollIntoView());
           return true;
         }
-        // Terminal output, code, and plain multi-line text go in as one code block, in the
-        // language VS Code or the web page gave the copy.
-        const language = vscodeLanguage(data.getData("vscode-editor-data")) ?? htmlLanguage(html);
+        // Terminal output and code go in as one code block, in the language VS Code or the web
+        // page gave the copy.
         const block = state.schema.nodes.codeBlock.create({ language }, state.schema.text(text));
         const tr = state.tr.replaceSelectionWith(block);
         // The caret goes to the line after the block, which is added when there is none, so
