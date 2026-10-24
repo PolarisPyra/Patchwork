@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Patchwork",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "identifier": "dev.patchwork.ade",
   "build": {
     "frontendDist": "../../web/dist",
