@@ -382,7 +382,7 @@ export function UsageLine({ usage, warnAbove }: { usage: TokenUsage; warnAbove: 
   const large = usage.context > warnAbove;
   return (
     <p
-      className={`m-0 mb-1.5 flex flex-wrap items-center justify-end gap-x-3 text-[length:var(--fs-xs)] tabular-nums ${large ? "text-warning" : "text-fg-muted"}`}
+      className={`m-0 mb-1.5 flex flex-wrap items-center justify-end gap-x-3 pr-3 text-[length:var(--fs-xs)] tabular-nums ${large ? "text-warning" : "text-fg-muted"}`}
     >
       <span className="inline-flex items-center gap-1">
         {large && <WarningIcon size={13} />}
