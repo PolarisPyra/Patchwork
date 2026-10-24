@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Cuts a release: checks the repo and the build, regenerates CHANGELOG.md with git-cliff, commits
-# it, tags the version, and pushes both. Pushing the tag starts the Release AppImage workflow,
-# which builds the AppImage and creates the GitHub release.
+# Cuts a release: checks the repo and the build, writes the new version into every package file,
+# regenerates CHANGELOG.md with git-cliff, commits both, tags the version, and pushes. Pushing the
+# tag starts the Release workflow, which builds the installers and creates the GitHub release.
 #
 # Usage: scripts/release.sh 0.2.0
 set -euo pipefail
@@ -51,16 +51,20 @@ echo "Release notes for $tag:"
 git cliff --config cliff.toml --unreleased --tag "$tag"
 echo
 
-read -r -p "Commit CHANGELOG.md, tag $tag, and push main and the tag to origin? [y/N] " answer
+read -r -p "Set the version to $version, commit it with CHANGELOG.md, tag $tag, and push main and the tag to origin? [y/N] " answer
 if [[ "$answer" != y && "$answer" != Y ]]; then
   die "Release cancelled. Nothing was changed."
 fi
 
+scripts/set-version.sh "$version"
+# Writes the crates' new version into Cargo.lock.
+cargo update --workspace --quiet
 git cliff --config cliff.toml --tag "$tag" --output CHANGELOG.md
-git add CHANGELOG.md
+git add CHANGELOG.md Cargo.lock package.json apps/web/package.json apps/desktop/package.json \
+  apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/Cargo.toml apps/server/Cargo.toml
 git commit -m "Release $tag"
 git tag -a "$tag" -m "Patchwork $version"
 git push origin main "$tag"
 
-echo "Pushed $tag. The Release AppImage workflow is building the AppImage and will create the"
-echo "GitHub release. Follow it in the Actions tab."
+echo "Pushed $tag. The Release workflow is building the installers and will create the GitHub"
+echo "release. Follow it in the Actions tab."

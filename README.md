@@ -84,6 +84,19 @@ Other project files:
 - [CLAUDE.md](CLAUDE.md): project rules for Claude Code
 - [UI checks](scripts/qa/README.md): browser measurements and screenshots of the dev session
 
+## Releasing
+
+Each release is a version tag, such as `v0.4.9`. The app shows its version next to the project
+name in the top left corner.
+
+1. Commit and push the changes for the release to `main`.
+2. Run `pnpm release 0.4.9` from the repo root, with the new version number.
+3. Read the release notes it prints, then type `y` to confirm.
+
+The script checks the build, writes the version into every package file, regenerates
+`CHANGELOG.md`, commits them as `Release v0.4.9`, tags the commit, and pushes. The tag starts the
+Release workflow, which builds the Linux, Windows, and macOS installers and publishes the GitHub
+release. [Releasing](docs/releasing.md) has the details.
 
 ## Contributing
 

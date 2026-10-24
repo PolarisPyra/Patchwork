@@ -53,16 +53,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Set version from tag
-        # The tag is the source of truth. Local builds keep the placeholder version in these files.
+        # scripts/release.sh already wrote the tag's version into the repo; this makes a tag pushed
+        # without the script build with its own version too.
         if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          for file in package.json apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json; do
-            jq --arg v "$version" '.version = $v' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
-          done
-          for file in apps/desktop/src-tauri/Cargo.toml apps/server/Cargo.toml; do
-            sed -i "0,/^version = /{s/^version = .*/version = \"$version\"/}" "$file"
-          done
+        run: scripts/set-version.sh "${GITHUB_REF_NAME#v}"
 
       - name: Build AppImage
         run: scripts/build.sh appimage
@@ -104,15 +98,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Set version from tag
+        # scripts/release.sh already wrote the tag's version into the repo; this makes a tag pushed
+        # without the script build with its own version too.
         if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          for file in package.json apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json; do
-            jq --arg v "$version" '.version = $v' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
-          done
-          for file in apps/desktop/src-tauri/Cargo.toml apps/server/Cargo.toml; do
-            sed -i "0,/^version = /{s/^version = .*/version = \"$version\"/}" "$file"
-          done
+        run: scripts/set-version.sh "${GITHUB_REF_NAME#v}"
 
       - name: Build installer
         run: pnpm --filter patchwork-desktop exec tauri build --bundles nsis
@@ -152,16 +141,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Set version from tag
+        # scripts/release.sh already wrote the tag's version into the repo; this makes a tag pushed
+        # without the script build with its own version too.
         if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          for file in package.json apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json; do
-            jq --arg v "$version" '.version = $v' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
-          done
-          for file in apps/desktop/src-tauri/Cargo.toml apps/server/Cargo.toml; do
-            # BSD sed has no `0,/re/` address, so perl replaces only the first match instead.
-            perl -0pi -e "s/^version = .*/version = \"$version\"/m" "$file"
-          done
+        run: scripts/set-version.sh "${GITHUB_REF_NAME#v}"
 
       - name: Build disk image
         run: pnpm --filter patchwork-desktop exec tauri build --bundles dmg

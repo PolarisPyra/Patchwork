@@ -63,9 +63,9 @@ Rules for coding agents working in the Rust code in this repo (`apps/server` and
 ## Pushing and releasing
 
 - **Pushing to `main`** (no tag) is a plain `git push origin main`. It builds nothing. Only push when the user asks.
-- **Tagged builds** are releases. Cut one only when the user asks, with `scripts/release.sh <version>` (for example `scripts/release.sh 0.2.0`) from a clean `main` that matches `origin/main`. The script runs the checks, shows the release notes, and waits for confirmation before it commits `Release v<version>`, creates the annotated `v<version>` tag, and pushes `main` and the tag.
-- Pushing the tag starts the **Release AppImage** workflow (`.github/workflows/release-appimage.yml`). It writes the tag's version into the package and Cargo manifests, builds the AppImage on Ubuntu 22.04, and creates a GitHub release named `Patchwork v<version>`.
-- To check the build without a release, run the workflow by hand from the Actions tab (**Run workflow**). It builds with the placeholder version and creates no release.
+- **Tagged builds** are releases. Cut one only when the user asks, with `pnpm release <version>` (for example `pnpm release 0.2.0`, which runs `scripts/release.sh`) from a clean `main` that matches `origin/main`. The script runs the checks, shows the release notes, and waits for confirmation before it writes the version into every package file with `scripts/set-version.sh`, commits `Release v<version>`, creates the annotated `v<version>` tag, and pushes `main` and the tag. The repo's version always matches the latest tag.
+- Pushing the tag starts the **Release** workflow (`.github/workflows/release-appimage.yml`). It runs `scripts/set-version.sh` with the tag's version, builds the Linux, Windows, and macOS installers, and creates a GitHub release named `Patchwork v<version>`.
+- To check the build without a release, run the workflow by hand from the Actions tab (**Run workflow**). It builds with the last released version and creates no release.
 - Never edit `CHANGELOG.md` by hand, and never set version numbers by hand. Tags must start with `v` followed by a digit.
 - Full details are in [docs/releasing.md](docs/releasing.md).
 

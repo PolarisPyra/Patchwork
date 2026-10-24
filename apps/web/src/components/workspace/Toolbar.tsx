@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { CaretDownIcon, ChatsIcon, FolderPlusIcon } from "@phosphor-icons/react";
+import { getVersion } from "@tauri-apps/api/app";
 import type { Project } from "~/api";
 import Dropdown from "~/components/workspace/Dropdown";
 
@@ -21,6 +23,17 @@ function initials(name: string): string {
   return Array.from(name.trim()).slice(0, 2).join("").toUpperCase();
 }
 
+/** The running app's version, as built from its release tag; null until it loads. */
+function useAppVersion(): string | null {
+  const [version, setVersion] = useState<string | null>(null);
+  useEffect(() => {
+    getVersion()
+      .then(setVersion)
+      .catch(() => setVersion(null));
+  }, []);
+  return version;
+}
+
 interface ToolbarProps {
   project: Project | null;
   projects: Project[];
@@ -35,6 +48,7 @@ export default function Toolbar({
   onOpenFolder,
 }: ToolbarProps) {
   const name = project?.name ?? "";
+  const version = useAppVersion();
 
   return (
     <header className="flex min-w-0 items-center gap-1.5 border-b border-border bg-app pr-2 pl-[calc((var(--activity-bar-w)_+_4px_-_20px)/2_-_6px)]">
@@ -96,6 +110,11 @@ export default function Toolbar({
           )}
         </Dropdown>
       </div>
+      {version && (
+        <span className="ml-auto flex-none rounded-full border border-border bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-2 py-px text-[length:var(--fs-xs)] leading-4 text-fg-muted tabular-nums">
+          v{version}
+        </span>
+      )}
     </header>
   );
 }

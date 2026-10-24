@@ -1,6 +1,6 @@
 {
   "name": "@patchwork/monorepo",
-  "version": "0.1.0",
+  "version": "0.4.8",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,6 +9,7 @@
     "build": "pnpm --filter patchwork-desktop build",
     "typecheck": "pnpm --filter patchwork-web typecheck",
     "test": "cargo test --workspace",
+    "release": "scripts/release.sh",
     "tauri": "pnpm --filter patchwork-desktop tauri",
     "format": "prettier --write --log-level warn \"apps/**/*.tsx\"",
     "format:check": "prettier --check \"apps/**/*.tsx\"",
