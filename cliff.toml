@@ -29,6 +29,10 @@ trim = true
 conventional_commits = false
 filter_unconventional = false
 split_commits = false
+# Rewords pushed commit subjects that describe a change too narrowly.
+commit_preprocessors = [
+    { pattern = "^Stop labelling pasted terminal output as JavaScript", replace = "Fix pasted text getting the wrong syntax highlighting language" },
+]
 commit_parsers = [
     { message = "^(Fix|Fixed|Repair|Stop|Prevent|Correct)", group = "Fixed" },
     { message = "^(Add|Show|Support|Allow|Introduce|Let|Remember|Reopen|Animate|Draw|Track|List|Render|Enable|Create)", group = "Added" },
