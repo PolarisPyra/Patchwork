@@ -19,7 +19,7 @@ export const SLASH_COMMANDS = [
   {
     name: "/compact",
     runs: "send",
-    description: "Ask Claude to summarise the conversation to free context",
+    description: "Summarise the conversation to free context",
   },
 ] as const satisfies readonly { name: string; runs: Runs; description: string }[];
 

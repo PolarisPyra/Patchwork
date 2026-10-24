@@ -257,19 +257,19 @@ export default function Composer({
   const [menuClosed, setMenuClosed] = useState(false);
   const [dispatchMenuOpen, setDispatchMenuOpen] = useState(false);
   const [commandIndex, setCommandIndex] = useState(0);
-  // Antigravity and OpenCode read the message as a prompt, so there are no commands to offer.
-  const slash =
-    agent !== "antigravity" && agent !== "opencode" && /^\/\S*$/.test(value)
-      ? value.toLowerCase()
-      : null;
+  // Antigravity reads the message as a prompt, so there are no commands to offer.
+  const slash = agent !== "antigravity" && /^\/\S*$/.test(value) ? value.toLowerCase() : null;
   const builtInNames = new Set(SLASH_COMMANDS.map((command) => command.name.slice(1)));
   const commands = [
-    ...SLASH_COMMANDS,
+    // Patchwork does not run /goal in OpenCode.
+    ...SLASH_COMMANDS.filter((command) => agent !== "opencode" || command.name !== "/goal"),
     ...providerSlashCommands
       .filter((command) => !builtInNames.has(command.name.replace(/^\//, "")))
       .map((command) => ({
         name: command.name.startsWith("/") ? command.name : `/${command.name}`,
-        description: command.description ?? "Claude Code command",
+        description:
+          command.description ??
+          (agent === "opencode" ? "OpenCode command" : "Claude Code command"),
       })),
   ];
   const matches =

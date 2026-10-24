@@ -8,8 +8,8 @@ use std::sync::OnceLock;
 use serde_json::{Value, json};
 
 use crate::types::{
-    AccessMode, AgentKind, AgentStatus, Attachment, AttachmentKind, ModelOption, Question,
-    QuestionOption, TokenUsage,
+    AccessMode, AgentKind, AgentStatus, Attachment, AttachmentKind, ModelOption,
+    ProviderSlashCommand, Question, QuestionOption, TokenUsage,
 };
 use super::Parsed;
 use super::ToolStart;
@@ -270,8 +270,37 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         "permissions": serve_permissions(spec),
         "text": prompt(spec),
         "files": image_paths(spec.attachments),
+        "command": command_of(spec),
     })
     .to_string()
+}
+
+/// A message that is only `/name` and its arguments, as `{name, text}`. The bridge runs it as
+/// one of OpenCode's commands when the session has one by that name, else sends it as a prompt.
+fn command_of(spec: &TurnSpec) -> Option<Value> {
+    if !spec.attachments.is_empty() {
+        return None;
+    }
+    let rest = spec.text.trim().strip_prefix('/')?;
+    let (name, text) = rest.split_once(char::is_whitespace).unwrap_or((rest, ""));
+    (!name.is_empty() && !name.contains('/'))
+        .then(|| json!({ "name": name, "text": text.trim_start() }))
+}
+
+/// OpenCode's commands for the slash menu.
+fn slash_commands(list: &Value) -> Vec<ProviderSlashCommand> {
+    list.as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|c| {
+            let name = c["name"].as_str()?.trim();
+            let description = c["description"].as_str().map(str::trim).filter(|d| !d.is_empty());
+            (!name.is_empty()).then(|| ProviderSlashCommand {
+                name: name.into(),
+                description: description.map(String::from),
+            })
+        })
+        .collect()
 }
 
 fn image_paths(attachments: &[Attachment]) -> Vec<String> {
@@ -339,6 +368,7 @@ fn parse_serve(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
             .into_iter()
             .collect(),
         Some("bridge.session_lost") => vec![Parsed::SessionLost],
+        Some("bridge.commands") => vec![Parsed::SlashCommands(slash_commands(&v["commands"]))],
         Some("bridge.steered") => vec![Parsed::Steered],
         Some("bridge.steer_rejected") => vec![Parsed::SteerRejected(message_of(v))],
         Some("bridge.error") => vec![Parsed::Error(message_of(v))],

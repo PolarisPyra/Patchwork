@@ -439,12 +439,12 @@ export default function Chat({
     }
   }
 
-  // /compact is passed to Claude Code, which compacts its own context. Other agents have no
-  // such command, so the request is refused here rather than sent as plain text.
+  // /compact is passed to Claude Code or OpenCode, which compact their own context. Other agents
+  // have no such command, so the request is refused here rather than sent as plain text.
   function compactChat() {
     setDraft("");
-    if (!thread || thread.agent !== "claude") {
-      setError("/compact works in Claude chats only.");
+    if (!thread || (thread.agent !== "claude" && thread.agent !== "opencode")) {
+      setError("/compact works in Claude and OpenCode chats only.");
       return;
     }
     void dispatch("/compact", [], true);

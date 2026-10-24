@@ -20,6 +20,9 @@ pub const BRIDGE_ARG: &str = "--opencode-bridge";
 /// How long the server may take to print the address it listens on.
 const START_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// How long the server may take to load the folder's commands.
+const COMMANDS_TIMEOUT: Duration = Duration::from_secs(3);
+
 /// The turn, as the first stdin line.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,6 +43,16 @@ pub struct Request {
     pub text: String,
     /// Images sent with the message.
     pub files: Vec<String>,
+    /// A message that is only `/name` and its arguments.
+    #[serde(default)]
+    pub command: Option<SlashCommand>,
+}
+
+#[derive(Deserialize)]
+pub struct SlashCommand {
+    pub name: String,
+    /// What follows the name, OpenCode's `$ARGUMENTS`.
+    pub text: String,
 }
 
 /// Runs the bridge; the process exits with what this returns.
@@ -126,10 +139,7 @@ fn turn(request: &Request, tx: &Sender<Msg>, rx: &Receiver<Msg>) -> Result<(), S
     )?;
     // Subscribed before the prompt, so no event of the turn is missed.
     events(&api, &session_id, tx.clone())?;
-    api.post(
-        &format!("/api/session/{session_id}/prompt"),
-        &prompt_body(&request.text, &request.files),
-    )?;
+    send(&api, &session_id, request)?;
 
     // Steering messages sent but not yet taken into the turn; the turn ends once none wait.
     let mut steers = HashSet::new();
@@ -147,6 +157,44 @@ fn turn(request: &Request, tx: &Sender<Msg>, rx: &Receiver<Msg>) -> Result<(), S
         }
     }
     Ok(())
+}
+
+/// Starts the turn: `/compact` compacts the session, a command the folder has runs as that
+/// command, and any other message is a prompt.
+fn send(api: &Api, session_id: &str, request: &Request) -> Result<(), String> {
+    // Only a command waits for the list; any other turn lists the commands alongside.
+    let known = match &request.command {
+        Some(command) if command.name != "compact" => commands(api),
+        _ => {
+            let api = api.clone();
+            std::thread::spawn(move || commands(&api));
+            Vec::new()
+        }
+    };
+    let (route, body) = match &request.command {
+        Some(command) if command.name == "compact" => ("compact", json!({})),
+        Some(command) if known.contains(&command.name) => {
+            ("command", json!({ "name": command.name, "text": command.text }))
+        }
+        _ => ("prompt", prompt_body(&request.text, &request.files)),
+    };
+    api.post(&format!("/api/session/{session_id}/{route}"), &body).map(drop)
+}
+
+/// Lists the folder's commands for Patchwork's slash menu, and returns their names.
+fn commands(api: &Api) -> Vec<String> {
+    let started = std::time::Instant::now();
+    // A fresh server lists none until it has loaded the folder.
+    let list = loop {
+        let Ok(listed) = api.get("/api/command") else { return Vec::new() };
+        let list = listed["data"].as_array().cloned().unwrap_or_default();
+        if !list.is_empty() || started.elapsed() > COMMANDS_TIMEOUT {
+            break list;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    emit(&json!({"type": "bridge.commands", "commands": list}));
+    list.iter().filter_map(|c| c["name"].as_str().map(String::from)).collect()
 }
 
 /// Acts on one line from Patchwork: an approval or question reply, a steering message, or a stop.
@@ -344,6 +392,7 @@ impl Drop for Server {
 }
 
 /// Requests to the server, with its Basic credentials.
+#[derive(Clone)]
 struct Api {
     agent: ureq::Agent,
     stream_agent: ureq::Agent,
