@@ -34,6 +34,7 @@ import type { UpdateSettings } from "~/app/App";
 import { syncProjects } from "~/lib/projects";
 import { formatTokens } from "~/lib/tokens";
 import { AGENT_KINDS, describeAgent, errorText } from "~/lib/util";
+import logoManifest from "../../../../../assets/logos/manifest.json";
 import { CHIP_CLASS } from "~/components/chat/ModelPicker";
 import Dropdown from "~/components/workspace/Dropdown";
 import KeybindingsPane from "~/components/settings/KeybindingsPane";
@@ -133,7 +134,45 @@ const THEMES: { value: Theme; label: string }[] = [
   { value: "system", label: "System" },
 ];
 
+/** Preview image of each app icon color way, keyed by id. */
+const LOGO_URLS: Record<string, string> = Object.fromEntries(
+  Object.entries(
+    import.meta.glob<string>("../../../../../assets/logos/*.svg", {
+      eager: true,
+      query: "?url",
+      import: "default",
+    }),
+  ).map(([path, url]) => [path.slice(path.lastIndexOf("/") + 1, -".svg".length), url]),
+);
+
 function AppearancePane({ settings, updateSettings }: PaneProps) {
+  const logo = settings.logo ?? logoManifest.default;
+  return (
+    <>
+      <ThemeRow settings={settings} updateSettings={updateSettings} />
+      <div className="border-b border-border py-2.5">
+        <div className="font-semibold">App icon</div>
+        <div role="radiogroup" aria-label="App icon" className="mt-2 grid grid-cols-8 gap-1">
+          {logoManifest.icons.map((icon) => (
+            <button
+              key={icon.id}
+              role="radio"
+              aria-checked={logo === icon.id}
+              aria-label={icon.name}
+              title={icon.name}
+              className={`grid aspect-square cursor-pointer place-items-center rounded-[var(--radius-sm)] border p-2 ${logo === icon.id ? "border-accent bg-accent-soft" : "border-transparent bg-transparent hover:bg-hover"}`}
+              onClick={() => void updateSettings((s) => ({ ...s, logo: icon.id }))}
+            >
+              <img src={LOGO_URLS[icon.id]} alt="" draggable={false} className="size-full" />
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function ThemeRow({ settings, updateSettings }: PaneProps) {
   return (
     <div className="flex items-center gap-3 border-b border-border py-2.5">
       <div className="min-w-0 flex-1">

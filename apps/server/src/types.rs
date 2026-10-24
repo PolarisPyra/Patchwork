@@ -68,6 +68,8 @@ pub struct Settings {
     /// Shell that agents run commands in. None follows the SHELL environment variable.
     pub shell: Option<String>,
     pub notifications: NotificationSettings,
+    /// Id of the app icon color way in `assets/logos/manifest.json`. None uses the manifest default.
+    pub logo: Option<String>,
 }
 
 /// Desktop notifications shown while Patchwork is not the focused window.

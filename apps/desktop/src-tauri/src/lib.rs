@@ -2,6 +2,7 @@
 //! agent events to the web UI on the `"agent-event"` channel.
 
 mod clipboard;
+mod logo;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -39,8 +40,14 @@ fn get_settings(server: Srv) -> Settings {
 }
 
 #[tauri::command]
-fn save_settings(server: Srv, settings: Settings) -> Res<()> {
-    server.save_settings(settings)
+fn save_settings(app: AppHandle, server: Srv, settings: Settings) -> Res<()> {
+    let logo = settings.logo.clone();
+    let logo_changed = server.store.settings().logo != logo;
+    server.save_settings(settings)?;
+    if logo_changed {
+        logo::apply(&app, logo.as_deref());
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -443,7 +450,7 @@ fn show_main_window(app: &AppHandle) {
 fn create_tray(app: &tauri::App) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "show", "Show Patchwork", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    let mut tray = TrayIconBuilder::new()
+    let mut tray = TrayIconBuilder::with_id(logo::TRAY_ID)
         .menu(&Menu::with_items(app, &[&show, &quit])?)
         .tooltip("Patchwork")
         .on_menu_event(|app, event| match event.id.as_ref() {
@@ -574,6 +581,7 @@ pub fn run() {
             )?;
             server.start_idle_compaction();
             server.continue_interrupted();
+            let logo = server.store.settings().logo;
             app.manage(server);
             app.manage(ProjectWatch::default());
             let tray = create_tray(app);
@@ -581,6 +589,8 @@ pub fn run() {
                 log::warn!("system tray unavailable, closing the window quits: {e}");
             }
             app.manage(TrayAvailable(tray.is_ok()));
+            app.manage(logo::LogoChanges::default());
+            logo::apply(app.handle(), logo.as_deref());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

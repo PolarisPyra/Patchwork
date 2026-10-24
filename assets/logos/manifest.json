@@ -1,0 +1,293 @@
+{
+  "default": "flare",
+  "icons": [
+    {
+      "id": "original",
+      "name": "Original",
+      "group": "Soft",
+      "colors": {
+        "top": "#FF7EB3",
+        "left": "#5BC0EB",
+        "right": "#9B5DE5"
+      },
+      "svg": "original.svg",
+      "png": "original.png"
+    },
+    {
+      "id": "sunrise",
+      "name": "Sunrise",
+      "group": "Soft",
+      "colors": {
+        "top": "#FFE66D",
+        "left": "#FFB86B",
+        "right": "#FF7EB3"
+      },
+      "svg": "sunrise.svg",
+      "png": "sunrise.png"
+    },
+    {
+      "id": "meadow",
+      "name": "Meadow",
+      "group": "Soft",
+      "colors": {
+        "top": "#FFE66D",
+        "left": "#7BE495",
+        "right": "#5BC0EB"
+      },
+      "svg": "meadow.svg",
+      "png": "meadow.png"
+    },
+    {
+      "id": "lagoon",
+      "name": "Lagoon",
+      "group": "Soft",
+      "colors": {
+        "top": "#7BE495",
+        "left": "#5BC0EB",
+        "right": "#9B5DE5"
+      },
+      "svg": "lagoon.svg",
+      "png": "lagoon.png"
+    },
+    {
+      "id": "peach",
+      "name": "Peach",
+      "group": "Soft",
+      "colors": {
+        "top": "#FFB86B",
+        "left": "#FF7EB3",
+        "right": "#9B5DE5"
+      },
+      "svg": "peach.svg",
+      "png": "peach.png"
+    },
+    {
+      "id": "lilac",
+      "name": "Lilac",
+      "group": "Soft",
+      "colors": {
+        "top": "#D9C6FA",
+        "left": "#9B5DE5",
+        "right": "#6A3FC1"
+      },
+      "svg": "lilac.svg",
+      "png": "lilac.png"
+    },
+    {
+      "id": "electric",
+      "name": "Electric",
+      "group": "Bright",
+      "colors": {
+        "top": "#FFD60A",
+        "left": "#FF3D8B",
+        "right": "#3D7BFF"
+      },
+      "svg": "electric.svg",
+      "png": "electric.png"
+    },
+    {
+      "id": "tropic",
+      "name": "Tropic",
+      "group": "Bright",
+      "colors": {
+        "top": "#A3E635",
+        "left": "#22C7F0",
+        "right": "#8B3DFF"
+      },
+      "svg": "tropic.svg",
+      "png": "tropic.png"
+    },
+    {
+      "id": "popsicle",
+      "name": "Popsicle",
+      "group": "Bright",
+      "colors": {
+        "top": "#FF7A1A",
+        "left": "#E83CF0",
+        "right": "#8B3DFF"
+      },
+      "svg": "popsicle.svg",
+      "png": "popsicle.png"
+    },
+    {
+      "id": "arcade",
+      "name": "Arcade",
+      "group": "Bright",
+      "colors": {
+        "top": "#22C7F0",
+        "left": "#3D7BFF",
+        "right": "#8B3DFF"
+      },
+      "svg": "arcade.svg",
+      "png": "arcade.png"
+    },
+    {
+      "id": "zest",
+      "name": "Zest",
+      "group": "Bright",
+      "colors": {
+        "top": "#FFD60A",
+        "left": "#FF7A1A",
+        "right": "#FF3D8B"
+      },
+      "svg": "zest.svg",
+      "png": "zest.png"
+    },
+    {
+      "id": "neon-mint",
+      "name": "Neon Mint",
+      "group": "Bright",
+      "colors": {
+        "top": "#2EE6A6",
+        "left": "#22C7F0",
+        "right": "#3D7BFF"
+      },
+      "svg": "neon-mint.svg",
+      "png": "neon-mint.png"
+    },
+    {
+      "id": "flare",
+      "name": "Flare",
+      "group": "Bright",
+      "colors": {
+        "top": "#E83CF0",
+        "left": "#8B3DFF",
+        "right": "#3D7BFF"
+      },
+      "svg": "flare.svg",
+      "png": "flare.png"
+    },
+    {
+      "id": "lime-pop",
+      "name": "Lime Pop",
+      "group": "Bright",
+      "colors": {
+        "top": "#A3E635",
+        "left": "#2EE6A6",
+        "right": "#22C7F0"
+      },
+      "svg": "lime-pop.svg",
+      "png": "lime-pop.png"
+    },
+    {
+      "id": "sherbet",
+      "name": "Sherbet",
+      "group": "Bright",
+      "colors": {
+        "top": "#FFD60A",
+        "left": "#FF5A5F",
+        "right": "#FF3D8B"
+      },
+      "svg": "sherbet.svg",
+      "png": "sherbet.png"
+    },
+    {
+      "id": "mono-pink",
+      "name": "Mono Pink",
+      "group": "Mono",
+      "colors": {
+        "top": "#FFC2DC",
+        "left": "#FF7EB3",
+        "right": "#E0457F"
+      },
+      "svg": "mono-pink.svg",
+      "png": "mono-pink.png"
+    },
+    {
+      "id": "mono-blue",
+      "name": "Mono Blue",
+      "group": "Mono",
+      "colors": {
+        "top": "#BFE6F8",
+        "left": "#5BC0EB",
+        "right": "#2E86C1"
+      },
+      "svg": "mono-blue.svg",
+      "png": "mono-blue.png"
+    },
+    {
+      "id": "mono-violet",
+      "name": "Mono Violet",
+      "group": "Mono",
+      "colors": {
+        "top": "#D6C2FA",
+        "left": "#9B5DE5",
+        "right": "#6A30B8"
+      },
+      "svg": "mono-violet.svg",
+      "png": "mono-violet.png"
+    },
+    {
+      "id": "mono-green",
+      "name": "Mono Green",
+      "group": "Mono",
+      "colors": {
+        "top": "#C8F5D4",
+        "left": "#7BE495",
+        "right": "#3DAE5E"
+      },
+      "svg": "mono-green.svg",
+      "png": "mono-green.png"
+    },
+    {
+      "id": "mono-orange",
+      "name": "Mono Orange",
+      "group": "Mono",
+      "colors": {
+        "top": "#FFDDB5",
+        "left": "#FFB86B",
+        "right": "#F08A2E"
+      },
+      "svg": "mono-orange.svg",
+      "png": "mono-orange.png"
+    },
+    {
+      "id": "gunmetal",
+      "name": "Gunmetal",
+      "group": "Special",
+      "colors": {
+        "top": "#A3A7B2",
+        "left": "#6E717C",
+        "right": "#4A4C55"
+      },
+      "svg": "gunmetal.svg",
+      "png": "gunmetal.png"
+    },
+    {
+      "id": "midnight",
+      "name": "Midnight",
+      "group": "Special",
+      "colors": {
+        "top": "#454A6B",
+        "left": "#2D3047",
+        "right": "#1C1E2F"
+      },
+      "svg": "midnight.svg",
+      "png": "midnight.png"
+    },
+    {
+      "id": "gold",
+      "name": "Gold",
+      "group": "Special",
+      "colors": {
+        "top": "#FFE08A",
+        "left": "#F2B544",
+        "right": "#C98A1E"
+      },
+      "svg": "gold.svg",
+      "png": "gold.png"
+    },
+    {
+      "id": "snow",
+      "name": "Snow",
+      "group": "Special",
+      "colors": {
+        "top": "#FFFFFF",
+        "left": "#E4E6EC",
+        "right": "#C4C7D0"
+      },
+      "svg": "snow.svg",
+      "png": "snow.png"
+    }
+  ]
+}

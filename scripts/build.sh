@@ -96,6 +96,13 @@ install_app() {
   # template changes. Compare the rendered launcher with the installed copy before rewriting it.
   local rendered
   rendered="$(sed "s|@EXEC@|$bin_path|" packaging/patchwork.desktop)"
+  # HACK: see the launcher module in apps/desktop/src-tauri/src/logo.rs. The app points the
+  # launcher at the icon of the chosen color way, so keep that choice.
+  local chosen_icon
+  chosen_icon="$(sed -n "s/^Icon=\($app_id-logo-.*\)$/\1/p" "$launcher" 2> /dev/null || true)"
+  if [[ -n "$chosen_icon" && -f "$icons_dir/512x512/apps/$chosen_icon.png" ]]; then
+    rendered="$(sed "s|^Icon=.*|Icon=$chosen_icon|" <<< "$rendered")"
+  fi
   mkdir -p "$apps_dir"
   if [[ ! -f "$launcher" ]]; then
     echo "Launcher: new install, writing $launcher"

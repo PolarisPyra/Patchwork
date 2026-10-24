@@ -39,6 +39,8 @@ export interface Settings {
   /** Shell that agents run commands in; null follows the SHELL environment variable. */
   shell: string | null;
   notifications: NotificationSettings;
+  /** Id of the app icon color way in `assets/logos/manifest.json`; null uses the manifest default. */
+  logo: string | null;
 }
 
 /** Desktop notifications shown while Patchwork is not the focused window. */
@@ -397,6 +399,7 @@ export const DEFAULT_SETTINGS: Settings = {
     defaultModels: {},
   },
   notifications: { goalComplete: true, taskComplete: true },
+  logo: null,
 };
 
 /** Agent used for new tasks: the first connected one, else Claude Code. */
