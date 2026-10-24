@@ -100,18 +100,53 @@ const components: Components = {
 /** Highlighting waits this long after a block last changed, so a block still streaming is not re-highlighted every frame. */
 const HIGHLIGHT_DELAY_MS = 150;
 
-export default memo(function Markdown({ text }: { text: string }) {
+export default memo(function Markdown({
+  text,
+  typed = false,
+}: {
+  text: string;
+  /** The user wrote the text, so an indented line is pasted text rather than a code block. */
+  typed?: boolean;
+}) {
   // Each block parses on its own, so a streaming reply re-parses only its last block.
   return (
     <div className="min-w-0 leading-[1.6] [word-break:break-word] selectable [&>:last-child]:mb-0 [&_p]:mt-0 [&_p]:mb-2">
       {splitBlocks(text).map((block, i) => (
-        <MarkdownBlock key={i} text={block} />
+        <MarkdownBlock key={i} text={block} typed={typed} />
       ))}
     </div>
   );
 });
 
 const REMARK_PLUGINS = [remarkGfm];
+
+/** Turns off indented code blocks; fenced blocks still render as code. */
+function remarkNoIndentedCode(this: { data: () => object }) {
+  const data = this.data() as { micromarkExtensions?: object[] };
+  (data.micromarkExtensions ??= []).push({ disable: { null: ["codeIndented"] } });
+}
+const TYPED_REMARK_PLUGINS = [remarkGfm, remarkNoIndentedCode];
+
+type HastNode = { type: string; tagName?: string; value?: string; children?: HastNode[] };
+
+/**
+ * A hard break renders as `<br>` followed by the newline that ended its line. Where paragraphs
+ * keep their newlines, as in the user's bubble, that newline would show as a second break, so it
+ * is dropped.
+ */
+function rehypeTrimBreaks() {
+  const walk = (node: HastNode) => {
+    node.children?.forEach((child, i, siblings) => {
+      const next = siblings[i + 1];
+      if (child.tagName === "br" && next?.type === "text" && next.value?.startsWith("\n")) {
+        next.value = next.value.slice(1);
+      }
+      walk(child);
+    });
+  };
+  return walk;
+}
+const REHYPE_PLUGINS = [rehypeTrimBreaks];
 /** Blocks whose rendered output is kept, most recently used last. */
 const PARSED_LIMIT = 1000;
 const parsed = new Map<string, ReactElement>();
@@ -119,28 +154,37 @@ const parsed = new Map<string, ReactElement>();
 let lastParsed = "";
 
 /** A block's rendered output, kept so a row the chat list remounts while scrolling is not parsed again. */
-function parseBlock(text: string): ReactElement {
-  let element = parsed.get(text);
+function parseBlock(text: string, typed: boolean): ReactElement {
+  // Typed text parses differently, so it is cached under its own key.
+  const key = typed ? `typed:${text}` : text;
+  let element = parsed.get(key);
   if (element) {
-    parsed.delete(text);
+    parsed.delete(key);
   } else {
     // react-markdown's synchronous renderer uses no hooks, so its output can be reused.
     element = ReactMarkdown({
       children: text,
-      remarkPlugins: REMARK_PLUGINS,
+      remarkPlugins: typed ? TYPED_REMARK_PLUGINS : REMARK_PLUGINS,
+      rehypePlugins: REHYPE_PLUGINS,
       components,
       skipHtml: true,
     });
-    if (lastParsed && text.startsWith(lastParsed)) parsed.delete(lastParsed);
+    if (lastParsed && key.startsWith(lastParsed)) parsed.delete(lastParsed);
     if (parsed.size >= PARSED_LIMIT) parsed.delete(parsed.keys().next().value!);
-    lastParsed = text;
+    lastParsed = key;
   }
-  parsed.set(text, element);
+  parsed.set(key, element);
   return element;
 }
 
-const MarkdownBlock = memo(function MarkdownBlock({ text }: { text: string }) {
-  return parseBlock(text);
+const MarkdownBlock = memo(function MarkdownBlock({
+  text,
+  typed,
+}: {
+  text: string;
+  typed: boolean;
+}) {
+  return parseBlock(text, typed);
 });
 
 /** An opening or closing code fence: its marker, then the rest of the line. */

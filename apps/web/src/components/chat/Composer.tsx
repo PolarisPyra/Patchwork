@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpIcon, CaretDownIcon, CheckIcon, SquareIcon } from "@phosphor-icons/react";
 import { EditorContent, useEditor } from "@tiptap/react";
+import { TextSelection } from "@tiptap/pm/state";
 import {
   api,
   type AccessMode,
@@ -96,6 +97,14 @@ const MENTION_LIMIT = 8;
 
 const EDITOR_CLASS =
   "min-h-16 max-h-[280px] overflow-y-auto whitespace-pre-wrap break-words px-1.5 text-fg text-[length:var(--fs-md)] leading-[20px] outline-none selectable [&_p]:m-0 [&_ul]:my-0 [&_ol]:my-0 [&_ul]:pl-5 [&_ol]:pl-5 [&_pre]:my-1 [&_pre]:rounded-[var(--radius-sm)] [&_pre]:bg-panel [&_pre]:px-2.5 [&_pre]:py-1.5 [&_pre]:font-[family-name:var(--font-mono)] [&_pre]:text-[12px] [&_code]:font-[family-name:var(--font-mono)] [&_code]:text-[12px]";
+
+/** Whether copied HTML is styled monospace text, as terminals and code editors copy it,
+ * rather than a document with paragraphs, lists or headings. */
+function isMonospaceHtml(html: string): boolean {
+  const body = new DOMParser().parseFromString(html, "text/html").body;
+  if (body.querySelector("p, h1, h2, h3, h4, h5, h6, li, table, blockquote")) return false;
+  return /<pre[\s>]|monospace|white-space:\s*pre/i.test(html);
+}
 
 /** Models per agent, fetched once per agent kind. */
 function useModels(agents: AgentKind[]): Partial<Record<AgentKind, ModelOption[]>> {
@@ -290,14 +299,27 @@ export default function Composer({
       attributes: { class: EDITOR_CLASS },
       handleKeyDown: (_view, event) => keyDown.current(event),
       // Plain multi-line text, such as terminal output, goes in as one code block with its lines
-      // and spaces kept. Text copied with HTML keeps the editor's default paste.
+      // and spaces kept. Terminals and editors that also copy styled monospace HTML count as
+      // plain text; other HTML keeps the editor's default paste.
       handlePaste: (view, event) => {
         const data = event.clipboardData;
         const text = data?.getData("text/plain").replace(/\r\n?/g, "\n").replace(/\n+$/, "") ?? "";
-        if (!text.includes("\n") || data?.types.includes("text/html")) return false;
+        if (!text.includes("\n")) return false;
+        if (data?.types.includes("text/html") && !isMonospaceHtml(data.getData("text/html"))) {
+          return false;
+        }
         const { state } = view;
         const block = state.schema.nodes.codeBlock.create(null, state.schema.text(text));
-        view.dispatch(state.tr.replaceSelectionWith(block).scrollIntoView());
+        const tr = state.tr.replaceSelectionWith(block);
+        // The caret goes to the line after the block, which is added when there is none, so
+        // typing goes on outside the pasted code.
+        const $end = tr.selection.$to;
+        const after = $end.after($end.depth);
+        if (!tr.doc.resolve(after).nodeAfter?.isTextblock) {
+          tr.insert(after, state.schema.nodes.paragraph.create());
+        }
+        tr.setSelection(TextSelection.create(tr.doc, after + 1));
+        view.dispatch(tr.scrollIntoView());
         return true;
       },
     },
@@ -503,6 +525,13 @@ export default function Composer({
   return (
     <div
       className={`relative flex flex-col gap-2 rounded-[8px] pt-3.5 pr-3 pb-2.5 pl-3 ${surface}`}
+      // The frame's padding and gaps belong to the text field: a click there keeps the caret in
+      // the draft, so Ctrl+A still selects the draft.
+      onMouseDown={(e) => {
+        if (e.target !== e.currentTarget || !editor) return;
+        e.preventDefault();
+        if (!editor.isFocused) editor.commands.focus("end");
+      }}
     >
       {menuOpen && (
         <div

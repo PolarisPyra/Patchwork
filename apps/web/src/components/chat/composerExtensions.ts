@@ -8,7 +8,7 @@ import Mention, { type MentionOptions } from "@tiptap/extension-mention";
 import { TableKit } from "@tiptap/extension-table";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { Plugin } from "@tiptap/pm/state";
+import { Plugin, Selection, TextSelection } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import CodeBlockNodeView from "~/components/chat/CodeBlockNodeView";
 import { codeHighlightPlugin } from "~/components/chat/codeHighlight";
@@ -118,6 +118,26 @@ const MarkdownTextBlocks = ["heading", "blockquote"].map((tokenName) =>
   }),
 );
 
+/**
+ * Ctrl+A selects the draft as text from its first character to its last. WebKitGTK does not paint
+ * ProseMirror's select-all selection when the draft starts with a code block, so the draft looked
+ * unselected.
+ */
+const SelectAllText = Extension.create({
+  name: "selectAllText",
+  addKeyboardShortcuts() {
+    return {
+      "Mod-a": ({ editor }) => {
+        const { doc, tr } = editor.state;
+        const from = Selection.atStart(doc).from;
+        const to = Selection.atEnd(doc).to;
+        editor.view.dispatch(tr.setSelection(TextSelection.create(doc, from, to)));
+        return true;
+      },
+    };
+  },
+});
+
 /** The suggestions behind the `@` trigger: the project's files, filtered as the user types. */
 export type MentionSuggestion = MentionOptions["suggestion"];
 
@@ -131,7 +151,8 @@ import.meta.hot?.accept(() => window.location.reload());
  */
 export function composerExtensions(placeholder: string, mentionSuggestion: MentionSuggestion) {
   return [
-    // Links keep their Markdown form; clicking one in a draft does not open it.
+    // Links keep their Markdown form; clicking one in a draft does not open it. Pasted text only
+    // links URLs with a protocol, so file names such as start.sh or main.rs stay plain text.
     // Dropped files become attachments (see Chat.tsx), so the drop cursor would point at a
     // place nothing is inserted.
     // Headings and quotes stay as typed text (see MarkdownLine), so they do not become block nodes.
@@ -141,7 +162,11 @@ export function composerExtensions(placeholder: string, mentionSuggestion: Menti
       heading: false,
       dropcursor: false,
       trailingNode: false,
-      link: { openOnClick: false, autolink: false },
+      link: {
+        openOnClick: false,
+        autolink: false,
+        shouldAutoLink: (url) => /^[a-z][a-z0-9+.-]*:\/\//i.test(url),
+      },
     }),
     // Code blocks show their language in a header that can be changed.
     CodeBlock.extend({
@@ -160,6 +185,7 @@ export function composerExtensions(placeholder: string, mentionSuggestion: Menti
     Markdown,
     GoalCommand,
     MarkdownLine,
+    SelectAllText,
     ...MarkdownTextBlocks,
     FileMention.configure({
       HTMLAttributes: { class: MENTION_CLASS },

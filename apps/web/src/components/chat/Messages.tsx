@@ -272,11 +272,11 @@ const UserMessage = memo(function UserMessage({
             <div className="flex items-baseline gap-1.5">
               <span className={`flex-none ${GOAL_CLASS}`}>/goal</span>
               <div className="min-w-0 flex-1">
-                <Markdown text={objective} />
+                <Markdown text={objective} typed />
               </div>
             </div>
           ) : (
-            <Markdown text={text} />
+            <Markdown text={text} typed />
           )}
         </div>
       )}

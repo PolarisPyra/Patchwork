@@ -1,6 +1,7 @@
-// Pastes a numbered list into the composer the ways other apps put it on the clipboard (plain
-// text alone, and plain text with the HTML of a rendered code block) and prints the editor's
-// HTML for each, to show how a paste is taken in. Usage: node checks/composer-paste.mjs
+// Pastes text into the composer the ways other apps put it on the clipboard (plain text alone,
+// plain text with the HTML of a rendered code block, a line naming a file and a URL, and terminal
+// output with the styled monospace HTML Ghostty copies) and prints the editor's HTML and the
+// Markdown it sends for each. Usage: node checks/composer-paste.mjs
 
 import { openWorkspace } from "../lib/open.mjs";
 
@@ -24,6 +25,16 @@ const cases = {
   "highlighted code html": {
     "text/plain": text,
     "text/html": `<pre class="shiki"><code>${lines.join("\n")}</code></pre>`,
+  },
+  "one line with a file name and a url": {
+    "text/plain": "run ./start.sh, then open https://example.com/docs",
+  },
+  "terminal html": {
+    "text/plain": `~/project main > ./start.sh\n{\n  "region": {\n    "size": 49152\n  }\n}\n`,
+    "text/html":
+      '<div style="font-family: monospace; white-space: pre;">' +
+      '<div style="display: inline; font-weight: bold;">~/project</div>' +
+      '<div style="display: inline;"> main &gt; ./start.sh</div>\n{\n  "region": {\n    "size": 49152\n  }\n}\n</div>',
   },
 };
 
