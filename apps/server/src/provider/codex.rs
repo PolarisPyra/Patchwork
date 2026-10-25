@@ -12,6 +12,7 @@ use crate::types::AgentStatus;
 use crate::types::Attachment;
 use crate::types::AttachmentKind;
 use crate::types::Goal;
+use crate::types::TokenUsage;
 use crate::types::ModelOption;
 use crate::types::PlanStep;
 use crate::types::Question;
@@ -629,6 +630,28 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                 }
             }
             out.push(Parsed::Finished);
+        }
+        // Sent after each model request; `last` is that request, and its total is the context.
+        (None, Some("thread/tokenUsage/updated")) => {
+            let usage = &params["tokenUsage"];
+            let last = &usage["last"];
+            let count = |key: &str| last[key].as_u64().unwrap_or(0);
+            let cached = count("cachedInputTokens");
+            out.push(Parsed::RequestUsage {
+                request_id: format!(
+                    "{}:{}",
+                    params["turnId"].as_str().unwrap_or_default(),
+                    usage["total"]["totalTokens"].as_u64().unwrap_or(0),
+                ),
+                usage: TokenUsage {
+                    input: count("inputTokens").saturating_sub(cached),
+                    cache_read: cached,
+                    cache_write: 0,
+                    output: count("outputTokens"),
+                    context: count("totalTokens"),
+                },
+                top_level: true,
+            });
         }
         _ => {}
     }
