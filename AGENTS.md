@@ -73,6 +73,7 @@ Rules for coding agents working in the Rust code in this repo (`apps/server` and
   - **Major** only when the user asks for it.
 - **Hotfixes** are ordinary patch releases. Fix the bug on `main`, then release the next patch number: a hotfix after `0.4.9` is `0.4.10`, not `0.4.91`. Each part is compared as a whole number, so `0.4.91` would sort above every release from `0.4.10` to `0.4.90` and break update and release ordering. If the user asks for a version like that, explain this and confirm before tagging.
 - Never reuse, move, or delete a pushed tag. A broken release is followed by the next patch release.
+- Never monitor or poll the Release workflow or GitHub releases after pushing a tag. The user reports a broken build.
 - Full details are in [docs/releasing.md](docs/releasing.md).
 
 ## Release and build setup for a Tauri project
