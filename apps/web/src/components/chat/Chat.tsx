@@ -75,7 +75,7 @@ interface ChatProps {
   onUpdateTokens: (patch: Partial<TokenSettings>) => void;
   onOpenFolder: () => void;
   onOpenCanvas: (path: string, message: Message | null, tab: CanvasTab) => void;
-  onShowChanges: (paths: string[]) => void;
+  onShowChanges: (messageId: string) => void;
   onSend: (
     text: string,
     attachments: Attachment[],
@@ -581,7 +581,10 @@ export default function Chat({
       latest.current.onOpenCanvas(path, message, tab),
     [],
   );
-  const showChanges = useCallback((paths: string[]) => latest.current.onShowChanges(paths), []);
+  const showChanges = useCallback(
+    (messageId: string) => latest.current.onShowChanges(messageId),
+    [],
+  );
   const restore = useCallback(
     (message: Message) => void latest.current.restoreCheckpoint(message),
     [],

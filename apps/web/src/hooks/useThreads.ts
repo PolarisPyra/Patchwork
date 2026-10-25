@@ -262,9 +262,10 @@ function mergeFull(current: Thread, full: Thread): Thread {
  * Every thread (project tasks and project-less chats) plus the selection.
  * `select(null)` means no thread is selected (the composer then creates one on
  * send). `initialProjectId` picks the default selection after loading.
- * `onTurnCompleted` fires after any turn ends so the caller can refresh git state.
+ * `onFilesChanged` fires when an agent may have changed files (a tool finished, a file was
+ * touched, or a turn ended) so the caller can refresh git state.
  */
-export function useThreads(initialProjectId: string | null, onTurnCompleted: () => void) {
+export function useThreads(initialProjectId: string | null, onFilesChanged: () => void) {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   /** Per project, its tasks and the folder each sat in, in order, before its last sort by agent. */
@@ -272,7 +273,7 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
     Record<string, { id: string; folderId: string | null }[]>
   >({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const turnDone = useRef(onTurnCompleted);
+  const filesChanged = useRef(onFilesChanged);
   const initialProject = useRef(initialProjectId);
   const threadsRef = useRef(threads);
   threadsRef.current = threads;
@@ -304,7 +305,7 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
   );
 
   useEffect(() => {
-    turnDone.current = onTurnCompleted;
+    filesChanged.current = onFilesChanged;
   });
 
   // Remember the open thread, so the next launch returns to it. A failed write only
@@ -394,7 +395,8 @@ export function useThreads(initialProjectId: string | null, onTurnCompleted: () 
             : threads;
         }, prev),
       );
-      if (batch.some(({ event }) => event.type === "turnCompleted")) turnDone.current();
+      const touching = ["toolFinished", "fileTouched", "turnCompleted"];
+      if (batch.some(({ event }) => touching.includes(event.type))) filesChanged.current();
     };
     void onAgentEvent((envelope) => {
       queue.push(envelope);

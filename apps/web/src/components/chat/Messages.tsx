@@ -48,7 +48,7 @@ interface MessagesProps {
   /** Omitted for chats without a project: the change summary is hidden. */
   onOpenCanvas?: OpenCanvas;
   /** Opens the sidebar's Changes view. */
-  onShowChanges: (paths: string[]) => void;
+  onShowChanges: (messageId: string) => void;
   onRetry: (message: Message) => void;
   /** User messages whose turn can be undone, and undoing one. */
   checkpoints: ReadonlySet<string>;
@@ -295,7 +295,7 @@ interface AssistantProps {
   retryMessage: Message | null;
   busy: boolean;
   onOpenCanvas?: OpenCanvas;
-  onShowChanges: (paths: string[]) => void;
+  onShowChanges: (messageId: string) => void;
   onRetry: (message: Message) => void;
 }
 
@@ -340,7 +340,7 @@ const AssistantMessage = memo(function AssistantMessage({
         <ChangeSummary
           paths={message.files}
           changes={changes}
-          onShow={() => onShowChanges(message.files)}
+          onShow={() => onShowChanges(message.id)}
         />
       )}
       {message.refusal && (

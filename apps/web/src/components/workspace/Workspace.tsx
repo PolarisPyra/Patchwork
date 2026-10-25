@@ -170,8 +170,11 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
       return next.size === prev.size ? prev : next;
     });
   }, [threads]);
-  // Files of the reply whose "Show changes" was clicked; pinned at the top of the Changes view.
-  const [changeFocus, setChangeFocus] = useState<string[] | null>(null);
+  // The reply whose "Show changes" was clicked; its files are pinned at the top of the Changes
+  // view and follow the reply as it keeps editing.
+  const [changeFocus, setChangeFocus] = useState<{ threadId: string; messageId: string } | null>(
+    null,
+  );
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [canvas, setCanvas] = useState<CanvasState | null>(null);
@@ -192,6 +195,11 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   const openCanvas = canvas && canvas.projectId === projectId ? canvas : null;
   const changes = git && git.projectId === projectId ? git.changes : NO_CHANGES;
   const branch = git && git.projectId === projectId ? git.branch : null;
+  const focusFiles = changeFocus
+    ? (threads
+        .find((t) => t.id === changeFocus.threadId)
+        ?.messages.find((m) => m.id === changeFocus.messageId)?.files ?? null)
+    : null;
 
   const refreshGit = useCallback(() => {
     if (!projectId) return Promise.resolve();
@@ -599,7 +607,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
             archivedThreads={sidebarThreads.archived}
             selectedId={selectedId}
             changes={changes}
-            changeFocus={changeFocus}
+            changeFocus={focusFiles}
             folders={folders}
             flashId={flashId}
             {...sidebarHandlers}
@@ -625,8 +633,8 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
               }
               onOpenFolder={openFolder}
               onOpenCanvas={openCanvasAt}
-              onShowChanges={(paths) => {
-                setChangeFocus(paths);
+              onShowChanges={(messageId) => {
+                if (selected) setChangeFocus({ threadId: selected.id, messageId });
                 setView("changes");
               }}
               onSend={(text, attachments, draft, queue) =>
