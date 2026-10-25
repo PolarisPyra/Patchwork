@@ -8,8 +8,10 @@ import {
   FolderSimpleIcon,
   GaugeIcon,
   KeyboardIcon,
+  MinusIcon,
   PaletteIcon,
   PlugsConnectedIcon,
+  PlusIcon,
   RobotIcon,
   TerminalIcon,
   TrashIcon,
@@ -133,7 +135,7 @@ export default function SettingsDialog({
             {section === "environment" && <EnvironmentPane {...paneProps} />}
             {section === "projects" && <ProjectsPane {...paneProps} />}
             {section === "shortcuts" && <KeybindingsPane />}
-            {section === "updates" && <UpdatesPane />}
+            {section === "updates" && <UpdatesPane {...paneProps} />}
           </div>
         </div>
       </div>
@@ -213,12 +215,20 @@ function ThemeRow({ settings, updateSettings }: PaneProps) {
 const TOKEN_LEVELS = [100_000, 150_000, 200_000, 300_000];
 
 /** One setting: its name and what it does, with the control on the right. */
-function TokenRow({ title, desc, children }: { title: string; desc: string; children: ReactNode }) {
+function TokenRow({
+  title,
+  desc,
+  children,
+}: {
+  title: string;
+  desc?: string;
+  children: ReactNode;
+}) {
   return (
     <div className="flex items-center gap-3 border-b border-border py-2.5">
       <div className="min-w-0 flex-1">
         <div className="font-semibold">{title}</div>
-        <div className="text-[length:var(--fs-sm)] text-fg-muted">{desc}</div>
+        {desc && <div className="text-[length:var(--fs-sm)] text-fg-muted">{desc}</div>}
       </div>
       {children}
     </div>
@@ -458,7 +468,7 @@ function updateText(state: UpdateState, canInstall: boolean): string {
 }
 
 /** The running version, where updating stands, and the action that moves it on. */
-function UpdatesPane() {
+function UpdatesPane({ settings, updateSettings }: PaneProps) {
   const [status, setStatus] = useState<UpdateStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -519,8 +529,61 @@ function UpdatesPane() {
         </div>
         {action}
       </div>
+      <TokenRow title="Check for updates every">
+        <MinutesStepper
+          label="Check for updates every"
+          value={settings.updates.checkEveryMinutes}
+          onChange={(checkEveryMinutes) =>
+            void updateSettings((s) => ({ ...s, updates: { ...s.updates, checkEveryMinutes } }))
+          }
+        />
+      </TokenRow>
       {error && <div className="py-2.5 text-[length:var(--fs-sm)] text-danger">{error}</div>}
     </>
+  );
+}
+
+const CHECK_MINUTES = [10, 20, 30, 40, 50, 60];
+
+/** Steps through `CHECK_MINUTES`. */
+function MinutesStepper({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  const at = Math.max(0, CHECK_MINUTES.indexOf(value));
+  const step =
+    "grid h-6 w-6 cursor-pointer place-items-center border-none bg-transparent p-0 text-fg-muted hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent";
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      className="inline-flex items-center overflow-hidden rounded-[var(--radius-sm)] border border-border-strong"
+    >
+      <button
+        className={step}
+        aria-label="Less often"
+        disabled={at === 0}
+        onClick={() => onChange(CHECK_MINUTES[at - 1])}
+      >
+        <MinusIcon size={12} />
+      </button>
+      <span className="w-14 border-x border-border-strong text-center text-[length:var(--fs-sm)] tabular-nums">
+        {CHECK_MINUTES[at] === 60 ? "1 hr" : `${CHECK_MINUTES[at]} min`}
+      </span>
+      <button
+        className={step}
+        aria-label="More often"
+        disabled={at === CHECK_MINUTES.length - 1}
+        onClick={() => onChange(CHECK_MINUTES[at + 1])}
+      >
+        <PlusIcon size={12} />
+      </button>
+    </div>
   );
 }
 

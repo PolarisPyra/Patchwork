@@ -71,10 +71,25 @@ pub struct Settings {
     /// Shell that agents run commands in. None follows the SHELL environment variable.
     pub shell: Option<String>,
     pub notifications: NotificationSettings,
+    pub updates: UpdateSettings,
     /// Id of the app icon color way in `assets/logos/manifest.json`. None uses the manifest default.
     pub logo: Option<String>,
     /// Stops writing `logs/imports.log` in the config folder.
     pub import_log_disabled: bool,
+}
+
+/// How Patchwork keeps itself up to date.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct UpdateSettings {
+    /// Minutes between checks for a new release: 10 to 60, in steps of 10.
+    pub check_every_minutes: u32,
+}
+
+impl Default for UpdateSettings {
+    fn default() -> Self {
+        Self { check_every_minutes: 10 }
+    }
 }
 
 /// Desktop notifications shown while Patchwork is not the focused window.

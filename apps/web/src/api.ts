@@ -43,8 +43,15 @@ export interface Settings {
   /** Shell that agents run commands in; null follows the SHELL environment variable. */
   shell: string | null;
   notifications: NotificationSettings;
+  updates: UpdatesSettings;
   /** Id of the app icon color way in `assets/logos/manifest.json`; null uses the manifest default. */
   logo: string | null;
+}
+
+/** How Patchwork keeps itself up to date. */
+export interface UpdatesSettings {
+  /** Minutes between checks for a new release: 10 to 60, in steps of 10. */
+  checkEveryMinutes: number;
 }
 
 /** Desktop notifications shown while Patchwork is not the focused window. */
@@ -440,6 +447,7 @@ export const DEFAULT_SETTINGS: Settings = {
     defaultModels: {},
   },
   notifications: { goalComplete: true, taskComplete: true },
+  updates: { checkEveryMinutes: 10 },
   logo: null,
   importLogDisabled: false,
 };

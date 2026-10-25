@@ -1,6 +1,6 @@
-//! Keeps Patchwork up to date from its GitHub releases. Shortly after launch and then every hour
-//! it checks the latest release, downloads this platform's file, checks it against the SHA-256
-//! digest GitHub publishes for it, and installs it. The new version
+//! Keeps Patchwork up to date from its GitHub releases. Shortly after launch and then as often as
+//! Settings asks, it checks the latest release, downloads this platform's file, checks it against
+//! the SHA-256 digest GitHub publishes for it, and installs it. The new version
 //! runs from the next start; the update card and Settings offer a restart. A copy that was not
 //! installed from a release (a dev or source build) cannot replace itself, so it only reports the
 //! version.
@@ -20,10 +20,8 @@ const LATEST_RELEASE_API: &str =
     "https://api.github.com/repos/PolarisPyra/Patchwork-ADE/releases/latest";
 /// How long after launch the first check waits, so it does not slow the start.
 const FIRST_CHECK: Duration = Duration::from_secs(30);
-/// How often to check. Measured on the wall clock, so time spent asleep counts.
-const CHECK_EVERY: Duration = Duration::from_secs(60 * 60);
 /// How often the timer looks at the clock.
-const TICK: Duration = Duration::from_secs(5 * 60);
+const TICK: Duration = Duration::from_secs(60);
 const CHECK_TIMEOUT: Duration = Duration::from_secs(30);
 /// A download that has not finished by then has stalled; the next check starts it again.
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(30 * 60);
@@ -286,10 +284,11 @@ impl Updates {
         }
     }
 
-    /// Whether an hour has passed since the last check.
-    fn due(&self) -> bool {
+    /// Whether `every` has passed since the last check. Measured on the wall clock, so time spent
+    /// asleep counts.
+    fn due(&self, every: Duration) -> bool {
         let last = *self.last_check.lock().unwrap_or_else(PoisonError::into_inner);
-        last.is_none_or(|last| last.elapsed().map_or(true, |since| since >= CHECK_EVERY))
+        last.is_none_or(|last| last.elapsed().map_or(true, |since| since >= every))
     }
 
     /// Restarts into the installed update, unless agents are replying and `force` is off. The app
@@ -409,6 +408,12 @@ fn install_bundle(archive: &std::path::Path) -> Result<(), String> {
     result
 }
 
+/// How often to check, from Settings: 10 minutes to an hour.
+fn check_every(app: &AppHandle) -> Duration {
+    let minutes = app.state::<Arc<Server>>().store.settings().updates.check_every_minutes;
+    Duration::from_secs(u64::from(minutes.clamp(10, 60)) * 60)
+}
+
 /// Starts the background checks.
 pub fn start(app: &AppHandle) {
     let app = app.clone();
@@ -416,7 +421,7 @@ pub fn start(app: &AppHandle) {
         std::thread::sleep(FIRST_CHECK);
         loop {
             let handle = app.clone();
-            if handle.state::<Updates>().due() {
+            if handle.state::<Updates>().due(check_every(&handle)) {
                 // In its own thread, so a panic in one check does not end the checks.
                 let check = std::thread::spawn(move || handle.state::<Updates>().check(&handle, false));
                 if check.join().is_err() {
