@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { api, DEFAULT_SETTINGS, type Settings } from "~/api";
+import UpdateToast from "~/components/UpdateToast";
 import Workspace from "~/components/workspace/Workspace";
 
 // Onboarding only runs on first launch, so it stays out of the main chunk.
@@ -51,7 +52,10 @@ export default function App() {
   if (!settings) return null;
 
   return settings.onboarded ? (
-    <Workspace settings={settings} updateSettings={updateSettings} toggleTheme={toggleTheme} />
+    <>
+      <Workspace settings={settings} updateSettings={updateSettings} toggleTheme={toggleTheme} />
+      <UpdateToast />
+    </>
   ) : (
     <Suspense fallback={null}>
       <Onboarding

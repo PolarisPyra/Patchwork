@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { confirm } from "@tauri-apps/plugin-dialog";
+import { RELEASES_URL, restartToUpdate } from "~/lib/updates";
 import {
   ArrowCircleUpIcon,
   BellIcon,
@@ -429,8 +429,6 @@ function NotificationsPane({ settings, updateSettings }: PaneProps) {
   );
 }
 
-const RELEASES_URL = "https://github.com/PolarisPyra/Patchwork-ADE/releases/latest";
-
 function updateText(state: UpdateState, canInstall: boolean): string {
   switch (state.status) {
     case "idle":
@@ -482,25 +480,10 @@ function UpdatesPane() {
     setError(null);
     action().catch((e: unknown) => setError(errorText(e)));
   };
-  // Running agents stop for the restart, and carry on after it.
-  const restart = async () => {
-    const result = await api.restartToUpdate(false);
-    if (result.result !== "busy") return;
-    const tasks = result.running === 1 ? "1 task is" : `${result.running} tasks are`;
-    const ok = await confirm(
-      `${tasks} still running. They stop now and carry on after the restart.`,
-      {
-        title: "Restart to update",
-        kind: "warning",
-      },
-    );
-    if (ok) await api.restartToUpdate(true);
-  };
-
   let action: ReactNode;
   if (state.status === "ready") {
     action = (
-      <button className="btn" onClick={() => run(restart)}>
+      <button className="btn" onClick={() => run(restartToUpdate)}>
         Restart to update
       </button>
     );
