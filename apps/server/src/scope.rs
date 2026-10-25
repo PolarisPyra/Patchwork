@@ -112,7 +112,7 @@ pub fn stop(unit: &str) {
 
 /// Runs `systemctl --user` with `args`; whether it succeeded.
 fn systemctl(args: &[&str]) -> bool {
-    Command::new("systemctl")
+    crate::host_command("systemctl")
         .arg("--user")
         .args(args)
         .stdin(Stdio::null())

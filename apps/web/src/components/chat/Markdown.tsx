@@ -2,7 +2,7 @@ import { Children, memo, useEffect, useState, type ReactElement, type ReactNode 
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { TextAlignLeftIcon } from "@phosphor-icons/react";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { api } from "~/api";
 import { SYNTAX_CLASSES } from "~/components/canvas/syntaxClasses";
 import { ACTION_CLASS, CopyButton } from "~/components/chat/CopyButton";
 import { CHOICES_LANG } from "~/components/chat/choices";
@@ -85,7 +85,7 @@ const components: Components = {
         onClick={(event) => {
           // The webview must not navigate away; the system browser opens the link instead.
           event.preventDefault();
-          void openUrl(href);
+          void api.openUrl(href);
         }}
       >
         {children}

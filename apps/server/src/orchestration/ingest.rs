@@ -619,7 +619,7 @@ mod tests {
         let root = std::env::temp_dir().join(new_id());
         std::fs::create_dir_all(&root).unwrap();
         let root_str = root.to_str().unwrap();
-        let ok = std::process::Command::new("git")
+        let ok = crate::host_command("git")
             .args(["init", "-q"])
             .current_dir(&root)
             .status()

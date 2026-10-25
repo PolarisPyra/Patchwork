@@ -5,7 +5,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::process::{Command, Output};
+use std::process::Output;
 
 use crate::Res;
 use crate::Server;
@@ -24,7 +24,7 @@ fn ref_name(thread_id: &str, message_id: &str) -> String {
 
 /// Runs git in `root`, reading the index from `index` when given, and writing `input` to its stdin.
 fn run(root: &str, index: Option<&Path>, args: &[&str], input: Option<&[u8]>) -> Res<Output> {
-    let mut cmd = Command::new("git");
+    let mut cmd = crate::host_command("git");
     cmd.args(args)
         .current_dir(root)
         .env("GIT_LITERAL_PATHSPECS", "1")

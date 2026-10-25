@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Output, Stdio};
 
 use crate::types::{Project, FileChange, new_id};
 
@@ -105,7 +105,7 @@ pub fn read_file(root: &str, rel: &str) -> Result<String, String> {
 
 /// Runs `git <args>` in `root` and returns its raw output.
 fn git_raw(root: &str, args: &[&str]) -> Result<Output, String> {
-    Command::new("git")
+    crate::host_command("git")
         .args(args)
         .current_dir(root)
         .stdin(Stdio::null())
@@ -320,7 +320,7 @@ pub fn open_in_editor(root: &str, rel: &str) -> Result<(), String> {
     };
     let candidates = ["idea", "code", "zed", fallback];
     for program in candidates {
-        let spawned = Command::new(program)
+        let spawned = crate::host_command(program)
             .arg(&path)
             .stdin(Stdio::null())
             .stdout(Stdio::null())

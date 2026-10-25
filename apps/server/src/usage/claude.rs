@@ -32,7 +32,7 @@ fn credentials() -> Option<Value> {
     let file = provider::claude::home()
         .and_then(|h| std::fs::read_to_string(h.join(".credentials.json")).ok());
     let raw = file.or_else(|| {
-        let out = std::process::Command::new("security")
+        let out = crate::host_command("security")
             .args([
                 "find-generic-password",
                 "-s",

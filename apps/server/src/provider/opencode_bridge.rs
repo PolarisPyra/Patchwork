@@ -6,7 +6,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Write};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Duration;
 
@@ -345,7 +345,7 @@ struct Server {
 impl Server {
     fn start(request: &Request) -> Result<Self, String> {
         let password = format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
-        let mut child = Command::new(&request.bin)
+        let mut child = crate::host_command(&request.bin)
             .args(["serve", "--hostname", "127.0.0.1", "--port", "0"])
             .current_dir(&request.root)
             // 2.x works in the folder `PWD` names, and takes its password from OPENCODE_PASSWORD.

@@ -434,6 +434,34 @@ fn open_in_editor(server: Srv, project_id: String, path: String) -> Res<()> {
     workspace::open_in_editor(&server.project_root(&project_id)?, &path)
 }
 
+/// Opens a web or mail link in the user's default app. On Linux `xdg-open` runs with the user's
+/// own environment, where the opener plugin would pass on the AppImage's.
+#[tauri::command]
+#[cfg_attr(target_os = "linux", allow(unused_variables))]
+fn open_url(app: AppHandle, url: String) -> Res<()> {
+    let scheme = url.split_once(':').map(|(scheme, _)| scheme.to_ascii_lowercase());
+    if !matches!(scheme.as_deref(), Some("http" | "https" | "mailto" | "tel")) {
+        return Err("Patchwork only opens web and mail links".into());
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let mut child = patchwork_server::host_command("xdg-open")
+            .arg(&url)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|e| format!("Could not open the link: {e}"))?;
+        std::thread::spawn(move || child.wait());
+        Ok(())
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        use tauri_plugin_opener::OpenerExt;
+        app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
+    }
+}
+
 // ---- updates -------------------------------------------------------------
 
 #[tauri::command]
@@ -680,6 +708,7 @@ pub fn run() {
             accept_file,
             revert_file,
             open_in_editor,
+            open_url,
             update_status,
             check_for_updates,
             restart_to_update,

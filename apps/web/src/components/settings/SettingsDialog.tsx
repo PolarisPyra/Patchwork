@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { confirm } from "@tauri-apps/plugin-dialog";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ArrowCircleUpIcon,
   BellIcon,
@@ -507,7 +506,7 @@ function UpdatesPane() {
     );
   } else if (state.status === "available") {
     action = (
-      <button className="btn" onClick={() => run(() => openUrl(RELEASES_URL))}>
+      <button className="btn" onClick={() => run(() => api.openUrl(RELEASES_URL))}>
         Download
       </button>
     );

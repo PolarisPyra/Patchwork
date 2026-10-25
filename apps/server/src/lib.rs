@@ -63,6 +63,35 @@ const COMPACT_LEAD_MS: u64 = 5 * 60 * 1000;
 /// How often idle threads are checked for compaction.
 const IDLE_CHECK: std::time::Duration = std::time::Duration::from_secs(60);
 
+/// A command for a program on the user's system. The AppImage's launcher points the library,
+/// Python, GTK and data paths into the AppImage for Patchwork itself; agents, git, and the other
+/// programs Patchwork starts get the user's own paths back.
+pub fn host_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    let Some(appdir) = std::env::var("APPDIR").ok().filter(|dir| !dir.is_empty()) else {
+        return cmd;
+    };
+    for (key, value) in std::env::vars_os() {
+        let value = value.to_string_lossy();
+        if !value.contains(&appdir) {
+            continue;
+        }
+        let kept: Vec<&str> = value
+            .split(':')
+            .filter(|entry| !entry.is_empty() && !entry.starts_with(&appdir))
+            .collect();
+        if kept.is_empty() {
+            cmd.env_remove(&key);
+        } else {
+            cmd.env(&key, kept.join(":"));
+        }
+    }
+    for key in ["APPDIR", "APPIMAGE", "ARGV0", "OWD"] {
+        cmd.env_remove(key);
+    }
+    cmd
+}
+
 fn clean_name(name: &str) -> Res<String> {
     let name = name.trim();
     if name.is_empty() {
@@ -281,7 +310,7 @@ impl Server {
         }
         std::fs::create_dir_all(&self.clis_dir).map_err(|e| e.to_string())?;
         let script = self.clis_dir.join("install-antigravity.sh");
-        let fetch = std::process::Command::new("curl")
+        let fetch = crate::host_command("curl")
             .args(["-fsSL", "https://antigravity.google/cli/install.sh", "-o"])
             .arg(&script)
             .output()
@@ -292,7 +321,7 @@ impl Server {
                 String::from_utf8_lossy(&fetch.stderr).trim()
             ));
         }
-        let run = std::process::Command::new("bash")
+        let run = crate::host_command("bash")
             .arg(&script)
             .arg("--dir")
             .arg(&self.clis_dir)

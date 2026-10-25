@@ -581,6 +581,8 @@ export const api = {
     invoke<void>("open_in_editor", { projectId, path }),
   /** Starts watching the project's files; `onProjectFilesChanged` then reports changes. */
   watchProject: (projectId: string) => invoke<void>("watch_project", { projectId }),
+  /** Opens a web or mail link in the default browser or mail app. */
+  openUrl: (url: string) => invoke<void>("open_url", { url }),
   updateStatus: () => invoke<UpdateStatus>("update_status"),
   /** Starts a check; its progress and result arrive through `onUpdateStatus`. */
   checkForUpdates: () => invoke<void>("check_for_updates"),
