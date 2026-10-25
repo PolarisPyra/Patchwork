@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { confirm } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
+  ArrowCircleUpIcon,
   BellIcon,
   CaretDownIcon,
   DownloadSimpleIcon,
@@ -15,6 +18,7 @@ import {
 } from "@phosphor-icons/react";
 import {
   api,
+  onUpdateStatus,
   AGENT_LABELS,
   importSourcesFor,
   SOURCE_LABELS,
@@ -28,6 +32,8 @@ import {
   type ShellChoices,
   type Theme,
   type TokenSettings,
+  type UpdateState,
+  type UpdateStatus,
 } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
 import type { UpdateSettings } from "~/app/App";
@@ -47,7 +53,8 @@ type Section =
   | "imports"
   | "environment"
   | "projects"
-  | "shortcuts";
+  | "shortcuts"
+  | "updates";
 
 const SECTIONS: { id: Section; label: string; Icon: Icon }[] = [
   { id: "appearance", label: "Appearance", Icon: PaletteIcon },
@@ -58,6 +65,7 @@ const SECTIONS: { id: Section; label: string; Icon: Icon }[] = [
   { id: "environment", label: "Environment", Icon: TerminalIcon },
   { id: "projects", label: "Projects", Icon: FolderSimpleIcon },
   { id: "shortcuts", label: "Shortcuts", Icon: KeyboardIcon },
+  { id: "updates", label: "Updates", Icon: ArrowCircleUpIcon },
 ];
 
 interface PaneProps {
@@ -121,6 +129,7 @@ export default function SettingsDialog({
             {section === "environment" && <EnvironmentPane {...paneProps} />}
             {section === "projects" && <ProjectsPane {...paneProps} />}
             {section === "shortcuts" && <KeybindingsPane />}
+            {section === "updates" && <UpdatesPane />}
           </div>
         </div>
       </div>
@@ -417,6 +426,113 @@ function NotificationsPane({ settings, updateSettings }: PaneProps) {
           onChange={(taskComplete) => update({ taskComplete })}
         />
       </TokenRow>
+    </>
+  );
+}
+
+const RELEASES_URL = "https://github.com/PolarisPyra/Patchwork-ADE/releases/latest";
+
+function updateText(state: UpdateState, canInstall: boolean): string {
+  switch (state.status) {
+    case "idle":
+      return canInstall ? "Updates install on their own" : "This copy can't install updates";
+    case "checking":
+      return "Checking for updates…";
+    case "upToDate":
+      return "Up to date";
+    case "available":
+      return `Patchwork ${state.version} is available`;
+    case "downloading": {
+      const progress = state.total
+        ? `${Math.floor((state.downloaded / state.total) * 100)}%`
+        : `${(state.downloaded / 2 ** 20).toFixed(1)} MB`;
+      return `Downloading Patchwork ${state.version} · ${progress}`;
+    }
+    case "ready":
+      return `Patchwork ${state.version} is installed. Restart to use it.`;
+    case "failed":
+      return state.message;
+  }
+}
+
+/** The running version, where updating stands, and the action that moves it on. */
+function UpdatesPane() {
+  const [status, setStatus] = useState<UpdateStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    const unlisten = onUpdateStatus((next) => {
+      if (live) setStatus(next);
+    });
+    // An event that arrived first is newer than this reply.
+    api
+      .updateStatus()
+      .then((next) => {
+        if (live) setStatus((current) => current ?? next);
+      })
+      .catch((e: unknown) => setError(errorText(e)));
+    return () => {
+      live = false;
+      void unlisten.then((stop) => stop());
+    };
+  }, []);
+  if (!status) return error && <div className="py-2.5 text-danger">{error}</div>;
+  const { state } = status;
+
+  const run = (action: () => Promise<unknown>) => {
+    setError(null);
+    action().catch((e: unknown) => setError(errorText(e)));
+  };
+  // Running agents stop for the restart, and carry on after it.
+  const restart = async () => {
+    const result = await api.restartToUpdate(false);
+    if (result.result !== "busy") return;
+    const tasks = result.running === 1 ? "1 task is" : `${result.running} tasks are`;
+    const ok = await confirm(
+      `${tasks} still running. They stop now and carry on after the restart.`,
+      {
+        title: "Restart to update",
+        kind: "warning",
+      },
+    );
+    if (ok) await api.restartToUpdate(true);
+  };
+
+  let action: ReactNode;
+  if (state.status === "ready") {
+    action = (
+      <button className="btn" onClick={() => run(restart)}>
+        Restart to update
+      </button>
+    );
+  } else if (state.status === "available") {
+    action = (
+      <button className="btn" onClick={() => run(() => openUrl(RELEASES_URL))}>
+        Download
+      </button>
+    );
+  } else {
+    const working = state.status === "checking" || state.status === "downloading";
+    action = (
+      <button className="btn" disabled={working} onClick={() => run(api.checkForUpdates)}>
+        {state.status === "checking" ? "Checking…" : "Check for updates"}
+      </button>
+    );
+  }
+  return (
+    <>
+      <div className="flex items-center gap-3 border-b border-border py-2.5">
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold">Patchwork {status.currentVersion}</div>
+          <div
+            className={`text-[length:var(--fs-sm)] ${state.status === "failed" ? "text-danger" : "text-fg-muted"}`}
+          >
+            {updateText(state, status.canInstall)}
+          </div>
+        </div>
+        {action}
+      </div>
+      {error && <div className="py-2.5 text-[length:var(--fs-sm)] text-danger">{error}</div>}
     </>
   );
 }

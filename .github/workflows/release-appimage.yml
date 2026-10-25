@@ -2,7 +2,8 @@ name: Release
 
 # Builds the Linux AppImage, the Windows installer, and the macOS (Apple silicon) disk image when a
 # version tag (v0.1.0, v0.2.0, ...) is pushed, then creates a GitHub release for that tag with all
-# three attached. Pushes to main don't build. Run it by hand from the Actions tab to build without a
+# three attached, plus the signed update files and latest.json that the app's updater reads.
+# Pushes to main don't build. Run it by hand from the Actions tab to build without a
 # tag; the release job only runs for tags.
 
 on:
@@ -59,6 +60,9 @@ jobs:
         run: scripts/set-version.sh "${GITHUB_REF_NAME#v}"
 
       - name: Build AppImage
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: scripts/build.sh appimage
 
       - name: Find AppImage
@@ -70,7 +74,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: patchwork-appimage
-          path: ${{ steps.find.outputs.path }}
+          path: |
+            ${{ steps.find.outputs.path }}
+            ${{ steps.find.outputs.path }}.sig
 
   windows:
     runs-on: windows-latest
@@ -104,6 +110,9 @@ jobs:
         run: scripts/set-version.sh "${GITHUB_REF_NAME#v}"
 
       - name: Build installer
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: pnpm --filter patchwork-desktop exec tauri build --bundles nsis
 
       - name: Find installer
@@ -115,7 +124,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: patchwork-windows
-          path: ${{ steps.find.outputs.path }}
+          path: |
+            ${{ steps.find.outputs.path }}
+            ${{ steps.find.outputs.path }}.sig
 
   macos:
     # macos-14 runs on Apple silicon, so the build is native arm64.
@@ -147,7 +158,11 @@ jobs:
         run: scripts/set-version.sh "${GITHUB_REF_NAME#v}"
 
       - name: Build disk image
-        run: pnpm --filter patchwork-desktop exec tauri build --bundles dmg
+        # The app bundle is what the updater downloads, as Patchwork.app.tar.gz.
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm --filter patchwork-desktop exec tauri build --bundles app,dmg
 
       - name: Find disk image
         id: find
@@ -158,7 +173,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: patchwork-macos-arm64
-          path: ${{ steps.find.outputs.path }}
+          path: |
+            ${{ steps.find.outputs.path }}
+            target/release/bundle/macos/Patchwork.app.tar.gz
+            target/release/bundle/macos/Patchwork.app.tar.gz.sig
 
   release:
     needs: [appimage, windows, macos]
@@ -180,6 +198,29 @@ jobs:
         uses: orhun/git-cliff-action@v4
         with:
           args: --latest --strip header --output RELEASE_NOTES.md
+
+      - name: Write the update manifest
+        # The app's updater reads latest.json from the latest release: each platform's download
+        # and the signature of that file.
+        run: |
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
+          platform() {
+            [[ -f "$1" && -f "$1.sig" ]] || { echo "Missing $1 or its signature." >&2; exit 1; }
+            jq -n --arg url "$base/$(basename "$1")" --arg signature "$(cat "$1.sig")" \
+              '{url: $url, signature: $signature}'
+          }
+          linux=$(platform dist/Patchwork_amd64.AppImage)
+          windows=$(platform "$(ls dist/*-setup.exe | head -n 1)")
+          macos=$(platform dist/Patchwork.app.tar.gz)
+          jq -n --arg version "${GITHUB_REF_NAME#v}" --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --rawfile notes RELEASE_NOTES.md \
+            --argjson linux "$linux" --argjson windows "$windows" --argjson macos "$macos" \
+            '{version: $version, notes: $notes, pub_date: $date, platforms: {
+              "linux-x86_64-appimage": $linux,
+              "windows-x86_64-nsis": $windows,
+              "darwin-aarch64-app": $macos
+            }}' > dist/latest.json
+          cat dist/latest.json
 
       - name: Attach to GitHub release
         env:

@@ -581,6 +581,11 @@ export const api = {
     invoke<void>("open_in_editor", { projectId, path }),
   /** Starts watching the project's files; `onProjectFilesChanged` then reports changes. */
   watchProject: (projectId: string) => invoke<void>("watch_project", { projectId }),
+  updateStatus: () => invoke<UpdateStatus>("update_status"),
+  /** Starts a check; its progress and result arrive through `onUpdateStatus`. */
+  checkForUpdates: () => invoke<void>("check_for_updates"),
+  /** Restarts into the installed update; without `force`, refuses while agents are replying. */
+  restartToUpdate: (force: boolean) => invoke<RestartResult>("restart_to_update", { force }),
 };
 
 export function onAgentEvent(cb: (e: AgentEventEnvelope) => void): Promise<UnlistenFn> {
@@ -590,3 +595,31 @@ export function onAgentEvent(cb: (e: AgentEventEnvelope) => void): Promise<Unlis
 export function onProjectFilesChanged(cb: (projectId: string) => void): Promise<UnlistenFn> {
   return listen<string>("project-files-changed", (e) => cb(e.payload));
 }
+
+export function onUpdateStatus(cb: (status: UpdateStatus) => void): Promise<UnlistenFn> {
+  return listen<UpdateStatus>("update-status", (e) => cb(e.payload));
+}
+
+/** Where updating Patchwork stands. Mirrors `UpdateState` in apps/desktop/src-tauri/src/updates.rs. */
+export type UpdateState =
+  | { status: "idle" }
+  | { status: "checking" }
+  | { status: "upToDate" }
+  /** A newer release this copy cannot install itself. */
+  | { status: "available"; version: string }
+  | { status: "downloading"; version: string; downloaded: number; total: number | null }
+  /** Installed; it runs once Patchwork restarts. */
+  | { status: "ready"; version: string }
+  | { status: "failed"; message: string };
+
+export interface UpdateStatus {
+  currentVersion: string;
+  /** Whether this copy can install updates itself; a dev or source build cannot. */
+  canInstall: boolean;
+  state: UpdateState;
+}
+
+export type RestartResult =
+  | { result: "busy"; running: number }
+  | { result: "nothingReady" }
+  | { result: "restarting" };

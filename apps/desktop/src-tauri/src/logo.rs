@@ -133,7 +133,7 @@ mod launcher {
     ///
     /// Every change installs the icon under a name never used before, because the window manager
     /// and taskbar keep icons, and failed lookups, cached by name. Runs without an installed
-    /// launcher, such as the AppImage, leave the desktop files alone.
+    /// launcher, such as a downloaded AppImage, leave the desktop files alone.
     ///
     /// Returns whether the launcher now names a different icon.
     fn install(data_home: &Path, app_id: &str, id: &str, png: &[u8]) -> io::Result<bool> {

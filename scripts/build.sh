@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Builds Patchwork. `appimage` writes Patchwork_amd64.AppImage. `install` builds the release binary
-# and installs it under $PREFIX (default ~/.local) with its icons and a launcher. The launcher has
-# its own id, so it leaves the launcher of an AppImage you already run untouched.
+# Builds Patchwork. `appimage` writes Patchwork_amd64.AppImage. `install` builds the AppImage and
+# installs it as $PREFIX/bin/patchwork (default ~/.local) with its icons and a launcher. The app
+# updates that file in place from the GitHub releases.
 #
 # Usage: scripts/build.sh appimage | install
 set -euo pipefail
@@ -19,8 +19,8 @@ usage() {
 Usage: scripts/build.sh appimage | install
 
   appimage  Build target/release/bundle/appimage/Patchwork_amd64.AppImage
-  install   Build the release binary and install it under $PREFIX (default ~/.local):
-            bin/patchwork, the icons, and share/applications/dev.patchwork.ade.desktop
+  install   Build the AppImage and install it under $PREFIX (default ~/.local): bin/patchwork,
+            the icons, and share/applications/dev.patchwork.ade.desktop
 EOF
 }
 
@@ -36,39 +36,24 @@ require_tools() {
 
 build_appimage() {
   require_tools
-  pnpm --filter patchwork-desktop exec tauri build --bundles appimage
+  # The updater signature needs the release signing key: CI passes it in the environment, and a
+  # local build reads it from ~/.tauri. Without the key, the build has no signature.
+  local key="$HOME/.tauri/patchwork.key" args=()
+  if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" && -f "$key" ]]; then
+    export TAURI_SIGNING_PRIVATE_KEY="$key"
+    export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(cat "$key.password" 2>/dev/null || true)"
+  fi
+  if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
+    args=(--config '{"bundle":{"createUpdaterArtifacts":false}}')
+  fi
+  pnpm --filter patchwork-desktop exec tauri build --bundles appimage "${args[@]}"
   # Tauri names the file after the version. Rename it so the name stays the same across releases.
   local built="target/release/bundle/appimage/Patchwork_${version}_amd64.AppImage"
   local out="target/release/bundle/appimage/Patchwork_amd64.AppImage"
   [[ -f "$built" ]] || die "Expected $built after the build."
   mv -f "$built" "$out"
+  [[ -f "$built.sig" ]] && mv -f "$built.sig" "$out.sig"
   echo "AppImage: $repo_root/$out"
-}
-
-stop_running_instances() {
-  local dev_bin="$repo_root/target/debug/patchwork"
-  local pids=() pid exe
-  for pid in $(pgrep -x patchwork || true); do
-    exe="$(readlink "/proc/$pid/exe" 2>/dev/null || true)"
-    # The dev session runs the debug build from this repo. Leave it running.
-    [[ "$exe" == "$dev_bin" ]] && continue
-    pids+=("$pid")
-  done
-  (( ${#pids[@]} )) || return 0
-
-  echo "Stopping running Patchwork: ${pids[*]}"
-  kill -TERM "${pids[@]}" 2>/dev/null || true
-  local _ alive
-  for _ in {1..50}; do
-    alive=0
-    for pid in "${pids[@]}"; do
-      kill -0 "$pid" 2>/dev/null && alive=1
-    done
-    (( alive )) || return 0
-    sleep 0.2
-  done
-  echo "Some instances ignored SIGTERM; killing them."
-  kill -KILL "${pids[@]}" 2>/dev/null || true
 }
 
 install_app() {
@@ -79,12 +64,12 @@ install_app() {
   local icons_dir="$prefix/share/icons/hicolor"
   local launcher="$apps_dir/$app_id.desktop"
 
-  stop_running_instances
-  pnpm --filter patchwork-desktop exec tauri build --no-bundle
-  [[ -x target/release/patchwork ]] || die "Expected target/release/patchwork after the build."
-
-  install -Dm755 target/release/patchwork "$bin_path"
-  echo "Binary: $bin_path"
+  build_appimage
+  # Moved into place rather than written over, so a running Patchwork keeps its file and the new
+  # version starts the next time it opens.
+  install -Dm755 target/release/bundle/appimage/Patchwork_amd64.AppImage "$bin_path.new"
+  mv -f "$bin_path.new" "$bin_path"
+  echo "AppImage: $bin_path"
 
   install -Dm644 apps/desktop/src-tauri/icons/logo.png "$icons_dir/512x512/apps/$app_id.png"
   # Earlier installs wrote smaller sizes of the icon. The shell picks one of those for notifications,

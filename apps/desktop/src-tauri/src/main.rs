@@ -14,12 +14,21 @@ fn main() {
         unsafe { std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1") };
     }
     // GTK sets the Wayland app id from the program name, and KWin uses it to find the desktop
-    // entry for the title bar icon. The local build's entry is dev.patchwork.ade.desktop, so it
-    // gets that id. The AppImage keeps the default id, which its own launcher matches. The AppImage
-    // runtime sets APPIMAGE.
+    // entry for the title bar icon. `scripts/build.sh install` installs dev.patchwork.ade.desktop,
+    // and the dev session shares it, so they get that id. An AppImage run without that entry
+    // keeps the default id, which its own launcher matches. The AppImage runtime sets APPIMAGE.
     #[cfg(target_os = "linux")]
-    if std::env::var_os("APPIMAGE").is_none() {
+    if std::env::var_os("APPIMAGE").is_none() || installed_launcher() {
         glib::set_prgname(Some("dev.patchwork.ade"));
     }
     patchwork_lib::run();
+}
+
+/// Whether `scripts/build.sh install` put Patchwork's launcher in the user's applications.
+#[cfg(target_os = "linux")]
+fn installed_launcher() -> bool {
+    let data_home = std::env::var_os("XDG_DATA_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join(".local/share")));
+    data_home.is_some_and(|dir| dir.join("applications/dev.patchwork.ade.desktop").is_file())
 }

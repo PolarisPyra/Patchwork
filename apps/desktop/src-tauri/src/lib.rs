@@ -3,6 +3,7 @@
 
 mod clipboard;
 mod logo;
+mod updates;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -433,6 +434,26 @@ fn open_in_editor(server: Srv, project_id: String, path: String) -> Res<()> {
     workspace::open_in_editor(&server.project_root(&project_id)?, &path)
 }
 
+// ---- updates -------------------------------------------------------------
+
+#[tauri::command]
+fn update_status(app: AppHandle, updates: State<updates::Updates>) -> updates::UpdateStatus {
+    updates.status(&app)
+}
+
+/// Starts a check. Its progress and result arrive on `"update-status"`.
+#[tauri::command]
+fn check_for_updates(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        app.state::<updates::Updates>().check(&app, true).await;
+    });
+}
+
+#[tauri::command]
+fn restart_to_update(app: AppHandle, updates: State<updates::Updates>, force: bool) -> updates::RestartResult {
+    updates.restart(&app, force)
+}
+
 // ---- tray & notifications ----------------------------------------------
 
 /// Whether the tray icon is up, so closing the window hides it instead of quitting.
@@ -550,6 +571,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event
                 && window.state::<TrayAvailable>().0
@@ -591,6 +613,8 @@ pub fn run() {
             app.manage(TrayAvailable(tray.is_ok()));
             app.manage(logo::LogoChanges::default());
             logo::apply(app.handle(), logo.as_deref());
+            app.manage(updates::Updates::default());
+            updates::start(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -656,15 +680,22 @@ pub fn run() {
             accept_file,
             revert_file,
             open_in_editor,
+            update_status,
+            check_for_updates,
+            restart_to_update,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Patchwork")
         .run(|app, event| {
             // Agents run in their own scopes, so they would outlive the app.
-            if let RunEvent::Exit = event
-                && let Some(server) = app.try_state::<Arc<Server>>()
-            {
-                server.stop_agents();
+            if let RunEvent::Exit = event {
+                if let Some(server) = app.try_state::<Arc<Server>>() {
+                    server.stop_agents();
+                }
+                // After the agents, since a Windows update runs its installer and exits.
+                if let Some(updates) = app.try_state::<updates::Updates>() {
+                    updates.install_on_exit();
+                }
             }
         });
 }

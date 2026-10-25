@@ -586,6 +586,11 @@ impl Server {
     }
 
     /// Stops every running agent; for quitting the app.
+    /// How many threads have an agent replying now.
+    pub fn running_turns(&self) -> usize {
+        self.runner.running().len()
+    }
+
     pub fn stop_agents(&self) {
         orchestration::recovery::remember_interrupted(&self.store, &self.runner.running());
         self.runner.stop_all();
