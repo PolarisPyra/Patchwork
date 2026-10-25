@@ -2,7 +2,9 @@ name: Release
 
 # Builds the Linux AppImage, the Windows installer, and the macOS (Apple silicon) disk image when a
 # version tag (v0.1.0, v0.2.0, ...) is pushed, then creates a GitHub release for that tag with all
-# three attached, plus the signed update files and latest.json that the app's updater reads.
+# three attached. Patchwork updates itself from these files, checking each against GitHub's
+# SHA-256 digest. While the TAURI_SIGNING_PRIVATE_KEY secret is set, the release also carries the
+# signed update files and latest.json that Patchwork 0.6.7 and older update from.
 # Pushes to main don't build. Run it by hand from the Actions tab to build without a
 # tag; the release job only runs for tags.
 
@@ -113,7 +115,12 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: pnpm --filter patchwork-desktop exec tauri build --bundles nsis
+        run: |
+          args=()
+          if [[ -n "$TAURI_SIGNING_PRIVATE_KEY" ]]; then
+            args=(--config '{"bundle":{"createUpdaterArtifacts":true}}')
+          fi
+          pnpm --filter patchwork-desktop exec tauri build --bundles nsis "${args[@]}"
 
       - name: Find installer
         id: find
@@ -158,11 +165,19 @@ jobs:
         run: scripts/set-version.sh "${GITHUB_REF_NAME#v}"
 
       - name: Build disk image
-        # The app bundle is what the updater downloads, as Patchwork.app.tar.gz.
+        # The app bundle is what the updater downloads, as Patchwork.app.tar.gz. A signed build
+        # packs it itself; otherwise it is packed here.
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: pnpm --filter patchwork-desktop exec tauri build --bundles app,dmg
+        run: |
+          args=()
+          if [[ -n "$TAURI_SIGNING_PRIVATE_KEY" ]]; then
+            args=(--config '{"bundle":{"createUpdaterArtifacts":true}}')
+          fi
+          pnpm --filter patchwork-desktop exec tauri build --bundles app,dmg "${args[@]}"
+          bundle=target/release/bundle/macos
+          [[ -f "$bundle/Patchwork.app.tar.gz" ]] || tar -czf "$bundle/Patchwork.app.tar.gz" -C "$bundle" Patchwork.app
 
       - name: Find disk image
         id: find
@@ -208,9 +223,13 @@ jobs:
           args: --latest --strip header --output RELEASE_NOTES.md
 
       - name: Write the update manifest
-        # The app's updater reads latest.json from the latest release: each platform's download
-        # and the signature of that file.
+        # Patchwork 0.6.7 and older read latest.json from the latest release: each platform's
+        # download and the signature of that file. Without the signing key there is none.
         run: |
+          if ! ls dist/*.sig > /dev/null 2>&1; then
+            echo "No signed files; the release has no latest.json."
+            exit 0
+          fi
           base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           platform() {
             [[ -f "$1" && -f "$1.sig" ]] || { echo "Missing $1 or its signature." >&2; exit 1; }

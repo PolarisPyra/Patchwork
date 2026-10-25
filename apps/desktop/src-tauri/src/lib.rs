@@ -472,9 +472,7 @@ fn update_status(app: AppHandle, updates: State<updates::Updates>) -> updates::U
 /// Starts a check. Its progress and result arrive on `"update-status"`.
 #[tauri::command]
 fn check_for_updates(app: AppHandle) {
-    tauri::async_runtime::spawn(async move {
-        app.state::<updates::Updates>().check(&app, true).await;
-    });
+    std::thread::spawn(move || app.state::<updates::Updates>().check(&app, true));
 }
 
 #[tauri::command]
@@ -599,7 +597,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event
                 && window.state::<TrayAvailable>().0

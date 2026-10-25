@@ -36,15 +36,12 @@ require_tools() {
 
 build_appimage() {
   require_tools
-  # The updater signature needs the release signing key: CI passes it in the environment, and a
-  # local build reads it from ~/.tauri. Without the key, the build has no signature.
-  local key="$HOME/.tauri/patchwork.key" args=()
-  if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" && -f "$key" ]]; then
-    export TAURI_SIGNING_PRIVATE_KEY="$key"
-    export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(cat "$key.password" 2>/dev/null || true)"
-  fi
-  if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
-    args=(--config '{"bundle":{"createUpdaterArtifacts":false}}')
+  # Patchwork 0.6.7 and older update only to signed builds. A release build signs its AppImage
+  # when CI passes the signing key, so those copies can update; Patchwork itself checks downloads
+  # against GitHub's checksums and needs no key.
+  local args=()
+  if [[ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
+    args=(--config '{"bundle":{"createUpdaterArtifacts":true}}')
   fi
   pnpm --filter patchwork-desktop exec tauri build --bundles appimage "${args[@]}"
   # Tauri names the file after the version. Rename it so the name stays the same across releases.
