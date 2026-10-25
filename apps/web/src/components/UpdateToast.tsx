@@ -49,7 +49,7 @@ export default function UpdateToast() {
   return (
     <div
       role="status"
-      className="fixed top-12 right-3 z-50 flex max-w-[calc(100vw_-_24px)] flex-col gap-1.5 rounded-[8px] border border-border-strong bg-elevated p-2.5 text-[length:var(--fs-md)] text-fg shadow-[var(--shadow-popup)]"
+      className="update-card-in fixed top-12 right-3 z-50 flex max-w-[calc(100vw_-_24px)] flex-col gap-1.5 rounded-[8px] border border-border-strong bg-elevated p-2.5 text-[length:var(--fs-md)] text-fg shadow-[var(--shadow-popup)]"
     >
       <div className="flex items-center gap-2">
         <ArrowCircleUpIcon size={18} className="flex-none text-accent" />
