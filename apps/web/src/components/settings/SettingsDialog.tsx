@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 import { RELEASES_URL, restartToUpdate } from "~/lib/updates";
 import {
   ArrowCircleUpIcon,
@@ -615,14 +616,24 @@ function AntigravityInstall({ onInstalled }: { onInstalled: () => void }) {
 
 function AgentPane({ settings, updateSettings }: PaneProps) {
   const [status, setStatus] = useState<Partial<Record<AgentKind, AgentStatus | null>>>({});
-  // Re-reads each agent, skipping the cache, so a fresh install shows at once.
-  const refresh = () => {
-    for (const kind of CLI_KINDS) {
-      api.detectAgent(kind, true).then(
-        (s) => setStatus((prev) => ({ ...prev, [kind]: s })),
-        () => setStatus((prev) => ({ ...prev, [kind]: null })),
-      );
-    }
+  // Re-reads an agent, skipping the cache, so a fresh install shows at once.
+  const recheck = (kind: AgentKind) =>
+    api.detectAgent(kind, true).then(
+      (s) => setStatus((prev) => ({ ...prev, [kind]: s })),
+      () => setStatus((prev) => ({ ...prev, [kind]: null })),
+    );
+  const refresh = () => CLI_KINDS.forEach(recheck);
+  const setPath = async (kind: AgentKind, path: string | undefined) => {
+    setStatus((prev) => ({ ...prev, [kind]: undefined }));
+    await updateSettings((st) => {
+      const { [kind]: _, ...rest } = st.agentPaths;
+      return { ...st, agentPaths: path ? { ...rest, [kind]: path } : rest };
+    });
+    await recheck(kind);
+  };
+  const locate = async (kind: AgentKind) => {
+    const path = await open({ multiple: false, directory: false });
+    if (typeof path === "string") await setPath(kind, path);
   };
 
   useEffect(() => {
@@ -659,6 +670,7 @@ function AgentPane({ settings, updateSettings }: PaneProps) {
       {CLI_KINDS.map((kind) => {
         const s = status[kind];
         const on = connected.includes(kind);
+        const path = settings.agentPaths[kind];
         const badge = s === undefined ? "Checking…" : s?.installed ? "Installed" : "Not installed";
         // Keep at least one agent connected, and only connect installed ones.
         const locked = on ? connected.length === 1 : !s?.installed;
@@ -672,6 +684,18 @@ function AgentPane({ settings, updateSettings }: PaneProps) {
             <span className={`badge${s?.installed ? " badge-success" : ""}`}>{badge}</span>
             {kind === "antigravity" && !s?.installed && s !== undefined && (
               <AntigravityInstall onInstalled={refresh} />
+            )}
+            {path ? (
+              <button className="btn" title={path} onClick={() => void setPath(kind, undefined)}>
+                Auto-detect
+              </button>
+            ) : (
+              s !== undefined &&
+              !s?.installed && (
+                <button className="btn" onClick={() => void locate(kind)}>
+                  Locate…
+                </button>
+              )
             )}
             <button
               className="toggle"

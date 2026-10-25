@@ -34,6 +34,8 @@ export interface Settings {
   theme: Theme;
   /** Connected agents; the first is the default for new tasks. */
   agents: AgentKind[];
+  /** Agent CLIs the user located by hand, used instead of searching for them. */
+  agentPaths: Partial<Record<AgentKind, string>>;
   integrations: Integrations;
   projects: Project[];
   activeProjectId: string | null;
@@ -437,6 +439,7 @@ export const DEFAULT_SETTINGS: Settings = {
   integrations: { github: false, terminal: false, figma: false, browser: false },
   projects: [],
   activeProjectId: null,
+  agentPaths: {},
   shell: null,
   tokens: {
     showUsage: true,

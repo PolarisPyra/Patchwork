@@ -31,6 +31,36 @@ use crate::workspace::{signal_process_group, SIGKILL};
 /// Upper bound for any single agent CLI probe (`--version`, `auth status`, ...).
 const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Agent CLIs the user located by hand, mirrored from the settings.
+static AGENT_PATHS: Mutex<Vec<(AgentKind, PathBuf)>> = Mutex::new(Vec::new());
+
+/// Called whenever the settings are loaded or saved.
+pub fn set_agent_paths(paths: &HashMap<AgentKind, String>) {
+    *AGENT_PATHS.lock().unwrap_or_else(PoisonError::into_inner) = paths
+        .iter()
+        .map(|(kind, path)| (*kind, PathBuf::from(path.trim())))
+        .filter(|(_, path)| !path.as_os_str().is_empty())
+        .collect();
+}
+
+fn located(kind: AgentKind) -> Option<PathBuf> {
+    AGENT_PATHS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .iter()
+        .find(|(k, _)| *k == kind)
+        .map(|(_, path)| path.clone())
+}
+
+/// The CLI the user located for `kind`, else what `search` finds. A located path is used alone,
+/// so a missing file reads as not installed rather than falling back to another copy.
+fn located_or(kind: AgentKind, search: impl FnOnce() -> Option<PathBuf>) -> Option<PathBuf> {
+    match located(kind) {
+        Some(path) => path.is_file().then_some(path),
+        None => search(),
+    }
+}
+
 pub fn home_dir() -> Option<PathBuf> {
     std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
@@ -48,6 +78,18 @@ fn fallback_dirs() -> Vec<PathBuf> {
     // npm's global bin on Windows, where `npm i -g @openai/codex` puts `codex.cmd`.
     if let Some(appdata) = std::env::var_os("APPDATA") {
         dirs.push(PathBuf::from(appdata).join("npm"));
+    }
+    // The Codex desktop app on Windows keeps its CLI in a folder named by a hash that changes
+    // with each update, so every one is searched, newest first.
+    if let Some(entries) = std::env::var_os("LOCALAPPDATA")
+        .and_then(|local| std::fs::read_dir(PathBuf::from(local).join("OpenAI/Codex/bin")).ok())
+    {
+        let mut bins: Vec<_> = entries
+            .flatten()
+            .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
+            .collect();
+        bins.sort_by_key(|a| std::cmp::Reverse(a.0));
+        dirs.extend(bins.into_iter().map(|(_, path)| path));
     }
     if let Ok(entries) = std::fs::read_dir(home.join(".nvm/versions/node")) {
         let mut nvm: Vec<PathBuf> = entries.flatten().map(|e| e.path().join("bin")).collect();
@@ -74,8 +116,9 @@ fn find_binary(name: &str) -> Option<PathBuf> {
 /// the binary's directory prepended to PATH (codex needs `node` beside it).
 pub fn agent_command(kind: AgentKind) -> Result<Command, String> {
     let bin = match kind {
-        AgentKind::Claude => find_binary("claude").ok_or("Claude Code is not installed")?,
-        AgentKind::Codex => find_binary("codex").ok_or("Codex is not installed")?,
+        AgentKind::Claude => located_or(kind, || find_binary("claude"))
+            .ok_or("Claude Code is not installed")?,
+        AgentKind::Codex => located_or(kind, || find_binary("codex")).ok_or("Codex is not installed")?,
         AgentKind::Antigravity => {
             antigravity::antigravity_bin().ok_or("Antigravity CLI is not installed")?
         }
@@ -276,6 +319,13 @@ pub fn detect_agent(kind: AgentKind) -> AgentStatus {
         return status;
     }
     let Some(version) = probe(kind, &["--version"]).filter(|p| p.success) else {
+        if let Some(path) = located(kind) {
+            status.detail = if path.is_file() {
+                format!("Could not run {}", path.display())
+            } else {
+                format!("No file at {}", path.display())
+            };
+        }
         return status;
     };
     status.installed = true;

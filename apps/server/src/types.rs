@@ -64,6 +64,8 @@ pub struct Settings {
     /// Legacy single-agent setting, migrated into `agents` on load.
     #[serde(skip_serializing)]
     pub agent: Option<AgentKind>,
+    /// Agent CLIs the user located by hand, used instead of searching for them.
+    pub agent_paths: HashMap<AgentKind, String>,
     pub integrations: Integrations,
     pub projects: Vec<Project>,
     pub active_project_id: Option<String>,

@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::OnceLock;
+use std::sync::{Mutex, PoisonError};
 
 use serde_json::{Value, json};
 
@@ -17,6 +17,7 @@ use super::TurnSpec;
 use super::file_touched;
 use super::find_binary;
 use super::home_dir;
+use super::located_or;
 use super::one_line;
 use super::opencode_bridge;
 use super::probe;
@@ -30,10 +31,12 @@ use super::tool_started;
 
 /// `opencode` on PATH or in the usual install folders, else where its installer puts it.
 pub fn opencode_bin() -> Option<PathBuf> {
-    find_binary("opencode").or_else(|| {
-        home_dir()
-            .map(|h| h.join(".opencode/bin/opencode"))
-            .filter(|p| p.is_file())
+    located_or(AgentKind::OpenCode, || {
+        find_binary("opencode").or_else(|| {
+            home_dir()
+                .map(|h| h.join(".opencode/bin/opencode"))
+                .filter(|p| p.is_file())
+        })
     })
 }
 
@@ -67,19 +70,31 @@ pub fn models() -> Vec<ModelOption> {
         .collect()
 }
 
-/// The CLI's major version, read once.
+/// The CLI's major version, read again only when the binary changes: another one is located,
+/// or the same file is updated in place.
 fn major_version() -> u32 {
-    static MAJOR: OnceLock<u32> = OnceLock::new();
-    *MAJOR.get_or_init(|| {
-        probe(AgentKind::OpenCode, &["--version"])
-            .and_then(|p| {
-                p.stdout
-                    .split_whitespace()
-                    .find_map(|w| w.trim_start_matches('v').split('.').next()?.parse().ok())
-            })
-            .unwrap_or(1)
-    })
+    static MAJOR: Mutex<Option<(BinaryKey, u32)>> = Mutex::new(None);
+    let key = opencode_bin().map(|bin| {
+        let modified = std::fs::metadata(&bin).and_then(|m| m.modified()).ok();
+        (bin, modified)
+    });
+    let mut cached = MAJOR.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some((_, major)) = cached.as_ref().filter(|(k, _)| *k == key) {
+        return *major;
+    }
+    let major = probe(AgentKind::OpenCode, &["--version"])
+        .and_then(|p| {
+            p.stdout
+                .split_whitespace()
+                .find_map(|w| w.trim_start_matches('v').split('.').next()?.parse().ok())
+        })
+        .unwrap_or(1);
+    *cached = Some((key, major));
+    major
 }
+
+/// Which OpenCode binary a cached version came from: its path and when it last changed.
+type BinaryKey = Option<(PathBuf, Option<std::time::SystemTime>)>;
 
 /// The tool kinds OpenCode 1.x checks before running; the read-only tools always run.
 const GUARDED: [&str; 6] = [

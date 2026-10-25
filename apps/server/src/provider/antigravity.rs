@@ -5,11 +5,13 @@ use std::path::PathBuf;
 use serde_json::Value;
 
 use crate::types::AccessMode;
+use crate::types::AgentKind;
 use crate::types::AgentStatus;
 use crate::types::ModelOption;
 use super::GoalUpdate;
 use super::home_dir;
 use super::is_goal_command;
+use super::located_or;
 use super::model_manifest;
 use super::Parsed;
 use super::prompt;
@@ -32,10 +34,12 @@ pub fn antigravity_bin() -> Option<PathBuf> {
             .map(PathBuf::from)
             .or_else(|| home_dir().map(|h| h.join(".config")))
     };
-    config
-        .map(|c| c.join("patchwork/clis/agy"))
-        .filter(|p| p.is_file())
-        .or_else(|| which::which("agy").ok())
+    located_or(AgentKind::Antigravity, || {
+        config
+            .map(|c| c.join("patchwork/clis/agy"))
+            .filter(|p| p.is_file())
+            .or_else(|| which::which("agy").ok())
+    })
 }
 
 /// `~/.gemini`, where the earlier Gemini CLI saved its chats for the import to read.
