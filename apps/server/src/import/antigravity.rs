@@ -7,17 +7,25 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::{Session, SessionMessage, push_merged};
+use super::{Session, SessionMessage, debug_log::ilog, push_merged};
 use crate::provider;
 use crate::time::parse_rfc3339_ms;
 use crate::types::{AgentKind, Role};
 
 pub fn sessions() -> Vec<Session> {
     let Some(home) = provider::antigravity::home() else {
+        ilog!("Antigravity: no home folder");
         return vec![];
     };
     let roots = project_roots(&home);
-    let dirs = std::fs::read_dir(home.join("tmp"))
+    let tmp = home.join("tmp");
+    ilog!(
+        "Antigravity: reading {} (exists: {}), {} projects in projects.json",
+        tmp.display(),
+        tmp.is_dir(),
+        roots.len()
+    );
+    let dirs = std::fs::read_dir(tmp)
         .into_iter()
         .flatten()
         .flatten();
@@ -29,6 +37,7 @@ pub fn sessions() -> Vec<Session> {
             .cloned()
             .or_else(|| marker_root(&dir.path()))
         else {
+            ilog!("Antigravity: skipped folder {name}: no project folder recorded for it");
             continue;
         };
         let chats = std::fs::read_dir(dir.path().join("chats"))
@@ -36,8 +45,12 @@ pub fn sessions() -> Vec<Session> {
             .flatten()
             .flatten();
         for chat in chats.map(|c| c.path()).filter(|p| p.is_file()) {
-            let Ok(text) = std::fs::read_to_string(&chat) else {
-                continue;
+            let text = match std::fs::read_to_string(&chat) {
+                Ok(text) => text,
+                Err(e) => {
+                    ilog!("Antigravity: couldn't read {}: {e}", chat.display());
+                    continue;
+                }
             };
             let parsed = if chat.extension().is_some_and(|e| e == "json") {
                 serde_json::from_str(&text)
@@ -46,6 +59,9 @@ pub fn sessions() -> Vec<Session> {
             } else {
                 parse_jsonl(&text, &cwd)
             };
+            if parsed.is_none() {
+                ilog!("Antigravity: skipped {}: unrecognized chat file", chat.display());
+            }
             out.extend(parsed);
         }
     }

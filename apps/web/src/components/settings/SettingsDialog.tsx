@@ -721,6 +721,13 @@ function ImportsPane({
         );
       })}
       {error && <div className="text-[length:var(--fs-sm)] text-danger">{error}</div>}
+      <TokenRow title="Import log" desc="Writes each scan and import to logs/imports.log">
+        <TokenSwitch
+          label="Import log"
+          on={!settings.importLogDisabled}
+          onChange={(on) => void updateSettings((s) => ({ ...s, importLogDisabled: !on }))}
+        />
+      </TokenRow>
     </>
   );
 }

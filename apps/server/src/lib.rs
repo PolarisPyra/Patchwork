@@ -17,6 +17,7 @@ use std::sync::Arc;
 use orchestration::{ApprovalDecision, Delivery, FollowUpInput, Runner, TurnRequest};
 use persistence::Store;
 
+use crate::import::debug_log::ilog;
 use crate::types::{AgentKind, Project, Settings, TokenSettings, Role, MessageStatus, StepStatus, AccessMode, ApprovalStatus, Attachment, Message, Thread, Folder, GoalStatus, ImportSource, ImportScan, AgentEventEnvelope, AgentEvent, now_ms, new_id};
 
 pub type Res<T> = Result<T, String>;
@@ -283,6 +284,7 @@ impl Server {
         provider::model_manifest::start(&config_dir);
         std::thread::spawn(scope::prepare);
         let clis_dir = config_dir.join("clis");
+        import::debug_log::init(config_dir.join("logs/imports.log"));
         let store = Store::open(config_dir)?;
         let interrupted = orchestration::recovery::recover(&store)?;
         Ok(Arc::new(Self {
@@ -1045,24 +1047,50 @@ impl Server {
         // Patchwork's own chats are not the user's imports, so they are not counted.
         let all: Vec<_> = all
             .into_iter()
-            .filter(|s| !s.subagent && !Path::new(&s.cwd).starts_with(&self.chats_dir))
-            .collect();
-        let found = all.len() as u32;
-        let new = all
-            .into_iter()
             .filter(|s| {
-                if s.imported {
-                    return !imported.contains(&s.session_id);
+                if s.subagent {
+                    ilog!("{source:?}: skipped {}: sub-agent run", s.session_id);
+                    return false;
                 }
-                !known
-                    .iter()
-                    .any(|(a, id)| *a == s.agent && *id == s.session_id)
+                if Path::new(&s.cwd).starts_with(&self.chats_dir) {
+                    ilog!("{source:?}: skipped {}: a Patchwork chat", s.session_id);
+                    return false;
+                }
+                true
             })
             .collect();
+        let found = all.len() as u32;
+        let new: Vec<_> = all
+            .into_iter()
+            .filter(|s| {
+                let already = if s.imported {
+                    imported.contains(&s.session_id)
+                } else {
+                    known
+                        .iter()
+                        .any(|(a, id)| *a == s.agent && *id == s.session_id)
+                };
+                if already {
+                    ilog!("{source:?}: skipped {}: already in Patchwork", s.session_id);
+                }
+                !already
+            })
+            .collect();
+        ilog!(
+            "{source:?}: {found} found, {} new, {subagents} sub-agent runs",
+            new.len()
+        );
         (found, subagents, new)
     }
 
+    /// Follows the setting before a scan or import writes to the import log.
+    fn start_import_log(&self, what: &str) {
+        import::debug_log::set_enabled(!self.store.settings().import_log_disabled);
+        ilog!("{what}");
+    }
+
     pub fn scan_imports(&self, source: ImportSource) -> ImportScan {
+        self.start_import_log(&format!("{source:?}: scan started"));
         let (found, subagents, new) = self.importable(
             source,
             &self.store.session_keys(),
@@ -1081,6 +1109,7 @@ impl Server {
     /// T3 Code thread is also in the agent's own files) is imported once.
     /// Returns how many threads were added.
     pub fn import_threads(&self, sources: &[ImportSource]) -> Res<u32> {
+        self.start_import_log(&format!("import started: {sources:?}"));
         let mut known = self.store.session_keys();
         let mut imported = self.store.imported_sources();
         let mut threads = Vec::new();
@@ -1088,6 +1117,7 @@ impl Server {
             for session in self.importable(source, &known, &imported).2 {
                 if session.imported {
                     if imported.contains(&session.session_id) {
+                        ilog!("{source:?}: skipped {}: imported from another source", session.session_id);
                         continue;
                     }
                     imported.push(session.session_id.clone());
@@ -1096,22 +1126,29 @@ impl Server {
                         .iter()
                         .any(|(a, id)| *a == session.agent && *id == session.session_id)
                     {
+                        ilog!("{source:?}: skipped {}: imported from another source", session.session_id);
                         continue;
                     }
                     known.push((session.agent, session.session_id.clone()));
                 }
                 let project_id = if import::is_chat_folder(Path::new(&session.cwd)) {
+                    ilog!("{source:?}: importing {} as a chat ({})", session.session_id, session.cwd);
                     None
                 } else {
-                    let project =
-                        self.register_project(workspace::make_project(&session.cwd)?, false)?;
+                    ilog!("{source:?}: importing {} into project {}", session.session_id, session.cwd);
+                    let project = workspace::make_project(&session.cwd)
+                        .and_then(|p| self.register_project(p, false))
+                        .inspect_err(|e| ilog!("{source:?}: couldn't add project {}: {e}", session.cwd))?;
                     Some(project.id)
                 };
                 threads.push(import::to_thread(session, project_id));
             }
         }
         let count = threads.len() as u32;
-        self.store.insert_threads(threads)?;
+        self.store
+            .insert_threads(threads)
+            .inspect_err(|e| ilog!("import failed saving threads: {e}"))?;
+        ilog!("import finished: {count} threads added");
         Ok(count)
     }
 }

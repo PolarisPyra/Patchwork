@@ -5,12 +5,14 @@
 mod antigravity;
 mod claude;
 mod codex;
+pub mod debug_log;
 mod opencode;
 mod t3;
 
 use std::path::Path;
 
 use crate::provider;
+use debug_log::ilog;
 use crate::types::{AgentKind, Role, MessageStatus, AccessMode, Message, Thread, ImportSource, new_id};
 
 /// The longest transcript sent to an agent as context. The newest messages are kept.
@@ -56,9 +58,19 @@ pub fn sessions(source: ImportSource, default_agent: AgentKind) -> Vec<Session> 
         ImportSource::T3 => t3::sessions(),
         ImportSource::OpenCode => opencode::sessions(default_agent),
     };
-    all.into_iter()
-        .filter(|s| s.messages.iter().any(|m| m.role == Role::User))
-        .collect()
+    let read = all.len();
+    let kept: Vec<_> = all
+        .into_iter()
+        .filter(|s| {
+            let keep = s.messages.iter().any(|m| m.role == Role::User);
+            if !keep {
+                ilog!("{source:?}: skipped {} ({}): no user message", s.session_id, s.cwd);
+            }
+            keep
+        })
+        .collect();
+    ilog!("{source:?}: read {read} conversations, {} with a user message", kept.len());
+    kept
 }
 
 impl SessionMessage {

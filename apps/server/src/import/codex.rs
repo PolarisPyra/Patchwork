@@ -8,20 +8,30 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::{Session, SessionMessage, push_merged};
+use super::{Session, SessionMessage, debug_log::ilog, push_merged};
 use crate::provider;
 use crate::time::parse_rfc3339_ms;
 use crate::types::{AgentKind, Role};
 
 pub fn sessions() -> Vec<Session> {
     let Some(home) = provider::codex::home() else {
+        ilog!("Codex: no home folder");
         return vec![];
     };
     let titles = thread_names(&home.join("session_index.jsonl"));
-    provider::codex::rollout_files(&home.join("sessions"))
+    let dir = home.join("sessions");
+    let files = provider::codex::rollout_files(&dir);
+    ilog!("Codex: reading {} (exists: {}), {} rollout files", dir.display(), dir.is_dir(), files.len());
+    files
         .into_iter()
         .filter_map(|(_, path)| {
-            let mut session = parse(BufReader::new(File::open(&path).ok()?))?;
+            let file = File::open(&path)
+                .map_err(|e| ilog!("Codex: couldn't read {}: {e}", path.display()))
+                .ok()?;
+            let Some(mut session) = parse(BufReader::new(file)) else {
+                ilog!("Codex: skipped {}: no session_meta with an id and folder", path.display());
+                return None;
+            };
             session.title = titles.get(&session.session_id).cloned();
             Some(session)
         })

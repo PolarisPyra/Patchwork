@@ -35,6 +35,8 @@ export interface Settings {
   integrations: Integrations;
   projects: Project[];
   activeProjectId: string | null;
+  /** Stops writing `logs/imports.log` in the config folder. */
+  importLogDisabled: boolean;
   tokens: TokenSettings;
   /** Shell that agents run commands in; null follows the SHELL environment variable. */
   shell: string | null;
@@ -403,6 +405,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   notifications: { goalComplete: true, taskComplete: true },
   logo: null,
+  importLogDisabled: false,
 };
 
 /** Agent used for new tasks: the first connected one, else Claude Code. */
@@ -425,7 +428,7 @@ export const SOURCE_LABELS: Record<ImportSource, string> = {
 
 /** Import sources to offer: each connected agent's own files, plus another app and OpenCode. */
 export function importSourcesFor(agents: AgentKind[]): ImportSource[] {
-  return [...agents, "t3", "opencode"];
+  return [...agents.filter((a) => a !== "opencode"), "t3", "opencode"];
 }
 
 const agentStatusCache: Partial<Record<AgentKind, AgentStatus>> = {};

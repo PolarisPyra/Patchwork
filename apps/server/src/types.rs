@@ -70,6 +70,8 @@ pub struct Settings {
     pub notifications: NotificationSettings,
     /// Id of the app icon color way in `assets/logos/manifest.json`. None uses the manifest default.
     pub logo: Option<String>,
+    /// Stops writing `logs/imports.log` in the config folder.
+    pub import_log_disabled: bool,
 }
 
 /// Desktop notifications shown while Patchwork is not the focused window.

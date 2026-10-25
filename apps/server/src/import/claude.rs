@@ -2,15 +2,17 @@
 
 use serde_json::Value;
 
-use super::{Session, SessionMessage, push_merged};
+use super::{Session, SessionMessage, debug_log::ilog, push_merged};
 use crate::provider;
 use crate::time::parse_rfc3339_ms;
 use crate::types::{AgentKind, Role};
 
 pub fn sessions() -> Vec<Session> {
     let Some(projects) = provider::claude::home().map(|h| h.join("projects")) else {
+        ilog!("Claude: no home folder");
         return vec![];
     };
+    ilog!("Claude: reading {} (exists: {})", projects.display(), projects.is_dir());
     let dirs = std::fs::read_dir(projects).into_iter().flatten().flatten();
     // Conversations are `<project>/<session>.jsonl`; sub-agent runs are
     // `<project>/<session>/subagents/*.jsonl`.
@@ -37,7 +39,13 @@ pub fn sessions() -> Vec<Session> {
         .filter_map(|p| {
             // Every line of a sub-agent run is a sidechain.
             let subagent = p.parent().is_some_and(|d| d.ends_with("subagents"));
-            let mut session = parse(&std::fs::read_to_string(p).ok()?, subagent)?;
+            let text = std::fs::read_to_string(&p)
+                .map_err(|e| ilog!("Claude: couldn't read {}: {e}", p.display()))
+                .ok()?;
+            let Some(mut session) = parse(&text, subagent) else {
+                ilog!("Claude: skipped {}: no session id or folder", p.display());
+                return None;
+            };
             session.subagent = subagent;
             Some(session)
         })

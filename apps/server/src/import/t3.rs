@@ -7,15 +7,17 @@
 use rusqlite::{Connection, OpenFlags, params};
 use serde_json::Value;
 
-use super::{Session, SessionMessage, push_merged};
+use super::{Session, SessionMessage, debug_log::ilog, push_merged};
 use crate::provider;
 use crate::time::parse_rfc3339_ms;
 use crate::types::{AgentKind, Role};
 
 pub fn sessions() -> Vec<Session> {
     let Some(path) = provider::home_dir().map(|h| h.join(".t3/userdata/statev2.sqlite")) else {
+        ilog!("T3: no home folder");
         return vec![];
     };
+    ilog!("T3: reading {} (exists: {})", path.display(), path.is_file());
     if !path.is_file() {
         return vec![];
     }
@@ -24,6 +26,7 @@ pub fn sessions() -> Vec<Session> {
         .and_then(|conn| read(&conn))
         .unwrap_or_else(|e| {
             log::warn!("couldn't read T3 Code threads: {e}");
+            ilog!("T3: couldn't read the database: {e}");
             vec![]
         })
 }
@@ -68,6 +71,7 @@ fn read(conn: &Connection) -> rusqlite::Result<Vec<Session>> {
     for row in rows {
         let (thread_id, title, provider, created, root, payload) = row?;
         let Some(agent) = agent_of(&provider) else {
+            ilog!("T3: skipped {thread_id}: provider {provider} can't be resumed");
             continue;
         };
         let payload: Value = serde_json::from_str(&payload).unwrap_or_default();
@@ -81,6 +85,7 @@ fn read(conn: &Connection) -> rusqlite::Result<Vec<Session>> {
             .filter_map(|p| serde_json::from_str::<Value>(&p).ok())
             .find_map(|p| p["nativeThreadRef"]["nativeId"].as_str().map(String::from));
         let Some(session_id) = session_id else {
+            ilog!("T3: skipped {thread_id}: no native session id");
             continue;
         };
 
