@@ -1,6 +1,6 @@
 //! Keeps Patchwork up to date from its GitHub releases. Shortly after launch and then every hour
 //! it checks the latest release, downloads this platform's file, checks it against the SHA-256
-//! digest GitHub publishes for it, and installs it, notifying once per version. The new version
+//! digest GitHub publishes for it, and installs it. The new version
 //! runs from the next start; the update card and Settings offer a restart. A copy that was not
 //! installed from a release (a dev or source build) cannot replace itself, so it only reports the
 //! version.
@@ -15,7 +15,6 @@ use patchwork_server::Server;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_notification::NotificationExt;
 
 const LATEST_RELEASE_API: &str =
     "https://api.github.com/repos/PolarisPyra/Patchwork-ADE/releases/latest";
@@ -28,8 +27,6 @@ const TICK: Duration = Duration::from_secs(5 * 60);
 const CHECK_TIMEOUT: Duration = Duration::from_secs(30);
 /// A download that has not finished by then has stalled; the next check starts it again.
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(30 * 60);
-/// The last version the user was told about, so each one notifies once.
-const NOTIFIED_KEY: &str = "update-notified-version";
 
 /// Where updating stands, as the Settings pane shows it.
 #[derive(Clone, Serialize)]
@@ -217,22 +214,14 @@ impl Updates {
         }
         if !can_install() {
             self.set(app, UpdateState::Available { version: version.clone() });
-            notify_once(app, &version, "Download it from the releases page.");
             return;
         }
-        notify_once(app, &version, "Downloading it now. It installs on its own.");
         if let Err(message) = self.download_and_install(app, &release, &version) {
             log::warn!("update {version} failed: {message}");
             self.set(app, UpdateState::Failed { message });
             return;
         }
         self.set(app, UpdateState::Ready { version: version.clone() });
-        let _ = app
-            .notification()
-            .builder()
-            .title(format!("Patchwork {version} is installed"))
-            .body("Restart Patchwork to use it.")
-            .show();
     }
 
     fn download_and_install(&self, app: &AppHandle, release: &Release, version: &str) -> Result<(), String> {
@@ -418,23 +407,6 @@ fn install_bundle(archive: &std::path::Path) -> Result<(), String> {
     })();
     let _ = std::fs::remove_dir_all(&staging);
     result
-}
-
-/// Tells the user about a new version, once per version.
-fn notify_once(app: &AppHandle, version: &str, body: &str) {
-    let server = app.state::<Arc<Server>>();
-    if server.store.state(NOTIFIED_KEY).as_deref() == Some(version) {
-        return;
-    }
-    if let Err(e) = server.store.set_state(NOTIFIED_KEY, version) {
-        log::warn!("could not record the update notification: {e}");
-    }
-    let _ = app
-        .notification()
-        .builder()
-        .title(format!("Patchwork {version} is available"))
-        .body(body)
-        .show();
 }
 
 /// Starts the background checks.
