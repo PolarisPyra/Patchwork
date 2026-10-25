@@ -118,7 +118,7 @@ jobs:
         run: |
           args=()
           if [[ -n "$TAURI_SIGNING_PRIVATE_KEY" ]]; then
-            args=(--config '{"bundle":{"createUpdaterArtifacts":true}}')
+            args=(--config "$GITHUB_WORKSPACE/apps/desktop/src-tauri/tauri.signing.conf.json")
           fi
           pnpm --filter patchwork-desktop exec tauri build --bundles nsis "${args[@]}"
 
@@ -173,7 +173,7 @@ jobs:
         run: |
           args=()
           if [[ -n "$TAURI_SIGNING_PRIVATE_KEY" ]]; then
-            args=(--config '{"bundle":{"createUpdaterArtifacts":true}}')
+            args=(--config "$GITHUB_WORKSPACE/apps/desktop/src-tauri/tauri.signing.conf.json")
           fi
           pnpm --filter patchwork-desktop exec tauri build --bundles app,dmg "${args[@]}"
           bundle=target/release/bundle/macos

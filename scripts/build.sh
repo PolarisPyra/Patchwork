@@ -41,7 +41,8 @@ build_appimage() {
   # against GitHub's checksums and needs no key.
   local args=()
   if [[ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
-    args=(--config '{"bundle":{"createUpdaterArtifacts":true}}')
+    # The bundler signs with the updater's public key, which only this config carries.
+    args=(--config "$repo_root/apps/desktop/src-tauri/tauri.signing.conf.json")
   fi
   pnpm --filter patchwork-desktop exec tauri build --bundles appimage "${args[@]}"
   # Tauri names the file after the version. Rename it so the name stays the same across releases.
