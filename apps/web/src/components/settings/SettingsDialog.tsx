@@ -9,6 +9,7 @@ import {
   GaugeIcon,
   KeyboardIcon,
   PaletteIcon,
+  PlugsConnectedIcon,
   RobotIcon,
   TerminalIcon,
   TrashIcon,
@@ -38,15 +39,17 @@ import ProviderLogos from "~/components/ProviderLogos";
 import type { UpdateSettings } from "~/app/App";
 import { syncProjects } from "~/lib/projects";
 import { formatTokens } from "~/lib/tokens";
-import { AGENT_KINDS, describeAgent, errorText } from "~/lib/util";
+import { AGENT_KINDS, CLI_KINDS, describeAgent, errorText } from "~/lib/util";
 import logoManifest from "../../../../../assets/logos/manifest.json";
 import { CHIP_CLASS } from "~/components/chat/ModelPicker";
 import Dropdown from "~/components/workspace/Dropdown";
 import KeybindingsPane from "~/components/settings/KeybindingsPane";
+import ApiProvidersPane from "~/components/settings/ApiProvidersPane";
 
 type Section =
   | "appearance"
   | "agent"
+  | "api"
   | "tokens"
   | "notifications"
   | "imports"
@@ -57,7 +60,8 @@ type Section =
 
 const SECTIONS: { id: Section; label: string; Icon: Icon }[] = [
   { id: "appearance", label: "Appearance", Icon: PaletteIcon },
-  { id: "agent", label: "Providers", Icon: RobotIcon },
+  { id: "agent", label: "CLI Providers", Icon: RobotIcon },
+  { id: "api", label: "API Providers", Icon: PlugsConnectedIcon },
   { id: "tokens", label: "AI Tokenomics", Icon: GaugeIcon },
   { id: "notifications", label: "Notifications", Icon: BellIcon },
   { id: "imports", label: "Imports", Icon: DownloadSimpleIcon },
@@ -104,10 +108,10 @@ export default function SettingsDialog({
           {SECTIONS.map(({ id, label, Icon }) => (
             <button
               key={id}
-              className={`flex h-7 cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border-none px-2 text-left text-fg ${section === id ? "bg-selected hover:bg-[color-mix(in_srgb,var(--bg-selected),var(--text)_8%)]" : "bg-transparent hover:bg-hover"}`}
+              className={`flex h-8 cursor-pointer items-center gap-2.5 rounded-[var(--radius-sm)] border-none px-2 text-left text-fg ${section === id ? "bg-selected hover:bg-[color-mix(in_srgb,var(--bg-selected),var(--text)_8%)]" : "bg-transparent hover:bg-hover"}`}
               onClick={() => setSection(id)}
             >
-              <Icon size={15} />
+              <Icon size={18} className="flex-none" />
               {label}
             </button>
           ))}
@@ -122,6 +126,7 @@ export default function SettingsDialog({
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
             {section === "appearance" && <AppearancePane {...paneProps} />}
             {section === "agent" && <AgentPane {...paneProps} />}
+            {section === "api" && <ApiProvidersPane updateSettings={updateSettings} />}
             {section === "tokens" && <TokensPane {...paneProps} />}
             {section === "notifications" && <NotificationsPane {...paneProps} />}
             {section === "imports" && <ImportsPane {...paneProps} onImported={onImported} />}
@@ -302,7 +307,7 @@ function DefaultModel({
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value || undefined)}
     >
-      <option value="">CLI default</option>
+      <option value="">{kind === "api" ? "First model" : "CLI default"}</option>
       {models.flatMap((m) =>
         m.id
           ? [
@@ -549,7 +554,7 @@ function AgentPane({ settings, updateSettings }: PaneProps) {
   const [status, setStatus] = useState<Partial<Record<AgentKind, AgentStatus | null>>>({});
   // Re-reads each agent, skipping the cache, so a fresh install shows at once.
   const refresh = () => {
-    for (const kind of AGENT_KINDS) {
+    for (const kind of CLI_KINDS) {
       api.detectAgent(kind, true).then(
         (s) => setStatus((prev) => ({ ...prev, [kind]: s })),
         () => setStatus((prev) => ({ ...prev, [kind]: null })),
@@ -559,7 +564,7 @@ function AgentPane({ settings, updateSettings }: PaneProps) {
 
   useEffect(() => {
     let cancelled = false;
-    for (const kind of AGENT_KINDS) {
+    for (const kind of CLI_KINDS) {
       api.detectAgent(kind).then(
         (s) => {
           if (!cancelled) setStatus((prev) => ({ ...prev, [kind]: s }));
@@ -588,7 +593,7 @@ function AgentPane({ settings, updateSettings }: PaneProps) {
 
   return (
     <>
-      {AGENT_KINDS.map((kind) => {
+      {CLI_KINDS.map((kind) => {
         const s = status[kind];
         const on = connected.includes(kind);
         const badge = s === undefined ? "Checking…" : s?.installed ? "Installed" : "Not installed";

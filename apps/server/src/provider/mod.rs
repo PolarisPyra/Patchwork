@@ -6,6 +6,10 @@ pub mod codex;
 pub mod antigravity;
 pub mod opencode;
 pub mod opencode_bridge;
+pub mod api;
+pub mod api_bridge;
+pub mod api_config;
+pub mod api_tools;
 pub mod model_manifest;
 
 use std::collections::HashMap;
@@ -67,6 +71,7 @@ pub fn agent_command(kind: AgentKind) -> Result<Command, String> {
             antigravity::antigravity_bin().ok_or("Antigravity CLI is not installed")?
         }
         AgentKind::OpenCode => opencode::opencode_bin().ok_or("OpenCode CLI is not installed")?,
+        AgentKind::Api => std::env::current_exe().map_err(|e| format!("Failed to find Patchwork: {e}"))?,
     };
     let mut cmd = crate::host_command(&bin);
     if let Some(dir) = bin.parent() {
@@ -85,7 +90,7 @@ pub fn agent_command(kind: AgentKind) -> Result<Command, String> {
 /// The command a turn runs. An OpenCode 2.x turn runs Patchwork's own binary as the bridge to
 /// `opencode serve`; every other turn runs the agent CLI.
 pub fn turn_command(kind: AgentKind) -> Result<Command, String> {
-    if kind == AgentKind::OpenCode && opencode::uses_serve() {
+    if kind == AgentKind::Api || (kind == AgentKind::OpenCode && opencode::uses_serve()) {
         let exe = std::env::current_exe().map_err(|e| format!("Failed to find Patchwork: {e}"))?;
         return Ok(Command::new(exe));
     }
@@ -104,9 +109,22 @@ fn shell_path() -> Option<&'static OsString> {
 }
 
 fn read_shell_path() -> Option<OsString> {
+    login_shell_value("PATH", false).map(OsString::from)
+}
+
+/// An environment variable as the user's interactive login shell sets it, for variables
+/// exported from shell profiles that a desktop launch does not inherit. None if unset or empty.
+pub fn shell_var(name: &str) -> Option<String> {
+    let valid = !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    valid.then(|| login_shell_value(name, true)).flatten()
+}
+
+/// `$name` in the user's login shell, read with a marker since profile scripts may print too.
+fn login_shell_value(name: &str, interactive: bool) -> Option<String> {
     let shell = crate::login_shell().or_else(|| std::env::var("SHELL").ok())?;
     let mut cmd = crate::host_command(shell);
-    cmd.args(["-l", "-c", &format!("printf '\\n{PATH_MARKER}%s\\n' \"$PATH\"")])
+    let flags = if interactive { "-lic" } else { "-lc" };
+    cmd.args([flags, &format!("printf '\\n{PATH_MARKER}%s\\n' \"${name}\"")])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
@@ -128,11 +146,11 @@ fn read_shell_path() -> Option<OsString> {
     // Kill anything the profile left running, so it cannot hold the pipe open.
     signal_process_group(child.id(), SIGKILL);
     let _ = reader.join();
-    let path = text(&out)
+    let value = text(&out)
         .lines()
         .find_map(|line| line.strip_prefix(PATH_MARKER))?
         .to_string();
-    (!path.is_empty()).then(|| path.into())
+    (!value.is_empty()).then_some(value)
 }
 
 pub struct Probe {
@@ -199,7 +217,17 @@ fn stop(child: &mut Child) {
 
 /// Copies a pipe into a shared buffer on its own thread, so a probe can read what has arrived
 /// without waiting for the pipe to close.
-fn read_pipe(mut pipe: impl Read + Send + 'static) -> (Arc<Mutex<Vec<u8>>>, JoinHandle<()>) {
+fn read_pipe(pipe: impl Read + Send + 'static) -> (Arc<Mutex<Vec<u8>>>, JoinHandle<()>) {
+    read_pipe_upto(pipe, usize::MAX)
+}
+
+/// Reads a pipe to its end, keeping at most about `limit` bytes: past that, the start and the
+/// latest output are kept with a note between them, and the middle is dropped.
+fn read_pipe_upto(
+    mut pipe: impl Read + Send + 'static,
+    limit: usize,
+) -> (Arc<Mutex<Vec<u8>>>, JoinHandle<()>) {
+    const CUT: &[u8] = b"\n[... output cut ...]\n";
     let buf = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&buf);
     let handle = std::thread::spawn(move || {
@@ -208,9 +236,13 @@ fn read_pipe(mut pipe: impl Read + Send + 'static) -> (Arc<Mutex<Vec<u8>>>, Join
             if n == 0 {
                 break;
             }
-            sink.lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .extend_from_slice(&chunk[..n]);
+            let mut buf = sink.lock().unwrap_or_else(PoisonError::into_inner);
+            buf.extend_from_slice(&chunk[..n]);
+            // Cut only once the buffer is twice the limit, so the copy happens rarely.
+            if buf.len() > limit.saturating_mul(2) {
+                let end = buf.len() - limit / 2;
+                buf.splice(limit / 2..end, CUT.iter().copied());
+            }
         }
     });
     (buf, handle)
@@ -229,6 +261,11 @@ pub fn detect_agent(kind: AgentKind) -> AgentStatus {
         signed_in: false,
         detail: "Not installed".into(),
     };
+    // API providers run in Patchwork itself, so there is no CLI to probe.
+    if kind == AgentKind::Api {
+        api::auth(&mut status);
+        return status;
+    }
     let Some(version) = probe(kind, &["--version"]).filter(|p| p.success) else {
         return status;
     };
@@ -245,6 +282,7 @@ pub fn detect_agent(kind: AgentKind) -> AgentStatus {
         AgentKind::Codex => codex::auth(&mut status),
         AgentKind::Antigravity => antigravity::auth(&mut status),
         AgentKind::OpenCode => opencode::auth(&mut status),
+        AgentKind::Api => {}
     }
     status
 }
@@ -256,6 +294,7 @@ pub fn list_models(kind: AgentKind) -> Vec<ModelOption> {
         AgentKind::Codex => (codex::configured_model(), codex::models()),
         AgentKind::Antigravity => (None, antigravity::models()),
         AgentKind::OpenCode => (None, opencode::models()),
+        AgentKind::Api => (api_config::default_model(), api_config::models()),
     };
     let mut out = vec![ModelOption {
         id: None,
@@ -379,6 +418,7 @@ pub fn steer_input(
         // `opencode run` reads one message per run; later ones start the next turn.
         AgentKind::OpenCode => opencode::uses_serve()
             .then(|| opencode::steer_line(&prompt_text(text, attachments), attachments)),
+        AgentKind::Api => Some(api::steer_line(&prompt_text(text, attachments), images)),
     }
 }
 
@@ -406,6 +446,7 @@ pub fn turn_args(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
         AgentKind::Codex => codex::turn_args(),
         AgentKind::Antigravity => antigravity::turn_args(spec),
         AgentKind::OpenCode => opencode::turn_args(spec),
+        AgentKind::Api => api::turn_args(),
     }
 }
 
@@ -417,7 +458,7 @@ pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)
         AgentKind::OpenCode => std::iter::once(("PWD", spec.root.to_string()))
             .chain(opencode::permission_config(spec).map(|config| ("OPENCODE_CONFIG_CONTENT", config)))
             .collect(),
-        AgentKind::Claude | AgentKind::Codex | AgentKind::Antigravity => Vec::new(),
+        AgentKind::Claude | AgentKind::Codex | AgentKind::Antigravity | AgentKind::Api => Vec::new(),
     }
 }
 
@@ -432,6 +473,8 @@ pub fn turn_input(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
         AgentKind::Codex => codex::turn_input(spec),
         // The OpenCode bridge reads its turn from stdin, and answers and steers after it.
         AgentKind::OpenCode if opencode::uses_serve() => vec![opencode::bridge_request(spec)],
+        // Patchwork's own agent reads its turn from stdin, and answers and steers after it.
+        AgentKind::Api => vec![api::bridge_request(spec)],
         // Both read the prompt from their arguments, and stdin is closed so they do not wait on it.
         AgentKind::Antigravity | AgentKind::OpenCode => vec![],
     }
@@ -461,6 +504,7 @@ pub fn parse_line(agent: AgentKind, v: &Value, spec: &TurnSpec, message_id: &str
         AgentKind::Codex => codex::parse(v, spec, message_id),
         AgentKind::Antigravity => antigravity::parse(v, spec, message_id),
         AgentKind::OpenCode => opencode::parse(v, spec, message_id),
+        AgentKind::Api => api::parse(v, message_id),
     }
 }
 
@@ -475,6 +519,7 @@ pub fn approval_reply(
         AgentKind::Claude => claude::approval_reply(reply, allow, answers),
         AgentKind::Codex => codex::approval_reply(reply, allow, answers),
         AgentKind::OpenCode if opencode::uses_serve() => opencode::approval_reply(reply, allow, answers),
+        AgentKind::Api => api::approval_reply(reply, allow, answers),
         // Antigravity and `opencode run` run headless and never ask.
         AgentKind::Antigravity | AgentKind::OpenCode => String::new(),
     }

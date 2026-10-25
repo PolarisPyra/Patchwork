@@ -3,9 +3,9 @@
 # Patchwork
 
 Patchwork is a desktop workspace for coding agents. It runs Claude Code, Codex, Antigravity, and
-OpenCode through the CLIs already installed on your machine, so there are no new accounts or API
-keys to manage. Projects, tasks, and chats share one sidebar, and every change an agent makes is
-reviewed in the app before you keep it.
+OpenCode through the CLIs already installed on your machine, and any OpenAI-compatible API, such as
+DeepSeek, with your own key. Projects, tasks, and chats share one sidebar, and every change an agent
+makes is reviewed in the app before you keep it.
 
 <table>
   <tr>
@@ -20,8 +20,12 @@ reviewed in the app before you keep it.
 
 ## Features
 
-- **Four agents, one interface.** Claude Code, Codex, Antigravity, and OpenCode share the same
-  chat, plan, and diff views.
+- **Every agent, one interface.** Claude Code, Codex, Antigravity, OpenCode, and API models share
+  the same chat, plan, and diff views.
+- **Bring your own API key.** Add DeepSeek, or any OpenAI-compatible endpoint, under
+  **Settings → API Providers**. Keys are kept in the system keychain. Patchwork's built-in agent
+  reads, searches, and edits files, runs commands, and asks before acting, following the task's
+  access mode.
 - **Review before you keep it.** Each task's canvas shows its Plan, Code, and Diff views. Stage the
   files you want with `git add`, or reject a file to restore it.
 - **Access modes per task.** Choose supervised, auto-accept edits, auto, or full access. Approval
@@ -44,8 +48,9 @@ installer for Windows, and a disk image for macOS on Apple silicon. To build fro
 
 ## Requirements
 
-Install at least one agent CLI and sign in to it with the CLI's own login command. Patchwork
-detects which CLIs are installed and uses them as they are.
+Install at least one agent CLI and sign in to it with the CLI's own login command, or add an API
+provider in **Settings → API Providers**. Patchwork detects which CLIs are installed and uses them
+as they are.
 
 - [Claude Code](https://docs.claude.com/en/docs/claude-code) (`claude`)
 - [Codex](https://github.com/openai/codex) (`codex`)
@@ -69,6 +74,14 @@ To try an agent without a project, start a chat from the top of the sidebar.
 - The agent CLIs do the work and talk to their own services. Patchwork reads the files they save,
   such as session transcripts, to show history and usage. [Agent CLIs](docs/agent-clis.md) lists
   every file and command it touches.
+- API providers are listed in `~/.config/patchwork/api-providers.json`, which holds no keys. Each
+  key, and the values of any custom headers, is stored in the system keychain (macOS Keychain,
+  Windows Credential Manager, or the Secret Service on Linux). On a system without one, they go to
+  `api-keys.json` in the same folder, readable only by you. A provider can also read its key from
+  an environment variable. Base URLs must use `https://`, except for a server on your machine or
+  local network. API
+  conversations are saved under `~/.config/patchwork/api-sessions/`, and requests go straight from
+  your machine to the provider.
 
 ## Documentation
 

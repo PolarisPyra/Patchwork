@@ -1,6 +1,8 @@
-import { AGENT_LABELS, type AgentKind, type AgentStatus } from "~/api";
+import { AGENT_LABELS, type AgentKind, type AgentStatus, type CliKind } from "~/api";
 
 export const AGENT_KINDS = Object.keys(AGENT_LABELS) as AgentKind[];
+/** The agents that run an installed CLI; API providers run in Patchwork itself. */
+export const CLI_KINDS = AGENT_KINDS.filter((k): k is CliKind => k !== "api");
 /** Names of the folders a sort by agent puts tasks in. */
 export const AGENT_FOLDER_NAMES: ReadonlySet<string> = new Set(Object.values(AGENT_LABELS));
 

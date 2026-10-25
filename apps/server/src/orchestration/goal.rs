@@ -116,7 +116,7 @@ pub(crate) fn agent_keeps(agent: AgentKind, status: GoalStatus) -> bool {
 /// its docs say to ask the agent.
 pub(crate) fn clear_command(agent: AgentKind) -> &'static str {
     match agent {
-        AgentKind::Antigravity | AgentKind::OpenCode => "Stop the current goal.",
+        AgentKind::Antigravity | AgentKind::OpenCode | AgentKind::Api => "Stop the current goal.",
         AgentKind::Claude | AgentKind::Codex => "/goal clear",
     }
 }

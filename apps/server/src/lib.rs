@@ -282,6 +282,7 @@ impl Server {
     /// `config_dir` holds the database and config files; `data_dir` holds chat scratch folders.
     pub fn open(config_dir: PathBuf, data_dir: &Path, sink: EventSink) -> Res<Arc<Self>> {
         provider::model_manifest::start(&config_dir);
+        provider::api_config::init(&config_dir);
         std::thread::spawn(scope::prepare);
         let clis_dir = config_dir.join("clis");
         import::debug_log::init(config_dir.join("logs/imports.log"));
@@ -635,6 +636,7 @@ impl Server {
     pub fn delete_thread(&self, id: &str) {
         self.runner.cancel(id, None);
         self.remove_checkpoints(id);
+        self.remove_api_session(id);
         if self
             .store
             .thread(id)
@@ -760,6 +762,9 @@ impl Server {
             let arg = text.trim()["/goal".len()..].trim().to_lowercase();
             if agent == Some(AgentKind::OpenCode) {
                 return Err("OpenCode has no /goal command. Describe the task in a message instead.".into());
+            }
+            if agent == Some(AgentKind::Api) {
+                return Err("API providers have no /goal command. Describe the task in a message instead.".into());
             }
             if agent == Some(AgentKind::Antigravity) {
                 if provider::antigravity::antigravity_bin().is_none() {
@@ -1011,7 +1016,17 @@ impl Server {
     pub fn clear_thread(&self, thread_id: &str) -> Res<()> {
         self.cancel_turn(thread_id);
         self.remove_checkpoints(thread_id);
+        self.remove_api_session(thread_id);
         self.store.clear_thread(thread_id)
+    }
+
+    /// Deletes the saved conversation of an API task, which Patchwork keeps itself.
+    fn remove_api_session(&self, thread_id: &str) {
+        let Some(thread) = self.store.thread(thread_id) else { return };
+        if let (AgentKind::Api, Some(session)) = (thread.agent, &thread.session_id) {
+            let file = provider::api_config::sessions_dir().join(format!("{session}.json"));
+            let _ = std::fs::remove_file(file);
+        }
     }
 
     /// Answers a pending approval in the thread's running turn.

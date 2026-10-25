@@ -64,6 +64,31 @@ fn list_models(kind: AgentKind) -> Vec<ModelOption> {
     provider::list_models(kind)
 }
 
+// ---- API providers -------------------------------------------------------
+
+#[tauri::command]
+fn list_api_providers() -> Vec<provider::api_config::ProviderView> {
+    provider::api_config::list()
+}
+
+#[tauri::command]
+async fn save_api_provider(
+    provider: provider::api_config::ApiProvider,
+    key: provider::api_config::KeyChange,
+) -> Res<provider::api_config::ProviderView> {
+    blocking(move || provider::api_config::save(provider, key)).await?
+}
+
+#[tauri::command]
+async fn remove_api_provider(id: String) -> Res<()> {
+    blocking(move || provider::api_config::remove(&id)).await?
+}
+
+#[tauri::command]
+async fn fetch_api_models(query: provider::api_config::ModelsQuery) -> Res<Vec<provider::api_config::ApiModel>> {
+    blocking(move || provider::api_config::fetch_models(query)).await?
+}
+
 #[tauri::command]
 async fn detect_agent(kind: AgentKind) -> AgentStatus {
     blocking(move || provider::detect_agent(kind))
@@ -648,6 +673,10 @@ pub fn run() {
             detect_agent,
             list_shells,
             list_models,
+            list_api_providers,
+            save_api_provider,
+            remove_api_provider,
+            fetch_api_models,
             get_usage,
             add_project,
             create_project,

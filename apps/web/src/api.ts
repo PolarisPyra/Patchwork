@@ -7,7 +7,9 @@ import { profile } from "~/lib/profile";
 const invoke = <T>(cmd: string, args?: InvokeArgs) =>
   profile(`ipc:${cmd}`, () => tauriInvoke<T>(cmd, args));
 
-export type AgentKind = "claude" | "codex" | "antigravity" | "opencode";
+export type AgentKind = "claude" | "codex" | "antigravity" | "opencode" | "api";
+/** The agents that run an installed CLI. */
+export type CliKind = Exclude<AgentKind, "api">;
 export type Theme = "light" | "dark" | "system";
 export type Role = "user" | "assistant";
 export type MessageStatus = "streaming" | "complete" | "error" | "cancelled";
@@ -85,6 +87,40 @@ export interface ModelOption {
   /** Superseded model; the picker lists it under "Legacy models". */
   isLegacy: boolean;
 }
+
+/** An OpenAI-compatible endpoint the user added with their own key. Mirrors `ApiProvider` in
+ * apps/server/src/provider/api_config.rs. */
+export interface ApiProvider {
+  /** The part of a model id before its `/`; empty for a provider not saved yet. */
+  id: string;
+  name: string;
+  /** The preset it was made from, e.g. "deepseek", or "custom". */
+  preset: string;
+  baseUrl: string;
+  enabled: boolean;
+  models: ApiModel[];
+  headers: { name: string; value: string }[];
+  /** Reads the key from this environment variable instead of a stored key. */
+  keyEnv: string | null;
+  /** Where the saved key is: the system credential store, or Patchwork's keys file. */
+  keyStore: "keychain" | "file" | null;
+  /** A logo chosen for it, as an image `data:` URL; replaces the preset's. */
+  logo: string | null;
+}
+
+export interface ApiModel {
+  id: string;
+  name: string | null;
+}
+
+/** A saved provider, which never carries its key back to the UI. */
+export interface ApiProviderView extends ApiProvider {
+  hasKey: boolean;
+}
+
+/** What happens to a provider's stored key when it is saved. */
+export type KeyChange = { action: "keep" } | { action: "set"; key: string } | { action: "clear" };
+
 
 /** Shells from /etc/shells, and the login shell that "System default" resolves to. */
 export interface ShellChoices {
@@ -320,7 +356,7 @@ export interface ProviderUsage {
 }
 
 /** Where imported conversations come from: an agent CLI, another app, or OpenCode. */
-export type ImportSource = AgentKind | "t3" | "opencode";
+export type ImportSource = CliKind | "t3";
 
 /** Conversations a source saved on disk that can be imported. */
 export interface ImportScan {
@@ -418,20 +454,53 @@ export const AGENT_LABELS: Record<AgentKind, string> = {
   codex: "Codex",
   antigravity: "Antigravity CLI",
   opencode: "OpenCode CLI",
+  api: "API",
 };
 
 export const SOURCE_LABELS: Record<ImportSource, string> = {
-  ...AGENT_LABELS,
+  claude: AGENT_LABELS.claude,
+  codex: AGENT_LABELS.codex,
+  antigravity: AGENT_LABELS.antigravity,
   t3: "T3 Code",
   opencode: "OpenCode",
 };
 
 /** Import sources to offer: each connected agent's own files, plus another app and OpenCode. */
 export function importSourcesFor(agents: AgentKind[]): ImportSource[] {
-  return [...agents.filter((a) => a !== "opencode"), "t3", "opencode"];
+  const cli = agents.filter((a): a is CliKind => a !== "opencode" && a !== "api");
+  return [...cli, "t3", "opencode"];
 }
 
 const agentStatusCache: Partial<Record<AgentKind, AgentStatus>> = {};
+
+/** Each API provider's preset, name, and logo, by id, as last listed; an API model shows them. */
+const apiProviders: Record<string, { preset: string; name: string; logo: string | null }> = {};
+const rememberPresets = <T extends ApiProvider>(providers: T[]) => {
+  for (const p of providers) apiProviders[p.id] = { preset: p.preset, name: p.name, logo: p.logo };
+  return providers;
+};
+
+/** The provider of a `provider/model` id, as last listed. */
+export function apiProviderOf(model: string | null | undefined) {
+  return model ? apiProviders[model.split("/")[0]] : undefined;
+}
+
+const API_PROVIDERS_CHANGED = "patchwork-api-providers-changed";
+const apiProvidersChanged = () => {
+  delete agentStatusCache.api;
+  window.dispatchEvent(new Event(API_PROVIDERS_CHANGED));
+};
+
+/** Calls `cb` whenever an API provider is added, changed, or removed; returns the unsubscribe. */
+export function onApiProvidersChanged(cb: () => void): () => void {
+  window.addEventListener(API_PROVIDERS_CHANGED, cb);
+  return () => window.removeEventListener(API_PROVIDERS_CHANGED, cb);
+}
+
+/** The name of the API provider a `provider/model` id belongs to. */
+export function apiProviderName(model: string | null | undefined): string | undefined {
+  return apiProviderOf(model)?.name;
+}
 const pendingDetect: Partial<Record<AgentKind, Promise<AgentStatus>>> = {};
 
 export const api = {
@@ -456,7 +525,31 @@ export const api = {
     return pendingDetect[kind]!;
   },
   /** Models for an agent, starting with "Default" (the CLI's own choice). */
-  listModels: (kind: AgentKind) => invoke<ModelOption[]>("list_models", { kind }),
+  listModels: async (kind: AgentKind) => {
+    // API models show their provider's logo, so the presets are read alongside.
+    if (kind === "api") await api.listApiProviders().catch(() => []);
+    return invoke<ModelOption[]>("list_models", { kind });
+  },
+  listApiProviders: () =>
+    invoke<ApiProviderView[]>("list_api_providers").then(rememberPresets),
+  /** Adds a provider (`id` empty) or replaces one; the key is stored apart from the provider. */
+  saveApiProvider: (provider: ApiProvider, key: KeyChange) =>
+    invoke<ApiProviderView>("save_api_provider", { provider, key }).then((p) => {
+      rememberPresets([p]);
+      apiProvidersChanged();
+      return p;
+    }),
+  removeApiProvider: (id: string) =>
+    invoke<void>("remove_api_provider", { id }).then(apiProvidersChanged),
+  /** The endpoint's own model list, which also checks the URL and key. A key typed but not saved
+   * goes in `key`; otherwise the saved provider's key is used. */
+  fetchApiModels: (query: {
+    baseUrl: string;
+    headers: { name: string; value: string }[];
+    key: string | null;
+    keyEnv: string | null;
+    providerId: string | null;
+  }) => invoke<ApiModel[]>("fetch_api_models", { query }),
   /** Installed login shells, as paths from /etc/shells, and the default shell's path. */
   listShells: () => invoke<ShellChoices>("list_shells"),
   /** Subscription usage limits. Cached by the backend; `refresh` asks for new

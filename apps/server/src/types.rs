@@ -14,14 +14,17 @@ pub enum AgentKind {
     #[serde(alias = "gemini")]
     Antigravity,
     OpenCode,
+    /// OpenAI-compatible API providers, run by Patchwork's own agent.
+    Api,
 }
 
 impl AgentKind {
-    pub const ALL: [AgentKind; 4] = [
+    pub const ALL: [AgentKind; 5] = [
         AgentKind::Claude,
         AgentKind::Codex,
         AgentKind::Antigravity,
         AgentKind::OpenCode,
+        AgentKind::Api,
     ];
 }
 

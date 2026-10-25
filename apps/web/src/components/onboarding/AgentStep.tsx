@@ -1,5 +1,5 @@
 import { ArrowClockwiseIcon, CheckIcon, CircleNotchIcon } from "@phosphor-icons/react";
-import { AGENT_LABELS, type AgentKind } from "~/api";
+import { AGENT_LABELS, type AgentKind, type CliKind } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
 import { cx } from "~/components/onboarding/classNames";
 import {
@@ -59,7 +59,7 @@ function AgentRow({
   selected,
   onToggle,
 }: {
-  kind: AgentKind;
+  kind: CliKind;
   probe: AgentProbe;
   selected: boolean;
   onToggle: (kind: AgentKind) => void;

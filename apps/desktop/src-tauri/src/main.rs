@@ -6,6 +6,10 @@ fn main() {
     if std::env::args().nth(1).as_deref() == Some(patchwork_server::provider::opencode_bridge::BRIDGE_ARG) {
         std::process::exit(patchwork_server::provider::opencode_bridge::run());
     }
+    // An API provider's turn starts this binary as Patchwork's own agent, without the app.
+    if std::env::args().nth(1).as_deref() == Some(patchwork_server::provider::api_bridge::BRIDGE_ARG) {
+        std::process::exit(patchwork_server::provider::api_bridge::run());
+    }
     // WebKitGTK's DMA-BUF renderer crashes on Wayland with some GPUs (notably
     // NVIDIA: "Error 71 (Protocol error) dispatching to Wayland display").
     #[cfg(target_os = "linux")]

@@ -164,7 +164,7 @@ function SubagentRow({
       onMouseLeave={leave}
     >
       <span className="relative grid h-5 w-5 flex-none place-items-center">
-        <ProviderLogos kind={thread.agent} size={16} />
+        <ProviderLogos kind={thread.agent} model={thread.model} size={16} />
         <span
           className={`absolute right-0 bottom-0 h-[7px] w-[7px] rounded-full ring-2 ring-[var(--color-panel)] ${DOT_COLOR[tool.status]}`}
         />

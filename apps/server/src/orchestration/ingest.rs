@@ -393,7 +393,7 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                         // first stay together.
                         AgentEvent::TextDelta { text, .. } => {
                             let streams = match turn.agent {
-                                AgentKind::Antigravity | AgentKind::Claude => true,
+                                AgentKind::Antigravity | AgentKind::Claude | AgentKind::Api => true,
                                 AgentKind::OpenCode => provider::opencode::uses_serve(),
                                 AgentKind::Codex => false,
                             };

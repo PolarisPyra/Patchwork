@@ -6,6 +6,7 @@ import { TextSelection } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import {
   api,
+  onApiProvidersChanged,
   type AccessMode,
   type AgentKind,
   type Attachment,
@@ -212,8 +213,19 @@ function useModels(agents: AgentKind[]): Partial<Record<AgentKind, ModelOption[]
         () => {},
       );
     }
+    // API models change whenever a provider is edited in Settings.
+    const stop = onApiProvidersChanged(() => {
+      if (!wanted.split(",").includes("api")) return;
+      api.listModels("api").then(
+        (list) => {
+          if (!cancelled) setModels((prev) => ({ ...prev, api: list }));
+        },
+        () => {},
+      );
+    });
     return () => {
       cancelled = true;
+      stop();
     };
   }, [wanted]);
   return models;

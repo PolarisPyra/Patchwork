@@ -82,7 +82,7 @@ export default function Onboarding({
   // ready agent on first run), then keep the user's choices while still ready.
   useEffect(() => {
     if (checking) return;
-    const ready = AGENT_KINDS.filter((k) => isReady(probes[k]));
+    const ready: AgentKind[] = AGENT_KINDS.filter((k) => isReady(probes[k]));
     setAgents((current) => {
       const saved = settings.agents.filter((k) => ready.includes(k));
       const base = current ?? (saved.length > 0 ? saved : ready);

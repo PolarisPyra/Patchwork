@@ -144,7 +144,7 @@ impl Runner {
         let settings = server.store.settings();
         // Codex takes its instructions in the turn's input; Claude takes them as launch arguments.
         let instructions = match agent {
-            AgentKind::Codex => codex::developer_instructions(&settings),
+            AgentKind::Codex | AgentKind::Api => codex::developer_instructions(&settings),
             AgentKind::Claude | AgentKind::Antigravity | AgentKind::OpenCode => None,
         };
         let spec = TurnSpec {

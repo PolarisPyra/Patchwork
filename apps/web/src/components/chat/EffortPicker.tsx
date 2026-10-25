@@ -21,6 +21,8 @@ export const EFFORTS: Record<AgentKind, string[]> = {
   antigravity: ["low", "medium", "high", "xhigh", "max"],
   // OpenCode passes these as the model's variant; the levels most providers share.
   opencode: ["low", "medium", "high"],
+  // Sent as `reasoning_effort`, which OpenAI-style reasoning models take.
+  api: ["low", "medium", "high"],
 };
 
 /** `effort` if `agent` accepts it, else null (the CLI's default). */

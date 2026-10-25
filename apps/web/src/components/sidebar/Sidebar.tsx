@@ -1118,7 +1118,7 @@ const ThreadRow = memo(function ThreadRow({
         className="inline-flex h-5 w-5 flex-none items-center justify-center"
         title={AGENT_LABELS[thread.agent]}
       >
-        <ProviderLogos kind={thread.agent} size={16} />
+        <ProviderLogos kind={thread.agent} model={thread.model} size={16} />
       </span>
     </div>
   );
@@ -1260,7 +1260,7 @@ function ArchivedView({
         className="inline-flex h-5 w-5 flex-none items-center justify-center"
         title={AGENT_LABELS[t.agent]}
       >
-        <ProviderLogos kind={t.agent} size={16} />
+        <ProviderLogos kind={t.agent} model={t.model} size={16} />
       </span>
     </div>
   );

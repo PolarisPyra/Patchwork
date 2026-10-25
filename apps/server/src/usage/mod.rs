@@ -64,6 +64,10 @@ fn fetch(kind: AgentKind) -> Result<ProviderUsage, Failure> {
             error: Some("OpenCode has no plan limits to show".into()),
             ..empty(kind)
         }),
+        AgentKind::Api => Ok(ProviderUsage {
+            error: Some("API providers bill per token and have no plan limits to show".into()),
+            ..empty(kind)
+        }),
     }
 }
 

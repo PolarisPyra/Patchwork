@@ -6,7 +6,7 @@ import {
   MagnifyingGlassIcon,
   StarIcon,
 } from "@phosphor-icons/react";
-import { AGENT_LABELS, type AgentKind, type ModelOption } from "~/api";
+import { AGENT_LABELS, apiProviderName, type AgentKind, type ModelOption } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
 
 interface Props {
@@ -22,6 +22,7 @@ const PROVIDER_NAMES: Record<AgentKind, string> = {
   codex: "Codex",
   antigravity: "Antigravity",
   opencode: "OpenCode",
+  api: "API",
 };
 export const CHIP_CLASS =
   "inline-flex h-7 cursor-pointer items-center gap-1 rounded-[var(--radius-sm)] border-none bg-transparent px-1.5 py-0 text-[length:var(--fs-md)] font-medium text-fg-muted hover:bg-hover hover:text-fg [&_span]:max-w-[180px] [&_span]:overflow-hidden [&_span]:text-ellipsis [&_span]:whitespace-nowrap";
@@ -75,7 +76,7 @@ export default function ModelPicker(props: Props) {
         aria-label={`Choose model: ${label}`}
         onClick={() => setOpen(!open)}
       >
-        <ProviderLogos kind={props.agent} size={16} />
+        <ProviderLogos kind={props.agent} model={props.model} size={16} />
         <span>{label}</span>
         <CaretDownIcon size={14} />
       </button>
@@ -127,7 +128,7 @@ function PickerPopup({
     )
     .filter(({ kind, item, key }) =>
       searching
-        ? `${item.label} ${item.defaultModel ?? ""} ${AGENT_LABELS[kind]}`
+        ? `${item.label} ${item.defaultModel ?? ""} ${AGENT_LABELS[kind]} ${apiProviderName(item.id) ?? ""}`
             .toLowerCase()
             .includes(query.trim().toLowerCase())
         : provider === "favorites"
@@ -299,9 +300,13 @@ function PickerPopup({
               : undefined
           }
         >
-          <ProviderLogos kind={kind} size={12} />
+          <ProviderLogos kind={kind} model={item.id ?? item.defaultModel} size={12} />
           <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-            {item.id === null ? (item.defaultModel ?? "CLI default") : PROVIDER_NAMES[kind]}
+            {item.id === null
+              ? (item.defaultModel ?? "CLI default")
+              : kind === "api"
+                ? (apiProviderName(item.id) ?? PROVIDER_NAMES[kind])
+                : PROVIDER_NAMES[kind]}
           </span>
         </span>
       </span>

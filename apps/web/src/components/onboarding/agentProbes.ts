@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type AgentKind, type AgentStatus } from "~/api";
-import { AGENT_KINDS } from "~/lib/util";
+import { api, type AgentStatus, type CliKind } from "~/api";
+import { CLI_KINDS as AGENT_KINDS } from "~/lib/util";
 
 export { AGENT_KINDS };
 
@@ -10,7 +10,7 @@ export interface AgentProbe {
   failed: boolean;
 }
 
-export type AgentProbes = Record<AgentKind, AgentProbe>;
+export type AgentProbes = Record<CliKind, AgentProbe>;
 
 /** An agent is usable only when it is installed and signed in. */
 export function isReady(probe: AgentProbe): boolean {
