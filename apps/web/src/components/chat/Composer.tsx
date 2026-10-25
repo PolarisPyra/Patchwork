@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUpIcon, CaretDownIcon, CheckIcon, SquareIcon } from "@phosphor-icons/react";
+import {
+  ArrowUpIcon,
+  CaretDownIcon,
+  CheckIcon,
+  FolderIcon,
+  PaperclipIcon,
+  SquareIcon,
+} from "@phosphor-icons/react";
+import { open } from "@tauri-apps/plugin-dialog";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { Fragment, Slice } from "@tiptap/pm/model";
 import { TextSelection } from "@tiptap/pm/state";
@@ -56,6 +64,8 @@ interface ComposerProps {
   effort: string | null;
   onPickEffort: (effort: string | null) => void;
   attachments: Attachment[];
+  /** Adds the files or folders at these paths to the draft's attachments. */
+  onAttachPaths: (paths: string[]) => void;
   onRemoveAttachment: (index: number) => void;
   /** A drag is hovering over the chat; the composer shows where it will land. */
   dropping: boolean;
@@ -231,6 +241,34 @@ function useModels(agents: AgentKind[]): Partial<Record<AgentKind, ModelOption[]
   return models;
 }
 
+/** A toolbar button that opens a native picker. */
+function AttachButton({
+  title,
+  Icon,
+  disabled,
+  onPick,
+}: {
+  title: string;
+  Icon: typeof PaperclipIcon;
+  disabled: boolean;
+  onPick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="grid h-8 w-8 flex-none cursor-pointer place-items-center rounded-[var(--radius)] border-none bg-transparent text-fg-muted hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-50"
+      // Keeps the focus in the editor.
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onPick}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+    >
+      <Icon size={16} />
+    </button>
+  );
+}
+
 export default function Composer({
   value,
   onChange,
@@ -255,6 +293,7 @@ export default function Composer({
   effort,
   onPickEffort,
   attachments,
+  onAttachPaths,
   onRemoveAttachment,
   dropping,
   goalActive,
@@ -264,6 +303,11 @@ export default function Composer({
   disabled,
 }: ComposerProps) {
   const models = useModels(agents);
+  // Several files or several folders at once; the dialog cannot pick both kinds together.
+  async function pickAttachments(directory: boolean) {
+    const picked = await open({ multiple: true, directory });
+    if (picked) onAttachPaths(picked);
+  }
   // The slash menu lists commands for a draft that is still one "/word"; Escape hides it
   // until the draft changes again.
   const [menuClosed, setMenuClosed] = useState(false);
@@ -734,6 +778,20 @@ export default function Composer({
         {/* Hidden when the composer is too narrow for the pickers and the formatting buttons together. */}
         <div className="hidden @[640px]:block">
           <FormatBar editor={editor} />
+        </div>
+        <div className="flex items-center gap-0.5">
+          <AttachButton
+            title="Attach files"
+            Icon={PaperclipIcon}
+            disabled={disabled}
+            onPick={() => pickAttachments(false)}
+          />
+          <AttachButton
+            title="Attach folders"
+            Icon={FolderIcon}
+            disabled={disabled}
+            onPick={() => pickAttachments(true)}
+          />
         </div>
         {working && (
           <button

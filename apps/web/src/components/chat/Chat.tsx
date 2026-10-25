@@ -141,6 +141,9 @@ export default function Chat({
     text: string;
     attachments: Attachment[];
   } | null>(null);
+  // Read by attach, which runs from a listener set up once, so it sees the open edit as it is now.
+  const queuedEditRef = useRef(queuedEdit);
+  queuedEditRef.current = queuedEdit;
   // Files and images dropped into the composer, kept per thread like drafts.
   const [pending, setPending] = useState<Record<string, Attachment[]>>({});
   const [dropping, setDropping] = useState(false);
@@ -284,22 +287,32 @@ export default function Chat({
     setQueuedEdit(null);
   }, [key]);
 
+  // Adds files and folders, given as paths, to what the composer shows: the queued message being
+  // edited, or else the draft. Drops and the composer's attach buttons both come through here; it
+  // only reads refs and state setters, so it is safe to call from the drop listener set up once.
+  async function attach(paths: string[]) {
+    const sentKey = keyRef.current;
+    try {
+      const found = await Promise.all(paths.map((path) => api.attachmentForPath(path)));
+      const withFresh = (current: Attachment[]) => [
+        ...current,
+        ...found.filter((a) => !current.some((c) => c.path === a.path)),
+      ];
+      if (queuedEditRef.current) {
+        setQueuedEdit((edit) =>
+          edit ? { ...edit, attachments: withFresh(edit.attachments) } : edit,
+        );
+      } else {
+        setPending((prev) => ({ ...prev, [sentKey]: withFresh(prev[sentKey] ?? []) }));
+      }
+    } catch (e) {
+      setErrorFor(sentKey, errorText(e));
+    }
+  }
+
   // Tauri hands dropped files over as paths (HTML drop events carry none), so drops are
   // listened for on the webview and kept only when they land on the chat.
   useEffect(() => {
-    async function attach(paths: string[]) {
-      const sentKey = keyRef.current;
-      try {
-        const found = await Promise.all(paths.map((path) => api.attachmentForPath(path)));
-        setPending((prev) => {
-          const current = prev[sentKey] ?? [];
-          const fresh = found.filter((a) => !current.some((c) => c.path === a.path));
-          return { ...prev, [sentKey]: [...current, ...fresh] };
-        });
-      } catch (e) {
-        setErrorFor(sentKey, errorText(e));
-      }
-    }
     function overChat(position: { x: number; y: number }) {
       const el = rootRef.current;
       if (!el) return false;
@@ -963,6 +976,7 @@ export default function Chat({
           effort={effort}
           onPickEffort={pickEffort}
           attachments={composerAttachments}
+          onAttachPaths={(paths) => void attach(paths)}
           onRemoveAttachment={(i) =>
             setComposerAttachments(composerAttachments.filter((_, j) => j !== i))
           }
