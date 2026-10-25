@@ -34,7 +34,7 @@ const PRESETS: Preset[] = [
     id: "deepseek",
     name: "DeepSeek",
     baseUrl: "https://api.deepseek.com/v1",
-    models: ["deepseek-chat", "deepseek-reasoner"],
+    models: [],
   },
   { id: "custom", name: "Custom", baseUrl: "", models: [] },
 ];
