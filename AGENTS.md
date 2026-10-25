@@ -60,6 +60,20 @@ Rules for coding agents working in the Rust code in this repo (`apps/server` and
 - If benchmarking against another crate or library, ensure the benchmarks are apples-to-apples comparisons.
 - Ensure benchmark tests are independent. If the tests are dependent due to a feature (e.g. caching), ensure the feature is disabled.
 
+## Performance
+
+When writing or reviewing code that handles a lot of data, I/O, or work per request, check each point below. Fix what is cheap and clear, and name the trade-off for the rest.
+
+- **Concurrency:** Is the work sequential when it could run in parallel? If it is already concurrent, could it go wider, and what would that cost in memory, contention, or rate limits?
+- **Threads:** How many threads or tasks does it spawn? One per item is too many; one for blocking work on the async runtime is too few.
+- **Passes:** How many times does it walk the same data? Merge passes where one will do.
+- **Allocations:** How many does it make? Borrow instead of cloning, reuse buffers, and avoid building intermediate collections that are thrown away.
+- **Batching and streaming:** If it batches, how big are the batches and why? Would streaming the data be better than collecting it all first?
+- **Waiting:** Does it sit idle on an `await` or blocking call when it could do other work meanwhile? Does every wait have a timeout?
+- **Early exit:** Does it stop as soon as it has the answer, or once a limit is reached?
+- **Data structures:** Is it using the right data structure for how the data is read and written? How is the data laid out in memory?
+- **I/O:** How many reads, writes, syscalls, and network requests does it make? Cache, batch, or combine them to make fewer.
+
 ## Pushing and releasing
 
 - **Pushing to `main`** (no tag) is a plain `git push origin main`. It builds nothing. Only push when the user asks.
