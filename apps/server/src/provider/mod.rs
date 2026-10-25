@@ -32,7 +32,9 @@ use crate::workspace::{signal_process_group, SIGKILL};
 const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(PathBuf::from)
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
 }
 
 /// Directories searched when `which` cannot find the agent CLI on PATH.
@@ -43,6 +45,10 @@ fn fallback_dirs() -> Vec<PathBuf> {
         .map(|d| home.join(d))
         .collect();
     dirs.extend(["/usr/local/bin", "/opt/homebrew/bin"].map(PathBuf::from));
+    // npm's global bin on Windows, where `npm i -g @openai/codex` puts `codex.cmd`.
+    if let Some(appdata) = std::env::var_os("APPDATA") {
+        dirs.push(PathBuf::from(appdata).join("npm"));
+    }
     if let Ok(entries) = std::fs::read_dir(home.join(".nvm/versions/node")) {
         let mut nvm: Vec<PathBuf> = entries.flatten().map(|e| e.path().join("bin")).collect();
         nvm.sort();
@@ -53,10 +59,13 @@ fn fallback_dirs() -> Vec<PathBuf> {
 
 fn find_binary(name: &str) -> Option<PathBuf> {
     which::which(name).ok().or_else(|| {
-        fallback_dirs()
-            .into_iter()
-            .map(|d| d.join(name))
-            .find(|p| p.is_file())
+        let names: &[&str] = if cfg!(windows) { &["exe", "cmd", "bat"] } else { &[""] };
+        fallback_dirs().into_iter().find_map(|d| {
+            names
+                .iter()
+                .map(|ext| d.join(name).with_extension(ext))
+                .find(|p| p.is_file())
+        })
     })
 }
 
