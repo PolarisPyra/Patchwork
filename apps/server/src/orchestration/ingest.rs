@@ -370,6 +370,14 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                         .lock()
                         .unwrap_or_else(PoisonError::into_inner) = Some(id);
                 }
+                Parsed::Retrying { reason, attempt, max_attempts } => {
+                    turn.emit(AgentEvent::Retrying {
+                        message_id: turn.message_id.clone(),
+                        reason,
+                        attempt,
+                        max_attempts,
+                    });
+                }
                 Parsed::Error(message) => {
                     stream_error.get_or_insert(message);
                 }

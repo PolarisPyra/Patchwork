@@ -68,7 +68,7 @@ pub fn agent_command(kind: AgentKind) -> Result<Command, String> {
         }
         AgentKind::OpenCode => opencode::opencode_bin().ok_or("OpenCode CLI is not installed")?,
     };
-    let mut cmd = Command::new(&bin);
+    let mut cmd = crate::host_command(&bin);
     if let Some(dir) = bin.parent() {
         let mut paths = vec![dir.to_path_buf()];
         paths.extend(shell_path().into_iter().flat_map(std::env::split_paths));
@@ -105,7 +105,7 @@ fn shell_path() -> Option<&'static OsString> {
 
 fn read_shell_path() -> Option<OsString> {
     let shell = crate::login_shell().or_else(|| std::env::var("SHELL").ok())?;
-    let mut cmd = Command::new(shell);
+    let mut cmd = crate::host_command(shell);
     cmd.args(["-l", "-c", &format!("printf '\\n{PATH_MARKER}%s\\n' \"$PATH\"")])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -514,6 +514,12 @@ pub enum Parsed {
     },
     /// The agent's id for the turn now running, which a steering message must name.
     TurnStarted(String),
+    /// The agent is retrying a model request that failed or stalled.
+    Retrying {
+        reason: String,
+        attempt: u32,
+        max_attempts: u32,
+    },
     /// The turn failed with this message.
     Error(String),
     /// The agent has no conversation under the session id the turn resumed.

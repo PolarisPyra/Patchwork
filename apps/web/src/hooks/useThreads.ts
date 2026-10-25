@@ -74,6 +74,13 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
       };
     case "goalChecking":
       return updateMessage(thread, event.messageId, (m) => ({ ...m, checkingGoal: true }));
+    case "retrying": {
+      const { messageId, reason, attempt, maxAttempts } = event;
+      return updateMessage(thread, messageId, (m) => ({
+        ...m,
+        retry: { reason, attempt, maxAttempts },
+      }));
+    }
     case "slashCommandsUpdated":
       return { ...thread, slashCommands: event.commands };
     case "usage": {
@@ -91,6 +98,7 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
         return {
           ...m,
           checkingGoal: false,
+          retry: null,
           text: m.text + text,
           parts:
             last?.type === "text"
@@ -106,6 +114,7 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
         return {
           ...m,
           checkingGoal: false,
+          retry: null,
           parts:
             last?.type === "thinking" && last.endedAt === null
               ? [...m.parts.slice(0, -1), { ...last, text: last.text + text }]
@@ -126,6 +135,7 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
       return updateMessage(thread, messageId, (m) => ({
         ...m,
         checkingGoal: false,
+        retry: null,
         tools: [...m.tools, tool],
         parts: [...endThinking(m.parts), { type: "tool", id: tool.id }],
       }));

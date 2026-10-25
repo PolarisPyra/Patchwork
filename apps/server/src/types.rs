@@ -703,6 +703,14 @@ pub enum AgentEvent {
     GoalChecking {
         message_id: String,
     },
+    /// The agent's model request failed or stalled and the agent is retrying it. Streamed, not
+    /// saved; the message's next output ends it.
+    Retrying {
+        message_id: String,
+        reason: String,
+        attempt: u32,
+        max_attempts: u32,
+    },
     /// Provider-native slash command names advertised by the active CLI session.
     SlashCommandsUpdated {
         commands: Vec<ProviderSlashCommand>,

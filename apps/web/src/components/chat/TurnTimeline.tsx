@@ -1,5 +1,6 @@
 import { useDeferredValue, useEffect, useState, type ReactNode } from "react";
 import {
+  ArrowClockwiseIcon,
   BrainIcon,
   CaretDownIcon,
   CaretRightIcon,
@@ -295,7 +296,14 @@ export default function TurnTimeline({
           <WorkGroup key={workKey(step.entries[0])} entries={step.entries} live={streaming} />
         ),
       )}
-      {idle && !goalCleared && <LiveRow icon={<BrainIcon size={15} />} label="Thinking" />}
+      {streaming && message.retry ? (
+        <LiveRow
+          icon={<ArrowClockwiseIcon size={15} />}
+          label={`Retrying: ${message.retry.reason} (${message.retry.attempt}/${message.retry.maxAttempts})`}
+        />
+      ) : (
+        idle && !goalCleared && <LiveRow icon={<BrainIcon size={15} />} label="Thinking" />
+      )}
       {streaming && message.checkingGoal && (
         <LiveRow icon={<TargetIcon size={15} />} label="Checking goal" />
       )}

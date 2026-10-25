@@ -101,6 +101,10 @@ pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
         "--include-partial-messages",
         // A subagent's own text and reasoning, for its thread; without this only its calls arrive.
         "--forward-subagent-text",
+        // Newer models send no reasoning text unless asked, so a long think streamed nothing
+        // and the reply looked hung.
+        "--thinking-display",
+        "summarized",
         "--permission-mode",
         mode,
     ]
@@ -453,6 +457,28 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
                     });
                 }
             }
+        }
+        // The CLI retries a failed or stalled model request on its own, which can take minutes.
+        Some("system") if v["subtype"] == "api_retry" && parent.is_none() => {
+            let reason = if let Some(ms) = v["no_response"]["waited_ms"].as_u64() {
+                format!("no response for {}s", ms / 1000)
+            } else {
+                match v["error"].as_str() {
+                    Some("overloaded") => "API overloaded".into(),
+                    Some("rate_limit") => "rate limited".into(),
+                    Some("authentication_failed") => "authentication failed".into(),
+                    _ => match v["error_status"].as_u64() {
+                        Some(status) => format!("API error {status}"),
+                        None => "API error".into(),
+                    },
+                }
+            };
+            let count = |key: &str| v[key].as_u64().unwrap_or(0) as u32;
+            out.push(Parsed::Retrying {
+                reason,
+                attempt: count("attempt"),
+                max_attempts: count("max_retries"),
+            });
         }
         Some("rate_limit_event") => {
             let windows = crate::usage::claude::windows_from_event(&v["rate_limit_info"]);
@@ -884,6 +910,8 @@ mod tests {
                 "--verbose",
                 "--include-partial-messages",
                 "--forward-subagent-text",
+                "--thinking-display",
+                "summarized",
                 "--permission-mode",
                 "bypassPermissions",
                 "--permission-prompt-tool",
