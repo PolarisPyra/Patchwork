@@ -194,6 +194,14 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Gather the release files
+        # An artifact with files from several folders keeps those folders, as the macOS one does;
+        # the release takes every file from dist itself.
+        run: |
+          find dist -mindepth 2 -type f -exec mv -t dist {} +
+          find dist -mindepth 1 -type d -empty -delete
+          ls -l dist
+
       - name: Generate release notes
         uses: orhun/git-cliff-action@v4
         with:
