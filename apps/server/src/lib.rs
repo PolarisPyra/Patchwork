@@ -65,20 +65,24 @@ const IDLE_CHECK: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// A command for a program on the user's system. The AppImage's launcher points the library,
 /// Python, GTK and data paths into the AppImage for Patchwork itself; agents, git, and the other
-/// programs Patchwork starts get the user's own paths back.
+/// programs Patchwork starts get the user's own paths back. A copy restarted into an update
+/// inherits the previous copy's paths too, so entries in any AppImage mount (`/tmp/.mount_*`)
+/// are removed, not only the ones in `APPDIR`.
 pub fn host_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
     let mut cmd = std::process::Command::new(program);
-    let Some(appdir) = std::env::var("APPDIR").ok().filter(|dir| !dir.is_empty()) else {
-        return cmd;
+    let appdir = std::env::var("APPDIR").ok().filter(|dir| !dir.is_empty());
+    let in_appimage = |entry: &str| {
+        appdir.as_deref().is_some_and(|dir| entry.starts_with(dir))
+            || entry.split('/').any(|part| part.starts_with(".mount_"))
     };
     for (key, value) in std::env::vars_os() {
         let value = value.to_string_lossy();
-        if !value.contains(&appdir) {
+        if !value.split(':').any(in_appimage) {
             continue;
         }
         let kept: Vec<&str> = value
             .split(':')
-            .filter(|entry| !entry.is_empty() && !entry.starts_with(&appdir))
+            .filter(|entry| !entry.is_empty() && !in_appimage(entry))
             .collect();
         if kept.is_empty() {
             cmd.env_remove(&key);
