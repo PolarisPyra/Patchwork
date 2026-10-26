@@ -1147,7 +1147,23 @@ impl Server {
         Ok(())
     }
 
-    /// Explicitly resumes persisted queued messages in their original order.
+    /// Sends the thread's queued messages once its turn has ended, in the background.
+    pub(crate) fn send_queued_later(self: &Arc<Self>, thread_id: &str) {
+        let server = Arc::clone(self);
+        let thread_id = thread_id.to_string();
+        std::thread::spawn(move || {
+            let queued = server
+                .store
+                .thread(&thread_id)
+                .is_some_and(|t| t.messages.iter().any(|m| m.queued));
+            if queued && let Err(e) = server.resume_queued(&thread_id) {
+                log::warn!("failed to send queued messages: {e}");
+            }
+        });
+    }
+
+    /// Sends persisted queued messages in their original order, as one message: to the idle
+    /// agent when one is up, as a normal message would go, otherwise in a new turn.
     pub fn resume_queued(self: &Arc<Self>, thread_id: &str) -> Res<()> {
         if self.runner.is_running(thread_id) {
             return Err("This turn is already running".into());
@@ -1164,6 +1180,15 @@ impl Server {
             t.messages.iter_mut().filter(|m| queued.iter().any(|q| q.id == m.id)).for_each(|m| m.queued = false);
         })?;
         queued.iter().for_each(|m| orchestration::publish(self, thread_id, AgentEvent::MessageQueued { message_id: m.id.clone(), queued: false }));
+        let first = &queued[0].id;
+        let input = FollowUpInput { message_id: first, text: &text, attachments: &attachments, images: &images };
+        if !matches!(
+            self.runner.steer(thread_id, input, thread.session_id.as_deref(), &[]),
+            Delivery::NotRunning
+        ) {
+            self.capture_checkpoint(thread_id, first);
+            return Ok(());
+        }
         if let Err(error) = self.runner.start_turn(self, TurnRequest { thread_id: thread_id.into(), text, attachments, images }) {
             self.store.update_thread(thread_id, |t| {
                 t.messages.iter_mut().filter(|m| queued.iter().any(|q| q.id == m.id)).for_each(|m| m.queued = true);

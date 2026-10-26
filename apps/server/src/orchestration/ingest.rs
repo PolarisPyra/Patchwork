@@ -619,8 +619,8 @@ fn can_idle(
 }
 
 /// Completes the replies not yet completed, with the files they changed, and marks the turn
-/// idle: the agent stays up and takes the next message as a new reply. Queued messages wait
-/// for the user to send them, as when the agent exits.
+/// idle: the agent stays up and takes the next message as a new reply, starting with the
+/// messages queued meanwhile.
 fn go_idle(turn: &mut Turn, segments: &[String], completed: &mut usize, unsaved: &mut Unsaved) {
     turn.save_text(unsaved);
     let after = workspace::git_changes(&turn.root).unwrap_or_default();
@@ -647,6 +647,7 @@ fn go_idle(turn: &mut Turn, segments: &[String], completed: &mut usize, unsaved:
     });
     *completed = segments.len();
     turn.idle.store(true, Ordering::SeqCst);
+    turn.server.send_queued_later(&turn.thread_id);
 }
 
 #[cfg(test)]

@@ -572,7 +572,7 @@ pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
         {
             turns.remove(&turn.thread_id);
         }
-        // Queued messages stay in the thread as queued until the user presses Send.
+        // Queued messages stay in the thread as queued until the turn has finished.
         // Steering messages the agent never answered continue automatically unless
         // the turn was stopped; messages sent after Stop still start the next turn.
         let unanswered = turn
@@ -636,7 +636,7 @@ pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
     }
 
     // The agent drops the goal in a turn of its own; unanswered steers wait for that
-    // system turn instead. Queued messages remain for the user to send explicitly.
+    // system turn instead, and queued messages for the end of it.
     if let Some(command) = clear_in_agent {
         let server = &turn.server;
         match server.send_message(turn.thread_id.clone(), command.into(), vec![], false) {
@@ -695,6 +695,10 @@ pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
         {
             log::warn!("failed to start the turn for queued messages: {e}");
         }
+    } else if !cancelled && status == MessageStatus::Complete {
+        // Queued messages go once the turn has finished; after Stop or an error they wait for
+        // the user to send them.
+        turn.server.send_queued_later(&turn.thread_id);
     }
 }
 
