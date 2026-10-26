@@ -88,9 +88,13 @@ When writing or reviewing code that handles a lot of data, I/O, or work per requ
 - **Hotfixes** are ordinary patch releases. Fix the bug on `main`, then release the next patch number: a hotfix after `0.4.9` is `0.4.10`, not `0.4.91`. Each part is compared as a whole number, so `0.4.91` would sort above every release from `0.4.10` to `0.4.90` and break update and release ordering. If the user asks for a version like that, explain this and confirm before tagging.
 - Never reuse, move, or delete a pushed tag. A broken release is followed by the next patch release.
 - Never monitor or poll the Release workflow or GitHub releases after pushing a tag. The user reports a broken build.
-- **Discord changelog**: this comes in addition to the git-cliff `CHANGELOG.md`, not instead of it. Release with `scripts/release.sh` as usual, which still regenerates `CHANGELOG.md` with git-cliff and commits it with the release. Then end the reply with a changelog the user can paste into Discord, in one fenced `markdown` code block so the formatting survives copying. Write it from the commits since the previous tag (`git log <previous tag>..v<version>`), in this shape:
-  - A `## Patchwork v<version>` heading, then `**Fixed**`, `**Added**`, `**Changed**`, and `**Known limits**` sections, leaving out any that are empty.
-  - One short bullet per user-visible change, saying what users notice rather than how the code changed. No file paths, function names, or commit hashes.
+- **Discord changelog**: every time the version is bumped and pushed, write Discord release notes and include them in the reply. This comes in addition to the git-cliff `CHANGELOG.md`, not instead of it. Release with `scripts/release.sh` as usual, which still regenerates `CHANGELOG.md` with git-cliff and commits it with the release. Then end the reply with the notes in one fenced `markdown` code block, so the formatting survives copying. Write them from the commits since the previous tag (`git log <previous tag>..v<version>`), in this shape:
+  - A `## Patchwork v<version>` heading, then `**Fixed**`, `**Added**`, `**Changed**`, and `**Note**` sections, in that order, leaving out any that are empty. No emoji.
+  - Plain `-` bullets, one per user-visible change. Say what the user sees and does, in everyday words: "Queued messages now send automatically. If you send a message while the agent is still replying, it goes out by itself as soon as the reply is done." Not "Messages queued during a turn are sent once it finishes."
+  - When a change has an exception, give it its own bullet in the same plain words, such as "If you stop a reply, or it fails with an error, your queued messages stay put until you send them yourself."
+  - Name settings by their path as the user sees it: "Settings → AI Tokenomics → Generate chat and task titles".
+  - Use `**Note**` for anything the user should know, such as an extra cost or a default worth changing.
+  - No file paths, function names, commit hashes, pixel sizes, or other apps' names.
   - Stay well under Discord's 2,000-character message limit.
 - Full details are in [docs/releasing.md](docs/releasing.md).
 
