@@ -4,8 +4,7 @@
 //! none is available, to `api-keys.json` beside it, readable only by the user. A provider can
 //! instead name an environment variable that holds its key. Header values are stored the same
 //! way, since one may carry a secret (an `Authorization` or `X-Api-Key` header), and the config
-//! keeps only their names. Plain `http://` is accepted only for this machine or a private
-//! network, so a key never crosses the internet unencrypted.
+//! keeps only their names.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -331,33 +330,12 @@ fn with_headers(mut provider: ApiProvider) -> ApiProvider {
     provider
 }
 
-/// Refuses a base URL a key would cross the internet unencrypted to: `http://` is accepted only
-/// for this machine and private networks, such as a local model server.
+/// Accepts `http://` and `https://` base URLs.
 fn check_url(url: &str) -> Result<(), String> {
-    if url.starts_with("https://") {
-        return Ok(());
-    }
-    let Some(rest) = url.strip_prefix("http://") else {
-        return Err("The base URL must start with https://".into());
-    };
-    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
-    let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
-    let host = match host.strip_prefix('[') {
-        Some(v6) => v6.split(']').next().unwrap_or_default(),
-        None => host.split(':').next().unwrap_or_default(),
-    }
-    .to_ascii_lowercase();
-    let local = match host.parse::<std::net::IpAddr>() {
-        Ok(std::net::IpAddr::V4(ip)) => ip.is_loopback() || ip.is_private() || ip.is_link_local(),
-        Ok(std::net::IpAddr::V6(ip)) => {
-            ip.is_loopback() || (ip.segments()[0] & 0xfe00) == 0xfc00
-        }
-        Err(_) => host == "localhost" || host.ends_with(".localhost") || host.ends_with(".local"),
-    };
-    if local {
+    if url.starts_with("https://") || url.starts_with("http://") {
         Ok(())
     } else {
-        Err("Use https:// for this base URL. Plain http:// is only allowed for a server on this machine or your local network, so the key is never sent unencrypted.".into())
+        Err("The base URL must start with http:// or https://".into())
     }
 }
 
