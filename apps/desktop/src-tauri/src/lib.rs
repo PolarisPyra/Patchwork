@@ -8,7 +8,7 @@ mod updates;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use patchwork_server::types::{AgentKind, Project, Settings, AgentStatus, ModelOption, ShellChoices, Role, MessageStatus, AccessMode, Attachment, Message, Thread, Folder, GoalStatus, FileChange, ProviderUsage, ImportSource, ImportScan, AgentEventEnvelope, AgentEvent};
+use patchwork_server::types::{AgentKind, Project, Settings, AgentStatus, ModelOption, ShellChoices, Role, MessageStatus, AccessMode, Attachment, Message, Thread, Folder, GoalStatus, FileChange, ProviderUsage, ImportSource, ImportScan, AgentEventEnvelope, AgentEvent, TurnTrees};
 use patchwork_server::{NewThread, Res, Server, orchestration, persistence, provider};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
@@ -431,6 +431,25 @@ async fn missing_files(server: Srv<'_>, project_id: String, paths: Vec<String>) 
     blocking(move || workspace::missing_files(&root, &paths)).await
 }
 
+/// What a reply's turn did to each of `paths`, and where each file stands now.
+#[tauri::command]
+async fn turn_files(
+    server: Srv<'_>,
+    project_id: String,
+    turn: TurnTrees,
+    paths: Vec<String>,
+) -> Res<Vec<orchestration::checkpoint::TurnFile>> {
+    let root = server.project_root(&project_id)?;
+    blocking(move || orchestration::checkpoint::turn_files(&root, &turn, &paths)).await?
+}
+
+/// A reply's turn's diff of one file.
+#[tauri::command]
+async fn turn_file_diff(server: Srv<'_>, project_id: String, turn: TurnTrees, path: String) -> Res<String> {
+    let root = server.project_root(&project_id)?;
+    blocking(move || orchestration::checkpoint::turn_file_diff(&root, &turn, &path)).await?
+}
+
 #[tauri::command]
 async fn read_file(server: Srv<'_>, project_id: String, path: String) -> Res<String> {
     let root = server.project_root(&project_id)?;
@@ -749,6 +768,8 @@ pub fn run() {
             import_threads,
             read_file,
             missing_files,
+            turn_files,
+            turn_file_diff,
             git_branch,
             git_changes,
             git_file_diff,

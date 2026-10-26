@@ -52,15 +52,17 @@ pub(super) fn save_message(
     tx.execute(
         "INSERT INTO messages
              (id, thread_id, position, role, text, created_at, status, tools, plan, files, error,
-              approvals, attachments, steer, finished_at, usage, queued, parts, cut_off, refusal)
+              approvals, attachments, steer, finished_at, usage, queued, parts, cut_off, refusal,
+              turn)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                 ?19, ?20)
+                 ?19, ?20, ?21)
          ON CONFLICT (id) DO UPDATE SET position = excluded.position, text = excluded.text,
              status = excluded.status, tools = excluded.tools, plan = excluded.plan,
              files = excluded.files, error = excluded.error, approvals = excluded.approvals,
              attachments = excluded.attachments, finished_at = excluded.finished_at,
              usage = excluded.usage, steer = excluded.steer, queued = excluded.queued,
-             parts = excluded.parts, cut_off = excluded.cut_off, refusal = excluded.refusal",
+             parts = excluded.parts, cut_off = excluded.cut_off, refusal = excluded.refusal,
+             turn = excluded.turn",
         params![
             m.id,
             thread_id,
@@ -81,7 +83,8 @@ pub(super) fn save_message(
             m.queued,
             json(&m.parts),
             m.cut_off,
-            m.refusal.as_ref().map(json)
+            m.refusal.as_ref().map(json),
+            m.turn.as_ref().map(json)
         ],
     )?;
     Ok(())
@@ -141,7 +144,7 @@ pub(super) fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
         .collect::<rusqlite::Result<_>>()?;
     let mut stmt = conn.prepare(
         "SELECT id, role, text, created_at, status, tools, plan, files, error, approvals,
-                attachments, steer, finished_at, usage, queued, parts, cut_off, refusal
+                attachments, steer, finished_at, usage, queued, parts, cut_off, refusal, turn
          FROM messages WHERE thread_id = ?1 ORDER BY position",
     )?;
     for t in &mut threads {
@@ -172,6 +175,9 @@ pub(super) fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
                         .get::<_, Option<String>>(17)?
                         .and_then(|j| serde_json::from_str(&j).ok()),
                     parts: from_json(r.get(15)?),
+                    turn: r
+                        .get::<_, Option<String>>(18)?
+                        .and_then(|j| serde_json::from_str(&j).ok()),
                 })
             })?
             .collect::<rusqlite::Result<_>>()?;

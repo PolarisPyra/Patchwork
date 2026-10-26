@@ -53,6 +53,7 @@ mod tests {
             parts: Vec::new(),
             finished_at: None,
             usage: None,
+            turn: None,
         }
     }
 

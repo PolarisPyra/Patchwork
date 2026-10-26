@@ -210,6 +210,10 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
         background: m.background.filter((t) => t.toolId !== toolId),
       }));
     }
+    case "turnRecorded": {
+      const { messageId, turn } = event;
+      return updateMessage(thread, messageId, (m) => ({ ...m, turn }));
+    }
     case "turnCompleted": {
       const { messageId, status, error } = event;
       // Nothing can still be running once the turn has ended (mirrors orchestration/stream.rs).

@@ -77,7 +77,9 @@ export default function Canvas({
           if (live) setFile({ key, error: errorMessage(e) });
         },
       );
-      api.gitFileDiff(projectId, path).then(
+      // A file the reply changed shows what its turn did, which stays after a commit.
+      const turn = message?.turn && message.files.includes(path) ? message.turn : null;
+      (turn ? api.turnFileDiff(projectId, turn, path) : api.gitFileDiff(projectId, path)).then(
         (value) => {
           if (live) setDiffResult({ key, value });
         },
@@ -89,7 +91,7 @@ export default function Canvas({
     return () => {
       live = false;
     };
-  }, [key, projectId, path, reloadToken]);
+  }, [key, projectId, path, reloadToken, message?.turn, message?.files]);
 
   // The workspace's watcher reports settled bursts of changes. Reload when one touched this file,
   // or `.git`, since staging and commits change its diff.
@@ -128,7 +130,13 @@ export default function Canvas({
   const content = code?.value;
   const lineCount = content === undefined ? null : splitLines(content).length;
   const planCount = message?.plan.length ?? 0;
-  const diffCount = change ? change.additions + change.deletions : 0;
+  const diffCount =
+    message?.turn && path && message.files.includes(path)
+      ? (diff?.value ?? "").split("\n").filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---) /.test(l))
+          .length
+      : change
+        ? change.additions + change.deletions
+        : 0;
 
   const tabs: { id: CanvasTab; label: string; count: number }[] = path
     ? [

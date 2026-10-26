@@ -130,6 +130,7 @@ pub(super) fn event_message(event: &AgentEvent) -> Option<&str> {
         | AgentEvent::ToolFinished { message_id, .. }
         | AgentEvent::PlanUpdated { message_id, .. }
         | AgentEvent::FileTouched { message_id, .. }
+        | AgentEvent::TurnRecorded { message_id, .. }
         | AgentEvent::ApprovalRequested { message_id, .. }
         | AgentEvent::ApprovalResolved { message_id, .. }
         | AgentEvent::Usage { message_id, .. }
@@ -258,6 +259,7 @@ pub(super) fn apply(thread: &mut Thread, event: &AgentEvent) {
                 msg.files.push(path.clone());
             }
         }
+        AgentEvent::TurnRecorded { turn, .. } => msg.turn = Some(turn.clone()),
         AgentEvent::ApprovalRequested { approval, .. } => msg.approvals.push(approval.clone()),
         AgentEvent::ApprovalResolved {
             approval_id,

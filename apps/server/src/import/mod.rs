@@ -165,6 +165,7 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
                 parts: Vec::new(),
                 finished_at: None,
                 usage: None,
+                turn: None,
             })
             .collect(),
         goal: None,

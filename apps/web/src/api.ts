@@ -272,6 +272,26 @@ export interface Message {
   finishedAt: number | null;
   /** Tokens the reply used; null for agents that do not report usage. */
   usage: TokenUsage | null;
+  /** The project before and after the turn that wrote the reply; null outside git projects and
+   * for older replies. */
+  turn?: TurnTrees | null;
+}
+
+/** Snapshots of a project's files, as git tree ids. */
+export interface TurnTrees {
+  before: string;
+  after: string;
+}
+
+/** Where a file a turn changed stands now. */
+export type TurnFileState = "uncommitted" | "committed" | "reverted" | "deleted" | "unchanged";
+
+/** A file a turn changed: lines the turn added and removed, and where the file stands now. */
+export interface TurnFile {
+  path: string;
+  additions: number;
+  deletions: number;
+  state: TurnFileState;
 }
 
 /** Why a safety classifier blocked a reply, as the agent reports it. */
@@ -440,6 +460,7 @@ export type AgentEvent =
   | { type: "messageEdited"; message: Message }
   | { type: "backgroundTaskStarted"; messageId: string; task: BackgroundTask }
   | { type: "backgroundTaskEnded"; messageId: string; toolId: string }
+  | { type: "turnRecorded"; messageId: string; turn: TurnTrees }
   | {
       type: "turnCompleted";
       messageId: string;
@@ -705,6 +726,10 @@ export const api = {
   /** Which of `paths` no longer exist in the project. */
   missingFiles: (projectId: string, paths: string[]) =>
     invoke<string[]>("missing_files", { projectId, paths }),
+  turnFiles: (projectId: string, turn: TurnTrees, paths: string[]) =>
+    invoke<TurnFile[]>("turn_files", { projectId, turn, paths }),
+  turnFileDiff: (projectId: string, turn: TurnTrees, path: string) =>
+    invoke<string>("turn_file_diff", { projectId, turn, path }),
   gitBranch: (projectId: string) => invoke<string | null>("git_branch", { projectId }),
   gitChanges: (projectId: string) => invoke<FileChange[]>("git_changes", { projectId }),
   /** Unified diff text for one file (empty string if unchanged). */

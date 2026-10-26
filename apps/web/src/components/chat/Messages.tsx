@@ -18,6 +18,8 @@ import {
   type Thread,
   type TokenSettings,
   type TokenUsage,
+  type TurnFile,
+  type TurnFileState,
 } from "~/api";
 import type { CanvasTab } from "~/components/canvas/Canvas";
 import AttachmentChip, { AttachmentTile } from "~/components/chat/AttachmentChip";
@@ -33,6 +35,7 @@ import { GOAL_CLASS, SKILL_CLASS } from "~/components/chat/composerExtensions";
 import { shortcutContext, useCommand } from "~/lib/shortcuts";
 import { formatTokens } from "~/lib/tokens";
 import { useMissingFiles } from "~/hooks/useMissingFiles";
+import { useTurnFiles } from "~/hooks/useTurnFiles";
 import { baseName, dirName, formatClock } from "~/lib/util";
 
 // Markdown loads with the chat, not on first use: its plain-text placeholder had another height,
@@ -326,7 +329,12 @@ const AssistantMessage = memo(function AssistantMessage({
   const openFile =
     onOpenCanvas &&
     ((path: string) =>
-      onOpenCanvas(path, message, changes.some((c) => c.path === path) ? "diff" : "code"));
+      onOpenCanvas(
+        path,
+        message,
+        // A reply with snapshots keeps its turn's diff, even once committed.
+        message.turn || changes.some((c) => c.path === path) ? "diff" : "code",
+      ));
   return (
     <section className="flex min-w-0 flex-col gap-2.5">
       <TurnTimeline
@@ -355,6 +363,7 @@ const AssistantMessage = memo(function AssistantMessage({
       {openFile && message.files.length > 0 && (
         <ChangeSummary
           projectId={projectId}
+          turn={message.turn}
           paths={message.files}
           changes={changes}
           onOpen={openFile}
@@ -470,26 +479,40 @@ function AnsweredQuestions({ approval }: { approval: Approval }) {
 /** Most files the summary lists; the rest are in the Changes view. */
 const SUMMARY_FILES = 5;
 
-/** The files a message touched, each opening its diff. A file with no uncommitted changes left
- * says so, rather than opening onto an empty diff unannounced. */
+/** How a file the turn changed stands now, when that is worth a note. */
+const TURN_NOTES: Record<TurnFileState, string | null> = {
+  uncommitted: null,
+  committed: "Committed",
+  reverted: "Reverted",
+  deleted: "Deleted",
+  unchanged: "No changes",
+};
+
+/** The files a message touched, each opening its diff. A reply with snapshots of its turn keeps
+ * what the turn did, line counts included, once its changes are committed or edited again, and
+ * notes where each file stands now. Older replies show the files' uncommitted changes. */
 function ChangeSummary({
   projectId,
+  turn,
   paths,
   changes,
   onOpen,
   onShow,
 }: {
   projectId: string | null;
+  turn: Message["turn"];
   paths: string[];
   changes: FileChange[];
   onOpen: (path: string) => void;
   onShow: () => void;
 }) {
-  const found = changes.filter((c) => paths.includes(c.path));
+  const turnFiles = useTurnFiles(projectId, turn, paths, changes);
+  const found: (FileChange | TurnFile)[] =
+    turnFiles ?? changes.filter((c) => paths.includes(c.path));
   const additions = found.reduce((sum, c) => sum + c.additions, 0);
   const deletions = found.reduce((sum, c) => sum + c.deletions, 0);
   const listed = paths.length > SUMMARY_FILES + 1 ? paths.slice(0, SUMMARY_FILES) : paths;
-  const missing = useMissingFiles(projectId, paths, changes);
+  const missing = useMissingFiles(projectId, turn ? [] : paths, changes);
   return (
     <div className="flex flex-col gap-1 rounded-[var(--radius)] border border-border bg-panel px-3 py-2 text-[length:var(--fs-sm)]">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -497,7 +520,7 @@ function ChangeSummary({
         <span className="whitespace-nowrap">
           {paths.length} {paths.length === 1 ? "file" : "files"} changed
         </span>
-        {found.length > 0 && (
+        {additions + deletions > 0 && (
           <>
             <span className="text-success">+{additions}</span>
             <span className="text-danger">−{deletions}</span>
@@ -508,19 +531,37 @@ function ChangeSummary({
           Show changes
         </button>
       </div>
-      <div className="flex flex-col">
-        {listed.map((path) => (
-          <ChangedFile
-            key={path}
-            path={path}
-            change={found.find((c) => c.path === path)}
-            deleted={missing.has(path)}
-            onOpen={() => onOpen(path)}
-          />
-        ))}
+      {/* One grid for all rows, so every file's folder starts in the same column. */}
+      <div className="grid grid-cols-[minmax(0,max-content)_minmax(0,1fr)_auto_auto] gap-x-2">
+        {listed.map((path) => {
+          const file = turnFiles?.find((f) => f.path === path);
+          if (turn) {
+            return (
+              <ChangedFile
+                key={path}
+                path={path}
+                note={file ? TURN_NOTES[file.state] : null}
+                lines={file}
+                deleted={file?.state === "deleted"}
+                onOpen={() => onOpen(path)}
+              />
+            );
+          }
+          const change = changes.find((c) => c.path === path);
+          const deleted = missing.has(path) || change?.status === "deleted";
+          return (
+            <ChangedFile
+              key={path}
+              path={path}
+              note={deleted ? "Deleted" : change ? null : "No changes"}
+              deleted={deleted}
+              onOpen={() => onOpen(path)}
+            />
+          );
+        })}
         {listed.length < paths.length && (
           <button
-            className="flex min-h-6 cursor-pointer items-center rounded-[var(--radius-sm)] border-none bg-transparent px-1 text-left text-fg-muted hover:bg-hover hover:text-fg"
+            className="col-span-full flex min-h-6 cursor-pointer items-center rounded-[var(--radius-sm)] border-none bg-transparent px-1 text-left text-fg-muted hover:bg-hover hover:text-fg"
             onClick={onShow}
           >
             {paths.length - listed.length} more
@@ -531,36 +572,41 @@ function ChangeSummary({
   );
 }
 
-/** One touched file: its name, struck through once deleted, then its folder, and whether it
- * was deleted or has no changes left. `deleted` is for a file gone without a git status, such as
- * one git never tracked. */
+/** One touched file: its name, struck through once deleted, then its folder, and a note on where
+ * it stands, such as "Committed". */
 function ChangedFile({
   path,
-  change,
-  deleted: gone,
+  note,
+  lines,
+  deleted,
   onOpen,
 }: {
   path: string;
-  change: FileChange | undefined;
+  note: string | null;
+  /** Lines the turn added and removed, for replies with snapshots of their turn. */
+  lines?: { additions: number; deletions: number };
   deleted: boolean;
   onOpen: () => void;
 }) {
-  const deleted = gone || change?.status === "deleted";
   const dir = dirName(path);
   return (
     <button
-      className="flex min-h-6 min-w-0 cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border-none bg-transparent px-1 text-left hover:bg-hover"
+      className="col-span-full grid min-h-6 min-w-0 cursor-pointer grid-cols-subgrid items-center rounded-[var(--radius-sm)] border-none bg-transparent px-1 text-left hover:bg-hover"
       title={path}
       onClick={onOpen}
     >
-      <span className={`flex-none ${deleted ? "text-fg-muted line-through" : "text-fg"}`}>
+      <span className={`truncate ${deleted ? "text-fg-muted line-through" : "text-fg"}`}>
         {baseName(path)}
       </span>
-      <span className="min-w-0 flex-1 truncate text-fg-subtle">{dir}</span>
-      {(deleted || !change) && (
-        <span className="flex-none text-[length:var(--fs-xs)] text-fg-subtle">
-          {deleted ? "Deleted" : "No changes"}
+      <span className="truncate text-fg-subtle">{dir}</span>
+      {lines && lines.additions + lines.deletions > 0 && (
+        <span className="col-start-3 flex gap-1.5 text-[length:var(--fs-xs)] tabular-nums">
+          <span className="text-success">+{lines.additions}</span>
+          <span className="text-danger">−{lines.deletions}</span>
         </span>
+      )}
+      {note && (
+        <span className="col-start-4 text-[length:var(--fs-xs)] text-fg-subtle">{note}</span>
       )}
     </button>
   );

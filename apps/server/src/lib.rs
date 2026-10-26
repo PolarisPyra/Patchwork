@@ -279,6 +279,7 @@ fn user_message(text: &str, attachments: Vec<Attachment>) -> Message {
         parts: Vec::new(),
         finished_at: None,
         usage: None,
+        turn: None,
     }
 }
 

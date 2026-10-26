@@ -436,6 +436,7 @@ pub(super) fn assistant_message() -> Message {
         parts: Vec::new(),
         finished_at: None,
         usage: None,
+        turn: None,
     }
 }
 
@@ -450,6 +451,26 @@ pub(super) struct TurnEnd {
     pub(super) cancelled: bool,
     pub(super) clear_in_agent: Option<&'static str>,
     pub(super) session_lost: bool,
+}
+
+/// Pairs the turn's replies with the project's snapshots from before and after the turn, so their
+/// changed files keep showing what the turn did once the changes are committed or edited again.
+fn record_turn(turn: &Turn, replies: &[String]) {
+    let Some(first) = replies.first() else { return };
+    let Some(thread) = turn.server.store.thread(&turn.thread_id) else { return };
+    if thread.project_id.is_none() {
+        return;
+    }
+    // The snapshot before the turn belongs to the user message the first reply answers.
+    let Some(at) = thread.messages.iter().position(|m| &m.id == first) else { return };
+    let Some(asked) = thread.messages[..at].iter().rev().find(|m| m.role == Role::User) else {
+        return;
+    };
+    if let Some(trees) = checkpoint::record_end(&turn.root, &turn.thread_id, &asked.id, replies) {
+        for id in replies {
+            turn.publish(AgentEvent::TurnRecorded { message_id: id.clone(), turn: trees.clone() });
+        }
+    }
 }
 
 pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
@@ -516,6 +537,7 @@ pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
             }
         }
     }
+    record_turn(&turn, segments);
     // Earlier messages of the turn were answered in full before a steer moved it on. None are
     // left when the agent went idle after its last reply, which was completed then.
     if let Some((last, earlier)) = segments.split_last() {

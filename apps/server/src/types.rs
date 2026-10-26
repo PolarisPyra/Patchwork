@@ -496,6 +496,18 @@ pub struct Message {
     /// Tokens the reply has used; None for agents that do not report usage.
     #[serde(default)]
     pub usage: Option<TokenUsage>,
+    /// The project before and after the turn that wrote the reply, so its changes can be shown
+    /// after they are committed or edited again. None outside git projects and for older replies.
+    #[serde(default)]
+    pub turn: Option<TurnTrees>,
+}
+
+/// Snapshots of a project's files as git tree ids, kept alive by refs under `refs/patchwork`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnTrees {
+    pub before: String,
+    pub after: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -798,6 +810,11 @@ pub enum AgentEvent {
     BackgroundTaskEnded {
         message_id: String,
         tool_id: String,
+    },
+    /// The project's snapshots from before and after the turn that wrote the message.
+    TurnRecorded {
+        message_id: String,
+        turn: TurnTrees,
     },
     /// Terminal event for a turn. `status` is complete | error | cancelled.
     TurnCompleted {
