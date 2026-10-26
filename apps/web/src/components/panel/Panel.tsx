@@ -97,15 +97,17 @@ export default function Panel({
       active.term.refresh(0, active.term.rows - 1);
     }
     active.fit.fit();
-    // One fit per frame: a window drag fires many resizes, and each fit redraws the terminal.
-    let frame = 0;
+    // Fit once the size settles: each fit rebuilds every row and rewrites xterm's stylesheet,
+    // which restyles the whole app, so fitting on every frame of a window drag pins the CPU.
+    // Until then the host clips the terminal at its old size.
+    let timer = 0;
     const resized = new ResizeObserver(() => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => active.fit.fit());
+      clearTimeout(timer);
+      timer = window.setTimeout(() => active.fit.fit(), 100);
     });
     resized.observe(el);
     return () => {
-      cancelAnimationFrame(frame);
+      clearTimeout(timer);
       resized.disconnect();
     };
   }, [tab, active]);
@@ -262,7 +264,11 @@ export default function Panel({
       )}
       <div className="min-h-0 flex-1">
         {tab === "terminal" ? (
-          <div ref={host} className="h-full w-full pl-3" {...shortcutContext("terminalFocus")} />
+          <div
+            ref={host}
+            className="h-full w-full overflow-hidden pl-3"
+            {...shortcutContext("terminalFocus")}
+          />
         ) : (
           <OutputView channel={channel?.id ?? null} />
         )}
