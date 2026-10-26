@@ -368,6 +368,24 @@ pub fn steer_line(text: &str, attachments: &[Attachment]) -> String {
 /// The bridge line that answers a permission request or a question.
 pub fn approval_reply(reply: &Value, allow: bool, answers: &HashMap<String, Vec<String>>) -> String {
     let request = &reply["requestID"];
+    if reply["kind"] == "form" {
+        if !allow {
+            return json!({"type": "form_cancel", "requestID": request}).to_string();
+        }
+        // A multiselect field takes a list; any other takes its answer as text.
+        let mut answer = serde_json::Map::new();
+        for field in reply["fields"].as_array().into_iter().flatten() {
+            let Some(key) = field["key"].as_str() else { continue };
+            let Some(picks) = answers.get(key).filter(|p| !p.is_empty()) else { continue };
+            let value = if field["type"] == "multiselect" {
+                json!(picks)
+            } else {
+                json!(picks.join(", "))
+            };
+            answer.insert(key.into(), value);
+        }
+        return json!({"type": "form", "requestID": request, "answer": answer}).to_string();
+    }
     if reply["kind"] == "question" {
         if !allow {
             return json!({"type": "question_reject", "requestID": request}).to_string();
@@ -505,6 +523,49 @@ fn parse_serve(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                 title: "Question".into(),
                 detail: questions.first().map(|q| q.question.clone()).unwrap_or_default(),
                 reply: json!({"kind": "question", "requestID": request, "questions": ids}),
+                questions,
+            }]
+        }
+        // OpenCode 2.1 asks its question tool's questions as a form, one field per question.
+        Some("form.created") => {
+            let form = &data["form"];
+            let Some(request) = form["id"].as_str() else { return Vec::new() };
+            let fields: Vec<&Value> = form["fields"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|f| f["key"].is_string() && f["hidden"] != true)
+                .collect();
+            let questions: Vec<Question> = fields
+                .iter()
+                .map(|f| Question {
+                    id: f["key"].as_str().unwrap_or_default().into(),
+                    header: f["title"].as_str().unwrap_or_default().into(),
+                    question: f["description"]
+                        .as_str()
+                        .or_else(|| f["title"].as_str())
+                        .unwrap_or_default()
+                        .into(),
+                    options: f["options"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .map(|o| QuestionOption {
+                            label: o["label"].as_str().unwrap_or_default().into(),
+                            description: o["description"].as_str().unwrap_or_default().into(),
+                        })
+                        .collect(),
+                    multi_select: f["type"] == "multiselect",
+                })
+                .collect();
+            let shapes: Vec<Value> = fields
+                .iter()
+                .map(|f| json!({"key": f["key"], "type": f["type"]}))
+                .collect();
+            vec![Parsed::Approval {
+                title: "Question".into(),
+                detail: questions.first().map(|q| q.question.clone()).unwrap_or_default(),
+                reply: json!({"kind": "form", "requestID": request, "fields": shapes}),
                 questions,
             }]
         }

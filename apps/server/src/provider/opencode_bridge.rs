@@ -217,6 +217,15 @@ fn command(api: &Api, session_id: &str, line: &str, steers: &mut HashSet<String>
         Some("question_reject") => api
             .post(&format!("/api/session/{session_id}/question/{request}/reject"), &json!({}))
             .map(drop),
+        Some("form") => api
+            .post(
+                &format!("/api/session/{session_id}/form/{request}/reply"),
+                &json!({ "answer": v["answer"] }),
+            )
+            .map(drop),
+        Some("form_cancel") => api
+            .delete(&format!("/api/session/{session_id}/form/{request}"))
+            .map(drop),
         Some("steer") => {
             let files: Vec<String> = v["files"]
                 .as_array()
@@ -286,7 +295,11 @@ fn events(api: &Api, session_id: &str, tx: Sender<Msg>) -> Result<(), String> {
             let Ok(line) = line else { break };
             let Some(data) = line.strip_prefix("data:") else { continue };
             let Ok(mut event) = serde_json::from_str::<Value>(data.trim()) else { continue };
-            if event["data"]["sessionID"].as_str() != Some(&session_id) {
+            // A form names its session inside the form.
+            let owner = event["data"]["sessionID"]
+                .as_str()
+                .or_else(|| event["data"]["form"]["sessionID"].as_str());
+            if owner != Some(&session_id) {
                 continue;
             }
             let kind = event["type"].as_str().unwrap_or_default().to_string();
@@ -442,6 +455,15 @@ impl Api {
             .patch(format!("{}{path}", self.base))
             .header("Authorization", &self.auth)
             .send_json(body);
+        read(path, response)
+    }
+
+    fn delete(&self, path: &str) -> Result<Value, String> {
+        let response = self
+            .agent
+            .delete(format!("{}{path}", self.base))
+            .header("Authorization", &self.auth)
+            .call();
         read(path, response)
     }
 
