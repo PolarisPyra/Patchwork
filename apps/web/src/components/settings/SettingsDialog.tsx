@@ -220,7 +220,7 @@ function ThemeRow({ settings, updateSettings }: PaneProps) {
 /** Context sizes offered by the token settings. */
 const TOKEN_LEVELS = [100_000, 150_000, 200_000, 300_000];
 
-/** Context sizes Claude can be told to compact at; 0 leaves Claude's own. */
+/** Context sizes to compact at; 0 is Default. */
 const COMPACT_WINDOWS = [0, 200_000, 300_000, 500_000];
 
 /** One setting: its name and what it does, with the control on the right. */
@@ -404,6 +404,7 @@ function TokensPane({ settings, updateSettings }: PaneProps) {
         <ContextLevels
           label="Compact above"
           value={tokens.autoCompactAbove}
+          levels={COMPACT_WINDOWS}
           onChange={(autoCompactAbove) => update({ autoCompactAbove })}
         />
       </TokenRow>

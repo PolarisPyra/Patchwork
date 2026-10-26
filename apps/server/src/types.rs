@@ -129,7 +129,8 @@ pub struct TokenSettings {
     pub ask_before_resume: bool,
     /// Compacts an idle Claude task just before its prompt cache expires.
     pub auto_compact: bool,
-    /// The context size above which an idle task is compacted.
+    /// The context size above which an idle task is compacted. 0 follows
+    /// `claude_compact_window`, or 200k when that is Claude's own.
     pub auto_compact_above: u64,
     /// The context size at which Claude compacts mid-task. 0 leaves Claude's own, near the
     /// model's full window.
@@ -145,7 +146,7 @@ impl Default for TokenSettings {
             warn_above: 150_000,
             ask_before_resume: true,
             auto_compact: true,
-            auto_compact_above: 200_000,
+            auto_compact_above: 0,
             claude_compact_window: 0,
             default_models: HashMap::new(),
         }

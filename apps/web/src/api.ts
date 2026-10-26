@@ -78,7 +78,7 @@ export interface TokenSettings {
   askBeforeResume: boolean;
   /** Compacts an idle Claude task just before its prompt cache expires. */
   autoCompact: boolean;
-  /** The context size above which an idle task is compacted. */
+  /** The context size above which an idle task is compacted. 0 follows `claudeCompactWindow`. */
   autoCompactAbove: number;
   /** The context size at which Claude compacts mid-task. 0 leaves Claude's own. */
   claudeCompactWindow: number;
@@ -491,7 +491,7 @@ export const DEFAULT_SETTINGS: Settings = {
     warnAbove: 150_000,
     askBeforeResume: true,
     autoCompact: true,
-    autoCompactAbove: 200_000,
+    autoCompactAbove: 0,
     claudeCompactWindow: 0,
     defaultModels: {},
   },

@@ -248,13 +248,18 @@ fn idle_compaction_due(thread: &Thread, now: u64, tokens: &TokenSettings) -> boo
         return false;
     };
     let idle = now.saturating_sub(finished);
+    let above = match (tokens.auto_compact_above, tokens.claude_compact_window) {
+        (0, 0) => 200_000,
+        (0, window) => window,
+        (above, _) => above,
+    };
     let window = (CACHE_TTL_MS - COMPACT_LEAD_MS)..CACHE_TTL_MS;
     window.contains(&idle)
         && thread
             .messages
             .last()
             .and_then(|m| m.usage)
-            .is_some_and(|u| u.context > tokens.auto_compact_above)
+            .is_some_and(|u| u.context > above)
 }
 
 /// A message the user sent, complete from the start.
