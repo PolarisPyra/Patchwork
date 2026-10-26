@@ -37,6 +37,8 @@ use super::process::exit_error;
 use super::process::last_lines;
 use super::process::next_line;
 use super::process::TURN_TIMEOUT;
+use super::process::terminate;
+use super::stuck::{LOOP_LIMIT, Repeats};
 use super::process::write_line;
 use super::stream::publish;
 use super::stream::Unsaved;
@@ -70,6 +72,7 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
     // How many of `segments` were completed when the agent went idle.
     let mut completed = 0;
     let mut stream_error: Option<String> = None;
+    let mut repeats = Repeats::default();
     // The agent could not find the session the turn resumed, so the turn runs again without it.
     let mut session_lost = false;
     let mut goal = turn
@@ -411,6 +414,7 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                         // Codex reports a tool when it starts and again when it completes;
                         // only the first ToolStarted for an id is kept.
                         AgentEvent::ToolStarted { tool, message_id } => {
+                            repeats.started(tool);
                             if tool_owner.contains_key(&tool.id) {
                                 continue;
                             }
@@ -427,8 +431,16 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                             tool_id,
                             message_id,
                             is_error,
-                            ..
+                            output,
                         } => {
+                            if let Some(name) = repeats.finished(tool_id, *is_error, output.as_deref())
+                                && stream_error.is_none()
+                            {
+                                stream_error = Some(format!(
+                                    "Stopped: the agent called {name} {LOOP_LIMIT} times in a row without getting anywhere."
+                                ));
+                                terminate(pid, turn.exited.clone());
+                            }
                             if let Some(owner) = tool_owner.get(tool_id) {
                                 message_id.clone_from(owner);
                             }

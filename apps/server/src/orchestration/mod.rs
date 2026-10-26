@@ -13,6 +13,7 @@ mod process;
 mod queue;
 pub(crate) mod recovery;
 mod stream;
+mod stuck;
 mod subagents;
 mod turn;
 mod usage;
