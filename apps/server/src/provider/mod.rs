@@ -678,10 +678,9 @@ fn one_line(s: &str) -> String {
 
 /// Strips the project root so paths are project-relative; other paths pass through.
 fn relative(root: &str, path: &str) -> String {
-    path.strip_prefix(root)
-        .and_then(|p| p.strip_prefix('/'))
-        .unwrap_or(path)
-        .to_string()
+    let root = root.trim_end_matches('/');
+    let path = path.strip_prefix(root).and_then(|p| p.strip_prefix('/')).unwrap_or(path);
+    path.strip_prefix("./").unwrap_or(path).to_string()
 }
 
 /// A tool call the agent has begun, as the provider's events describe it.
