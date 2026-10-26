@@ -2994,7 +2994,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "glib",
  "log",
@@ -3016,7 +3016,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-server"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
  "globset",
