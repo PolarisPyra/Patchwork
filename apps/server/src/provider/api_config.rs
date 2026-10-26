@@ -283,7 +283,7 @@ fn headers_secret(id: &str) -> String {
 }
 
 /// Saves a secret in the credential store, or in the keys file when there is none.
-fn store_secret(name: &str, value: &str) -> Result<KeyStore, String> {
+pub(crate) fn store_secret(name: &str, value: &str) -> Result<KeyStore, String> {
     keys().insert(name.to_string(), value.to_string());
     if entry(name).and_then(|e| e.set_password(value)).is_ok() {
         set_file_key(name, None)?;
@@ -293,7 +293,7 @@ fn store_secret(name: &str, value: &str) -> Result<KeyStore, String> {
     Ok(KeyStore::File)
 }
 
-fn delete_secret(name: &str) {
+pub(crate) fn delete_secret(name: &str) {
     keys().remove(name);
     if let Ok(entry) = entry(name) {
         let _ = entry.delete_credential();
@@ -309,17 +309,7 @@ fn with_headers(mut provider: ApiProvider) -> ApiProvider {
     if provider.headers.iter().all(|h| !h.value.is_empty()) {
         return provider;
     }
-    let name = headers_secret(&provider.id);
-    let cached = keys().get(&name).cloned();
-    let stored = cached.or_else(|| {
-        let value = entry(&name)
-            .and_then(|e| e.get_password())
-            .ok()
-            .or_else(|| read_file_keys().remove(&name))?;
-        keys().insert(name, value.clone());
-        Some(value)
-    });
-    let values: Vec<String> = stored
+    let values: Vec<String> = read_secret(&headers_secret(&provider.id))
         .and_then(|text| serde_json::from_str(&text).ok())
         .unwrap_or_default();
     for (h, value) in provider.headers.iter_mut().zip(values) {
@@ -328,6 +318,19 @@ fn with_headers(mut provider: ApiProvider) -> ApiProvider {
         }
     }
     provider
+}
+
+/// A secret saved with `store_secret`, from wherever it went.
+pub(crate) fn read_secret(name: &str) -> Option<String> {
+    if let Some(value) = keys().get(name) {
+        return Some(value.clone());
+    }
+    let value = entry(name)
+        .and_then(|e| e.get_password())
+        .ok()
+        .or_else(|| read_file_keys().remove(name))?;
+    keys().insert(name.into(), value.clone());
+    Some(value)
 }
 
 /// Accepts `http://` and `https://` base URLs.

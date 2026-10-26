@@ -339,6 +339,7 @@ impl Server {
     pub fn open(config_dir: PathBuf, data_dir: &Path, sink: EventSink) -> Res<Arc<Self>> {
         provider::model_manifest::start(&config_dir);
         provider::api_config::init(&config_dir);
+        provider::mcp::init(&config_dir);
         skills::init(&config_dir);
         std::thread::spawn(scope::prepare);
         let clis_dir = config_dir.join("clis");

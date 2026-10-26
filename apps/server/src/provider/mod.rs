@@ -10,6 +10,8 @@ pub mod api;
 pub mod api_bridge;
 pub mod api_config;
 pub mod api_tools;
+pub mod mcp;
+pub mod mcp_clis;
 pub mod model_manifest;
 
 use std::collections::HashMap;
@@ -137,6 +139,26 @@ pub fn agent_command(kind: AgentKind) -> Result<Command, String> {
         }
     }
     Ok(cmd)
+}
+
+/// A command the user configured, such as an MCP server: found and run with the PATH their
+/// login shell sets up, as agents get it.
+pub fn user_command(program: &str) -> Command {
+    let mut paths: Vec<PathBuf> = shell_path().into_iter().flat_map(std::env::split_paths).collect();
+    if let Some(existing) = std::env::var_os("PATH") {
+        paths.extend(std::env::split_paths(&existing));
+    }
+    let path = std::env::join_paths(paths).ok();
+    let bin = path
+        .as_ref()
+        .and_then(|p| which::which_in(program, Some(p), ".").ok())
+        .or_else(|| find_binary(program))
+        .unwrap_or_else(|| PathBuf::from(program));
+    let mut cmd = crate::host_command(bin);
+    if let Some(path) = path {
+        cmd.env("PATH", path);
+    }
+    cmd
 }
 
 /// The command a turn runs. An OpenCode 2.x turn runs Patchwork's own binary as the bridge to
@@ -527,8 +549,8 @@ pub fn is_goal_command(text: &str) -> bool {
 /// Command-line arguments for one turn.
 pub fn turn_args(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
     match agent {
-        AgentKind::Claude => claude::turn_args(spec),
-        AgentKind::Codex => codex::turn_args(),
+        AgentKind::Claude => [claude::turn_args(spec), mcp_clis::overrides(agent, spec.root)].concat(),
+        AgentKind::Codex => [codex::turn_args(), mcp_clis::overrides(agent, spec.root)].concat(),
         AgentKind::Antigravity => antigravity::turn_args(spec),
         AgentKind::OpenCode => opencode::turn_args(spec),
         AgentKind::Api => api::turn_args(),
@@ -658,6 +680,14 @@ pub enum Parsed {
     SessionLost,
     /// Write this line to the agent's stdin.
     Send(String),
+    /// The API agent calls a tool of an MCP server, which Patchwork keeps running; the result
+    /// goes back to its stdin as `api::mcp_reply`.
+    McpCall {
+        id: Value,
+        server: String,
+        tool: String,
+        arguments: Value,
+    },
     /// The agent waits for the user; `reply` is what `approval_reply` needs to answer it.
     Approval {
         title: String,

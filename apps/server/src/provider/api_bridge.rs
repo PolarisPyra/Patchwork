@@ -49,6 +49,7 @@ const CONTEXT_PHRASES: [&str; 9] = [
     "reduce the length",
     "too long",
 ];
+const DENIED: &str = "The user denied this. Do not retry it; ask what they would like instead, or carry on another way.";
 const REMOVED_RESULT: &str =
     "(This output was removed to fit the context window. Run the tool again if it is still needed.)";
 
@@ -80,6 +81,20 @@ struct Request {
     /// `compact` summarizes the conversation instead of sending a message.
     #[serde(default)]
     command: Option<String>,
+    /// Tools of the MCP servers Patchwork runs, which it calls for the agent.
+    #[serde(default)]
+    mcp_tools: Vec<McpTool>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct McpTool {
+    name: String,
+    server: String,
+    tool: String,
+    description: String,
+    parameters: Value,
+    read_only: bool,
 }
 
 #[derive(Deserialize)]
@@ -246,7 +261,12 @@ impl Agent {
             .http_status_as_error(false)
             .build()
             .into();
-        let tools = api_tools::definitions(request.plan);
+        let mut tools = api_tools::definitions(request.plan);
+        if let Some(list) = tools.as_array_mut() {
+            list.extend(request.mcp_tools.iter().map(|t| {
+                json!({"type": "function", "function": {"name": t.name, "description": t.description, "parameters": t.parameters}})
+            }));
+        }
         let system = system_prompt(&request, &root);
         Agent {
             request,
@@ -496,31 +516,38 @@ impl Agent {
         };
         let summary = api_tools::summary(&call.name, &args, &self.root);
         emit(&json!({"type": "api.tool", "id": call.id, "name": call.name, "summary": summary}));
-        let (result, error, stop) = match call.name.as_str() {
-            "update_plan" => {
-                emit(&json!({"type": "api.todos", "steps": args["steps"]}));
-                (Ok("The plan is shown to the user.".to_string()), false, false)
-            }
-            "propose_plan" => {
-                let plan = args["plan"].as_str().unwrap_or_default();
-                emit(&json!({"type": "api.plan", "text": plan}));
-                (Ok("The plan was shown to the user, who will reply.".to_string()), false, true)
-            }
-            "ask_user" => match self.ask(&call.id, &args) {
-                Ok(answer) => (Ok(answer), false, false),
-                Err(e) => (Err(e), true, false),
-            },
-            name => {
-                let allowed = match api_tools::approval(name, &args, self.request.mode, &self.root) {
-                    Some((title, detail)) => self.approve(&call.id, &title, &detail),
-                    None => true,
-                };
-                if allowed {
-                    let result = api_tools::run(name, &args, &self.root);
-                    let error = result.is_err();
-                    (result, error, false)
-                } else {
-                    (Err("The user denied this. Do not retry it; ask what they would like instead, or carry on another way.".into()), true, false)
+        let mcp = self.request.mcp_tools.iter().position(|t| t.name == call.name);
+        let (result, error, stop) = if let Some(index) = mcp {
+            let result = self.call_mcp(index, &call.id, &args);
+            let error = result.is_err();
+            (result, error, false)
+        } else {
+            match call.name.as_str() {
+                "update_plan" => {
+                    emit(&json!({"type": "api.todos", "steps": args["steps"]}));
+                    (Ok("The plan is shown to the user.".to_string()), false, false)
+                }
+                "propose_plan" => {
+                    let plan = args["plan"].as_str().unwrap_or_default();
+                    emit(&json!({"type": "api.plan", "text": plan}));
+                    (Ok("The plan was shown to the user, who will reply.".to_string()), false, true)
+                }
+                "ask_user" => match self.ask(&call.id, &args) {
+                    Ok(answer) => (Ok(answer), false, false),
+                    Err(e) => (Err(e), true, false),
+                },
+                name => {
+                    let allowed = match api_tools::approval(name, &args, self.request.mode, &self.root) {
+                        Some((title, detail)) => self.approve(&call.id, &title, &detail),
+                        None => true,
+                    };
+                    if allowed {
+                        let result = api_tools::run(name, &args, &self.root);
+                        let error = result.is_err();
+                        (result, error, false)
+                    } else {
+                        (Err(DENIED.into()), true, false)
+                    }
                 }
             }
         };
@@ -536,6 +563,24 @@ impl Agent {
         }
         emit(&done);
         (text, stop)
+    }
+
+    /// Has Patchwork call an MCP tool, once the user approves where the access mode asks.
+    fn call_mcp(&mut self, index: usize, id: &str, args: &Value) -> Result<String, String> {
+        let tool = &self.request.mcp_tools[index];
+        let ask = match self.request.mode {
+            AccessMode::FullAccess => false,
+            AccessMode::Supervised => true,
+            _ => !tool.read_only,
+        };
+        let (server, name) = (tool.server.clone(), tool.tool.clone());
+        if ask && !self.approve(id, &format!("Use {name} from {server}"), &args.to_string()) {
+            return Err(DENIED.into());
+        }
+        emit(&json!({"type": "api.mcp_call", "id": id, "server": server, "tool": name, "arguments": args}));
+        let reply = self.wait(id).ok_or("The turn ended before the tool finished")?;
+        let output = api_tools::cap(reply["output"].as_str().unwrap_or_default().to_string());
+        if reply["error"] == true { Err(output) } else { Ok(output) }
     }
 
     /// Asks Patchwork for an approval and waits for the answer.

@@ -10,7 +10,7 @@ use crate::types::{
     ProviderSlashCommand,
 };
 use super::{Image, Parsed, ToolStart, TurnSpec};
-use super::{api_bridge, api_config, api_tools, file_touched, prompt, text_delta, thinking, tool_finished, tool_started};
+use super::{api_bridge, api_config, api_tools, mcp, file_touched, prompt, text_delta, thinking, tool_finished, tool_started};
 
 pub fn auth(status: &mut AgentStatus) {
     let providers = api_config::providers();
@@ -53,6 +53,7 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         "effort": spec.effort,
         "instructions": spec.instructions,
         "command": command,
+        "mcpTools": mcp::turn_tools(spec.plan),
     });
     if let (Some(request), Some(fields)) = (request.as_object_mut(), fields.as_object()) {
         request.extend(fields.clone());
@@ -66,6 +67,15 @@ pub fn steer_line(text: &str, images: &[Image]) -> String {
         .map(|i| json!({"mediaType": i.media_type, "data": i.data}))
         .collect();
     json!({"type": "steer", "text": text, "images": images}).to_string()
+}
+
+/// The result of an MCP tool call, for the agent.
+pub fn mcp_reply(id: &Value, result: Result<String, String>) -> String {
+    let (output, error) = match result {
+        Ok(text) => (text, false),
+        Err(text) => (text, true),
+    };
+    json!({"type": "reply", "id": id, "output": output, "error": error}).to_string()
 }
 
 pub fn approval_reply(reply: &Value, allow: bool, answers: &HashMap<String, Vec<String>>) -> String {
@@ -201,6 +211,12 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
             reason: text("reason").into(),
             attempt: v["attempt"].as_u64().unwrap_or(1) as u32,
             max_attempts: v["max"].as_u64().unwrap_or(3) as u32,
+        }],
+        Some("api.mcp_call") => vec![Parsed::McpCall {
+            id: v["id"].clone(),
+            server: text("server").into(),
+            tool: text("tool").into(),
+            arguments: v["arguments"].clone(),
         }],
         Some("api.steered") => vec![Parsed::Steered],
         Some("api.error") => vec![Parsed::Error(text("message").into())],

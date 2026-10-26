@@ -12,6 +12,7 @@ import {
   KeyboardIcon,
   MinusIcon,
   PaletteIcon,
+  PlugIcon,
   PlugsConnectedIcon,
   PlusIcon,
   RobotIcon,
@@ -56,11 +57,13 @@ import { CHIP_CLASS } from "~/components/chat/ModelPicker";
 import Dropdown from "~/components/workspace/Dropdown";
 import KeybindingsPane from "~/components/settings/KeybindingsPane";
 import ApiProvidersPane from "~/components/settings/ApiProvidersPane";
+import McpServersPane from "~/components/settings/McpServersPane";
 
 type Section =
   | "appearance"
   | "agent"
   | "api"
+  | "mcp"
   | "tokens"
   | "notifications"
   | "imports"
@@ -76,6 +79,7 @@ const SECTIONS: { id: Section; label: string; Icon: Icon }[] = [
   { id: "appearance", label: "Appearance", Icon: PaletteIcon },
   { id: "agent", label: "CLI Providers", Icon: RobotIcon },
   { id: "api", label: "API Providers", Icon: PlugsConnectedIcon },
+  { id: "mcp", label: "MCP Servers", Icon: PlugIcon },
   { id: "tokens", label: "AI Tokenomics", Icon: GaugeIcon },
   { id: "notifications", label: "Notifications", Icon: BellIcon },
   { id: "imports", label: "Imports", Icon: DownloadSimpleIcon },
@@ -144,6 +148,9 @@ export default function SettingsDialog({
             {section === "appearance" && <AppearancePane {...paneProps} />}
             {section === "agent" && <AgentPane {...paneProps} />}
             {section === "api" && <ApiProvidersPane updateSettings={updateSettings} />}
+            {section === "mcp" && (
+              <McpServersPane appIcon={LOGO_URLS[settings.logo ?? logoManifest.default]} />
+            )}
             {section === "tokens" && <TokensPane {...paneProps} />}
             {section === "notifications" && <NotificationsPane {...paneProps} />}
             {section === "imports" && <ImportsPane {...paneProps} onImported={onImported} />}

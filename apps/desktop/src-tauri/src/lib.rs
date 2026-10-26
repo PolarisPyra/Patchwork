@@ -178,6 +178,71 @@ async fn remove_api_provider(id: String) -> Res<()> {
     blocking(move || provider::api_config::remove(&id)).await?
 }
 
+// ---- MCP servers ---------------------------------------------------------
+
+#[tauri::command]
+fn list_mcp_servers() -> Vec<provider::mcp::ServerView> {
+    provider::mcp::list()
+}
+
+#[tauri::command]
+async fn save_mcp_server(name: String, previous: Option<String>, server: provider::mcp::McpServer) -> Res<()> {
+    blocking(move || provider::mcp::save(name, previous, server)).await?
+}
+
+#[tauri::command]
+async fn remove_mcp_server(name: String) -> Res<()> {
+    blocking(move || provider::mcp::remove(&name)).await?
+}
+
+#[tauri::command]
+async fn restart_mcp_server(name: String) -> Res<()> {
+    blocking(move || provider::mcp::restart(&name)).await
+}
+
+/// How many MCP tools an API turn may offer.
+#[tauri::command]
+fn mcp_tool_budget() -> usize {
+    provider::mcp::tool_budget()
+}
+
+#[tauri::command]
+fn mcp_config_file() -> String {
+    provider::mcp::path().display().to_string()
+}
+
+/// The MCP servers Claude Code and Codex use, from their own config.
+#[tauri::command]
+async fn list_cli_mcp_servers(server: Srv<'_>) -> Res<Vec<provider::mcp_clis::CliGroup>> {
+    let projects = server.store.settings().projects;
+    blocking(move || provider::mcp_clis::list(&projects)).await
+}
+
+#[tauri::command]
+async fn refresh_cli_mcp_server(server: Srv<'_>, key: String) -> Res<()> {
+    let projects = server.store.settings().projects;
+    blocking(move || provider::mcp_clis::refresh(&key, &projects)).await
+}
+
+#[tauri::command]
+async fn enable_cli_mcp_server(server: Srv<'_>, key: String) -> Res<()> {
+    let projects = server.store.settings().projects;
+    blocking(move || provider::mcp_clis::enable(&key, &projects)).await?
+}
+
+/// Opens a file MCP servers are configured in, in the user's editor.
+#[tauri::command]
+fn open_mcp_config(server: Srv, path: String) -> Res<()> {
+    let path = std::path::PathBuf::from(path);
+    if !provider::mcp_clis::is_config_file(&path, &server.store.settings().projects) {
+        return Err("That is not an MCP config file".into());
+    }
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
+        return Err("That is not an MCP config file".into());
+    };
+    workspace::open_in_editor(&dir.to_string_lossy(), &name.to_string_lossy())
+}
+
 #[tauri::command]
 async fn fetch_api_models(query: provider::api_config::ModelsQuery) -> Res<Vec<provider::api_config::ApiModel>> {
     blocking(move || provider::api_config::fetch_models(query)).await?
@@ -816,6 +881,16 @@ pub fn run() {
             list_api_providers,
             save_api_provider,
             remove_api_provider,
+            list_mcp_servers,
+            save_mcp_server,
+            remove_mcp_server,
+            restart_mcp_server,
+            mcp_config_file,
+            mcp_tool_budget,
+            list_cli_mcp_servers,
+            refresh_cli_mcp_server,
+            enable_cli_mcp_server,
+            open_mcp_config,
             fetch_api_models,
             get_usage,
             add_project,

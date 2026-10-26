@@ -162,6 +162,7 @@ pub fn summary(name: &str, args: &Value, root: &Path) -> String {
         "glob" | "grep" => field("pattern"),
         "ask_user" => args["questions"][0]["question"].as_str().unwrap_or_default().to_string(),
         "update_plan" | "propose_plan" => String::new(),
+        _ if name.starts_with("mcp__") => args.to_string(),
         _ => args["path"].as_str().map(|p| shown(&resolve(root, p), root)).unwrap_or_default(),
     };
     summary.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(120).collect()
@@ -275,7 +276,7 @@ pub fn run(name: &str, args: &Value, root: &Path) -> Result<String, String> {
 }
 
 /// Cuts a long result to its start and end.
-fn cap(text: String) -> String {
+pub fn cap(text: String) -> String {
     if text.len() <= MAX_RESULT {
         return text;
     }

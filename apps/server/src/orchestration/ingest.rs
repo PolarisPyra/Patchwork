@@ -176,6 +176,15 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                 Parsed::Send(line) => {
                     write_line(&turn.stdin, &line);
                 }
+                Parsed::McpCall { id, server, tool, arguments } => {
+                    let stdin = turn.stdin.clone();
+                    let (cancelled, exited) = (turn.cancelled.clone(), turn.exited.clone());
+                    std::thread::spawn(move || {
+                        let stopped = || cancelled.load(Ordering::SeqCst) || exited.load(Ordering::SeqCst);
+                        let result = provider::mcp::call(&server, &tool, &arguments, &stopped);
+                        write_line(&stdin, &provider::api::mcp_reply(&id, result));
+                    });
+                }
                 Parsed::Approval {
                     title,
                     detail,

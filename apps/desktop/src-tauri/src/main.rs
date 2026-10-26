@@ -10,6 +10,10 @@ fn main() {
     if std::env::args().nth(1).as_deref() == Some(patchwork_server::provider::api_bridge::BRIDGE_ARG) {
         std::process::exit(patchwork_server::provider::api_bridge::run());
     }
+    // Claude Code and Codex start this binary as a relay to an MCP server Patchwork runs.
+    if std::env::args().nth(1).as_deref() == Some(patchwork_server::provider::mcp::PROXY_ARG) {
+        std::process::exit(patchwork_server::provider::mcp::run_proxy());
+    }
     // WebKitGTK's DMA-BUF renderer crashes on Wayland with some GPUs (notably
     // NVIDIA: "Error 71 (Protocol error) dispatching to Wayland display").
     #[cfg(target_os = "linux")]
