@@ -23,3 +23,7 @@ ignore = "0.4"
 notify = "8"
 globset = "0.4"
 regex = "1"
+# Debug log folder names and line times in local time.
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# Exporting the debug logs as one file to send with a bug report.
+zip = { version = "2", default-features = false, features = ["deflate"] }

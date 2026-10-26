@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { RELEASES_URL, restartToUpdate } from "~/lib/updates";
 import {
   ArrowCircleUpIcon,
@@ -17,6 +17,7 @@ import {
   RobotIcon,
   ScrollIcon,
   TerminalIcon,
+  TerminalWindowIcon,
   TrashIcon,
   XIcon,
   type Icon,
@@ -31,10 +32,13 @@ import {
   type AgentStatus,
   type ImportScan,
   type ImportSource,
+  type LoggingSettings,
   type ModelOption,
   type NotificationSettings,
   type Settings,
   type ShellChoices,
+  type TerminalSettings,
+  defaultTerminalSettings,
   type SkillsView,
   type Theme,
   type TokenSettings,
@@ -42,6 +46,7 @@ import {
   type UpdateStatus,
 } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
+import LogLevelPicker from "~/components/panel/LogLevelPicker";
 import type { UpdateSettings } from "~/app/App";
 import { syncProjects } from "~/lib/projects";
 import { formatTokens } from "~/lib/tokens";
@@ -60,6 +65,7 @@ type Section =
   | "notifications"
   | "imports"
   | "environment"
+  | "terminal"
   | "skills"
   | "projects"
   | "shortcuts"
@@ -74,6 +80,7 @@ const SECTIONS: { id: Section; label: string; Icon: Icon }[] = [
   { id: "notifications", label: "Notifications", Icon: BellIcon },
   { id: "imports", label: "Imports", Icon: DownloadSimpleIcon },
   { id: "environment", label: "Environment", Icon: TerminalIcon },
+  { id: "terminal", label: "Terminal", Icon: TerminalWindowIcon },
   { id: "skills", label: "Skills", Icon: BooksIcon },
   { id: "projects", label: "Projects", Icon: FolderSimpleIcon },
   { id: "shortcuts", label: "Shortcuts", Icon: KeyboardIcon },
@@ -141,6 +148,7 @@ export default function SettingsDialog({
             {section === "notifications" && <NotificationsPane {...paneProps} />}
             {section === "imports" && <ImportsPane {...paneProps} onImported={onImported} />}
             {section === "environment" && <EnvironmentPane {...paneProps} />}
+            {section === "terminal" && <TerminalPane {...paneProps} />}
             {section === "skills" && <SkillsPane {...paneProps} />}
             {section === "projects" && <ProjectsPane {...paneProps} />}
             {section === "shortcuts" && <KeybindingsPane />}
@@ -843,32 +851,58 @@ function ImportsPane({
   );
 }
 
-/** The debug logs in the config folder's `logs`, which people can send with a bug report. */
+const LOGS: { key: keyof LoggingSettings; title: string; desc: string }[] = [
+  { key: "app", title: "Main", desc: "Patchwork's own messages, in main.log" },
+  {
+    key: "window",
+    title: "Window",
+    desc: "The window's errors and warnings, in window1/renderer.log",
+  },
+  { key: "agents", title: "Agents", desc: "Each agent's runs, in agents/" },
+  { key: "imports", title: "Imports", desc: "Each scan and import, in imports.log" },
+];
+
+/** The logs each launch writes to its own folder in the config folder's `logs`, as VS Code's,
+ * which people can send with a bug report. */
 function LoggingPane({ settings, updateSettings }: PaneProps) {
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  async function exportLogs() {
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, "");
+    const path = await save({
+      defaultPath: `patchwork-logs-${stamp}.zip`,
+      filters: [{ name: "Zip", extensions: ["zip"] }],
+    });
+    if (!path) return;
+    setError(null);
+    setExporting(true);
+    try {
+      await api.exportLogs(path);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <>
-      <TokenRow
-        title="Agent activity"
-        desc="Everything sent to and printed by each agent, in logs/agents.log"
-      >
-        <TokenSwitch
-          label="Agent activity"
-          on={!settings.agentLogDisabled}
-          onChange={(on) => void updateSettings((s) => ({ ...s, agentLogDisabled: !on }))}
-        />
-      </TokenRow>
-      <TokenRow
-        title="Conversation imports"
-        desc="Each search for saved conversations and what it imported, in logs/imports.log"
-      >
-        <TokenSwitch
-          label="Conversation imports"
-          on={!settings.importLogDisabled}
-          onChange={(on) => void updateSettings((s) => ({ ...s, importLogDisabled: !on }))}
-        />
-      </TokenRow>
+      {LOGS.map((log) => (
+        <TokenRow key={log.key} title={log.title} desc={log.desc}>
+          <LogLevelPicker
+            label={log.title}
+            value={settings.logging[log.key]}
+            onChange={(level) =>
+              void updateSettings((s) => ({ ...s, logging: { ...s.logging, [log.key]: level } }))
+            }
+          />
+        </TokenRow>
+      ))}
       <TokenRow title="Log folder">
+        <button className="btn" disabled={exporting} onClick={() => void exportLogs()}>
+          {exporting ? "Exporting…" : "Export…"}
+        </button>
         <button
           className="btn"
           onClick={() => api.openLogsFolder().catch((e) => setError(errorText(e)))}
@@ -878,6 +912,403 @@ function LoggingPane({ settings, updateSettings }: PaneProps) {
       </TokenRow>
       {error && <div className="mt-2 text-[length:var(--fs-sm)] text-danger">{error}</div>}
     </>
+  );
+}
+
+/** Two to five choices side by side, as the theme picker. */
+function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className="inline-flex overflow-hidden rounded-[var(--radius-sm)] border border-border-strong"
+    >
+      {options.map((o) => (
+        <button
+          key={o.value}
+          role="radio"
+          aria-checked={value === o.value}
+          className={`grid h-6 w-auto cursor-pointer place-items-center border-none px-2.5 py-0 text-[length:var(--fs-sm)] whitespace-nowrap [&+&]:border-l [&+&]:border-border-strong ${value === o.value ? "bg-selected text-fg" : "bg-transparent text-fg-muted hover:bg-hover hover:text-fg"}`}
+          onClick={() => onChange(o.value)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** A text field that saves when it loses focus or on Enter. */
+function TextField({
+  label,
+  value,
+  placeholder,
+  width = "w-[220px]",
+  onSave,
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  width?: string;
+  onSave: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  return (
+    <input
+      className={`input ${width} text-[length:var(--fs-sm)]`}
+      aria-label={label}
+      value={draft}
+      placeholder={placeholder}
+      spellCheck={false}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => draft !== value && onSave(draft)}
+      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+    />
+  );
+}
+
+/** A number field that saves a valid number when it loses focus or on Enter. */
+function NumberField({
+  label,
+  value,
+  step = 1,
+  min,
+  max,
+  onSave,
+}: {
+  label: string;
+  value: number;
+  step?: number;
+  min?: number;
+  max?: number;
+  onSave: (value: number) => void;
+}) {
+  return (
+    <TextField
+      label={label}
+      value={String(value)}
+      width="w-[80px]"
+      onSave={(text) => {
+        const n = Number(text);
+        if (text.trim() === "" || !Number.isFinite(n)) return;
+        const clamped = Math.min(max ?? n, Math.max(min ?? n, n));
+        onSave(step >= 1 ? Math.round(clamped) : clamped);
+      }}
+    />
+  );
+}
+
+const isMacPlatform = /Mac|iPhone|iPad/.test(navigator.platform);
+
+/** The integrated terminal, with VS Code's `terminal.integrated.*` settings. The shell is the
+ * Environment pane's. */
+function TerminalPane({ settings, updateSettings }: PaneProps) {
+  const t = settings.terminal;
+  const set = (patch: Partial<TerminalSettings>) =>
+    void updateSettings((s) => ({ ...s, terminal: { ...s.terminal, ...patch } }));
+  const heading = (text: string) => (
+    <h3 className="m-0 mt-4 mb-0.5 text-[length:var(--fs-sm)] font-medium text-fg-subtle first:mt-0">
+      {text}
+    </h3>
+  );
+  return (
+    <>
+      {heading("Shell")}
+      <TokenRow title="Shell arguments">
+        <TextField
+          label="Shell arguments"
+          value={t.shellArgs?.join(" ") ?? ""}
+          placeholder={isMacPlatform ? "-l" : "None"}
+          onSave={(text) => set({ shellArgs: text.trim() ? text.trim().split(/\s+/) : null })}
+        />
+      </TokenRow>
+      <TokenRow title="Starting folder">
+        <TextField
+          label="Starting folder"
+          value={t.cwd ?? ""}
+          placeholder="Project folder"
+          onSave={(text) => set({ cwd: text.trim() || null })}
+        />
+      </TokenRow>
+      <TokenRow title="Inherit environment" desc="Start from Patchwork's environment">
+        <TokenSwitch
+          label="Inherit environment"
+          on={t.inheritEnv}
+          onChange={(on) => set({ inheritEnv: on })}
+        />
+      </TokenRow>
+      <TokenRow title="UTF-8 locale" desc="Sets LANG; Auto only when it is not UTF-8">
+        <Segmented
+          label="UTF-8 locale"
+          value={t.detectLocale}
+          options={[
+            { value: "auto", label: "Auto" },
+            { value: "on", label: "On" },
+            { value: "off", label: "Off" },
+          ]}
+          onChange={(detectLocale) => set({ detectLocale })}
+        />
+      </TokenRow>
+      <EnvEditor env={t.env} onChange={(env) => set({ env })} />
+
+      {heading("Appearance")}
+      <TokenRow title="Font">
+        <TextField
+          label="Font"
+          value={t.fontFamily ?? ""}
+          placeholder="App monospace font"
+          onSave={(text) => set({ fontFamily: text.trim() || null })}
+        />
+      </TokenRow>
+      <TokenRow title="Font size">
+        <NumberField
+          label="Font size"
+          value={t.fontSize}
+          min={6}
+          max={100}
+          onSave={(fontSize) => set({ fontSize })}
+        />
+      </TokenRow>
+      <TokenRow title="Line height">
+        <NumberField
+          label="Line height"
+          value={t.lineHeight}
+          step={0.1}
+          min={1}
+          onSave={(lineHeight) => set({ lineHeight })}
+        />
+      </TokenRow>
+      <TokenRow title="Letter spacing">
+        <NumberField
+          label="Letter spacing"
+          value={t.letterSpacing}
+          step={0.5}
+          onSave={(letterSpacing) => set({ letterSpacing })}
+        />
+      </TokenRow>
+      <TokenRow title="Font weight">
+        <TextField
+          label="Font weight"
+          value={t.fontWeight}
+          width="w-[80px]"
+          onSave={(text) => text.trim() && set({ fontWeight: text.trim() })}
+        />
+      </TokenRow>
+      <TokenRow title="Bold font weight">
+        <TextField
+          label="Bold font weight"
+          value={t.fontWeightBold}
+          width="w-[80px]"
+          onSave={(text) => text.trim() && set({ fontWeightBold: text.trim() })}
+        />
+      </TokenRow>
+      <TokenRow title="Cursor">
+        <Segmented
+          label="Cursor style"
+          value={t.cursorStyle}
+          options={[
+            { value: "block", label: "Block" },
+            { value: "line", label: "Line" },
+            { value: "underline", label: "Underline" },
+          ]}
+          onChange={(cursorStyle) => set({ cursorStyle })}
+        />
+      </TokenRow>
+      {t.cursorStyle === "line" && (
+        <TokenRow title="Cursor width">
+          <NumberField
+            label="Cursor width"
+            value={t.cursorWidth}
+            min={1}
+            onSave={(cursorWidth) => set({ cursorWidth })}
+          />
+        </TokenRow>
+      )}
+      <TokenRow title="Cursor blinking">
+        <TokenSwitch
+          label="Cursor blinking"
+          on={t.cursorBlinking}
+          onChange={(cursorBlinking) => set({ cursorBlinking })}
+        />
+      </TokenRow>
+      <TokenRow title="Minimum contrast ratio">
+        <NumberField
+          label="Minimum contrast ratio"
+          value={t.minimumContrastRatio}
+          step={0.5}
+          min={1}
+          max={21}
+          onSave={(minimumContrastRatio) => set({ minimumContrastRatio })}
+        />
+      </TokenRow>
+      <TokenRow title="Bold text in bright colors">
+        <TokenSwitch
+          label="Bold text in bright colors"
+          on={t.drawBoldTextInBrightColors}
+          onChange={(drawBoldTextInBrightColors) => set({ drawBoldTextInBrightColors })}
+        />
+      </TokenRow>
+
+      {heading("Behavior")}
+      <TokenRow title="Scrollback" desc="Lines kept above the screen">
+        <NumberField
+          label="Scrollback"
+          value={t.scrollback}
+          min={0}
+          onSave={(scrollback) => set({ scrollback })}
+        />
+      </TokenRow>
+      <TokenRow title="Copy on selection">
+        <TokenSwitch
+          label="Copy on selection"
+          on={t.copyOnSelection}
+          onChange={(copyOnSelection) => set({ copyOnSelection })}
+        />
+      </TokenRow>
+      <TokenRow title="Right click">
+        <Segmented
+          label="Right click"
+          value={t.rightClickBehavior}
+          options={[
+            { value: "default", label: "Menu" },
+            { value: "copyPaste", label: "Copy or paste" },
+            { value: "paste", label: "Paste" },
+            { value: "selectWord", label: "Select word" },
+            { value: "nothing", label: "Nothing" },
+          ]}
+          onChange={(rightClickBehavior) => set({ rightClickBehavior })}
+        />
+      </TokenRow>
+      <TokenRow title="Alt-click moves the cursor">
+        <TokenSwitch
+          label="Alt-click moves the cursor"
+          on={t.altClickMovesCursor}
+          onChange={(altClickMovesCursor) => set({ altClickMovesCursor })}
+        />
+      </TokenRow>
+      {isMacPlatform && (
+        <TokenRow title="Option is Meta">
+          <TokenSwitch
+            label="Option is Meta"
+            on={t.macOptionIsMeta}
+            onChange={(macOptionIsMeta) => set({ macOptionIsMeta })}
+          />
+        </TokenRow>
+      )}
+      <TokenRow title="Smooth scrolling">
+        <TokenSwitch
+          label="Smooth scrolling"
+          on={t.smoothScrolling}
+          onChange={(smoothScrolling) => set({ smoothScrolling })}
+        />
+      </TokenRow>
+      <TokenRow title="Scroll speed">
+        <NumberField
+          label="Scroll speed"
+          value={t.mouseWheelScrollSensitivity}
+          step={0.5}
+          min={0.1}
+          onSave={(mouseWheelScrollSensitivity) => set({ mouseWheelScrollSensitivity })}
+        />
+      </TokenRow>
+      <TokenRow title="Fast scroll speed" desc="While Alt is held">
+        <NumberField
+          label="Fast scroll speed"
+          value={t.fastScrollSensitivity}
+          step={0.5}
+          min={0.1}
+          onSave={(fastScrollSensitivity) => set({ fastScrollSensitivity })}
+        />
+      </TokenRow>
+      <div className="mt-4">
+        <button className="btn" onClick={() => set(defaultTerminalSettings())}>
+          Reset to defaults
+        </button>
+      </div>
+    </>
+  );
+}
+
+/** The terminal's environment variables. A removed variable is taken out of the shell's
+ * environment, as `null` in VS Code's `terminal.integrated.env`. */
+function EnvEditor({
+  env,
+  onChange,
+}: {
+  env: Record<string, string | null>;
+  onChange: (env: Record<string, string | null>) => void;
+}) {
+  const entries = Object.entries(env);
+  const replace = (index: number, name: string, value: string | null) =>
+    onChange(
+      Object.fromEntries(
+        entries.map((entry, i) => (i === index ? [name, value] : entry)).filter(([n]) => n),
+      ),
+    );
+  return (
+    <div className="border-b border-border py-2.5">
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold">Environment variables</div>
+          <div className="text-[length:var(--fs-sm)] text-fg-muted">
+            {"Values can use ${env:NAME} and ${workspaceFolder}"}
+          </div>
+        </div>
+        <button
+          className="btn"
+          onClick={() => {
+            let name = "NAME";
+            for (let n = 2; name in env; n++) name = `NAME_${n}`;
+            onChange({ ...env, [name]: "" });
+          }}
+        >
+          Add
+        </button>
+      </div>
+      {entries.map(([name, value], i) => (
+        <div key={i} className="mt-1.5 flex items-center gap-1.5">
+          <TextField
+            label="Variable name"
+            value={name}
+            width="w-[160px]"
+            onSave={(next) => replace(i, next.trim(), value)}
+          />
+          <TextField
+            label={`${name} value`}
+            value={value ?? ""}
+            width="min-w-0 flex-1"
+            placeholder={value === null ? "Removed from the shell" : ""}
+            onSave={(next) => replace(i, name, next)}
+          />
+          <button
+            className={`btn ${value === null ? "bg-selected-muted" : ""}`}
+            aria-pressed={value === null}
+            title="Take this variable out of the shell's environment"
+            onClick={() => replace(i, name, value === null ? "" : null)}
+          >
+            Remove from shell
+          </button>
+          <button
+            className="btn-icon"
+            aria-label={`Delete ${name}`}
+            onClick={() => onChange(Object.fromEntries(entries.filter((_, j) => j !== i)))}
+          >
+            <XIcon size={14} />
+          </button>
+        </div>
+      ))}
+    </div>
   );
 }
 

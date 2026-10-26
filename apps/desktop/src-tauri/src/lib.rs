@@ -3,6 +3,7 @@
 
 mod clipboard;
 mod logo;
+mod terminal;
 mod updates;
 
 use std::collections::{HashMap, HashSet};
@@ -78,6 +79,54 @@ fn open_skills_folder(app: AppHandle, server: Srv) -> Res<()> {
 fn open_logs_folder(app: AppHandle) -> Res<()> {
     let dir = app.path().config_dir().map_err(|e| e.to_string())?.join("patchwork/logs");
     open_folder(&app, &dir)
+}
+
+/// This launch's logs, for the Output panel.
+#[tauri::command]
+fn log_channels() -> Vec<String> {
+    patchwork_server::debug_log::channels()
+}
+
+/// A log from `offset` on, for the Output panel to follow.
+#[tauri::command]
+async fn read_log(channel: String, offset: u64) -> Res<patchwork_server::debug_log::LogChunk> {
+    blocking(move || patchwork_server::debug_log::read(&channel, offset)).await?
+}
+
+/// A message from the window for `window1/renderer.log`.
+#[tauri::command]
+fn log_renderer(level: patchwork_server::types::LogLevel, message: String) {
+    use patchwork_server::debug_log::{Data, RENDERER, Source};
+    RENDERER.write(level, "", &Source::default(), Data::Text(message));
+}
+
+/// Saves the kept sessions' logs as a zip at `path`, with `system.json`: the app's version,
+/// the platform, the connected agents' CLI versions, and the settings, secrets removed.
+#[tauri::command]
+async fn export_logs(app: AppHandle, server: Srv<'_>, path: String) -> Res<()> {
+    let server = server.inner().clone();
+    let version = app.package_info().version.to_string();
+    blocking(move || {
+        let settings = server.store.settings();
+        let agents: serde_json::Map<String, serde_json::Value> = settings
+            .agents
+            .iter()
+            .map(|&kind| {
+                let version = provider::cli_version(kind);
+                (format!("{kind:?}"), serde_json::json!(version))
+            })
+            .collect();
+        let system = serde_json::json!({
+            "app": "Patchwork",
+            "version": version,
+            "os": std::env::consts::OS,
+            "arch": std::env::consts::ARCH,
+            "agents": agents,
+            "settings": settings,
+        });
+        patchwork_server::debug_log::export(std::path::Path::new(&path), &system)
+    })
+    .await?
 }
 
 #[cfg_attr(target_os = "linux", allow(unused_variables))]
@@ -680,15 +729,46 @@ pub fn run() {
             }
         })
         .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
             // Config lives in `~/.config/patchwork` rather than the app-identifier folder.
             let config_dir = app.path().config_dir()?.join("patchwork");
+            // The app's own messages go to `main.log` in this launch's log folder in every
+            // build, as VS Code writes its own, and to stdout in development. Settings →
+            // Logging sets how much they record.
+            {
+                use tauri_plugin_log::{Builder, RotationStrategy, Target, TargetKind};
+                let mut targets = vec![Target::new(TargetKind::Folder {
+                    path: patchwork_server::debug_log::session_dir(&config_dir),
+                    file_name: Some("main".into()),
+                })];
+                if cfg!(debug_assertions) {
+                    targets.push(Target::new(TargetKind::Stdout));
+                }
+                app.handle().plugin(
+                    Builder::new()
+                        .targets(targets)
+                        // Each message is checked against the setting, which the server sets
+                        // once it opens.
+                        .level(log::LevelFilter::Trace)
+                        .filter(|metadata| patchwork_server::debug_log::app_logs(metadata.level()))
+                        .format(|out, message, record| {
+                            let level = match record.level() {
+                                log::Level::Warn => "warning".to_string(),
+                                level => level.as_str().to_lowercase(),
+                            };
+                            let time = patchwork_server::debug_log::now_text();
+                            out.finish(format_args!("{time} [{level}] {message}"))
+                        })
+                        .max_file_size(5 * 1024 * 1024)
+                        .rotation_strategy(RotationStrategy::KeepSome(5))
+                        .build(),
+                )?;
+                // A panic is logged before the default hook reports it.
+                let report = std::panic::take_hook();
+                std::panic::set_hook(Box::new(move |info| {
+                    log::error!("panic: {info}");
+                    report(info);
+                }));
+            }
             persistence::adopt_old_dir(&app.path().app_config_dir()?, &config_dir)?;
             let handle = app.handle().clone();
             let notifier = Notifier::default();
@@ -712,6 +792,7 @@ pub fn run() {
             app.manage(logo::LogoChanges::default());
             logo::apply(app.handle(), logo.as_deref());
             app.manage(updates::Updates::default());
+            app.manage(terminal::Terminals::default());
             updates::start(app.handle());
             Ok(())
         })
@@ -723,6 +804,14 @@ pub fn run() {
             list_skills,
             open_skills_folder,
             open_logs_folder,
+            log_channels,
+            read_log,
+            log_renderer,
+            terminal::terminal_spawn,
+            terminal::terminal_write,
+            terminal::terminal_resize,
+            terminal::terminal_kill,
+            export_logs,
             list_models,
             list_api_providers,
             save_api_provider,

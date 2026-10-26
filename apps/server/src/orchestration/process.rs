@@ -13,7 +13,8 @@ use std::sync::Mutex;
 use std::sync::PoisonError;
 use std::time::Duration;
 
-use crate::debug_log::alog;
+use crate::debug_log::{AGENTS, Data, Source};
+use crate::types::{AgentKind, LogLevel};
 use crate::workspace;
 use super::queue::Steers;
 
@@ -43,16 +44,16 @@ pub(super) const WATCH_EVERY: Duration = Duration::from_secs(60);
 /// The agent's stdin; None once the turn has finished.
 pub(super) type Stdin = Arc<Mutex<Option<AgentStdin>>>;
 
-/// The agent's stdin pipe, with its pid for the agent log.
+/// The agent's stdin pipe, with where its lines come from for the agent log.
 pub(super) struct AgentStdin {
     pipe: ChildStdin,
-    pid: u32,
+    source: Source,
 }
 
 impl AgentStdin {
-    pub(super) fn take(child: &mut Child) -> Option<Self> {
-        let pid = child.id();
-        child.stdin.take().map(|pipe| Self { pipe, pid })
+    pub(super) fn take(child: &mut Child, agent: AgentKind, thread_id: &str) -> Option<Self> {
+        let source = Source::agent(agent, child.id(), thread_id, None);
+        child.stdin.take().map(|pipe| Self { pipe, source })
     }
 }
 
@@ -65,14 +66,14 @@ pub(super) fn write_line(stdin: &Mutex<Option<AgentStdin>>, line: &str) -> bool 
 }
 
 pub(super) fn write_to(stdin: &mut Option<AgentStdin>, line: &str) -> bool {
-    let Some(AgentStdin { pipe, pid }) = stdin.as_mut() else {
+    let Some(AgentStdin { pipe, source }) = stdin.as_mut() else {
         return false;
     };
-    alog!("{pid} > {line}");
+    AGENTS.line("in", source, line);
     match writeln!(pipe, "{line}").and_then(|()| pipe.flush()) {
         Ok(()) => true,
         Err(e) => {
-            alog!("{pid} write failed: {e}");
+            AGENTS.write(LogLevel::Error, "write_failed", source, Data::Text(e.to_string()));
             log::warn!("failed to write to agent: {e}");
             false
         }
@@ -156,13 +157,13 @@ pub(super) fn next_line(reader: &mut impl BufRead) -> Option<String> {
 }
 
 /// Reads all of stderr but keeps only roughly the last `STDERR_TAIL_BYTES`.
-pub(super) fn read_stderr_tail(stderr: ChildStderr, pid: u32) -> String {
+pub(super) fn read_stderr_tail(stderr: ChildStderr, source: Source) -> String {
     let mut reader = BufReader::new(stderr);
     let mut tail = String::new();
     let mut line = Vec::new();
     while reader.read_until(b'\n', &mut line).unwrap_or(0) > 0 {
         let text = String::from_utf8_lossy(&line);
-        alog!("{pid} ! {}", text.trim_end());
+        AGENTS.write(LogLevel::Debug, "stderr", &source, Data::Text(text.trim_end().into()));
         tail.push_str(&text);
         line.clear();
         if tail.len() > STDERR_TAIL_BYTES {

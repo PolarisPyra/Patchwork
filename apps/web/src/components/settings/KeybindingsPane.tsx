@@ -19,6 +19,10 @@ const MOD = formatKey("mod")[0];
 /** Keys the editor and the mouse own, so they cannot be remapped, listed on the page they belong to. */
 const FIXED: Record<ShortcutPage, { keys: string[]; action: string }[]> = {
   Main: [],
+  Panel: [
+    { keys: [MOD, ...(MOD === "Cmd" ? [] : ["Shift"]), "C"], action: "Copy in the terminal" },
+    { keys: [MOD, ...(MOD === "Cmd" ? [] : ["Shift"]), "V"], action: "Paste in the terminal" },
+  ],
   Chat: [],
   Sidebar: [{ keys: [MOD, "Click"], action: "Select or unselect a chat or task" }],
   Archive: [{ keys: [MOD, "Click"], action: "Select or unselect an archived chat" }],

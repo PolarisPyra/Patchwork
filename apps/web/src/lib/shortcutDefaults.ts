@@ -1,7 +1,7 @@
 import type { CommandInfo, Rule } from "~/lib/shortcuts";
 
 /** The pages of the Shortcuts settings pane, in order. */
-export const SHORTCUT_PAGES = ["Main", "Chat", "Sidebar", "Archive", "Composer"] as const;
+export const SHORTCUT_PAGES = ["Main", "Panel", "Chat", "Sidebar", "Archive", "Composer"] as const;
 export type ShortcutPage = (typeof SHORTCUT_PAGES)[number];
 
 /** Every command a key can run, with the page it is listed on. */
@@ -32,6 +32,15 @@ export const COMMANDS: CommandInfo[] = [
     title: "Toggle sidebar",
     description: "Closes the sidebar, or reopens its last view; outside a text field",
   },
+  {
+    id: "terminal.toggle",
+    page: "Panel",
+    title: "Toggle terminal",
+    description: "Opens the panel on the terminal, starting one if none is open",
+  },
+  { id: "terminal.new", page: "Panel", title: "New terminal" },
+  { id: "panel.toggle", page: "Panel", title: "Toggle panel" },
+  { id: "output.toggle", page: "Panel", title: "Toggle output" },
   { id: "palette.close", page: "Main", fixed: true, title: "Close search" },
   { id: "settings.close", page: "Main", fixed: true, title: "Close settings" },
   { id: "canvas.close", page: "Main", fixed: true, title: "Close the file panel" },
@@ -98,6 +107,10 @@ export const DEFAULT_RULES: Rule[] = [
   { key: "mod+t", command: "chat.new" },
   { key: "mod+n", command: "chat.newHere" },
   { key: "mod+,", command: "settings.open" },
+  { key: "mod+`", command: "terminal.toggle" },
+  { key: "mod+shift+~", command: "terminal.new" },
+  { key: "mod+j", command: "panel.toggle" },
+  { key: "mod+shift+u", command: "output.toggle" },
   { key: "tab", command: "composer.focus", when: "!textInputFocus" },
   { key: "space", command: "sidebar.toggle", when: "!textInputFocus" },
   { key: "mod+w", command: "workspace.closeChat" },

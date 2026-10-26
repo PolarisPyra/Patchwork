@@ -4,6 +4,9 @@ import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
 import "./theme.css";
 import App from "~/app/App";
+import { installRendererLog } from "~/lib/rendererLog";
+
+installRendererLog();
 
 // Marks the dev session: theme.css frames it in hazard stripes, and agents can read the flag.
 if (import.meta.env.DEV) document.documentElement.dataset.devSession = "true";

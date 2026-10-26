@@ -28,7 +28,8 @@ use crate::types::MessageStatus;
 use crate::types::new_id;
 use crate::types::now_ms;
 use crate::types::Role;
-use crate::debug_log::alog;
+use crate::debug_log::{AGENTS, Data, Source};
+use crate::types::LogLevel;
 use crate::workspace;
 use super::FollowUpInput;
 use super::checkpoint;
@@ -214,11 +215,29 @@ impl Runner {
             .spawn()
             .map_err(|e| format!("Failed to start agent: {e}"))?;
         let pid = child.id();
-        alog!(
-            "{pid} started {agent:?} for thread {thread_id} in {root}: {} {}",
-            cmd.get_program().to_string_lossy(),
-            args.join(" ")
-        );
+        if AGENTS.logs(LogLevel::Info) {
+            // Below Trace only flags are kept, since an argument can be the prompt.
+            let trace = AGENTS.logs(LogLevel::Trace);
+            let args: Vec<String> = args
+                .iter()
+                .map(|a| {
+                    if trace || a.starts_with('-') {
+                        a.clone()
+                    } else {
+                        format!("<{} chars>", a.chars().count())
+                    }
+                })
+                .collect();
+            let started = format!(
+                "{} in {root}: {} {}",
+                cmd.get_program().to_string_lossy(),
+                args.join(" "),
+                if session_id.is_some() { "(resumed)" } else { "" },
+            );
+            let source = Source::agent(agent, pid, &thread_id, None);
+            AGENTS.write(LogLevel::Info, "start", &source, Data::Text(started.trim_end().into()));
+            log_cli_version(agent);
+        }
         let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
             return Err("Agent output is unavailable".into());
         };
@@ -226,8 +245,9 @@ impl Runner {
         if sends_context {
             server.store.update_thread(&thread_id, |t| t.context_pending = false)?;
         }
-        let stderr_tail = std::thread::spawn(move || read_stderr_tail(stderr, pid));
-        let stdin: Stdin = Arc::new(Mutex::new(AgentStdin::take(&mut child)));
+        let source = Source::agent(agent, pid, &thread_id, None);
+        let stderr_tail = std::thread::spawn(move || read_stderr_tail(stderr, source));
+        let stdin: Stdin = Arc::new(Mutex::new(AgentStdin::take(&mut child, agent, &thread_id)));
         input.iter().for_each(|line| {
             write_line(&stdin, line);
         });
@@ -681,4 +701,25 @@ pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
 /// A background command's window, apart from its call's, which has the same id.
 fn background_id(tool_id: &str) -> String {
     format!("background:{tool_id}")
+}
+
+/// Logs the agent's CLI version once per run of the app. A thread asks, since running the CLI
+/// takes a moment the turn should not wait for.
+fn log_cli_version(agent: AgentKind) {
+    static LOGGED: Mutex<Vec<AgentKind>> = Mutex::new(Vec::new());
+    if agent == AgentKind::Api {
+        return;
+    }
+    {
+        let mut logged = LOGGED.lock().unwrap_or_else(PoisonError::into_inner);
+        if logged.contains(&agent) {
+            return;
+        }
+        logged.push(agent);
+    }
+    std::thread::spawn(move || {
+        let version = provider::cli_version(agent).unwrap_or_else(|| "unknown".into());
+        let source = Source { agent: Some(agent), ..Source::default() };
+        AGENTS.write(LogLevel::Info, "cli", &source, Data::Text(format!("{agent:?} {version}")));
+    });
 }

@@ -329,13 +329,7 @@ pub fn detect_agent(kind: AgentKind) -> AgentStatus {
         return status;
     };
     status.installed = true;
-    // "2.1.303 (Claude Code)", "codex-cli 0.163.0" and "0.64.0" all carry the version as a numeric word.
-    status.version = version
-        .stdout
-        .split_whitespace()
-        .map(|w| w.trim_start_matches('v'))
-        .find(|w| w.starts_with(|c: char| c.is_ascii_digit()))
-        .map(String::from);
+    status.version = version_in(&version.stdout);
     match kind {
         AgentKind::Claude => claude::auth(&mut status),
         AgentKind::Codex => codex::auth(&mut status),
@@ -344,6 +338,20 @@ pub fn detect_agent(kind: AgentKind) -> AgentStatus {
         AgentKind::Api => {}
     }
     status
+}
+
+/// The CLI's version, as `--version` prints it.
+pub fn cli_version(kind: AgentKind) -> Option<String> {
+    probe(kind, &["--version"]).filter(|p| p.success).and_then(|p| version_in(&p.stdout))
+}
+
+/// "2.1.303 (Claude Code)", "codex-cli 0.163.0" and "0.64.0" all carry the version as a numeric word.
+fn version_in(stdout: &str) -> Option<String> {
+    stdout
+        .split_whitespace()
+        .map(|w| w.trim_start_matches('v'))
+        .find(|w| w.starts_with(|c: char| c.is_ascii_digit()))
+        .map(String::from)
 }
 
 /// Models offered for `kind`, starting with the CLI default.

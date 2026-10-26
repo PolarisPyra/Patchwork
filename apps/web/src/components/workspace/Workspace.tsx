@@ -34,6 +34,8 @@ import { getCollapsed, setCollapsed } from "~/components/sidebar/collapsedState"
 import { getSelectedRows, setSelectedRows } from "~/components/sidebar/selectionState";
 import StatusBar from "~/components/workspace/StatusBar";
 import Toolbar from "~/components/workspace/Toolbar";
+import type { PanelTab } from "~/components/panel/Panel";
+import { setRendererLogLevel } from "~/lib/rendererLog";
 import { isWorking, useThreads } from "~/hooks/useThreads";
 import { keyLabel, useCommand, useContextKey, useKeybindings } from "~/lib/shortcuts";
 import { AGENT_KINDS, displayTitle, errorText } from "~/lib/util";
@@ -61,6 +63,10 @@ interface GitState {
 
 const CANVAS_MIN_PX = 340;
 const CANVAS_MAX_FRACTION = 0.7;
+const PANEL_MIN_PX = 120;
+const PANEL_MAX_FRACTION = 0.8;
+const PANEL_DEFAULT_PX = 260;
+const PANEL_HEIGHT_KEY = "patchwork-panel-height";
 // How long an archived row takes to collapse out of the list. Matches the sidebar's Collapse.
 const ARCHIVE_COLLAPSE_MS = 120;
 
@@ -81,6 +87,11 @@ function isTypingTarget(el: Element | null): boolean {
 let canvasModule: typeof import("~/components/canvas/Canvas") | null = null;
 const loadCanvas = () => import("~/components/canvas/Canvas").then((m) => (canvasModule = m));
 const LazyCanvas = lazy(loadCanvas);
+// The panel brings in the terminal emulator, so it loads as its own chunk, shortly after the
+// workspace shows, so the first terminal opens without waiting for it.
+const loadPanel = () => import("~/components/panel/Panel");
+const Panel = lazy(loadPanel);
+
 /** How long after the workspace shows the canvas chunk starts loading, so it is ready before
  * it is first opened. */
 const PRELOAD_AFTER_MS = 1500;
@@ -150,7 +161,10 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     if (view) lastView.current = view;
   }, [view]);
   useEffect(() => {
-    const timer = setTimeout(() => void loadCanvas(), PRELOAD_AFTER_MS);
+    const timer = setTimeout(() => {
+      void loadCanvas();
+      void loadPanel();
+    }, PRELOAD_AFTER_MS);
     return () => clearTimeout(timer);
   }, []);
   // Rows picked for removing together, in the view they were picked in; Ctrl+W and Delete act on them.
@@ -180,6 +194,17 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [canvas, setCanvas] = useState<CanvasState | null>(null);
   const [canvasWidth, setCanvasWidth] = useState<number | null>(null);
+  // The terminal and Output panel under the chat.
+  const [panel, setPanel] = useState<{ open: boolean; tab: PanelTab }>({
+    open: false,
+    tab: "terminal",
+  });
+  const [panelHeight, setPanelHeight] = useState(
+    () => Number(localStorage.getItem(PANEL_HEIGHT_KEY)) || PANEL_DEFAULT_PX,
+  );
+  const [newTerminal, setNewTerminal] = useState(0);
+  const [focusTerminal, setFocusTerminal] = useState(0);
+  const columnRef = useRef<HTMLDivElement>(null);
   const [git, setGit] = useState<GitState | null>(null);
   // A project whose folder was added again; the sidebar flashes its row for as long as the CSS
   // animation runs.
@@ -455,6 +480,29 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     setCanvas((prev) => ({ seq: (prev?.seq ?? 0) + 1, projectId, path, message, tab }));
   };
 
+  const closePanel = useCallback(() => setPanel((p) => ({ ...p, open: false })), []);
+  useEffect(() => setRendererLogLevel(settings.logging.window), [settings.logging.window]);
+
+  function startPanelResize(e: ReactMouseEvent) {
+    const column = columnRef.current;
+    if (!column) return;
+    e.preventDefault();
+    const bottom = column.getBoundingClientRect().bottom;
+    const max = column.clientHeight * PANEL_MAX_FRACTION;
+    let height = panelHeight;
+    const onMove = (ev: MouseEvent) => {
+      height = Math.min(max, Math.max(PANEL_MIN_PX, bottom - ev.clientY));
+      setPanelHeight(height);
+    };
+    const onUp = () => {
+      localStorage.setItem(PANEL_HEIGHT_KEY, String(Math.round(height)));
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+
   function startResize(e: ReactMouseEvent) {
     const body = bodyRef.current;
     if (!body) return;
@@ -501,6 +549,27 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     else if (view === "tasks" && selected)
       void removeTargets([{ kind: "thread", id: selected.id }]);
   });
+  // As VS Code's: the terminal key opens the terminal, focuses it if it is shown elsewhere, and
+  // closes the panel from inside it.
+  useCommand("terminal.toggle", () => {
+    const inTerminal = document.activeElement?.closest(".xterm") != null;
+    if (panel.open && panel.tab === "terminal" && inTerminal) {
+      setPanel((p) => ({ ...p, open: false }));
+      return;
+    }
+    setPanel({ open: true, tab: "terminal" });
+    setFocusTerminal((n) => n + 1);
+  });
+  useCommand("terminal.new", () => {
+    setPanel({ open: true, tab: "terminal" });
+    setNewTerminal((n) => n + 1);
+  });
+  useCommand("panel.toggle", () => setPanel((p) => ({ ...p, open: !p.open })));
+  useCommand("output.toggle", () =>
+    setPanel((p) =>
+      p.open && p.tab === "output" ? { ...p, open: false } : { open: true, tab: "output" },
+    ),
+  );
   useCommand("palette.close", () => setPaletteOpen(false));
   useCommand("settings.close", () => setSettingsOpen(false));
   useCommand("canvas.close", () => setCanvas(null));
@@ -629,71 +698,98 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
           />
         )}
 
-        <div className="flex min-h-0 min-w-0 flex-1">
-          <main className="flex min-w-0 flex-1 bg-editor">
-            <Chat
-              project={project}
-              thread={selected}
-              parentThread={
-                (selected?.parent && threads.find((t) => t.id === selected.parent?.threadId)) ||
-                null
-              }
-              onOpenThread={select}
-              changes={changes}
-              defaultAgent={defaultAgent}
-              agents={connectedAgents}
-              tokens={settings.tokens}
-              onUpdateTokens={(patch) =>
-                void updateSettings((s) => ({ ...s, tokens: { ...s.tokens, ...patch } }))
-              }
-              onOpenFolder={openFolder}
-              onOpenCanvas={openCanvasAt}
-              onShowChanges={(messageId) => {
-                if (selected) setChangeFocus({ threadId: selected.id, messageId });
-                setView("changes");
-              }}
-              onSend={(text, attachments, draft, queue) =>
-                send(text, attachments, draft, projectId, queue)
-              }
-              onNewChat={() => newThreadIn(projectId)}
-              onChangeFolder={() => {
-                if (projectId) attempt(() => relocateProject(projectId, updateSettings));
-              }}
-              onClearThread={(id) => clearThread(id).catch((e: unknown) => setError(errorText(e)))}
-              onRestoreCheckpoint={restoreCheckpoint}
-              onCancel={(id) => api.cancelTurn(id)}
-              onSetModel={setModel}
-              onSetAccessMode={setAccessMode}
-              onSetPlanMode={setPlanMode}
-              onStartThread={(opts, title, text) =>
-                startThread(projectId, opts, title, text).catch((e: unknown) =>
-                  setError(errorText(e)),
-                )
-              }
-              onSetEffort={setEffort}
-            />
-          </main>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col" ref={columnRef}>
+          <div className="flex min-h-0 min-w-0 flex-1">
+            <main className="flex min-w-0 flex-1 bg-editor">
+              <Chat
+                project={project}
+                thread={selected}
+                parentThread={
+                  (selected?.parent && threads.find((t) => t.id === selected.parent?.threadId)) ||
+                  null
+                }
+                onOpenThread={select}
+                changes={changes}
+                defaultAgent={defaultAgent}
+                agents={connectedAgents}
+                tokens={settings.tokens}
+                onUpdateTokens={(patch) =>
+                  void updateSettings((s) => ({ ...s, tokens: { ...s.tokens, ...patch } }))
+                }
+                onOpenFolder={openFolder}
+                onOpenCanvas={openCanvasAt}
+                onShowChanges={(messageId) => {
+                  if (selected) setChangeFocus({ threadId: selected.id, messageId });
+                  setView("changes");
+                }}
+                onSend={(text, attachments, draft, queue) =>
+                  send(text, attachments, draft, projectId, queue)
+                }
+                onNewChat={() => newThreadIn(projectId)}
+                onChangeFolder={() => {
+                  if (projectId) attempt(() => relocateProject(projectId, updateSettings));
+                }}
+                onClearThread={(id) =>
+                  clearThread(id).catch((e: unknown) => setError(errorText(e)))
+                }
+                onRestoreCheckpoint={restoreCheckpoint}
+                onCancel={(id) => api.cancelTurn(id)}
+                onSetModel={setModel}
+                onSetAccessMode={setAccessMode}
+                onSetPlanMode={setPlanMode}
+                onStartThread={(opts, title, text) =>
+                  startThread(projectId, opts, title, text).catch((e: unknown) =>
+                    setError(errorText(e)),
+                  )
+                }
+                onSetEffort={setEffort}
+              />
+            </main>
 
-          {openCanvas && (
+            {openCanvas && (
+              <>
+                <div
+                  className="relative w-1 flex-none cursor-col-resize after:absolute after:top-0 after:bottom-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-border after:content-['']"
+                  onMouseDown={startResize}
+                />
+                <div
+                  className="flex w-[max(420px,46%)] min-h-0 min-w-0 flex-none [&>*]:min-w-0 [&>*]:flex-1"
+                  style={canvasWidth !== null ? { width: canvasWidth } : undefined}
+                >
+                  <Suspense fallback={null}>
+                    <Canvas
+                      key={openCanvas.seq}
+                      projectId={openCanvas.projectId}
+                      path={openCanvas.path}
+                      message={openCanvas.message}
+                      initialTab={openCanvas.tab}
+                      changes={changes}
+                      onClose={() => setCanvas(null)}
+                      onChangesUpdated={() => void refreshGit()}
+                    />
+                  </Suspense>
+                </div>
+              </>
+            )}
+          </div>
+
+          {panel.open && (
             <>
               <div
-                className="relative w-1 flex-none cursor-col-resize after:absolute after:top-0 after:bottom-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-border after:content-['']"
-                onMouseDown={startResize}
+                className="relative z-[1] -mb-1 h-1 flex-none cursor-row-resize"
+                onMouseDown={startPanelResize}
               />
-              <div
-                className="flex w-[max(420px,46%)] min-h-0 min-w-0 flex-none [&>*]:min-w-0 [&>*]:flex-1"
-                style={canvasWidth !== null ? { width: canvasWidth } : undefined}
-              >
+              <div className="min-h-0 flex-none" style={{ height: panelHeight }}>
                 <Suspense fallback={null}>
-                  <Canvas
-                    key={openCanvas.seq}
-                    projectId={openCanvas.projectId}
-                    path={openCanvas.path}
-                    message={openCanvas.message}
-                    initialTab={openCanvas.tab}
-                    changes={changes}
-                    onClose={() => setCanvas(null)}
-                    onChangesUpdated={() => void refreshGit()}
+                  <Panel
+                    tab={panel.tab}
+                    onTab={(tab) => setPanel({ open: true, tab })}
+                    onClose={closePanel}
+                    settings={settings}
+                    updateSettings={updateSettings}
+                    cwd={project?.path ?? null}
+                    newTerminal={newTerminal}
+                    focusTerminal={focusTerminal}
                   />
                 </Suspense>
               </div>

@@ -39,10 +39,8 @@ export interface Settings {
   integrations: Integrations;
   projects: Project[];
   activeProjectId: string | null;
-  /** Stops writing `logs/imports.log` in the config folder. */
-  importLogDisabled: boolean;
-  /** Stops writing `logs/agents.log` in the config folder. */
-  agentLogDisabled: boolean;
+  logging: LoggingSettings;
+  terminal: TerminalSettings;
   tokens: TokenSettings;
   /** Shell that agents run commands in; null follows the SHELL environment variable. */
   shell: string | null;
@@ -60,6 +58,105 @@ export interface Settings {
 export interface UpdatesSettings {
   /** Minutes between checks for a new release: 10 to 60, in steps of 10. */
   checkEveryMinutes: number;
+}
+
+/** How much a log records, as VS Code's log levels; each includes the ones before it. Below
+ * Trace no conversation or file content is written. */
+export type LogLevel = "off" | "error" | "warning" | "info" | "debug" | "trace";
+
+/** How much each log in the launch's log folder records. */
+export interface LoggingSettings {
+  /** `main.log`: Patchwork's own messages. */
+  app: LogLevel;
+  /** `window1/renderer.log`: the window's errors and warnings. */
+  window: LogLevel;
+  /** `agents/<agent>.log`: each agent's processes and their traffic. */
+  agents: LogLevel;
+  /** `imports.log`: each scan and import of saved conversations. */
+  imports: LogLevel;
+}
+
+/** The integrated terminal, as VS Code's `terminal.integrated.*` settings. Mirrors
+ * `TerminalSettings` in apps/server/src/types.rs. */
+export interface TerminalSettings {
+  /** Null is `-l` on macOS, none elsewhere. */
+  shellArgs: string[] | null;
+  /** Null removes a variable; values may use `${env:NAME}` and `${workspaceFolder}`. */
+  env: Record<string, string | null>;
+  inheritEnv: boolean;
+  /** Null is the project folder. */
+  cwd: string | null;
+  detectLocale: "auto" | "off" | "on";
+  /** Null is the app's monospace font. */
+  fontFamily: string | null;
+  fontSize: number;
+  lineHeight: number;
+  letterSpacing: number;
+  fontWeight: string;
+  fontWeightBold: string;
+  cursorStyle: "block" | "line" | "underline";
+  cursorBlinking: boolean;
+  cursorWidth: number;
+  scrollback: number;
+  copyOnSelection: boolean;
+  rightClickBehavior: "default" | "copyPaste" | "paste" | "selectWord" | "nothing";
+  altClickMovesCursor: boolean;
+  macOptionIsMeta: boolean;
+  drawBoldTextInBrightColors: boolean;
+  minimumContrastRatio: number;
+  smoothScrolling: boolean;
+  mouseWheelScrollSensitivity: number;
+  fastScrollSensitivity: number;
+}
+
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+const isLinux = /Linux/.test(navigator.platform);
+
+/** VS Code's terminal defaults, as `TerminalSettings::default` sets them. */
+export function defaultTerminalSettings(): TerminalSettings {
+  return {
+    shellArgs: null,
+    env: {},
+    inheritEnv: true,
+    cwd: null,
+    detectLocale: "auto",
+    fontFamily: null,
+    fontSize: isMac ? 12 : 14,
+    lineHeight: isLinux ? 1.1 : 1,
+    letterSpacing: 0,
+    fontWeight: "normal",
+    fontWeightBold: "bold",
+    cursorStyle: "block",
+    cursorBlinking: false,
+    cursorWidth: 1,
+    scrollback: 1000,
+    copyOnSelection: false,
+    rightClickBehavior: isMac ? "selectWord" : isLinux ? "default" : "copyPaste",
+    altClickMovesCursor: true,
+    macOptionIsMeta: false,
+    drawBoldTextInBrightColors: true,
+    minimumContrastRatio: 4.5,
+    smoothScrolling: false,
+    mouseWheelScrollSensitivity: 1,
+    fastScrollSensitivity: 5,
+  };
+}
+
+/** A shell the terminal started. */
+export interface StartedTerminal {
+  id: number;
+  /** The shell's file name, such as "zsh". */
+  name: string;
+  cwd: string;
+}
+
+/** Part of a log for the Output panel. */
+export interface LogChunk {
+  text: string;
+  /** Where to read from next. */
+  offset: number;
+  /** The log started over, so what is shown is replaced. */
+  reset: boolean;
 }
 
 /** Desktop notifications shown while Patchwork is not the focused window. */
@@ -500,8 +597,8 @@ export const DEFAULT_SETTINGS: Settings = {
   notifications: { goalComplete: true, taskComplete: true },
   updates: { checkEveryMinutes: 10 },
   logo: null,
-  importLogDisabled: false,
-  agentLogDisabled: false,
+  logging: { app: "info", window: "info", agents: "info", imports: "info" },
+  terminal: defaultTerminalSettings(),
 };
 
 /** Agent used for new tasks: the first connected one, else Claude Code. */
@@ -615,6 +712,17 @@ export const api = {
   listSkills: () => invoke<SkillsView>("list_skills"),
   openSkillsFolder: () => invoke<void>("open_skills_folder"),
   openLogsFolder: () => invoke<void>("open_logs_folder"),
+  exportLogs: (path: string) => invoke<void>("export_logs", { path }),
+  logChannels: () => invoke<string[]>("log_channels"),
+  readLog: (channel: string, offset: number) => invoke<LogChunk>("read_log", { channel, offset }),
+  logRenderer: (level: LogLevel, message: string) =>
+    invoke<void>("log_renderer", { level, message }),
+  terminalSpawn: (cwd: string | null, cols: number, rows: number) =>
+    invoke<StartedTerminal>("terminal_spawn", { cwd, cols, rows }),
+  terminalWrite: (id: number, data: string) => invoke<void>("terminal_write", { id, data }),
+  terminalResize: (id: number, cols: number, rows: number) =>
+    invoke<void>("terminal_resize", { id, cols, rows }),
+  terminalKill: (id: number) => invoke<void>("terminal_kill", { id }),
   /** Subscription usage limits. Cached by the backend; `refresh` asks for new
    * numbers, which it still throttles to avoid provider rate limits. */
   getUsage: (kind: AgentKind, refresh = false) =>
@@ -775,6 +883,16 @@ export interface ProjectChanged {
 
 export function onProjectChanged(cb: (e: ProjectChanged) => void): Promise<UnlistenFn> {
   return listen<ProjectChanged>("project-changed", (e) => cb(e.payload));
+}
+
+export function onTerminalOutput(cb: (e: { id: number; data: string }) => void): Promise<UnlistenFn> {
+  return listen<{ id: number; data: string }>("terminal-output", (e) => cb(e.payload));
+}
+
+export function onTerminalExit(
+  cb: (e: { id: number; code: number | null }) => void,
+): Promise<UnlistenFn> {
+  return listen<{ id: number; code: number | null }>("terminal-exit", (e) => cb(e.payload));
 }
 
 export function onUpdateStatus(cb: (status: UpdateStatus) => void): Promise<UnlistenFn> {

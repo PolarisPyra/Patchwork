@@ -167,22 +167,27 @@ export function suspendShortcuts(): () => void {
 }
 
 function dispatch(event: KeyboardEvent) {
-  if (suspended > 0 || event.isComposing || !(event.target instanceof Element)) return;
+  const command = boundCommand(event);
+  if (!command) return;
+  event.preventDefault();
+  handlers.get(command)?.at(-1)?.current(event);
+}
+
+/** The command a key press would run, or null. A terminal checks it to hand the app's own keys
+ * back instead of sending them to the shell. */
+export function boundCommand(event: KeyboardEvent): string | null {
+  if (suspended > 0 || event.isComposing || !(event.target instanceof Element)) return null;
   const key = keyFromEvent(event);
-  if (!key) return;
+  if (!key) return null;
   const rules = store.snapshot.rules;
   let has: Lookup | undefined;
   for (let i = rules.length - 1; i >= 0; i--) {
     const rule = rules[i];
-    if (rule.key !== key) continue;
-    const run = handlers.get(rule.command)?.at(-1);
-    if (!run) continue;
+    if (rule.key !== key || !handlers.get(rule.command)?.length) continue;
     has ??= contextOf(event.target);
-    if (!holds(rule.when, has)) continue;
-    event.preventDefault();
-    run.current(event);
-    return;
+    if (holds(rule.when, has)) return rule.command;
   }
+  return null;
 }
 
 // --- keys ---

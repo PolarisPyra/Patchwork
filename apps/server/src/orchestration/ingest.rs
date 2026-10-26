@@ -1,5 +1,5 @@
 //! Reads an agent's output for one turn and hands each event to the modules that handle it.
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::BufReader;
 use std::process::Child;
 use std::process::ChildStdout;
@@ -20,13 +20,24 @@ use crate::types::AgentKind;
 use crate::types::Approval;
 use crate::types::ApprovalStatus;
 use crate::types::BackgroundTask;
+
+/// What kind of output a line is, as its `type` (or JSON-RPC `method`) and any `subtype`.
+fn line_kind(value: &Value) -> String {
+    let kind = value["type"].as_str().or_else(|| value["method"].as_str()).unwrap_or("untyped");
+    match value["subtype"].as_str() {
+        Some(subtype) => format!("{kind}/{subtype}"),
+        None => kind.into(),
+    }
+}
+
 #[cfg(test)]
 use crate::types::FileChange;
 use crate::types::Goal;
 use crate::types::GoalStatus;
 use crate::types::MessageStatus;
 use crate::types::new_id;
-use crate::debug_log::alog;
+use crate::debug_log::{AGENTS, Data, Source};
+use crate::types::LogLevel;
 use crate::workspace;
 
 use super::attribution;
@@ -95,10 +106,21 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
     // Every model request the turn has made; each reply's usage is summed from these.
     let mut requests: Vec<Request> = Vec::new();
 
+    // Kinds of output the parser had no use for, logged once each per turn, so a CLI that
+    // changes how it reports something shows up in the agent log.
+    let mut logged_kinds: HashSet<String> = HashSet::new();
+
     let mut stdout = BufReader::new(stdout);
     while let Some(line) = next_line(&mut stdout) {
-        alog!("{pid} < {line}");
+        let source =
+            |turn: &Turn| Source::agent(turn.agent, pid, &turn.thread_id, Some(&turn.message_id));
+        if AGENTS.logs(LogLevel::Error) {
+            AGENTS.line("out", &source(&turn), &line);
+        }
         let Ok(value) = serde_json::from_str::<Value>(&line) else {
+            if logged_kinds.insert("unparsed".into()) {
+                AGENTS.write(LogLevel::Warning, "unparsed", &source(&turn), Data::Outline(line));
+            }
             continue;
         };
         // A message Claude took after it had already ended its reply (while a background
@@ -141,6 +163,14 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
             }
         }
         let parsed = provider::parse_line(turn.agent, &value, &turn.spec(), &turn.message_id);
+        // A subagent's frames went to its own thread above.
+        let routed = turn.agent == AgentKind::Claude && value["parent_tool_use_id"].is_string();
+        if parsed.is_empty() && !routed && AGENTS.logs(LogLevel::Warning) {
+            let kind = line_kind(&value);
+            if logged_kinds.insert(kind.clone()) {
+                AGENTS.write(LogLevel::Warning, "ignored", &source(&turn), Data::Text(kind));
+            }
+        }
         for item in parsed {
             match item {
                 Parsed::Send(line) => {
@@ -495,7 +525,10 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
     });
 
     let exit = child.wait().ok();
-    alog!("{pid} exited: {}", exit.map_or("unknown".into(), |s| s.to_string()));
+    let status = exit.map_or("unknown".into(), |s| s.to_string());
+    let level = if exit.is_some_and(|s| s.success()) { LogLevel::Info } else { LogLevel::Error };
+    let source = Source::agent(turn.agent, pid, &turn.thread_id, Some(&turn.message_id));
+    AGENTS.write(level, "exit", &source, Data::Text(status));
     // Whatever the agent left running in its group or scope (MCP servers, background
     // commands) would otherwise outlive the turn and keep its memory in the agents' slice.
     workspace::signal_process_group(pid, workspace::SIGKILL);
@@ -690,7 +723,7 @@ mod tests {
             .stderr(Stdio::piped())
             .spawn()
             .unwrap();
-        let stdin: Stdin = Arc::new(Mutex::new(AgentStdin::take(&mut child)));
+        let stdin: Stdin = Arc::new(Mutex::new(AgentStdin::take(&mut child, agent, "test")));
         for line in &input {
             write_line(&stdin, line);
         }

@@ -33,6 +33,9 @@ pub(super) fn load_settings(conn: &Connection) -> rusqlite::Result<Settings> {
         .optional()?
         .map(from_json)
         .unwrap_or_default();
+    if settings.import_log_disabled {
+        settings.logging.imports = crate::types::LogLevel::Off;
+    }
     let mut stmt = conn.prepare("SELECT id, name, path FROM projects ORDER BY position")?;
     settings.projects = stmt
         .query_map([], |r| {

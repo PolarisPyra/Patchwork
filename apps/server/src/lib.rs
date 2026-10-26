@@ -1,13 +1,14 @@
 //! Patchwork's backend. The desktop shell exposes these methods as Tauri
 //! commands and forwards agent events to the UI.
 
-mod debug_log;
+pub mod debug_log;
 pub mod import;
 pub mod orchestration;
 pub mod persistence;
 pub mod provider;
 mod scope;
 pub mod skills;
+pub mod terminal;
 mod time;
 pub mod types;
 pub mod usage;
@@ -21,9 +22,26 @@ use orchestration::{ApprovalDecision, Delivery, FollowUpInput, Runner, TurnReque
 use persistence::Store;
 
 use crate::import::debug_log::ilog;
-use crate::types::{AgentKind, Project, Settings, TokenSettings, Role, MessageStatus, StepStatus, AccessMode, ApprovalStatus, Attachment, Message, Thread, Folder, GoalStatus, ImportSource, ImportScan, AgentEventEnvelope, AgentEvent, now_ms, new_id};
+use crate::types::{AgentKind, Project, Settings, TokenSettings, LogLevel, Role, MessageStatus, StepStatus, AccessMode, ApprovalStatus, Attachment, Message, Thread, Folder, GoalStatus, ImportSource, ImportScan, AgentEventEnvelope, AgentEvent, now_ms, new_id};
 
 pub type Res<T> = Result<T, String>;
+
+/// Sets how much each log records. The desktop shell installs the logger of the app's own.
+fn follow_log_levels(settings: &Settings) {
+    let levels = &settings.logging;
+    debug_log::AGENTS.set_level(levels.agents);
+    debug_log::RENDERER.set_level(levels.window);
+    import::debug_log::LOG.set_level(levels.imports);
+    debug_log::set_app_level(levels.app);
+    log::set_max_level(match levels.app {
+        LogLevel::Off => log::LevelFilter::Off,
+        LogLevel::Error => log::LevelFilter::Error,
+        LogLevel::Warning => log::LevelFilter::Warn,
+        LogLevel::Info => log::LevelFilter::Info,
+        LogLevel::Debug => log::LevelFilter::Debug,
+        LogLevel::Trace => log::LevelFilter::Trace,
+    });
+}
 
 /// Receives every agent event, e.g. to forward it to the UI.
 pub type EventSink = Box<dyn Fn(AgentEventEnvelope) + Send + Sync>;
@@ -76,11 +94,36 @@ const IDLE_CHECK: std::time::Duration = std::time::Duration::from_secs(60);
 /// are removed, not only the ones in `APPDIR`.
 pub fn host_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
     let mut cmd = std::process::Command::new(program);
+    for (key, value) in host_env_changes() {
+        match value {
+            Some(value) => cmd.env(key, value),
+            None => cmd.env_remove(key),
+        };
+    }
+    cmd
+}
+
+/// Patchwork's environment as `host_command` passes it on, without the AppImage's paths.
+pub fn host_env() -> Vec<(std::ffi::OsString, std::ffi::OsString)> {
+    let changes: std::collections::HashMap<_, _> = host_env_changes().into_iter().collect();
+    std::env::vars_os()
+        .filter_map(|(key, value)| match changes.get(&key) {
+            Some(Some(changed)) => Some((key, changed.into())),
+            Some(None) => None,
+            None => Some((key, value)),
+        })
+        .collect()
+}
+
+/// The variables `host_command` changes: each with its value without AppImage entries, or None
+/// to remove it.
+fn host_env_changes() -> Vec<(std::ffi::OsString, Option<String>)> {
     let appdir = std::env::var("APPDIR").ok().filter(|dir| !dir.is_empty());
     let in_appimage = |entry: &str| {
         appdir.as_deref().is_some_and(|dir| entry.starts_with(dir))
             || entry.split('/').any(|part| part.starts_with(".mount_"))
     };
+    let mut changes = Vec::new();
     for (key, value) in std::env::vars_os() {
         let value = value.to_string_lossy();
         if !value.split(':').any(in_appimage) {
@@ -90,16 +133,12 @@ pub fn host_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Comma
             .split(':')
             .filter(|entry| !entry.is_empty() && !in_appimage(entry))
             .collect();
-        if kept.is_empty() {
-            cmd.env_remove(&key);
-        } else {
-            cmd.env(&key, kept.join(":"));
-        }
+        changes.push((key, (!kept.is_empty()).then(|| kept.join(":"))));
     }
     for key in ["APPDIR", "APPIMAGE", "ARGV0", "OWD"] {
-        cmd.env_remove(key);
+        changes.push((key.into(), None));
     }
-    cmd
+    changes
 }
 
 fn clean_name(name: &str) -> Res<String> {
@@ -297,10 +336,12 @@ impl Server {
         skills::init(&config_dir);
         std::thread::spawn(scope::prepare);
         let clis_dir = config_dir.join("clis");
-        import::debug_log::LOG.init(config_dir.join("logs/imports.log"));
-        debug_log::AGENTS.init(config_dir.join("logs/agents.log"));
+        let logs = debug_log::session_dir(&config_dir);
+        import::debug_log::LOG.init(logs.clone());
+        debug_log::RENDERER.init(logs.clone());
+        debug_log::AGENTS.init(logs);
         let store = Store::open(config_dir)?;
-        debug_log::AGENTS.set_enabled(!store.settings().agent_log_disabled);
+        follow_log_levels(&store.settings());
         let interrupted = orchestration::recovery::recover(&store)?;
         Ok(Arc::new(Self {
             store,
@@ -447,7 +488,7 @@ impl Server {
     // ---- settings & projects ---------------------------------------------
 
     pub fn save_settings(&self, settings: Settings) -> Res<()> {
-        debug_log::AGENTS.set_enabled(!settings.agent_log_disabled);
+        follow_log_levels(&settings);
         self.store.update_settings(|s| *s = settings)
     }
 
@@ -1186,9 +1227,8 @@ impl Server {
         (found, subagents, new)
     }
 
-    /// Follows the setting before a scan or import writes to the import log.
+    /// Starts the import log's entries for a scan or import.
     fn start_import_log(&self, what: &str) {
-        import::debug_log::LOG.set_enabled(!self.store.settings().import_log_disabled);
         ilog!("{what}");
     }
 
