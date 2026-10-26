@@ -97,9 +97,17 @@ export default function Panel({
       active.term.refresh(0, active.term.rows - 1);
     }
     active.fit.fit();
-    const resized = new ResizeObserver(() => active.fit.fit());
+    // One fit per frame: a window drag fires many resizes, and each fit redraws the terminal.
+    let frame = 0;
+    const resized = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => active.fit.fit());
+    });
     resized.observe(el);
-    return () => resized.disconnect();
+    return () => {
+      cancelAnimationFrame(frame);
+      resized.disconnect();
+    };
   }, [tab, active]);
 
   useEffect(() => {

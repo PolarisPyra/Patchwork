@@ -186,7 +186,13 @@ export async function startShell(
   term.onData((data) => {
     if (shell.exitCode === undefined) void api.terminalWrite(shell.id, data);
   });
-  term.onResize(({ cols, rows }) => void api.terminalResize(shell.id, cols, rows));
+  // Sent once the size settles: each resize makes the shell redraw its prompt, so a drag would
+  // leave a trail of stale prompts behind.
+  let resizeTimer = 0;
+  term.onResize(({ cols, rows }) => {
+    clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => void api.terminalResize(shell.id, cols, rows), 100);
+  });
   term.onSelectionChange(() => {
     if (current?.copyOnSelection && term.hasSelection()) {
       void navigator.clipboard.writeText(term.getSelection());
