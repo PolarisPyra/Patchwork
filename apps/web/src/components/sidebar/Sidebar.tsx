@@ -1438,6 +1438,22 @@ function ChangeRow({
   onOpen: () => void;
 }) {
   const name = baseName(change.path);
+  if (showDir) {
+    // A row of the reply's file grid, whose columns are shared so every folder starts together.
+    return (
+      <button className={REPLY_ROW_CLASS} title={change.path} onClick={onOpen}>
+        <span
+          className={`truncate ${change.status === "deleted" ? "text-fg-muted line-through" : ""}`}
+        >
+          {name}
+        </span>
+        <span className="truncate text-[length:var(--fs-xs)] text-fg-subtle">
+          {dirName(change.path)}
+        </span>
+        <ChangeCounts change={change} />
+      </button>
+    );
+  }
   return (
     <div className="flex h-[30px] items-center rounded-[var(--radius-sm)] py-1 pr-2 pl-1.5 hover:bg-hover">
       <button
@@ -1445,32 +1461,36 @@ function ChangeRow({
         title={change.path}
         onClick={onOpen}
       >
-        <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-          <span
-            className={`${showDir ? "flex-none" : "min-w-0 truncate"} ${change.status === "deleted" ? "text-fg-muted line-through" : ""}`}
-          >
-            {name}
-          </span>
-          {showDir && (
-            <span className="min-w-0 truncate text-[length:var(--fs-xs)] text-fg-subtle">
-              {dirName(change.path)}
-            </span>
-          )}
+        <span
+          className={`min-w-0 flex-1 truncate ${change.status === "deleted" ? "text-fg-muted line-through" : ""}`}
+        >
+          {name}
         </span>
-        {/* The icon column has a fixed width, so the icons line up across rows. */}
-        <span className="flex flex-none items-center gap-2 text-[length:var(--fs-xs)] tabular-nums">
-          <span className="flex items-center gap-1">
-            <span className="w-[var(--diff-col)] text-right text-success">+{change.additions}</span>
-            <span className="w-[var(--diff-col)] text-danger">−{change.deletions}</span>
-          </span>
-          <span className="flex w-3 justify-center">
-            <GitDiffIcon size={14} className="text-fg-muted" aria-label="Changed" />
-          </span>
-        </span>
+        <ChangeCounts change={change} />
       </button>
     </div>
   );
 }
+
+/** A file's added and removed lines, then the changed icon. The icon column has a fixed width, so
+ * the icons line up across rows. */
+function ChangeCounts({ change }: { change: FileChange }) {
+  return (
+    <span className="flex flex-none items-center justify-self-end text-[length:var(--fs-xs)] tabular-nums">
+      <span className="flex items-center gap-3">
+        <span className="w-[var(--diff-col)] text-right text-success">+{change.additions}</span>
+        <span className="w-[var(--diff-col)] text-danger">−{change.deletions}</span>
+      </span>
+      <span className="flex w-7 justify-center">
+        <GitDiffIcon size={14} className="text-fg-muted" aria-label="Changed" />
+      </span>
+    </span>
+  );
+}
+
+/** A row of the reply's file grid: name, folder, then counts or a note. */
+const REPLY_ROW_CLASS =
+  "col-span-full grid h-[30px] cursor-pointer grid-cols-subgrid items-baseline rounded-[var(--radius-sm)] border-none bg-transparent py-1 pr-2 pl-1.5 text-left text-fg hover:bg-hover";
 
 /** Changed files. Those from the reply the view was opened from are pinned on top; the rest are grouped by folder. */
 function ChangesView({
@@ -1538,7 +1558,8 @@ function ChangesView({
 
   return (
     <>
-      <div className="flex h-8 flex-none items-center justify-between pr-2 pl-3 text-[length:var(--fs-sm)] font-semibold">
+      {/* The list below reserves its 10px scrollbar (theme.css), so the header keeps the same inset. */}
+      <div className="flex h-8 flex-none items-center justify-between pr-[18px] pl-3 text-[length:var(--fs-sm)] font-semibold">
         <span>Changes</span>
         <button
           className="btn-icon"
@@ -1550,7 +1571,7 @@ function ChangesView({
         </button>
       </div>
       <div
-        className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-scroll p-2"
+        className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-scroll p-2 [scrollbar-gutter:stable]"
         style={{ "--diff-col": `${diffDigits + 1}ch` } as CSSProperties}
       >
         {changes.length > 0 && !fullAccess && (
@@ -1563,8 +1584,11 @@ function ChangesView({
           <div className="px-3 py-2 text-[length:var(--fs-sm)] text-fg-muted">No changes</div>
         )}
         {replyFiles.length > 0 && (
-          <div className="flex flex-col gap-px">
-            <div className="flex items-center gap-1.5 px-1.5 pt-1 text-[length:var(--fs-xs)] text-fg-subtle">
+          // Shared columns, so every folder starts together. A name takes at most about half the
+          // row and truncates past that; the folder takes what is left, and shrinks first as the
+          // sidebar narrows.
+          <div className="grid grid-cols-[fit-content(55%)_minmax(0,1fr)_auto] gap-x-3 gap-y-px">
+            <div className="col-span-full flex items-center gap-1.5 px-1.5 pt-1 text-[length:var(--fs-xs)] text-fg-subtle">
               <ChatCircleIcon size={14} />
               <span className="min-w-0 flex-1 truncate">From this reply</span>
               {pinned.length > 0 && !fullAccess && (
@@ -1588,19 +1612,17 @@ function ChangesView({
               ) : (
                 <button
                   key={path}
-                  className="flex h-[30px] w-full cursor-pointer items-center gap-3 rounded-[var(--radius-sm)] border-none bg-transparent py-1 pr-2 pl-1.5 text-fg-muted text-left hover:bg-hover"
+                  className={`${REPLY_ROW_CLASS} !text-fg-muted`}
                   title={path}
                   onClick={() => onOpenChange(path)}
                 >
-                  <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-                    <span className={missing.has(path) ? "flex-none line-through" : "flex-none"}>
-                      {baseName(path)}
-                    </span>
-                    <span className="min-w-0 truncate text-[length:var(--fs-xs)] text-fg-subtle">
-                      {dirName(path)}
-                    </span>
+                  <span className={`truncate ${missing.has(path) ? "line-through" : ""}`}>
+                    {baseName(path)}
                   </span>
-                  <span className="flex-none text-[length:var(--fs-xs)] text-fg-subtle">
+                  <span className="truncate text-[length:var(--fs-xs)] text-fg-subtle">
+                    {dirName(path)}
+                  </span>
+                  <span className="justify-self-end text-[length:var(--fs-xs)] text-fg-subtle">
                     {missing.has(path) ? "Deleted" : "No changes"}
                   </span>
                 </button>
