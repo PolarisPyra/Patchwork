@@ -399,6 +399,13 @@ function TokensPane({ settings, updateSettings }: PaneProps) {
           onChange={(askBeforeResume) => update({ askBeforeResume })}
         />
       </TokenRow>
+      <TokenRow title="Generate chat and task titles">
+        <TokenSwitch
+          label="Generate chat and task titles"
+          on={tokens.generateTitles}
+          onChange={(generateTitles) => update({ generateTitles })}
+        />
+      </TokenRow>
       <TokenRow
         title="Compact idle tasks"
         desc="Claude tasks are compacted about 55 minutes after their last reply, before the cache expires"

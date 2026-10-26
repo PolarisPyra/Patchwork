@@ -276,6 +276,9 @@ pub struct TokenSettings {
     pub claude_compact_window: u64,
     /// Model for new tasks, per agent. A missing agent uses the CLI's own default.
     pub default_models: HashMap<AgentKind, String>,
+    /// Names a new chat or task with a title its provider writes from the first message,
+    /// rather than that message's first line.
+    pub generate_titles: bool,
 }
 
 impl Default for TokenSettings {
@@ -288,6 +291,7 @@ impl Default for TokenSettings {
             auto_compact_above: 0,
             claude_compact_window: 0,
             default_models: HashMap::new(),
+            generate_titles: true,
         }
     }
 }
@@ -969,6 +973,10 @@ pub enum AgentEvent {
     /// A thread the server created, such as a subagent's.
     ThreadCreated {
         thread: Thread,
+    },
+    /// The thread was named after what its first message is about.
+    TitleUpdated {
+        title: String,
     },
 }
 

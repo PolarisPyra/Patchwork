@@ -14,7 +14,6 @@ import {
   type StepStatus,
   type Thread,
 } from "~/api";
-import { goalObjective } from "~/components/chat/composerActions";
 import { profileMark } from "~/lib/profile";
 import { AGENT_FOLDER_NAMES, AGENT_KINDS } from "~/lib/util";
 
@@ -36,13 +35,6 @@ export function isWorking(thread: Thread | null): boolean {
 
 /** How often streamed events are applied to the threads, in milliseconds. */
 const FLUSH_MS = 100;
-
-/** Same rule as the backend: first line without a leading `/goal`, at most 60 characters. */
-function titleFrom(text: string): string {
-  const line = (text.split("\n")[0] ?? "").trim();
-  const objective = goalObjective(line) ?? line;
-  return Array.from(objective || line).slice(0, 60).join("");
-}
 
 /** Adds or replaces a message, keeping creation order. */
 function upsertMessage(list: Message[], msg: Message): Message[] {
@@ -83,6 +75,8 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
     }
     case "slashCommandsUpdated":
       return { ...thread, slashCommands: event.commands };
+    case "titleUpdated":
+      return { ...thread, title: event.title };
     case "usage": {
       const { messageId, usage } = event;
       return updateMessage(thread, messageId, (m) => ({ ...m, usage }));
@@ -396,6 +390,12 @@ export function useThreads(initialProjectId: string | null) {
     };
     void onAgentEvent((envelope) => {
       queue.push(envelope);
+      // A title arrives once per thread, so it shows at once rather than with the next batch.
+      if (envelope.event.type === "titleUpdated") {
+        window.clearTimeout(timer);
+        flush();
+        return;
+      }
       timer ||= window.setTimeout(flush, FLUSH_MS);
     }).then((u) => {
       if (disposed) u();
@@ -601,8 +601,6 @@ export function useThreads(initialProjectId: string | null) {
           ? t
           : {
               ...t,
-              // Mirrors the backend: the first message names the thread.
-              title: t.messages.length === 0 ? titleFrom(text) : t.title,
               messages: upsertMessage(t.messages, message),
             },
       ),

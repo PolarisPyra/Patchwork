@@ -17,7 +17,7 @@ use std::ffi::OsString;
 use std::io::Read;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::thread::JoinHandle;
@@ -221,7 +221,23 @@ pub fn probe(kind: AgentKind, args: &[&str]) -> Option<Probe> {
 /// that output as a success. Some CLIs print their answer and then keep running, so waiting
 /// for them to exit would only ever reach the timeout.
 pub fn probe_until(kind: AgentKind, args: &[&str], done: impl Fn(&str) -> bool) -> Option<Probe> {
+    let cmd = agent_command(kind).ok()?;
+    run_probe(cmd, args, PROBE_TIMEOUT, done)
+}
+
+/// Like `probe`, but runs in `dir` and allows `timeout`.
+pub fn probe_in(kind: AgentKind, args: &[&str], dir: &Path, timeout: Duration) -> Option<Probe> {
     let mut cmd = agent_command(kind).ok()?;
+    cmd.current_dir(dir);
+    run_probe(cmd, args, timeout, |_| false)
+}
+
+fn run_probe(
+    mut cmd: Command,
+    args: &[&str],
+    timeout: Duration,
+    done: impl Fn(&str) -> bool,
+) -> Option<Probe> {
     cmd.args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -232,7 +248,7 @@ pub fn probe_until(kind: AgentKind, args: &[&str], done: impl Fn(&str) -> bool) 
     let (out, out_reader) = read_pipe(child.stdout.take()?);
     let (err, err_reader) = read_pipe(child.stderr.take()?);
 
-    let deadline = Instant::now() + PROBE_TIMEOUT;
+    let deadline = Instant::now() + timeout;
     let success = loop {
         match child.try_wait() {
             Ok(Some(status)) => {

@@ -10,6 +10,7 @@ mod scope;
 pub mod skills;
 pub mod terminal;
 mod time;
+mod title;
 pub mod types;
 pub mod usage;
 pub mod watch;
@@ -149,9 +150,14 @@ fn clean_name(name: &str) -> Res<String> {
     Ok(name.chars().take(120).collect())
 }
 
-/// A thread title from the first line of a message, without a leading `/goal`.
+/// A thread title from the first line of a message that is not a code fence, without a
+/// leading `/goal`.
 pub fn title_from(text: &str) -> String {
-    let line = text.lines().next().unwrap_or("").trim();
+    let line = text
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty() && !l.starts_with("```"))
+        .unwrap_or("");
     let objective = if provider::is_goal_command(line) {
         line["/goal".len()..].trim()
     } else {
@@ -852,6 +858,48 @@ impl Server {
         }
     }
 
+    /// Replaces the `placeholder` title with one a model writes from `text`, in the background,
+    /// unless the thread has been renamed meanwhile. With titles switched off in Settings, a
+    /// slash command, or a message the model gives no title for, the first line names it.
+    fn name_thread(
+        self: &Arc<Self>,
+        thread_id: &str,
+        text: &str,
+        placeholder: String,
+        agent: AgentKind,
+        model: Option<String>,
+    ) {
+        let server = Arc::downgrade(self);
+        let thread_id = thread_id.to_string();
+        let text = text.to_string();
+        let enabled = self.store.settings().tokens.generate_titles;
+        std::thread::spawn(move || {
+            let first_line = title_from(&text);
+            let generated = if !enabled || first_line.starts_with('/') {
+                None
+            } else {
+                title::generate(&text, agent, model.as_deref())
+            };
+            let generated = generated.unwrap_or(first_line);
+            let Some(server) = server.upgrade() else {
+                return;
+            };
+            let mut renamed = false;
+            let _ = server.store.update_thread(&thread_id, |t| {
+                if t.title == placeholder {
+                    t.title = generated.clone();
+                    renamed = true;
+                }
+            });
+            if renamed {
+                server.emit(AgentEventEnvelope {
+                    thread_id,
+                    event: AgentEvent::TitleUpdated { title: generated },
+                });
+            }
+        });
+    }
+
     /// Sends `/compact` as a turn of its own, shown in the thread like a typed one.
     fn compact_thread(self: &Arc<Self>, thread_id: &str) -> Res<()> {
         let message = user_message("/compact", vec![]);
@@ -917,9 +965,10 @@ impl Server {
         let m = msg.clone();
         let mut session_id = None;
         let mut subagents = Vec::new();
+        let mut first_title = None;
         self.store.update_thread(&thread_id, |t| {
             if t.messages.is_empty() {
-                t.title = title_from(&text);
+                first_title = Some((t.title.clone(), t.agent, t.model.clone()));
             }
             // Subagents of the running turn still working, which a steer must not cut off.
             subagents = t
@@ -934,6 +983,9 @@ impl Server {
             t.messages.push(m);
             session_id = t.session_id.clone();
         })?;
+        if let Some((placeholder, agent, model)) = first_title {
+            self.name_thread(&thread_id, &text, placeholder, agent, model);
+        }
         // A goal that has ended is over: the next message starts unrelated work, so its banner
         // goes. The agent has already dropped the goal, or `settle` told it to with a /goal
         // command, which is why those leave the banner alone.

@@ -183,6 +183,8 @@ export interface TokenSettings {
   claudeCompactWindow: number;
   /** Model for new tasks, per agent. A missing agent uses the CLI's own default. */
   defaultModels: Partial<Record<AgentKind, string>>;
+  /** Names a new chat or task with a title its provider writes, rather than its first line. */
+  generateTitles: boolean;
 }
 
 export interface AgentStatus {
@@ -557,6 +559,7 @@ export type AgentEvent =
   | { type: "refused"; messageId: string; refusal: Refusal }
   | { type: "planProposed"; messageId: string; text: string }
   | { type: "threadCreated"; thread: Thread }
+  | { type: "titleUpdated"; title: string }
   | { type: "messageRemoved"; messageId: string }
   | { type: "messageEdited"; message: Message }
   | { type: "backgroundTaskStarted"; messageId: string; task: BackgroundTask }
@@ -593,6 +596,7 @@ export const DEFAULT_SETTINGS: Settings = {
     autoCompactAbove: 0,
     claudeCompactWindow: 0,
     defaultModels: {},
+    generateTitles: true,
   },
   notifications: { goalComplete: true, taskComplete: true },
   updates: { checkEveryMinutes: 10 },

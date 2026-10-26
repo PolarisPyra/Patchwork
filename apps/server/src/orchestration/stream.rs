@@ -122,6 +122,7 @@ pub(super) fn event_message(event: &AgentEvent) -> Option<&str> {
         | AgentEvent::GoalUpdated { .. }
         | AgentEvent::SlashCommandsUpdated { .. }
         | AgentEvent::ThreadCreated { .. }
+        | AgentEvent::TitleUpdated { .. }
         | AgentEvent::MessageRemoved { .. } => None,
         AgentEvent::MessageEdited { message } => Some(&message.id),
         AgentEvent::TextDelta { message_id, .. }
@@ -168,6 +169,10 @@ pub(super) fn apply(thread: &mut Thread, event: &AgentEvent) {
         }
         AgentEvent::SlashCommandsUpdated { commands } => {
             thread.slash_commands = commands.clone();
+            return;
+        }
+        AgentEvent::TitleUpdated { title } => {
+            thread.title = title.clone();
             return;
         }
         AgentEvent::MessageRemoved { message_id } => {
@@ -310,6 +315,7 @@ pub(super) fn apply(thread: &mut Thread, event: &AgentEvent) {
         | AgentEvent::Retrying { .. }
         | AgentEvent::SlashCommandsUpdated { .. }
         | AgentEvent::ThreadCreated { .. }
+        | AgentEvent::TitleUpdated { .. }
         | AgentEvent::MessageRemoved { .. }
         | AgentEvent::MessageEdited { .. } => {}
     }
