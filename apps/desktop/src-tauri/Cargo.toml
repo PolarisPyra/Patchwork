@@ -1,6 +1,6 @@
 [package]
 name = "patchwork"
-version = "0.9.4"
+version = "0.9.5"
 description = "Patchwork — an agentic development environment"
 edition = "2024"
 rust-version = "1.90"
