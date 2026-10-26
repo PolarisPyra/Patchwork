@@ -324,7 +324,7 @@ function DefaultModel({
   return (
     <select
       aria-label={`${AGENT_LABELS[kind]} model for new tasks`}
-      className="h-7 max-w-[200px] rounded-[var(--radius-sm)] border border-border-strong bg-editor px-2 text-[length:var(--fs-sm)] text-fg"
+      className="h-7 w-[200px] rounded-[var(--radius-sm)] border border-border-strong bg-editor px-2 text-[length:var(--fs-sm)] text-fg"
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value || undefined)}
     >
