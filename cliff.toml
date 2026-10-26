@@ -32,9 +32,6 @@ split_commits = false
 # Rewords pushed commit subjects that describe a change too narrowly.
 commit_preprocessors = [
     { pattern = "^Stop labelling pasted terminal output as JavaScript", replace = "Fix pasted text getting the wrong syntax highlighting language" },
-    { pattern = "^Make the sidebar tree as compact and readable as VS Code's explorer", replace = "Make the sidebar tree more compact and readable" },
-    { pattern = "^Add a terminal and Output panel, and keep debug logs the way VS Code does", replace = "Add a terminal and Output panel, and keep debug logs in a log folder per session" },
-    { pattern = "^Match the Projects tree to VS Code's explorer selection and reordering", replace = "Improve selecting and reordering in the Projects tree" },
 ]
 commit_parsers = [
     { message = "^(Fix|Fixed|Repair|Stop|Prevent|Correct)", group = "Fixed" },
