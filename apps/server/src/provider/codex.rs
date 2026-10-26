@@ -136,11 +136,19 @@ pub fn turn_input(spec: &TurnSpec) -> Vec<String> {
             "capabilities": {"experimentalApi": true}
         }}),
         json!({"method": "initialized"}),
+        // Patchwork's skills folder joins Codex's own skill folders.
+        json!({"id": SKILLS_REQUEST, "method": "skills/extraRoots/set", "params": {
+            "extraRoots": spec.skills_dir.into_iter().collect::<Vec<_>>(),
+        }}),
         json!({"id": THREAD_REQUEST, "method": method, "params": thread}),
     ]
     .map(|v| v.to_string())
     .into()
 }
+
+/// Request id of `skills/extraRoots/set`. Its response, even an error from a Codex without the
+/// method, does not end the turn.
+const SKILLS_REQUEST: u64 = 12;
 
 /// How Codex is asked to present its plan in plan mode, so it arrives as a plan item.
 const PLAN_INSTRUCTIONS: &str = "You are in plan mode: investigate and plan, but do not change \
@@ -282,7 +290,7 @@ fn turn_start(spec: &TurnSpec, thread_id: &str, text: &str, resolved_model: Opti
     let mut params = json!({
         "threadId": thread_id,
         "cwd": spec.root,
-        "input": if text.is_empty() { vec![] } else { input_items(text, spec.attachments) },
+        "input": if text.is_empty() { vec![] } else { input_items(text, spec.attachments, spec.skills_dir) },
         "approvalPolicy": policy,
         "approvalsReviewer": reviewer,
         "sandboxPolicy": {"type": sandbox},
@@ -315,8 +323,15 @@ fn turn_start(spec: &TurnSpec, thread_id: &str, text: &str, resolved_model: Opti
     json!({"id": TURN_REQUEST, "method": "turn/start", "params": params}).to_string()
 }
 
-fn input_items(text: &str, attachments: &[Attachment]) -> Vec<Value> {
+fn input_items(text: &str, attachments: &[Attachment], skills_dir: Option<&str>) -> Vec<Value> {
     let mut input = vec![json!({"type": "text", "text": text})];
+    // A message that invokes a skill starts with its "$name", which Codex takes with the skill.
+    if let Some(dir) = skills_dir
+        && let Some(name) = text.strip_prefix('$').and_then(|t| t.split_whitespace().next())
+        && let Some(skill) = crate::skills::list(std::path::Path::new(dir)).into_iter().find(|s| s.name == name)
+    {
+        input.push(json!({"type": "skill", "name": skill.name, "path": skill.path}));
+    }
     input.extend(
         attachments
             .iter()
@@ -339,7 +354,7 @@ pub fn steer_input(
     json!({"id": STEER_REQUEST, "method": "turn/steer", "params": {
         "threadId": thread_id,
         "expectedTurnId": turn_id,
-        "input": input_items(text, attachments),
+        "input": input_items(text, attachments, None),
     }})
     .to_string()
 }
@@ -513,7 +528,9 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
         // A response to one of our requests.
         (Some(id), None) => {
             let error = v["error"]["message"].as_str();
-            if id == STEER_REQUEST {
+            if id == SKILLS_REQUEST {
+                // Nothing to do: the skills folder is only an addition.
+            } else if id == STEER_REQUEST {
                 out.push(match error {
                     Some(message) => Parsed::SteerRejected(message.into()),
                     None => Parsed::Steered,
@@ -694,6 +711,7 @@ mod tests {
             attachments: &[],
             images: &[],
             instructions: None,
+            skills_dir: None,
         }
     }
 
@@ -715,11 +733,11 @@ mod tests {
         assert_eq!(new[0]["method"], "initialize");
         assert_eq!(new[0]["params"]["capabilities"]["experimentalApi"], true);
         assert_eq!(new[1]["method"], "initialized");
-        assert_eq!(new[2]["method"], "thread/start");
-        assert_eq!(new[2]["params"]["cwd"], "/abs");
+        assert_eq!(new[3]["method"], "thread/start");
+        assert_eq!(new[3]["params"]["cwd"], "/abs");
 
         let resumed = turn_input(&spec(Some("sid"), AccessMode::FullAccess));
-        let resume: Value = serde_json::from_str(&resumed[2]).unwrap();
+        let resume: Value = serde_json::from_str(&resumed[3]).unwrap();
         assert_eq!(resume["method"], "thread/resume");
         assert_eq!(resume["params"]["threadId"], "sid");
 

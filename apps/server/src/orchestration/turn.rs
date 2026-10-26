@@ -139,16 +139,28 @@ impl Runner {
             )
         };
         let sends_context = context.is_some();
+        let settings = server.store.settings();
+        let skills = crate::skills::enabled(&settings);
+        // A message that starts with a skill's "$name" reaches the agent in the form it runs.
+        let text = match crate::skills::invoked(&text, &skills) {
+            Some((skill, rest)) => crate::skills::invocation(agent, &skill, rest),
+            None => text,
+        };
         let text = match context {
             Some(context) => format!("{context}{text}"),
             None => text,
         };
-        let settings = server.store.settings();
         // Codex takes its instructions in the turn's input; Claude takes them as launch arguments.
         let instructions = match agent {
-            AgentKind::Codex | AgentKind::Api => codex::developer_instructions(&settings),
+            AgentKind::Codex => codex::developer_instructions(&settings),
+            // Patchwork's own agent has no skill loader, so it is told where the skills are.
+            AgentKind::Api => {
+                let parts = [codex::developer_instructions(&settings), crate::skills::instructions(&skills)];
+                Some(parts.into_iter().flatten().collect::<Vec<_>>().join("\n\n")).filter(|t| !t.is_empty())
+            }
             AgentKind::Claude | AgentKind::Antigravity | AgentKind::OpenCode => None,
         };
+        let skills_dir = Some(crate::skills::loaded_dir(&settings).to_string_lossy().into_owned());
         let spec = TurnSpec {
             root: &root,
             session_id: session_id.as_deref(),
@@ -160,6 +172,7 @@ impl Runner {
             attachments: &attachments,
             images: &images,
             instructions: instructions.as_deref(),
+            skills_dir: skills_dir.as_deref(),
         };
 
         // Agents often edit files through the shell, so changes are also found by
@@ -244,6 +257,7 @@ impl Runner {
             attachments,
             images,
             instructions,
+            skills_dir,
         };
         self.turns
             .lock()
@@ -328,6 +342,8 @@ pub(super) struct Turn {
     pub(super) images: Vec<provider::Image>,
     /// What `spec` passes as `TurnSpec::instructions`.
     pub(super) instructions: Option<String>,
+    /// What `spec` passes as `TurnSpec::skills_dir`.
+    pub(super) skills_dir: Option<String>,
 }
 
 impl Turn {
@@ -393,6 +409,7 @@ impl Turn {
             attachments: &self.attachments,
             images: &self.images,
             instructions: self.instructions.as_deref(),
+            skills_dir: self.skills_dir.as_deref(),
         }
     }
 }

@@ -6,6 +6,7 @@ pub mod orchestration;
 pub mod persistence;
 pub mod provider;
 mod scope;
+pub mod skills;
 mod time;
 pub mod types;
 pub mod usage;
@@ -286,6 +287,7 @@ impl Server {
     pub fn open(config_dir: PathBuf, data_dir: &Path, sink: EventSink) -> Res<Arc<Self>> {
         provider::model_manifest::start(&config_dir);
         provider::api_config::init(&config_dir);
+        skills::init(&config_dir);
         std::thread::spawn(scope::prepare);
         let clis_dir = config_dir.join("clis");
         import::debug_log::init(config_dir.join("logs/imports.log"));

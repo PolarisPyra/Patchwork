@@ -51,6 +51,49 @@ fn list_shells() -> ShellChoices {
     }
 }
 
+#[derive(serde::Serialize)]
+struct SkillsView {
+    dir: String,
+    skills: Vec<patchwork_server::skills::Skill>,
+}
+
+/// The skills folder in use and the skills in it.
+#[tauri::command]
+fn list_skills(server: Srv) -> SkillsView {
+    let dir = patchwork_server::skills::dir(&server.store.settings());
+    SkillsView {
+        skills: patchwork_server::skills::all(&server.store.settings()),
+        dir: dir.to_string_lossy().into_owned(),
+    }
+}
+
+/// Opens the skills folder in the file manager, creating it first.
+#[tauri::command]
+#[cfg_attr(target_os = "linux", allow(unused_variables))]
+fn open_skills_folder(app: AppHandle, server: Srv) -> Res<()> {
+    let dir = patchwork_server::skills::dir(&server.store.settings());
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
+    #[cfg(target_os = "linux")]
+    {
+        let mut child = patchwork_server::host_command("xdg-open")
+            .arg(&dir)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|e| format!("Could not open the folder: {e}"))?;
+        std::thread::spawn(move || child.wait());
+        Ok(())
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        use tauri_plugin_opener::OpenerExt;
+        app.opener()
+            .open_path(dir.to_string_lossy(), None::<&str>)
+            .map_err(|e| e.to_string())
+    }
+}
+
 #[tauri::command]
 fn list_models(kind: AgentKind) -> Vec<ModelOption> {
     provider::list_models(kind)
@@ -648,6 +691,8 @@ pub fn run() {
             save_settings,
             detect_agent,
             list_shells,
+            list_skills,
+            open_skills_folder,
             list_models,
             list_api_providers,
             save_api_provider,

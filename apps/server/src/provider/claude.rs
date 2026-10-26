@@ -898,6 +898,7 @@ mod tests {
             attachments: &[],
             images: &[],
             instructions: None,
+            skills_dir: None,
         };
         assert_eq!(
             turn_args(&spec),

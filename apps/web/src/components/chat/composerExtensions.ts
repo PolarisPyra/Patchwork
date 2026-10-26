@@ -15,6 +15,8 @@ import { codeHighlightPlugin } from "~/components/chat/codeHighlight";
 
 export const GOAL_CLASS =
   "rounded-[4px] bg-accent/30 px-1 py-0.5 font-[family-name:var(--font-mono)] text-fg";
+export const SKILL_CLASS =
+  "rounded-[4px] bg-success/25 px-1 py-0.5 font-[family-name:var(--font-mono)] text-fg";
 const MENTION_CLASS = "rounded-[4px] bg-selected-muted px-1 text-accent-text";
 
 /** A slash command, such as `/goal`. It is an atom, so the whole command selects and deletes together. */
@@ -49,6 +51,35 @@ export const GoalCommand = Node.create({
       }),
     ];
   },
+});
+
+/** A skill picked from the `$` menu, sent as `$name`. An atom, like the goal command. */
+export const SkillCommand = Node.create({
+  name: "skillCommand",
+  group: "inline",
+  inline: true,
+  atom: true,
+  selectable: false,
+  addAttributes() {
+    return {
+      name: {
+        default: "",
+        parseHTML: (element) => element.getAttribute("data-skill-command") ?? "",
+        renderHTML: (attributes) => ({ "data-skill-command": attributes.name }),
+      },
+    };
+  },
+  parseHTML() {
+    return [{ tag: "span[data-skill-command]" }];
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    return [
+      "span",
+      mergeAttributes(HTMLAttributes, { class: SKILL_CLASS }),
+      `$${node.attrs.name}`,
+    ];
+  },
+  renderMarkdown: (node: { attrs?: { name?: string } }) => `$${node.attrs?.name ?? ""}`,
 });
 
 /**
@@ -184,6 +215,7 @@ export function composerExtensions(placeholder: string, mentionSuggestion: Menti
     Placeholder.configure({ placeholder }),
     Markdown,
     GoalCommand,
+    SkillCommand,
     MarkdownLine,
     SelectAllText,
     ...MarkdownTextBlocks,

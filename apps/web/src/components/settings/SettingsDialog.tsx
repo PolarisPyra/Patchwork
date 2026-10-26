@@ -4,6 +4,7 @@ import { RELEASES_URL, restartToUpdate } from "~/lib/updates";
 import {
   ArrowCircleUpIcon,
   BellIcon,
+  BooksIcon,
   CaretDownIcon,
   DownloadSimpleIcon,
   FolderSimpleIcon,
@@ -33,6 +34,7 @@ import {
   type NotificationSettings,
   type Settings,
   type ShellChoices,
+  type SkillsView,
   type Theme,
   type TokenSettings,
   type UpdateState,
@@ -57,6 +59,7 @@ type Section =
   | "notifications"
   | "imports"
   | "environment"
+  | "skills"
   | "projects"
   | "shortcuts"
   | "updates";
@@ -69,6 +72,7 @@ const SECTIONS: { id: Section; label: string; Icon: Icon }[] = [
   { id: "notifications", label: "Notifications", Icon: BellIcon },
   { id: "imports", label: "Imports", Icon: DownloadSimpleIcon },
   { id: "environment", label: "Environment", Icon: TerminalIcon },
+  { id: "skills", label: "Skills", Icon: BooksIcon },
   { id: "projects", label: "Projects", Icon: FolderSimpleIcon },
   { id: "shortcuts", label: "Shortcuts", Icon: KeyboardIcon },
   { id: "updates", label: "Updates", Icon: ArrowCircleUpIcon },
@@ -134,6 +138,7 @@ export default function SettingsDialog({
             {section === "notifications" && <NotificationsPane {...paneProps} />}
             {section === "imports" && <ImportsPane {...paneProps} onImported={onImported} />}
             {section === "environment" && <EnvironmentPane {...paneProps} />}
+            {section === "skills" && <SkillsPane {...paneProps} />}
             {section === "projects" && <ProjectsPane {...paneProps} />}
             {section === "shortcuts" && <KeybindingsPane />}
             {section === "updates" && <UpdatesPane {...paneProps} />}
@@ -883,6 +888,104 @@ function EnvironmentPane({ settings, updateSettings }: PaneProps) {
         </Dropdown>
       </TokenRow>
       {error && <div className="text-[length:var(--fs-sm)] text-danger">{error}</div>}
+    </>
+  );
+}
+
+/** How a skills folder is laid out: one folder per skill, named like the skill, with its
+ * SKILL.md and anything the skill refers to. */
+const SKILLS_EXAMPLE = `skills/
+├── release-notes/
+│   ├── SKILL.md
+│   └── template.md
+└── review-ui/
+    ├── SKILL.md
+    └── scripts/
+        └── measure.sh
+
+release-notes/SKILL.md
+---
+name: release-notes
+description: Draft release notes from the commits since the last tag
+---
+Read template.md, then list the commits since the last tag…`;
+
+/** The skills folder every agent loads, and the skills in it. */
+function SkillsPane({ settings, updateSettings }: PaneProps) {
+  const [view, setView] = useState<SkillsView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => api.listSkills().then(setView, (e) => setError(errorText(e))), []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function choose(dir: string | null) {
+    setError(null);
+    await updateSettings((s) => ({ ...s, skillsDir: dir }));
+    await load();
+  }
+
+  async function toggle(name: string, on: boolean) {
+    setView(
+      (v) =>
+        v && { ...v, skills: v.skills.map((s) => (s.name === name ? { ...s, enabled: on } : s)) },
+    );
+    await updateSettings((s) => ({
+      ...s,
+      disabledSkills: on
+        ? s.disabledSkills.filter((n) => n !== name)
+        : [...s.disabledSkills.filter((n) => n !== name), name],
+    }));
+  }
+
+  async function pick() {
+    const picked = await open({ directory: true, defaultPath: view?.dir });
+    if (typeof picked === "string") await choose(picked);
+  }
+
+  return (
+    <>
+      <TokenRow title="Folder" desc={view?.dir}>
+        {settings.skillsDir && (
+          <button className="btn" onClick={() => void choose(null)}>
+            Use default
+          </button>
+        )}
+        <button className="btn" onClick={() => void pick()}>
+          Change…
+        </button>
+        <button
+          className="btn"
+          onClick={() => api.openSkillsFolder().catch((e) => setError(errorText(e)))}
+        >
+          Open
+        </button>
+      </TokenRow>
+      {error && <div className="mt-2 text-[length:var(--fs-sm)] text-danger">{error}</div>}
+      {view?.skills.length === 0 && (
+        <div className="px-3 py-2 text-[length:var(--fs-sm)] text-fg-subtle">No skills yet</div>
+      )}
+      {view?.skills.map((skill) => (
+        <div
+          key={skill.path}
+          className="flex items-center gap-3 border-b border-border py-2.5"
+          title={skill.description ?? skill.path}
+        >
+          <div className="min-w-0 flex-1 truncate font-[family-name:var(--font-mono)]">
+            ${skill.name}
+          </div>
+          <TokenSwitch
+            label={`$${skill.name}`}
+            on={skill.enabled}
+            onChange={(on) => void toggle(skill.name, on)}
+          />
+        </div>
+      ))}
+      <div className="mt-5 mb-1.5 font-semibold">Example</div>
+      <pre className="m-0 overflow-x-auto rounded-[var(--radius-sm)] border border-border-strong bg-editor px-3 py-2.5 font-[family-name:var(--font-mono)] text-[length:var(--fs-xs)] leading-relaxed text-fg-muted">
+        {SKILLS_EXAMPLE}
+      </pre>
     </>
   );
 }

@@ -121,6 +121,11 @@ pub fn permission_config(spec: &TurnSpec) -> Option<String> {
     Some(json!({ "permission": rules }).to_string())
 }
 
+/// The skills folder for 2.x's `skills.paths`, as `OPENCODE_CONFIG_CONTENT`.
+pub fn skills_config(spec: &TurnSpec) -> Option<String> {
+    spec.skills_dir.map(|dir| json!({ "skills": { "paths": [dir] } }).to_string())
+}
+
 pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
     // The bridge takes a 2.x turn from its stdin.
     if uses_serve() {
@@ -248,6 +253,7 @@ fn tool_name(name: &str) -> &str {
         "webfetch" => "WebFetch",
         "websearch" => "WebSearch",
         "todowrite" => "TodoWrite",
+        "skill" => "Skill",
         "task" | "subagent" => "Task",
         "execute" => "Execute",
         other => other,

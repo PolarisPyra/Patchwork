@@ -381,6 +381,8 @@ pub struct TurnSpec<'a> {
     pub images: &'a [Image],
     /// Instructions added to the agent's own, for agents that take them in the turn's input.
     pub instructions: Option<&'a str>,
+    /// Patchwork's skills folder, which the agent loads skills from.
+    pub skills_dir: Option<&'a str>,
 }
 
 /// An attached image, base64-encoded for the agent's input.
@@ -512,8 +514,10 @@ pub fn turn_args(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
 /// Environment for one turn's agent process, on top of the app's own.
 pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)> {
     match agent {
-        // The bridge sets up its own server.
-        AgentKind::OpenCode if opencode::uses_serve() => Vec::new(),
+        // The bridge sets up its own server, which inherits this environment.
+        AgentKind::OpenCode if opencode::uses_serve() => {
+            opencode::skills_config(spec).map(|config| ("OPENCODE_CONFIG_CONTENT", config)).into_iter().collect()
+        }
         AgentKind::OpenCode => std::iter::once(("PWD", spec.root.to_string()))
             .chain(opencode::permission_config(spec).map(|config| ("OPENCODE_CONFIG_CONTENT", config)))
             .collect(),
@@ -744,8 +748,10 @@ fn text_delta(message_id: &str, text: &str) -> Parsed {
 
 /// One-line summary of a tool call's input: the first useful field that is present.
 fn summarize(input: &Value, root: &str) -> String {
-    const KEYS: [&str; 6] = [
+    const KEYS: [&str; 7] = [
         "command",
+        // The skill a `Skill` call loads.
+        "skill",
         "file_path",
         "pattern",
         "url",

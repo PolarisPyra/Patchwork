@@ -59,6 +59,15 @@ export function goalObjective(text: string): string | null {
   return /^\/goal(\s|$)/.test(trimmed) ? trimmed.slice("/goal".length).trim() : null;
 }
 
+/**
+ * The skill a message starts with and the text after it, or null. Skill names are lowercase words
+ * joined by hyphens, so a message about `$HOME` or `$5` does not show a skill chip.
+ */
+export function skillInvocation(text: string): { name: string; rest: string } | null {
+  const match = /^\$([a-z][a-z0-9]*(?:[-_:][a-z0-9]+)*)(?=\s|$)/.exec(text.trim());
+  return match ? { name: match[1], rest: text.trim().slice(match[0].length).trim() } : null;
+}
+
 /** `/goal clear` or one of its aliases, as the backend reads them. */
 export function isGoalClearCommand(text: string): boolean {
   return /^\/goal\s+(clear|stop|off|reset|none|cancel)\s*$/i.test(text.trim());

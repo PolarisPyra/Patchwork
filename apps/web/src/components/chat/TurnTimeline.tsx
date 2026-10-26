@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useState, type ReactNode } from "react";
 import {
   ArrowClockwiseIcon,
+  BooksIcon,
   BrainIcon,
   CaretDownIcon,
   CaretRightIcon,
@@ -28,7 +29,7 @@ import { isGoalClearedReply } from "~/components/chat/goalPresentation";
 import Markdown from "~/components/chat/Markdown";
 
 /** What a tool call does, which picks its icon, its verb, and how a group of calls is summed up. */
-type Action = "edit" | "command" | "read" | "search" | "web" | "agent" | "other";
+type Action = "edit" | "command" | "read" | "search" | "web" | "agent" | "skill" | "other";
 
 const ACTIONS: Record<string, Action> = {
   Bash: "command",
@@ -55,13 +56,24 @@ const ACTIONS: Record<string, Action> = {
   WebFetch: "web",
   search_web: "web",
   read_url_content: "web",
+  Skill: "skill",
 };
 
 /** Calls that are not shown: the plan they keep is shown above the composer. */
 const HIDDEN_TOOLS = new Set(["TodoWrite"]);
 
 function actionOf(tool: ToolCall): Action {
-  return tool.subagent ? "agent" : (ACTIONS[tool.name] ?? "other");
+  if (tool.subagent) return "agent";
+  const action = ACTIONS[tool.name] ?? "other";
+  // Agents without a skill tool load a skill by reading its SKILL.md.
+  return action === "read" && /(^|\/)SKILL\.md$/.test(tool.summary) ? "skill" : action;
+}
+
+/** The skill a call loads: Claude names Patchwork's as the "patchwork" plugin's, and a read
+ * names its folder. */
+function skillName(tool: ToolCall): string {
+  if (tool.name !== "Skill") return tool.summary.split("/").slice(-2, -1)[0] ?? "";
+  return tool.summary.replace(/^patchwork:/, "");
 }
 
 const ACTION_ICONS: Record<Action, ReactNode> = {
@@ -71,6 +83,7 @@ const ACTION_ICONS: Record<Action, ReactNode> = {
   search: <MagnifyingGlassIcon size={15} />,
   web: <GlobeIcon size={15} />,
   agent: <RobotIcon size={15} />,
+  skill: <BooksIcon size={15} />,
   other: <WrenchIcon size={15} />,
 };
 
@@ -82,6 +95,7 @@ const ACTION_COUNTS: [Action, string, string][] = [
   ["search", "Searched code", "time"],
   ["web", "Searched web", "time"],
   ["agent", "Ran", "subagent"],
+  ["skill", "Used", "skill"],
   ["other", "Used", "tool"],
 ];
 
@@ -118,6 +132,11 @@ function toolLabel(tool: ToolCall): string {
       return summary ? `${running ? "Searching" : "Searched"} ${summary}` : "Searched web";
     case "agent":
       return titleOf(tool);
+    case "skill": {
+      const name = skillName(tool);
+      if (!name) return running ? "Loading skill" : "Used skill";
+      return `${running ? "Loading" : "Used"} the ${name} skill`;
+    }
     case "other":
       return `${running ? "Using" : "Used"} ${toolName(tool)}`;
   }

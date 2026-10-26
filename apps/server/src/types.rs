@@ -72,6 +72,10 @@ pub struct Settings {
     pub tokens: TokenSettings,
     /// Shell that agents run commands in. None follows the SHELL environment variable.
     pub shell: Option<String>,
+    /// Folder of the skills every agent loads. None uses `skills` in the config folder.
+    pub skills_dir: Option<String>,
+    /// Skills switched off in Settings, by name.
+    pub disabled_skills: Vec<String>,
     pub notifications: NotificationSettings,
     pub updates: UpdateSettings,
     /// Id of the app icon color way in `assets/logos/manifest.json`. None uses the manifest default.

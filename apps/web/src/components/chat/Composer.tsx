@@ -20,6 +20,7 @@ import {
   type Attachment,
   type ModelOption,
   type ProviderSlashCommand,
+  type Skill,
 } from "~/api";
 import AccessPicker from "~/components/chat/AccessPicker";
 import { detectLanguage, isTerminalOutput } from "~/components/chat/languageDetection";
@@ -314,13 +315,32 @@ export default function Composer({
   const [dispatchMenuOpen, setDispatchMenuOpen] = useState(false);
   const [commandIndex, setCommandIndex] = useState(0);
   // Antigravity reads the message as a prompt, so there are no commands to offer.
-  const slash = agent !== "antigravity" && /^\/\S*$/.test(value) ? value.toLowerCase() : null;
+  // "/" lists commands and "$" lists skills.
+  const slash = agent !== "antigravity" && /^[/$]\S*$/.test(value) ? value.toLowerCase() : null;
+  const skillMenu = slash?.startsWith("$") ?? false;
+  // Skills are read again each time the menu opens, so ones just added to the folder show up.
+  const [skills, setSkills] = useState<Skill[]>([]);
+  useEffect(() => {
+    if (skillMenu)
+      api.listSkills().then(
+        (view) => setSkills(view.skills.filter((skill) => skill.enabled)),
+        () => undefined,
+      );
+  }, [skillMenu]);
   const builtInNames = new Set(SLASH_COMMANDS.map((command) => command.name.slice(1)));
-  const commands = [
+  const skillCommands = skills.map((skill) => ({
+    name: `$${skill.name}`,
+    description: skill.description ?? "Skill",
+  }));
+  const slashCommands = [
     // Patchwork does not run /goal in OpenCode.
     ...SLASH_COMMANDS.filter((command) => agent !== "opencode" || command.name !== "/goal"),
     ...providerSlashCommands
-      .filter((command) => !builtInNames.has(command.name.replace(/^\//, "")))
+      // Claude lists Patchwork's skills again as the "patchwork" plugin's; they are under "$".
+      .filter((command) => {
+        const name = command.name.replace(/^\//, "");
+        return !builtInNames.has(name) && !name.startsWith("patchwork:");
+      })
       .map((command) => ({
         name: command.name.startsWith("/") ? command.name : `/${command.name}`,
         description:
@@ -331,7 +351,7 @@ export default function Composer({
   const matches =
     slash === null
       ? []
-      : commands
+      : (skillMenu ? skillCommands : slashCommands)
           .flatMap((c) => {
             const score = commandScore(c.name, slash.slice(1));
             return score === null ? [] : [{ ...c, score }];
@@ -564,14 +584,21 @@ export default function Composer({
 
   function complete(name: string) {
     if (!editor) return;
-    // The menu only shows for a bare "/word", so the whole draft is replaced by the command.
+    // The menu only shows for a bare "/word" or "$word", so the whole draft is replaced by the pick.
     editor
       .chain()
       .focus()
       .selectAll()
       .deleteSelection()
       .insertContent(
-        name === "/goal" ? [{ type: "goalCommand" }, { type: "text", text: " " }] : `${name} `,
+        name === "/goal"
+          ? [{ type: "goalCommand" }, { type: "text", text: " " }]
+          : name.startsWith("$")
+            ? [
+                { type: "skillCommand", attrs: { name: name.slice(1) } },
+                { type: "text", text: " " },
+              ]
+            : `${name} `,
       )
       .run();
     changed.current(editor.getMarkdown());
@@ -710,12 +737,12 @@ export default function Composer({
       {menuOpen && (
         <div
           role="listbox"
-          aria-label="Slash commands"
+          aria-label={skillMenu ? "Skills" : "Slash commands"}
           className="absolute right-0 bottom-full left-0 mb-1.5 flex max-h-[min(50vh,32rem)] flex-col gap-px overflow-y-auto overscroll-contain rounded-[var(--radius)] border border-border bg-panel p-1 shadow-[var(--shadow-popup)]"
         >
           {matches.length === 0 && (
             <div className="px-2 py-1.5 text-[length:var(--fs-sm)] text-fg-muted">
-              No matching command.
+              {skillMenu ? "No matching skill." : "No matching command."}
             </div>
           )}
           {matches.map((c) => (

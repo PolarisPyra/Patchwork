@@ -646,6 +646,7 @@ mod tests {
             attachments: &[],
             images: &[],
             instructions: None,
+            skills_dir: None,
         };
         let baseline = workspace::git_changes(root_str).unwrap();
         let input = provider::turn_input(agent, &spec);

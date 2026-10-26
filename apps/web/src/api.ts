@@ -44,6 +44,10 @@ export interface Settings {
   tokens: TokenSettings;
   /** Shell that agents run commands in; null follows the SHELL environment variable. */
   shell: string | null;
+  /** Folder of the skills every agent loads; null uses `skills` in the config folder. */
+  skillsDir: string | null;
+  /** Skills switched off in Settings, by name. */
+  disabledSkills: string[];
   notifications: NotificationSettings;
   updates: UpdatesSettings;
   /** Id of the app icon color way in `assets/logos/manifest.json`; null uses the manifest default. */
@@ -189,6 +193,22 @@ export interface PlanStep {
 export interface ProviderSlashCommand {
   name: string;
   description: string | null;
+}
+
+/** A skill in Patchwork's skills folder; "$name" in a message invokes it. */
+export interface Skill {
+  name: string;
+  description: string | null;
+  /** Its `SKILL.md`. */
+  path: string;
+  /** Switched on in Settings; agents only load enabled skills. */
+  enabled: boolean;
+}
+
+export interface SkillsView {
+  /** The skills folder in use. */
+  dir: string;
+  skills: Skill[];
 }
 
 /** How much an agent may do without asking. */
@@ -441,6 +461,8 @@ export const DEFAULT_SETTINGS: Settings = {
   activeProjectId: null,
   agentPaths: {},
   shell: null,
+  skillsDir: null,
+  disabledSkills: [],
   tokens: {
     showUsage: true,
     warnAbove: 150_000,
@@ -563,6 +585,8 @@ export const api = {
   }) => invoke<ApiModel[]>("fetch_api_models", { query }),
   /** Installed login shells, as paths from /etc/shells, and the default shell's path. */
   listShells: () => invoke<ShellChoices>("list_shells"),
+  listSkills: () => invoke<SkillsView>("list_skills"),
+  openSkillsFolder: () => invoke<void>("open_skills_folder"),
   /** Subscription usage limits. Cached by the backend; `refresh` asks for new
    * numbers, which it still throttles to avoid provider rate limits. */
   getUsage: (kind: AgentKind, refresh = false) =>
