@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowClockwiseIcon,
   CaretDownIcon,
+  CheckIcon,
   EyeIcon,
   EyeSlashIcon,
   ImageIcon,
@@ -578,19 +579,26 @@ function Models({
             {shown.length === 0 && (
               <div className="px-2 py-1.5 text-[length:var(--fs-sm)] text-fg-muted">No models</div>
             )}
-            {shown.map((m) => (
-              <label
-                key={m.id}
-                className="flex cursor-pointer items-center gap-2 px-2 py-1 font-mono text-[length:var(--fs-sm)] hover:bg-hover"
-              >
-                <input
-                  type="checkbox"
-                  checked={chosen.has(m.id)}
-                  onChange={() => (chosen.has(m.id) ? removeModel(m.id) : add(m.id))}
-                />
-                {m.id}
-              </label>
-            ))}
+            {shown.map((m) => {
+              const on = chosen.has(m.id);
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="checkbox"
+                  aria-checked={on}
+                  className="flex w-full cursor-pointer items-center gap-2 border-none bg-transparent px-2 py-1 text-left font-mono text-[length:var(--fs-sm)] text-fg hover:bg-hover"
+                  onClick={() => (on ? removeModel(m.id) : add(m.id))}
+                >
+                  <span
+                    className={`inline-flex size-4 flex-none items-center justify-center rounded-[var(--radius-sm)] border text-on-accent ${on ? "border-accent bg-accent" : "border-border-strong"}`}
+                  >
+                    {on && <CheckIcon size={11} weight="bold" />}
+                  </span>
+                  <span className="min-w-0 truncate">{m.id}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
