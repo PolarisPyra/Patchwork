@@ -69,14 +69,24 @@ fn list_skills(server: Srv) -> SkillsView {
 
 /// Opens the skills folder in the file manager, creating it first.
 #[tauri::command]
-#[cfg_attr(target_os = "linux", allow(unused_variables))]
 fn open_skills_folder(app: AppHandle, server: Srv) -> Res<()> {
-    let dir = patchwork_server::skills::dir(&server.store.settings());
-    std::fs::create_dir_all(&dir).map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
+    open_folder(&app, &patchwork_server::skills::dir(&server.store.settings()))
+}
+
+/// Opens the folder of the debug logs in the file manager, creating it first.
+#[tauri::command]
+fn open_logs_folder(app: AppHandle) -> Res<()> {
+    let dir = app.path().config_dir().map_err(|e| e.to_string())?.join("patchwork/logs");
+    open_folder(&app, &dir)
+}
+
+#[cfg_attr(target_os = "linux", allow(unused_variables))]
+fn open_folder(app: &AppHandle, dir: &std::path::Path) -> Res<()> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
     #[cfg(target_os = "linux")]
     {
         let mut child = patchwork_server::host_command("xdg-open")
-            .arg(&dir)
+            .arg(dir)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
@@ -712,6 +722,7 @@ pub fn run() {
             list_shells,
             list_skills,
             open_skills_folder,
+            open_logs_folder,
             list_models,
             list_api_providers,
             save_api_provider,

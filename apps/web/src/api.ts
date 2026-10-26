@@ -41,6 +41,8 @@ export interface Settings {
   activeProjectId: string | null;
   /** Stops writing `logs/imports.log` in the config folder. */
   importLogDisabled: boolean;
+  /** Stops writing `logs/agents.log` in the config folder. */
+  agentLogDisabled: boolean;
   tokens: TokenSettings;
   /** Shell that agents run commands in; null follows the SHELL environment variable. */
   shell: string | null;
@@ -499,6 +501,7 @@ export const DEFAULT_SETTINGS: Settings = {
   updates: { checkEveryMinutes: 10 },
   logo: null,
   importLogDisabled: false,
+  agentLogDisabled: false,
 };
 
 /** Agent used for new tasks: the first connected one, else Claude Code. */
@@ -611,6 +614,7 @@ export const api = {
   listShells: () => invoke<ShellChoices>("list_shells"),
   listSkills: () => invoke<SkillsView>("list_skills"),
   openSkillsFolder: () => invoke<void>("open_skills_folder"),
+  openLogsFolder: () => invoke<void>("open_logs_folder"),
   /** Subscription usage limits. Cached by the backend; `refresh` asks for new
    * numbers, which it still throttles to avoid provider rate limits. */
   getUsage: (kind: AgentKind, refresh = false) =>

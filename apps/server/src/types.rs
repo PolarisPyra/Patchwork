@@ -82,6 +82,8 @@ pub struct Settings {
     pub logo: Option<String>,
     /// Stops writing `logs/imports.log` in the config folder.
     pub import_log_disabled: bool,
+    /// Stops writing `logs/agents.log` in the config folder.
+    pub agent_log_disabled: bool,
 }
 
 /// How Patchwork keeps itself up to date.

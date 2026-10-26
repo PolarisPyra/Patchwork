@@ -1,6 +1,7 @@
 //! Patchwork's backend. The desktop shell exposes these methods as Tauri
 //! commands and forwards agent events to the UI.
 
+mod debug_log;
 pub mod import;
 pub mod orchestration;
 pub mod persistence;
@@ -296,8 +297,10 @@ impl Server {
         skills::init(&config_dir);
         std::thread::spawn(scope::prepare);
         let clis_dir = config_dir.join("clis");
-        import::debug_log::init(config_dir.join("logs/imports.log"));
+        import::debug_log::LOG.init(config_dir.join("logs/imports.log"));
+        debug_log::AGENTS.init(config_dir.join("logs/agents.log"));
         let store = Store::open(config_dir)?;
+        debug_log::AGENTS.set_enabled(!store.settings().agent_log_disabled);
         let interrupted = orchestration::recovery::recover(&store)?;
         Ok(Arc::new(Self {
             store,
@@ -444,6 +447,7 @@ impl Server {
     // ---- settings & projects ---------------------------------------------
 
     pub fn save_settings(&self, settings: Settings) -> Res<()> {
+        debug_log::AGENTS.set_enabled(!settings.agent_log_disabled);
         self.store.update_settings(|s| *s = settings)
     }
 
@@ -1184,7 +1188,7 @@ impl Server {
 
     /// Follows the setting before a scan or import writes to the import log.
     fn start_import_log(&self, what: &str) {
-        import::debug_log::set_enabled(!self.store.settings().import_log_disabled);
+        import::debug_log::LOG.set_enabled(!self.store.settings().import_log_disabled);
         ilog!("{what}");
     }
 

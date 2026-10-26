@@ -28,12 +28,14 @@ use crate::types::MessageStatus;
 use crate::types::new_id;
 use crate::types::now_ms;
 use crate::types::Role;
+use crate::debug_log::alog;
 use crate::workspace;
 use super::FollowUpInput;
 use super::checkpoint;
 use super::claude;
 use super::codex;
 use super::ingest::ingest;
+use super::process::AgentStdin;
 use super::process::close_stdin_unless_steered;
 use super::process::read_stderr_tail;
 use super::process::Stdin;
@@ -211,6 +213,12 @@ impl Runner {
         let mut child = cmd
             .spawn()
             .map_err(|e| format!("Failed to start agent: {e}"))?;
+        let pid = child.id();
+        alog!(
+            "{pid} started {agent:?} for thread {thread_id} in {root}: {} {}",
+            cmd.get_program().to_string_lossy(),
+            args.join(" ")
+        );
         let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
             return Err("Agent output is unavailable".into());
         };
@@ -218,8 +226,8 @@ impl Runner {
         if sends_context {
             server.store.update_thread(&thread_id, |t| t.context_pending = false)?;
         }
-        let stderr_tail = std::thread::spawn(move || read_stderr_tail(stderr));
-        let stdin: Stdin = Arc::new(Mutex::new(child.stdin.take()));
+        let stderr_tail = std::thread::spawn(move || read_stderr_tail(stderr, pid));
+        let stdin: Stdin = Arc::new(Mutex::new(AgentStdin::take(&mut child)));
         input.iter().for_each(|line| {
             write_line(&stdin, line);
         });

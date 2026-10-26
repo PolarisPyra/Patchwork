@@ -2,6 +2,7 @@
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Write;
+use std::process::Child;
 use std::process::ChildStderr;
 use std::process::ChildStdin;
 use std::process::ExitStatus;
@@ -12,6 +13,7 @@ use std::sync::Mutex;
 use std::sync::PoisonError;
 use std::time::Duration;
 
+use crate::debug_log::alog;
 use crate::workspace;
 use super::queue::Steers;
 
@@ -39,23 +41,38 @@ pub(super) const IDLE_LIMIT: Duration = Duration::from_secs(30 * 60);
 pub(super) const WATCH_EVERY: Duration = Duration::from_secs(60);
 
 /// The agent's stdin; None once the turn has finished.
-pub(super) type Stdin = Arc<Mutex<Option<ChildStdin>>>;
+pub(super) type Stdin = Arc<Mutex<Option<AgentStdin>>>;
+
+/// The agent's stdin pipe, with its pid for the agent log.
+pub(super) struct AgentStdin {
+    pipe: ChildStdin,
+    pid: u32,
+}
+
+impl AgentStdin {
+    pub(super) fn take(child: &mut Child) -> Option<Self> {
+        let pid = child.id();
+        child.stdin.take().map(|pipe| Self { pipe, pid })
+    }
+}
 
 /// Writes one line to the agent's stdin, if it is still open.
-pub(super) fn write_line(stdin: &Mutex<Option<ChildStdin>>, line: &str) -> bool {
+pub(super) fn write_line(stdin: &Mutex<Option<AgentStdin>>, line: &str) -> bool {
     write_to(
         &mut stdin.lock().unwrap_or_else(PoisonError::into_inner),
         line,
     )
 }
 
-pub(super) fn write_to(stdin: &mut Option<ChildStdin>, line: &str) -> bool {
-    let Some(pipe) = stdin.as_mut() else {
+pub(super) fn write_to(stdin: &mut Option<AgentStdin>, line: &str) -> bool {
+    let Some(AgentStdin { pipe, pid }) = stdin.as_mut() else {
         return false;
     };
+    alog!("{pid} > {line}");
     match writeln!(pipe, "{line}").and_then(|()| pipe.flush()) {
         Ok(()) => true,
         Err(e) => {
+            alog!("{pid} write failed: {e}");
             log::warn!("failed to write to agent: {e}");
             false
         }
@@ -139,12 +156,14 @@ pub(super) fn next_line(reader: &mut impl BufRead) -> Option<String> {
 }
 
 /// Reads all of stderr but keeps only roughly the last `STDERR_TAIL_BYTES`.
-pub(super) fn read_stderr_tail(stderr: ChildStderr) -> String {
+pub(super) fn read_stderr_tail(stderr: ChildStderr, pid: u32) -> String {
     let mut reader = BufReader::new(stderr);
     let mut tail = String::new();
     let mut line = Vec::new();
     while reader.read_until(b'\n', &mut line).unwrap_or(0) > 0 {
-        tail.push_str(&String::from_utf8_lossy(&line));
+        let text = String::from_utf8_lossy(&line);
+        alog!("{pid} ! {}", text.trim_end());
+        tail.push_str(&text);
         line.clear();
         if tail.len() > STDERR_TAIL_BYTES {
             let mut cut = tail.len() - STDERR_TAIL_BYTES;

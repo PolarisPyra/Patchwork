@@ -15,6 +15,7 @@ import {
   PlugsConnectedIcon,
   PlusIcon,
   RobotIcon,
+  ScrollIcon,
   TerminalIcon,
   TrashIcon,
   XIcon,
@@ -62,6 +63,7 @@ type Section =
   | "skills"
   | "projects"
   | "shortcuts"
+  | "logging"
   | "updates";
 
 const SECTIONS: { id: Section; label: string; Icon: Icon }[] = [
@@ -75,6 +77,7 @@ const SECTIONS: { id: Section; label: string; Icon: Icon }[] = [
   { id: "skills", label: "Skills", Icon: BooksIcon },
   { id: "projects", label: "Projects", Icon: FolderSimpleIcon },
   { id: "shortcuts", label: "Shortcuts", Icon: KeyboardIcon },
+  { id: "logging", label: "Logging", Icon: ScrollIcon },
   { id: "updates", label: "Updates", Icon: ArrowCircleUpIcon },
 ];
 
@@ -141,6 +144,7 @@ export default function SettingsDialog({
             {section === "skills" && <SkillsPane {...paneProps} />}
             {section === "projects" && <ProjectsPane {...paneProps} />}
             {section === "shortcuts" && <KeybindingsPane />}
+            {section === "logging" && <LoggingPane {...paneProps} />}
             {section === "updates" && <UpdatesPane {...paneProps} />}
           </div>
         </div>
@@ -835,13 +839,44 @@ function ImportsPane({
         );
       })}
       {error && <div className="text-[length:var(--fs-sm)] text-danger">{error}</div>}
-      <TokenRow title="Import log" desc="Writes each scan and import to logs/imports.log">
+    </>
+  );
+}
+
+/** The debug logs in the config folder's `logs`, which people can send with a bug report. */
+function LoggingPane({ settings, updateSettings }: PaneProps) {
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <>
+      <TokenRow
+        title="Agent activity"
+        desc="Everything sent to and printed by each agent, in logs/agents.log"
+      >
         <TokenSwitch
-          label="Import log"
+          label="Agent activity"
+          on={!settings.agentLogDisabled}
+          onChange={(on) => void updateSettings((s) => ({ ...s, agentLogDisabled: !on }))}
+        />
+      </TokenRow>
+      <TokenRow
+        title="Conversation imports"
+        desc="Each search for saved conversations and what it imported, in logs/imports.log"
+      >
+        <TokenSwitch
+          label="Conversation imports"
           on={!settings.importLogDisabled}
           onChange={(on) => void updateSettings((s) => ({ ...s, importLogDisabled: !on }))}
         />
       </TokenRow>
+      <TokenRow title="Log folder">
+        <button
+          className="btn"
+          onClick={() => api.openLogsFolder().catch((e) => setError(errorText(e)))}
+        >
+          Open
+        </button>
+      </TokenRow>
+      {error && <div className="mt-2 text-[length:var(--fs-sm)] text-danger">{error}</div>}
     </>
   );
 }

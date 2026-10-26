@@ -26,6 +26,7 @@ use crate::types::Goal;
 use crate::types::GoalStatus;
 use crate::types::MessageStatus;
 use crate::types::new_id;
+use crate::debug_log::alog;
 use crate::workspace;
 
 use super::attribution;
@@ -96,6 +97,7 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
 
     let mut stdout = BufReader::new(stdout);
     while let Some(line) = next_line(&mut stdout) {
+        alog!("{pid} < {line}");
         let Ok(value) = serde_json::from_str::<Value>(&line) else {
             continue;
         };
@@ -493,6 +495,7 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
     });
 
     let exit = child.wait().ok();
+    alog!("{pid} exited: {}", exit.map_or("unknown".into(), |s| s.to_string()));
     // Whatever the agent left running in its group or scope (MCP servers, background
     // commands) would otherwise outlive the turn and keep its memory in the agents' slice.
     workspace::signal_process_group(pid, workspace::SIGKILL);
@@ -618,6 +621,7 @@ mod tests {
     use std::io::BufRead;
     use crate::types::AccessMode;
     use std::sync::Mutex;
+    use crate::orchestration::process::AgentStdin;
     use crate::orchestration::process::Stdin;
     use std::process::Stdio;
     use crate::provider::TurnSpec;
@@ -686,7 +690,7 @@ mod tests {
             .stderr(Stdio::piped())
             .spawn()
             .unwrap();
-        let stdin: Stdin = Arc::new(Mutex::new(child.stdin.take()));
+        let stdin: Stdin = Arc::new(Mutex::new(AgentStdin::take(&mut child)));
         for line in &input {
             write_line(&stdin, line);
         }
