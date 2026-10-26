@@ -217,6 +217,12 @@ export default memo(function Sidebar(props: SidebarProps) {
     <aside
       className="relative flex min-h-0 flex-none flex-col border-r border-border bg-panel text-[length:var(--fs-md)] [--fs-xs:13px] [--fs-sm:14px] [--fs-md:15px]"
       style={{ width, flex: `0 0 ${width}px` }}
+      onContextMenu={(e) => {
+        // Rows open their own menus and prevent default; only the sidebar's bare area gets this one.
+        if (e.defaultPrevented) return;
+        e.preventDefault();
+        setWidthMenu({ x: e.clientX, y: e.clientY });
+      }}
     >
       <div
         role="separator"
@@ -225,10 +231,6 @@ export default memo(function Sidebar(props: SidebarProps) {
         className={`absolute top-0 -right-[3px] bottom-0 z-10 w-1.5 ${locked ? "" : "cursor-col-resize hover:bg-accent/40"}`}
         onMouseDown={startResize}
         onDoubleClick={resetWidth}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          setWidthMenu({ x: e.clientX, y: e.clientY });
-        }}
       />
       {widthMenu && (
         <ContextMenu
