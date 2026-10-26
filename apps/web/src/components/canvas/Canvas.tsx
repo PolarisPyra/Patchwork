@@ -8,7 +8,7 @@ import {
   CopyIcon,
   XIcon,
 } from "@phosphor-icons/react";
-import { api, onProjectFilesChanged, type FileChange, type Message } from "~/api";
+import { api, onProjectChanged, type FileChange, type Message } from "~/api";
 import CodeView from "~/components/canvas/CodeView";
 import DiffView from "~/components/canvas/DiffView";
 import PlanView from "~/components/canvas/PlanView";
@@ -23,6 +23,8 @@ export interface CanvasProps {
   /** Assistant message whose plan (Plan tab) and files are shown; null if none. */
   message: Message | null;
   initialTab?: CanvasTab;
+  /** The project's uncommitted changes, which the workspace keeps current. */
+  changes: FileChange[];
   onClose: () => void;
   /** Called after Apply/Reject succeeds so the parent can refresh git state. */
   onChangesUpdated: () => void;
@@ -35,11 +37,6 @@ interface Loaded<T> {
   error?: string;
 }
 
-interface ChangesState {
-  projectId: string;
-  items: FileChange[];
-}
-
 function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
@@ -49,13 +46,13 @@ export default function Canvas({
   path,
   message,
   initialTab,
+  changes,
   onClose,
   onChangesUpdated,
 }: CanvasProps) {
   const [tab, setTab] = useState<CanvasTab>(initialTab ?? (path ? "code" : "plan"));
   const [file, setFile] = useState<Loaded<string> | null>(null);
   const [diffResult, setDiffResult] = useState<Loaded<string> | null>(null);
-  const [changesState, setChangesState] = useState<ChangesState | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -68,7 +65,7 @@ export default function Canvas({
     setTab(initialTab ?? (path ? "code" : "plan"));
   }, [path, initialTab]);
 
-  // Reload content, diff and git state whenever the file changes or a reload is requested.
+  // Reload content and diff whenever the file changes or a reload is requested.
   useEffect(() => {
     let live = true;
     if (path) {
@@ -89,36 +86,21 @@ export default function Canvas({
         },
       );
     }
-    api.gitChanges(projectId).then(
-      (items) => {
-        if (live) setChangesState({ projectId, items });
-      },
-      (e: unknown) => {
-        if (live) {
-          setChangesState({ projectId, items: [] });
-          setActionError(errorMessage(e));
-        }
-      },
-    );
     return () => {
       live = false;
     };
   }, [key, projectId, path, reloadToken]);
 
-  // Files can change outside the agent's stream too; reload once a burst of writes settles.
+  // The workspace's watcher reports settled bursts of changes. Reload when one touched this file,
+  // or `.git`, since staging and commits change its diff.
   useEffect(() => {
-    let timer: number | undefined;
-    api.watchProject(projectId).catch((e: unknown) => setActionError(errorMessage(e)));
-    const unlisten = onProjectFilesChanged((changed) => {
-      if (changed !== projectId) return;
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => setReloadToken((n) => n + 1), 200);
+    if (!path) return;
+    const unlisten = onProjectChanged((e) => {
+      if (e.projectId !== projectId) return;
+      if (e.paths.some((p) => p === path || p.startsWith(".git/"))) setReloadToken((n) => n + 1);
     });
-    return () => {
-      window.clearTimeout(timer);
-      unlisten.then((stop) => stop());
-    };
-  }, [projectId]);
+    return () => void unlisten.then((stop) => stop());
+  }, [projectId, path]);
 
   // The agent may have edited the file while it was streaming.
   const status = message?.status;
@@ -138,13 +120,11 @@ export default function Canvas({
 
   const code = file?.key === key ? file : null;
   const diff = diffResult?.key === key ? diffResult : null;
-  const change =
-    changesState?.projectId === projectId
-      ? changesState.items.find((c) => c.path === path)
-      : undefined;
+  const change = changes.find((c) => c.path === path);
 
   const name = path ? (path.split("/").pop() ?? path) : "No file selected";
   const kind = path ? describeFile(path) : null;
+  const dir = path && path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : null;
   const content = code?.value;
   const lineCount = content === undefined ? null : splitLines(content).length;
   const planCount = message?.plan.length ?? 0;
@@ -243,8 +223,10 @@ export default function Canvas({
             {name}
           </div>
           {kind && (
-            <div className="text-[length:var(--fs-sm)] text-fg-muted tabular-nums select-text">
-              {lineCount === null ? kind.label : `${kind.label} · ${lineCount} lines`}
+            <div className="truncate text-[length:var(--fs-sm)] text-fg-muted tabular-nums select-text">
+              {[dir, kind.label, lineCount === null ? null : `${lineCount} lines`]
+                .filter(Boolean)
+                .join(" · ")}
             </div>
           )}
         </div>

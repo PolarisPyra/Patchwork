@@ -678,6 +678,9 @@ export const api = {
   ) => invoke<void>("respond_approval", { threadId, approvalId, allow, answers }),
 
   readFile: (projectId: string, path: string) => invoke<string>("read_file", { projectId, path }),
+  /** Which of `paths` no longer exist in the project. */
+  missingFiles: (projectId: string, paths: string[]) =>
+    invoke<string[]>("missing_files", { projectId, paths }),
   gitBranch: (projectId: string) => invoke<string | null>("git_branch", { projectId }),
   gitChanges: (projectId: string) => invoke<FileChange[]>("git_changes", { projectId }),
   /** Unified diff text for one file (empty string if unchanged). */
@@ -689,7 +692,7 @@ export const api = {
   revertFile: (projectId: string, path: string) => invoke<void>("revert_file", { projectId, path }),
   openInEditor: (projectId: string, path: string) =>
     invoke<void>("open_in_editor", { projectId, path }),
-  /** Starts watching the project's files; `onProjectFilesChanged` then reports changes. */
+  /** Watches the project's files in place of any other; `onProjectChanged` reports changes. */
   watchProject: (projectId: string) => invoke<void>("watch_project", { projectId }),
   /** Opens a web or mail link in the default browser or mail app. */
   openUrl: (url: string) => invoke<void>("open_url", { url }),
@@ -704,8 +707,18 @@ export function onAgentEvent(cb: (e: AgentEventEnvelope) => void): Promise<Unlis
   return listen<AgentEventEnvelope>("agent-event", (e) => cb(e.payload));
 }
 
-export function onProjectFilesChanged(cb: (projectId: string) => void): Promise<UnlistenFn> {
-  return listen<string>("project-files-changed", (e) => cb(e.payload));
+/** A settled burst of file changes in the watched project, with git's state after it. */
+export interface ProjectChanged {
+  projectId: string;
+  /** Project-relative paths the burst touched; `.git/...` for commits, staging and checkouts. */
+  paths: string[];
+  branch: string | null;
+  /** Null when `git status` failed. */
+  changes: FileChange[] | null;
+}
+
+export function onProjectChanged(cb: (e: ProjectChanged) => void): Promise<UnlistenFn> {
+  return listen<ProjectChanged>("project-changed", (e) => cb(e.payload));
 }
 
 export function onUpdateStatus(cb: (status: UpdateStatus) => void): Promise<UnlistenFn> {

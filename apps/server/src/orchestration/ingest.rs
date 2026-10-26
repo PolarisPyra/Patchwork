@@ -20,12 +20,17 @@ use crate::types::AgentKind;
 use crate::types::Approval;
 use crate::types::ApprovalStatus;
 use crate::types::BackgroundTask;
+#[cfg(test)]
 use crate::types::FileChange;
 use crate::types::Goal;
 use crate::types::GoalStatus;
 use crate::types::MessageStatus;
 use crate::types::new_id;
 use crate::workspace;
+
+use super::attribution;
+#[cfg(test)]
+use super::attribution::changed_paths;
 use super::goal::end_input;
 use super::goal;
 use super::process::exit_error;
@@ -510,7 +515,8 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
     });
 
     let after = workspace::git_changes(&turn.root).unwrap_or_default();
-    changed_paths(&turn.baseline, &after)
+    let changed = attribution::lock(&turn.attribution).settle(after);
+    changed
         .into_iter()
         .for_each(|path| {
             turn.publish(AgentEvent::FileTouched {
@@ -554,15 +560,13 @@ fn can_idle(
 fn go_idle(turn: &mut Turn, segments: &[String], completed: &mut usize, unsaved: &mut Unsaved) {
     turn.save_text(unsaved);
     let after = workspace::git_changes(&turn.root).unwrap_or_default();
-    changed_paths(&turn.baseline, &after)
-        .into_iter()
-        .for_each(|path| {
-            turn.publish(AgentEvent::FileTouched {
-                message_id: turn.message_id.clone(),
-                path,
-            });
+    let changed = attribution::lock(&turn.attribution).settle(after);
+    changed.into_iter().for_each(|path| {
+        turn.publish(AgentEvent::FileTouched {
+            message_id: turn.message_id.clone(),
+            path,
         });
-    turn.baseline = after;
+    });
     segments[*completed..].iter().for_each(|id| {
         turn.publish(AgentEvent::TurnCompleted {
             message_id: id.clone(),
@@ -572,21 +576,6 @@ fn go_idle(turn: &mut Turn, segments: &[String], completed: &mut usize, unsaved:
     });
     *completed = segments.len();
     turn.idle.store(true, Ordering::SeqCst);
-}
-
-/// Paths whose git status or line counts differ between two snapshots.
-pub(super) fn changed_paths(before: &[FileChange], after: &[FileChange]) -> Vec<String> {
-    let key = |c: &FileChange| (c.status.clone(), c.additions, c.deletions);
-    after
-        .iter()
-        .filter(|a| {
-            before
-                .iter()
-                .find(|b| b.path == a.path)
-                .is_none_or(|b| key(b) != key(a))
-        })
-        .map(|a| a.path.clone())
-        .collect()
 }
 
 #[cfg(test)]

@@ -598,6 +598,18 @@ pub struct FileChange {
     pub staged: bool,
 }
 
+/// A settled burst of file changes in the watched project, with git's state after it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectChanged {
+    pub project_id: String,
+    /// Project-relative paths the burst touched; `.git/...` for commits, staging and checkouts.
+    pub paths: Vec<String>,
+    pub branch: Option<String>,
+    /// None when `git status` failed, so the last good list stays.
+    pub changes: Option<Vec<FileChange>>,
+}
+
 /// One rate-limit window, e.g. the 5-hour session limit.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

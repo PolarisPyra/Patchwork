@@ -14,6 +14,7 @@ import { confirm } from "@tauri-apps/plugin-dialog";
 import {
   api,
   defaultAgentOf,
+  onProjectChanged,
   type FileChange,
   type Message,
   type Settings,
@@ -110,7 +111,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     setEffort,
     send,
     startThread,
-  } = useThreads(settings.activeProjectId, () => void refreshGit());
+  } = useThreads(settings.activeProjectId);
   // The selected thread decides the project (null: a chat without a project);
   // with nothing selected, the last active project does.
   const project =
@@ -214,6 +215,19 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   useEffect(() => {
     void refreshGit();
   }, [refreshGit]);
+
+  // The backend watches the active project and sends git's state after each settled burst of
+  // changes, whoever made them: an agent, an editor, or git in a terminal.
+  useEffect(() => {
+    if (!projectId) return;
+    api.watchProject(projectId).catch((e: unknown) => setError(errorText(e)));
+    const unlisten = onProjectChanged((e) => {
+      if (e.projectId === projectId && e.changes) {
+        setGit({ projectId, branch: e.branch, changes: e.changes });
+      }
+    });
+    return () => void unlisten.then((stop) => stop());
+  }, [projectId]);
 
   function attempt(fn: () => Promise<unknown>) {
     setError(null);
@@ -576,7 +590,8 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     onOpenFolder: openFolder,
     onDropFolders: dropFolders,
     onRefreshChanges: () => attempt(refreshGit),
-    onOpenChange: (path: string) => openCanvasAt(path, null, "diff"),
+    onOpenChange: (path: string) =>
+      openCanvasAt(path, null, changes.some((c) => c.path === path) ? "diff" : "code"),
     onOpenPalette: () => setPaletteOpen(true),
   });
 
@@ -676,6 +691,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
                     path={openCanvas.path}
                     message={openCanvas.message}
                     initialTab={openCanvas.tab}
+                    changes={changes}
                     onClose={() => setCanvas(null)}
                     onChangesUpdated={() => void refreshGit()}
                   />

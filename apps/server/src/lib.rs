@@ -9,6 +9,7 @@ mod scope;
 mod time;
 pub mod types;
 pub mod usage;
+pub mod watch;
 pub mod workspace;
 
 use std::path::{Path, PathBuf};
@@ -49,6 +50,8 @@ pub struct Server {
     /// Where Patchwork installs agent CLIs (`clis` under the config folder).
     clis_dir: PathBuf,
     sink: EventSink,
+    /// The watcher on the active project, with that project's id.
+    project_watch: std::sync::Mutex<Option<(String, watch::ProjectWatcher)>>,
 }
 
 /// Trims a user-entered name; blank names are refused.
@@ -297,6 +300,7 @@ impl Server {
             pasted_dir: data_dir.join("pasted"),
             clis_dir,
             sink,
+            project_watch: std::sync::Mutex::default(),
         }))
     }
 
@@ -380,6 +384,43 @@ impl Server {
         let mut attachment = Attachment::from_path(&path.to_string_lossy())?;
         attachment.name = "Pasted text.txt".to_string();
         Ok(attachment)
+    }
+
+    /// Watches the project for changes, in place of any project watched before. After each
+    /// settled burst it runs one `git status`, adds what replies under way there changed to
+    /// them, and passes the result to `on_change`.
+    pub fn watch_project(
+        self: &Arc<Self>,
+        project_id: &str,
+        on_change: impl Fn(types::ProjectChanged) + Send + 'static,
+    ) -> Res<()> {
+        let mut current = self
+            .project_watch
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if current.as_ref().is_some_and(|(id, _)| id == project_id) {
+            return Ok(());
+        }
+        let root = self.project_root(project_id)?;
+        let watched = PathBuf::from(&root);
+        // The watcher lives in the server, so it holds the server weakly.
+        let server = Arc::downgrade(self);
+        let id = project_id.to_string();
+        let watcher = watch::ProjectWatcher::start(&watched, move |burst| {
+            let Some(server) = server.upgrade() else { return };
+            let changes = workspace::git_changes(&root).ok();
+            if let Some(changes) = &changes {
+                server.note_project_changes(&id, changes, &burst);
+            }
+            on_change(types::ProjectChanged {
+                project_id: id.clone(),
+                paths: burst.into_iter().map(|c| c.path).collect(),
+                branch: workspace::git_branch(&root),
+                changes,
+            });
+        })?;
+        *current = Some((project_id.to_string(), watcher));
+        Ok(())
     }
 
     pub fn project_root(&self, project_id: &str) -> Res<String> {

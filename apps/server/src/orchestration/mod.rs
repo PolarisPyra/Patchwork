@@ -6,6 +6,7 @@
 pub mod checkpoint;
 pub mod claude;
 pub mod codex;
+mod attribution;
 mod ingest;
 pub(crate) mod goal;
 mod process;
@@ -115,6 +116,16 @@ impl Runner {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .contains_key(thread_id)
+    }
+
+    /// The threads with a reply under way, each with what its files are judged by.
+    fn attributions(&self) -> Vec<(String, attribution::SharedAttribution)> {
+        let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+        turns
+            .iter()
+            .filter(|(_, turn)| !turn.idle.load(Ordering::SeqCst))
+            .map(|(id, turn)| (id.clone(), turn.attribution.clone()))
+            .collect()
     }
 
     /// The threads with a reply under way.

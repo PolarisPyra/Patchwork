@@ -6,10 +6,8 @@ mod logo;
 mod updates;
 
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use patchwork_server::types::{AgentKind, Project, Settings, AgentStatus, ModelOption, ShellChoices, Role, MessageStatus, AccessMode, Attachment, Message, Thread, Folder, GoalStatus, FileChange, ProviderUsage, ImportSource, ImportScan, AgentEventEnvelope, AgentEvent};
 use patchwork_server::{NewThread, Res, Server, orchestration, persistence, provider};
 use tauri::menu::{Menu, MenuItem};
@@ -19,12 +17,6 @@ use tauri_plugin_notification::NotificationExt;
 
 type Srv<'a> = State<'a, Arc<Server>>;
 
-/// Holds the watcher for the project the canvas has open. Replacing it stops the old one.
-#[derive(Default)]
-struct ProjectWatch(Mutex<Option<RecommendedWatcher>>);
-
-/// Build output and git internals change constantly and never affect what the canvas shows.
-const IGNORED_DIRS: [&str; 3] = [".git", "target", "node_modules"];
 
 /// Runs blocking work (CLI probes, network, disk scans) off the main thread.
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Res<T> {
@@ -391,57 +383,42 @@ async fn import_threads(server: Srv<'_>, kinds: Vec<ImportSource>) -> Res<u32> {
 use patchwork_server::workspace;
 
 #[tauri::command]
-fn read_file(server: Srv, project_id: String, path: String) -> Res<String> {
-    workspace::read_file(&server.project_root(&project_id)?, &path)
+async fn missing_files(server: Srv<'_>, project_id: String, paths: Vec<String>) -> Res<Vec<String>> {
+    let root = server.project_root(&project_id)?;
+    blocking(move || workspace::missing_files(&root, &paths)).await
 }
 
 #[tauri::command]
-fn git_branch(server: Srv, project_id: String) -> Res<Option<String>> {
-    Ok(workspace::git_branch(&server.project_root(&project_id)?))
+async fn read_file(server: Srv<'_>, project_id: String, path: String) -> Res<String> {
+    let root = server.project_root(&project_id)?;
+    blocking(move || workspace::read_file(&root, &path)).await?
 }
 
 #[tauri::command]
-fn git_changes(server: Srv, project_id: String) -> Res<Vec<FileChange>> {
-    workspace::git_changes(&server.project_root(&project_id)?)
+async fn git_branch(server: Srv<'_>, project_id: String) -> Res<Option<String>> {
+    let root = server.project_root(&project_id)?;
+    blocking(move || workspace::git_branch(&root)).await
 }
 
 #[tauri::command]
-fn git_file_diff(server: Srv, project_id: String, path: String) -> Res<String> {
-    workspace::git_file_diff(&server.project_root(&project_id)?, &path)
+async fn git_changes(server: Srv<'_>, project_id: String) -> Res<Vec<FileChange>> {
+    let root = server.project_root(&project_id)?;
+    blocking(move || workspace::git_changes(&root)).await?
 }
 
-/// Emits `project-files-changed` with the project id when a file under the project changes.
 #[tauri::command]
-fn watch_project(
-    app: AppHandle,
-    server: Srv,
-    watch: State<ProjectWatch>,
-    project_id: String,
-) -> Res<()> {
-    let root = PathBuf::from(server.project_root(&project_id)?);
-    let event_root = root.clone();
-    let watched_id = project_id.clone();
-    let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-        let Ok(event) = res else { return };
-        if matches!(event.kind, EventKind::Access(_)) {
-            return;
-        }
-        let relevant = event.paths.iter().any(|path| {
-            path.strip_prefix(&event_root).is_ok_and(|rel| {
-                !rel.components()
-                    .any(|c| IGNORED_DIRS.iter().any(|dir| c.as_os_str() == *dir))
-            })
-        });
-        if relevant {
-            let _ = app.emit("project-files-changed", &watched_id);
-        }
+async fn git_file_diff(server: Srv<'_>, project_id: String, path: String) -> Res<String> {
+    let root = server.project_root(&project_id)?;
+    blocking(move || workspace::git_file_diff(&root, &path)).await?
+}
+
+/// Watches the active project in place of any other, emitting `project-changed` after each
+/// settled burst of changes.
+#[tauri::command]
+fn watch_project(app: AppHandle, server: Srv, project_id: String) -> Res<()> {
+    server.watch_project(&project_id, move |changed| {
+        let _ = app.emit("project-changed", changed);
     })
-    .map_err(|e| e.to_string())?;
-    watcher
-        .watch(&root, RecursiveMode::Recursive)
-        .map_err(|e| e.to_string())?;
-    *watch.0.lock().map_err(|e| e.to_string())? = Some(watcher);
-    Ok(())
 }
 
 #[tauri::command]
@@ -655,7 +632,6 @@ pub fn run() {
             server.continue_interrupted();
             let logo = server.store.settings().logo;
             app.manage(server);
-            app.manage(ProjectWatch::default());
             let tray = create_tray(app);
             if let Err(e) = &tray {
                 log::warn!("system tray unavailable, closing the window quits: {e}");
@@ -727,6 +703,7 @@ pub fn run() {
             scan_imports,
             import_threads,
             read_file,
+            missing_files,
             git_branch,
             git_changes,
             git_file_diff,

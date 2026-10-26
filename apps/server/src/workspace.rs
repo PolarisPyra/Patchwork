@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Output, Stdio};
+use std::sync::{LazyLock, Mutex, PoisonError};
+use std::time::SystemTime;
 
 use crate::types::{Project, FileChange, new_id};
 
@@ -85,6 +87,14 @@ fn resolve_inside(root: &str, rel: &str) -> Result<PathBuf, String> {
     }
 }
 
+/// The paths of `rels` that no longer exist in the project. A broken link still exists.
+pub fn missing_files(root: &str, rels: &[String]) -> Vec<String> {
+    rels.iter()
+        .filter(|rel| std::fs::symlink_metadata(Path::new(root).join(rel)).is_err())
+        .cloned()
+        .collect()
+}
+
 pub fn read_file(root: &str, rel: &str) -> Result<String, String> {
     let path = resolve_inside(root, rel)?;
     if !path.is_file() {
@@ -108,6 +118,9 @@ fn git_raw(root: &str, args: &[&str]) -> Result<Output, String> {
     crate::host_command("git")
         .args(args)
         .current_dir(root)
+        // Reads such as `git status` would otherwise rewrite the index, which the project
+        // watcher would report as a change.
+        .env("GIT_OPTIONAL_LOCKS", "0")
         .stdin(Stdio::null())
         .output()
         .map_err(|e| format!("Failed to run git: {e}"))
@@ -176,8 +189,29 @@ fn parse_numstat(out: &str) -> Vec<(String, u32, u32)> {
     entries
 }
 
-/// Number of lines in an untracked file; 0 for binary or unreadable files.
+/// A file's size and modified time, and the lines it had then.
+type Counted = (u64, SystemTime, u32);
+
+/// Line counts of untracked files, by path.
+static LINE_COUNTS: LazyLock<Mutex<HashMap<PathBuf, Counted>>> = LazyLock::new(Default::default);
+
+/// Number of lines in an untracked file; 0 for binary or unreadable files. A file is read again
+/// only once its size or modified time changes.
 fn line_count(path: &Path) -> u32 {
+    let stamp = std::fs::metadata(path).and_then(|m| Ok((m.len(), m.modified()?)));
+    let Ok((len, modified)) = stamp else { return 0 };
+    let mut cache = LINE_COUNTS.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(&(l, m, count)) = cache.get(path)
+        && (l, m) == (len, modified)
+    {
+        return count;
+    }
+    let count = count_lines(path);
+    cache.insert(path.to_path_buf(), (len, modified, count));
+    count
+}
+
+fn count_lines(path: &Path) -> u32 {
     match std::fs::read(path) {
         Ok(bytes) if !bytes.contains(&0) => {
             let newlines = bytes.iter().filter(|&&b| b == b'\n').count();
@@ -206,22 +240,38 @@ pub fn list_files(root: &str) -> Result<Vec<String>, String> {
         .collect())
 }
 
+/// The project's uncommitted changes with their line counts: `git status`, plus one
+/// `git diff HEAD` for the counts when a tracked file changed.
 pub fn git_changes(root: &str) -> Result<Vec<FileChange>, String> {
-    if !git_succeeds(root, &["rev-parse", "--is-inside-work-tree"]) {
-        return Ok(vec![]);
-    }
-    let status = git(
+    let out = git_raw(
         root,
         &["status", "--porcelain=v1", "-z", "--untracked-files=all"],
     )?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr);
+        // A folder that is not a git repository has no changes.
+        if err.contains("not a git repository") {
+            return Ok(vec![]);
+        }
+        return Err(format!("git status: {}", err.trim()));
+    }
+    let status = String::from_utf8_lossy(&out.stdout).into_owned();
 
     let mut counts: HashMap<String, (u32, u32)> = HashMap::new();
-    let numstat_args: [&[&str]; 2] = [
-        &["diff", "--numstat", "-z"],
-        &["diff", "--cached", "--numstat", "-z"],
-    ];
-    for args in numstat_args {
-        for (path, added, deleted) in parse_numstat(&git(root, args)?) {
+    let tracked_changed = status
+        .split('\0')
+        .any(|entry| entry.len() >= 4 && !entry.starts_with("??"));
+    if tracked_changed {
+        // Staged and unstaged changes in one diff against the last commit, as the diff view shows
+        // them. A repository with no commits yet has no HEAD, so its two parts are added up.
+        let numstats = match git(root, &["diff", "HEAD", "--numstat", "-z"]) {
+            Ok(out) => vec![out],
+            Err(_) => vec![
+                git(root, &["diff", "--numstat", "-z"])?,
+                git(root, &["diff", "--cached", "--numstat", "-z"])?,
+            ],
+        };
+        for (path, added, deleted) in numstats.iter().flat_map(|out| parse_numstat(out)) {
             let entry = counts.entry(path).or_default();
             entry.0 += added;
             entry.1 += deleted;

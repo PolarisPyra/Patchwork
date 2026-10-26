@@ -11,6 +11,7 @@ use std::sync::PoisonError;
 
 use serde_json::Value;
 
+use super::attribution::{self, Attribution, Reach, SharedAttribution};
 use crate::provider::TurnSpec;
 use crate::provider;
 use crate::scope;
@@ -19,7 +20,6 @@ use crate::types::AccessMode;
 use crate::types::AgentEvent;
 use crate::types::AgentKind;
 use crate::types::Attachment;
-use crate::types::FileChange;
 use crate::types::Goal;
 use crate::types::GoalStatus;
 use crate::types::Message;
@@ -72,6 +72,8 @@ pub(super) struct RunningTurn {
     /// The agent has finished its reply and stays up only for shell commands it left running;
     /// the thread counts as idle, and the next message starts a new reply in this process.
     pub(super) idle: Arc<AtomicBool>,
+    /// Shared with the project's watcher, which adds files to the reply as they change.
+    pub(super) attribution: SharedAttribution,
 }
 
 /// What a new turn sends to the agent, and the thread it belongs to.
@@ -162,7 +164,7 @@ impl Runner {
 
         // Agents often edit files through the shell, so changes are also found by
         // comparing git state before and after the turn.
-        let baseline = workspace::git_changes(&root).unwrap_or_default();
+        let attribution = Attribution::shared(workspace::git_changes(&root).unwrap_or_default());
         if let Some(message_id) = &checkpoint {
             checkpoint::capture(&root, &thread_id, message_id);
         }
@@ -222,7 +224,7 @@ impl Runner {
             cancelled: cancelled.clone(),
             timed_out: timed_out.clone(),
             exited: exited.clone(),
-            baseline,
+            attribution: attribution.clone(),
             scope,
             stdin: stdin.clone(),
             pending: pending.clone(),
@@ -262,6 +264,7 @@ impl Runner {
                     tasks,
                     controls,
                     idle,
+                    attribution,
                 },
             );
         turn.publish(AgentEvent::MessageStarted { message });
@@ -302,8 +305,8 @@ pub(super) struct Turn {
     /// Set when the turn ran past `TURN_TIMEOUT` and the agent was stopped for it.
     pub(super) timed_out: Arc<AtomicBool>,
     pub(super) exited: Arc<AtomicBool>,
-    /// `git status` of the project when the turn started.
-    pub(super) baseline: Vec<FileChange>,
+    /// The files this reply changed, as far as they are known yet.
+    pub(super) attribution: SharedAttribution,
     /// The agent's systemd scope, when agents run in scopes.
     pub(super) scope: Option<String>,
     pub(super) stdin: Stdin,
@@ -329,7 +332,38 @@ pub(super) struct Turn {
 
 impl Turn {
     pub(super) fn publish(&self, event: AgentEvent) {
+        // Changes that waited for a call to cover them, which this finished one does.
+        let covered = match &event {
+            AgentEvent::ToolStarted { tool, .. } => {
+                let reach = Reach::of(tool);
+                attribution::lock(&self.attribution).tool_started(&tool.id, tool.started_at, reach);
+                None
+            }
+            AgentEvent::ToolFinished { tool_id, message_id, .. } => {
+                let paths = attribution::lock(&self.attribution).tool_finished(tool_id);
+                Some((message_id.clone(), paths))
+            }
+            // A background command writes until it ends, after its call has returned.
+            AgentEvent::BackgroundTaskStarted { task, .. } => {
+                let reach = Reach::Anything(task.description.clone());
+                let id = background_id(&task.tool_id);
+                attribution::lock(&self.attribution).tool_started(&id, None, reach);
+                None
+            }
+            AgentEvent::BackgroundTaskEnded { tool_id, message_id } => {
+                let id = background_id(tool_id);
+                let paths = attribution::lock(&self.attribution).tool_finished(&id);
+                Some((message_id.clone(), paths))
+            }
+            _ => None,
+        };
         publish(&self.server, &self.thread_id, event);
+        if let Some((message_id, paths)) = covered {
+            for path in paths {
+                let touched = AgentEvent::FileTouched { message_id: message_id.clone(), path };
+                publish(&self.server, &self.thread_id, touched);
+            }
+        }
     }
 
     /// Starts a new assistant message for what the agent says after taking a steering
@@ -543,4 +577,9 @@ pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
             log::warn!("failed to start the turn for queued messages: {e}");
         }
     }
+}
+
+/// A background command's window, apart from its call's, which has the same id.
+fn background_id(tool_id: &str) -> String {
+    format!("background:{tool_id}")
 }

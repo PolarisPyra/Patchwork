@@ -2998,7 +2998,6 @@ version = "0.8.4"
 dependencies = [
  "glib",
  "log",
- "notify",
  "patchwork-server",
  "semver",
  "serde",
@@ -3025,6 +3024,7 @@ dependencies = [
  "keyring",
  "libc",
  "log",
+ "notify",
  "regex",
  "rusqlite",
  "serde",
