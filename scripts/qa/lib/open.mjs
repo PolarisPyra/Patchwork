@@ -8,11 +8,13 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const URL = "http://localhost:1420/";
 
-export async function openWorkspace({ width = 1200, height = 800 } = {}) {
+// `init` is a script run after the stub, for a check that needs more data than it has.
+export async function openWorkspace({ width = 1200, height = 800, init } = {}) {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width, height } });
   // Replaces the Tauri IPC with canned data so the workspace renders without the Rust backend.
   await page.addInitScript({ content: readFileSync(join(here, "tauri-stub.js"), "utf8") });
+  if (init) await page.addInitScript({ content: init });
   try {
     await page.goto(URL, { waitUntil: "networkidle", timeout: 15000 });
   } catch {

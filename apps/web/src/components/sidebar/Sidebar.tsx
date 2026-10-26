@@ -215,7 +215,7 @@ export default memo(function Sidebar(props: SidebarProps) {
   }
   return (
     <aside
-      className="relative flex min-h-0 flex-none flex-col border-r border-border bg-panel text-[length:var(--fs-md)] [--fs-xs:13px] [--fs-sm:14px] [--fs-md:15px]"
+      className="relative flex min-h-0 flex-none flex-col border-r border-border bg-panel text-[length:var(--fs-md)] [--fs-xs:12px] [--fs-sm:13px] [--fs-md:13px]"
       style={{ width, flex: `0 0 ${width}px` }}
       onContextMenu={(e) => {
         // Rows open their own menus and prevent default; only the sidebar's bare area gets this one.
@@ -371,9 +371,10 @@ function SectionLabel({
   ref?: Ref<HTMLDivElement>;
 }) {
   return (
+    // The negative right margin centers the action's icon on the rows' provider icons.
     <div
       ref={ref}
-      className="flex items-center justify-between px-1.5 pt-2.5 pb-1 text-[length:var(--fs-xs)] tracking-[0.06em] text-fg-muted uppercase"
+      className="-mr-0.5 flex items-center justify-between pt-2.5 pb-1 pl-1.5 text-[length:var(--fs-xs)] tracking-[0.06em] text-fg-muted uppercase"
     >
       <span>{children}</span>
       {action}
@@ -776,6 +777,7 @@ function TasksView({
           <ThreadRow
             thread={t}
             {...rowState(t)}
+            depth={0}
             drag={reorder.row(CHATS_GROUP, t.id, chatIds, null)}
           />
         </Collapse>
@@ -836,8 +838,7 @@ function TasksView({
               <ThreadRow
                 thread={t}
                 {...rowState(t)}
-                tree
-                nested={folderId !== null}
+                depth={folderId === null ? 1 : 2}
                 drag={reorder.row(group, t.id, ids, folderId)}
               />
             </Collapse>
@@ -854,7 +855,7 @@ function TasksView({
                   drag.attrs.onPointerDown(e);
                   if (!editing && isPlainPress(e)) pickRow(e, row);
                 }}
-                className={`group mx-1 flex h-7 cursor-pointer items-center rounded-[var(--radius-sm)] select-none border-none pr-1.5 pl-1 text-left text-fg ${drag.edge} ${drag.dragging ? "opacity-50" : ""} ${flashId === p.id ? "project-flash" : ""}`}
+                className={`group mx-1 flex h-[22px] cursor-pointer items-center rounded-[var(--radius-sm)] select-none border-none pr-1.5 pl-1 text-left text-fg ${drag.edge} ${drag.dragging ? "opacity-50" : ""} ${flashId === p.id ? "project-flash" : ""}`}
                 onClick={(e) => {
                   if (!pickRow(e, row)) toggle(p.id);
                 }}
@@ -954,7 +955,7 @@ function TasksView({
                           onPointerDown={(e) => {
                             if (!folderEditing && isPlainPress(e)) pickRow(e, folderRow);
                           }}
-                          className={`group mx-1 flex h-7 cursor-pointer items-center rounded-[var(--radius-sm)] select-none pr-1.5 pl-3 text-fg ${target.edge}`}
+                          className={`group mx-1 flex h-[22px] cursor-pointer items-center rounded-[var(--radius-sm)] select-none pr-1.5 pl-3 text-fg ${target.edge}`}
                           onClick={(e) => {
                             if (!pickRow(e, folderRow)) toggle(key);
                           }}
@@ -1015,7 +1016,7 @@ function TasksView({
       {folderDrop && (
         <div
           ref={(el) => el?.scrollIntoView({ block: "nearest" })}
-          className="mx-1 flex h-7 items-center gap-1.5 rounded-[var(--radius-sm)] border border-dashed border-accent px-2 text-[length:var(--fs-sm)] text-fg-muted"
+          className="mx-1 flex h-[22px] items-center gap-1.5 rounded-[var(--radius-sm)] border border-dashed border-accent px-2 text-[length:var(--fs-sm)] text-fg-muted"
         >
           <FolderPlusIcon size={15} />
           Add Folder
@@ -1082,9 +1083,8 @@ interface ThreadRowProps {
   minute: number;
   actions: RowActions;
   drag: RowDrag;
-  nested?: boolean;
-  /** In the Tasks tree: fixed-height rows that line up with the folders and projects. */
-  tree?: boolean;
+  /** 0 for a chat, 1 for a task, 2 for a task in a folder: sets how far the row is indented. */
+  depth: 0 | 1 | 2;
 }
 
 /** A row redraws only when something it shows changes. `drag.attrs` is left out of the comparison:
@@ -1096,8 +1096,7 @@ function sameRow(a: ThreadRowProps, b: ThreadRowProps): boolean {
     a.editing === b.editing &&
     a.minute === b.minute &&
     a.actions === b.actions &&
-    a.nested === b.nested &&
-    a.tree === b.tree &&
+    a.depth === b.depth &&
     a.drag.edge === b.drag.edge &&
     a.drag.dragging === b.drag.dragging
   );
@@ -1109,8 +1108,7 @@ const ThreadRow = memo(function ThreadRow({
   editing,
   actions,
   drag,
-  nested = false,
-  tree = false,
+  depth,
 }: ThreadRowProps) {
   const { onSelectThread, onArchiveThread, onPick, onContextMenu, onCommitRename, onCancelRename } =
     actions;
@@ -1119,18 +1117,12 @@ const ThreadRow = memo(function ThreadRow({
   const goalActive = thread.goal?.status === "active";
   const last = thread.messages[thread.messages.length - 1];
   const needsApproval = last?.approvals.some((a) => a.status === "pending") ?? false;
-  // Tree rows are 28px tall. The indent and the empty chevron column sit in the margin, so the highlight starts just before the title and the titles still line up with folder names.
-  const spacing = tree
-    ? `h-7 rounded-[var(--radius-sm)] pr-2 pl-2 mr-1 ${nested ? "ml-[38px]" : "ml-[30px]"}`
-    : `${nested ? "mb-1" : "my-0.5"} ${nested ? "ml-6 mr-1.5" : "mx-1.5"} px-2.5 py-1.5 rounded-[var(--radius-sm)]`;
+  // Tree rows are 22px tall, as in VS Code's explorer. The indent and the empty chevron column sit in the margin, so the highlight starts just before the title and the titles still line up with project and folder names.
+  // Chats sit in the padded list, tasks in their project's unpadded group, so both end at the same edge.
+  const margins = ["ml-[14px] -mr-1", "ml-[30px] mr-1", "ml-[38px] mr-1"][depth];
+  const spacing = `h-[22px] rounded-[var(--radius-sm)] pr-2 pl-2 ${margins}`;
   // The picked rows are the selection, and the open chat is always among them.
-  const fill = picked
-    ? tree
-      ? selectionFill(true)
-      : "bg-selected"
-    : tree
-      ? selectionFill(false)
-      : "bg-[color-mix(in_srgb,var(--bg-hover)_40%,transparent)] hover:bg-hover";
+  const fill = selectionFill(picked);
   return (
     <div
       {...drag.attrs}
@@ -1156,40 +1148,42 @@ const ThreadRow = memo(function ThreadRow({
           {displayTitle(thread.title)}
         </span>
       )}
-      {/* A fixed, right-aligned slot so the time sits next to the archive button. It shows the time, or a spinner or approval shield. */}
+      {/* A fixed, right-aligned slot: the time, or a spinner or approval shield, and the archive button in their place on hover. */}
       <span className="flex w-9 flex-none items-center justify-end">
-        {needsApproval ? (
-          <span title="Waiting for approval" className="inline-flex flex-none text-warning">
-            <ShieldWarningIcon size={15} />
-          </span>
-        ) : isWorking(thread) ? (
-          <span title="Working" className="inline-flex flex-none">
-            <CircleNotchIcon size={15} className="spin text-accent-text" />
-          </span>
-        ) : (
-          <span
-            className={`text-[length:var(--fs-xs)] ${selected ? "text-fg-muted" : "text-fg-subtle"}`}
-          >
-            {formatRelative(last?.createdAt ?? thread.createdAt)}
-          </span>
-        )}
+        <span className="flex items-center group-hover:hidden">
+          {needsApproval ? (
+            <span title="Waiting for approval" className="inline-flex flex-none text-warning">
+              <ShieldWarningIcon size={15} />
+            </span>
+          ) : isWorking(thread) ? (
+            <span title="Working" className="inline-flex flex-none">
+              <CircleNotchIcon size={15} className="spin text-accent-text" />
+            </span>
+          ) : (
+            <span
+              className={`text-[length:var(--fs-xs)] ${selected ? "text-fg-muted" : "text-fg-subtle"}`}
+            >
+              {formatRelative(last?.createdAt ?? thread.createdAt)}
+            </span>
+          )}
+        </span>
+        <button
+          className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex hover:bg-border-strong"
+          title="Archive"
+          aria-label="Archive"
+          onClick={(e) => {
+            e.stopPropagation();
+            onArchiveThread(thread);
+          }}
+        >
+          <ArchiveIcon size={15} />
+        </button>
       </span>
-      <button
-        className="btn-icon h-5 w-5 flex-none hover:bg-border-strong"
-        title="Archive"
-        aria-label="Archive"
-        onClick={(e) => {
-          e.stopPropagation();
-          onArchiveThread(thread);
-        }}
-      >
-        <ArchiveIcon size={16} />
-      </button>
       <span
-        className="inline-flex h-5 w-5 flex-none items-center justify-center"
+        className="inline-flex h-4 w-4 flex-none items-center justify-center"
         title={AGENT_LABELS[thread.agent]}
       >
-        <ProviderLogos kind={thread.agent} model={thread.model} size={16} />
+        <ProviderLogos kind={thread.agent} model={thread.model} size={14} />
       </span>
     </div>
   );
@@ -1269,7 +1263,7 @@ function ArchivedView({
    * Its menu deletes every archived chat or task under it. */
   const header = (key: string, name: ReactNode, folder: boolean, inside: Thread[]) => (
     <div
-      className={`group mx-1 flex h-7 cursor-pointer items-center rounded-[var(--radius-sm)] select-none pr-1.5 text-left text-fg ${folder ? "pl-3" : "pl-1"} ${selectionFill(false)}`}
+      className={`group mx-1 flex h-[22px] cursor-pointer items-center rounded-[var(--radius-sm)] select-none pr-1.5 text-left text-fg ${folder ? "pl-3" : "pl-1"} ${selectionFill(false)}`}
       onClick={() => toggle(key)}
       onContextMenu={(e) =>
         openMenu(e, [
@@ -1295,7 +1289,7 @@ function ArchivedView({
   const row = (t: Thread, nested: boolean) => (
     <div
       key={t.id}
-      className={`group mr-1 flex h-7 cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] select-none pr-2 pl-2 text-fg ${nested ? "ml-[38px]" : "ml-[30px]"} ${selectionFill(isPicked(t.id))}`}
+      className={`group mr-1 flex h-[22px] cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] select-none pr-2 pl-2 text-fg ${nested ? "ml-[38px]" : "ml-[30px]"} ${selectionFill(isPicked(t.id))}`}
       onClick={(e) => pick(e, t.id)}
       onContextMenu={(e) =>
         openMenu(e, [
@@ -1328,10 +1322,10 @@ function ArchivedView({
         <ArrowCounterClockwiseIcon size={16} />
       </button>
       <span
-        className="inline-flex h-5 w-5 flex-none items-center justify-center"
+        className="inline-flex h-4 w-4 flex-none items-center justify-center"
         title={AGENT_LABELS[t.agent]}
       >
-        <ProviderLogos kind={t.agent} model={t.model} size={16} />
+        <ProviderLogos kind={t.agent} model={t.model} size={14} />
       </span>
     </div>
   );
