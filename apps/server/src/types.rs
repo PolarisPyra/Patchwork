@@ -131,6 +131,9 @@ pub struct TokenSettings {
     pub auto_compact: bool,
     /// The context size above which an idle task is compacted.
     pub auto_compact_above: u64,
+    /// The context size at which Claude compacts mid-task. 0 leaves Claude's own, near the
+    /// model's full window.
+    pub claude_compact_window: u64,
     /// Model for new tasks, per agent. A missing agent uses the CLI's own default.
     pub default_models: HashMap<AgentKind, String>,
 }
@@ -143,6 +146,7 @@ impl Default for TokenSettings {
             ask_before_resume: true,
             auto_compact: true,
             auto_compact_above: 200_000,
+            claude_compact_window: 0,
             default_models: HashMap::new(),
         }
     }

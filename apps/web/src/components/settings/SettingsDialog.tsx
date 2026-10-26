@@ -220,6 +220,9 @@ function ThemeRow({ settings, updateSettings }: PaneProps) {
 /** Context sizes offered by the token settings. */
 const TOKEN_LEVELS = [100_000, 150_000, 200_000, 300_000];
 
+/** Context sizes Claude can be told to compact at; 0 leaves Claude's own. */
+const COMPACT_WINDOWS = [0, 200_000, 300_000, 500_000];
+
 /** One setting: its name and what it does, with the control on the right. */
 function TokenRow({
   title,
@@ -265,10 +268,12 @@ function ContextLevels({
   label,
   value,
   onChange,
+  levels = TOKEN_LEVELS,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
+  levels?: number[];
 }) {
   return (
     <div
@@ -276,7 +281,7 @@ function ContextLevels({
       aria-label={label}
       className="inline-flex overflow-hidden rounded-[var(--radius-sm)] border border-border-strong"
     >
-      {TOKEN_LEVELS.map((level) => (
+      {levels.map((level) => (
         <button
           key={level}
           role="radio"
@@ -284,7 +289,7 @@ function ContextLevels({
           className={`grid h-6 w-auto cursor-pointer place-items-center border-none px-2.5 py-0 text-[length:var(--fs-sm)] tabular-nums [&+&]:border-l [&+&]:border-border-strong ${value === level ? "bg-selected text-fg" : "bg-transparent text-fg-muted hover:bg-hover hover:text-fg"}`}
           onClick={() => onChange(level)}
         >
-          {formatTokens(level)}
+          {level === 0 ? "Default" : formatTokens(level)}
         </button>
       ))}
     </div>
@@ -400,6 +405,17 @@ function TokensPane({ settings, updateSettings }: PaneProps) {
           label="Compact above"
           value={tokens.autoCompactAbove}
           onChange={(autoCompactAbove) => update({ autoCompactAbove })}
+        />
+      </TokenRow>
+      <TokenRow
+        title="Claude compacts at"
+        desc="Compacts a working Claude task once its context reaches this. Default waits until the model's window is almost full"
+      >
+        <ContextLevels
+          label="Claude compacts at"
+          value={tokens.claudeCompactWindow}
+          levels={COMPACT_WINDOWS}
+          onChange={(claudeCompactWindow) => update({ claudeCompactWindow })}
         />
       </TokenRow>
       {connected.map((kind) => (

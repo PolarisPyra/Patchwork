@@ -80,6 +80,8 @@ export interface TokenSettings {
   autoCompact: boolean;
   /** The context size above which an idle task is compacted. */
   autoCompactAbove: number;
+  /** The context size at which Claude compacts mid-task. 0 leaves Claude's own. */
+  claudeCompactWindow: number;
   /** Model for new tasks, per agent. A missing agent uses the CLI's own default. */
   defaultModels: Partial<Record<AgentKind, string>>;
 }
@@ -490,6 +492,7 @@ export const DEFAULT_SETTINGS: Settings = {
     askBeforeResume: true,
     autoCompact: true,
     autoCompactAbove: 200_000,
+    claudeCompactWindow: 0,
     defaultModels: {},
   },
   notifications: { goalComplete: true, taskComplete: true },

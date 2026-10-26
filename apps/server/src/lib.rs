@@ -712,15 +712,27 @@ impl Server {
         if thread.agent != agent && !thread.messages.is_empty() && !thread.context_pending {
             return Err("The agent can't change after the conversation has started".into());
         }
+        let changed = thread.agent != agent || thread.model != model;
         self.store.update_thread(id, |t| {
             t.agent = agent;
             t.model = model;
-        })
+        })?;
+        // An idle agent was started with the old model.
+        if changed {
+            self.runner.retire_idle(id);
+        }
+        Ok(())
     }
 
     /// Takes effect from the thread's next turn.
     pub fn set_thread_access_mode(&self, id: &str, mode: AccessMode) -> Res<()> {
-        self.store.update_thread(id, |t| t.access_mode = mode)
+        let thread = self.store.thread(id).ok_or("Task not found")?;
+        self.store.update_thread(id, |t| t.access_mode = mode)?;
+        // An idle agent was started with the old setting.
+        if thread.access_mode != mode {
+            self.runner.retire_idle(id);
+        }
+        Ok(())
     }
 
     /// Writes `text` to `path`, a file the user picked in a save dialog.
@@ -730,12 +742,24 @@ impl Server {
 
     /// Takes effect from the thread's next turn.
     pub fn set_thread_plan_mode(&self, id: &str, on: bool) -> Res<()> {
-        self.store.update_thread(id, |t| t.plan_mode = on)
+        let thread = self.store.thread(id).ok_or("Task not found")?;
+        self.store.update_thread(id, |t| t.plan_mode = on)?;
+        // An idle agent was started with the old setting.
+        if thread.plan_mode != on {
+            self.runner.retire_idle(id);
+        }
+        Ok(())
     }
 
     /// Takes effect from the thread's next turn.
     pub fn set_thread_effort(&self, id: &str, effort: Option<String>) -> Res<()> {
-        self.store.update_thread(id, |t| t.effort = effort)
+        let thread = self.store.thread(id).ok_or("Task not found")?;
+        self.store.update_thread(id, |t| t.effort = effort.clone())?;
+        // An idle agent was started with the old setting.
+        if thread.effort != effort {
+            self.runner.retire_idle(id);
+        }
+        Ok(())
     }
 
     /// Starts the background check that compacts idle Claude threads just before their prompt
@@ -871,6 +895,17 @@ impl Server {
                 .dismiss_goal(&thread_id, &orchestration::goal::signature(&goal))?;
             orchestration::publish(self, &thread_id, AgentEvent::GoalUpdated { goal: None });
         }
+        // A /goal runs as a turn of its own, not in an idle agent's process.
+        if provider::is_goal_command(&text) {
+            self.runner.retire_idle(&thread_id);
+        }
+        // A message that starts with a skill's "$name" reaches the agent in the form it runs,
+        // as `start_turn` sends it too.
+        let skills = skills::enabled(&self.store.settings());
+        let steer_text = match (self.store.thread(&thread_id), skills::invoked(&text, &skills)) {
+            (Some(thread), Some((skill, rest))) => skills::invocation(thread.agent, &skill, rest),
+            _ => text.clone(),
+        };
         // While a turn runs, the message steers it, or waits for it to end when the
         // agent cannot take it now.
         let delivery = if queue {
@@ -881,7 +916,7 @@ impl Server {
                 Ok(true) => Delivery::Queued,
                 Ok(false) => self.runner.steer(
                     &thread_id,
-                    FollowUpInput { message_id: &msg.id, text: &text, attachments: &attachments, images: &images },
+                    FollowUpInput { message_id: &msg.id, text: &steer_text, attachments: &attachments, images: &images },
                     session_id.as_deref(),
                     &subagents,
                 ),
@@ -895,7 +930,7 @@ impl Server {
         } else {
             self.runner.steer(
                 &thread_id,
-                FollowUpInput { message_id: &msg.id, text: &text, attachments: &attachments, images: &images },
+                FollowUpInput { message_id: &msg.id, text: &steer_text, attachments: &attachments, images: &images },
                 session_id.as_deref(),
                 &subagents,
             )

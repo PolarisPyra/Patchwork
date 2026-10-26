@@ -31,6 +31,13 @@ pub(super) const MAX_LINE_BYTES: usize = 8 << 20;
 /// How long a turn may run before the agent is stopped as timed out.
 pub(super) const TURN_TIMEOUT: Duration = Duration::from_secs(4 * 60 * 60);
 
+/// How long an idle agent stays up for the next message after its last reply, unless shell
+/// commands it left running keep it up longer.
+pub(super) const IDLE_LIMIT: Duration = Duration::from_secs(30 * 60);
+
+/// How often a running agent is checked against `TURN_TIMEOUT` and `IDLE_LIMIT`.
+pub(super) const WATCH_EVERY: Duration = Duration::from_secs(60);
+
 /// The agent's stdin; None once the turn has finished.
 pub(super) type Stdin = Arc<Mutex<Option<ChildStdin>>>;
 

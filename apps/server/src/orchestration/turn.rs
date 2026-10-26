@@ -8,6 +8,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 use std::sync::PoisonError;
+use std::time::Instant;
 
 use serde_json::Value;
 
@@ -37,7 +38,9 @@ use super::process::close_stdin_unless_steered;
 use super::process::read_stderr_tail;
 use super::process::Stdin;
 use super::process::terminate;
+use super::process::IDLE_LIMIT;
 use super::process::TURN_TIMEOUT;
+use super::process::WATCH_EVERY;
 use super::process::write_line;
 use super::queue::Queue;
 use super::queue::Steers;
@@ -190,6 +193,9 @@ impl Runner {
         if let Some(shell) = crate::effective_shell(server.store.settings().shell.as_deref()) {
             cmd.env("SHELL", shell);
         }
+        if agent == AgentKind::Claude {
+            cmd.envs(claude::launch_env(&settings));
+        }
         cmd.args(&args)
             .envs(provider::turn_env(agent, &spec))
             .current_dir(&root)
@@ -296,16 +302,62 @@ impl Runner {
                 });
             }
         }
-        let (pid, exited) = (child.id(), turn.exited.clone());
-        std::thread::spawn(move || {
-            std::thread::sleep(TURN_TIMEOUT);
-            if !exited.load(Ordering::SeqCst) {
-                timed_out.store(true, Ordering::SeqCst);
-                terminate(pid, exited);
-            }
-        });
+        let watched = Watched {
+            server: server.clone(),
+            thread_id: turn.thread_id.clone(),
+            pid: child.id(),
+            exited: turn.exited.clone(),
+            idle: turn.idle.clone(),
+            timed_out,
+        };
+        std::thread::spawn(move || watch(watched));
         std::thread::spawn(move || ingest(turn, child, stdout, stderr_tail));
         Ok(())
+    }
+}
+
+/// What `watch` checks one agent process by.
+struct Watched {
+    server: Arc<Server>,
+    thread_id: String,
+    pid: u32,
+    exited: Arc<AtomicBool>,
+    idle: Arc<AtomicBool>,
+    timed_out: Arc<AtomicBool>,
+}
+
+/// Stops the agent when one reply runs past `TURN_TIMEOUT`, and retires it once it has been
+/// idle for `IDLE_LIMIT` with no shell commands of its own still running. Ends with the agent.
+fn watch(w: Watched) {
+    let mut busy_since = Instant::now();
+    let mut was_idle = false;
+    loop {
+        std::thread::sleep(WATCH_EVERY);
+        if w.exited.load(Ordering::SeqCst) {
+            return;
+        }
+        let idle = w.idle.load(Ordering::SeqCst);
+        if !idle && was_idle {
+            busy_since = Instant::now();
+        }
+        was_idle = idle;
+        if !idle && busy_since.elapsed() >= TURN_TIMEOUT {
+            w.timed_out.store(true, Ordering::SeqCst);
+            terminate(w.pid, w.exited);
+            return;
+        }
+        // Idle time counts from the last reply, as idle compaction counts it.
+        let retire = idle
+            && w.server.store.thread(&w.thread_id).is_some_and(|t| {
+                let finished = t.messages.last().and_then(|m| m.finished_at).unwrap_or(0);
+                let idle_ms = u64::try_from(IDLE_LIMIT.as_millis()).unwrap_or(u64::MAX);
+                now_ms().saturating_sub(finished) >= idle_ms
+                    && t.messages.iter().all(|m| m.background.is_empty())
+            });
+        if retire {
+            w.server.runner.retire_idle(&w.thread_id);
+            return;
+        }
     }
 }
 
@@ -455,7 +507,7 @@ pub(super) struct TurnEnd {
 
 /// Pairs the turn's replies with the project's snapshots from before and after the turn, so their
 /// changed files keep showing what the turn did once the changes are committed or edited again.
-fn record_turn(turn: &Turn, replies: &[String]) {
+pub(super) fn record_turn(turn: &Turn, replies: &[String]) {
     let Some(first) = replies.first() else { return };
     let Some(thread) = turn.server.store.thread(&turn.thread_id) else { return };
     if thread.project_id.is_none() {
