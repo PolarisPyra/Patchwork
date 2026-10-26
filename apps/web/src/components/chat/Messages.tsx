@@ -31,7 +31,8 @@ import {
 import { GOAL_CLASS } from "~/components/chat/composerExtensions";
 import { shortcutContext, useCommand } from "~/lib/shortcuts";
 import { formatTokens } from "~/lib/tokens";
-import { formatClock } from "~/lib/util";
+import { useMissingFiles } from "~/hooks/useMissingFiles";
+import { baseName, dirName, formatClock } from "~/lib/util";
 
 // Markdown loads with the chat, not on first use: its plain-text placeholder had another height,
 // so swapping it in moved the messages.
@@ -173,6 +174,7 @@ export default function Messages({
                   <AssistantMessage
                     message={item}
                     agent={thread.agent}
+                    projectId={thread.projectId}
                     onOpenThread={onOpenThread}
                     changes={changes}
                     retryMessage={previous?.role === "user" ? previous : null}
@@ -290,6 +292,7 @@ const UserMessage = memo(function UserMessage({
 interface AssistantProps {
   message: Message;
   agent: AgentKind;
+  projectId: string | null;
   onOpenThread: (id: string) => void;
   changes: FileChange[];
   retryMessage: Message | null;
@@ -302,6 +305,7 @@ interface AssistantProps {
 const AssistantMessage = memo(function AssistantMessage({
   message,
   agent,
+  projectId,
   onOpenThread,
   changes,
   retryMessage,
@@ -312,6 +316,11 @@ const AssistantMessage = memo(function AssistantMessage({
 }: AssistantProps) {
   const streaming = message.status === "streaming";
   const clearsGoal = retryMessage !== null && isGoalClearCommand(retryMessage.text);
+  // A file with nothing left to diff opens on its contents instead.
+  const openFile =
+    onOpenCanvas &&
+    ((path: string) =>
+      onOpenCanvas(path, message, changes.some((c) => c.path === path) ? "diff" : "code"));
   return (
     <section className="flex min-w-0 flex-col gap-2.5">
       <TurnTimeline
@@ -319,6 +328,7 @@ const AssistantMessage = memo(function AssistantMessage({
         agent={agent}
         clearsGoal={clearsGoal}
         onOpenThread={onOpenThread}
+        onOpenFile={openFile}
       />
       {/* A pending approval is answered in the banner above the composer. */}
       {message.approvals.map((approval) =>
@@ -336,10 +346,12 @@ const AssistantMessage = memo(function AssistantMessage({
           <ApprovalCard key={approval.id} approval={approval} />
         ),
       )}
-      {onOpenCanvas && message.files.length > 0 && (
+      {openFile && message.files.length > 0 && (
         <ChangeSummary
+          projectId={projectId}
           paths={message.files}
           changes={changes}
+          onOpen={openFile}
           onShow={() => onShowChanges(message.id)}
         />
       )}
@@ -449,35 +461,101 @@ function AnsweredQuestions({ approval }: { approval: Approval }) {
   );
 }
 
-/** One line for the files a message touched; the list itself lives in the Changes view. */
+/** Most files the summary lists; the rest are in the Changes view. */
+const SUMMARY_FILES = 5;
+
+/** The files a message touched, each opening its diff. A file with no uncommitted changes left
+ * says so, rather than opening onto an empty diff unannounced. */
 function ChangeSummary({
+  projectId,
   paths,
   changes,
+  onOpen,
   onShow,
 }: {
+  projectId: string | null;
   paths: string[];
   changes: FileChange[];
+  onOpen: (path: string) => void;
   onShow: () => void;
 }) {
   const found = changes.filter((c) => paths.includes(c.path));
   const additions = found.reduce((sum, c) => sum + c.additions, 0);
   const deletions = found.reduce((sum, c) => sum + c.deletions, 0);
+  const listed = paths.length > SUMMARY_FILES + 1 ? paths.slice(0, SUMMARY_FILES) : paths;
+  const missing = useMissingFiles(projectId, paths, changes);
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[var(--radius)] border border-border bg-panel px-3 py-2 text-[length:var(--fs-sm)]">
-      <GitDiffIcon size={14} className="flex-none text-fg-muted" />
-      <span className="whitespace-nowrap">
-        {paths.length} {paths.length === 1 ? "file" : "files"} changed
-      </span>
-      {found.length > 0 && (
-        <>
-          <span className="text-success">+{additions}</span>
-          <span className="text-danger">−{deletions}</span>
-        </>
-      )}
-      <span className="flex-1" />
-      <button className="btn flex-none" onClick={onShow}>
-        Show changes
-      </button>
+    <div className="flex flex-col gap-1 rounded-[var(--radius)] border border-border bg-panel px-3 py-2 text-[length:var(--fs-sm)]">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <GitDiffIcon size={14} className="flex-none text-fg-muted" />
+        <span className="whitespace-nowrap">
+          {paths.length} {paths.length === 1 ? "file" : "files"} changed
+        </span>
+        {found.length > 0 && (
+          <>
+            <span className="text-success">+{additions}</span>
+            <span className="text-danger">−{deletions}</span>
+          </>
+        )}
+        <span className="flex-1" />
+        <button className="btn flex-none" onClick={onShow}>
+          Show changes
+        </button>
+      </div>
+      <div className="flex flex-col">
+        {listed.map((path) => (
+          <ChangedFile
+            key={path}
+            path={path}
+            change={found.find((c) => c.path === path)}
+            deleted={missing.has(path)}
+            onOpen={() => onOpen(path)}
+          />
+        ))}
+        {listed.length < paths.length && (
+          <button
+            className="flex min-h-6 cursor-pointer items-center rounded-[var(--radius-sm)] border-none bg-transparent px-1 text-left text-fg-muted hover:bg-hover hover:text-fg"
+            onClick={onShow}
+          >
+            {paths.length - listed.length} more
+          </button>
+        )}
+      </div>
     </div>
+  );
+}
+
+/** One touched file: its name, struck through once deleted, then its folder, and whether it
+ * was deleted or has no changes left. `deleted` is for a file gone without a git status, such as
+ * one git never tracked. */
+function ChangedFile({
+  path,
+  change,
+  deleted: gone,
+  onOpen,
+}: {
+  path: string;
+  change: FileChange | undefined;
+  deleted: boolean;
+  onOpen: () => void;
+}) {
+  const deleted = gone || change?.status === "deleted";
+  const dir = dirName(path);
+  return (
+    <button
+      className="flex min-h-6 min-w-0 cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border-none bg-transparent px-1 text-left hover:bg-hover"
+      title={path}
+      onClick={onOpen}
+    >
+      <span className={`flex-none ${deleted ? "text-fg-muted line-through" : "text-fg"}`}>
+        {baseName(path)}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-fg-subtle">{dir}</span>
+      {(deleted || !change) && (
+        <span className="flex-none text-[length:var(--fs-xs)] text-fg-subtle">
+          {deleted ? "Deleted" : "No changes"}
+        </span>
+      )}
+    </button>
   );
 }

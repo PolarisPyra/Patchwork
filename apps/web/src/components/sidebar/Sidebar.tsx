@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type HTMLAttributes,
   type KeyboardEvent,
   type MouseEvent,
@@ -44,6 +45,7 @@ import { confirm } from "@tauri-apps/plugin-dialog";
 import ProviderLogos from "~/components/ProviderLogos";
 import ContextMenu, { type MenuItem } from "~/components/sidebar/ContextMenu";
 import UsagePopover from "~/components/usage/UsagePopover";
+import { useMissingFiles } from "~/hooks/useMissingFiles";
 import { useRowReorder, type RowDrag } from "~/hooks/useRowReorder";
 import {
   getSelectedRows,
@@ -1358,7 +1360,16 @@ function BulkButton({ onClick, children }: { onClick: () => void; children: Reac
 }
 
 /** One changed file: opens its diff. */
-function ChangeRow({ change, onOpen }: { change: FileChange; onOpen: () => void }) {
+/** `showDir` adds the file's folder, for rows not under a folder heading. */
+function ChangeRow({
+  change,
+  showDir = false,
+  onOpen,
+}: {
+  change: FileChange;
+  showDir?: boolean;
+  onOpen: () => void;
+}) {
   const name = baseName(change.path);
   return (
     <div className="flex h-[30px] items-center rounded-[var(--radius-sm)] py-1 pr-2 pl-1.5 hover:bg-hover">
@@ -1367,12 +1378,23 @@ function ChangeRow({ change, onOpen }: { change: FileChange; onOpen: () => void 
         title={change.path}
         onClick={onOpen}
       >
-        <span className="min-w-0 flex-1 truncate">{name}</span>
+        <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+          <span
+            className={`${showDir ? "flex-none" : "min-w-0 truncate"} ${change.status === "deleted" ? "text-fg-muted line-through" : ""}`}
+          >
+            {name}
+          </span>
+          {showDir && (
+            <span className="min-w-0 truncate text-[length:var(--fs-xs)] text-fg-subtle">
+              {dirName(change.path)}
+            </span>
+          )}
+        </span>
         {/* The icon column has a fixed width, so the icons line up across rows. */}
         <span className="flex flex-none items-center gap-2 text-[length:var(--fs-xs)] tabular-nums">
           <span className="flex items-center gap-1">
-            <span className="text-success">+{change.additions}</span>
-            <span className="text-danger">−{change.deletions}</span>
+            <span className="w-[var(--diff-col)] text-right text-success">+{change.additions}</span>
+            <span className="w-[var(--diff-col)] text-danger">−{change.deletions}</span>
           </span>
           <span className="flex w-3 justify-center">
             <GitDiffIcon size={14} className="text-fg-muted" aria-label="Changed" />
@@ -1399,6 +1421,12 @@ function ChangesView({
   const fullAccess = threads.find((t) => t.id === selectedId)?.accessMode === "full-access";
   // The reply's files, listed whether or not they still have uncommitted changes.
   const replyFiles = changeFocus ?? [];
+  const missing = useMissingFiles(project?.id ?? null, replyFiles, changes);
+  // The +/− counts sit in columns as wide as the longest count, so they line up across rows.
+  const diffDigits = Math.max(
+    1,
+    ...changes.map((c) => String(Math.max(c.additions, c.deletions)).length),
+  );
   const pinned = changes.filter((c) => replyFiles.includes(c.path));
   const folders = new Map<string, FileChange[]>();
   for (const c of changes) {
@@ -1454,7 +1482,10 @@ function ChangesView({
           <ArrowsClockwiseIcon size={18} />
         </button>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-scroll p-2">
+      <div
+        className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-scroll p-2"
+        style={{ "--diff-col": `${diffDigits + 1}ch` } as CSSProperties}
+      >
         {changes.length > 0 && !fullAccess && (
           <div className="flex justify-end gap-1 px-1">
             <BulkButton onClick={() => applyAll(changes)}>Stage all</BulkButton>
@@ -1486,16 +1517,25 @@ function ChangesView({
             {replyFiles.map((path) => {
               const change = changes.find((c) => c.path === path);
               return change ? (
-                row(change)
+                <ChangeRow key={path} change={change} showDir onOpen={() => onOpenChange(path)} />
               ) : (
                 <button
                   key={path}
-                  className="flex min-h-[26px] w-full cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border-none bg-transparent py-0.5 pr-1 pl-1.5 text-fg text-left hover:bg-hover"
+                  className="flex h-[30px] w-full cursor-pointer items-center gap-3 rounded-[var(--radius-sm)] border-none bg-transparent py-1 pr-2 pl-1.5 text-fg-muted text-left hover:bg-hover"
                   title={path}
                   onClick={() => onOpenChange(path)}
                 >
-                  <span className="min-w-0 flex-1 truncate">{baseName(path)}</span>
-                  <PencilSimpleIcon size={14} className="flex-none text-fg-muted" />
+                  <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+                    <span className={missing.has(path) ? "flex-none line-through" : "flex-none"}>
+                      {baseName(path)}
+                    </span>
+                    <span className="min-w-0 truncate text-[length:var(--fs-xs)] text-fg-subtle">
+                      {dirName(path)}
+                    </span>
+                  </span>
+                  <span className="flex-none text-[length:var(--fs-xs)] text-fg-subtle">
+                    {missing.has(path) ? "Deleted" : "No changes"}
+                  </span>
                 </button>
               );
             })}

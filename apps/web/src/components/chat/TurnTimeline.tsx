@@ -7,6 +7,7 @@ import {
   CheckIcon,
   CircleNotchIcon,
   EyeIcon,
+  GitDiffIcon,
   GlobeIcon,
   MagnifyingGlassIcon,
   NotePencilIcon,
@@ -219,6 +220,7 @@ export default function TurnTimeline({
   agent,
   clearsGoal = false,
   onOpenThread,
+  onOpenFile,
 }: {
   message: Message;
   agent: AgentKind;
@@ -226,6 +228,8 @@ export default function TurnTimeline({
   clearsGoal?: boolean;
   /** Opens a subagent's thread. */
   onOpenThread: (id: string) => void;
+  /** Opens a file; edit rows link to their file when given. */
+  onOpenFile?: (path: string) => void;
 }) {
   const streaming = message.status === "streaming";
   const steps = stepsOf(message);
@@ -293,7 +297,12 @@ export default function TurnTimeline({
             onOpenThread={onOpenThread}
           />
         ) : (
-          <WorkGroup key={workKey(step.entries[0])} entries={step.entries} live={streaming} />
+          <WorkGroup
+            key={workKey(step.entries[0])}
+            entries={step.entries}
+            live={streaming}
+            onOpenFile={onOpenFile}
+          />
         ),
       )}
       {streaming && message.retry ? (
@@ -410,12 +419,20 @@ function FoldRow({
 
 /** A run of work between texts: one row, or a summary row over several that opens to list them.
  * While its last call runs, the summary shows that call instead. */
-function WorkGroup({ entries, live }: { entries: Entry[]; live: boolean }) {
+function WorkGroup({
+  entries,
+  live,
+  onOpenFile,
+}: {
+  entries: Entry[];
+  live: boolean;
+  onOpenFile?: (path: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   if (entries.length === 1) {
     return (
       <div className="pb-2">
-        <EntryRow entry={entries[0]} live={live} />
+        <EntryRow entry={entries[0]} live={live} onOpenFile={onOpenFile} />
       </div>
     );
   }
@@ -449,7 +466,7 @@ function WorkGroup({ entries, live }: { entries: Entry[]; live: boolean }) {
       {open && (
         <div className="flex flex-col">
           {entries.map((entry) => (
-            <EntryRow key={workKey(entry)} entry={entry} live={live} />
+            <EntryRow key={workKey(entry)} entry={entry} live={live} onOpenFile={onOpenFile} />
           ))}
         </div>
       )}
@@ -477,12 +494,47 @@ function entryLabel(entry: Entry): string {
   return entry.part.text.replace(/\s+/g, " ").trim() || "Thought";
 }
 
+/** The one file an edit call changes, or null for other calls, failed edits, and edits of
+ * several files at once. */
+function editedFile(entry: Entry): string | null {
+  if (entry.kind !== "tool" || actionOf(entry.tool) !== "edit") return null;
+  const { summary, status } = entry.tool;
+  return status === "error" || !summary || summary.includes(", ") ? null : summary;
+}
+
 /** One call or block of reasoning; it opens to show the command and its output, or the whole
- * reasoning. */
-function EntryRow({ entry, live }: { entry: Entry; live: boolean }) {
+ * reasoning. An edit opens its file instead. */
+function EntryRow({
+  entry,
+  live,
+  onOpenFile,
+}: {
+  entry: Entry;
+  live: boolean;
+  onOpenFile?: (path: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const active = live && entryActive(entry);
   const Caret = open ? CaretDownIcon : CaretRightIcon;
+  const file = onOpenFile ? editedFile(entry) : null;
+  if (file !== null && onOpenFile) {
+    return (
+      <div className="min-w-0">
+        <button type="button" title={file} onClick={() => onOpenFile(file)} className={ROW_CLASS}>
+          <RowIcon>{entryIcon(entry)}</RowIcon>
+          <span
+            className={`min-w-0 flex-1 truncate underline-offset-2 group-hover:underline ${active ? "tool-shine" : ""}`}
+          >
+            {entryLabel(entry)}
+          </span>
+          <GitDiffIcon
+            size={13}
+            className="flex-none text-fg-subtle opacity-0 group-hover:opacity-100"
+          />
+        </button>
+      </div>
+    );
+  }
   return (
     <div className="min-w-0">
       <button
