@@ -57,7 +57,7 @@ pub struct ApiProvider {
     /// The preset it was made from (`deepseek`, `openai`, ... or `custom`); picks its logo.
     #[serde(default = "custom")]
     pub preset: String,
-    /// The OpenAI-compatible base URL, e.g. `https://api.deepseek.com/v1`.
+    /// The OpenAI-compatible base URL, e.g. `https://api.deepseek.com`.
     pub base_url: String,
     #[serde(default = "yes")]
     pub enabled: bool,
