@@ -8,7 +8,7 @@ use std::sync::{Mutex, PoisonError};
 use serde_json::{Value, json};
 
 use crate::types::{
-    AccessMode, AgentKind, AgentStatus, Attachment, AttachmentKind, ModelOption,
+    AccessMode, AgentEvent, AgentKind, AgentStatus, Attachment, AttachmentKind, ModelOption,
     ProviderSlashCommand, Question, QuestionOption, TokenUsage,
 };
 use super::Parsed;
@@ -205,7 +205,7 @@ fn tool(part: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
         Some(path) => relative(root, path),
         None => summarize(input, root),
     };
-    let mut out = vec![tool_started(
+    let mut started = tool_started(
         message_id,
         ToolStart {
             id,
@@ -214,7 +214,14 @@ fn tool(part: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
             subagent: None,
             parent: None,
         },
-    )];
+    );
+    // Reported only once done, the call keeps when it really started.
+    if let (Parsed::Event(AgentEvent::ToolStarted { tool, .. }), Some(start)) =
+        (&mut started, state["time"]["start"].as_u64())
+    {
+        tool.started_at = Some(start);
+    }
+    let mut out = vec![started];
     let failed = state["status"] == "error";
     let output = if failed {
         state["error"].as_str()
