@@ -24,6 +24,8 @@ import {
   FolderIcon,
   FolderPlusIcon,
   GitDiffIcon,
+  LockOpenIcon,
+  LockSimpleIcon,
   MagicWandIcon,
   MagnifyingGlassIcon,
   PencilSimpleIcon,
@@ -169,14 +171,79 @@ const selectionFill = (selected: boolean) =>
     ? "bg-[var(--tree-inactive-selected,var(--bg-selected-muted))] hover:bg-[var(--tree-selected,var(--bg-selected))] group-focus-within/tree:bg-[var(--tree-selected,var(--bg-selected))] outline-transparent group-focus-within/tree:outline group-focus-within/tree:outline-1 group-focus-within/tree:-outline-offset-1 group-focus-within/tree:outline-[#3994bcb3]"
     : "bg-transparent hover:bg-[var(--tree-hover,var(--bg-hover))]";
 
+/** The sidebar's width: dragged on its right edge, kept between launches, reset by a double-click. */
+const SIDEBAR_WIDTH = 300;
+const SIDEBAR_MIN = 200;
+const SIDEBAR_MAX = 480;
+const SIDEBAR_WIDTH_KEY = "patchwork.sidebarWidth";
+const SIDEBAR_LOCKED_KEY = "patchwork.sidebarLocked";
+const clampWidth = (width: number) => Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, width));
+
 export default memo(function Sidebar(props: SidebarProps) {
   const { rules } = useKeybindings();
   const searchKey = keyFor(rules, "palette.toggle");
+  const [width, setWidth] = useState(() =>
+    clampWidth(Number(localStorage.getItem(SIDEBAR_WIDTH_KEY)) || SIDEBAR_WIDTH),
+  );
+  const [locked, setLocked] = useState(() => localStorage.getItem(SIDEBAR_LOCKED_KEY) === "1");
+  const [widthMenu, setWidthMenu] = useState<{ x: number; y: number } | null>(null);
+  function toggleLocked() {
+    localStorage.setItem(SIDEBAR_LOCKED_KEY, locked ? "0" : "1");
+    setLocked(!locked);
+  }
+  function startResize(e: MouseEvent) {
+    if (e.button !== 0 || locked) return;
+    e.preventDefault();
+    const left = e.currentTarget.parentElement?.getBoundingClientRect().left ?? 0;
+    // Saved on every move, not only on release: a release outside the window may never reach here.
+    const onMove = (ev: globalThis.MouseEvent) => {
+      const next = clampWidth(ev.clientX - left);
+      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(next));
+      setWidth(next);
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+  function resetWidth() {
+    if (locked) return;
+    localStorage.removeItem(SIDEBAR_WIDTH_KEY);
+    setWidth(SIDEBAR_WIDTH);
+  }
   return (
     <aside
-      className="flex min-h-0 flex-none flex-col border-r border-border bg-panel text-[length:var(--fs-md)] [--fs-xs:13px] [--fs-sm:14px] [--fs-md:15px]"
-      style={{ width: 256, flex: "0 0 256px" }}
+      className="relative flex min-h-0 flex-none flex-col border-r border-border bg-panel text-[length:var(--fs-md)] [--fs-xs:13px] [--fs-sm:14px] [--fs-md:15px]"
+      style={{ width, flex: `0 0 ${width}px` }}
     >
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        className={`absolute top-0 -right-[3px] bottom-0 z-10 w-1.5 ${locked ? "" : "cursor-col-resize hover:bg-accent/40"}`}
+        onMouseDown={startResize}
+        onDoubleClick={resetWidth}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setWidthMenu({ x: e.clientX, y: e.clientY });
+        }}
+      />
+      {widthMenu && (
+        <ContextMenu
+          x={widthMenu.x}
+          y={widthMenu.y}
+          items={[
+            {
+              label: locked ? "Unlock width" : "Lock width",
+              Icon: locked ? LockOpenIcon : LockSimpleIcon,
+              onSelect: toggleLocked,
+            },
+          ]}
+          onClose={() => setWidthMenu(null)}
+        />
+      )}
       <button
         className="mx-2 mt-3 mb-0.5 flex h-8 flex-none cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border border-border bg-input px-2 text-[length:var(--fs-sm)] text-fg-muted hover:border-border-strong hover:text-fg"
         onClick={props.onOpenPalette}
