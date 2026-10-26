@@ -6,7 +6,7 @@
 //! 20261026T121729/
 //! ├─ main.log                 Patchwork's own messages (written by the desktop shell)
 //! ├─ imports.log              scans and imports of saved conversations
-//! ├─ window1/renderer.log     the window's errors and warnings
+//! ├─ window/renderer.log     the window's errors and warnings
 //! └─ agents/claude.log        one log per agent: its processes and their traffic
 //! ```
 //!
@@ -65,8 +65,8 @@ pub fn app_logs(level: log::Level) -> bool {
     level as u8 <= APP_LEVEL.load(Ordering::Relaxed)
 }
 
-/// The window's errors and warnings, `window1/renderer.log`.
-pub static RENDERER: DebugLog = DebugLog::new("window1/renderer.log");
+/// The window's errors and warnings, `window/renderer.log`.
+pub static RENDERER: DebugLog = DebugLog::new("window/renderer.log");
 
 /// A log larger than this moves to `<name>.1.log`: VS Code's 30 MB over six files.
 const MAX_BYTES: u64 = 5 * 1024 * 1024;

@@ -856,7 +856,7 @@ const LOGS: { key: keyof LoggingSettings; title: string; desc: string }[] = [
   {
     key: "window",
     title: "Window",
-    desc: "The window's errors and warnings, in window1/renderer.log",
+    desc: "The window's errors and warnings, in window/renderer.log",
   },
   { key: "agents", title: "Agents", desc: "Each agent's runs, in agents/" },
   { key: "imports", title: "Imports", desc: "Each scan and import, in imports.log" },

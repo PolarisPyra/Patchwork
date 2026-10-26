@@ -68,7 +68,7 @@ export type LogLevel = "off" | "error" | "warning" | "info" | "debug" | "trace";
 export interface LoggingSettings {
   /** `main.log`: Patchwork's own messages. */
   app: LogLevel;
-  /** `window1/renderer.log`: the window's errors and warnings. */
+  /** `window/renderer.log`: the window's errors and warnings. */
   window: LogLevel;
   /** `agents/<agent>.log`: each agent's processes and their traffic. */
   agents: LogLevel;

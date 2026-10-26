@@ -93,7 +93,7 @@ async fn read_log(channel: String, offset: u64) -> Res<patchwork_server::debug_l
     blocking(move || patchwork_server::debug_log::read(&channel, offset)).await?
 }
 
-/// A message from the window for `window1/renderer.log`.
+/// A message from the window for `window/renderer.log`.
 #[tauri::command]
 fn log_renderer(level: patchwork_server::types::LogLevel, message: String) {
     use patchwork_server::debug_log::{Data, RENDERER, Source};

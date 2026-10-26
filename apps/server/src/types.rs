@@ -200,7 +200,7 @@ pub enum RightClickBehavior {
 pub struct LoggingSettings {
     /// `main.log`: Patchwork's own messages.
     pub app: LogLevel,
-    /// `window1/renderer.log`: the window's errors and warnings.
+    /// `window/renderer.log`: the window's errors and warnings.
     pub window: LogLevel,
     /// `agents/<agent>.log`: each agent's processes and their traffic.
     pub agents: LogLevel,
