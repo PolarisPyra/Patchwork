@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Everything that releases Patchwork, on your machine and in the Release workflow
-# (.github/workflows/release-appimage.yml). docs/release.md explains how it all fits together.
+# (.github/workflows/release.yml). docs/release.md explains how it all fits together.
 #
 # On your machine:
 #   scripts/release.sh X.Y.Z            Cut a release, with no questions asked: check, draft and
 #                                       check the notes with Claude, set the version, add the
-#                                       notes to CHANGELOG.md, commit, tag, push, follow the
-#                                       workflow, and check that latest.json names the new version.
+#                                       notes to CHANGELOG.md, commit, tag, and push, then print
+#                                       the build's link and end.
+#   scripts/release.sh watch X.Y.Z      Follow X.Y.Z's build to the end, then check that
+#                                       latest.json names it.
 #   scripts/release.sh version X.Y.Z    Write a version into every file that names it.
 #   scripts/release.sh notes X.Y.Z      Publish X.Y.Z's section of CHANGELOG.md again, after a
 #                                       fix: to its GitHub release, and to latest.json when X.Y.Z
@@ -33,7 +35,7 @@ cd "$repo_root"
 
 PUBLIC=https://updates.patchworkeditor.com
 STORAGE=https://ny.storage.bunnycdn.com/patchwork-releases
-WORKFLOW=release-appimage.yml
+WORKFLOW=release.yml
 SECRETS=(BUNNY_STORAGE_PASSWORD BUNNY_API_KEY TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD)
 
 die() {
@@ -125,15 +127,25 @@ cut_release() {
   git push origin main "$tag"
   rm -f "$notes" "$notes.json"
 
-  # Stopping the script from here on (Ctrl-C) does not stop the build.
-  step "Following the Release workflow"
-  local run="" url
+  # The build runs on GitHub from here; `scripts/release.sh watch` follows it.
+  local run=""
   for _ in $(seq 30); do
     run=$(gh run list --workflow "$WORKFLOW" --branch "$tag" --limit 1 --json databaseId -q '.[0].databaseId // empty')
     [[ -n "$run" ]] && break
     sleep 2
   done
   [[ -n "$run" ]] || die "No Release run started for $tag. Check the Actions tab."
+  echo "Released $tag. The build: $(gh run view "$run" --json url -q .url)"
+}
+
+# Follows a release's build to the end, then checks that latest.json names it. Ctrl-C stops only
+# the watching, not the build.
+watch_release() {
+  local version="${1#v}"
+  check_version "$version"
+  local tag="v$version" run url
+  run=$(gh run list --workflow "$WORKFLOW" --branch "$tag" --limit 1 --json databaseId -q '.[0].databaseId // empty')
+  [[ -n "$run" ]] || die "No Release run for $tag. Check the Actions tab."
   url=$(gh run view "$run" --json url -q .url)
   echo "$url"
   if ! gh run watch "$run" --exit-status --interval 30 > /dev/null; then
@@ -325,7 +337,8 @@ pull_release() {
 republish_notes() {
   local version="${1#v}"
   check_version "$version"
-  local tag="v$version" notes=".release-notes/$tag.published.md"
+  local tag="v$version"
+  local notes=".release-notes/$tag.published.md"
   mkdir -p .release-notes
   scripts/changelog.sh section "$tag" > "$notes"
   [[ -s "$notes" ]] || die "CHANGELOG.md has no section for $version."
@@ -352,6 +365,7 @@ case "${1:-}" in
   version) set_version "${2:-}" ;;
   notes) republish_notes "${2:-}" ;;
   pull) pull_release "${2:-}" ;;
+  watch) watch_release "${2:-}" ;;
   ci-build) ci_build "${2:-}" ;;
   ci-upload) ci_upload "${2:-}" ;;
   ci-release) ci_release ;;

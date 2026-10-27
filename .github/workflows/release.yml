@@ -22,7 +22,7 @@ on:
     paths:
       - Cargo.lock
       - "**/Cargo.toml"
-      - .github/workflows/release-appimage.yml
+      - .github/workflows/release.yml
   workflow_dispatch:
 
 permissions:

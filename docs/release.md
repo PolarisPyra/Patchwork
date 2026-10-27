@@ -28,7 +28,7 @@ These files do all of it:
 | File | What it does |
 | --- | --- |
 | `scripts/release.sh` | Cuts the release on your machine, and does the build and publish steps in CI |
-| `.github/workflows/release-appimage.yml` | Sets up each runner's tools and calls `scripts/release.sh` |
+| `.github/workflows/release.yml` | Sets up each runner's tools and calls `scripts/release.sh` |
 | `scripts/changelog.sh` | Checks commit messages, drafts and checks each release's notes, and reads and writes `CHANGELOG.md` |
 | `docs/changelog-style.md` | The rules for changelog entries, for people and for the model that drafts them |
 
@@ -122,13 +122,15 @@ script:
    written before they pass.
 4. Writes the version, adds the notes to the top of `CHANGELOG.md`, commits both as
    `Release v0.2.0`, creates the annotated tag, and pushes `main` and the tag. It asks no questions.
-5. Follows the Release workflow, and stops with the failed jobs' errors if it fails. Ctrl-C stops
-   only the script, not the build.
-6. Checks that `latest.json` names the new version, and prints the download links.
+5. Prints the link to the Release workflow's run and ends. The build carries on on GitHub.
+
+To follow the build, run `scripts/release.sh watch 0.2.0`. It waits for the run to end, stops with
+the failed jobs' errors if it fails, then checks that `latest.json` names the new version and
+prints the download links. Ctrl-C stops only the watching, not the build.
 
 ## The Release workflow
 
-`.github/workflows/release-appimage.yml` runs on a `v*` tag, and on a push to `main` that changes
+`.github/workflows/release.yml` runs on a `v*` tag, and on a push to `main` that changes
 the Rust dependencies (see [Caches](#caches)). Other pushes to `main` build nothing.
 
 | Job | Runner | Commands | Publishes |
@@ -259,10 +261,9 @@ Set one with `gh secret set <NAME>` and paste the value at the prompt. If a Bunn
 regenerate it in Bunny and set it again.
 
 The signing key's public half is in `updates.rs` (`SIGNING_KEY`), which the app and the release job
-check signatures against, and base64-encoded in `apps/desktop/src-tauri/tauri.signing.conf.json`
-(`pubkey`), which the builds no longer read. If `TAURI_SIGNING_PRIVATE_KEY` is ever set to a
-different key, the release job stops before publishing. Losing the private key means no installed copy can update again, so keep a copy
-outside GitHub. Changing it means every copy needs a manual reinstall.
+check signatures against. If `TAURI_SIGNING_PRIVATE_KEY` is ever set to a different key, the
+release job stops before publishing. Losing the private key means no installed copy can update
+again, so keep a copy outside GitHub. Changing it means every copy needs a manual reinstall.
 
 ## Share a build
 
@@ -308,9 +309,9 @@ On Linux, the AppImage runs after `chmod +x Patchwork_amd64.AppImage`. Windows u
 
 - Push only when the user asks. A push to `main` builds only when it changes the Rust
   dependencies or the workflow.
-- Cut a release only when the user asks, with `pnpm release <version> 2>&1 | sed '/actions\/runs\//q'`
-  in the foreground. It asks nothing, and ends by itself once the tag is pushed and the run's link
-  is printed. Never background it, poll it, or kill it.
+- Cut a release only when the user asks, with `scripts/release.sh <version>` in the foreground. It
+  asks nothing and ends once the tag is pushed and the run's link is printed. Run `watch` only when
+  the user asks to follow the build.
 - If the user asks for a version like `0.4.91` after `0.4.9`, explain the ordering problem above
   and confirm before tagging.
 - **Discord changelog**: every time the version is bumped and pushed, write Discord release notes
