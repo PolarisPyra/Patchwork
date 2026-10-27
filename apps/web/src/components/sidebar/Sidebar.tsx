@@ -20,7 +20,6 @@ import {
   ArrowsClockwiseIcon,
   ArrowsInLineVerticalIcon,
   ChatCircleIcon,
-  CircleNotchIcon,
   FolderIcon,
   FolderPlusIcon,
   GitDiffIcon,
@@ -45,6 +44,7 @@ import {
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import ProviderLogos from "~/components/ProviderLogos";
+import Spinner from "~/components/Spinner";
 import ContextMenu, { type MenuItem } from "~/components/sidebar/ContextMenu";
 import UsagePopover from "~/components/usage/UsagePopover";
 import { useMissingFiles } from "~/hooks/useMissingFiles";
@@ -1158,7 +1158,7 @@ const ThreadRow = memo(function ThreadRow({
             </span>
           ) : isWorking(thread) ? (
             <span title="Working" className="inline-flex flex-none">
-              <CircleNotchIcon size={15} className="spin text-accent-text" />
+              <Spinner className="text-accent-text" />
             </span>
           ) : (
             <span

@@ -1,7 +1,8 @@
 /** Bottom status bar: project and branch, open thread, change count, prompt mode, and agent status. */
 import { memo } from "react";
-import { CaretRightIcon, CircleIcon, CircleNotchIcon, GitBranchIcon } from "@phosphor-icons/react";
+import { CaretRightIcon, CircleIcon, GitBranchIcon } from "@phosphor-icons/react";
 import { AGENT_LABELS, type AgentKind, type Project } from "~/api";
+import Spinner from "~/components/Spinner";
 
 interface StatusBarProps {
   project: Project | null;
@@ -57,7 +58,7 @@ function StatusBar({
       <span className="inline-flex h-5 items-center gap-1 px-1.5">
         {working ? (
           <>
-            <CircleNotchIcon size={12} className="spin" />
+            <Spinner />
             {AGENT_LABELS[agent]} working…
           </>
         ) : (

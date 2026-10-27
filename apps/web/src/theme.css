@@ -418,6 +418,16 @@
   }
 }
 
+/* Spinner's arc runs once around its ring (circumference 2π × 9) per 0.8 seconds. */
+.spinner-arc {
+  animation: spinner-arc 0.8s linear infinite;
+}
+@keyframes spinner-arc {
+  to {
+    stroke-dashoffset: -56.55;
+  }
+}
+
 /* The label of something still running breathes between muted and full text. A plain opacity
    change repaints only the label; the gradient sweep this replaces cost several times more. */
 .tool-shine {
