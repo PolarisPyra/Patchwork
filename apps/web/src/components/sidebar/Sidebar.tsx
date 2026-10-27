@@ -773,7 +773,8 @@ function TasksView({
         <div className="px-3 py-2 text-[length:var(--fs-sm)] text-fg-muted">No chats yet</div>
       )}
       {chats.map((t) => (
-        <Collapse key={t.id} open={!leavingIds.has(t.id)}>
+        // Chat rows reach 4px past the list's edge (see ThreadRow), so an open one is not clipped.
+        <Collapse key={t.id} open={!leavingIds.has(t.id)} overflowWhenOpen>
           <ThreadRow
             thread={t}
             {...rowState(t)}
