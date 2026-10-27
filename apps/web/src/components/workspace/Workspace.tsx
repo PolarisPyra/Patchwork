@@ -546,6 +546,9 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   );
   // Closes the open sidebar, or reopens the last one, wherever focus sits after a click.
   useCommand("sidebar.toggle", () => setView((current) => (current ? null : lastView.current)));
+  useCommand("sidebar.showTasks", () => setView("tasks"));
+  useCommand("sidebar.showChanges", () => setView("changes"));
+  useCommand("sidebar.showArchived", () => setView("archived"));
   // Acts on the picked rows and, while the compose box is not active, on the open chat in the task
   // list even when it is not picked.
   useCommand("workspace.closeChat", () => {
