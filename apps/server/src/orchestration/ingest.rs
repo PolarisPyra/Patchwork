@@ -1,6 +1,7 @@
 //! Reads an agent's output for one turn and hands each event to the modules that handle it.
 use std::collections::{HashMap, HashSet};
 use std::io::BufReader;
+use std::path::Path;
 use std::process::Child;
 use std::process::ChildStdout;
 use std::sync::Arc;
@@ -12,6 +13,7 @@ use std::thread::JoinHandle;
 use serde_json::Value;
 
 use crate::provider::GoalUpdate;
+use crate::permissions;
 use crate::provider::Parsed;
 use crate::provider;
 use crate::scope;
@@ -58,7 +60,8 @@ use super::subagents::finish_child;
 use super::subagents::open_child;
 use super::subagents::SubagentThread;
 use super::turn::{TurnEnd, finish, record_turn};
-use super::turn::Turn;
+use super::turn::{PendingApproval, Turn};
+use super::decide;
 use super::usage::message_usage;
 use super::usage::record_request;
 use super::usage::Request;
@@ -190,19 +193,48 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                     detail,
                     reply,
                     questions,
+                    target,
                 } => {
-                    let approval = Approval {
+                    let mut approval = Approval {
                         id: new_id(),
                         title,
                         detail,
                         status: ApprovalStatus::Pending,
                         questions,
                         answers: HashMap::new(),
+                        kind: target.as_ref().map(|t| t.kind),
+                        suggestions: target
+                            .as_ref()
+                            .map(|t| permissions::suggest(t, Path::new(&turn.root)))
+                            .unwrap_or_default(),
+                        rule: None,
+                        auto: false,
                     };
-                    turn.pending
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .insert(approval.id.clone(), (turn.message_id.clone(), reply));
+                    // A permission rule answers it without asking.
+                    if let Some(decision) = target.as_ref().and_then(|t| decide(&turn.server, &turn.thread_id, &turn.root, t)) {
+                        write_line(
+                            &turn.stdin,
+                            &provider::approval_reply(turn.agent, &reply, decision.allow, &HashMap::new()),
+                        );
+                        approval.status = if decision.allow { ApprovalStatus::Allowed } else { ApprovalStatus::Denied };
+                        approval.rule = Some(decision.rule);
+                        approval.auto = true;
+                        turn.save_text(&mut unsaved);
+                        turn.publish(AgentEvent::ApprovalRequested {
+                            message_id: turn.message_id.clone(),
+                            approval,
+                        });
+                        continue;
+                    }
+                    turn.pending.lock().unwrap_or_else(PoisonError::into_inner).insert(
+                        approval.id.clone(),
+                        PendingApproval {
+                            message_id: turn.message_id.clone(),
+                            reply,
+                            target,
+                            root: turn.root.clone(),
+                        },
+                    );
                     turn.save_text(&mut unsaved);
                     turn.publish(AgentEvent::ApprovalRequested {
                         message_id: turn.message_id.clone(),

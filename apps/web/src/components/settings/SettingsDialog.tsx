@@ -17,6 +17,7 @@ import {
   PlugsConnectedIcon,
   PlusIcon,
   RobotIcon,
+  ShieldCheckIcon,
   ScrollIcon,
   TerminalIcon,
   TerminalWindowIcon,
@@ -61,10 +62,12 @@ import Dropdown from "~/components/workspace/Dropdown";
 import KeybindingsPane from "~/components/settings/KeybindingsPane";
 import ApiProvidersPane from "~/components/settings/ApiProvidersPane";
 import McpServersPane, { Badge, chip, home, INPUT } from "~/components/settings/McpServersPane";
+import PermissionsPane, { type PermissionsFocus } from "~/components/settings/PermissionsPane";
 
 type Section =
   | "appearance"
   | "agent"
+  | "permissions"
   | "api"
   | "mcp"
   | "tokens"
@@ -81,6 +84,7 @@ type Section =
 const SECTIONS: { id: Section; label: string; Icon: Icon }[] = [
   { id: "appearance", label: "Appearance", Icon: PaletteIcon },
   { id: "agent", label: "CLI Providers", Icon: RobotIcon },
+  { id: "permissions", label: "Permissions", Icon: ShieldCheckIcon },
   { id: "api", label: "API Providers", Icon: PlugsConnectedIcon },
   { id: "mcp", label: "MCP Servers", Icon: PlugIcon },
   { id: "skills", label: "Skills", Icon: BooksIcon },
@@ -101,6 +105,8 @@ interface PaneProps {
 }
 
 interface SettingsDialogProps extends PaneProps {
+  /** Opens on Settings → Permissions, with this scope and rule picked out. */
+  focus?: PermissionsFocus | null;
   /** Called after conversations were imported, so threads can be reloaded. */
   onImported: () => void;
   onClose: () => void;
@@ -109,10 +115,11 @@ interface SettingsDialogProps extends PaneProps {
 export default function SettingsDialog({
   settings,
   updateSettings,
+  focus,
   onImported,
   onClose,
 }: SettingsDialogProps) {
-  const [section, setSection] = useState<Section>("appearance");
+  const [section, setSection] = useState<Section>(focus ? "permissions" : "appearance");
   const title = SECTIONS.find((s) => s.id === section)?.label ?? "";
   const paneProps = { settings, updateSettings };
 
@@ -150,6 +157,7 @@ export default function SettingsDialog({
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
             {section === "appearance" && <AppearancePane {...paneProps} />}
             {section === "agent" && <AgentPane {...paneProps} />}
+            {section === "permissions" && <PermissionsPane {...paneProps} focus={focus ?? null} />}
             {section === "api" && <ApiProvidersPane updateSettings={updateSettings} />}
             {section === "mcp" && (
               <McpServersPane appIcon={LOGO_URLS[settings.logo ?? logoManifest.default]} />
@@ -246,7 +254,7 @@ const TOKEN_LEVELS = [100_000, 150_000, 200_000, 300_000];
 const COMPACT_WINDOWS = [0, 200_000, 300_000, 500_000];
 
 /** One setting: its name and what it does, with the control on the right. */
-function TokenRow({
+export function TokenRow({
   title,
   desc,
   children,
@@ -954,7 +962,7 @@ function LoggingPane({ settings, updateSettings }: PaneProps) {
 }
 
 /** Two to five choices side by side, as the theme picker. */
-function Segmented<T extends string>({
+export function Segmented<T extends string>({
   label,
   value,
   options,
@@ -987,7 +995,7 @@ function Segmented<T extends string>({
 }
 
 /** A text field that saves when it loses focus or on Enter. */
-function TextField({
+export function TextField({
   label,
   value,
   placeholder,

@@ -8,7 +8,8 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
-use crate::types::AccessMode;
+use crate::permissions::Target;
+use crate::types::{AccessMode, PermissionKind};
 
 /// Longest tool result sent back to the model; the middle of a longer one is cut.
 const MAX_RESULT: usize = 40_000;
@@ -173,8 +174,9 @@ pub fn shown(path: &Path, root: &Path) -> String {
     path.strip_prefix(root).unwrap_or(path).display().to_string()
 }
 
-/// The approval a call needs before it runs, as its title and detail, or None to run at once.
-pub fn approval(name: &str, args: &Value, mode: AccessMode, root: &Path) -> Option<(String, String)> {
+/// The approval a call needs before it runs, as its title, its detail, and what it asks to do for
+/// the permission rules, or None to run at once.
+pub fn approval(name: &str, args: &Value, mode: AccessMode, root: &Path) -> Option<(String, String, Target)> {
     if mode == AccessMode::FullAccess {
         return None;
     }
@@ -182,19 +184,29 @@ pub fn approval(name: &str, args: &Value, mode: AccessMode, root: &Path) -> Opti
     if let Some(path) = &path
         && !path.starts_with(root)
     {
-        let title = if writes(name) { "Change a file outside the project" } else { "Read outside the project" };
-        return Some((title.into(), path.display().to_string()));
+        let shown = path.display().to_string();
+        if writes(name) {
+            let target = Target::new(PermissionKind::Edit, [shown.clone()]);
+            return Some(("Change a file outside the project".into(), shown, target));
+        }
+        // Reading a file asks for its folder.
+        let folder = if name == "read_file" { path.parent().unwrap_or(path) } else { path };
+        let target = Target::new(PermissionKind::Folder, [folder.display().to_string()]);
+        return Some(("Read outside the project".into(), shown, target));
     }
     match name {
         "write_file" | "edit_file" if mode == AccessMode::Supervised => {
             let title = if name == "write_file" { "Write a file" } else { "Edit a file" };
-            Some((title.into(), path.map(|p| shown(&p, root)).unwrap_or_default()))
+            let target = Target::new(PermissionKind::Edit, path.iter().map(|p| p.display().to_string()));
+            Some((title.into(), path.map(|p| shown(&p, root)).unwrap_or_default(), target))
         }
         "bash" if matches!(mode, AccessMode::Supervised | AccessMode::AutoAcceptEdits) => {
-            Some(("Run a command".into(), args["command"].as_str().unwrap_or_default().into()))
+            let command = args["command"].as_str().unwrap_or_default();
+            Some(("Run a command".into(), command.into(), Target::new(PermissionKind::Command, [command])))
         }
         "fetch_url" if mode == AccessMode::Supervised => {
-            Some(("Fetch a web page".into(), args["url"].as_str().unwrap_or_default().into()))
+            let url = args["url"].as_str().unwrap_or_default();
+            Some(("Fetch a web page".into(), url.into(), Target::new(PermissionKind::Web, [url])))
         }
         _ => None,
     }

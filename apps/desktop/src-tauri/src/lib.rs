@@ -561,8 +561,9 @@ fn respond_approval(
     approval_id: String,
     allow: bool,
     answers: Option<std::collections::HashMap<String, Vec<String>>>,
+    rule: Option<patchwork_server::types::RuleRef>,
 ) -> Res<()> {
-    server.respond_approval(&thread_id, &approval_id, allow, answers.unwrap_or_default())
+    server.respond_approval(&thread_id, &approval_id, allow, answers.unwrap_or_default(), rule)
 }
 
 #[tauri::command]

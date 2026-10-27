@@ -13,6 +13,7 @@ use std::time::Instant;
 use serde_json::Value;
 
 use super::attribution::{self, Attribution, Reach, SharedAttribution};
+use crate::permissions::Target;
 use crate::provider::TurnSpec;
 use crate::provider;
 use crate::scope;
@@ -54,8 +55,19 @@ use super::subagents::Controls;
 use super::subagents::Tasks;
 
 
-/// Pending approvals of one turn: approval id → its message and the provider's reply context.
-pub(super) type Pending = Arc<Mutex<HashMap<String, (String, Value)>>>;
+/// An approval waiting for the user.
+pub(super) struct PendingApproval {
+    pub(super) message_id: String,
+    /// What `approval_reply` needs to answer it.
+    pub(super) reply: Value,
+    /// What it asks to do, for the permission rules.
+    pub(super) target: Option<Target>,
+    /// The folder the thread works in.
+    pub(super) root: String,
+}
+
+/// Pending approvals of one turn, by approval id.
+pub(super) type Pending = Arc<Mutex<HashMap<String, PendingApproval>>>;
 
 /// The agent's id for the turn now running (Codex reports it once the turn starts).
 pub(super) type NativeTurn = Arc<Mutex<Option<String>>>;

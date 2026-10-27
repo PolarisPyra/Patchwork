@@ -4,6 +4,7 @@
 pub mod debug_log;
 pub mod import;
 pub mod orchestration;
+pub mod permissions;
 pub mod persistence;
 pub mod provider;
 mod scope;
@@ -528,7 +529,10 @@ impl Server {
 
     pub fn save_settings(&self, settings: Settings) -> Res<()> {
         follow_log_levels(&settings);
-        self.store.update_settings(|s| *s = settings)
+        self.store.update_settings(|s| *s = settings)?;
+        // A rule the user just added may answer requests already waiting.
+        self.runner.apply_rules(self);
+        Ok(())
     }
 
     /// Adds `project` unless its path is already registered; returns the stored one.
@@ -1275,11 +1279,12 @@ impl Server {
         approval_id: &str,
         allow: bool,
         answers: std::collections::HashMap<String, Vec<String>>,
+        rule: Option<types::RuleRef>,
     ) -> Res<()> {
         self.runner.respond(
             self,
             thread_id,
-            ApprovalDecision { approval_id, allow, answers },
+            ApprovalDecision { approval_id, allow, answers, rule },
         )
     }
 

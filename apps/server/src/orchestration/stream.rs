@@ -270,10 +270,14 @@ pub(super) fn apply(thread: &mut Thread, event: &AgentEvent) {
             approval_id,
             allowed,
             answers,
+            rule,
+            auto,
             ..
         } => {
             if let Some(approval) = msg.approvals.iter_mut().find(|a| a.id == *approval_id) {
                 approval.answers = answers.clone();
+                approval.rule = rule.clone();
+                approval.auto = *auto;
                 approval.status = if *allowed {
                     ApprovalStatus::Allowed
                 } else {

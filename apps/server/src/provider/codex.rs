@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
+use crate::permissions::Target;
 use crate::types::AccessMode;
 use crate::types::AgentEvent;
 use crate::types::AgentKind;
@@ -15,6 +16,7 @@ use crate::types::Goal;
 use crate::types::TokenUsage;
 use crate::types::ModelOption;
 use crate::types::PlanStep;
+use crate::types::PermissionKind;
 use crate::types::Question;
 use crate::types::QuestionOption;
 use crate::types::Refusal;
@@ -456,16 +458,19 @@ fn codex_item(completed: bool, item: &Value, root: &str, message_id: &str, out: 
 fn codex_server_request(v: &Value) -> Parsed {
     let params = &v["params"];
     let reason = params["reason"].as_str().filter(|r| !r.is_empty());
-    let (title, detail) = match v["method"].as_str() {
+    let (title, detail, target) = match v["method"].as_str() {
         Some("item/commandExecution/requestApproval") => (
             "Run command",
             params["command"].as_str().or(reason).unwrap_or_default(),
+            Target::new(PermissionKind::Command, params["command"].as_str()),
         ),
+        // The request names no files; a folder it wants to write in, at most.
         Some("item/fileChange/requestApproval") => (
             "Edit files",
             reason
                 .or(params["grantRoot"].as_str())
                 .unwrap_or("Apply the proposed file changes"),
+            Target::new(PermissionKind::Edit, params["grantRoot"].as_str()),
         ),
         Some("item/tool/requestUserInput") if !codex_questions(&params["questions"]).is_empty() => {
             let questions = codex_questions(&params["questions"]);
@@ -477,6 +482,7 @@ fn codex_server_request(v: &Value) -> Parsed {
                     .unwrap_or_default(),
                 reply: json!({"id": v["id"], "question": true}),
                 questions,
+                target: None,
             };
         }
         _ => {
@@ -491,6 +497,7 @@ fn codex_server_request(v: &Value) -> Parsed {
         detail: one_line(detail),
         reply: json!({"id": v["id"]}),
         questions: vec![],
+        target: Some(target),
     }
 }
 

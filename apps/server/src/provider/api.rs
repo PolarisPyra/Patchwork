@@ -9,6 +9,7 @@ use crate::types::{
     AgentEvent, AgentStatus, PlanStep, Question, QuestionOption, StepStatus, TokenUsage,
     ProviderSlashCommand,
 };
+use crate::permissions::Target;
 use super::{Image, Parsed, ToolStart, TurnSpec};
 use super::{api_bridge, api_config, api_tools, mcp, file_touched, prompt, text_delta, thinking, tool_finished, tool_started};
 
@@ -164,6 +165,10 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
             detail: super::one_line(text("detail")),
             reply: json!({"id": v["id"]}),
             questions: Vec::new(),
+            target: serde_json::from_value(v["kind"].clone()).ok().map(|kind| {
+                let resources = v["resources"].as_array().into_iter().flatten().filter_map(Value::as_str);
+                Target::new(kind, resources)
+            }),
         }],
         Some("api.question") => {
             let questions: Vec<Question> = v["questions"]
@@ -191,6 +196,7 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
                 detail: questions.first().map(|q| q.question.clone()).unwrap_or_default(),
                 reply: json!({"id": v["id"]}),
                 questions,
+                target: None,
             }]
         }
         Some("api.usage") => {

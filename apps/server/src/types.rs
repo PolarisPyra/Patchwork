@@ -85,6 +85,76 @@ pub struct Settings {
     pub import_log_disabled: bool,
     pub logging: LoggingSettings,
     pub terminal: TerminalSettings,
+    pub permissions: PermissionSettings,
+}
+
+/// What agents may do without asking: for every project and chat, for chats without a project,
+/// and for each project.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PermissionSettings {
+    pub everywhere: ScopeRules,
+    pub chats: ScopeRules,
+    /// By project id.
+    pub projects: HashMap<String, ScopeRules>,
+    /// Set once the starting rules were added, so deleting one does not bring it back.
+    pub seeded: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ScopeRules {
+    /// What each kind of request gets when no rule matches it; a missing kind inherits.
+    pub defaults: BTreeMap<PermissionKind, Effect>,
+    pub rules: Vec<PermissionRule>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionRule {
+    pub id: String,
+    pub kind: PermissionKind,
+    /// A folder, a command's leading words, a web host, or an MCP server; `*` is anything, and
+    /// `.` is the thread's own folder.
+    pub pattern: String,
+    pub effect: Effect,
+}
+
+/// The kinds of request a rule can answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PermissionKind {
+    Edit,
+    Command,
+    Folder,
+    Web,
+    Mcp,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Effect {
+    Allow,
+    Ask,
+    Deny,
+}
+
+/// Where a permission rule applies.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "projectId", rename_all = "lowercase")]
+pub enum PermissionScope {
+    Everywhere,
+    Chats,
+    Project(String),
+}
+
+/// The rule that answered an approval: a rule by id, or the scope's default for the kind.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuleRef {
+    pub scope: PermissionScope,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule_id: Option<String>,
 }
 
 /// The integrated terminal, as VS Code's `terminal.integrated.*` settings set it up, with its
@@ -498,6 +568,18 @@ pub struct Approval {
     /// The user's answers, by question id.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub answers: HashMap<String, Vec<String>>,
+    /// What kind of request it is, when a permission rule can answer it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<PermissionKind>,
+    /// The patterns "Always allow" saves; empty when a rule could not safely cover it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub suggestions: Vec<String>,
+    /// The rule that answered it, or that the user saved when answering it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule: Option<RuleRef>,
+    /// Answered by a rule, without asking.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub auto: bool,
 }
 
 /// A question the agent asks the user, with the answers it offers.
@@ -891,6 +973,12 @@ pub enum AgentEvent {
         /// The user's answers to the agent's questions, by question id.
         #[serde(default, skip_serializing_if = "HashMap::is_empty")]
         answers: HashMap<String, Vec<String>>,
+        /// The rule that answered it, or that the user saved when answering it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rule: Option<RuleRef>,
+        /// Answered by a rule, without asking.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        auto: bool,
     },
     /// The thread's goal changed; None once it is cleared.
     GoalUpdated {

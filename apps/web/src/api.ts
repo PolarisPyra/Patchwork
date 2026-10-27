@@ -52,6 +52,48 @@ export interface Settings {
   updates: UpdatesSettings;
   /** Id of the app icon color way in `assets/logos/manifest.json`; null uses the manifest default. */
   logo: string | null;
+  permissions: PermissionSettings;
+}
+
+/** What agents may do without asking. Mirrors `PermissionSettings` in apps/server/src/types.rs. */
+export interface PermissionSettings {
+  everywhere: ScopeRules;
+  /** Chats without a project. */
+  chats: ScopeRules;
+  /** By project id. */
+  projects: Record<string, ScopeRules>;
+  seeded: boolean;
+}
+
+export interface ScopeRules {
+  /** What each kind of request gets when no rule matches it; a missing kind inherits. */
+  defaults: Partial<Record<PermissionKind, Effect>>;
+  rules: PermissionRule[];
+}
+
+export interface PermissionRule {
+  id: string;
+  kind: PermissionKind;
+  /** A folder, a command's leading words, a web host, or an MCP server; `*` is anything, and `.`
+   * is the thread's own folder. */
+  pattern: string;
+  effect: Effect;
+}
+
+export type PermissionKind = "edit" | "command" | "folder" | "web" | "mcp";
+
+export type Effect = "allow" | "ask" | "deny";
+
+/** Where a permission rule applies. */
+export type PermissionScope =
+  | { type: "everywhere" }
+  | { type: "chats" }
+  | { type: "project"; projectId: string };
+
+/** The rule that answered an approval: a rule by id, or the scope's default for the kind. */
+export interface RuleRef {
+  scope: PermissionScope;
+  ruleId?: string;
 }
 
 /** How Patchwork keeps itself up to date. */
@@ -388,6 +430,14 @@ export interface Approval {
   questions?: Question[];
   /** The user's answers, by question id. */
   answers?: Record<string, string[]>;
+  /** What kind of request it is, when a permission rule can answer it. */
+  kind?: PermissionKind;
+  /** The patterns "Always allow" saves; none when a rule could not safely cover it. */
+  suggestions?: string[];
+  /** The rule that answered it, or that the user saved when answering it. */
+  rule?: RuleRef;
+  /** Answered by a rule, without asking. */
+  auto?: boolean;
 }
 
 /** A question the agent asks the user, with the answers it offers. */
@@ -610,6 +660,8 @@ export type AgentEvent =
       approvalId: string;
       allowed: boolean;
       answers?: Record<string, string[]>;
+      rule?: RuleRef;
+      auto?: boolean;
     }
   | { type: "messageQueued"; messageId: string; queued: boolean }
   | { type: "messageSteered"; messageId: string }
@@ -661,6 +713,12 @@ export const DEFAULT_SETTINGS: Settings = {
   logo: null,
   logging: { app: "info", window: "info", agents: "info", imports: "info" },
   terminal: defaultTerminalSettings(),
+  permissions: {
+    everywhere: { defaults: {}, rules: [] },
+    chats: { defaults: {}, rules: [] },
+    projects: {},
+    seeded: false,
+  },
 };
 
 /** Agent used for new tasks: the first connected one, else Claude Code. */
@@ -920,7 +978,8 @@ export const api = {
     approvalId: string,
     allow: boolean,
     answers?: Record<string, string[]>,
-  ) => invoke<void>("respond_approval", { threadId, approvalId, allow, answers }),
+    rule?: RuleRef,
+  ) => invoke<void>("respond_approval", { threadId, approvalId, allow, answers, rule }),
 
   readFile: (projectId: string, path: string) => invoke<string>("read_file", { projectId, path }),
   /** Which of `paths` no longer exist in the project. */

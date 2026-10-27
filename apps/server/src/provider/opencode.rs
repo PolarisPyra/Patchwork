@@ -11,6 +11,8 @@ use crate::types::{
     AccessMode, AgentEvent, AgentKind, AgentStatus, Attachment, AttachmentKind, ModelOption,
     ProviderSlashCommand, Question, QuestionOption, TokenUsage,
 };
+use crate::permissions::Target;
+use crate::types::PermissionKind;
 use super::Parsed;
 use super::ToolStart;
 use super::TurnSpec;
@@ -493,6 +495,7 @@ fn parse_serve(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                 detail: one_line(&resources.join(", ")),
                 reply: json!({"kind": "permission", "requestID": request}),
                 questions: Vec::new(),
+                target: permission_target(action, &resources),
             }]
         }
         Some("question.asked" | "question.v2.asked") => {
@@ -524,6 +527,7 @@ fn parse_serve(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                 detail: questions.first().map(|q| q.question.clone()).unwrap_or_default(),
                 reply: json!({"kind": "question", "requestID": request, "questions": ids}),
                 questions,
+                target: None,
             }]
         }
         // OpenCode 2.1 asks its question tool's questions as a form, one field per question.
@@ -567,6 +571,7 @@ fn parse_serve(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                 detail: questions.first().map(|q| q.question.clone()).unwrap_or_default(),
                 reply: json!({"kind": "form", "requestID": request, "fields": shapes}),
                 questions,
+                target: None,
             }]
         }
         Some("session.execution.failed") => vec![Parsed::Error(message_of(v))],
@@ -600,6 +605,18 @@ fn tool_summary(input: &Value, root: &str) -> String {
         Some(path) => relative(root, path),
         None => summarize(input, root),
     }
+}
+
+/// What a permission request asks to do, for the permission rules.
+fn permission_target(action: &str, resources: &[&str]) -> Option<Target> {
+    let kind = match action {
+        "edit" => PermissionKind::Edit,
+        "shell" | "bash" => PermissionKind::Command,
+        "external_directory" => PermissionKind::Folder,
+        "webfetch" => PermissionKind::Web,
+        _ => return None,
+    };
+    Some(Target::new(kind, resources.iter().copied()))
 }
 
 /// What a permission request asks to do, as an approval title.

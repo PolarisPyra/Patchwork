@@ -36,6 +36,7 @@ pub(super) fn load_settings(conn: &Connection) -> rusqlite::Result<Settings> {
     if settings.import_log_disabled {
         settings.logging.imports = crate::types::LogLevel::Off;
     }
+    crate::permissions::seed(&mut settings.permissions);
     let mut stmt = conn.prepare("SELECT id, name, path FROM projects ORDER BY position")?;
     settings.projects = stmt
         .query_map([], |r| {

@@ -8,7 +8,10 @@ import {
   type Attachment,
   type BackgroundTask,
   type FileChange,
+  type Approval,
   type Message,
+  type PermissionScope,
+  type PermissionSettings,
   type Project,
   type ProviderSlashCommand,
   type Thread,
@@ -43,6 +46,14 @@ import Composer, {
 import { inlineImagePaths } from "~/components/chat/composerExtensions";
 import Messages, { UsageLine } from "~/components/chat/Messages";
 import PendingApprovalBanner from "~/components/chat/PendingApprovalBanner";
+import {
+  PermissionsContext,
+  type PermissionsContextValue,
+  scopeName,
+  suggestedRules,
+  threadScope,
+  withScopeRules,
+} from "~/lib/permissions";
 import TasksBadge from "~/components/chat/TasksBadge";
 import { planTitle } from "~/components/chat/ProposedPlanCard";
 import MissingFolderPrompt from "~/components/chat/MissingFolderPrompt";
@@ -104,6 +115,12 @@ interface ChatProps {
   onClearThread: (threadId: string) => Promise<void>;
   /** Undoes the turn of a user message and everything after it, the project's files included. */
   onRestoreCheckpoint: (threadId: string, messageId: string) => Promise<void>;
+  /** Settings → Permissions, for the approval banner and the transcript. */
+  permissionSettings: PermissionSettings;
+  projects: Project[];
+  onUpdatePermissions: (change: (p: PermissionSettings) => PermissionSettings) => void;
+  /** Opens Settings → Permissions on a scope, with one of its rules picked out. */
+  onOpenPermissions: (scope: PermissionScope, ruleId?: string) => void;
 }
 
 /** What goes into the draft for an attachment: its path, relative to the project when inside it. */
@@ -191,6 +208,10 @@ export default function Chat({
   onSetPlanMode,
   onStartThread,
   onSetEffort,
+  permissionSettings,
+  projects,
+  onUpdatePermissions,
+  onOpenPermissions,
 }: ChatProps) {
   // Drafts are kept per thread ("new" when nothing is selected).
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -796,6 +817,52 @@ export default function Chat({
     },
     [threadId],
   );
+  const scopeProjectId = thread ? thread.projectId : (project?.id ?? null);
+  const scope = useMemo(() => threadScope(scopeProjectId), [scopeProjectId]);
+  const permissionsContext = useMemo<PermissionsContextValue>(
+    () => ({
+      permissions: permissionSettings,
+      projects,
+      scope,
+      addRules: (to, rules) =>
+        onUpdatePermissions((p) =>
+          withScopeRules(p, to, (s) => ({
+            ...s,
+            // A rule with the same pattern is replaced, so saving one twice keeps one.
+            rules: [
+              ...s.rules.filter(
+                (r) => !rules.some((n) => n.kind === r.kind && n.pattern === r.pattern),
+              ),
+              ...rules,
+            ],
+          })),
+        ),
+      removeRule: (from, ruleId) =>
+        onUpdatePermissions((p) =>
+          withScopeRules(p, from, (s) => ({ ...s, rules: s.rules.filter((r) => r.id !== ruleId) })),
+        ),
+      openRule: onOpenPermissions,
+    }),
+    [permissionSettings, projects, scope, onUpdatePermissions, onOpenPermissions],
+  );
+  /** Answers a permission request; `always` also saves its rules there, so the next ones like
+   * it are answered without asking. The rules are saved after the answer, so the server answers
+   * the other waiting requests they cover rather than this one. */
+  const respondPermission = useCallback(
+    (approval: Approval, allow: boolean, always?: PermissionScope) => {
+      if (!threadId) return;
+      setError(null);
+      const rules = always ? suggestedRules(approval) : [];
+      const rule = always && rules[0] ? { scope: always, ruleId: rules[0].id } : undefined;
+      api
+        .respondApproval(threadId, approval.id, allow, undefined, rule)
+        .then(() => {
+          if (always && rules.length > 0) permissionsContext.addRules(always, rules);
+        })
+        .catch((e: unknown) => setError(errorText(e)));
+    },
+    [threadId, permissionsContext],
+  );
   const pendingApprovals =
     thread?.messages.flatMap((m) => m.approvals).filter((a) => a.status === "pending") ?? [];
   // Questions the agent asks wait in a choice panel, one at a time; permission requests wait in
@@ -928,19 +995,21 @@ export default function Chat({
       )}
       <div className={`flex min-h-0 flex-col ${isNew ? "flex-none overflow-y-auto" : "flex-1"}`}>
         {!isNew ? (
-          <Messages
-            key={thread.id}
-            thread={thread}
-            onOpenThread={onOpenThread}
-            changes={changes}
-            busy={working}
-            onOpenCanvas={project ? openCanvas : undefined}
-            onShowChanges={showChanges}
-            onRetry={retry}
-            checkpoints={checkpoints}
-            onRestore={restore}
-            tokens={tokens}
-          />
+          <PermissionsContext.Provider value={permissionsContext}>
+            <Messages
+              key={thread.id}
+              thread={thread}
+              onOpenThread={onOpenThread}
+              changes={changes}
+              busy={working}
+              onOpenCanvas={project ? openCanvas : undefined}
+              onShowChanges={showChanges}
+              onRetry={retry}
+              checkpoints={checkpoints}
+              onRestore={restore}
+              tokens={tokens}
+            />
+          </PermissionsContext.Provider>
         ) : (
           <div className="flex h-auto flex-col items-center justify-center gap-4 p-6 text-center">
             <ProviderLogos kind={agent} size={40} />
@@ -1006,7 +1075,12 @@ export default function Chat({
           </div>
         )}
         {permissions.length > 0 && (
-          <PendingApprovalBanner approvals={permissions} onRespond={respond} />
+          <PendingApprovalBanner
+            approvals={permissions}
+            scope={scope}
+            scopeName={scopeName(scope, projects)}
+            onRespond={respondPermission}
+          />
         )}
         {asking && question && showQuestion && (
           <ChoicePanel

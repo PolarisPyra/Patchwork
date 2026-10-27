@@ -16,7 +16,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use super::api_tools;
-use crate::types::AccessMode;
+use crate::permissions::Target;
+use crate::types::{AccessMode, PermissionKind};
 
 /// The argument that starts Patchwork's own binary as the API agent.
 pub const BRIDGE_ARG: &str = "--api-bridge";
@@ -541,7 +542,7 @@ impl Agent {
                 },
                 name => {
                     let allowed = match api_tools::approval(name, &args, self.request.mode, &self.root) {
-                        Some((title, detail)) => self.approve(&call.id, &title, &detail),
+                        Some((title, detail, target)) => self.approve(&call.id, &title, &detail, target),
                         None => true,
                     };
                     if allowed && name == "read_file" && let Some(image) = self.read_image(&args) {
@@ -595,7 +596,12 @@ impl Agent {
             _ => !tool.read_only,
         };
         let (server, name) = (tool.server.clone(), tool.tool.clone());
-        if ask && !self.approve(id, &format!("Use {name} from {server}"), &args.to_string()) {
+        if ask && !self.approve(
+            id,
+            &format!("Use {name} from {server}"),
+            &args.to_string(),
+            Target::new(PermissionKind::Mcp, [format!("{server}/{name}")]),
+        ) {
             return Err(DENIED.into());
         }
         emit(&json!({"type": "api.mcp_call", "id": id, "server": server, "tool": name, "arguments": args}));
@@ -605,8 +611,12 @@ impl Agent {
     }
 
     /// Asks Patchwork for an approval and waits for the answer.
-    fn approve(&mut self, id: &str, title: &str, detail: &str) -> bool {
-        emit(&json!({"type": "api.approval", "id": id, "title": title, "detail": detail}));
+    fn approve(&mut self, id: &str, title: &str, detail: &str, target: Target) -> bool {
+        let Target { kind, resources } = target;
+        emit(&json!({
+            "type": "api.approval", "id": id, "title": title, "detail": detail,
+            "kind": kind, "resources": resources,
+        }));
         self.wait(id).is_some_and(|reply| reply["allow"] == true)
     }
 

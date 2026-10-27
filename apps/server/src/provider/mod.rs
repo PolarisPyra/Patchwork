@@ -695,6 +695,8 @@ pub enum Parsed {
         reply: Value,
         /// Set when the agent asks the user questions instead of asking permission.
         questions: Vec<Question>,
+        /// What it asks to do, when a permission rule can answer it.
+        target: Option<crate::permissions::Target>,
     },
     /// The agent answered the control request with this id.
     ControlResponse(String),

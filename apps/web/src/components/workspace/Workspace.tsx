@@ -16,6 +16,8 @@ import {
   onProjectChanged,
   type FileChange,
   type Message,
+  type PermissionScope,
+  type PermissionSettings,
   type Settings,
   type Thread,
 } from "~/api";
@@ -192,6 +194,20 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   );
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // The permission rule Settings opens on, from an approval in the transcript.
+  const [settingsFocus, setSettingsFocus] = useState<{
+    scope: PermissionScope;
+    ruleId?: string;
+  } | null>(null);
+  const openPermissions = useCallback((scope: PermissionScope, ruleId?: string) => {
+    setSettingsFocus({ scope, ruleId });
+    setSettingsOpen(true);
+  }, []);
+  const updatePermissions = useCallback(
+    (change: (p: PermissionSettings) => PermissionSettings) =>
+      void updateSettings((s) => ({ ...s, permissions: change(s.permissions) })),
+    [updateSettings],
+  );
   const [canvas, setCanvas] = useState<CanvasState | null>(null);
   const [canvasWidth, setCanvasWidth] = useState<number | null>(null);
   // The terminal and Output panel under the chat.
@@ -571,7 +587,10 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     ),
   );
   useCommand("palette.close", () => setPaletteOpen(false));
-  useCommand("settings.close", () => setSettingsOpen(false));
+  useCommand("settings.close", () => {
+    setSettingsOpen(false);
+    setSettingsFocus(null);
+  });
   useCommand("canvas.close", () => setCanvas(null));
   useCommand("sidebar.clearSelection", () => setSelectedRows([]));
   useContextKey("paletteOpen", () => paletteOpen);
@@ -755,6 +774,10 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
                   )
                 }
                 onSetEffort={setEffort}
+                permissionSettings={settings.permissions}
+                projects={settings.projects}
+                onUpdatePermissions={updatePermissions}
+                onOpenPermissions={openPermissions}
               />
             </main>
 
@@ -837,8 +860,12 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
         <SettingsDialog
           settings={settings}
           updateSettings={updateSettings}
+          focus={settingsFocus}
           onImported={() => void reload()}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => {
+            setSettingsOpen(false);
+            setSettingsFocus(null);
+          }}
         />
       )}
     </div>

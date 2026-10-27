@@ -165,11 +165,13 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
       }));
     }
     case "approvalResolved": {
-      const { messageId, approvalId, allowed, answers } = event;
+      const { messageId, approvalId, allowed, answers, rule, auto } = event;
       const status = allowed ? "allowed" : "denied";
       return updateMessage(thread, messageId, (m) => ({
         ...m,
-        approvals: m.approvals.map((a) => (a.id === approvalId ? { ...a, status, answers } : a)),
+        approvals: m.approvals.map((a) =>
+          a.id === approvalId ? { ...a, status, answers, rule, auto } : a,
+        ),
       }));
     }
     case "threadCreated":

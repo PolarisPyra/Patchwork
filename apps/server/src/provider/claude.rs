@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
+use crate::permissions::Target;
 use crate::types::AccessMode;
 use crate::types::AgentEvent;
 use crate::types::AgentKind;
@@ -14,6 +15,7 @@ use crate::types::ModelOption;
 use crate::types::now_ms;
 use crate::types::PlanStep;
 use crate::types::ProviderSlashCommand;
+use crate::types::PermissionKind;
 use crate::types::Question;
 use crate::types::QuestionOption;
 use crate::types::StepStatus;
@@ -306,6 +308,7 @@ fn claude_control_request(v: &Value, root: &str) -> Parsed {
                 .unwrap_or_default(),
             reply,
             questions,
+            target: None,
         };
     }
     let title = match tool {
@@ -322,6 +325,32 @@ fn claude_control_request(v: &Value, root: &str) -> Parsed {
         detail,
         reply,
         questions: vec![],
+        target: claude_target(tool, &request["input"], root),
+    }
+}
+
+/// What a tool call asks to do, for the permission rules.
+fn claude_target(tool: &str, input: &Value, root: &str) -> Option<Target> {
+    let text = |key: &str| input[key].as_str().unwrap_or_default();
+    let path = input["file_path"].as_str().or(input["notebook_path"].as_str());
+    match tool {
+        "Bash" => Some(Target::new(PermissionKind::Command, [text("command")])),
+        "Edit" | "Write" | "MultiEdit" | "NotebookEdit" => Some(Target::new(PermissionKind::Edit, path)),
+        // Reading outside the folder: the file's folder, or the folder searched.
+        "Read" => {
+            let path = std::path::Path::new(path?);
+            let folder = path.parent().unwrap_or(path).to_string_lossy().into_owned();
+            Some(Target::new(PermissionKind::Folder, [folder]))
+        }
+        "Glob" | "Grep" | "LS" => Some(Target::new(
+            PermissionKind::Folder,
+            [input["path"].as_str().unwrap_or(root)],
+        )),
+        "WebFetch" => Some(Target::new(PermissionKind::Web, [text("url")])),
+        _ => {
+            let (server, tool) = tool.strip_prefix("mcp__")?.split_once("__")?;
+            Some(Target::new(PermissionKind::Mcp, [format!("{server}/{tool}")]))
+        }
     }
 }
 
