@@ -19,8 +19,8 @@ use tauri::{AppHandle, Emitter, Manager};
 
 /// The latest release, in the shape of GitHub's release API. The release workflow publishes it.
 const LATEST_RELEASE: &str = "https://updates.patchworkeditor.com/latest.json";
-/// The minisign public key of the release signing key: the updater `pubkey` in
-/// tauri.signing.conf.json, decoded.
+/// The minisign public key of the release signing key. The release job checks every signature
+/// against it before publishing (see scripts/release.sh).
 const SIGNING_KEY: &str = "RWRXprrQ+eDX1VTXegp1CNjQ85EUGvB2gw6QQR/8pzPzVHjoIsayrxzc";
 /// How long after launch the first check waits, so it does not slow the start.
 const FIRST_CHECK: Duration = Duration::from_secs(30);
