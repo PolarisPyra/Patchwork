@@ -26,7 +26,7 @@ import AttachmentChip, { AttachmentTile } from "~/components/chat/AttachmentChip
 import { ACTION_CLASS, CopyButton } from "~/components/chat/CopyButton";
 import TurnTimeline from "~/components/chat/TurnTimeline";
 import { isCompactCommand, isGoalClearCommand } from "~/components/chat/composerActions";
-import { inlineImagePaths } from "~/components/chat/composerExtensions";
+import { withoutImageMarkdown } from "~/components/chat/composerExtensions";
 import { shortcutContext, useCommand } from "~/lib/shortcuts";
 import { formatTokens } from "~/lib/tokens";
 import { useMissingFiles } from "~/hooks/useMissingFiles";
@@ -217,20 +217,17 @@ const UserMessage = memo(function UserMessage({
   /** Set when the message's turn can be undone. */
   onRestore?: (message: Message) => void;
 }) {
-  const long = message.text.length > LONG_MESSAGE_CHARS;
+  // Images written into the text show above it with the other attachments.
+  const full = useMemo(() => withoutImageMarkdown(message.text), [message.text]);
+  const long = full.length > LONG_MESSAGE_CHARS;
   const [expanded, setExpanded] = useState(() => expandedMessages.has(message.id));
-  const lines = useMemo(() => (long ? message.text.split("\n") : []), [long, message.text]);
+  const lines = useMemo(() => (long ? full.split("\n") : []), [long, full]);
   const text =
     long && !expanded && lines.length > PREVIEW_LINES
       ? lines.slice(0, PREVIEW_LINES).join("\n")
       : long && !expanded
-        ? message.text.slice(0, LONG_MESSAGE_CHARS)
-        : message.text;
-  // Images written into the text show there, not above it.
-  const inline = inlineImagePaths(message.text);
-  const attachments = message.attachments.filter(
-    (a) => a.kind !== "image" || !inline.includes(a.path),
-  );
+        ? full.slice(0, LONG_MESSAGE_CHARS)
+        : full;
   const toggle = () => {
     if (expanded) expandedMessages.delete(message.id);
     else expandedMessages.add(message.id);
@@ -253,9 +250,9 @@ const UserMessage = memo(function UserMessage({
           {message.steer && " · Steer"}
         </span>
       </div>
-      {attachments.length > 0 && (
+      {message.attachments.length > 0 && (
         <div className="flex flex-wrap justify-end gap-1.5">
-          {attachments.map((a) =>
+          {message.attachments.map((a) =>
             a.kind === "image" ? (
               <AttachmentTile key={a.path} attachment={a} />
             ) : (
@@ -264,7 +261,7 @@ const UserMessage = memo(function UserMessage({
           )}
         </div>
       )}
-      {message.text && (
+      {full && (
         // Line breaks the user typed are kept inside paragraphs only; between blocks they would show
         // as blank lines.
         <div className="rounded-[12px] bg-[color-mix(in_srgb,var(--text)_10%,var(--bg-editor))] px-4 py-2.5 leading-[1.55] text-fg [word-break:break-word] selectable [&_h3]:mt-0 [&_h3]:mb-0 [&_p]:whitespace-pre-wrap">
@@ -276,7 +273,7 @@ const UserMessage = memo(function UserMessage({
         <button className={ACTION_CLASS} onClick={toggle}>
           {expanded
             ? "Show less"
-            : `Show full message (${Math.round(message.text.length / 1000)}k characters)`}
+            : `Show full message (${Math.round(full.length / 1000)}k characters)`}
         </button>
       )}
     </div>

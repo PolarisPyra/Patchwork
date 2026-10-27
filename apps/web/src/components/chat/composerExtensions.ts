@@ -129,9 +129,16 @@ export function imageMarkdown(name: string, path: string) {
   return `![${name.replace(/[\\[\]]/g, "\\$&")}](<${path}>)`;
 }
 
+const IMAGE_MARKDOWN = /!\[(?:\\.|[^\]\\])*\]\(<(\/[^<>\n]+)>\)/g;
+
 /** The paths of the images written into a message with `imageMarkdown`. */
 export function inlineImagePaths(text: string): string[] {
-  return Array.from(text.matchAll(/!\[(?:\\.|[^\]\\])*\]\(<(\/[^<>\n]+)>\)/g), (m) => m[1]);
+  return Array.from(text.matchAll(IMAGE_MARKDOWN), (m) => m[1]);
+}
+
+/** A message without the images written into it, which show above it with its attachments. */
+export function withoutImageMarkdown(text: string): string {
+  return text.replace(IMAGE_MARKDOWN, "").replace(/ {2,}/g, " ").trim();
 }
 
 /**

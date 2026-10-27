@@ -104,7 +104,6 @@ interface ChatProps {
   onRestoreCheckpoint: (threadId: string, messageId: string) => Promise<void>;
 }
 
-/** The file's bytes, base64-encoded, for sending to the backend. */
 /** What goes into the draft for an attachment: its path, relative to the project when inside it. */
 function mentionFor(attachment: Attachment, root: string | null): MentionItem {
   const { path, name, kind } = attachment;
@@ -115,24 +114,44 @@ function mentionFor(attachment: Attachment, root: string | null): MentionItem {
   };
 }
 
-/** A message's attachments with the images written into its text added. */
-function withInlineImages(text: string, files: Attachment[]): Attachment[] {
-  const images = [...new Set(inlineImagePaths(text))]
-    .filter((path) => !files.some((f) => f.path === path))
-    .map((path): Attachment => ({
+function mentions(text: string, file: Attachment, root: string | null) {
+  return text.includes(`@${mentionFor(file, root).label}`);
+}
+
+/** A message's attachments with the images written into its text, and the dropped files it still
+ * mentions, added; they show above the sent message. */
+function withInline(
+  text: string,
+  files: Attachment[],
+  dropped: Attachment[],
+  root: string | null,
+): Attachment[] {
+  const added = [
+    ...dropped.filter((f) => mentions(text, f, root)),
+    ...inlineImagePaths(text).map((path): Attachment => ({
       kind: "image",
       path,
       name: path.slice(path.lastIndexOf("/") + 1),
-    }));
-  return [...files, ...images];
+    })),
+  ];
+  return [
+    ...files,
+    ...added.filter(
+      (a, i) =>
+        !files.some((f) => f.path === a.path) && added.findIndex((b) => b.path === a.path) === i,
+    ),
+  ];
 }
 
-/** A message's attachments without the images written into its text, which the draft shows. */
-function withoutInlineImages(text: string, files: Attachment[]): Attachment[] {
-  const inline = inlineImagePaths(text);
-  return files.filter((f) => f.kind !== "image" || !inline.includes(f.path));
+/** A message's attachments without the ones its text holds, which the draft shows in line. */
+function withoutInline(text: string, files: Attachment[], root: string | null): Attachment[] {
+  const images = inlineImagePaths(text);
+  return files.filter((f) =>
+    f.kind === "image" ? !images.includes(f.path) : !mentions(text, f, root),
+  );
 }
 
+/** The file's bytes, base64-encoded, for sending to the backend. */
 function base64Of(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -207,6 +226,15 @@ export default function Chat({
   // Read by the drop listener, which is set up once.
   const projectPathRef = useRef(projectPath);
   projectPathRef.current = projectPath;
+  // Files dropped into the draft as mentions. A message that still mentions one sends it as an
+  // attachment too, so it shows above the message like any attached file.
+  const droppedFiles = useRef<Attachment[]>([]);
+  const sentWith = (text: string, files: Attachment[]) =>
+    withInline(text, files, droppedFiles.current, projectPathRef.current);
+  const draftWithout = (text: string, files: Attachment[]) => {
+    droppedFiles.current.push(...files.filter((f) => f.kind !== "image"));
+    return withoutInline(text, files, projectPathRef.current);
+  };
   const [folderMissing, setFolderMissing] = useState(false);
   useEffect(() => {
     setFolderMissing(false);
@@ -336,6 +364,7 @@ export default function Chat({
       // anywhere else go in at the caret; other files and folders stay attachments.
       if (mention) {
         mention(found.map((a) => mentionFor(a, root)));
+        droppedFiles.current.push(...found.filter((a) => a.kind !== "image"));
         found = [];
       } else {
         const images = found.filter((a) => a.kind === "image");
@@ -468,7 +497,7 @@ export default function Chat({
       setErrorFor(sentKey === "new" ? keyRef.current : sentKey, errorText(e));
       if (restoreOnError) {
         setDrafts((d) => (d[sentKey] ? d : { ...d, [sentKey]: text }));
-        setPending((p) => (p[sentKey] ? p : { ...p, [sentKey]: withoutInlineImages(text, files) }));
+        setPending((p) => (p[sentKey] ? p : { ...p, [sentKey]: draftWithout(text, files) }));
       }
     } finally {
       setSending(false);
@@ -504,7 +533,7 @@ export default function Chat({
     try {
       await onRestoreCheckpoint(thread.id, message.id);
       setDraft(message.text);
-      setAttachments(withoutInlineImages(message.text, message.attachments));
+      setAttachments(draftWithout(message.text, message.attachments));
     } catch (e) {
       setError(errorText(e));
     }
@@ -527,7 +556,7 @@ export default function Chat({
     if (queuedEdit) {
       if (!thread) return;
       api
-        .editQueued(thread.id, queuedEdit.id, text, withInlineImages(text, composerAttachments))
+        .editQueued(thread.id, queuedEdit.id, text, sentWith(text, composerAttachments))
         .then(() => setQueuedEdit(null))
         .catch((e: unknown) => setError(errorText(e)));
       return;
@@ -569,7 +598,7 @@ export default function Chat({
     }
     setDraft("");
     setAttachments([]);
-    void dispatch(text, withInlineImages(text, attachments), true, queue);
+    void dispatch(text, sentWith(text, attachments), true, queue);
   }
 
   // Takes a queued message back from the agent's queue. Editing puts its text and attachments in
@@ -580,7 +609,7 @@ export default function Chat({
       setQueuedEdit({
         id: message.id,
         text: message.text,
-        attachments: withoutInlineImages(message.text, message.attachments),
+        attachments: draftWithout(message.text, message.attachments),
       });
       return;
     }
@@ -594,7 +623,7 @@ export default function Chat({
       setQueuedEdit({
         id: latestQueued.id,
         text: latestQueued.text,
-        attachments: withoutInlineImages(latestQueued.text, latestQueued.attachments),
+        attachments: draftWithout(latestQueued.text, latestQueued.attachments),
       });
   }
 
