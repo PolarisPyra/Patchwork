@@ -3,10 +3,14 @@
 # (.github/workflows/release-appimage.yml). docs/release.md explains how it all fits together.
 #
 # On your machine:
-#   scripts/release.sh X.Y.Z            Cut a release: check, set the version, regenerate
+#   scripts/release.sh X.Y.Z            Cut a release: check, draft the notes with Claude for you
+#                                       to approve, set the version, add the notes to
 #                                       CHANGELOG.md, commit, tag, push, follow the workflow, and
 #                                       check that latest.json names the new version.
 #   scripts/release.sh version X.Y.Z    Write a version into every file that names it.
+#   scripts/release.sh notes X.Y.Z      Publish X.Y.Z's section of CHANGELOG.md again, after a
+#                                       fix: to its GitHub release, and to latest.json when X.Y.Z
+#                                       is the latest release and the Bunny keys are set.
 #
 # In the Release workflow:
 #   scripts/release.sh ci-build linux|windows|macos
@@ -15,8 +19,8 @@
 #                                       JSON list of them (name, SHA-256, signature) to the step's
 #                                       `assets` output. Without a tag: build only.
 #   scripts/release.sh ci-release       Write latest.json from the build jobs' lists ($LINUX,
-#                                       $WINDOWS, $MACOS), upload it, purge its cached copy, and
-#                                       create the GitHub release from RELEASE_NOTES.md.
+#                                       $WINDOWS, $MACOS) and the tag's notes, upload it, purge
+#                                       its cached copy, and create the GitHub release.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -72,7 +76,7 @@ cut_release() {
 
   step "Checking the repo"
   local tool secret
-  for tool in git git-cliff pnpm cargo gh jq curl; do
+  for tool in git pnpm cargo gh jq curl claude; do
     command -v "$tool" > /dev/null || die "$tool is required."
   done
   gh auth status > /dev/null 2>&1 || die "gh is not signed in. Run gh auth login."
@@ -96,22 +100,38 @@ cut_release() {
   cargo test --workspace
 
   step "Release notes for $tag"
-  git cliff --config cliff.toml --unreleased --tag "$tag" --strip header
-  echo
-  local answer
-  read -r -p "Set the version to $version, commit it with CHANGELOG.md, tag $tag, and push main and the tag to origin? [y/N] " answer
-  [[ "$answer" == y || "$answer" == Y ]] || die "Release cancelled. Nothing was changed."
+  # Kept until the release is pushed, so running it again reuses them rather than drafting anew.
+  local notes=".release-notes/$tag.md" answer
+  scripts/changelog.sh draft "$tag" "$notes"
+  while true; do
+    echo
+    cat "$notes"
+    echo
+    read -r -p "Release $version with these notes: set the version, add them to CHANGELOG.md, commit, tag $tag, and push main and the tag? [y]es, [e]dit the notes, [r]edraft them, or [N]o: " answer
+    case "$answer" in
+      y | Y) break ;;
+      # Unquoted, so an editor with arguments, such as "code --wait", runs.
+      e | E) ${VISUAL:-${EDITOR:-vi}} "$notes" && scripts/changelog.sh check "$notes" "$version" || true ;;
+      r | R)
+        rm -f "$notes"
+        scripts/changelog.sh draft "$tag" "$notes"
+        ;;
+      *) die "Release cancelled. Nothing was changed; the notes stay in $notes." ;;
+    esac
+  done
+  scripts/changelog.sh check "$notes" "$version"
 
   step "Tagging $tag"
   set_version "$version"
   # Writes the crates' new version into Cargo.lock.
   cargo update --workspace --quiet
-  git cliff --config cliff.toml --tag "$tag" --output CHANGELOG.md
+  scripts/changelog.sh insert "$notes" "$version"
   git add CHANGELOG.md Cargo.lock package.json apps/web/package.json apps/desktop/package.json \
     apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/Cargo.toml apps/server/Cargo.toml
   git commit -m "Release $tag"
   git tag -a "$tag" -m "Patchwork $version"
   git push origin main "$tag"
+  rm -f "$notes" "$notes.json"
 
   # Stopping the script from here on (Ctrl-C) does not stop the build.
   step "Following the Release workflow"
@@ -213,11 +233,14 @@ ci_build() {
 ci_release() {
   local tag="${GITHUB_REF_NAME:?Run ci-release from the Release workflow.}"
   [[ -n "${BUNNY_API_KEY:-}" ]] || die "BUNNY_API_KEY is not set."
-  # In the shape of GitHub's release API, plus each file's signature, as the updater reads it. It
-  # goes up after the build jobs uploaded every file, so it never names a missing one.
-  jq -n --arg tag "$tag" --arg public "$PUBLIC" \
+  # The tag's section of CHANGELOG.md, which release.sh committed before tagging.
+  scripts/changelog.sh section "$tag" > RELEASE_NOTES.md
+  [[ -s RELEASE_NOTES.md ]] || echo "CHANGELOG.md has no section for $tag, so the release has no notes." >&2
+  # In the shape of GitHub's release API, plus each file's signature and the notes, as the updater
+  # reads it. It goes up after the build jobs uploaded every file, so it never names a missing one.
+  jq -n --arg tag "$tag" --arg public "$PUBLIC" --rawfile body RELEASE_NOTES.md \
     --argjson linux "${LINUX:?}" --argjson windows "${WINDOWS:?}" --argjson macos "${MACOS:?}" \
-    '{tag_name: $tag, assets: ($linux + $windows + $macos | map({
+    '{tag_name: $tag, body: $body, assets: ($linux + $windows + $macos | map({
       name,
       browser_download_url: "\($public)/\($tag)/\(.name)",
       digest,
@@ -232,8 +255,36 @@ ci_release() {
   gh release create "$tag" --title "Patchwork $tag" --notes-file RELEASE_NOTES.md
 }
 
+# Publishes a release's notes again from CHANGELOG.md, for a fix made after the release.
+republish_notes() {
+  local version="${1#v}"
+  check_version "$version"
+  local tag="v$version" notes=".release-notes/$tag.published.md"
+  mkdir -p .release-notes
+  scripts/changelog.sh section "$tag" > "$notes"
+  [[ -s "$notes" ]] || die "CHANGELOG.md has no section for $version."
+  scripts/changelog.sh check "$notes" "$version"
+  gh release edit "$tag" --notes-file "$notes" > /dev/null
+  echo "Updated the notes of the GitHub release $tag."
+  local manifest
+  manifest=$(curl -fsS "$PUBLIC/latest.json") || die "Could not fetch $PUBLIC/latest.json."
+  if [[ "$(jq -r .tag_name <<< "$manifest")" != "$tag" ]]; then
+    echo "latest.json is for another release, so the app's update notes are unchanged."
+  elif [[ -z "${BUNNY_STORAGE_PASSWORD:-}" || -z "${BUNNY_API_KEY:-}" ]]; then
+    echo "Set BUNNY_STORAGE_PASSWORD and BUNNY_API_KEY to update the notes the app shows for this update too."
+  else
+    jq --rawfile body "$notes" '.body = $body' <<< "$manifest" > .release-notes/latest.json
+    upload .release-notes/latest.json latest.json
+    curl -fsS -X POST -H "AccessKey: $BUNNY_API_KEY" "https://api.bunny.net/purge?url=$PUBLIC/latest.json"
+    echo "Updated the notes in $PUBLIC/latest.json."
+    rm -f .release-notes/latest.json
+  fi
+  rm -f "$notes"
+}
+
 case "${1:-}" in
   version) set_version "${2:-}" ;;
+  notes) republish_notes "${2:-}" ;;
   ci-build) ci_build "${2:-}" ;;
   ci-release) ci_release ;;
   -h | --help) usage ;;

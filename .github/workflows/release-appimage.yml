@@ -133,14 +133,6 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          # git-cliff needs the full history and tags to build the release notes.
-          fetch-depth: 0
-
-      - name: Generate release notes
-        uses: orhun/git-cliff-action@v4
-        with:
-          args: --latest --strip header --output RELEASE_NOTES.md
 
       - name: Publish latest.json and the GitHub release
         env:

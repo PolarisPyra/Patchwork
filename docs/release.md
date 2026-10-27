@@ -7,7 +7,7 @@ For local builds, see [Development](development.md).
 ## Overview
 
 ```
-pnpm release 0.2.0                      your machine: checks, version, CHANGELOG.md, commit, tag, push
+pnpm release 0.2.0                      your machine: checks, notes, version, CHANGELOG.md, commit, tag, push
         │
         ▼
 Release workflow (GitHub Actions)       on the v0.2.0 tag
@@ -23,13 +23,14 @@ Installed copies (0.10.10 and newer)    read latest.json, download, check SHA-25
 The repo is private. The installers are not attached to GitHub releases; they live only on the
 update server.
 
-Three files do all of it:
+These files do all of it:
 
 | File | What it does |
 | --- | --- |
 | `scripts/release.sh` | Cuts the release on your machine, and does the build and publish steps in CI |
 | `.github/workflows/release-appimage.yml` | Sets up each runner's tools and calls `scripts/release.sh` |
-| `cliff.toml` | git-cliff config for `CHANGELOG.md` and the release notes |
+| `scripts/changelog.sh` | Checks commit messages, drafts and checks each release's notes, and reads and writes `CHANGELOG.md` |
+| `docs/changelog-style.md` | The rules for changelog entries, for people and for the model that drafts them |
 
 `scripts/release.sh --help` lists its commands.
 
@@ -54,30 +55,16 @@ next to the project name in the top left corner. To fix a mismatch, run
 
 ## Changelog
 
-`CHANGELOG.md` and each release's notes come from the commit history with
-[git-cliff](https://git-cliff.org/), configured in `cliff.toml`. Each commit goes into a group by
-the first word of its subject:
+`CHANGELOG.md` is for users. The app shows the notes in **Settings → Updates**: those of the
+update it is installing, from `latest.json`, and those of the running version, as built in. Each
+GitHub release has the same text. It follows [Keep a Changelog](https://keepachangelog.com) with
+the groups Added, Changed, Fixed, Removed, and Security, and the rules in
+[changelog-style.md](changelog-style.md).
 
-| Group | Subjects starting with |
-| --- | --- |
-| Fixed | Fix, Fixed, Repair, Stop, Prevent, Correct |
-| Added | Add, Show, Support, Allow, Introduce, Let, Remember, Reopen, Animate, Draw, Track, List, Render, Enable, Create |
-| Removed | Remove, Drop, Delete, Deprecate |
-| Changed | Update, Change, Polish, Tighten, Refactor, Rename, Move, Align, Make, Improve, Describe, Sidebar, Choice, Use, Replace |
-| (left out) | Release, Bump, Merge, Chore |
-| Other | anything else |
+Notes are written in two steps.
 
-Internal changes stay out. A commit that only touches `.github/`, `scripts/`, `docs/`,
-`cliff.toml`, or `*.md` is left out (`exclude_paths` in `cliff.toml`), so commit CI/CD, release,
-and tooling changes separately from app changes. An internal change that has to touch app files
-gets a `skip` parser for its subject instead.
-
-So write commit subjects with a leading verb from that table. The app shows `CHANGELOG.md`, as it
-was when the copy was built, in **Settings → Updates**, so users read these entries.
-
-A subject alone is too terse for users, so each app commit also carries its changelog entry: a
-paragraph in the message that starts with `Changelog:`. The changelog shows that paragraph, joined
-into one line, in place of the subject; a commit without one falls back to its subject.
+**1. At commit.** Every commit that changes the app has a paragraph for users in its message, or
+`Changelog: none` when users can't notice the change:
 
 ```
 Use the custom spinner everywhere
@@ -87,12 +74,33 @@ background tasks, the tasks badge, steps in a reply, plans loading, and the setu
 agents and imports. The old one rotated and looked like it shook.
 ```
 
-Write it for users, in the same plain words as the Discord notes below: what they see, where, and
-what is different now. Name settings by their path ("Settings → Skills"). No file paths, function
-or component names, or pixel sizes. To give an already pushed commit an entry, add a
-`commit_preprocessors` rule for its subject in `cliff.toml` rather than rewriting history.
+The `commit-msg` hook in `scripts/hooks/` turns down a commit that changes the app without one,
+and one that breaks the style rules, so the author fixes it while the change is fresh. A commit
+that only touches `.github/`, `scripts/`, `docs/`, or `*.md` is internal and needs none.
+`pnpm install` turns the hook on (`git config core.hooksPath scripts/hooks`).
 
-To regenerate `CHANGELOG.md` after changing `cliff.toml`: `git cliff --config cliff.toml -o CHANGELOG.md`.
+**2. At release.** `scripts/release.sh` drafts the release's section with Claude (the `claude`
+CLI, signed in; `PATCHWORK_NOTES_MODEL` picks the model, Opus by default). Claude reads every app
+commit since the last tag, its `Changelog:` text, and its diff, then:
+
+- merges commits that make up one change into one entry, and drops fixes for bugs that never
+  shipped;
+- accounts for every commit, in an entry or as internal with a reason.
+
+Before you see the draft, a script checks that every commit is accounted for and that no entry
+names a file, code, or a pixel size, and a second Claude pass checks each entry against the diffs
+for wrong claims, vague wording, and user-visible changes left out. A failed check sends the
+problems back for another draft, three times at most; then the release stops and keeps the last
+draft for you to finish by hand. A draft takes a minute or two.
+
+The draft waits in `.release-notes/<tag>.md` (ignored by git) until the release is pushed, so
+running the release again reuses it. At the prompt you can release, edit it in `$EDITOR`, redraft
+it, or stop.
+
+**Fixing notes after a release.** `CHANGELOG.md` is the source. Edit the release's section, commit
+it, and run `scripts/release.sh notes 0.2.0` to publish it to the GitHub release, and to
+`latest.json` when it is the latest release and `BUNNY_STORAGE_PASSWORD` and `BUNNY_API_KEY` are
+set. Copies already installed show the fix once they update past it.
 
 ## Cut a release
 
@@ -102,19 +110,20 @@ From a clean `main` that is up to date with `origin/main`:
 pnpm release 0.2.0
 ```
 
-It needs `git`, `git-cliff` (`cargo install git-cliff --locked`), `pnpm`, `cargo`, `gh` (signed in),
-`jq`, and `curl`. The script:
+It needs `git`, `pnpm`, `cargo`, `gh` (signed in), `jq`, `curl`, and `claude` (signed in). The
+script:
 
 1. Checks the version, that `main` is clean and up to date, that the tag is new, and that the repo
    has the four secrets the workflow needs (see [Secrets](#secrets)).
 2. Runs `pnpm typecheck`, `pnpm format:check`, `cargo clippy --workspace --all-targets -- -D warnings`,
-   and `cargo test --workspace`, then prints the release notes.
-3. After you type `y`, writes the version, regenerates `CHANGELOG.md` (a full rewrite, not
-   `--prepend`), commits both as `Release v0.2.0`, creates the annotated tag, and pushes `main` and
-   the tag. Nothing is written before you confirm.
-4. Follows the Release workflow, and stops with the failed jobs' errors if it fails. Ctrl-C stops
+   and `cargo test --workspace`.
+3. Drafts and checks the release notes (see [Changelog](#changelog)) and shows them.
+4. After you type `y`, writes the version, adds the notes to the top of `CHANGELOG.md`, commits
+   both as `Release v0.2.0`, creates the annotated tag, and pushes `main` and the tag. Nothing is
+   written before you confirm.
+5. Follows the Release workflow, and stops with the failed jobs' errors if it fails. Ctrl-C stops
    only the script, not the build.
-5. Checks that `latest.json` names the new version, and prints the download links.
+6. Checks that `latest.json` names the new version, and prints the download links.
 
 ## The Release workflow
 
@@ -132,7 +141,7 @@ its own version. It builds with the signing key, uploads its files to
 `updates.patchworkeditor.com/<tag>/`, and passes each file's name, SHA-256, and signature to the
 release job as a job output. The release job writes `latest.json` from those, uploads it last (so
 it never names a file that isn't there yet), purges Bunny's cached copy, and creates a GitHub
-release named `Patchwork v0.2.0` with the notes from `git cliff --latest`.
+release named `Patchwork v0.2.0`. Both carry the tag's section of `CHANGELOG.md`.
 
 To check the build without releasing, run the workflow by hand from the Actions tab
 (**Run workflow**). It builds the current version and publishes nothing.
@@ -164,11 +173,13 @@ Release files are served from `https://updates.patchworkeditor.com`:
 /v0.2.0/Patchwork.app.tar.gz
 ```
 
-`latest.json` has the shape of GitHub's release API, plus each file's signature:
+`latest.json` has the shape of GitHub's release API, plus each file's signature. `body` is the
+release's section of `CHANGELOG.md`:
 
 ```json
 {
   "tag_name": "v0.2.0",
+  "body": "## [0.2.0] - 2026-01-02\n\n### Added\n\n- …",
   "assets": [
     {
       "name": "Patchwork_amd64.AppImage",
@@ -253,9 +264,10 @@ On Linux, the AppImage runs after `chmod +x Patchwork_amd64.AppImage`. Windows u
 
 ## Rules
 
-- Don't edit `CHANGELOG.md` by hand; the next release rewrites it.
+- Releases add their notes to `CHANGELOG.md`; edit it only to fix published notes, then run
+  `scripts/release.sh notes <version>`.
 - Don't change version numbers by hand.
-- Tags start with `v` followed by a digit, such as `v0.2.0`, because git-cliff and the workflow
+- Tags start with `v` followed by a digit, such as `v0.2.0`, because the scripts and the workflow
   match that pattern.
 - Never reuse, move, or delete a pushed tag. A broken release is followed by the next patch.
 
@@ -268,8 +280,8 @@ On Linux, the AppImage runs after `chmod +x Patchwork_amd64.AppImage`. Windows u
   and confirm before tagging.
 - **Discord changelog**: every time the version is bumped and pushed, write Discord release notes
   and end the reply with them in one fenced `markdown` code block, so the formatting survives
-  copying. They come in addition to `CHANGELOG.md`, not instead of it. Write them from
-  `git log <previous tag>..v<version>`, in this shape:
+  copying. They come in addition to `CHANGELOG.md`, not instead of it. Write them from the
+  release's section of `CHANGELOG.md` (`scripts/changelog.sh section <version>`), in this shape:
   - A `## Patchwork v<version>` heading, then `**Fixed**`, `**Added**`, `**Changed**`, and
     `**Note**` sections, in that order, leaving out any that are empty. No emoji.
   - Plain `-` bullets, one per user-visible change. Say what the user sees and does, in everyday

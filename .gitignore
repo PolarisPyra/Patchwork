@@ -3,3 +3,4 @@ dist
 /target
 apps/desktop/src-tauri/gen
 .env
+.release-notes
