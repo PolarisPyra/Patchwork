@@ -31,7 +31,7 @@ pub fn definitions(plan: bool) -> Value {
     let mut tools = vec![
         tool(
             "read_file",
-            "Read a text file. Returns numbered lines. Use offset and limit for long files.",
+            "Read a text file, or look at an image (PNG, JPEG, GIF, WebP). Returns numbered lines. Use offset and limit for long files.",
             json!({"type": "object", "properties": {
                 "path": path,
                 "offset": {"type": "integer", "description": "First line to read, from 1"},

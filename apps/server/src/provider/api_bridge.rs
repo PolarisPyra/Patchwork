@@ -152,6 +152,9 @@ struct Agent {
     input: Receiver<Value>,
     /// Steering messages that came in while the agent was busy.
     steers: Vec<Value>,
+    /// Images `read_file` opened this step. A tool result is text only, so they follow the
+    /// step's results as a message of their own.
+    read_images: Vec<ImageIn>,
     /// Stdin closed: Patchwork is ending the turn.
     closed: bool,
     http: ureq::Agent,
@@ -273,6 +276,7 @@ impl Agent {
             messages,
             input,
             steers: Vec::new(),
+            read_images: Vec::new(),
             closed: false,
             http,
             tools,
@@ -327,6 +331,11 @@ impl Agent {
                 let (result, stop) = self.call(call);
                 proposed |= stop;
                 self.messages.push(json!({"role": "tool", "tool_call_id": call.id, "content": result}));
+            }
+            if !self.read_images.is_empty() {
+                let images = std::mem::take(&mut self.read_images);
+                let content = self.user_content("The images read_file opened:", &images);
+                self.messages.push(json!({"role": "user", "content": content}));
             }
             if !reply.calls.is_empty() {
                 self.save()?;
@@ -535,7 +544,10 @@ impl Agent {
                         Some((title, detail)) => self.approve(&call.id, &title, &detail),
                         None => true,
                     };
-                    if allowed {
+                    if allowed && name == "read_file" && let Some(image) = self.read_image(&args) {
+                        let error = image.is_err();
+                        (image, error, false)
+                    } else if allowed {
                         let result = api_tools::run(name, &args, &self.root);
                         let error = result.is_err();
                         (result, error, false)
@@ -557,6 +569,21 @@ impl Agent {
         }
         emit(&done);
         (text, stop)
+    }
+
+    /// Opens the image `read_file` was pointed at for the model to see, or None when the path is
+    /// not an image.
+    fn read_image(&mut self, args: &Value) -> Option<Result<String, String>> {
+        let path = api_tools::resolve(&self.root, args["path"].as_str()?);
+        let path = path.to_str()?;
+        crate::types::image_media_type(path)?;
+        let image = crate::types::Attachment::from_path(path)
+            .and_then(|a| super::load_images(&[a]))
+            .map(|mut images| images.remove(0));
+        Some(image.map(|image| {
+            self.read_images.push(ImageIn { media_type: image.media_type.into(), data: image.data });
+            format!("{path} is an image; it follows the tool results.")
+        }))
     }
 
     /// Has Patchwork call an MCP tool, once the user approves where the access mode asks.
