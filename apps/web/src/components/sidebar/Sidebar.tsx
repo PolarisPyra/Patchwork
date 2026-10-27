@@ -20,6 +20,7 @@ import {
   ArrowsClockwiseIcon,
   ArrowsInLineVerticalIcon,
   ChatCircleIcon,
+  ExportIcon,
   FolderIcon,
   FolderPlusIcon,
   GitDiffIcon,
@@ -62,6 +63,7 @@ import {
   setCollapsed,
   useIsCollapsed,
 } from "./collapsedState";
+import { exportThread } from "~/lib/exportThread";
 import { isWorking } from "~/hooks/useThreads";
 import { formatKey, keyFor, shortcutContext, useCommand, useKeybindings } from "~/lib/shortcuts";
 import {
@@ -531,6 +533,15 @@ function TasksView({
     return [
       ...(targets.length === 1
         ? [{ label: "Rename", Icon: PencilSimpleIcon, onSelect: () => setRenaming(targets[0]) }]
+        : []),
+      ...(targets.length === 1 && targets[0].kind === "thread"
+        ? [
+            {
+              label: "Export to…",
+              Icon: ExportIcon,
+              onSelect: () => void exportThread(targets[0].id),
+            },
+          ]
         : []),
       ...(targets.length === 1 && targets[0].kind === "project"
         ? [
@@ -1306,6 +1317,7 @@ function ArchivedView({
             Icon: ArrowCounterClockwiseIcon,
             onSelect: () => onRestoreThread(t.id),
           },
+          { label: "Export to…", Icon: ExportIcon, onSelect: () => void exportThread(t.id) },
           {
             label: "Delete permanently",
             Icon: TrashIcon,
