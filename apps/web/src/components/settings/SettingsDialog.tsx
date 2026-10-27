@@ -6,6 +6,7 @@ import {
   BellIcon,
   BooksIcon,
   CaretDownIcon,
+  CaretRightIcon,
   DownloadSimpleIcon,
   FolderSimpleIcon,
   GaugeIcon,
@@ -634,9 +635,7 @@ function UpdatesPane({ settings, updateSettings }: PaneProps) {
           <Markdown text={releaseNotes(status.notes)} />
         </div>
       )}
-      <div className="pt-1">
-        <Markdown text={LATEST_RELEASE} />
-      </div>
+      <ReleaseList />
     </>
   );
 }
@@ -647,12 +646,58 @@ function releaseNotes(section: string): string {
   return section.replace(/^## \[(.+?)\] - /, "## $1 · ");
 }
 
-/** The newest release's section of CHANGELOG.md as it was when this copy was built. */
-const LATEST_RELEASE = (() => {
-  const start = changelog.indexOf("\n## [") + 1;
-  const end = changelog.indexOf("\n## [", start);
-  return releaseNotes(changelog.slice(start, end === -1 ? undefined : end));
-})();
+/** Every release in CHANGELOG.md as it was when this copy was built, newest first: its version
+ * and date, and the notes under its heading. */
+const RELEASES = changelog
+  .split(/\n(?=## \[)/)
+  .slice(1)
+  .map((section) => {
+    const [heading, ...rest] = section.trim().split("\n");
+    const [, version = heading, date = ""] = /^## \[(.+?)\](?: - (.+))?/.exec(heading) ?? [];
+    return { version, date, notes: rest.join("\n").trim() };
+  });
+
+/** The releases' notes, one row each. Only the newest is open at first, and a release's notes
+ * render only once it is opened, so the pane does not draw every release at once. */
+function ReleaseList() {
+  const [open, setOpen] = useState<ReadonlySet<string>>(
+    () => new Set(RELEASES.slice(0, 1).map((r) => r.version)),
+  );
+  const toggle = (version: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(version)) next.add(version);
+      return next;
+    });
+  return (
+    <div className="pt-1">
+      {RELEASES.map(({ version, date, notes }) => {
+        const isOpen = open.has(version);
+        return (
+          <div key={version} className="border-b border-border last:border-b-0">
+            <button
+              className="flex w-full cursor-pointer items-center gap-1.5 border-none bg-transparent py-2 text-left text-fg"
+              aria-expanded={isOpen}
+              onClick={() => toggle(version)}
+            >
+              <CaretRightIcon
+                size={12}
+                className={`flex-none text-fg-muted transition-transform ${isOpen ? "rotate-90" : ""}`}
+              />
+              <span className="font-semibold">{version}</span>
+              {date && <span className="text-fg-muted">{date}</span>}
+            </button>
+            {isOpen && (
+              <div className="pb-3 pl-[18px]">
+                <Markdown text={notes} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 const CHECK_MINUTES = [10, 20, 30, 40, 50, 60];
 
