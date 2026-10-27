@@ -3,6 +3,25 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.20] - 2026-10-27
+
+### Added
+
+- Ctrl+1 opens the sidebar on Tasks, Ctrl+2 on Changes and Ctrl+3 on Archived (Cmd on a Mac). They are listed in Settings → Shortcuts on the Sidebar page, where you can change them, and the icons on the left show their key when you hover them.
+- Settings → Permissions has a Restore defaults button on the Everywhere rules. It puts back the starting rules you deleted, such as the one that lets ls run without asking, and resets the ones you changed, such as rm switched to Allow. Rules you added yourself stay as they are. The button is greyed out when there is nothing to restore.
+- Restore defaults leaves out a starting rule when a rule you added yourself already covers the same command, so your own rule stays in charge.
+
+### Changed
+
+- Copying part of a reply now copies it as Markdown, so headings, lists, quotes, tables, code blocks, bold text, inline code and links keep their formatting when you paste them into the chat box or another app. Pasting into another app, such as an editor or a terminal, brings the Markdown marks along: the hash signs before headings, the dashes before list items, the asterisks around bold text, and links written out with their address. In the chat box, lists, tables and code come in as blocks, and headings and quotes as the lines they were written as. Before, a copy kept only the plain text.
+- Copying from inside a code block in a reply still copies the code exactly, without any marks.
+- The list on the left of Settings is now in four groups with small headings: General, Agents, Projects and System. Before, all fifteen pages were in one long list. The list scrolls when the window is too short for it.
+- The small Copy button, on code blocks and in other places that use it, now says "Couldn't copy" when a copy fails, instead of doing nothing.
+
+### Fixed
+
+- On Linux with Wayland, the Copy button on code blocks now copies when another app was in front. Before, the click only brought Patchwork forward and the copy was refused without a word. The same fix covers copying a plan, copying in the file panel, and copying in the terminal.
+
 ## [0.10.19] - 2026-10-27
 
 ### Added
