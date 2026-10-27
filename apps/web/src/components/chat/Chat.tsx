@@ -360,19 +360,14 @@ export default function Chat({
     try {
       let found = await Promise.all(paths.map((path) => api.attachmentForPath(path)));
       const root = projectPathRef.current;
-      // Whatever is dropped on the composer is written into the draft where it landed. Images from
-      // anywhere else go in at the caret; other files and folders stay attachments.
-      if (mention) {
-        mention(found.map((a) => mentionFor(a, root)));
+      // Whatever is dropped on the composer is written into the draft where it landed; anything
+      // dropped elsewhere or picked goes in at the caret. They stay attachments only when the
+      // draft cannot be written.
+      const place = mention ?? dropMentions.current?.(null);
+      if (place) {
+        place(found.map((a) => mentionFor(a, root)));
         droppedFiles.current.push(...found.filter((a) => a.kind !== "image"));
         found = [];
-      } else {
-        const images = found.filter((a) => a.kind === "image");
-        const caret = images.length > 0 ? dropMentions.current?.(null) : null;
-        if (caret) {
-          caret(images.map((a) => mentionFor(a, root)));
-          found = found.filter((a) => a.kind !== "image");
-        }
       }
       const withFresh = (current: Attachment[]) => [
         ...current,
