@@ -591,6 +591,11 @@ function UpdatesPane({ settings, updateSettings }: PaneProps) {
         />
       </TokenRow>
       {error && <div className="py-2.5 text-[length:var(--fs-sm)] text-danger">{error}</div>}
+      {status.notes && state.status !== "upToDate" && (
+        <div className="border-b border-border pt-1 pb-3">
+          <Markdown text={releaseNotes(status.notes)} />
+        </div>
+      )}
       <div className="pt-1">
         <Markdown text={LATEST_RELEASE} />
       </div>
@@ -598,14 +603,17 @@ function UpdatesPane({ settings, updateSettings }: PaneProps) {
   );
 }
 
-/** The newest release's section of CHANGELOG.md as it was when this copy was built. Its
- * `## [0.2.0] - 2026-01-02` heading reads as `## 0.2.0 · 2026-01-02`. */
+/** A release's section of CHANGELOG.md, its `## [0.2.0] - 2026-01-02` heading read as
+ * `## 0.2.0 · 2026-01-02`. */
+function releaseNotes(section: string): string {
+  return section.replace(/^## \[(.+?)\] - /, "## $1 · ");
+}
+
+/** The newest release's section of CHANGELOG.md as it was when this copy was built. */
 const LATEST_RELEASE = (() => {
   const start = changelog.indexOf("\n## [") + 1;
   const end = changelog.indexOf("\n## [", start);
-  return changelog
-    .slice(start, end === -1 ? undefined : end)
-    .replace(/^## \[(.+?)\] - /, "## $1 · ");
+  return releaseNotes(changelog.slice(start, end === -1 ? undefined : end));
 })();
 
 const CHECK_MINUTES = [10, 20, 30, 40, 50, 60];

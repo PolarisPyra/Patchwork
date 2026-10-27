@@ -1001,6 +1001,8 @@ export interface UpdateStatus {
   /** Whether this copy can install updates itself; a dev or source build cannot. */
   canInstall: boolean;
   state: UpdateState;
+  /** The notes of the newer release the last check found, as Markdown. */
+  notes: string | null;
 }
 
 export type RestartResult =

@@ -52,6 +52,8 @@ pub struct UpdateStatus {
     /// Whether this copy can install updates itself.
     pub can_install: bool,
     pub state: UpdateState,
+    /// The notes of the newer release the last check found, from its section of CHANGELOG.md.
+    pub notes: Option<String>,
 }
 
 /// What `restart_to_update` did.
@@ -78,6 +80,8 @@ pub struct Updates {
     #[cfg_attr(not(windows), allow(dead_code))]
     restarting: AtomicBool,
     last_check: Mutex<Option<SystemTime>>,
+    /// The notes of the newer release the last check found.
+    notes: Mutex<Option<String>>,
     /// The user asked for the running check, so it shows its progress and errors.
     watched: AtomicBool,
 }
@@ -95,6 +99,9 @@ impl Drop for Busy<'_> {
 #[derive(Deserialize)]
 struct Release {
     tag_name: String,
+    /// The release's notes; releases before 0.10.16 have none.
+    #[serde(default)]
+    body: Option<String>,
     assets: Vec<Asset>,
 }
 
@@ -160,6 +167,7 @@ impl Updates {
             current_version: app.package_info().version.to_string(),
             can_install: can_install(),
             state: self.state().unwrap_or(UpdateState::Idle),
+            notes: self.notes.lock().unwrap_or_else(PoisonError::into_inner).clone(),
         }
     }
 
@@ -216,6 +224,8 @@ impl Updates {
             }
             return;
         }
+        *self.notes.lock().unwrap_or_else(PoisonError::into_inner) =
+            release.body.clone().filter(|body| !body.trim().is_empty());
         if !can_install() {
             self.set(app, UpdateState::Available { version: version.clone() });
             return;

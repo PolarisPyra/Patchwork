@@ -1,5 +1,5 @@
 // Walks the Updates settings pane through each update status the backend reports, and prints the
-// status line and the button for each. Records the commands the button invokes, and saves a
+// status line and the button for each, and whether the update's notes show. Records the commands the button invokes, and saves a
 // screenshot per status as <out-prefix>-<status>.png.
 // Usage: node checks/updates-pane.mjs [out-prefix]
 import { openWorkspace } from "../lib/open.mjs";
@@ -22,7 +22,7 @@ const script = `(() => {
   window.__qaEmit = (status) => callbacks[window.__qaUpdateHandler]({ payload: status });
   internals.invoke = async (cmd, args) => {
     if (cmd === "plugin:event|listen" && args && args.event === "update-status") window.__qaUpdateHandler = args.handler;
-    if (cmd === "update_status") return { currentVersion: "0.6.3", canInstall: true, state: { status: "idle" } };
+    if (cmd === "update_status") return { currentVersion: "0.6.3", canInstall: true, state: { status: "idle" }, notes: null };
     if (cmd === "check_for_updates" || cmd === "restart_to_update" || cmd.startsWith("plugin:dialog") || cmd.startsWith("plugin:opener")) {
       window.__qaInvokes.push({ cmd, args });
       if (cmd === "restart_to_update") return args.force ? { result: "restarting" } : { result: "busy", running: 2 };
@@ -51,16 +51,25 @@ const states = [
   { status: "available", version: "0.6.4" },
   { status: "ready", version: "0.6.4" },
 ];
+// The notes of the update the check found, as latest.json carries them.
+const notes =
+  "## [0.6.4] - 2026-10-28\n\n### Added\n\n- Settings → Skills now shows each skill as a card you can switch on or off.\n\n### Fixed\n\n- Chats no longer jump to the top when a reply finishes.\n";
 const pane = dialog.locator("div.border-b").filter({ hasText: "Patchwork 0.6.3" });
 for (const state of states) {
   const canInstall = state.status !== "available";
-  await page.evaluate((s) => window.__qaEmit(s), { currentVersion: "0.6.3", canInstall, state });
+  await page.evaluate((s) => window.__qaEmit(s), {
+    currentVersion: "0.6.3",
+    canInstall,
+    state,
+    notes: state.status === "idle" ? null : notes,
+  });
   await page.waitForTimeout(100);
   const button = pane.locator("button");
   const text = (await pane.innerText()).split("\n").join(" | ");
   const label = await button.innerText();
   const disabled = await button.isDisabled();
-  console.log(`${state.status}: ${text}${disabled ? " (disabled)" : ""}`);
+  const shown = (await dialog.getByText("0.6.4 · 2026-10-28").count()) > 0;
+  console.log(`${state.status}: ${text}${disabled ? " (disabled)" : ""}; notes ${shown ? "shown" : "hidden"}`);
   if (state.status !== "idle" && !label) console.log("  no button");
   await dialog.screenshot({ path: `${prefix}-${state.status}.png` });
 }
