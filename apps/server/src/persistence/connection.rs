@@ -15,8 +15,13 @@ pub(super) const DB_FILE: &str = "patchwork.db";
 pub(super) fn open(dir: &Path) -> Res<Connection> {
     std::fs::create_dir_all(dir).map_err(err)?;
     let mut conn = Connection::open(dir.join(DB_FILE)).map_err(err)?;
-    conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;")
-        .map_err(err)?;
+    // With WAL, NORMAL syncs at checkpoints instead of every commit. A commit made a 4 ms fsync,
+    // under the store's lock, for each tool event of a streaming reply. The database cannot be
+    // corrupted this way; a power cut or OS crash can lose only the last commits.
+    conn.execute_batch(
+        "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;",
+    )
+    .map_err(err)?;
     let from = migrations::run(&mut conn)?;
     if from == 0 {
         legacy::import_legacy_json(&mut conn, dir)?;
