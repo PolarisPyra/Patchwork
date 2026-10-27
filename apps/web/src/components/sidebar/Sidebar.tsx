@@ -377,7 +377,7 @@ function SectionLabel({
     // The negative right margin centers the action's icon on the rows' provider icons.
     <div
       ref={ref}
-      className="-mr-0.5 flex items-center justify-between pt-2.5 pb-1 pl-1.5 text-[length:var(--fs-xs)] tracking-[0.06em] text-fg-muted uppercase"
+      className="-mr-0.5 flex items-center justify-between pt-2.5 pl-1.5 first:pt-1 text-[length:var(--fs-xs)] tracking-[0.06em] text-fg-muted uppercase"
     >
       <span>{children}</span>
       {action}
