@@ -33,10 +33,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The runner's Azure apt mirror is sometimes throttled (55 MB once took 20 minutes), so
+      # drop it from the mirror list and use archive.ubuntu.com directly.
       - name: Install Tauri Linux dependencies
         run: |
+          sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
           sudo apt-get update
-          sudo apt-get install -y build-essential file libayatana-appindicator3-dev libfuse2 \
+          sudo apt-get install -y -o Acquire::Retries=3 build-essential file libayatana-appindicator3-dev libfuse2 \
             librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
 
       - uses: dtolnay/rust-toolchain@stable
