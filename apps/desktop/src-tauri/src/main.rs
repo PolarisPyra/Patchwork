@@ -14,13 +14,10 @@ fn main() {
     if std::env::args().nth(1).as_deref() == Some(patchwork_server::provider::mcp::PROXY_ARG) {
         std::process::exit(patchwork_server::provider::mcp::run_proxy());
     }
-    // WebKitGTK's DMA-BUF renderer crashes on Wayland with some GPUs (notably
-    // NVIDIA: "Error 71 (Protocol error) dispatching to Wayland display").
-    #[cfg(target_os = "linux")]
-    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
-        // SAFETY: runs first in main, before any other threads exist.
-        unsafe { std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1") };
-    }
+    // WebKitGTK's DMA-BUF renderer stays on: without it every animated frame is copied whole
+    // from the web process, so a single spinner cost about a fifth of a core. On older NVIDIA
+    // drivers under Wayland it can crash ("Error 71 (Protocol error) dispatching to Wayland
+    // display"); WebKit itself reads WEBKIT_DISABLE_DMABUF_RENDERER=1 to turn it off there.
     // GTK sets the Wayland app id from the program name, and KWin uses it to find the desktop
     // entry for the title bar icon. `scripts/build.sh install` installs dev.patchwork.ade.desktop,
     // and the dev session shares it, so they get that id. An AppImage run without that entry

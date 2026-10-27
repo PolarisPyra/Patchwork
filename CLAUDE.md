@@ -58,7 +58,7 @@ Run the checks that match what you changed, and report the output if any fail.
 
 ## Performance checks
 
-Headless Chromium is not the app's renderer. The app runs in WebKitGTK, without GPU compositing (`main.rs` sets `WEBKIT_DISABLE_DMABUF_RENDERER=1`), so animations and scrolling can be smooth in Playwright and choppy in the app. For any lag, jank or "choppy animation" report, measure in the real dev window:
+Headless Chromium is not the app's renderer. The app runs in WebKitGTK with its DMA-BUF renderer (unless `WEBKIT_DISABLE_DMABUF_RENDERER=1` is set, which copies every animated frame on the CPU), so animations and scrolling can behave differently in Playwright and in the app. For any lag, jank or "choppy animation" report, measure in the real dev window:
 
 1. Start a throwaway collector outside the repo: a small `node` HTTP server on `127.0.0.1` that sends `Access-Control-Allow-Origin: *` and appends each POST body to a file. The app's CSP is null, so the webview can post to it.
 2. Add a temporary block to `apps/web/src/main.tsx`, inside `if (import.meta.env.DEV)`. A few seconds after load, it drives the UI itself, for example by calling `.click()` on the real element. It records `requestAnimationFrame` gaps over the animation, and the synchronous time of the action. Then it POSTs them to the collector. Editing `main.tsx` reloads the dev window, so the block runs on its own.
