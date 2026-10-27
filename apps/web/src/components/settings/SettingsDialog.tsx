@@ -53,6 +53,8 @@ import { syncProjects } from "~/lib/projects";
 import { formatTokens } from "~/lib/tokens";
 import { AGENT_KINDS, CLI_KINDS, describeAgent, errorText } from "~/lib/util";
 import logoManifest from "../../../../../assets/logos/manifest.json";
+import changelog from "../../../../../CHANGELOG.md?raw";
+import Markdown from "~/components/chat/Markdown";
 import { CHIP_CLASS } from "~/components/chat/ModelPicker";
 import Dropdown from "~/components/workspace/Dropdown";
 import KeybindingsPane from "~/components/settings/KeybindingsPane";
@@ -588,9 +590,22 @@ function UpdatesPane({ settings, updateSettings }: PaneProps) {
         />
       </TokenRow>
       {error && <div className="py-2.5 text-[length:var(--fs-sm)] text-danger">{error}</div>}
+      <div className="pt-1">
+        <Markdown text={LATEST_RELEASE} />
+      </div>
     </>
   );
 }
+
+/** The newest release's section of CHANGELOG.md as it was when this copy was built. Its
+ * `## [0.2.0] - 2026-01-02` heading reads as `## 0.2.0 · 2026-01-02`. */
+const LATEST_RELEASE = (() => {
+  const start = changelog.indexOf("\n## [") + 1;
+  const end = changelog.indexOf("\n## [", start);
+  return changelog
+    .slice(start, end === -1 ? undefined : end)
+    .replace(/^## \[(.+?)\] - /, "## $1 · ");
+})();
 
 const CHECK_MINUTES = [10, 20, 30, 40, 50, 60];
 
