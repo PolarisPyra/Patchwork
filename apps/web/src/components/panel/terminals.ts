@@ -122,7 +122,11 @@ export function useShells(): Shell[] {
 void onTerminalOutput(({ id, data }) => {
   const shell = shells.find((s) => s.id === id);
   if (shell) shell.term.write(data);
-  else early.set(id, [...(early.get(id) ?? []), data]);
+  else {
+    const queued = early.get(id);
+    if (queued) queued.push(data);
+    else early.set(id, [data]);
+  }
 });
 
 void onTerminalExit(({ id, code }) => {

@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError, mpsc};
+use std::time::{Duration, Instant};
 
 use patchwork_server::{Res, Server};
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
@@ -33,6 +34,10 @@ pub struct Started {
     name: String,
     cwd: String,
 }
+
+/// How long output gathers before it is sent, and the most sent at once.
+const BATCH: Duration = Duration::from_millis(8);
+const BATCH_BYTES: usize = 256 * 1024;
 
 #[derive(Serialize, Clone)]
 struct Output {
@@ -113,15 +118,29 @@ fn spawn(
         begun.elapsed().as_millis()
     );
 
+    // The PTY hands over a few hundred bytes per read, so a noisy command made thousands of
+    // events a second. Reads go to a second thread, which sends what gathers within BATCH as one.
+    let (tx, rx) = mpsc::channel::<Vec<u8>>();
     std::thread::spawn(move || {
         let mut buf = [0u8; 16 * 1024];
-        // A character split across two reads waits here for the rest of its bytes.
-        let mut pending: Vec<u8> = Vec::new();
         while let Ok(n) = reader.read(&mut buf) {
-            if n == 0 {
+            if n == 0 || tx.send(buf[..n].to_vec()).is_err() {
                 break;
             }
-            pending.extend_from_slice(&buf[..n]);
+        }
+    });
+    std::thread::spawn(move || {
+        // A character split across two reads waits here for the rest of its bytes.
+        let mut pending: Vec<u8> = Vec::new();
+        while let Ok(first) = rx.recv() {
+            pending.extend_from_slice(&first);
+            let deadline = Instant::now() + BATCH;
+            while pending.len() < BATCH_BYTES {
+                match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+                    Ok(more) => pending.extend_from_slice(&more),
+                    Err(_) => break,
+                }
+            }
             let whole = match std::str::from_utf8(&pending) {
                 Ok(_) => pending.len(),
                 Err(e) if e.error_len().is_none() => e.valid_up_to(),
