@@ -82,6 +82,20 @@ pub fn apply(app: &AppHandle, id: Option<&str>) {
     launcher::apply(app, id, png);
 }
 
+/// Path of a PNG of the color way named `id`, for desktop notifications, which take their icon as
+/// a file or an icon theme name rather than image data. Written to the cache folder when shown.
+pub fn notification_icon(app: &AppHandle, id: Option<&str>) -> Option<String> {
+    let (id, png) = resolve(id);
+    let dir = app.path().app_cache_dir().ok()?.join("logos");
+    let path = dir.join(format!("{id}.png"));
+    let written = std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(&path, png));
+    if let Err(e) = written {
+        log::warn!("notification icon could not be written: {e}");
+        return None;
+    }
+    Some(path.to_string_lossy().into_owned())
+}
+
 /// HACK: the desktop shows a Wayland window's icon from its launcher, because tao cannot set a
 /// window icon there yet (the `xdg-toplevel-icon` protocol). Until it can, the color way is
 /// installed as the launcher's icon, and the window is remapped so the window manager and taskbar

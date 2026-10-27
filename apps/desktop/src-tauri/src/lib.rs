@@ -774,7 +774,12 @@ impl Notifier {
             window.is_visible().unwrap_or(false) && window.is_focused().unwrap_or(false)
         });
         if !focused {
-            let _ = app.notification().builder().title(title).body(body).show();
+            let mut notification = app.notification().builder().title(title).body(body);
+            // Without an icon, Linux looks up one named after the executable, which is not installed.
+            if let Some(icon) = logo::notification_icon(app, server.store.settings().logo.as_deref()) {
+                notification = notification.icon(icon);
+            }
+            let _ = notification.show();
         }
     }
 }
