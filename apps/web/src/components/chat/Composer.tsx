@@ -33,6 +33,7 @@ import {
   keepDraftText,
   type MentionSuggestion,
 } from "~/components/chat/composerExtensions";
+import { MARKDOWN_COPY_ATTR } from "~/lib/markdownCopy";
 import FormatBar from "~/components/chat/FormatBar";
 import ModelPicker from "~/components/chat/ModelPicker";
 
@@ -508,7 +509,7 @@ function Composer({
     setQueueNext(true);
   }, [working, goalActive]);
 
-  const editor = useEditor({
+  const editor: Editor | null = useEditor({
     extensions: composerExtensions(
       "Reply or describe the next change…",
       mentionSuggestion,
@@ -529,6 +530,14 @@ function Composer({
         if (html.includes("data-pm-slice")) return false;
         const text = data.getData("text/plain").replace(/\r\n?/g, "\n").replace(/\n+$/, "");
         if (!text) return true;
+        // A copy from a reply carries its Markdown, which goes in as the draft would load it:
+        // lists and code as blocks, headings and quotes as the lines they were typed as.
+        if (
+          html.includes(MARKDOWN_COPY_ATTR) &&
+          !view.state.selection.$from.parent.type.spec.code
+        ) {
+          return editor?.commands.insertContent(text, { contentType: "markdown" }) ?? false;
+        }
         const { state } = view;
         // Inside a code block, and on a single line, the text goes in exactly as copied.
         if (state.selection.$from.parent.type.spec.code || !text.includes("\n")) {

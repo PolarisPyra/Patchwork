@@ -1,4 +1,12 @@
-import { Children, memo, useEffect, useState, type ReactElement, type ReactNode } from "react";
+import {
+  Children,
+  memo,
+  useEffect,
+  useState,
+  type ClipboardEvent,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { TextAlignLeftIcon } from "@phosphor-icons/react";
@@ -8,6 +16,7 @@ import { SYNTAX_CLASSES } from "~/components/canvas/syntaxClasses";
 import { ACTION_CLASS, CopyButton } from "~/components/chat/CopyButton";
 import { CHOICES_LANG } from "~/components/chat/choices";
 import { GOAL_CLASS, MENTION_CLASS, SKILL_CLASS } from "~/components/chat/composerExtensions";
+import { selectionMarkdown } from "~/lib/markdownCopy";
 
 /** Links open in the system browser only with one of these protocols; others are shown as text. */
 const SAFE_LINK = /^(https?:|mailto:)/i;
@@ -26,22 +35,34 @@ function codeTitle(meta: string | null | undefined): string | null {
 
 const components: Components = {
   h1: ({ children }) => (
-    <h3 className="mt-3 mb-1.5 text-[length:var(--fs-lg)] font-semibold">{children}</h3>
+    <h3 data-depth={1} className="mt-3 mb-1.5 text-[length:var(--fs-lg)] font-semibold">
+      {children}
+    </h3>
   ),
   h2: ({ children }) => (
-    <h4 className="mt-3 mb-1.5 text-[length:var(--fs-md)] font-semibold">{children}</h4>
+    <h4 data-depth={2} className="mt-3 mb-1.5 text-[length:var(--fs-md)] font-semibold">
+      {children}
+    </h4>
   ),
   h3: ({ children }) => (
-    <h5 className="mt-3 mb-1.5 text-[length:var(--fs-md)] font-semibold">{children}</h5>
+    <h5 data-depth={3} className="mt-3 mb-1.5 text-[length:var(--fs-md)] font-semibold">
+      {children}
+    </h5>
   ),
   h4: ({ children }) => (
-    <h5 className="mt-3 mb-1.5 text-[length:var(--fs-md)] font-semibold">{children}</h5>
+    <h5 data-depth={4} className="mt-3 mb-1.5 text-[length:var(--fs-md)] font-semibold">
+      {children}
+    </h5>
   ),
   h5: ({ children }) => (
-    <h5 className="mt-3 mb-1.5 text-[length:var(--fs-md)] font-semibold">{children}</h5>
+    <h5 data-depth={5} className="mt-3 mb-1.5 text-[length:var(--fs-md)] font-semibold">
+      {children}
+    </h5>
   ),
   h6: ({ children }) => (
-    <h5 className="mt-3 mb-1.5 text-[length:var(--fs-md)] font-semibold">{children}</h5>
+    <h5 data-depth={6} className="mt-3 mb-1.5 text-[length:var(--fs-md)] font-semibold">
+      {children}
+    </h5>
   ),
   ul: ({ children }) => <ul className="mt-0 mb-2 pl-[22px]">{children}</ul>,
   ol: ({ children }) => <ol className="mt-0 mb-2 pl-[22px]">{children}</ol>,
@@ -99,6 +120,15 @@ const components: Components = {
   img: ({ alt }) => <span className="text-fg-muted">{alt || "Image"}</span>,
 };
 
+/** Copies the selection as the Markdown it was rendered from, rather than its plain text. */
+function copyMarkdown(event: ClipboardEvent<HTMLDivElement>) {
+  const copy = selectionMarkdown(event.currentTarget);
+  if (!copy) return;
+  event.preventDefault();
+  event.clipboardData.setData("text/plain", copy.markdown);
+  event.clipboardData.setData("text/html", copy.html);
+}
+
 /** Highlighting waits this long after a block last changed, so a block still streaming is not re-highlighted every frame. */
 const HIGHLIGHT_DELAY_MS = 150;
 
@@ -115,7 +145,10 @@ export default memo(function Markdown({
 }) {
   // Each block parses on its own, so a streaming reply re-parses only its last block.
   return (
-    <div className="min-w-0 leading-[1.6] [word-break:break-word] selectable [&>:last-child]:mb-0 [&_p]:mt-0 [&_p]:mb-2">
+    <div
+      className="min-w-0 leading-[1.6] [word-break:break-word] selectable [&>:last-child]:mb-0 [&_p]:mt-0 [&_p]:mb-2"
+      onCopy={copyMarkdown}
+    >
       {splitBlocks(text).map((block, i) => (
         <MarkdownBlock key={i} text={block} typed={typed} chips={chips} />
       ))}
@@ -343,8 +376,14 @@ function CodeBlock({ lang, code, title }: { lang: string; code: string; title: s
     return () => clearTimeout(timer);
   }, [code, lang, upToDate, delay]);
   return (
-    <div className="my-2 overflow-hidden rounded-[var(--radius)] border border-border bg-panel">
-      <div className="flex items-center justify-between border-b border-border py-0.5 pr-1 pl-2.5 text-[length:var(--fs-xs)] text-fg-subtle">
+    <div
+      data-code={lang}
+      className="my-2 overflow-hidden rounded-[var(--radius)] border border-border bg-panel"
+    >
+      <div
+        data-copy-skip
+        className="flex items-center justify-between border-b border-border py-0.5 pr-1 pl-2.5 text-[length:var(--fs-xs)] text-fg-subtle"
+      >
         <span className="min-w-0 truncate">{title || lang || "text"}</span>
         <div className="flex items-center">
           <button
