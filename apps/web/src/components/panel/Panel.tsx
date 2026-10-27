@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { CaretDownIcon, FolderOpenIcon, PlusIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
 import { api, type Settings } from "~/api";
 import type { UpdateSettings } from "~/app/App";
@@ -13,6 +13,7 @@ import {
   useShells,
   type Shell,
 } from "~/components/panel/terminals";
+import ContextMenu from "~/components/sidebar/ContextMenu";
 import Dropdown from "~/components/workspace/Dropdown";
 import { shortcutContext } from "~/lib/shortcuts";
 import { errorText } from "~/lib/util";
@@ -50,6 +51,7 @@ export default function Panel({
   const host = useRef<HTMLDivElement>(null);
   const starting = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; shell: Shell } | null>(null);
 
   const [channels, setChannels] = useState<Channel[]>([]);
   const [channelId, setChannelId] = useState<string | null>(null);
@@ -172,6 +174,15 @@ export default function Panel({
                     label={i === 0 ? shell.name : `${shell.name} ${i + 1}`}
                     active={shell === active}
                     onSelect={() => setActiveId(shell.id)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      // The chips sit at the panel's right edge; keep the menu inside the window.
+                      setMenu({
+                        x: Math.min(e.clientX, window.innerWidth - 170),
+                        y: e.clientY,
+                        shell,
+                      });
+                    }}
                   />
                 ))}
               <button
@@ -259,6 +270,21 @@ export default function Panel({
           </button>
         </div>
       </header>
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={[
+            {
+              label: "Kill terminal",
+              Icon: TrashIcon,
+              danger: true,
+              onSelect: () => killShell(menu.shell),
+            },
+          ]}
+          onClose={() => setMenu(null)}
+        />
+      )}
       {error && (
         <div className="flex-none px-3 pb-1 text-[length:var(--fs-sm)] text-danger">{error}</div>
       )}
@@ -282,17 +308,20 @@ function ShellChip({
   label,
   active,
   onSelect,
+  onContextMenu,
 }: {
   shell: Shell;
   label: string;
   active: boolean;
   onSelect: () => void;
+  onContextMenu: (e: MouseEvent) => void;
 }) {
   return (
     <button
       className={`h-6 cursor-pointer rounded-[var(--radius-sm)] border-none px-2 text-[length:var(--fs-sm)] ${active ? "bg-selected-muted text-fg" : "bg-transparent text-fg-muted hover:bg-hover hover:text-fg"}`}
       title={shell.exitCode !== undefined ? `Exited with code ${shell.exitCode}` : undefined}
       onClick={onSelect}
+      onContextMenu={onContextMenu}
     >
       {label}
     </button>
