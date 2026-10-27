@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.22] - 2026-10-27
+
+### Changed
+
+- Settings → Updates now lists every release instead of only the newest one. Each release has a row showing its version and date. The newest release starts open, and you can click any row to show or hide its notes.
+
 ## [0.10.21] - 2026-10-27
 
 ### Changed
