@@ -35,6 +35,9 @@ export function isWorking(thread: Thread | null): boolean {
 
 /** How often streamed events are applied to the threads, in milliseconds. */
 const FLUSH_MS = 100;
+/** How often streamed text for threads that are not open is applied. Nothing on screen shows it,
+ * and each flush re-renders the workspace. */
+const BACKGROUND_FLUSH_MS = 1000;
 
 /** Adds or replaces a message, keeping creation order. */
 function upsertMessage(list: Message[], msg: Message): Message[] {
@@ -269,6 +272,10 @@ export function useThreads(initialProjectId: string | null) {
     Record<string, { id: string; folderId: string | null }[]>
   >({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedRef = useRef(selectedId);
+  selectedRef.current = selectedId;
+  /** Applies the streamed events still waiting, e.g. a background thread's as it opens. */
+  const flushRef = useRef(() => {});
   const initialProject = useRef(initialProjectId);
   const threadsRef = useRef(threads);
   threadsRef.current = threads;
@@ -372,10 +379,14 @@ export function useThreads(initialProjectId: string | null) {
     let unlisten: (() => void) | undefined;
     let queue: AgentEventEnvelope[] = [];
     let timer = 0;
+    let urgent = false;
     const flush = () => {
+      window.clearTimeout(timer);
+      timer = 0;
+      urgent = false;
+      if (queue.length === 0) return;
       const batch = queue;
       queue = [];
-      timer = 0;
       setThreads((prev) =>
         batch.reduce((threads, { threadId, event }) => {
           // A thread the server made, such as a subagent's, joins the list.
@@ -388,15 +399,25 @@ export function useThreads(initialProjectId: string | null) {
         }, prev),
       );
     };
+    flushRef.current = flush;
     void onAgentEvent((envelope) => {
       queue.push(envelope);
       // A title arrives once per thread, so it shows at once rather than with the next batch.
       if (envelope.event.type === "titleUpdated") {
-        window.clearTimeout(timer);
         flush();
         return;
       }
-      timer ||= window.setTimeout(flush, FLUSH_MS);
+      // Text and reasoning for a thread that is not open wait for the slower flush; anything
+      // else, or anything for the open thread, brings the whole queue forward, in order.
+      const { type } = envelope.event;
+      const quiet =
+        (type === "textDelta" || type === "thinking") && envelope.threadId !== selectedRef.current;
+      if (!quiet && !urgent) {
+        urgent = true;
+        window.clearTimeout(timer);
+        timer = window.setTimeout(flush, FLUSH_MS);
+      }
+      timer ||= window.setTimeout(flush, BACKGROUND_FLUSH_MS);
     }).then((u) => {
       if (disposed) u();
       else unlisten = u;
@@ -407,6 +428,9 @@ export function useThreads(initialProjectId: string | null) {
       window.clearTimeout(timer);
     };
   }, []);
+
+  // A thread that opens shows the text it streamed in the background straight away.
+  useEffect(() => flushRef.current(), [selectedId]);
 
   const selected = threads.find((t) => t.id === selectedId) ?? null;
 
