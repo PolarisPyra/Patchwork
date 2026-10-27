@@ -17,6 +17,7 @@ Desktop AI coding workspace: a Tauri app with a React frontend and a Rust backen
 - Format TSX: `pnpm format`. Check only: `pnpm format:check`. Both cover `apps/**/*.tsx` and nothing else.
 - Rust lint: `cargo clippy --workspace --all-targets`.
 - Rust tests: `cargo test --workspace` (the root `test` script).
+- Rust benchmarks: `cargo bench -p patchwork-server` (Criterion, `apps/server/benches/`). Profile a benchmark with `cargo flamegraph -p patchwork-server --bench stream -- --bench <filter>` (needs `perf`). Use these for backend performance work, not one-off scratch scripts; add a benchmark beside the existing ones when a new hot path needs measuring.
 - UI measurement and screenshots of the running dev session: `pnpm qa:activity-bar`, `pnpm qa:shot <out.png> [selector]`.
 
 ## Verification
