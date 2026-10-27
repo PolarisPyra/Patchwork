@@ -96,6 +96,8 @@ Playwright's numbers don't match the app. Measure lag in the real dev window:
 - Don't commit until I've reviewed the change and say so. Don't push unless I ask.
 - When a QA check is added or changed, commit it along with the change it checks. Never leave one untracked.
 - Commit subjects are short, sentence-case, and imperative, with no prefix. Describe the user-visible change, for example "Nudge the header project dropdown 2px left".
+- `CHANGELOG.md` is user-facing: the app shows it in Settings → Updates and it becomes the release notes. Every app commit gets a paragraph in its message starting with `Changelog:`, which replaces the subject there. Write it for users: what they see, where, and what changed for them, for example "Changelog: Every loading indicator now uses the steady spinner from the thread list: plan steps, background tasks, … The old one rotated and looked like it shook." Name settings by their path ("Settings → Skills"). No file paths, function or component names, or pixel sizes. Internal commits that stay out of the changelog don't need one.
+- A pushed commit missing a good entry gets one through a `commit_preprocessors` rule in `cliff.toml`. Never rewrite pushed history for it.
 - Keep internal CI/CD, release, and tooling changes out of the changelog. Commit them separately from app changes, so they only touch `.github/`, `scripts/`, `docs/`, `cliff.toml`, or `*.md`, which `exclude_paths` in `cliff.toml` leaves out. If an internal change has to touch app files (such as the Vite config or the dev session), add a `skip` parser for its subject in `cliff.toml`.
 - Never watch GitHub Actions runs unless I ask. When releasing, stop `scripts/release.sh` once it has pushed the tag, give me the run's link, and end the turn.
 

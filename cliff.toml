@@ -18,7 +18,9 @@ body = """
 {% for group, commits in commits | group_by(attribute="group") %}
     ### {{ group | upper_first }}
     {% for commit in commits %}
-        - {{ commit.message | upper_first | split(pat="\n") | first }}\
+        - {% set parts = commit.message | split(pat="\nChangelog:") %}\
+          {% if parts | length > 1 %}{{ parts | last | split(pat="\n\n") | first | replace(from="\n", to=" ") | trim }}\
+          {% else %}{{ commit.message | upper_first | split(pat="\n") | first }}{% endif %}\
     {% endfor %}
 {% endfor %}\n
 """
@@ -29,9 +31,22 @@ trim = true
 conventional_commits = false
 filter_unconventional = false
 split_commits = false
-# Rewords pushed commit subjects that describe a change too narrowly.
+# A commit's changelog entry is the paragraph in its message that starts with `Changelog:`, or
+# its subject when it has none (see docs/release.md). The entries below are added to commits that
+# were pushed without one.
 commit_preprocessors = [
     { pattern = "^Stop labelling pasted terminal output as JavaScript", replace = "Fix pasted text getting the wrong syntax highlighting language" },
+    { pattern = "^(Show skills as cards that update live when the skills folder changes)", replace = "${1}\n\nChangelog: Settings → Skills now shows each skill as a card with its name, file, description, an Edit button that opens it in your editor, and an on/off switch. Filter by On or Off, or search by name and description. Skills you add, edit, or delete in the skills folder show up right away, without restarting Patchwork." },
+    { pattern = "^(Use the custom spinner everywhere)", replace = "${1}\n\nChangelog: Every loading indicator now uses the steady spinner from the thread list: plan steps, background tasks, the tasks badge, steps in a reply, plans loading, and the setup screens for agents and imports. The old one rotated and looked like it shook." },
+    { pattern = "^(Show the newest release's notes in Settings → Updates)", replace = "${1}\n\nChangelog: Settings → Updates now shows what changed in the version you have installed." },
+    { pattern = "^(Add Export to… to the chat and task right-click menu)", replace = "${1}\n\nChangelog: Right-click a chat or task and choose Export to… to save its whole conversation as a Markdown file wherever you like." },
+    { pattern = "^(Replace the shaky working spinner in the thread list and status bar)", replace = "${1}\n\nChangelog: The spinner beside a working chat in the sidebar and in the status bar no longer looks like it shakes. The ring stays still and only an arc runs around it." },
+    { pattern = "^(Align chat titles with the Chats label and show more of each title)", replace = "${1}\n\nChangelog: Chat titles in the sidebar now line up with the Chats label above them, and longer titles show more before they are cut off." },
+    { pattern = "^(Move the Chats label up and tighten the space under section labels)", replace = "${1}\n\nChangelog: The sidebar's section labels sit closer to the lists under them, so more of each list fits." },
+    { pattern = "^(Tighten sidebar empty states and give Archived the Changes header)", replace = "${1}\n\nChangelog: Empty sidebar sections, such as No chats yet or Nothing archived, take less room, and the Archived section has the same header style as Changes." },
+    { pattern = "^(Keep a gap between highlighted rows in the sidebar tree)", replace = "${1}\n\nChangelog: When several rows in the sidebar are highlighted one after another, a small gap now keeps them apart, so each row is easy to tell from the next." },
+    # The co-author lines at the end of a message.
+    { pattern = "(?m)^Co-Authored-By:.*$", replace = "" },
 ]
 commit_parsers = [
     { message = "^(Fix|Fixed|Repair|Stop|Prevent|Correct)", group = "Fixed" },

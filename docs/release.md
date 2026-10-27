@@ -75,6 +75,25 @@ gets a `skip` parser for its subject instead.
 So write commit subjects with a leading verb from that table. The app shows `CHANGELOG.md`, as it
 was when the copy was built, in **Settings → Updates**, so users read these entries.
 
+A subject alone is too terse for users, so each app commit also carries its changelog entry: a
+paragraph in the message that starts with `Changelog:`. The changelog shows that paragraph, joined
+into one line, in place of the subject; a commit without one falls back to its subject.
+
+```
+Use the custom spinner everywhere
+
+Changelog: Every loading indicator now uses the steady spinner from the thread list: plan steps,
+background tasks, the tasks badge, steps in a reply, plans loading, and the setup screens for
+agents and imports. The old one rotated and looked like it shook.
+```
+
+Write it for users, in the same plain words as the Discord notes below: what they see, where, and
+what is different now. Name settings by their path ("Settings → Skills"). No file paths, function
+or component names, or pixel sizes. To give an already pushed commit an entry, add a
+`commit_preprocessors` rule for its subject in `cliff.toml` rather than rewriting history.
+
+To regenerate `CHANGELOG.md` after changing `cliff.toml`: `git cliff --config cliff.toml -o CHANGELOG.md`.
+
 ## Cut a release
 
 From a clean `main` that is up to date with `origin/main`:
