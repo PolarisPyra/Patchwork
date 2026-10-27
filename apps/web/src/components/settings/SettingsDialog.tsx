@@ -81,23 +81,46 @@ type Section =
   | "logging"
   | "updates";
 
-const SECTIONS: { id: Section; label: string; Icon: Icon }[] = [
-  { id: "appearance", label: "Appearance", Icon: PaletteIcon },
-  { id: "agent", label: "CLI Providers", Icon: RobotIcon },
-  { id: "permissions", label: "Permissions", Icon: ShieldCheckIcon },
-  { id: "api", label: "API Providers", Icon: PlugsConnectedIcon },
-  { id: "mcp", label: "MCP Servers", Icon: PlugIcon },
-  { id: "skills", label: "Skills", Icon: BooksIcon },
-  { id: "tokens", label: "AI Tokenomics", Icon: GaugeIcon },
-  { id: "notifications", label: "Notifications", Icon: BellIcon },
-  { id: "imports", label: "Imports", Icon: DownloadSimpleIcon },
-  { id: "environment", label: "Environment", Icon: TerminalIcon },
-  { id: "terminal", label: "Terminal", Icon: TerminalWindowIcon },
-  { id: "projects", label: "Projects", Icon: FolderSimpleIcon },
-  { id: "shortcuts", label: "Shortcuts", Icon: KeyboardIcon },
-  { id: "logging", label: "Logging", Icon: ScrollIcon },
-  { id: "updates", label: "Updates", Icon: ArrowCircleUpIcon },
+/** The panes, in groups under a heading, so the list reads in a few short runs. */
+const GROUPS: { label: string; sections: { id: Section; label: string; Icon: Icon }[] }[] = [
+  {
+    label: "General",
+    sections: [
+      { id: "appearance", label: "Appearance", Icon: PaletteIcon },
+      { id: "notifications", label: "Notifications", Icon: BellIcon },
+      { id: "shortcuts", label: "Shortcuts", Icon: KeyboardIcon },
+      { id: "updates", label: "Updates", Icon: ArrowCircleUpIcon },
+    ],
+  },
+  {
+    label: "Agents",
+    sections: [
+      { id: "agent", label: "CLI Providers", Icon: RobotIcon },
+      { id: "api", label: "API Providers", Icon: PlugsConnectedIcon },
+      { id: "mcp", label: "MCP Servers", Icon: PlugIcon },
+      { id: "skills", label: "Skills", Icon: BooksIcon },
+      { id: "permissions", label: "Permissions", Icon: ShieldCheckIcon },
+      { id: "tokens", label: "AI Tokenomics", Icon: GaugeIcon },
+    ],
+  },
+  {
+    label: "Projects",
+    sections: [
+      { id: "projects", label: "Projects", Icon: FolderSimpleIcon },
+      { id: "imports", label: "Imports", Icon: DownloadSimpleIcon },
+    ],
+  },
+  {
+    label: "System",
+    sections: [
+      { id: "environment", label: "Environment", Icon: TerminalIcon },
+      { id: "terminal", label: "Terminal", Icon: TerminalWindowIcon },
+      { id: "logging", label: "Logging", Icon: ScrollIcon },
+    ],
+  },
 ];
+
+const SECTIONS = GROUPS.flatMap((g) => g.sections);
 
 interface PaneProps {
   settings: Settings;
@@ -135,16 +158,23 @@ export default function SettingsDialog({
         aria-label="Settings"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <nav className="flex w-[180px] flex-none flex-col gap-0.5 border-r border-border bg-panel px-2 py-2.5">
-          {SECTIONS.map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              className={`flex h-8 cursor-pointer items-center gap-2.5 rounded-[var(--radius-sm)] border-none px-2 text-left text-fg ${section === id ? "bg-selected hover:bg-[color-mix(in_srgb,var(--bg-selected),var(--text)_8%)]" : "bg-transparent hover:bg-hover"}`}
-              onClick={() => setSection(id)}
-            >
-              <Icon size={18} className="flex-none" />
-              {label}
-            </button>
+        <nav className="flex w-[180px] flex-none flex-col overflow-y-auto border-r border-border bg-panel px-2 py-2.5">
+          {GROUPS.map((group) => (
+            <div key={group.label} className="flex flex-col gap-0.5 [&+&]:mt-3">
+              <div className="px-2 pb-0.5 text-[length:var(--fs-xs)] font-semibold text-fg-subtle">
+                {group.label}
+              </div>
+              {group.sections.map(({ id, label, Icon }) => (
+                <button
+                  key={id}
+                  className={`flex h-8 cursor-pointer items-center gap-2.5 rounded-[var(--radius-sm)] border-none px-2 text-left text-fg ${section === id ? "bg-selected hover:bg-[color-mix(in_srgb,var(--bg-selected),var(--text)_8%)]" : "bg-transparent hover:bg-hover"}`}
+                  onClick={() => setSection(id)}
+                >
+                  <Icon size={18} className="flex-none" />
+                  {label}
+                </button>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="flex min-w-0 flex-1 flex-col">
