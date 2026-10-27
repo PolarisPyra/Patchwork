@@ -90,7 +90,7 @@ pub fn launch(settings: &Settings, workspace: Option<&Path>) -> Launch {
     env.insert("TERM_PROGRAM".into(), "patchwork".into());
     env.insert(
         "TERM_PROGRAM_VERSION".into(),
-        env!("CARGO_PKG_VERSION").into(),
+        crate::VERSION.into(),
     );
     let lang = env.get("LANG").cloned().unwrap_or_default();
     let utf8 =

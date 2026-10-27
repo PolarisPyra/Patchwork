@@ -7,7 +7,8 @@ name: Release
 #
 # A push to main that changes the Rust dependencies builds Linux and Windows without publishing,
 # only to save their dependency caches: a tag's run can restore caches saved on main, but not ones
-# saved by another tag.
+# saved by another tag. A release commit changes only the version in tauri.conf.json and the
+# package.json files, never a Cargo file, so pushing it to main with its tag starts only the tag's run.
 #
 # Actions are pinned to commits, so a moved tag can't change what runs next to the secrets. The
 # comment after each names the version it was.
@@ -44,8 +45,6 @@ jobs:
     # against an older glibc and runs on newer distributions too.
     runs-on: ubuntu-22.04
     timeout-minutes: 45
-    # Release commits change Cargo.lock only by Patchwork's own version, which the cache ignores.
-    if: github.ref_type == 'tag' || !startsWith(github.event.head_commit.message, 'Release v')
     outputs:
       assets: ${{ steps.upload.outputs.assets }}
     env:
@@ -97,7 +96,6 @@ jobs:
     # A Dev Drive is needed for the Windows 2025 image's native ReFS support.
     runs-on: windows-2025
     timeout-minutes: 45
-    if: github.ref_type == 'tag' || !startsWith(github.event.head_commit.message, 'Release v')
     outputs:
       assets: ${{ steps.upload.outputs.assets }}
     defaults:

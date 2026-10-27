@@ -488,7 +488,7 @@ impl Conn {
         let init = json!({
             "protocolVersion": PROTOCOL,
             "capabilities": {},
-            "clientInfo": {"name": "Patchwork", "version": env!("CARGO_PKG_VERSION")},
+            "clientInfo": {"name": "Patchwork", "version": crate::VERSION},
         });
         conn.info = conn.request("initialize", init, START_TIMEOUT, &|| false).map_err(|e| conn.explain(e))?;
         conn.notify("notifications/initialized");

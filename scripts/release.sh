@@ -53,8 +53,9 @@ check_version() {
   [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "Not a version: $1 (expected X.Y.Z, for example 0.2.0)."
 }
 
-# Writes the version into the package.json files, the Tauri config (which the app shows and the
-# installers use), and the Rust crates.
+# Writes the version into the package.json files and the Tauri config, which the app shows and the
+# installers use; the Rust crates read it from the Tauri config (apps/server/build.rs). A release
+# leaves Cargo.toml and Cargo.lock alone, so its push to main does not start a cache build.
 set_version() {
   local version="$1" file
   check_version "$version"
@@ -67,11 +68,6 @@ set_version() {
       json.version = version;
       fs.writeFileSync(file, JSON.stringify(json, null, 2) + "\n");
     ' "$file" "$version"
-  done
-  # Perl rather than sed: it replaces only the package's own version (the first match) the same way
-  # on Linux, macOS, and Git Bash on Windows.
-  for file in apps/desktop/src-tauri/Cargo.toml apps/server/Cargo.toml; do
-    perl -0pi -e "s/^version = .*/version = \"$version\"/m" "$file"
   done
   echo "Set the version to $version."
 }
@@ -117,11 +113,9 @@ cut_release() {
 
   step "Tagging $tag"
   set_version "$version"
-  # Writes the crates' new version into Cargo.lock.
-  cargo update --workspace --quiet
   scripts/changelog.sh insert "$notes" "$version"
-  git add CHANGELOG.md Cargo.lock package.json apps/web/package.json apps/desktop/package.json \
-    apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/Cargo.toml apps/server/Cargo.toml
+  git add CHANGELOG.md package.json apps/web/package.json apps/desktop/package.json \
+    apps/desktop/src-tauri/tauri.conf.json
   git commit -m "Release $tag"
   git tag -a "$tag" -m "Patchwork $version"
   git push origin main "$tag"

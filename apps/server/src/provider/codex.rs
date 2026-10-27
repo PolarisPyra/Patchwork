@@ -133,7 +133,7 @@ pub fn turn_input(spec: &TurnSpec) -> Vec<String> {
     };
     [
         json!({"id": 1, "method": "initialize", "params": {
-            "clientInfo": {"name": "patchwork", "title": "Patchwork", "version": env!("CARGO_PKG_VERSION")},
+            "clientInfo": {"name": "patchwork", "title": "Patchwork", "version": crate::VERSION},
             // turn/start collaborationMode is part of Codex's experimental app-server API.
             "capabilities": {"experimentalApi": true}
         }}),

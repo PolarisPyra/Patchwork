@@ -1,9 +1,13 @@
 [package]
 name = "patchwork-server"
-version = "0.10.20"
+# The app's version is in apps/desktop/src-tauri/tauri.conf.json; releases leave this alone.
+version = "0.0.0"
 description = "Patchwork backend: providers, persistence, usage, and thread import"
 edition = "2024"
 rust-version = "1.90"
+
+[build-dependencies]
+serde_json = "1.0"
 
 [dependencies]
 base64 = "0.22"

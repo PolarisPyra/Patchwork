@@ -156,7 +156,7 @@ fn app_bundle() -> Option<PathBuf> {
 fn agent(timeout: Duration) -> ureq::Agent {
     ureq::Agent::config_builder()
         .timeout_global(Some(timeout))
-        .user_agent(concat!("Patchwork/", env!("CARGO_PKG_VERSION")))
+        .user_agent(format!("Patchwork/{}", patchwork_server::VERSION))
         .build()
         .into()
 }

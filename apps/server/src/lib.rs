@@ -1,6 +1,9 @@
 //! Patchwork's backend. The desktop shell exposes these methods as Tauri
 //! commands and forwards agent events to the UI.
 
+/// The app's version, from `tauri.conf.json` (see build.rs).
+pub const VERSION: &str = env!("PATCHWORK_VERSION");
+
 pub mod debug_log;
 pub mod import;
 pub mod orchestration;

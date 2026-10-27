@@ -48,9 +48,10 @@ is compared as a whole number, so `0.4.91` would sort above every release from `
 and break update ordering.
 
 The repo's version always matches the latest tag. The script writes it into `package.json`,
-`apps/web/package.json`, `apps/desktop/package.json`, `apps/desktop/src-tauri/tauri.conf.json`,
-`apps/desktop/src-tauri/Cargo.toml`, `apps/server/Cargo.toml`, and `Cargo.lock`. The app shows it
-next to the project name in the top left corner. To fix a mismatch, run
+`apps/web/package.json`, `apps/desktop/package.json`, and `apps/desktop/src-tauri/tauri.conf.json`.
+The Rust crates read it from `tauri.conf.json` when they build (`apps/server/build.rs`); their own
+versions stay at `0.0.0`, so a release never changes a Cargo file. The app shows it next to the
+project name in the top left corner. To fix a mismatch, run
 `scripts/release.sh version X.Y.Z`.
 
 ## Changelog
@@ -167,8 +168,8 @@ Most of each build is compiling the Rust dependencies. A tag's run can restore c
 `main`, but not ones saved by another tag, so the dependency caches are saved only on `main`:
 
 - A push to `main` that changes `Cargo.lock`, a `Cargo.toml`, or the workflow builds Linux and
-  Windows without publishing anything, and saves their caches. The release commit is skipped: it
-  changes only Patchwork's own version, which the cache key leaves out.
+  Windows without publishing anything, and saves their caches. The release commit changes no Cargo
+  file, so its push to `main` starts no run; only its tag does.
 - Tag runs restore those caches and save none.
 - The Rust toolchain is pinned (`RUST_TOOLCHAIN` in the workflow), because a cache is only reused by
   the same compiler. Raising it rebuilds the caches on that push.
