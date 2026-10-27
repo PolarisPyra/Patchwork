@@ -17,7 +17,8 @@ Tauri desktop app: React frontend, Rust backend. Run everything from the repo ro
 | Dev app | `pnpm tauri dev` |
 | Web typecheck | `pnpm typecheck` |
 | Format TSX | `pnpm format` / `pnpm format:check` (only `apps/**/*.tsx`) |
-| Rust lint | `cargo clippy --workspace --all-targets` |
+| Rust format | `cargo fmt --all` / `cargo fmt --all -- --check` |
+| Rust lint | `cargo clippy --workspace --all-targets -- -D warnings` |
 | Rust tests | `cargo test --workspace` |
 | Rust bench | `cargo bench -p patchwork-server` |
 | Flamegraph | `cargo flamegraph -p patchwork-server --bench stream -- --bench <filter>` |
@@ -29,8 +30,21 @@ Tauri desktop app: React frontend, Rust backend. Run everything from the repo ro
 ## Verify
 
 - Web changes: run `pnpm typecheck`. For TSX changes, run `pnpm format` and then `pnpm format:check`.
-- Rust changes: run clippy and `cargo test --workspace`.
+- Rust changes: run `cargo fmt --all`, then clippy with `-D warnings` (no warnings left behind), then `cargo test --workspace`.
 - Report the output of any check that fails.
+
+## Rust and Tauri
+
+- Keep logic in `apps/server`. `src-tauri` is thin glue that only wires up commands, windows, and state.
+- No `unwrap()`/`expect()` in app code: return errors instead. Tests and benches are the exception.
+- Use the project's logger, not `println!`/`eprintln!`.
+- New `#[tauri::command]`: register it in `generate_handler!` and add its permission in `capabilities/`. Do both, or it fails at runtime.
+- Commands return `Result<T, E>` where `E` serializes to a readable message. Never panic in a command.
+- Make commands `async`, and move heavy or blocking work to `spawn_blocking`. Never block the main thread.
+- JS `invoke()` takes camelCase arguments, which Tauri maps to snake_case in Rust. Keep it that way, and don't add renames to fight it.
+- Stream output to the frontend with `tauri::ipc::Channel`, not global events.
+- Keep capabilities minimal. Never widen a permission or use a wildcard just to make something work.
+- When a command signature or a serde struct the frontend uses changes, update the matching TS types in the same change.
 
 ## Dev session
 
@@ -64,16 +78,13 @@ Tauri desktop app: React frontend, Rust backend. Run everything from the repo ro
 
 ## Performance checks
 
-The app renders in WebKitGTK, not Chromium, so Playwright numbers don't count. Measure lag in the real dev window:
+Playwright's numbers don't match the app. Measure lag in the real dev window:
 
 1. Run a collector inline with `node -e` in the background, not as a saved file. It should listen on `127.0.0.1`, send CORS `*`, and print each POST body to stdout. Read the results from its output.
 2. Add a temporary `import.meta.env.DEV` block to `apps/web/src/main.tsx`. It should click the real element, record `requestAnimationFrame` gaps and how long the action takes, then POST the results to the collector.
 3. To find the cause, inject a `<style>` per suspect to turn one thing off at a time, and compare the frame gaps. Put the UI back the way you found it.
 4. Fix the cause, then measure again.
 5. Revert `main.tsx` and kill the collector by PID (not `pkill -f`). `git status` should show no new files. Tell me the window reloaded and what got clicked.
-
-`/usr/lib/webkit2gtk-4.1/MiniBrowser` can test `WEBKIT_*` env vars, but its numbers are only a hint.
-
 ## Tests
 
 - Never write tests: no test files, runners, dependencies, or scripts.
