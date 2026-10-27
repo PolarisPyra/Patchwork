@@ -76,27 +76,7 @@ When writing or reviewing code that handles a lot of data, I/O, or work per requ
 
 ## Pushing and releasing
 
-- **Pushing to `main`** (no tag) is a plain `git push origin main`. It builds nothing. Only push when the user asks.
-- **Tagged builds** are releases. Cut one only when the user asks, with `pnpm release <version>` (for example `pnpm release 0.2.0`, which runs `scripts/release.sh`) from a clean `main` that matches `origin/main`. The script runs the checks, shows the release notes, and waits for confirmation before it writes the version into every package file with `scripts/set-version.sh`, commits `Release v<version>`, creates the annotated `v<version>` tag, and pushes `main` and the tag. The repo's version always matches the latest tag.
-- Pushing the tag starts the **Release** workflow (`.github/workflows/release-appimage.yml`). It runs `scripts/set-version.sh` with the tag's version, builds the Linux, Windows, and macOS installers, and creates a GitHub release named `Patchwork v<version>`.
-- To check the build without a release, run the workflow by hand from the Actions tab (**Run workflow**). It builds with the last released version and creates no release.
-- Never edit `CHANGELOG.md` by hand, and never set version numbers by hand. Tags must start with `v` followed by a digit.
-- **Version numbers** are `MAJOR.MINOR.PATCH` with no leading zeros and no suffixes (the release script only accepts `X.Y.Z`). Read the current version with `git describe --tags --abbrev=0`, then raise one part by one:
-  - **Patch** by default, for every release: `0.8.0` → `0.8.1`.
-  - **Minor** only when the user says it is a major update, resetting the patch: `0.8.1` → `0.9.0`.
-  - **Major** only when the user asks for it.
-- **Hotfixes** are ordinary patch releases. Fix the bug on `main`, then release the next patch number: a hotfix after `0.4.9` is `0.4.10`, not `0.4.91`. Each part is compared as a whole number, so `0.4.91` would sort above every release from `0.4.10` to `0.4.90` and break update and release ordering. If the user asks for a version like that, explain this and confirm before tagging.
-- Never reuse, move, or delete a pushed tag. A broken release is followed by the next patch release.
-- Never monitor or poll the Release workflow or GitHub releases after pushing a tag. The user reports a broken build.
-- **Discord changelog**: every time the version is bumped and pushed, write Discord release notes and include them in the reply. This comes in addition to the git-cliff `CHANGELOG.md`, not instead of it. Release with `scripts/release.sh` as usual, which still regenerates `CHANGELOG.md` with git-cliff and commits it with the release. Then end the reply with the notes in one fenced `markdown` code block, so the formatting survives copying. Write them from the commits since the previous tag (`git log <previous tag>..v<version>`), in this shape:
-  - A `## Patchwork v<version>` heading, then `**Fixed**`, `**Added**`, `**Changed**`, and `**Note**` sections, in that order, leaving out any that are empty. No emoji.
-  - Plain `-` bullets, one per user-visible change. Say what the user sees and does, in everyday words: "Queued messages now send automatically. If you send a message while the agent is still replying, it goes out by itself as soon as the reply is done." Not "Messages queued during a turn are sent once it finishes."
-  - When a change has an exception, give it its own bullet in the same plain words, such as "If you stop a reply, or it fails with an error, your queued messages stay put until you send them yourself."
-  - Name settings by their path as the user sees it: "Settings → AI Tokenomics → Generate chat and task titles".
-  - Use `**Note**` for anything the user should know, such as an extra cost or a default worth changing.
-  - No file paths, function names, commit hashes, pixel sizes, or other apps' names.
-  - Stay well under Discord's 2,000-character message limit.
-- Full details are in [docs/releasing.md](docs/releasing.md).
+Read [docs/release.md](docs/release.md) before any push, version bump, or release. It has every rule, including the Discord changelog.
 
 ## Release and build setup for a Tauri project
 

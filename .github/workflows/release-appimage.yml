@@ -1,13 +1,9 @@
 name: Release
 
-# Builds the Linux AppImage, the Windows installer, and the macOS (Apple silicon) disk image when a
-# version tag (v0.1.0, v0.2.0, ...) is pushed. Each build job uploads its files straight to
-# updates.patchworkeditor.com (a Bunny storage zone), so nothing goes through GitHub's artifact
-# storage, which a private repo has little of. The release job then publishes latest.json there,
-# which Patchwork 0.10.10 and newer update from, checking each file's SHA-256 digest and signature,
-# and creates a GitHub release with the notes.
-# Pushes to main don't build. Run it by hand from the Actions tab to check the build without a
-# tag; only tags publish.
+# Builds the Linux AppImage, the Windows installer, and the macOS (Apple silicon) disk image and app
+# bundle when a version tag (v0.1.0, v0.2.0, ...) is pushed, publishes them to
+# updates.patchworkeditor.com, and creates a GitHub release with the notes. scripts/release.sh does
+# the work. docs/release.md explains it, including how it keeps to a private repo's limits.
 
 on:
   push:
@@ -18,13 +14,19 @@ on:
 permissions:
   contents: write
 
+# A second run for the same ref would build and upload the same files again.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   appimage:
     # Build on the oldest Ubuntu runner still available so the AppImage links
     # against an older glibc and runs on newer distributions too.
     runs-on: ubuntu-22.04
+    timeout-minutes: 45
     outputs:
-      assets: ${{ steps.publish.outputs.assets }}
+      assets: ${{ steps.build.outputs.assets }}
     env:
       # linuxdeploy is itself an AppImage; this lets it run without FUSE.
       APPIMAGE_EXTRACT_AND_RUN: 1
@@ -32,19 +34,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Tauri Linux dependencies
-        # Prebuilt Ubuntu packages, kept in the Actions cache: the WebKitGTK ones are large, and a
-        # slow Ubuntu mirror once held a release at this step for over 15 minutes. Change `version`
-        # to refresh the cached packages.
-        uses: awalsh128/cache-apt-pkgs-action@v1
-        with:
-          packages: >-
-            build-essential file libayatana-appindicator3-dev libfuse2 librsvg2-dev libssl-dev
-            libwebkit2gtk-4.1-dev libxdo-dev patchelf
-          version: 1
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential file libayatana-appindicator3-dev libfuse2 \
+            librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
 
       - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
 
       - uses: pnpm/action-setup@v4
         with:
@@ -53,51 +48,30 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
 
       - name: Install JavaScript dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Set version from tag
-        # scripts/release.sh already wrote the tag's version into the repo; this makes a tag pushed
-        # without the script build with its own version too.
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: scripts/set-version.sh "${GITHUB_REF_NAME#v}"
-
-      - name: Build AppImage
+      - name: Build and publish
+        id: build
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: scripts/build.sh appimage
-
-      - name: Find AppImage
-        id: find
-        run: |
-          path=$(ls target/release/bundle/appimage/*.AppImage | head -n 1)
-          echo "path=$path" >> "$GITHUB_OUTPUT"
-
-      - name: Publish to updates.patchworkeditor.com
-        id: publish
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
           BUNNY_STORAGE_PASSWORD: ${{ secrets.BUNNY_STORAGE_PASSWORD }}
-          FILE: ${{ steps.find.outputs.path }}
-        run: echo "assets=$(scripts/publish-files.sh "$GITHUB_REF_NAME" "$FILE")" >> "$GITHUB_OUTPUT"
+        run: scripts/release.sh ci-build linux
 
   windows:
     runs-on: windows-latest
+    timeout-minutes: 45
     outputs:
-      assets: ${{ steps.publish.outputs.assets }}
+      assets: ${{ steps.build.outputs.assets }}
     defaults:
       run:
         shell: bash
-
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
 
       - uses: pnpm/action-setup@v4
         with:
@@ -106,54 +80,29 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
 
       - name: Install JavaScript dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Set version from tag
-        # scripts/release.sh already wrote the tag's version into the repo; this makes a tag pushed
-        # without the script build with its own version too.
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: scripts/set-version.sh "${GITHUB_REF_NAME#v}"
-
-      - name: Build installer
+      - name: Build and publish
+        id: build
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          args=()
-          if [[ -n "$TAURI_SIGNING_PRIVATE_KEY" ]]; then
-            args=(--config "$GITHUB_WORKSPACE/apps/desktop/src-tauri/tauri.signing.conf.json")
-          fi
-          pnpm --filter patchwork-desktop exec tauri build --bundles nsis "${args[@]}"
-
-      - name: Find installer
-        id: find
-        run: |
-          path=$(ls target/release/bundle/nsis/*-setup.exe | head -n 1)
-          echo "path=$path" >> "$GITHUB_OUTPUT"
-
-      - name: Publish to updates.patchworkeditor.com
-        id: publish
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
           BUNNY_STORAGE_PASSWORD: ${{ secrets.BUNNY_STORAGE_PASSWORD }}
-          FILE: ${{ steps.find.outputs.path }}
-        run: echo "assets=$(scripts/publish-files.sh "$GITHUB_REF_NAME" "$FILE")" >> "$GITHUB_OUTPUT"
+        run: scripts/release.sh ci-build windows
 
   macos:
-    # macos-14 runs on Apple silicon, so the build is native arm64.
+    # macos-14 runs on Apple silicon, so the build is native arm64. Its minutes count ten times
+    # against the private repo's allowance, so its timeout is the tightest.
     runs-on: macos-14
+    timeout-minutes: 30
     outputs:
-      assets: ${{ steps.publish.outputs.assets }}
-
+      assets: ${{ steps.build.outputs.assets }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
 
       - uses: pnpm/action-setup@v4
         with:
@@ -162,54 +111,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
 
       - name: Install JavaScript dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Set version from tag
-        # scripts/release.sh already wrote the tag's version into the repo; this makes a tag pushed
-        # without the script build with its own version too.
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: scripts/set-version.sh "${GITHUB_REF_NAME#v}"
-
-      - name: Build disk image
-        # The app bundle is what the updater downloads, as Patchwork.app.tar.gz. A signed build
-        # packs it itself; otherwise it is packed here.
+      - name: Build and publish
+        id: build
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          args=()
-          if [[ -n "$TAURI_SIGNING_PRIVATE_KEY" ]]; then
-            args=(--config "$GITHUB_WORKSPACE/apps/desktop/src-tauri/tauri.signing.conf.json")
-          fi
-          pnpm --filter patchwork-desktop exec tauri build --bundles app,dmg "${args[@]}"
-          bundle=target/release/bundle/macos
-          [[ -f "$bundle/Patchwork.app.tar.gz" ]] || tar -czf "$bundle/Patchwork.app.tar.gz" -C "$bundle" Patchwork.app
-
-      - name: Find disk image
-        id: find
-        run: |
-          path=$(ls target/release/bundle/dmg/*.dmg | head -n 1)
-          echo "path=$path" >> "$GITHUB_OUTPUT"
-
-      - name: Publish to updates.patchworkeditor.com
-        # The disk image is for new installs; the updater downloads Patchwork.app.tar.gz.
-        id: publish
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
           BUNNY_STORAGE_PASSWORD: ${{ secrets.BUNNY_STORAGE_PASSWORD }}
-          FILE: ${{ steps.find.outputs.path }}
-        run: |
-          assets=$(scripts/publish-files.sh "$GITHUB_REF_NAME" "$FILE" target/release/bundle/macos/Patchwork.app.tar.gz)
-          echo "assets=$assets" >> "$GITHUB_OUTPUT"
+        run: scripts/release.sh ci-build macos
 
   release:
     needs: [appimage, windows, macos]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -221,37 +139,12 @@ jobs:
         with:
           args: --latest --strip header --output RELEASE_NOTES.md
 
-      - name: Publish latest.json to updates.patchworkeditor.com
-        # In the shape of GitHub's release API, plus each file's signature, as the updater reads it.
-        # It goes up after the build jobs uploaded every file, so it never names a missing one,
-        # and its cached copy is purged.
+      - name: Publish latest.json and the GitHub release
         env:
-          STORAGE: https://ny.storage.bunnycdn.com/patchwork-releases
-          PUBLIC: https://updates.patchworkeditor.com
+          GH_TOKEN: ${{ github.token }}
           BUNNY_STORAGE_PASSWORD: ${{ secrets.BUNNY_STORAGE_PASSWORD }}
           BUNNY_API_KEY: ${{ secrets.BUNNY_API_KEY }}
           LINUX: ${{ needs.appimage.outputs.assets }}
           WINDOWS: ${{ needs.windows.outputs.assets }}
           MACOS: ${{ needs.macos.outputs.assets }}
-        run: |
-          jq -n --arg tag "$GITHUB_REF_NAME" --arg public "$PUBLIC" \
-            --argjson linux "$LINUX" --argjson windows "$WINDOWS" --argjson macos "$MACOS" \
-            '{tag_name: $tag, assets: ($linux + $windows + $macos | map({
-              name,
-              browser_download_url: "\($public)/\($tag)/\(.name)",
-              digest,
-              signature: (.sig | if . then @base64d else null end)
-            }))}' > latest.json
-          cat latest.json
-          curl -fsS --retry 3 -T latest.json -H "AccessKey: $BUNNY_STORAGE_PASSWORD" \
-            -H "Content-Type: application/json" "$STORAGE/latest.json" > /dev/null
-          curl -fsS -X POST -H "AccessKey: $BUNNY_API_KEY" \
-            "https://api.bunny.net/purge?url=$PUBLIC/latest.json"
-
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --title "Patchwork $GITHUB_REF_NAME" \
-            --notes-file RELEASE_NOTES.md
+        run: scripts/release.sh ci-release

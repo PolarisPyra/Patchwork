@@ -20,13 +20,11 @@ pnpm tauri dev
 ## Build
 
 ```sh
-scripts/build.sh appimage   # target/release/bundle/appimage/Patchwork_amd64.AppImage
 scripts/build.sh install    # release binary, icons, and launcher under ~/.local
 ```
 
-`scripts/build.sh appimage` builds the AppImage under a fixed name, `Patchwork_amd64.AppImage`, so
-it doesn't change with the version. `scripts/build.sh install` builds the release binary and
-installs it under `~/.local` with its icons and a launcher named **Patchwork**.
+`scripts/build.sh install` builds the AppImage and installs it under `~/.local` with its icons and
+a launcher named **Patchwork**.
 Set `PREFIX` to install somewhere else. The launcher's id is
 `dev.patchwork.ade`, so it doesn't replace the launcher of an AppImage you already run. The
 install step refreshes the desktop, icon, and KDE caches.

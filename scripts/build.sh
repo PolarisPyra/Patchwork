@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Builds Patchwork. `appimage` writes Patchwork_amd64.AppImage. `install` builds the AppImage and
-# installs it as $PREFIX/bin/patchwork (default ~/.local) with its icons and a launcher. The app
-# updates that file in place from the GitHub releases.
+# Builds Patchwork's AppImage and installs it as $PREFIX/bin/patchwork (default ~/.local) with its
+# icons and a launcher. The app updates that file in place from the releases at
+# updates.patchworkeditor.com. Release builds come from scripts/release.sh.
 #
-# Usage: scripts/build.sh appimage | install
+# Usage: scripts/build.sh install
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,9 +16,8 @@ die() {
 
 usage() {
   cat <<'EOF'
-Usage: scripts/build.sh appimage | install
+Usage: scripts/build.sh install
 
-  appimage  Build target/release/bundle/appimage/Patchwork_amd64.AppImage
   install   Build the AppImage and install it under $PREFIX (default ~/.local): bin/patchwork,
             the icons, and share/applications/dev.patchwork.ade.desktop
 EOF
@@ -36,22 +35,11 @@ require_tools() {
 
 build_appimage() {
   require_tools
-  # Patchwork 0.6.7 and older update only to signed builds. A release build signs its AppImage
-  # when CI passes the signing key, so those copies can update; Patchwork itself checks downloads
-  # against GitHub's checksums and needs no key.
-  local args=()
-  if [[ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
-    # The bundler signs with the updater's public key, which only this config carries.
-    args=(--config "$repo_root/apps/desktop/src-tauri/tauri.signing.conf.json")
-  fi
-  pnpm --filter patchwork-desktop exec tauri build --bundles appimage "${args[@]}"
-  # Tauri names the file after the version. Rename it so the name stays the same across releases.
+  pnpm --filter patchwork-desktop exec tauri build --bundles appimage
+  # Tauri names the file after the version. Rename it so the install step finds it.
   local built="target/release/bundle/appimage/Patchwork_${version}_amd64.AppImage"
-  local out="target/release/bundle/appimage/Patchwork_amd64.AppImage"
   [[ -f "$built" ]] || die "Expected $built after the build."
-  mv -f "$built" "$out"
-  [[ -f "$built.sig" ]] && mv -f "$built.sig" "$out.sig"
-  echo "AppImage: $repo_root/$out"
+  mv -f "$built" target/release/bundle/appimage/Patchwork_amd64.AppImage
 }
 
 install_app() {
@@ -124,7 +112,6 @@ refresh_caches() {
 }
 
 case "${1:-}" in
-  appimage) build_appimage ;;
   install) install_app ;;
   -h | --help) usage ;;
   *)

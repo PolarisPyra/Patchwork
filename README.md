@@ -88,7 +88,7 @@ To try an agent without a project, start a chat from the top of the sidebar.
 - [Development](docs/development.md): build, run, and test Patchwork
 - [Architecture](docs/architecture.md): repo layout and the data model
 - [Agent CLIs](docs/agent-clis.md): how each agent is detected, run, and imported
-- [Releasing](docs/releasing.md): changelog, versioning, and the release workflow
+- [Releasing](docs/release.md): versions, the changelog, the release workflow, and the update server
 - [All docs](docs/README.md)
 
 Other project files:
@@ -101,17 +101,7 @@ Other project files:
 
 ## Releasing
 
-Each release is a version tag, such as `v0.4.9`. The app shows its version next to the project
-name in the top left corner.
-
-1. Commit and push the changes for the release to `main`.
-2. Run `pnpm release 0.4.9` from the repo root, with the new version number.
-3. Read the release notes it prints, then type `y` to confirm.
-
-The script checks the build, writes the version into every package file, regenerates
-`CHANGELOG.md`, commits them as `Release v0.4.9`, tags the commit, and pushes. The tag starts the
-Release workflow, which builds the Linux, Windows, and macOS installers and publishes the GitHub
-release. [Releasing](docs/releasing.md) has the details.
+Run `pnpm release 0.4.9` with the new version. [Releasing](docs/release.md) covers the rest.
 
 ## Contributing
 

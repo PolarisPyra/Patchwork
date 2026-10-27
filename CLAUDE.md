@@ -96,6 +96,7 @@ Playwright's numbers don't match the app. Measure lag in the real dev window:
 - Don't commit until I've reviewed the change and say so. Don't push unless I ask.
 - When a QA check is added or changed, commit it along with the change it checks. Never leave one untracked.
 - Commit subjects are short, sentence-case, and imperative, with no prefix. Describe the user-visible change, for example "Nudge the header project dropdown 2px left".
+- Keep internal CI/CD, release, and tooling changes out of the changelog. Commit them separately from app changes, so they only touch `.github/`, `scripts/`, `docs/`, `cliff.toml`, or `*.md`, which `exclude_paths` in `cliff.toml` leaves out. If an internal change has to touch app files (such as the Vite config or the dev session), add a `skip` parser for its subject in `cliff.toml`.
 
 ## Finishing
 

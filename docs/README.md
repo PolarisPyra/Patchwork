@@ -8,7 +8,7 @@ for people using it.
 | [Development](development.md) | Requirements, running the app, building, tests, and other checks |
 | [Architecture](architecture.md) | Repo layout, the SQLite data model, and where tasks and chats run |
 | [Agent CLIs](agent-clis.md) | How each agent is detected, run, approved, steered, and imported |
-| [Releasing](releasing.md) | git-cliff changelog, version tags, and the release workflow |
+| [Releasing](release.md) | Versions, the changelog, the release workflow, and the update server |
 | [UI checks](../scripts/qa/README.md) | Browser measurements and screenshots of the running dev session |
 
 ## Adding a guide

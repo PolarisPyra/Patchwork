@@ -1,5 +1,5 @@
 # git-cliff configuration for CHANGELOG.md.
-# Run `git cliff --tag vX.Y.Z -o CHANGELOG.md` before tagging a release (see docs/releasing.md).
+# Run `git cliff --tag vX.Y.Z -o CHANGELOG.md` before tagging a release (see docs/release.md).
 
 [changelog]
 header = """
@@ -39,12 +39,24 @@ commit_parsers = [
     { message = "^(Remove|Drop|Delete|Deprecate)", group = "Removed" },
     { message = "^(Update|Change|Polish|Tighten|Refactor|Rename|Move|Align|Make|Improve|Describe|Sidebar|Choice|Use|Replace)", group = "Changed" },
     { message = "^(Release|Bump|Merge|Chore)", skip = true },
+    # Internal changes users never see, made outside the paths in `exclude_paths` below.
+    { message = "^Paint the dev session", skip = true },
+    { message = "^Split the web bundle", skip = true },
     { message = "^Reword the v[0-9.]+ changelog", skip = true },
     { message = ".*", group = "Other" },
 ]
 protect_breaking_commits = false
 filter_commits = false
 tag_pattern = "v[0-9].*"
+# Commits that only touch CI/CD, release, and tooling files are internal and stay out of the
+# changelog. A commit that also changes the app is kept.
+exclude_paths = [
+    ".github/**",
+    "scripts/**",
+    "docs/**",
+    "cliff.toml",
+    "*.md",
+]
 skip_tags = ""
 ignore_tags = ""
 topo_order = false

@@ -21,7 +21,7 @@ Thanks for helping out. Bug reports, fixes, and new guides are all welcome.
 
 Changelog entries are generated from commit subjects, so write each subject as a short,
 sentence-case summary that starts with a verb, such as `Add ...`, `Fix ...`, or `Change ...`.
-See [Releasing](docs/releasing.md) for how the groups are built.
+See [Releasing](docs/release.md) for how the groups are built.
 
 ## Adding documentation
 
