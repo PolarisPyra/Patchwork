@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.18] - 2026-10-27
+
+### Fixed
+
+- Spinners that show at the same time now turn together, such as when two background tasks are running in a chat. Before, each spinner started its turn when it appeared, so they were out of step with each other.
+
 ## [0.10.17] - 2026-10-27
 
 ### Added
