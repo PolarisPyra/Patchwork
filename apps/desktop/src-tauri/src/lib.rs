@@ -717,6 +717,14 @@ impl Notifier {
         let Some(server) = app.try_state::<Arc<Server>>() else {
             return;
         };
+        // Streamed text and reasoning never notify, and come per token: they skip the settings
+        // copy, made under the store's lock.
+        if matches!(
+            envelope.event,
+            AgentEvent::TextDelta { .. } | AgentEvent::Thinking { .. }
+        ) {
+            return;
+        }
         let settings = server.store.settings().notifications;
         let thread_id = &envelope.thread_id;
         let mut goal_met = self.goal_met.lock().unwrap_or_else(PoisonError::into_inner);
