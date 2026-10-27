@@ -63,9 +63,6 @@ struct Request {
     model: String,
     /// The provider's name, for messages.
     provider: String,
-    /// The preset the provider was made from, e.g. `deepseek`.
-    #[serde(default)]
-    preset: Option<String>,
     root: String,
     sessions_dir: String,
     session_id: Option<String>,
@@ -487,14 +484,11 @@ impl Agent {
         dropped
     }
 
-    /// A user message's content: plain text, or text and images where the provider reads them.
-    /// DeepSeek's API takes text only.
+    /// A user message's content: plain text, or text and images. A model that cannot read the
+    /// images refuses them, and `recover` sends the message again without them.
     fn user_content(&self, text: &str, images: &[ImageIn]) -> Value {
         if images.is_empty() {
             return json!(text);
-        }
-        if self.request.preset.as_deref() == Some("deepseek") {
-            return json!(format!("{text}\n\n{}", images_note(&self.request.provider, images.len())));
         }
         let mut parts = vec![json!({"type": "text", "text": text})];
         parts.extend(images.iter().map(|i| {
