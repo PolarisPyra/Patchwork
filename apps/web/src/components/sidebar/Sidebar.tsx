@@ -773,7 +773,9 @@ function TasksView({
         Chats
       </SectionLabel>
       {chats.length === 0 && (
-        <div className="px-3 py-2 text-[length:var(--fs-sm)] text-fg-muted">No chats yet</div>
+        <div className="flex h-[22px] items-center px-1.5 text-[length:var(--fs-sm)] text-fg-muted">
+          No chats yet
+        </div>
       )}
       {chats.map((t) => (
         // Chat rows reach 4px past the list's edge (see ThreadRow), so an open one is not clipped.
@@ -820,7 +822,9 @@ function TasksView({
         Projects
       </SectionLabel>
       {projects.length === 0 && !folderDrop && (
-        <div className="px-3 py-2 text-[length:var(--fs-sm)] text-fg-muted">No projects yet</div>
+        <div className="flex h-[22px] items-center px-1.5 text-[length:var(--fs-sm)] text-fg-muted">
+          No projects yet
+        </div>
       )}
       <div className="-mx-2">
         {projects.map((p) => {
@@ -940,7 +944,7 @@ function TasksView({
                     className="pointer-events-none absolute top-0 bottom-0 left-4 w-px bg-[#58585866] opacity-0 transition-opacity group-hover/tree:opacity-100"
                   />
                   {tasks.length === 0 && projectFolders.length === 0 && (
-                    <div className="px-5 py-2 text-[length:var(--fs-sm)] text-fg-muted">
+                    <div className="flex h-[22px] items-center pl-[30px] text-[length:var(--fs-sm)] text-fg-muted">
                       No tasks yet
                     </div>
                   )}
@@ -1347,70 +1351,72 @@ function ArchivedView({
   );
 
   return (
-    <div
-      tabIndex={-1}
-      {...shortcutContext("archivedListFocus")}
-      onClick={clearSelectionOnBlank}
-      className="group/tree flex min-h-0 flex-1 flex-col gap-px overflow-y-scroll overflow-x-hidden p-2 *:shrink-0 focus:outline-none"
-    >
-      <SectionLabel
-        action={
-          archivedThreads.length > 0 && (
-            <button
-              className="flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 normal-case tracking-normal text-fg-muted hover:text-fg"
-              onClick={collapseAll}
-            >
-              <ArrowsInLineVerticalIcon size={15} />
-              Collapse all
-            </button>
-          )
-        }
+    <>
+      {/* Styled as the Changes header; the list below reserves its scrollbar, so the inset matches. */}
+      <div className="flex h-8 flex-none items-center justify-between pr-[18px] pl-3 text-[length:var(--fs-sm)] font-semibold">
+        <span>Archived</span>
+        {archivedThreads.length > 0 && (
+          <button
+            className="flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 font-normal text-[length:var(--fs-xs)] text-fg-muted hover:text-fg"
+            onClick={collapseAll}
+          >
+            <ArrowsInLineVerticalIcon size={15} />
+            Collapse all
+          </button>
+        )}
+      </div>
+      <div
+        tabIndex={-1}
+        {...shortcutContext("archivedListFocus")}
+        onClick={clearSelectionOnBlank}
+        className="group/tree flex min-h-0 flex-1 flex-col gap-px overflow-y-scroll overflow-x-hidden p-2 *:shrink-0 focus:outline-none"
       >
-        Archived
-      </SectionLabel>
-      {archivedThreads.length === 0 && (
-        <div className="px-3 py-2 text-[length:var(--fs-sm)] text-fg-muted">Nothing archived</div>
-      )}
-      <div className="-mx-2">
-        {chats.length > 0 && (
-          <div>
-            {header("chats", "Chats", false, chats)}
-            {body(
-              "chats",
-              "left-4",
-              chats.map((t) => row(t, false)),
-            )}
+        {archivedThreads.length === 0 && (
+          <div className="-mt-2.5 flex h-[22px] items-center px-1 text-[length:var(--fs-sm)] text-fg-muted">
+            Nothing archived
           </div>
         )}
-        {groups.map((g) => (
-          <div key={g.project.id}>
-            {header(g.project.id, g.project.name, false, [
-              ...g.folders.flatMap((f) => f.tasks),
-              ...g.topLevel,
-            ])}
-            {body(g.project.id, "left-4", [
-              ...g.folders.map(({ folder, tasks }) => {
-                const key = `folder:${folder.id}`;
-                return (
-                  <div key={folder.id}>
-                    {header(key, folder.name, true, tasks)}
-                    {body(
-                      key,
-                      "left-6",
-                      tasks.map((t) => row(t, true)),
-                    )}
-                  </div>
-                );
-              }),
-              ...g.topLevel.map((t) => row(t, false)),
-            ])}
-          </div>
-        ))}
+        <div className="-mx-2">
+          {chats.length > 0 && (
+            <div>
+              {header("chats", "Chats", false, chats)}
+              {body(
+                "chats",
+                "left-4",
+                chats.map((t) => row(t, false)),
+              )}
+            </div>
+          )}
+          {groups.map((g) => (
+            <div key={g.project.id}>
+              {header(g.project.id, g.project.name, false, [
+                ...g.folders.flatMap((f) => f.tasks),
+                ...g.topLevel,
+              ])}
+              {body(g.project.id, "left-4", [
+                ...g.folders.map(({ folder, tasks }) => {
+                  const key = `folder:${folder.id}`;
+                  return (
+                    <div key={folder.id}>
+                      {header(key, folder.name, true, tasks)}
+                      {body(
+                        key,
+                        "left-6",
+                        tasks.map((t) => row(t, true)),
+                      )}
+                    </div>
+                  );
+                }),
+                ...g.topLevel.map((t) => row(t, false)),
+              ])}
+            </div>
+          ))}
+        </div>
+        {menu && (
+          <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />
+        )}
       </div>
-      {menu && (
-        <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />
-      )}
-    </div>
+    </>
   );
 }
 
@@ -1581,7 +1587,9 @@ function ChangesView({
           </div>
         )}
         {changes.length === 0 && (
-          <div className="px-3 py-2 text-[length:var(--fs-sm)] text-fg-muted">No changes</div>
+          <div className="-mt-2.5 flex h-[22px] items-center px-1 text-[length:var(--fs-sm)] text-fg-muted">
+            No changes
+          </div>
         )}
         {replyFiles.length > 0 && (
           // Shared columns, so every folder starts together. A name takes at most about half the
