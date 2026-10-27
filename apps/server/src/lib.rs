@@ -73,6 +73,8 @@ pub struct Server {
     sink: EventSink,
     /// The watcher on the active project, with that project's id.
     project_watch: std::sync::Mutex<Option<(String, watch::ProjectWatcher)>>,
+    /// The watcher on the skills folder, while Settings shows the skills.
+    skills_watch: std::sync::Mutex<Option<skills::Watcher>>,
 }
 
 /// Trims a user-entered name; blank names are refused.
@@ -360,6 +362,7 @@ impl Server {
             clis_dir,
             sink,
             project_watch: std::sync::Mutex::default(),
+            skills_watch: std::sync::Mutex::default(),
         }))
     }
 
@@ -480,6 +483,35 @@ impl Server {
         })?;
         *current = Some((project_id.to_string(), watcher));
         Ok(())
+    }
+
+    /// Watches the skills folder in place of any watch before, passing the skills to
+    /// `on_change` after each settled burst of changes.
+    pub fn watch_skills(
+        self: &Arc<Self>,
+        on_change: impl Fn(Vec<skills::Skill>) + Send + 'static,
+    ) -> Res<()> {
+        let mut current = self
+            .skills_watch
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *current = None;
+        // The watcher lives in the server, so it holds the server weakly.
+        let server = Arc::downgrade(self);
+        let watcher = skills::watch(&skills::dir(&self.store.settings()), move || {
+            if let Some(server) = server.upgrade() {
+                on_change(skills::all(&server.store.settings()));
+            }
+        })?;
+        *current = Some(watcher);
+        Ok(())
+    }
+
+    pub fn unwatch_skills(&self) {
+        *self
+            .skills_watch
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 
     pub fn project_root(&self, project_id: &str) -> Res<String> {

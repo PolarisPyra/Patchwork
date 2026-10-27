@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use patchwork_server::types::{AgentKind, Project, Settings, AgentStatus, ModelOption, ShellChoices, Role, MessageStatus, AccessMode, Attachment, Message, Thread, Folder, GoalStatus, FileChange, ProviderUsage, ImportSource, ImportScan, AgentEventEnvelope, AgentEvent, TurnTrees};
 use patchwork_server::{NewThread, Res, Server, orchestration, persistence, provider};
+use tauri::ipc::Channel;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
@@ -66,6 +67,37 @@ fn list_skills(server: Srv) -> SkillsView {
         skills: patchwork_server::skills::all(&server.store.settings()),
         dir: dir.to_string_lossy().into_owned(),
     }
+}
+
+/// The skills, as `list_skills` gives them, and then again on `on_change` after each change to
+/// the skills folder, until `unwatch_skills` or another watch. Not `async`, so a watch and the
+/// unwatch before it run in the order they were called.
+#[tauri::command]
+fn watch_skills(server: Srv, on_change: Channel<SkillsView>) -> Res<SkillsView> {
+    let view = list_skills(server.clone());
+    let dir = view.dir.clone();
+    server.watch_skills(move |skills| {
+        let _ = on_change.send(SkillsView { dir: dir.clone(), skills });
+    })?;
+    Ok(view)
+}
+
+#[tauri::command]
+fn unwatch_skills(server: Srv) {
+    server.unwatch_skills();
+}
+
+/// Opens a skill's file in the user's editor.
+#[tauri::command]
+fn open_skill(server: Srv, path: String) -> Res<()> {
+    if !patchwork_server::skills::all(&server.store.settings()).iter().any(|s| s.path == path) {
+        return Err("That is not a skill".into());
+    }
+    let path = std::path::PathBuf::from(path);
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
+        return Err("That is not a skill".into());
+    };
+    workspace::open_in_editor(&dir.to_string_lossy(), &name.to_string_lossy())
 }
 
 /// Opens the skills folder in the file manager, creating it first.
@@ -881,6 +913,9 @@ pub fn run() {
             list_shells,
             list_skills,
             open_skills_folder,
+            watch_skills,
+            unwatch_skills,
+            open_skill,
             open_logs_folder,
             log_channels,
             read_log,

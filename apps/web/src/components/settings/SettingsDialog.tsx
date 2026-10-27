@@ -10,6 +10,7 @@ import {
   FolderSimpleIcon,
   GaugeIcon,
   KeyboardIcon,
+  MagnifyingGlassIcon,
   MinusIcon,
   PaletteIcon,
   PlugIcon,
@@ -59,7 +60,7 @@ import { CHIP_CLASS } from "~/components/chat/ModelPicker";
 import Dropdown from "~/components/workspace/Dropdown";
 import KeybindingsPane from "~/components/settings/KeybindingsPane";
 import ApiProvidersPane from "~/components/settings/ApiProvidersPane";
-import McpServersPane from "~/components/settings/McpServersPane";
+import McpServersPane, { Badge, chip, home, INPUT } from "~/components/settings/McpServersPane";
 
 type Section =
   | "appearance"
@@ -1422,20 +1423,33 @@ description: Draft release notes from the commits since the last tag
 ---
 Read template.md, then list the commits since the last tag…`;
 
-/** The skills folder every agent loads, and the skills in it. */
+type SkillFilter = "on" | "off";
+
+/** The skills folder every agent loads, and the skills in it, kept up to date as it changes. */
 function SkillsPane({ settings, updateSettings }: PaneProps) {
   const [view, setView] = useState<SkillsView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<SkillFilter | null>(null);
+  const [query, setQuery] = useState("");
 
-  const load = useCallback(() => api.listSkills().then(setView, (e) => setError(errorText(e))), []);
+  // A folder that can't be watched still lists its skills.
+  const watch = useCallback(
+    () =>
+      api.watchSkills(setView).then(setView, (e) => {
+        setError(errorText(e));
+        return api.listSkills().then(setView);
+      }),
+    [],
+  );
   useEffect(() => {
-    void load();
-  }, [load]);
+    void watch();
+    return () => void api.unwatchSkills();
+  }, [watch]);
 
   async function choose(dir: string | null) {
     setError(null);
     await updateSettings((s) => ({ ...s, skillsDir: dir }));
-    await load();
+    await watch();
   }
 
   async function toggle(name: string, on: boolean) {
@@ -1456,44 +1470,115 @@ function SkillsPane({ settings, updateSettings }: PaneProps) {
     if (typeof picked === "string") await choose(picked);
   }
 
+  if (view === null) return null;
+
+  const run = (action: Promise<void>) => {
+    setError(null);
+    action.catch((e) => setError(errorText(e)));
+  };
+  const q = query.trim().toLowerCase();
+  const on = view.skills.filter((s) => s.enabled).length;
+  const counts = { on, off: view.skills.length - on };
+  const shown = view.skills.filter(
+    (s) =>
+      (!filter || s.enabled === (filter === "on")) &&
+      (!q || `${s.name} ${s.description ?? ""}`.toLowerCase().includes(q)),
+  );
+
   return (
     <>
-      <TokenRow title="Folder" desc={view?.dir}>
-        {settings.skillsDir && (
-          <button className="btn" onClick={() => void choose(null)}>
-            Use default
+      <div className="flex items-center gap-1.5 pb-3">
+        <button
+          className={chip(filter === null)}
+          aria-pressed={filter === null}
+          onClick={() => setFilter(null)}
+        >
+          All <span className="text-fg-muted">{view.skills.length}</span>
+        </button>
+        {(["on", "off"] as const).map((f) => (
+          <button
+            key={f}
+            className={chip(filter === f)}
+            aria-pressed={filter === f}
+            onClick={() => setFilter(filter === f ? null : f)}
+          >
+            {f === "on" ? "On" : "Off"} <span className="text-fg-muted">{counts[f]}</span>
+          </button>
+        ))}
+        <label className="relative ml-auto w-52">
+          <MagnifyingGlassIcon
+            size={13}
+            className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-fg-muted"
+          />
+          <input
+            className={`${INPUT} pl-7`}
+            value={query}
+            placeholder="Search skills"
+            spellCheck={false}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
+      </div>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(196px,1fr))] gap-2">
+        {shown.map((skill) => (
+          <div
+            key={skill.path}
+            className={`flex min-h-[124px] min-w-0 flex-col gap-2.5 rounded-[var(--radius-md)] border border-border p-3 text-fg ${skill.enabled ? "" : "opacity-55"}`}
+          >
+            <div className="flex w-full min-w-0 items-center gap-2.5">
+              <Badge name={skill.name} size={32} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-semibold">${skill.name}</div>
+                <div className="truncate font-mono text-[length:var(--fs-xs)] text-fg-muted">
+                  {skill.path.startsWith(`${view.dir}/`)
+                    ? skill.path.slice(view.dir.length + 1)
+                    : home(skill.path)}
+                </div>
+              </div>
+              <button className="btn flex-none" onClick={() => run(api.openSkill(skill.path))}>
+                Edit
+              </button>
+            </div>
+            <div className="line-clamp-2 flex-1 text-[length:var(--fs-sm)] text-fg-muted">
+              {skill.description}
+            </div>
+            <div className="flex justify-end">
+              <TokenSwitch
+                label={`$${skill.name}`}
+                on={skill.enabled}
+                onChange={(on) => void toggle(skill.name, on)}
+              />
+            </div>
+          </div>
+        ))}
+        {!q && !filter && (
+          <button
+            className="flex min-h-[124px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-dashed border-border-strong bg-transparent text-fg-muted hover:border-accent hover:text-fg"
+            onClick={() => run(api.openSkillsFolder())}
+          >
+            <FolderSimpleIcon size={20} />
+            <span className="text-[length:var(--fs-sm)]">Open folder</span>
           </button>
         )}
-        <button className="btn" onClick={() => void pick()}>
-          Change…
-        </button>
-        <button
-          className="btn"
-          onClick={() => api.openSkillsFolder().catch((e) => setError(errorText(e)))}
-        >
-          Open
-        </button>
-      </TokenRow>
-      {error && <div className="mt-2 text-[length:var(--fs-sm)] text-danger">{error}</div>}
-      {view?.skills.length === 0 && (
-        <div className="px-3 py-2 text-[length:var(--fs-sm)] text-fg-subtle">No skills yet</div>
-      )}
-      {view?.skills.map((skill) => (
-        <div
-          key={skill.path}
-          className="flex items-center gap-3 border-b border-border py-2.5"
-          title={skill.description ?? skill.path}
-        >
-          <div className="min-w-0 flex-1 truncate font-[family-name:var(--font-mono)]">
-            ${skill.name}
-          </div>
-          <TokenSwitch
-            label={`$${skill.name}`}
-            on={skill.enabled}
-            onChange={(on) => void toggle(skill.name, on)}
-          />
+      </div>
+      {(q || filter) && shown.length === 0 && (
+        <div className="py-6 text-center text-fg-muted">
+          {q ? `Nothing matches “${query.trim()}”` : "No skills"}
         </div>
-      ))}
+      )}
+      {error && <div className="mt-2 text-[length:var(--fs-sm)] text-danger">{error}</div>}
+      <div className="mt-3">
+        <TokenRow title="Folder" desc={view.dir}>
+          {settings.skillsDir && (
+            <button className="btn" onClick={() => void choose(null)}>
+              Use default
+            </button>
+          )}
+          <button className="btn" onClick={() => void pick()}>
+            Change…
+          </button>
+        </TokenRow>
+      </div>
       <div className="mt-5 mb-1.5 font-semibold">Example</div>
       <pre className="m-0 overflow-x-auto rounded-[var(--radius-sm)] border border-border-strong bg-editor px-3 py-2.5 font-[family-name:var(--font-mono)] text-[length:var(--fs-xs)] leading-relaxed text-fg-muted">
         {SKILLS_EXAMPLE}

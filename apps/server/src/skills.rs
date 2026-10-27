@@ -4,6 +4,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+use notify::{RecursiveMode, Watcher as _};
 use serde::Serialize;
 
 use crate::types::{AgentKind, Settings};
@@ -184,6 +185,40 @@ pub fn claude_plugin(_settings: &Settings) -> Option<PathBuf> {
 /// itself where there are no links.
 pub fn loaded_dir(settings: &Settings) -> PathBuf {
     claude_plugin(settings).map(|plugin| plugin.join("skills")).unwrap_or_else(|| dir(settings))
+}
+
+/// Watches the skills folder until dropped.
+pub struct Watcher {
+    _watcher: notify::RecommendedWatcher,
+}
+
+/// Quiet time that ends a burst of changes in the skills folder.
+const SETTLE: std::time::Duration = std::time::Duration::from_millis(200);
+
+/// Watches `dir` and everything in it, following links, and runs `on_change` on a thread of its
+/// own once each burst of changes settles.
+pub fn watch(dir: &Path, on_change: impl Fn() + Send + 'static) -> Result<Watcher, String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+        if !res.is_ok_and(|e| matches!(e.kind, notify::EventKind::Access(_))) {
+            let _ = tx.send(());
+        }
+    })
+    .map_err(|e| e.to_string())?;
+    watcher
+        .watch(dir, RecursiveMode::Recursive)
+        .map_err(|e| format!("Could not watch {}: {e}", dir.display()))?;
+    // Ends once the watcher is dropped, which closes the channel.
+    std::thread::Builder::new()
+        .name("skills-watch".into())
+        .spawn(move || {
+            while rx.recv().is_ok() {
+                while rx.recv_timeout(SETTLE).is_ok() {}
+                on_change();
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(Watcher { _watcher: watcher })
 }
 
 /// What Patchwork's own agent is told about the skills, which it reads with its file tools.

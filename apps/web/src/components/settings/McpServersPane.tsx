@@ -18,7 +18,7 @@ import {
 import ProviderLogos from "~/components/ProviderLogos";
 import { errorText } from "~/lib/util";
 
-const INPUT =
+export const INPUT =
   "h-7 w-full min-w-0 rounded-[var(--radius-sm)] border border-border-strong bg-editor px-2 text-[length:var(--fs-sm)] text-fg outline-none focus:border-accent";
 
 type Status = McpServerView["status"] | CliMcpServer["status"];
@@ -265,7 +265,7 @@ export default function McpServersPane({ appIcon }: { appIcon: string }) {
   );
 }
 
-function chip(on: boolean): string {
+export function chip(on: boolean): string {
   return `flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[length:var(--fs-sm)] ${on ? "border-accent bg-accent-soft text-fg" : "border-border bg-transparent text-fg hover:bg-hover"}`;
 }
 
@@ -336,7 +336,7 @@ function ownConfig(s: McpServerView): McpServer {
 }
 
 /** A letter on a color picked from the name, so each server is easy to spot. */
-function Badge({ name, size }: { name: string; size: number }) {
+export function Badge({ name, size }: { name: string; size: number }) {
   let hash = 0;
   for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) | 0;
   const hue = Math.abs(hash) % 360;
@@ -709,7 +709,7 @@ function ServerDetail({
 }
 
 /** A path with the home folder shown as `~`. */
-function home(path: string): string {
+export function home(path: string): string {
   return path.replace(/^(\/home\/[^/]+|\/Users\/[^/]+|[A-Za-z]:\\Users\\[^\\]+)/, "~");
 }
 

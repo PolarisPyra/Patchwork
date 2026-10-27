@@ -1,6 +1,6 @@
 // Typed bridge to the Rust backend. Mirrors apps/server/src/types.rs and the
 // commands registered in apps/desktop/src-tauri/src/lib.rs — keep all three in sync.
-import { invoke as tauriInvoke, type InvokeArgs } from "@tauri-apps/api/core";
+import { Channel, invoke as tauriInvoke, type InvokeArgs } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { profile } from "~/lib/profile";
 
@@ -788,6 +788,14 @@ export const api = {
   listShells: () => invoke<ShellChoices>("list_shells"),
   listSkills: () => invoke<SkillsView>("list_skills"),
   openSkillsFolder: () => invoke<void>("open_skills_folder"),
+  /** The skills now, and on `onChange` after each change to the folder until `unwatchSkills`. */
+  watchSkills: (onChange: (view: SkillsView) => void) => {
+    const channel = new Channel<SkillsView>();
+    channel.onmessage = onChange;
+    return invoke<SkillsView>("watch_skills", { onChange: channel });
+  },
+  unwatchSkills: () => invoke<void>("unwatch_skills"),
+  openSkill: (path: string) => invoke<void>("open_skill", { path }),
   openLogsFolder: () => invoke<void>("open_logs_folder"),
   exportLogs: (path: string) => invoke<void>("export_logs", { path }),
   logChannels: () => invoke<string[]>("log_channels"),
