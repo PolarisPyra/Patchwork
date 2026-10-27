@@ -1,5 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
-import { CaretDownIcon, FolderOpenIcon, PlusIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
+import {
+  CaretDownIcon,
+  FolderOpenIcon,
+  PlusIcon,
+  TerminalWindowIcon,
+  TrashIcon,
+  XIcon,
+} from "@phosphor-icons/react";
 import { api, type Settings } from "~/api";
 import type { UpdateSettings } from "~/app/App";
 import { CHIP_CLASS } from "~/components/chat/ModelPicker";
@@ -166,25 +173,11 @@ export default function Panel({
         <div className="ml-auto flex min-w-0 items-center gap-1">
           {tab === "terminal" ? (
             <>
-              {shells.length > 1 &&
-                shells.map((shell, i) => (
-                  <ShellChip
-                    key={shell.id}
-                    shell={shell}
-                    label={i === 0 ? shell.name : `${shell.name} ${i + 1}`}
-                    active={shell === active}
-                    onSelect={() => setActiveId(shell.id)}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      // The chips sit at the panel's right edge; keep the menu inside the window.
-                      setMenu({
-                        x: Math.min(e.clientX, window.innerWidth - 170),
-                        y: e.clientY,
-                        shell,
-                      });
-                    }}
-                  />
-                ))}
+              {shells.length === 1 && (
+                <span className="px-1 text-[length:var(--fs-sm)] text-fg-muted">
+                  {shells[0].name}
+                </span>
+              )}
               <button
                 className="btn-icon"
                 aria-label="New terminal"
@@ -193,15 +186,18 @@ export default function Panel({
               >
                 <PlusIcon size={14} />
               </button>
-              <button
-                className="btn-icon"
-                aria-label="Kill terminal"
-                title="Kill terminal"
-                disabled={!active}
-                onClick={() => active && killShell(active)}
-              >
-                <TrashIcon size={14} />
-              </button>
+              {/* With the tab list showing, each tab has its own kill button. */}
+              {shells.length < 2 && (
+                <button
+                  className="btn-icon"
+                  aria-label="Kill terminal"
+                  title="Kill terminal"
+                  disabled={!active}
+                  onClick={() => active && killShell(active)}
+                >
+                  <TrashIcon size={14} />
+                </button>
+              )}
             </>
           ) : (
             <>
@@ -288,13 +284,43 @@ export default function Panel({
       {error && (
         <div className="flex-none px-3 pb-1 text-[length:var(--fs-sm)] text-danger">{error}</div>
       )}
-      <div className="min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1">
         {tab === "terminal" ? (
-          <div
-            ref={host}
-            className="h-full w-full overflow-hidden pl-3"
-            {...shortcutContext("terminalFocus")}
-          />
+          <>
+            <div
+              ref={host}
+              className="h-full min-w-0 flex-1 overflow-hidden pl-3"
+              {...shortcutContext("terminalFocus")}
+            />
+            {/* The terminals, listed beside the active one once there is more than one. */}
+            {shells.length > 1 && (
+              <div
+                className="flex w-[120px] flex-none flex-col overflow-y-auto border-l border-border py-0.5"
+                role="tablist"
+                aria-label="Terminals"
+                aria-orientation="vertical"
+              >
+                {shells.map((shell, i) => (
+                  <ShellTab
+                    key={shell.id}
+                    shell={shell}
+                    label={i === 0 ? shell.name : `${shell.name} ${i + 1}`}
+                    active={shell === active}
+                    onSelect={() => setActiveId(shell.id)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      // The list sits at the panel's right edge; keep the menu inside the window.
+                      setMenu({
+                        x: Math.min(e.clientX, window.innerWidth - 170),
+                        y: e.clientY,
+                        shell,
+                      });
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         ) : (
           <OutputView channel={channel?.id ?? null} />
         )}
@@ -303,7 +329,7 @@ export default function Panel({
   );
 }
 
-function ShellChip({
+function ShellTab({
   shell,
   label,
   active,
@@ -317,13 +343,31 @@ function ShellChip({
   onContextMenu: (e: MouseEvent) => void;
 }) {
   return (
-    <button
-      className={`h-6 cursor-pointer rounded-[var(--radius-sm)] border-none px-2 text-[length:var(--fs-sm)] ${active ? "bg-selected-muted text-fg" : "bg-transparent text-fg-muted hover:bg-hover hover:text-fg"}`}
+    <div
+      role="tab"
+      aria-selected={active}
+      className={`group flex h-[22px] flex-none cursor-pointer items-center gap-1.5 pr-0.5 pl-2 text-[length:var(--fs-sm)] ${active ? "bg-selected-muted text-fg" : "text-fg-muted hover:bg-hover hover:text-fg"}`}
       title={shell.exitCode !== undefined ? `Exited with code ${shell.exitCode}` : undefined}
       onClick={onSelect}
+      // Middle-click kills the terminal.
+      onAuxClick={(e) => e.button === 1 && killShell(shell)}
       onContextMenu={onContextMenu}
     >
-      {label}
-    </button>
+      <TerminalWindowIcon size={14} className="flex-none" />
+      <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+        {label}
+      </span>
+      <button
+        className={`btn-icon size-[18px] ${active ? "" : "invisible group-hover:visible"}`}
+        aria-label={`Kill ${label}`}
+        title="Kill terminal"
+        onClick={(e) => {
+          e.stopPropagation();
+          killShell(shell);
+        }}
+      >
+        <TrashIcon size={12} />
+      </button>
+    </div>
   );
 }
