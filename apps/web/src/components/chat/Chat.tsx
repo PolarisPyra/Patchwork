@@ -34,7 +34,12 @@ import { ComposerStripPresence } from "~/components/chat/ComposerStrip";
 import BackgroundTasks from "~/components/chat/BackgroundTasks";
 import QueuedMessages from "~/components/chat/QueuedMessages";
 import LineageCard from "~/components/chat/LineageCard";
-import Composer, { type DropMentions, type HistoryEntry } from "~/components/chat/Composer";
+import Composer, {
+  type DropMentions,
+  type HistoryEntry,
+  type MentionItem,
+} from "~/components/chat/Composer";
+import { inlineImagePaths } from "~/components/chat/composerExtensions";
 import Messages, { UsageLine } from "~/components/chat/Messages";
 import PendingApprovalBanner from "~/components/chat/PendingApprovalBanner";
 import TasksBadge from "~/components/chat/TasksBadge";
@@ -100,6 +105,34 @@ interface ChatProps {
 }
 
 /** The file's bytes, base64-encoded, for sending to the backend. */
+/** What goes into the draft for an attachment: its path, relative to the project when inside it. */
+function mentionFor(attachment: Attachment, root: string | null): MentionItem {
+  const { path, name, kind } = attachment;
+  if (kind === "image") return { id: path, label: name, image: true };
+  return {
+    id: path,
+    label: root && path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path,
+  };
+}
+
+/** A message's attachments with the images written into its text added. */
+function withInlineImages(text: string, files: Attachment[]): Attachment[] {
+  const images = [...new Set(inlineImagePaths(text))]
+    .filter((path) => !files.some((f) => f.path === path))
+    .map((path): Attachment => ({
+      kind: "image",
+      path,
+      name: path.slice(path.lastIndexOf("/") + 1),
+    }));
+  return [...files, ...images];
+}
+
+/** A message's attachments without the images written into its text, which the draft shows. */
+function withoutInlineImages(text: string, files: Attachment[]): Attachment[] {
+  const inline = inlineImagePaths(text);
+  return files.filter((f) => f.kind !== "image" || !inline.includes(f.path));
+}
+
 function base64Of(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -298,19 +331,19 @@ export default function Chat({
     const sentKey = keyRef.current;
     try {
       let found = await Promise.all(paths.map((path) => api.attachmentForPath(path)));
-      // Files and folders dropped on the composer are written into the draft where they landed,
-      // as project-relative mentions when they are in the project. Images stay attachments.
+      const root = projectPathRef.current;
+      // Whatever is dropped on the composer is written into the draft where it landed. Images from
+      // anywhere else go in at the caret; other files and folders stay attachments.
       if (mention) {
-        const root = projectPathRef.current;
-        mention(
-          found
-            .filter((a) => a.kind !== "image")
-            .map((a) => ({
-              id: a.path,
-              label: root && a.path.startsWith(`${root}/`) ? a.path.slice(root.length + 1) : a.path,
-            })),
-        );
-        found = found.filter((a) => a.kind === "image");
+        mention(found.map((a) => mentionFor(a, root)));
+        found = [];
+      } else {
+        const images = found.filter((a) => a.kind === "image");
+        const caret = images.length > 0 ? dropMentions.current?.(null) : null;
+        if (caret) {
+          caret(images.map((a) => mentionFor(a, root)));
+          found = found.filter((a) => a.kind !== "image");
+        }
       }
       const withFresh = (current: Attachment[]) => [
         ...current,
@@ -369,7 +402,7 @@ export default function Chat({
     };
   }, []);
 
-  // Images pasted into the chat are saved to files and attached like dropped ones. The
+  // Images pasted into the chat are saved to files and go in at the caret, like dropped ones. The
   // event stops here, so the composer does not also try to paste them as text.
   useEffect(() => {
     const el = rootRef.current;
@@ -380,7 +413,9 @@ export default function Chat({
         const found = await Promise.all(
           images.map(async (image) => api.savePastedImage(image.type, await base64Of(image))),
         );
-        setPending((prev) => ({ ...prev, [sentKey]: [...(prev[sentKey] ?? []), ...found] }));
+        const caret = dropMentions.current?.(null);
+        if (caret) caret(found.map((a) => mentionFor(a, null)));
+        else setPending((prev) => ({ ...prev, [sentKey]: [...(prev[sentKey] ?? []), ...found] }));
       } catch (e) {
         setErrorFor(sentKey, errorText(e));
       }
@@ -433,7 +468,7 @@ export default function Chat({
       setErrorFor(sentKey === "new" ? keyRef.current : sentKey, errorText(e));
       if (restoreOnError) {
         setDrafts((d) => (d[sentKey] ? d : { ...d, [sentKey]: text }));
-        setPending((p) => (p[sentKey] ? p : { ...p, [sentKey]: files }));
+        setPending((p) => (p[sentKey] ? p : { ...p, [sentKey]: withoutInlineImages(text, files) }));
       }
     } finally {
       setSending(false);
@@ -469,7 +504,7 @@ export default function Chat({
     try {
       await onRestoreCheckpoint(thread.id, message.id);
       setDraft(message.text);
-      setAttachments(message.attachments);
+      setAttachments(withoutInlineImages(message.text, message.attachments));
     } catch (e) {
       setError(errorText(e));
     }
@@ -492,7 +527,7 @@ export default function Chat({
     if (queuedEdit) {
       if (!thread) return;
       api
-        .editQueued(thread.id, queuedEdit.id, text, composerAttachments)
+        .editQueued(thread.id, queuedEdit.id, text, withInlineImages(text, composerAttachments))
         .then(() => setQueuedEdit(null))
         .catch((e: unknown) => setError(errorText(e)));
       return;
@@ -534,7 +569,7 @@ export default function Chat({
     }
     setDraft("");
     setAttachments([]);
-    void dispatch(text, attachments, true, queue);
+    void dispatch(text, withInlineImages(text, attachments), true, queue);
   }
 
   // Takes a queued message back from the agent's queue. Editing puts its text and attachments in
@@ -542,7 +577,11 @@ export default function Chat({
   function takeBack(message: Message, edit: boolean) {
     if (!thread) return;
     if (edit) {
-      setQueuedEdit({ id: message.id, text: message.text, attachments: message.attachments });
+      setQueuedEdit({
+        id: message.id,
+        text: message.text,
+        attachments: withoutInlineImages(message.text, message.attachments),
+      });
       return;
     }
     api.removeQueued(thread.id, message.id).catch((e: unknown) => setError(errorText(e)));
@@ -555,7 +594,7 @@ export default function Chat({
       setQueuedEdit({
         id: latestQueued.id,
         text: latestQueued.text,
-        attachments: latestQueued.attachments,
+        attachments: withoutInlineImages(latestQueued.text, latestQueued.attachments),
       });
   }
 

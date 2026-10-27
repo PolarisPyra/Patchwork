@@ -26,6 +26,7 @@ import AttachmentChip, { AttachmentTile } from "~/components/chat/AttachmentChip
 import { ACTION_CLASS, CopyButton } from "~/components/chat/CopyButton";
 import TurnTimeline from "~/components/chat/TurnTimeline";
 import { isCompactCommand, isGoalClearCommand } from "~/components/chat/composerActions";
+import { inlineImagePaths } from "~/components/chat/composerExtensions";
 import { shortcutContext, useCommand } from "~/lib/shortcuts";
 import { formatTokens } from "~/lib/tokens";
 import { useMissingFiles } from "~/hooks/useMissingFiles";
@@ -225,6 +226,11 @@ const UserMessage = memo(function UserMessage({
       : long && !expanded
         ? message.text.slice(0, LONG_MESSAGE_CHARS)
         : message.text;
+  // Images written into the text show there, not above it.
+  const inline = inlineImagePaths(message.text);
+  const attachments = message.attachments.filter(
+    (a) => a.kind !== "image" || !inline.includes(a.path),
+  );
   const toggle = () => {
     if (expanded) expandedMessages.delete(message.id);
     else expandedMessages.add(message.id);
@@ -247,9 +253,9 @@ const UserMessage = memo(function UserMessage({
           {message.steer && " · Steer"}
         </span>
       </div>
-      {message.attachments.length > 0 && (
+      {attachments.length > 0 && (
         <div className="flex flex-wrap justify-end gap-1.5">
-          {message.attachments.map((a) =>
+          {attachments.map((a) =>
             a.kind === "image" ? (
               <AttachmentTile key={a.path} attachment={a} />
             ) : (

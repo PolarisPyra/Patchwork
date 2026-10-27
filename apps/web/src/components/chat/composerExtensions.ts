@@ -10,6 +10,8 @@ import { ReactNodeViewRenderer } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Plugin, Selection, TextSelection } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { api } from "~/api";
 import CodeBlockNodeView from "~/components/chat/CodeBlockNodeView";
 import { codeHighlightPlugin } from "~/components/chat/codeHighlight";
 
@@ -21,6 +23,10 @@ export const GOAL_CLASS =
 export const SKILL_CLASS =
   "rounded-[4px] bg-success/25 px-1 font-[family-name:var(--font-mono)] text-[0.9em] leading-none text-fg [box-decoration-break:clone]";
 const MENTION_CLASS = "rounded-[4px] bg-selected-muted px-1 text-accent-text";
+// The image chip has no line height of its own and is lowered a quarter em, so its middle is the
+// text's middle.
+const IMAGE_CLASS =
+  "inline-flex items-center gap-1 rounded-[4px] bg-selected-muted px-1 align-[-0.25em] leading-none text-accent-text";
 
 /** A slash command, such as `/goal`. It is an atom, so the whole command selects and deletes together. */
 export const GoalCommand = Node.create({
@@ -116,6 +122,67 @@ export const SkillCommand = Node.create<{ isSkill: (name: string) => boolean }>(
 const FileMention = Mention.extend({
   renderMarkdown: (node: { attrs?: { id?: string; label?: string } }) =>
     `@${node.attrs?.label ?? node.attrs?.id ?? ""}`,
+});
+
+/** An image written into a message: Markdown of its path, in angle brackets so spaces stay in it. */
+export function imageMarkdown(name: string, path: string) {
+  return `![${name.replace(/[\\[\]]/g, "\\$&")}](<${path}>)`;
+}
+
+/** The paths of the images written into a message with `imageMarkdown`. */
+export function inlineImagePaths(text: string): string[] {
+  return Array.from(text.matchAll(/!\[(?:\\.|[^\]\\])*\]\(<(\/[^<>\n]+)>\)/g), (m) => m[1]);
+}
+
+/**
+ * An image dropped, pasted or picked into the draft, shown where it went as a thumbnail and its
+ * name. It is written as a Markdown image of its path, and goes with the message as an image.
+ */
+const InlineImage = Node.create({
+  name: "inlineImage",
+  group: "inline",
+  inline: true,
+  atom: true,
+  addAttributes() {
+    return { id: { default: "" }, label: { default: "" } };
+  },
+  parseHTML() {
+    return [
+      {
+        tag: "span[data-inline-image]",
+        getAttrs: (el) => ({ id: el.getAttribute("data-inline-image"), label: el.textContent }),
+      },
+    ];
+  },
+  renderHTML({ node }) {
+    return ["span", { "data-inline-image": node.attrs.id, class: IMAGE_CLASS }, node.attrs.label];
+  },
+  renderText: ({ node }) => node.attrs.label,
+  // The thumbnail loads once the backend lets the webview read the file.
+  addNodeView() {
+    return ({ node }) => {
+      const dom = document.createElement("span");
+      dom.className = IMAGE_CLASS;
+      dom.title = node.attrs.id;
+      const img = document.createElement("img");
+      img.alt = "";
+      img.className = "h-4 w-4 flex-none rounded-[2px] object-cover";
+      dom.append(img, node.attrs.label);
+      api.allowPreview(node.attrs.id).then(
+        () => (img.src = convertFileSrc(node.attrs.id)),
+        () => img.remove(),
+      );
+      return { dom };
+    };
+  },
+  // Only images of local files are attachments; any other Markdown image stays as typed.
+  markdownTokenName: "image",
+  parseMarkdown: (token, helpers) =>
+    token.href?.startsWith("/")
+      ? helpers.createNode("inlineImage", { id: token.href, label: token.text ?? "" })
+      : helpers.createTextNode(token.raw ?? ""),
+  renderMarkdown: (node: { attrs?: { id?: string; label?: string } }) =>
+    imageMarkdown(node.attrs?.label ?? "", node.attrs?.id ?? ""),
 });
 
 /**
@@ -247,6 +314,7 @@ export function composerExtensions(
     Markdown,
     GoalCommand,
     SkillCommand.configure({ isSkill }),
+    InlineImage,
     MarkdownLine,
     SelectAllText,
     ...MarkdownTextBlocks,

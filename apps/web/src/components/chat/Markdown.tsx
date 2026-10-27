@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import { TextAlignLeftIcon } from "@phosphor-icons/react";
 import { api } from "~/api";
 import { SYNTAX_CLASSES } from "~/components/canvas/syntaxClasses";
+import { AttachmentTile } from "~/components/chat/AttachmentChip";
 import { ACTION_CLASS, CopyButton } from "~/components/chat/CopyButton";
 import { CHOICES_LANG } from "~/components/chat/choices";
 import { GOAL_CLASS, SKILL_CLASS } from "~/components/chat/composerExtensions";
@@ -96,6 +97,17 @@ const components: Components = {
     ),
   // Remote images are not loaded from a reply; the alt text stands in for them.
   img: ({ alt }) => <span className="text-fg-muted">{alt || "Image"}</span>,
+};
+
+/** The user's own text shows the local images written into it where they were put. */
+const chipComponents: Components = {
+  ...components,
+  img: ({ src, alt }) => {
+    // The Markdown parser percent-encodes the path.
+    const path = typeof src === "string" && src.startsWith("/") ? decodeURI(src) : null;
+    if (!path) return <span className="text-fg-muted">{alt || "Image"}</span>;
+    return <AttachmentTile attachment={{ kind: "image", path, name: alt ?? "" }} />;
+  },
 };
 
 /** Highlighting waits this long after a block last changed, so a block still streaming is not re-highlighted every frame. */
@@ -234,7 +246,7 @@ function parseBlock(text: string, typed: boolean, chips: boolean): ReactElement 
       children: text,
       remarkPlugins: typed ? TYPED_REMARK_PLUGINS : REMARK_PLUGINS,
       rehypePlugins: chips ? CHIP_REHYPE_PLUGINS : REHYPE_PLUGINS,
-      components,
+      components: chips ? chipComponents : components,
       skipHtml: true,
     });
     if (lastParsed && key.startsWith(lastParsed)) parsed.delete(lastParsed);

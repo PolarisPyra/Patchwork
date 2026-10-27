@@ -70,7 +70,7 @@ interface ComposerProps {
   onRemoveAttachment: (index: number) => void;
   /** A drag is hovering over the chat; the composer shows where it will land. */
   dropping: boolean;
-  /** Set by the composer, so the chat can put dropped files and folders into the draft. */
+  /** Set by the composer, so the chat can put dropped files, folders and images into the draft. */
   dropMentions: MutableRefObject<DropMentions | null>;
   /** The thread's goal is active: its border turns instead of holding still. */
   goalActive: boolean;
@@ -96,13 +96,15 @@ interface Recalled {
 }
 
 /**
- * For a drop at this point, in CSS pixels: null when it is not on the composer, or else a function
- * that writes the dropped paths into the draft as mentions where they were dropped.
+ * For a drop at this point, in CSS pixels, or at the caret when null: null when it is not on the
+ * composer, or else a function that writes the dropped paths into the draft where they were dropped.
  */
-export type DropMentions = (point: {
-  x: number;
-  y: number;
-}) => ((mentions: MentionItem[]) => void) | null;
+export type DropMentions = (
+  point: {
+    x: number;
+    y: number;
+  } | null,
+) => ((mentions: MentionItem[]) => void) | null;
 
 /** The "/word" or "$word" the caret is at the end of, at the start of a line or after a space. */
 interface CommandToken {
@@ -137,6 +139,8 @@ const PROMPT_LIMIT = 120_000;
 export interface MentionItem {
   id: string;
   label: string;
+  /** Goes in as the image, rather than a mention of its path. */
+  image?: boolean;
 }
 
 interface MentionMenu {
@@ -580,7 +584,7 @@ export default function Composer({
   });
 
   // Files and folders dropped on the composer go into the draft as mentions where they land, or
-  // at the caret when they land beside the text.
+  // at the caret when they land beside the text. Images go in the same way, as themselves.
   const surfaceRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!editor) return;
@@ -589,15 +593,14 @@ export default function Composer({
       if (
         !box ||
         !editor.isEditable ||
-        point.x < box.left ||
-        point.x > box.right ||
-        point.y < box.top ||
-        point.y > box.bottom
+        (point &&
+          (point.x < box.left || point.x > box.right || point.y < box.top || point.y > box.bottom))
       ) {
         return null;
       }
       const at =
-        editor.view.posAtCoords({ left: point.x, top: point.y })?.pos ?? editor.state.selection.to;
+        (point && editor.view.posAtCoords({ left: point.x, top: point.y })?.pos) ??
+        editor.state.selection.to;
       return (mentions) => {
         if (mentions.length === 0) return;
         // A point beside or below the text is between blocks, where the mentions would start a
@@ -610,8 +613,8 @@ export default function Composer({
           .focus()
           .insertContentAt(pos, [
             ...(before && !/\s/.test(before) ? [{ type: "text", text: " " }] : []),
-            ...mentions.flatMap((attrs) => [
-              { type: "mention", attrs },
+            ...mentions.flatMap(({ id, label, image }) => [
+              { type: image ? "inlineImage" : "mention", attrs: { id, label } },
               { type: "text", text: " " },
             ]),
           ])
