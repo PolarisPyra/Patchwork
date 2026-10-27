@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { TextAlignLeftIcon } from "@phosphor-icons/react";
 import { api } from "~/api";
+import { highlightBlock } from "~/components/canvas/highlight";
 import { SYNTAX_CLASSES } from "~/components/canvas/syntaxClasses";
 import { ACTION_CLASS, CopyButton } from "~/components/chat/CopyButton";
 import { CHOICES_LANG } from "~/components/chat/choices";
@@ -299,7 +300,6 @@ function splitBlocks(text: string): string[] {
 }
 
 function CodeBlock({ lang, code, title }: { lang: string; code: string; title: string | null }) {
-  // Highlighting loads on demand, so the chat does not pull every grammar up front.
   // The highlighted HTML is kept with the code it was made from; newer code shows plain until highlighted.
   const [highlighted, setHighlighted] = useState<{ code: string; html: string | null } | null>(
     null,
@@ -312,18 +312,11 @@ function CodeBlock({ lang, code, title }: { lang: string; code: string; title: s
   const delay = highlighted === null ? 0 : HIGHLIGHT_DELAY_MS;
   useEffect(() => {
     if (upToDate) return;
-    let current = true;
     const timer = setTimeout(
-      () =>
-        void import("~/components/canvas/highlight").then(({ highlightBlock }) => {
-          if (current) setHighlighted({ code, html: highlightBlock(code, lang) });
-        }),
+      () => setHighlighted({ code, html: highlightBlock(code, lang) }),
       delay,
     );
-    return () => {
-      current = false;
-      clearTimeout(timer);
-    };
+    return () => clearTimeout(timer);
   }, [code, lang, upToDate, delay]);
   return (
     <div className="my-2 overflow-hidden rounded-[var(--radius)] border border-border bg-panel">

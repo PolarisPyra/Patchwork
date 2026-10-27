@@ -14,11 +14,18 @@ export default defineConfig({
         codeSplitting: {
           groups: [
             {
-              name: (id) =>
-                /node_modules[\\/](@tiptap|prosemirror-|orderedmap|rope-sequence|w3c-keyname|style-mod|crelt|linkifyjs)/.test(id)
-                  ? "tiptap"
-                  : null,
+              name: "prosemirror",
+              test: /node_modules[\\/](prosemirror-|orderedmap|rope-sequence|w3c-keyname|style-mod|crelt)/,
             },
+            { name: "tiptap", test: /node_modules[\\/](@tiptap|linkifyjs)/ },
+            { name: "highlight", test: /node_modules[\\/]highlight\.js/ },
+            {
+              name: "markdown",
+              test: /node_modules[\\/](react-markdown|remark-|micromark|mdast-|hast-|unist-|unified|vfile|decode-named-character-reference|character-entities|property-information|space-separated-tokens|comma-separated-tokens|devlop|bail|trough|zwitch|ccount|markdown-table|longest-streak|html-url-attributes|estree-util-|style-to-js|style-to-object|inline-style-parser|trim-lines|is-plain-obj)/,
+            },
+            { name: "react", test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+            { name: "xterm", test: /node_modules[\\/]@xterm/ },
+            { name: "vendor", test: /node_modules[\\/](@legendapp|@phosphor-icons|@tauri-apps)/ },
           ],
         },
       },
