@@ -2,12 +2,12 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowSquareOutIcon,
   CheckIcon,
-  CircleNotchIcon,
   PlusIcon,
   CodeIcon,
   CopyIcon,
   XIcon,
 } from "@phosphor-icons/react";
+import Spinner from "~/components/Spinner";
 import { api, onProjectChanged, type FileChange, type Message } from "~/api";
 import CodeView from "~/components/canvas/CodeView";
 import DiffView from "~/components/canvas/DiffView";
@@ -194,7 +194,7 @@ export default function Canvas({
     if (!result || (result.value === undefined && result.error === undefined)) {
       return (
         <div className="flex items-center justify-center h-full min-h-[120px] p-6 text-center text-fg-subtle">
-          <CircleNotchIcon size={18} className="spin" />
+          <Spinner size={18} />
         </div>
       );
     }

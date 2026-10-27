@@ -1,4 +1,5 @@
-import { ArrowClockwiseIcon, CheckIcon, CircleNotchIcon } from "@phosphor-icons/react";
+import { ArrowClockwiseIcon, CheckIcon } from "@phosphor-icons/react";
+import Spinner from "~/components/Spinner";
 import { AGENT_LABELS, type AgentKind, type CliKind } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
 import { cx } from "~/components/onboarding/classNames";
@@ -107,7 +108,7 @@ function StatusBadge({ probe }: { probe: AgentProbe }) {
   if (probe.checking) {
     return (
       <span className="badge">
-        <CircleNotchIcon size={12} className="spin" />
+        <Spinner />
         Checking…
       </span>
     );

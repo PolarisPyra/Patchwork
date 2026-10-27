@@ -1,4 +1,5 @@
-import { CheckIcon, CircleIcon, CircleNotchIcon, XIcon } from "@phosphor-icons/react";
+import { CheckIcon, CircleIcon, XIcon } from "@phosphor-icons/react";
+import Spinner from "~/components/Spinner";
 import type { Message, StepStatus } from "~/api";
 
 function StepIcon({ status }: { status: StepStatus }) {
@@ -6,7 +7,7 @@ function StepIcon({ status }: { status: StepStatus }) {
     case "done":
       return <CheckIcon size={14} className="mt-1 flex-none text-accent-text" />;
     case "running":
-      return <CircleNotchIcon size={14} className="mt-1 flex-none text-accent-text spin" />;
+      return <Spinner size={14} className="mt-1 text-accent-text" />;
     case "error":
       return <XIcon size={14} className="mt-1 flex-none text-danger" />;
     case "pending":

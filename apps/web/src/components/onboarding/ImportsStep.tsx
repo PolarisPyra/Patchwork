@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { CheckIcon, CircleNotchIcon } from "@phosphor-icons/react";
+import { CheckIcon } from "@phosphor-icons/react";
+import Spinner from "~/components/Spinner";
 import { api, SOURCE_LABELS, type ImportScan, type ImportSource } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
 import { cx } from "~/components/onboarding/classNames";
@@ -85,7 +86,7 @@ export default function ImportsStep({
               <span className="flex flex-none items-center gap-3">
                 {scan === undefined && (
                   <span className="badge">
-                    <CircleNotchIcon size={12} className="spin" />
+                    <Spinner />
                     Scanning…
                   </span>
                 )}

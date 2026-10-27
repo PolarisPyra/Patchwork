@@ -6,7 +6,6 @@ import {
   CaretDownIcon,
   CaretRightIcon,
   CheckIcon,
-  CircleNotchIcon,
   EyeIcon,
   GitDiffIcon,
   GlobeIcon,
@@ -18,6 +17,7 @@ import {
   WarningCircleIcon,
   WrenchIcon,
 } from "@phosphor-icons/react";
+import Spinner from "~/components/Spinner";
 import type { AgentKind, Message, Part, ToolCall } from "~/api";
 import { fullElapsed, isActive, titleOf } from "~/components/chat/LineageCard";
 import ProposedPlanCard from "~/components/chat/ProposedPlanCard";
@@ -359,7 +359,7 @@ function GoalClearedNotice({
       className={`${live ? "goal-cleared-in " : ""}m-0 flex min-h-6 items-center gap-1.5 text-[length:var(--fs-md)] text-fg-muted [word-break:break-word]`}
     >
       {pending ? (
-        <CircleNotchIcon size={14} className="spin flex-none text-fg-subtle" />
+        <Spinner size={14} className="text-fg-subtle" />
       ) : (
         <CheckIcon size={14} className="flex-none text-fg-subtle" />
       )}

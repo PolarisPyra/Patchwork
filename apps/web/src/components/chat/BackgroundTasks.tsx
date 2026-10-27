@@ -1,4 +1,5 @@
-import { CircleNotchIcon, SquareIcon } from "@phosphor-icons/react";
+import { SquareIcon } from "@phosphor-icons/react";
+import Spinner from "~/components/Spinner";
 import type { BackgroundTask } from "~/api";
 
 /**
@@ -17,7 +18,7 @@ export default function BackgroundTasks({
     <div className="mb-1.5 flex flex-col gap-0.5 px-2 text-[length:var(--fs-sm)]">
       {tasks.map((task) => (
         <div key={task.toolId} className="flex min-w-0 items-center gap-2">
-          <CircleNotchIcon size={12} className="flex-none animate-spin text-accent" />
+          <Spinner className="text-accent" />
           <span className="flex-none font-semibold text-fg">Background</span>
           <span className="min-w-0 flex-1 truncate text-fg-muted">{task.description}</span>
           <button

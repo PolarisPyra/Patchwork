@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   CaretRightIcon,
   CheckIcon,
-  CircleNotchIcon,
   DotsThreeIcon,
   PlugsIcon,
   SquareIcon,
@@ -10,6 +9,7 @@ import {
   XCircleIcon,
   XIcon,
 } from "@phosphor-icons/react";
+import Spinner from "~/components/Spinner";
 import { api, type StepStatus, type Thread, type ToolCall } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
 import { errorText } from "~/lib/util";
@@ -90,7 +90,7 @@ function DetailsCard({
       <div className="flex items-center gap-1.5">
         {tool.status === "running" && (
           <>
-            <CircleNotchIcon size={12} className="flex-none animate-spin text-accent" />
+            <Spinner className="text-accent" />
             <span className="text-accent">Running</span>
           </>
         )}
