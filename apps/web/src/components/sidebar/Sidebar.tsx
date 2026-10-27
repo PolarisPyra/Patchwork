@@ -1123,7 +1123,7 @@ const ThreadRow = memo(function ThreadRow({
   const needsApproval = last?.approvals.some((a) => a.status === "pending") ?? false;
   // Tree rows are 22px tall, as in VS Code's explorer. The indent and the empty chevron column sit in the margin, so the highlight starts just before the title and the titles still line up with project and folder names.
   // Chats sit in the padded list, tasks in their project's unpadded group, so both end at the same edge.
-  const margins = ["ml-[14px] -mr-1", "ml-[30px] mr-1", "ml-[38px] mr-1"][depth];
+  const margins = ["-ml-[2px] -mr-1", "ml-[30px] mr-1", "ml-[38px] mr-1"][depth];
   const spacing = `h-[22px] rounded-[var(--radius-sm)] pr-2 pl-2 ${margins}`;
   // The picked rows are the selection, and the open chat is always among them.
   const fill = selectionFill(picked);
@@ -1152,8 +1152,8 @@ const ThreadRow = memo(function ThreadRow({
           {displayTitle(thread.title)}
         </span>
       )}
-      {/* A fixed, right-aligned slot: the time, or a spinner or approval shield, and the archive button in their place on hover. */}
-      <span className="flex w-9 flex-none items-center justify-end">
+      {/* A right-aligned slot as wide as the time, or a spinner or approval shield, and the archive button in their place on hover. */}
+      <span className="flex min-w-5 flex-none items-center justify-end">
         <span className="flex items-center group-hover:hidden">
           {needsApproval ? (
             <span title="Waiting for approval" className="inline-flex flex-none text-warning">
