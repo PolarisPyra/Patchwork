@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { CaretDownIcon, ChatsIcon, FolderPlusIcon } from "@phosphor-icons/react";
 import { getVersion } from "@tauri-apps/api/app";
 import type { Project } from "~/api";
@@ -41,12 +41,7 @@ interface ToolbarProps {
   onOpenFolder: () => void;
 }
 
-export default function Toolbar({
-  project,
-  projects,
-  onSelectProject,
-  onOpenFolder,
-}: ToolbarProps) {
+function Toolbar({ project, projects, onSelectProject, onOpenFolder }: ToolbarProps) {
   const name = project?.name ?? "";
   const version = useAppVersion();
 
@@ -118,3 +113,6 @@ export default function Toolbar({
     </header>
   );
 }
+
+// Its parent re-renders as replies stream; nothing it shows changes then.
+export default memo(Toolbar);

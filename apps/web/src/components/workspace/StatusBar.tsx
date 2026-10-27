@@ -1,4 +1,5 @@
 /** Bottom status bar: project and branch, open thread, change count, prompt mode, and agent status. */
+import { memo } from "react";
 import { CaretRightIcon, CircleIcon, CircleNotchIcon, GitBranchIcon } from "@phosphor-icons/react";
 import { AGENT_LABELS, type AgentKind, type Project } from "~/api";
 
@@ -15,7 +16,7 @@ interface StatusBarProps {
   onOpenChanges: () => void;
 }
 
-export default function StatusBar({
+function StatusBar({
   project,
   branch,
   threadTitle,
@@ -66,3 +67,6 @@ export default function StatusBar({
     </footer>
   );
 }
+
+// Its parent re-renders as replies stream; nothing it shows changes then.
+export default memo(StatusBar);

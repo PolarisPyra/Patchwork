@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MutableRefObject } from "react";
+import { memo, useEffect, useRef, useState, type MutableRefObject } from "react";
 import {
   ArrowUpIcon,
   CaretDownIcon,
@@ -311,7 +311,7 @@ function AttachButton({
   );
 }
 
-export default function Composer({
+function Composer({
   value,
   onChange,
   onSubmit,
@@ -1045,3 +1045,6 @@ export default function Composer({
     </div>
   );
 }
+
+// The chat re-renders as its reply streams; the editor only needs to when its own props change.
+export default memo(Composer);

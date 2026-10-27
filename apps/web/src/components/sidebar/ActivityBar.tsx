@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { ArchiveIcon, ChatsIcon, GearSixIcon, GitDiffIcon, type Icon } from "@phosphor-icons/react";
 import type { SidebarView } from "./Sidebar";
 
@@ -14,7 +15,7 @@ interface ActivityBarProps {
   onOpenSettings: () => void;
 }
 
-export default function ActivityBar({ view, onSelect, onOpenSettings }: ActivityBarProps) {
+function ActivityBar({ view, onSelect, onOpenSettings }: ActivityBarProps) {
   return (
     <nav className="flex w-[var(--activity-bar-w)] flex-none flex-col items-center gap-1 border-r border-border bg-app py-1.5">
       {ACTIVITIES.map(({ view: v, label, Icon }) => (
@@ -40,3 +41,6 @@ export default function ActivityBar({ view, onSelect, onOpenSettings }: Activity
     </nav>
   );
 }
+
+// Its parent re-renders as replies stream; nothing it shows changes then.
+export default memo(ActivityBar);

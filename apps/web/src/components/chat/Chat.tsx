@@ -10,6 +10,7 @@ import {
   type FileChange,
   type Message,
   type Project,
+  type ProviderSlashCommand,
   type Thread,
   type TokenSettings,
 } from "~/api";
@@ -46,6 +47,7 @@ import TasksBadge from "~/components/chat/TasksBadge";
 import { planTitle } from "~/components/chat/ProposedPlanCard";
 import MissingFolderPrompt from "~/components/chat/MissingFolderPrompt";
 import ResumePrompt from "~/components/chat/ResumePrompt";
+import { useStableHandlers } from "~/hooks/useStableHandlers";
 import { isWorking, type NewThreadOptions } from "~/hooks/useThreads";
 import { coldLargeSession, threadUsage } from "~/lib/tokens";
 import { displayTitle, errorText } from "~/lib/util";
@@ -160,6 +162,10 @@ function base64Of(file: Blob): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+// Fallbacks that keep one identity, so the memoized composer sees no change.
+const NO_ATTACHMENTS: Attachment[] = [];
+const NO_COMMANDS: ProviderSlashCommand[] = [];
 
 export default function Chat({
   project,
@@ -277,7 +283,7 @@ export default function Chat({
   const setError = (text: string | null) => setErrorFor(key, text);
   const draft = drafts[key] ?? "";
   const setDraft = (text: string) => setDrafts((d) => ({ ...d, [key]: text }));
-  const attachments = pending[key] ?? [];
+  const attachments = pending[key] ?? NO_ATTACHMENTS;
   const setAttachments = (next: Attachment[]) => setPending((p) => ({ ...p, [key]: next }));
   const composerDraft = queuedEdit?.text ?? draft;
   const composerAttachments = queuedEdit?.attachments ?? attachments;
@@ -335,7 +341,9 @@ export default function Chat({
   }, [thread?.id, projectId, working]);
   // Before the first message any connected agent's models are offered.
   const offered = agents.includes(agent) ? agents : [agent, ...agents];
-  // What the user sent in this chat, for Up/Down in the composer; repeats count once.
+  // What the user sent in this chat, for Up/Down in the composer; repeats count once. It keeps
+  // its identity while a reply streams, so the composer skips those renders.
+  const historyRef = useRef<HistoryEntry[]>([]);
   const history = useMemo(() => {
     const entries: HistoryEntry[] = [];
     for (const m of thread?.messages ?? []) {
@@ -344,8 +352,16 @@ export default function Chat({
       if (entries.at(-1)?.text === text) entries.pop();
       entries.push({ id: m.id, text });
     }
-    return entries;
+    const prev = historyRef.current;
+    const same =
+      prev.length === entries.length &&
+      prev.every((h, i) => h.id === entries[i].id && h.text === entries[i].text);
+    if (!same) historyRef.current = entries;
+    return historyRef.current;
   }, [thread?.messages]);
+  const composerAgents = empty || thread?.contextPending ? offered : [agent];
+  const composerAgentsKey = composerAgents.join();
+  const stableComposerAgents = useMemo(() => composerAgents, [composerAgentsKey]);
 
   useEffect(() => {
     keyRef.current = key;
@@ -880,6 +896,28 @@ export default function Chat({
     if (choiceSource) dismissChoice(choiceSource.id);
   };
   const isNew = !thread || empty;
+  // The composer is memoized; these keep their identity across the renders a stream causes.
+  const composerHandlers = useStableHandlers({
+    onChange: setComposerDraft,
+    onSubmit: submit,
+    onEditLatestQueued: editLatestQueued,
+    onSteerQueued: () => {
+      if (!queued[0]) return;
+      setSteerPressed(true);
+      window.clearTimeout(steerPressedTimer.current);
+      steerPressedTimer.current = window.setTimeout(() => setSteerPressed(false), 150);
+      steerQueued(queued[0]);
+    },
+    onStop: stop,
+    onPickModel: pickModel,
+    onSelectSlashCommand: selectSlashCommand,
+    onPickAccess: pickAccess,
+    onPickEffort: pickEffort,
+    onAttachPaths: (paths: string[]) => void attach(paths),
+    onRemoveAttachment: (i: number) =>
+      setComposerAttachments(composerAttachments.filter((_, j) => j !== i)),
+  });
+
   return (
     <div
       className={`relative flex min-h-0 min-w-0 flex-1 flex-col${isNew ? " justify-center" : ""}`}
@@ -1036,39 +1074,31 @@ export default function Chat({
         <Composer
           key={key}
           value={composerDraft}
-          onChange={setComposerDraft}
-          onSubmit={submit}
-          onEditLatestQueued={editLatestQueued}
-          onSteerQueued={() => {
-            if (!queued[0]) return;
-            setSteerPressed(true);
-            window.clearTimeout(steerPressedTimer.current);
-            steerPressedTimer.current = window.setTimeout(() => setSteerPressed(false), 150);
-            steerQueued(queued[0]);
-          }}
+          onChange={composerHandlers.onChange}
+          onSubmit={composerHandlers.onSubmit}
+          onEditLatestQueued={composerHandlers.onEditLatestQueued}
+          onSteerQueued={composerHandlers.onSteerQueued}
           canSteerQueued={working && queued.length > 0}
           editingQueued={queuedEdit !== null}
           canQueueFollowUp={queued.length === 0}
-          onStop={stop}
+          onStop={composerHandlers.onStop}
           goalActive={thread?.goal?.status === "active"}
           working={working}
           error={error}
           agent={agent}
           model={model}
-          agents={empty || thread?.contextPending ? offered : [agent]}
-          onPickModel={pickModel}
+          agents={stableComposerAgents}
+          onPickModel={composerHandlers.onPickModel}
           modelPickerRequest={modelPickerRequest}
-          providerSlashCommands={thread?.slashCommands ?? []}
-          onSelectSlashCommand={selectSlashCommand}
+          providerSlashCommands={thread?.slashCommands ?? NO_COMMANDS}
+          onSelectSlashCommand={composerHandlers.onSelectSlashCommand}
           accessMode={accessMode}
-          onPickAccess={pickAccess}
+          onPickAccess={composerHandlers.onPickAccess}
           effort={effort}
-          onPickEffort={pickEffort}
+          onPickEffort={composerHandlers.onPickEffort}
           attachments={composerAttachments}
-          onAttachPaths={(paths) => void attach(paths)}
-          onRemoveAttachment={(i) =>
-            setComposerAttachments(composerAttachments.filter((_, j) => j !== i))
-          }
+          onAttachPaths={composerHandlers.onAttachPaths}
+          onRemoveAttachment={composerHandlers.onRemoveAttachment}
           dropping={dropping}
           dropMentions={dropMentions}
           history={history}

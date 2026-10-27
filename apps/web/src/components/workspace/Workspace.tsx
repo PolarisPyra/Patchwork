@@ -3,7 +3,6 @@ import {
   Suspense,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -34,6 +33,7 @@ import { getCollapsed, setCollapsed } from "~/components/sidebar/collapsedState"
 import { getSelectedRows, setSelectedRows } from "~/components/sidebar/selectionState";
 import StatusBar from "~/components/workspace/StatusBar";
 import Toolbar from "~/components/workspace/Toolbar";
+import { useStableHandlers } from "~/hooks/useStableHandlers";
 import type { PanelTab } from "~/components/panel/Panel";
 import { setRendererLogLevel } from "~/lib/rendererLog";
 import { isWorking, useThreads } from "~/hooks/useThreads";
@@ -664,20 +664,32 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     onOpenPalette: () => setPaletteOpen(true),
   });
 
+  // The bars around the chat skip the renders streamed text causes.
+  const barHandlers = useStableHandlers({
+    selectProject,
+    openFolder,
+    selectView: (v: SidebarView) => setView(view === v ? null : v),
+    openSettings: () => setSettingsOpen(true),
+    openChanges: () => {
+      setChangeFocus(null);
+      setView("changes");
+    },
+  });
+
   return (
     <div className="grid h-full grid-rows-[var(--toolbar-h)_minmax(0,1fr)_var(--statusbar-h)] bg-app text-fg">
       <Toolbar
         project={project}
         projects={settings.projects}
-        onSelectProject={selectProject}
-        onOpenFolder={openFolder}
+        onSelectProject={barHandlers.selectProject}
+        onOpenFolder={barHandlers.openFolder}
       />
 
       <div className="flex min-h-0 min-w-0" ref={bodyRef}>
         <ActivityBar
           view={view}
-          onSelect={(v) => setView(view === v ? null : v)}
-          onOpenSettings={() => setSettingsOpen(true)}
+          onSelect={barHandlers.selectView}
+          onOpenSettings={barHandlers.openSettings}
         />
         {view && (
           <Sidebar
@@ -806,10 +818,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
         agent={selected?.agent ?? defaultAgent}
         working={isWorking(selected)}
         planMode={selected?.planMode ?? false}
-        onOpenChanges={() => {
-          setChangeFocus(null);
-          setView("changes");
-        }}
+        onOpenChanges={barHandlers.openChanges}
       />
 
       {error && (
@@ -866,27 +875,4 @@ function computeSidebarSignature(t: Thread): string {
     needsApproval,
     isWorking(t),
   ].join("|");
-}
-
-/**
- * Stand-ins for `handlers` that keep their identity and call the latest render's versions,
- * so a memoized child can skip renders without holding stale closures. Keys must not change.
- */
-function useStableHandlers<T extends Record<string, (...args: never[]) => unknown>>(
-  handlers: T,
-): T {
-  const latest = useRef(handlers);
-  useLayoutEffect(() => {
-    latest.current = handlers;
-  });
-  const [stable] = useState(
-    () =>
-      Object.fromEntries(
-        Object.keys(handlers).map((key) => [
-          key,
-          (...args: never[]) => latest.current[key](...args),
-        ]),
-      ) as T,
-  );
-  return stable;
 }
