@@ -13,6 +13,7 @@ import CodeView from "~/components/canvas/CodeView";
 import DiffView from "~/components/canvas/DiffView";
 import PlanView from "~/components/canvas/PlanView";
 import { describeFile, splitLines } from "~/components/canvas/highlight";
+import { copyText } from "~/lib/clipboard";
 
 export type CanvasTab = "plan" | "code" | "diff";
 
@@ -169,7 +170,7 @@ export default function Canvas({
   async function copyContent() {
     if (content === undefined) return;
     try {
-      await navigator.clipboard.writeText(content);
+      await copyText(content);
       setCopied(true);
     } catch (e) {
       setActionError(errorMessage(e));

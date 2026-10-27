@@ -4,6 +4,7 @@ import "@xterm/xterm/css/xterm.css";
 import { useSyncExternalStore } from "react";
 import { api, onTerminalExit, onTerminalOutput, type TerminalSettings } from "~/api";
 import { boundCommand } from "~/lib/shortcuts";
+import { copyText } from "~/lib/clipboard";
 
 /**
  * The integrated terminal's shells. Each keeps its xterm and element here, outside React, so it
@@ -199,7 +200,7 @@ export async function startShell(
   });
   term.onSelectionChange(() => {
     if (current?.copyOnSelection && term.hasSelection()) {
-      void navigator.clipboard.writeText(term.getSelection());
+      void copyText(term.getSelection()).catch(() => undefined);
     }
   });
   term.attachCustomKeyEventHandler((event) => {
@@ -211,7 +212,7 @@ export async function startShell(
       : event.ctrlKey && event.shiftKey;
     const key = event.key.toLowerCase();
     if (copyPaste && key === "c" && term.hasSelection()) {
-      void navigator.clipboard.writeText(term.getSelection());
+      void copyText(term.getSelection()).catch(() => undefined);
       event.preventDefault();
       return false;
     }
@@ -225,7 +226,7 @@ export async function startShell(
     event.preventDefault();
     if (behavior === "nothing") return;
     if (behavior === "copyPaste" && term.hasSelection()) {
-      void navigator.clipboard.writeText(term.getSelection());
+      void copyText(term.getSelection()).catch(() => undefined);
       term.clearSelection();
       return;
     }

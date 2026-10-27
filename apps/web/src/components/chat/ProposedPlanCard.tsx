@@ -6,6 +6,7 @@ import { api } from "~/api";
 // Markdown loads with the chat, not on first use: its plain-text placeholder had another height,
 // so swapping it in moved the messages.
 import Markdown from "~/components/chat/Markdown";
+import { copyText } from "~/lib/clipboard";
 
 /** The plan's first heading, which names it. */
 export function planTitle(markdown: string): string {
@@ -54,7 +55,7 @@ export default function ProposedPlanCard({ markdown }: { markdown: string }) {
     : body;
 
   async function copy() {
-    await navigator.clipboard.writeText(`${markdown.trimEnd()}\n`);
+    await copyText(`${markdown.trimEnd()}\n`);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1500);
   }

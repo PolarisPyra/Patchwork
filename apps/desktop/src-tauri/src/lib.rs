@@ -507,6 +507,14 @@ fn clipboard_editor_data() -> Option<String> {
     clipboard::editor_data()
 }
 
+/// Copies `text` when the webview's own clipboard refused it.
+#[tauri::command]
+async fn copy_text(text: String) -> Res<()> {
+    tauri::async_runtime::spawn_blocking(move || clipboard::write_text(text))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// Lets the webview load an image for its thumbnail. The asset scope is not kept across restarts,
 /// so this runs again whenever a thumbnail is shown.
 #[tauri::command]
@@ -1006,6 +1014,7 @@ pub fn run() {
             save_pasted_image,
             save_pasted_text,
             clipboard_editor_data,
+            copy_text,
             allow_preview,
             cancel_turn,
             stop_goal,

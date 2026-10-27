@@ -26,6 +26,23 @@ pub fn editor_data() -> Option<String> {
     None
 }
 
+/// Puts `text` on the system clipboard, for a copy the webview refused: its clipboard API wants a
+/// focused page and a fresh click, which a click that only brings the window forward is not. The
+/// copy is served from a background thread until something else is copied.
+#[cfg(target_os = "linux")]
+pub fn write_text(text: String) -> Result<(), String> {
+    use wl_clipboard_rs::copy::{MimeType, Options, Source};
+
+    Options::new()
+        .copy(Source::Bytes(text.into_bytes().into()), MimeType::Text)
+        .map_err(|e| format!("Could not copy: {e}"))
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn write_text(_text: String) -> Result<(), String> {
+    Err("Could not copy".into())
+}
+
 /// One entry of Chromium's custom clipboard data: a pickle holding its payload size, the entry
 /// count, then each type and value as a length-prefixed UTF-16 string padded to 4 bytes.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
