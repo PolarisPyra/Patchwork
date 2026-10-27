@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.17] - 2026-10-27
+
+### Added
+
+- Files you mention with @ in a message you've sent now show in the chat as the same highlighted chip you see in the chat box, and clicking one opens your file manager with that file selected. This works for files inside and outside the project. Before, the mention was plain text you couldn't click.
+
+### Changed
+
+- In Settings, Skills now sits right below MCP Servers in the sidebar. Before, it was further down, between Terminal and Projects.
+
 ## [0.10.16] - 2026-10-27
 
 ### Added
