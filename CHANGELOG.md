@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.16] - 2026-10-27
+
+### Added
+
+- When a newer version of Patchwork is available, Settings → Updates now shows what is new in it, above the notes for the version you have installed. You can read what changes before you restart to update.
+
 ## [0.10.15] - 2026-10-27
 
 ### Added
@@ -646,5 +652,3 @@ Each release adds its notes at the top; see docs/release.md.
 - Drop the hover tooltip on project sub-folder rows
 - Drop the path tooltip on project rows
 - Remove the integration toggles that did nothing
-
-
