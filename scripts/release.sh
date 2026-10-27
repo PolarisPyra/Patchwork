@@ -3,24 +3,29 @@
 # (.github/workflows/release-appimage.yml). docs/release.md explains how it all fits together.
 #
 # On your machine:
-#   scripts/release.sh X.Y.Z            Cut a release: check, draft the notes with Claude for you
-#                                       to approve, set the version, add the notes to
-#                                       CHANGELOG.md, commit, tag, push, follow the workflow, and
-#                                       check that latest.json names the new version.
+#   scripts/release.sh X.Y.Z            Cut a release, with no questions asked: check, draft and
+#                                       check the notes with Claude, set the version, add the
+#                                       notes to CHANGELOG.md, commit, tag, push, follow the
+#                                       workflow, and check that latest.json names the new version.
 #   scripts/release.sh version X.Y.Z    Write a version into every file that names it.
 #   scripts/release.sh notes X.Y.Z      Publish X.Y.Z's section of CHANGELOG.md again, after a
 #                                       fix: to its GitHub release, and to latest.json when X.Y.Z
 #                                       is the latest release and the Bunny keys are set.
+#   scripts/release.sh pull X.Y.Z       Withdraw X.Y.Z when it went wrong: point latest.json back
+#                                       at the release before it. Needs the Bunny keys.
 #
 # In the Release workflow:
 #   scripts/release.sh ci-build linux|windows|macos
-#                                       On a tag: set the tag's version, build this platform's
-#                                       files, upload them under the tag's folder, and write a
-#                                       JSON list of them (name, SHA-256, signature) to the step's
-#                                       `assets` output. Without a tag: build only.
-#   scripts/release.sh ci-release       Write latest.json from the build jobs' lists ($LINUX,
-#                                       $WINDOWS, $MACOS) and the tag's notes, upload it, purge
-#                                       its cached copy, and create the GitHub release.
+#                                       Build this platform's files, unsigned, with the tag's
+#                                       version on a tag.
+#   scripts/release.sh ci-upload linux|windows|macos
+#                                       Upload them under the tag's folder, and write a JSON list
+#                                       of them (name, SHA-256) to the step's `assets` output.
+#   scripts/release.sh ci-release       Fetch every file back from the update server, check it
+#                                       against the build jobs' lists ($LINUX, $WINDOWS, $MACOS),
+#                                       sign it and check the signature against the app's key,
+#                                       then publish latest.json (also under the tag's folder),
+#                                       purge its cached copy, and create the GitHub release.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -101,24 +106,11 @@ cut_release() {
 
   step "Release notes for $tag"
   # Kept until the release is pushed, so running it again reuses them rather than drafting anew.
-  local notes=".release-notes/$tag.md" answer
+  local notes=".release-notes/$tag.md"
   scripts/changelog.sh draft "$tag" "$notes"
-  while true; do
-    echo
-    cat "$notes"
-    echo
-    read -r -p "Release $version with these notes: set the version, add them to CHANGELOG.md, commit, tag $tag, and push main and the tag? [y]es, [e]dit the notes, [r]edraft them, or [N]o: " answer
-    case "$answer" in
-      y | Y) break ;;
-      # Unquoted, so an editor with arguments, such as "code --wait", runs.
-      e | E) ${VISUAL:-${EDITOR:-vi}} "$notes" && scripts/changelog.sh check "$notes" "$version" || true ;;
-      r | R)
-        rm -f "$notes"
-        scripts/changelog.sh draft "$tag" "$notes"
-        ;;
-      *) die "Release cancelled. Nothing was changed; the notes stay in $notes." ;;
-    esac
-  done
+  echo
+  cat "$notes"
+  echo
   scripts/changelog.sh check "$notes" "$version"
 
   step "Tagging $tag"
@@ -167,92 +159,166 @@ upload() {
     -H "Content-Type: application/octet-stream" "$STORAGE/$2" > /dev/null
 }
 
-# Builds with the Tauri CLI, signing the updater files when CI passes the signing key.
+# Builds with the Tauri CLI. Nothing is signed here: the release job signs the published files, so
+# the signing key is never on a machine that runs the dependencies' build scripts.
 tauri_build() {
-  local args=()
-  if [[ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
-    # The bundler signs with the updater's public key, which only this config carries.
-    args=(--config "${GITHUB_WORKSPACE:-$repo_root}/apps/desktop/src-tauri/tauri.signing.conf.json")
-  fi
-  pnpm --filter patchwork-desktop exec tauri build --bundles "$1" ${args[@]+"${args[@]}"}
+  pnpm --filter patchwork-desktop exec tauri build --bundles "$1"
+}
+
+# Sets `files` to the files a platform's build publishes.
+platform_files() {
+  case "$1" in
+    linux) files=(target/release/bundle/appimage/Patchwork_amd64.AppImage) ;;
+    windows) files=(target/release/bundle/nsis/*-setup.exe) ;;
+    macos) files=(target/release/bundle/dmg/*.dmg target/release/bundle/macos/Patchwork.app.tar.gz) ;;
+    *) die "Usage: scripts/release.sh ci-build|ci-upload linux|windows|macos" ;;
+  esac
 }
 
 ci_build() {
-  local platform="${1:-}" tag="" files=()
-  [[ "${GITHUB_REF:-}" == refs/tags/v* ]] && tag="$GITHUB_REF_NAME"
+  local platform="${1:-}" files=() file
+  platform_files "$platform"
   # A tag pushed without `scripts/release.sh X.Y.Z` still builds with its own version.
-  [[ -n "$tag" ]] && set_version "${tag#v}"
+  if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then set_version "${GITHUB_REF_NAME#v}"; fi
   case "$platform" in
     linux)
       tauri_build appimage
       # Tauri names the file after the version. The release keeps one name across versions,
       # which the updater looks for.
-      local version built out=target/release/bundle/appimage/Patchwork_amd64.AppImage
+      local version built
       version=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
       built="target/release/bundle/appimage/Patchwork_${version}_amd64.AppImage"
       [[ -f "$built" ]] || die "Expected $built after the build."
-      mv -f "$built" "$out"
-      [[ -f "$built.sig" ]] && mv -f "$built.sig" "$out.sig"
-      files=("$out")
+      mv -f "$built" target/release/bundle/appimage/Patchwork_amd64.AppImage
       ;;
-    windows)
-      tauri_build nsis
-      files=(target/release/bundle/nsis/*-setup.exe)
-      ;;
+    windows) tauri_build nsis ;;
     macos)
-      # The disk image is for new installs; the updater downloads Patchwork.app.tar.gz, which a
-      # signed build packs itself.
+      # The disk image is for new installs; the updater downloads Patchwork.app.tar.gz and unpacks
+      # it with tar, expecting Patchwork.app at its top. COPYFILE_DISABLE keeps macOS's ._ files out.
       tauri_build app,dmg
-      local bundle=target/release/bundle/macos
-      [[ -f "$bundle/Patchwork.app.tar.gz" ]] || tar -czf "$bundle/Patchwork.app.tar.gz" -C "$bundle" Patchwork.app
-      files=(target/release/bundle/dmg/*.dmg "$bundle/Patchwork.app.tar.gz")
+      COPYFILE_DISABLE=1 tar -czf target/release/bundle/macos/Patchwork.app.tar.gz \
+        -C target/release/bundle/macos Patchwork.app
       ;;
-    *) die "Usage: scripts/release.sh ci-build linux|windows|macos" ;;
   esac
-  if [[ -z "$tag" ]]; then
-    echo "Not a tag, so nothing is published. Built: ${files[*]}"
-    return
-  fi
+  platform_files "$platform"
+  for file in "${files[@]}"; do
+    [[ -f "$file" ]] || die "Expected $file after the build."
+  done
+  echo "Built: ${files[*]}"
+}
 
-  local assets='[]' file name sig digest
+# Uploads a platform's files under the tag's folder, and writes a JSON list of them (name, SHA-256)
+# to the step's `assets` output. A separate step from the build, so the storage password is not in
+# the environment while the dependencies' build scripts run.
+ci_upload() {
+  local platform="${1:-}" tag="${GITHUB_REF_NAME:?Run ci-upload from the Release workflow.}"
+  local files=() assets='[]' file name digest
+  [[ "${GITHUB_REF:-}" == refs/tags/v* ]] || die "ci-upload only runs on a version tag."
+  platform_files "$platform"
   for file in "${files[@]}"; do
     [[ -f "$file" ]] || die "Expected $file after the build."
     name=$(basename "$file")
     upload "$file" "$tag/$name"
-    sig=null
-    [[ -f "$file.sig" ]] && sig=$(jq -Rs . < "$file.sig")
-    # macOS has shasum but not always sha256sum.
-    digest=$( (sha256sum "$file" 2> /dev/null || shasum -a 256 "$file") | cut -d' ' -f1)
-    assets=$(jq -c --arg name "$name" --arg digest "sha256:$digest" --argjson sig "$sig" \
-      '. + [{name: $name, digest: $digest, sig: $sig}]' <<< "$assets")
+    digest=$(file_sha256 "$file")
+    assets=$(jq -c --arg name "$name" --arg digest "sha256:$digest" '. + [{name: $name, digest: $digest}]' <<< "$assets")
     echo "Uploaded $PUBLIC/$tag/$name"
   done
   echo "assets=$assets" >> "${GITHUB_OUTPUT:-/dev/stdout}"
 }
 
+file_sha256() {
+  # macOS has shasum but not always sha256sum.
+  (sha256sum "$1" 2> /dev/null || shasum -a 256 "$1") | cut -d' ' -f1
+}
+
+# The key the app checks updates against, as built into it.
+app_signing_key() {
+  sed -n 's/^const SIGNING_KEY: &str = "\(.*\)";$/\1/p' apps/desktop/src-tauri/src/updates.rs
+}
+
+# The Tauri CLI version the lockfile pins, for signing without installing the project.
+tauri_cli_version() {
+  awk '/^      .@tauri-apps\/cli.:$/ { found = 1; next } found && /version:/ { print $2; exit }' pnpm-lock.yaml
+}
+
 ci_release() {
   local tag="${GITHUB_REF_NAME:?Run ci-release from the Release workflow.}"
+  local version="${tag#v}" key cli dir=release-check name digest asset assets='[]'
+  local built="${LINUX:?} ${WINDOWS:?} ${MACOS:?}"
   [[ -n "${BUNNY_API_KEY:-}" ]] || die "BUNNY_API_KEY is not set."
+  [[ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]] || die "TAURI_SIGNING_PRIVATE_KEY is not set."
+  key=$(app_signing_key)
+  [[ -n "$key" ]] || die "Could not read SIGNING_KEY from apps/desktop/src-tauri/src/updates.rs."
+  cli=$(tauri_cli_version)
+  [[ -n "$cli" ]] || die "Could not read the @tauri-apps/cli version from pnpm-lock.yaml."
+  mkdir -p "$dir"
+
+  # Each file is fetched back from the update server, so what is checked and signed is what users
+  # download: it must match the SHA-256 its build job reported, and its signature must check out
+  # against the key built into the app, as the updater will check it.
+  while IFS= read -r asset; do
+    name=$(jq -r .name <<< "$asset")
+    digest=$(jq -r .digest <<< "$asset")
+    curl -fsS --retry 3 -o "$dir/$name" "$PUBLIC/$tag/$name" || die "Could not download $PUBLIC/$tag/$name."
+    [[ "sha256:$(file_sha256 "$dir/$name")" == "$digest" ]] \
+      || die "$PUBLIC/$tag/$name does not match the file its build job uploaded."
+    npx --yes "@tauri-apps/cli@$cli" signer sign --app-version "$version" "$dir/$name" > /dev/null
+    base64 -d "$dir/$name.sig" > "$dir/$name.minisig"
+    minisign -Vq -P "$key" -m "$dir/$name" -x "$dir/$name.minisig" \
+      || die "The signature of $name does not check out against the app's key. Is TAURI_SIGNING_PRIVATE_KEY the right key?"
+    assets=$(jq -c --arg name "$name" --rawfile sig "$dir/$name.minisig" '. + [{name: $name, sig: $sig}]' <<< "$assets")
+    echo "Checked and signed $name"
+  done < <(jq -c '.[]' <<< "$built")
+
   # The tag's section of CHANGELOG.md, which release.sh committed before tagging.
   scripts/changelog.sh section "$tag" > RELEASE_NOTES.md
   [[ -s RELEASE_NOTES.md ]] || echo "CHANGELOG.md has no section for $tag, so the release has no notes." >&2
   # In the shape of GitHub's release API, plus each file's signature and the notes, as the updater
   # reads it. It goes up after the build jobs uploaded every file, so it never names a missing one.
   jq -n --arg tag "$tag" --arg public "$PUBLIC" --rawfile body RELEASE_NOTES.md \
-    --argjson linux "${LINUX:?}" --argjson windows "${WINDOWS:?}" --argjson macos "${MACOS:?}" \
-    '{tag_name: $tag, body: $body, assets: ($linux + $windows + $macos | map({
+    --argjson built "$(jq -s 'add' <<< "$built")" --argjson signed "$assets" \
+    '{tag_name: $tag, body: $body, assets: ($built | map(. as $file | {
       name,
       browser_download_url: "\($public)/\($tag)/\(.name)",
       digest,
-      signature: (.sig | if . then @base64d else null end)
+      signature: ($signed[] | select(.name == $file.name) | .sig)
     }))}' > latest.json
   cat latest.json
+  # The tag's own copy lets `scripts/release.sh pull` put this release back as the latest.
+  upload latest.json "$tag/latest.json"
   upload latest.json latest.json
   curl -fsS -X POST -H "AccessKey: $BUNNY_API_KEY" "https://api.bunny.net/purge?url=$PUBLIC/latest.json"
   echo "Published $PUBLIC/latest.json"
 
   # The installers stay on the update server; the GitHub release keeps the tag's notes.
   gh release create "$tag" --title "Patchwork $tag" --notes-file RELEASE_NOTES.md
+}
+
+# Withdraws a release that went wrong: latest.json goes back to the release before it, so copies
+# that have not updated yet stop being offered it. Copies already on it keep it.
+pull_release() {
+  local version="${1#v}"
+  check_version "$version"
+  local tag="v$version" manifest previous="" candidate found=""
+  [[ -n "${BUNNY_STORAGE_PASSWORD:-}" && -n "${BUNNY_API_KEY:-}" ]] \
+    || die "Set BUNNY_STORAGE_PASSWORD and BUNNY_API_KEY to pull a release."
+  manifest=$(curl -fsS "$PUBLIC/latest.json") || die "Could not fetch $PUBLIC/latest.json."
+  [[ "$(jq -r .tag_name <<< "$manifest")" == "$tag" ]] \
+    || die "latest.json names $(jq -r .tag_name <<< "$manifest"), not $tag, so there is nothing to pull."
+  git fetch --quiet --tags origin
+  mkdir -p .release-notes
+  for candidate in $(git tag -l 'v*' --sort=-v:refname); do
+    if [[ -n "$found" ]] && curl -fsS -o .release-notes/latest.json "$PUBLIC/$candidate/latest.json" 2> /dev/null; then
+      previous="$candidate"
+      break
+    fi
+    if [[ "$candidate" == "$tag" ]]; then found=1; fi
+  done
+  [[ -n "$previous" ]] || die "No release before $tag has its own copy of latest.json to go back to."
+  upload .release-notes/latest.json latest.json
+  curl -fsS -X POST -H "AccessKey: $BUNNY_API_KEY" "https://api.bunny.net/purge?url=$PUBLIC/latest.json"
+  rm -f .release-notes/latest.json
+  echo "latest.json names $previous again, so $tag is no longer offered as an update."
 }
 
 # Publishes a release's notes again from CHANGELOG.md, for a fix made after the release.
@@ -285,7 +351,9 @@ republish_notes() {
 case "${1:-}" in
   version) set_version "${2:-}" ;;
   notes) republish_notes "${2:-}" ;;
+  pull) pull_release "${2:-}" ;;
   ci-build) ci_build "${2:-}" ;;
+  ci-upload) ci_upload "${2:-}" ;;
   ci-release) ci_release ;;
   -h | --help) usage ;;
   "") usage >&2 && exit 1 ;;
