@@ -1,6 +1,7 @@
-//! Keeps Patchwork up to date from its GitHub releases. Shortly after launch and then as often as
-//! Settings asks, it checks the latest release, downloads this platform's file, checks it against
-//! the SHA-256 digest GitHub publishes for it, and installs it. The new version
+//! Keeps Patchwork up to date from the releases published at updates.patchworkeditor.com. Shortly
+//! after launch and then as often as Settings asks, it checks the latest release, downloads this
+//! platform's file, checks it against the release's SHA-256 digest and the release signing key's
+//! signature, and installs it. The new version
 //! runs from the next start; the update card and Settings offer a restart. A copy that was not
 //! installed from a release (a dev or source build) cannot replace itself, so it only reports the
 //! version.
@@ -16,8 +17,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, Manager};
 
-const LATEST_RELEASE_API: &str =
-    "https://api.github.com/repos/PolarisPyra/Patchwork-ADE/releases/latest";
+/// The latest release, in the shape of GitHub's release API. The release workflow publishes it.
+const LATEST_RELEASE: &str = "https://updates.patchworkeditor.com/latest.json";
+/// The minisign public key of the release signing key: the updater `pubkey` in
+/// tauri.signing.conf.json, decoded.
+const SIGNING_KEY: &str = "RWRXprrQ+eDX1VTXegp1CNjQ85EUGvB2gw6QQR/8pzPzVHjoIsayrxzc";
 /// How long after launch the first check waits, so it does not slow the start.
 const FIRST_CHECK: Duration = Duration::from_secs(30);
 /// How often the timer looks at the clock.
@@ -98,8 +102,10 @@ struct Release {
 struct Asset {
     name: String,
     browser_download_url: String,
-    /// `sha256:<hex>`, published by GitHub for each asset.
+    /// `sha256:<hex>`.
     digest: Option<String>,
+    /// The file's minisign signature, as the text of its `.sig` file.
+    signature: Option<String>,
 }
 
 /// The release file this copy installs from: the AppImage, the Windows installer, or the macOS
@@ -233,12 +239,28 @@ impl Updates {
             .as_deref()
             .and_then(|digest| digest.strip_prefix("sha256:"))
             .ok_or("The release does not publish this download's checksum.")?;
-        let file = self.download(app, &asset.browser_download_url, sha256, version)?;
+        let signature = asset
+            .signature
+            .as_deref()
+            .ok_or("The release does not publish this download's signature.")?;
+        let signature = minisign_verify::Signature::decode(signature)
+            .map_err(|e| format!("The release has an unreadable signature: {e}"))?;
+        let file = self.download(app, &asset.browser_download_url, sha256, &signature, version)?;
         install(file, self)
     }
 
-    /// Downloads `url` into the temporary folder and checks its SHA-256.
-    fn download(&self, app: &AppHandle, url: &str, sha256: &str, version: &str) -> Result<PathBuf, String> {
+    /// Downloads `url` into the temporary folder and checks its SHA-256 and signature.
+    fn download(
+        &self,
+        app: &AppHandle,
+        url: &str,
+        sha256: &str,
+        signature: &minisign_verify::Signature,
+        version: &str,
+    ) -> Result<PathBuf, String> {
+        let key = minisign_verify::PublicKey::from_base64(SIGNING_KEY).map_err(|e| e.to_string())?;
+        let mut verifier =
+            key.verify_stream(signature).map_err(|e| format!("The release has an unusable signature: {e}"))?;
         self.set(app, UpdateState::Downloading { version: version.into(), downloaded: 0, total: None });
         let mut response = agent(DOWNLOAD_TIMEOUT)
             .get(url)
@@ -261,6 +283,7 @@ impl Updates {
                     break;
                 }
                 hasher.update(&buf[..read]);
+                verifier.update(&buf[..read]);
                 file.write_all(&buf[..read]).map_err(|e| format!("Could not save the download: {e}"))?;
                 downloaded += read as u64;
                 if downloaded / step != shown / step {
@@ -273,6 +296,9 @@ impl Updates {
             if !got.eq_ignore_ascii_case(sha256) {
                 return Err("The download does not match its checksum.".to_string());
             }
+            verifier
+                .finalize()
+                .map_err(|_| "The download is not signed with Patchwork's release key.".to_string())?;
             Ok(())
         })();
         match result {
@@ -327,14 +353,13 @@ impl Updates {
 
 fn latest_release() -> Result<Release, String> {
     let mut response = agent(CHECK_TIMEOUT)
-        .get(LATEST_RELEASE_API)
-        .header("Accept", "application/vnd.github+json")
+        .get(LATEST_RELEASE)
         .call()
-        .map_err(|e| format!("Could not reach GitHub: {e}"))?;
+        .map_err(|e| format!("Could not reach the update server: {e}"))?;
     response
         .body_mut()
         .read_json()
-        .map_err(|e| format!("GitHub sent an unreadable release: {e}"))
+        .map_err(|e| format!("The update server sent an unreadable release:{e}"))
 }
 
 /// Keeps the verified installer for the restart or the quit, since running it closes the app.

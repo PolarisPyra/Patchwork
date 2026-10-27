@@ -2,8 +2,9 @@ name: Release
 
 # Builds the Linux AppImage, the Windows installer, and the macOS (Apple silicon) disk image when a
 # version tag (v0.1.0, v0.2.0, ...) is pushed, then creates a GitHub release for that tag with all
-# three attached. Patchwork updates itself from these files, checking each against GitHub's
-# SHA-256 digest. While the TAURI_SIGNING_PRIVATE_KEY secret is set, the release also carries the
+# three attached, and publishes them to updates.patchworkeditor.com. Patchwork 0.10.10 and newer
+# update from there, checking each file's SHA-256 digest and signature; older copies update from the
+# GitHub release, checking GitHub's SHA-256 digest. While the TAURI_SIGNING_PRIVATE_KEY secret is set, the release also carries the
 # signed update files and latest.json that Patchwork 0.6.7 and older update from.
 # Pushes to main don't build. Run it by hand from the Actions tab to build without a
 # tag; the release job only runs for tags.
@@ -76,6 +77,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: patchwork-appimage
+          # Only the release job reads these, and a private repo has little artifact storage.
+          retention-days: 1
           path: |
             ${{ steps.find.outputs.path }}
             ${{ steps.find.outputs.path }}.sig
@@ -131,6 +134,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: patchwork-windows
+          retention-days: 1
           path: |
             ${{ steps.find.outputs.path }}
             ${{ steps.find.outputs.path }}.sig
@@ -188,6 +192,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: patchwork-macos-arm64
+          retention-days: 1
           path: |
             ${{ steps.find.outputs.path }}
             target/release/bundle/macos/Patchwork.app.tar.gz
@@ -256,3 +261,37 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/* \
             --title "Patchwork $GITHUB_REF_NAME" \
             --notes-file RELEASE_NOTES.md
+
+      - name: Publish to updates.patchworkeditor.com
+        # Patchwork 0.10.10 and newer update from here: each file under its tag on the Bunny storage
+        # zone, then latest.json, in the shape of GitHub's release API plus each file's signature.
+        # latest.json goes up last, so it never names a file that is not there yet, and its cached
+        # copy is purged.
+        env:
+          STORAGE: https://ny.storage.bunnycdn.com/patchwork-releases
+          PUBLIC: https://updates.patchworkeditor.com
+          BUNNY_STORAGE_PASSWORD: ${{ secrets.BUNNY_STORAGE_PASSWORD }}
+          BUNNY_API_KEY: ${{ secrets.BUNNY_API_KEY }}
+        run: |
+          upload() {
+            curl -fsS -X PUT -H "AccessKey: $BUNNY_STORAGE_PASSWORD" \
+              -H "Content-Type: application/octet-stream" --data-binary "@$1" "$STORAGE/$2"
+          }
+          assets='[]'
+          for file in dist/*; do
+            name=$(basename "$file")
+            [[ "$name" == *.sig || "$name" == latest.json ]] && continue
+            upload "$file" "$GITHUB_REF_NAME/$name"
+            signature=null
+            [[ -f "$file.sig" ]] && signature=$(base64 -d "$file.sig" | jq -Rs .)
+            assets=$(jq --arg name "$name" --arg url "$PUBLIC/$GITHUB_REF_NAME/$name" \
+              --arg digest "sha256:$(sha256sum "$file" | cut -d' ' -f1)" --argjson signature "$signature" \
+              '. + [{name: $name, browser_download_url: $url, digest: $digest, signature: $signature}]' \
+              <<< "$assets")
+          done
+          jq -n --arg tag "$GITHUB_REF_NAME" --argjson assets "$assets" \
+            '{tag_name: $tag, assets: $assets}' > manifest.json
+          cat manifest.json
+          upload manifest.json latest.json
+          curl -fsS -X POST -H "AccessKey: $BUNNY_API_KEY" \
+            "https://api.bunny.net/purge?url=$PUBLIC/latest.json"
