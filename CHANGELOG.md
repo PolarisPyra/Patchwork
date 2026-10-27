@@ -3,6 +3,20 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.19] - 2026-10-27
+
+### Added
+
+- The Allow button on an approval now has a menu: Allow once, Always allow in this project (or in Chats, for chats without a project), or Always allow everywhere. It shows what it will save, such as the folder or the command, and the button offers the choice you picked last time for that kind of request. Once a folder, command, website or MCP server is always allowed, Patchwork answers later requests like it for you, including ones already waiting, so you no longer click Allow again and again for the same folder.
+- Settings → Permissions lists the rules for everywhere, for chats, and for each project. You can switch each rule between Allow, Ask and Deny, edit it, move it to another project or to everywhere, delete it, or add your own. You can also set what each kind of request gets when no rule matches: editing files, running commands, working outside the folder, using the web, and MCP tools.
+- Requests a rule answered show as a single "Auto-allowed" line in the chat instead of another card. Click "Auto-allowed" or "Always allowed" to open the rule in Settings → Permissions or to have it ask again next time. Click "Allowed" on an approval you answered by hand to save a rule for it afterward.
+
+### Changed
+
+- Commands that only read, such as ls, cat, grep and git status, now run without asking from the start. Commands that delete, run with more access, or rewrite history, such as rm, sudo, git push and git reset, keep asking even when another rule allows them. These are starting rules in Settings → Permissions that you can change or delete.
+- Commands that send their output to a file or run another command inside them still ask each time, even when a rule allows the command.
+- Repeated approvals of the same thing now fold into one card in the chat, such as "Denied ×3".
+
 ## [0.10.18] - 2026-10-27
 
 ### Fixed
