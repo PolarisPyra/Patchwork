@@ -13,12 +13,13 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import CodeBlockNodeView from "~/components/chat/CodeBlockNodeView";
 import { codeHighlightPlugin } from "~/components/chat/codeHighlight";
 
-// Chips sit inside a line of text, so they keep its height: no vertical padding, and the mono
-// face a little smaller than the prose around it.
+// Chips sit inside a line of text, so they keep its height: no vertical padding, the mono face a
+// little smaller than the prose around it, and no line height of their own, since the mono face's
+// baseline would otherwise make the line a little taller.
 export const GOAL_CLASS =
-  "rounded-[4px] bg-accent/30 px-1 font-[family-name:var(--font-mono)] text-[0.9em] text-fg [box-decoration-break:clone]";
+  "rounded-[4px] bg-accent/30 px-1 font-[family-name:var(--font-mono)] text-[0.9em] leading-none text-fg [box-decoration-break:clone]";
 export const SKILL_CLASS =
-  "rounded-[4px] bg-success/25 px-1 font-[family-name:var(--font-mono)] text-[0.9em] text-fg [box-decoration-break:clone]";
+  "rounded-[4px] bg-success/25 px-1 font-[family-name:var(--font-mono)] text-[0.9em] leading-none text-fg [box-decoration-break:clone]";
 const MENTION_CLASS = "rounded-[4px] bg-selected-muted px-1 text-accent-text";
 
 /** A slash command, such as `/goal`. It is an atom, so the whole command selects and deletes together. */
