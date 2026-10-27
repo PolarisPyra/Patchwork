@@ -13,10 +13,12 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import CodeBlockNodeView from "~/components/chat/CodeBlockNodeView";
 import { codeHighlightPlugin } from "~/components/chat/codeHighlight";
 
+// Chips sit inside a line of text, so they keep its height: no vertical padding, and the mono
+// face a little smaller than the prose around it.
 export const GOAL_CLASS =
-  "rounded-[4px] bg-accent/30 px-1 py-0.5 font-[family-name:var(--font-mono)] text-fg";
+  "rounded-[4px] bg-accent/30 px-1 font-[family-name:var(--font-mono)] text-[0.9em] text-fg [box-decoration-break:clone]";
 export const SKILL_CLASS =
-  "rounded-[4px] bg-success/25 px-1 py-0.5 font-[family-name:var(--font-mono)] text-fg";
+  "rounded-[4px] bg-success/25 px-1 font-[family-name:var(--font-mono)] text-[0.9em] text-fg [box-decoration-break:clone]";
 const MENTION_CLASS = "rounded-[4px] bg-selected-muted px-1 text-accent-text";
 
 /** A slash command, such as `/goal`. It is an atom, so the whole command selects and deletes together. */
@@ -53,9 +55,15 @@ export const GoalCommand = Node.create({
   },
 });
 
-/** A skill picked from the `$` menu, sent as `$name`. An atom, like the goal command. */
-export const SkillCommand = Node.create({
+/**
+ * A skill picked from the `$` menu, or typed as `$name ` anywhere in the draft, sent as `$name`.
+ * An atom, like the goal command.
+ */
+export const SkillCommand = Node.create<{ isSkill: (name: string) => boolean }>({
   name: "skillCommand",
+  addOptions() {
+    return { isSkill: () => false };
+  },
   group: "inline",
   inline: true,
   atom: true,
@@ -80,6 +88,24 @@ export const SkillCommand = Node.create({
     ];
   },
   renderMarkdown: (node: { attrs?: { name?: string } }) => `$${node.attrs?.name ?? ""}`,
+  addInputRules() {
+    const type = this.type;
+    const isSkill = this.options.isSkill;
+    return [
+      new InputRule({
+        find: /(?:^|\s)\$([a-z][a-z0-9]*(?:[-_:][a-z0-9]+)*)\s$/,
+        handler: ({ state, range, match }) => {
+          if (!isSkill(match[1])) return null;
+          // The match can start with the space before the `$`, which stays.
+          const from = range.from + match[0].indexOf("$");
+          state.tr.replaceWith(from, range.to, [
+            type.create({ name: match[1] }),
+            state.schema.text(" "),
+          ]);
+        },
+      }),
+    ];
+  },
 });
 
 /**
@@ -180,7 +206,11 @@ import.meta.hot?.accept(() => window.location.reload());
  * Everything the composer edits: Markdown blocks (code, lists, task lists), links, the
  * inline command and file mentions, and the placeholder.
  */
-export function composerExtensions(placeholder: string, mentionSuggestion: MentionSuggestion) {
+export function composerExtensions(
+  placeholder: string,
+  mentionSuggestion: MentionSuggestion,
+  isSkill: (name: string) => boolean,
+) {
   return [
     // Links keep their Markdown form; clicking one in a draft does not open it. Text dropped in
     // only links URLs with a protocol, so file names such as start.sh or main.rs stay plain text.
@@ -215,7 +245,7 @@ export function composerExtensions(placeholder: string, mentionSuggestion: Menti
     Placeholder.configure({ placeholder }),
     Markdown,
     GoalCommand,
-    SkillCommand,
+    SkillCommand.configure({ isSkill }),
     MarkdownLine,
     SelectAllText,
     ...MarkdownTextBlocks,

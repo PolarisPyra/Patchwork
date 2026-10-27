@@ -25,13 +25,7 @@ import type { CanvasTab } from "~/components/canvas/Canvas";
 import AttachmentChip, { AttachmentTile } from "~/components/chat/AttachmentChip";
 import { ACTION_CLASS, CopyButton } from "~/components/chat/CopyButton";
 import TurnTimeline from "~/components/chat/TurnTimeline";
-import {
-  goalObjective,
-  skillInvocation,
-  isCompactCommand,
-  isGoalClearCommand,
-} from "~/components/chat/composerActions";
-import { GOAL_CLASS, SKILL_CLASS } from "~/components/chat/composerExtensions";
+import { isCompactCommand, isGoalClearCommand } from "~/components/chat/composerActions";
 import { shortcutContext, useCommand } from "~/lib/shortcuts";
 import { formatTokens } from "~/lib/tokens";
 import { useMissingFiles } from "~/hooks/useMissingFiles";
@@ -231,13 +225,6 @@ const UserMessage = memo(function UserMessage({
       : long && !expanded
         ? message.text.slice(0, LONG_MESSAGE_CHARS)
         : message.text;
-  const objective = goalObjective(text);
-  const skill = objective === null ? skillInvocation(text) : null;
-  // A goal or a skill shows the chip the composer showed for it, then the rest of the message.
-  const chip =
-    objective !== null
-      ? { label: "/goal", className: GOAL_CLASS, rest: objective }
-      : skill && { label: `$${skill.name}`, className: SKILL_CLASS, rest: skill.rest };
   const toggle = () => {
     if (expanded) expandedMessages.delete(message.id);
     else expandedMessages.add(message.id);
@@ -275,16 +262,8 @@ const UserMessage = memo(function UserMessage({
         // Line breaks the user typed are kept inside paragraphs only; between blocks they would show
         // as blank lines.
         <div className="rounded-[12px] bg-[color-mix(in_srgb,var(--text)_10%,var(--bg-editor))] px-4 py-2.5 leading-[1.55] text-fg [word-break:break-word] selectable [&_h3]:mt-0 [&_h3]:mb-0 [&_p]:whitespace-pre-wrap">
-          {chip ? (
-            <div className="flex items-baseline gap-1.5">
-              <span className={`flex-none ${chip.className}`}>{chip.label}</span>
-              <div className="min-w-0 flex-1">
-                <Markdown text={chip.rest} typed />
-              </div>
-            </div>
-          ) : (
-            <Markdown text={text} typed />
-          )}
+          {/* A goal or skill shows the chip the composer showed for it, in line with the text. */}
+          <Markdown text={text} typed chips />
         </div>
       )}
       {long && (

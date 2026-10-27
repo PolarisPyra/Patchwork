@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import {
   ArrowUpIcon,
   CaretDownIcon,
@@ -8,9 +8,9 @@ import {
   SquareIcon,
 } from "@phosphor-icons/react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { Fragment, Slice } from "@tiptap/pm/model";
-import { TextSelection } from "@tiptap/pm/state";
+import { Selection, TextSelection } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import {
   api,
@@ -70,6 +70,8 @@ interface ComposerProps {
   onRemoveAttachment: (index: number) => void;
   /** A drag is hovering over the chat; the composer shows where it will land. */
   dropping: boolean;
+  /** Set by the composer, so the chat can put dropped files and folders into the draft. */
+  dropMentions: MutableRefObject<DropMentions | null>;
   /** The thread's goal is active: its border turns instead of holding still. */
   goalActive: boolean;
   /** The chat's earlier messages, oldest first, recalled with the arrow keys. */
@@ -93,11 +95,46 @@ interface Recalled {
   text: string;
 }
 
+/**
+ * For a drop at this point, in CSS pixels: null when it is not on the composer, or else a function
+ * that writes the dropped paths into the draft as mentions where they were dropped.
+ */
+export type DropMentions = (point: {
+  x: number;
+  y: number;
+}) => ((mentions: MentionItem[]) => void) | null;
+
+/** The "/word" or "$word" the caret is at the end of, at the start of a line or after a space. */
+interface CommandToken {
+  text: string;
+  from: number;
+  to: number;
+  /** The token is the whole draft, so a pick replaces the draft and can run a local command. */
+  whole: boolean;
+}
+
+function commandToken(editor: Editor): CommandToken | null {
+  const { selection, doc } = editor.state;
+  const { $from } = selection;
+  if (!selection.empty || $from.parent.type.spec.code) return null;
+  // Chips and mentions read as one character that ends the token.
+  const before = $from.parent.textBetween(0, $from.parentOffset, undefined, "\ufffc");
+  const match = /(?:^|\s)([/$][^\s\ufffc]*)$/.exec(before);
+  if (!match) return null;
+  const text = match[1];
+  return {
+    text,
+    from: $from.pos - text.length,
+    to: $from.pos,
+    whole: doc.childCount === 1 && doc.textContent === text,
+  };
+}
+
 /** Most characters a prompt can hold; a longer draft cannot be sent. */
 const PROMPT_LIMIT = 120_000;
 
-/** An entry in the @ menu. */
-interface MentionItem {
+/** An entry in the @ menu, or a dropped path. */
+export interface MentionItem {
   id: string;
   label: string;
 }
@@ -297,6 +334,7 @@ export default function Composer({
   onAttachPaths,
   onRemoveAttachment,
   dropping,
+  dropMentions,
   goalActive,
   history,
   files,
@@ -309,17 +347,21 @@ export default function Composer({
     const picked = await open({ multiple: true, directory });
     if (picked) onAttachPaths(picked);
   }
-  // The slash menu lists commands for a draft that is still one "/word"; Escape hides it
-  // until the draft changes again.
+  // The slash menu lists commands for the "/word" or "$word" being typed, anywhere in the draft;
+  // Escape hides it until the draft changes again.
   const [menuClosed, setMenuClosed] = useState(false);
   const [dispatchMenuOpen, setDispatchMenuOpen] = useState(false);
   const [commandIndex, setCommandIndex] = useState(0);
+  const [token, setToken] = useState<CommandToken | null>(null);
   // Antigravity reads the message as a prompt, so there are no commands to offer.
   // "/" lists commands and "$" lists skills.
-  const slash = agent !== "antigravity" && /^[/$]\S*$/.test(value) ? value.toLowerCase() : null;
+  const slash = agent !== "antigravity" && token ? token.text.toLowerCase() : null;
   const skillMenu = slash?.startsWith("$") ?? false;
   // Skills are read again each time the menu opens, so ones just added to the folder show up.
   const [skills, setSkills] = useState<Skill[]>([]);
+  // The editor's `$name ` rule reads the skills through this.
+  const skillsRef = useRef(skills);
+  skillsRef.current = skills;
   useEffect(() => {
     if (skillMenu)
       api.listSkills().then(
@@ -333,8 +375,11 @@ export default function Composer({
     description: skill.description ?? "Skill",
   }));
   const slashCommands = [
-    // Patchwork does not run /goal in OpenCode.
-    ...SLASH_COMMANDS.filter((command) => agent !== "opencode" || command.name !== "/goal"),
+    // Patchwork does not run /goal in OpenCode. Its own commands only take effect as the whole
+    // message, so later in a draft only the agent's commands are offered.
+    ...(token?.whole ? SLASH_COMMANDS : []).filter(
+      (command) => agent !== "opencode" || command.name !== "/goal",
+    ),
     ...providerSlashCommands
       // Claude lists Patchwork's skills again as the "patchwork" plugin's; they are under "$".
       .filter((command) => {
@@ -357,7 +402,8 @@ export default function Composer({
             return score === null ? [] : [{ ...c, score }];
           })
           .sort((a, b) => a.score - b.score);
-  const menuOpen = !menuClosed && slash !== null;
+  // Later in a draft, a "/" that matches nothing is a path, so no menu shows for it.
+  const menuOpen = !menuClosed && slash !== null && (token?.whole || matches.length > 0);
   const activeCommand = matches[Math.min(commandIndex, matches.length - 1)];
   const commandOptionRef = useRef<HTMLButtonElement>(null);
 
@@ -459,7 +505,11 @@ export default function Composer({
   }, [working, goalActive]);
 
   const editor = useEditor({
-    extensions: composerExtensions("Reply or describe the next change…", mentionSuggestion),
+    extensions: composerExtensions(
+      "Reply or describe the next change…",
+      mentionSuggestion,
+      (name) => skillsRef.current.some((skill) => skill.name === name),
+    ),
     content: value,
     contentType: "markdown",
     immediatelyRender: false,
@@ -523,9 +573,55 @@ export default function Composer({
     onUpdate: ({ editor }) => {
       setMenuClosed(false);
       setCommandIndex(0);
+      setToken(commandToken(editor));
       changed.current(editor.getMarkdown());
     },
+    onSelectionUpdate: ({ editor }) => setToken(commandToken(editor)),
   });
+
+  // Files and folders dropped on the composer go into the draft as mentions where they land, or
+  // at the caret when they land beside the text.
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!editor) return;
+    dropMentions.current = (point) => {
+      const box = surfaceRef.current?.getBoundingClientRect();
+      if (
+        !box ||
+        !editor.isEditable ||
+        point.x < box.left ||
+        point.x > box.right ||
+        point.y < box.top ||
+        point.y > box.bottom
+      ) {
+        return null;
+      }
+      const at =
+        editor.view.posAtCoords({ left: point.x, top: point.y })?.pos ?? editor.state.selection.to;
+      return (mentions) => {
+        if (mentions.length === 0) return;
+        // A point beside or below the text is between blocks, where the mentions would start a
+        // line of their own; they go at the end of the nearest line before it instead.
+        const { doc } = editor.state;
+        const pos = Selection.near(doc.resolve(Math.min(at, doc.content.size)), -1).from;
+        const before = doc.textBetween(Math.max(pos - 1, 0), pos, "\n", "\ufffc");
+        editor
+          .chain()
+          .focus()
+          .insertContentAt(pos, [
+            ...(before && !/\s/.test(before) ? [{ type: "text", text: " " }] : []),
+            ...mentions.flatMap((attrs) => [
+              { type: "mention", attrs },
+              { type: "text", text: " " },
+            ]),
+          ])
+          .run();
+      };
+    };
+    return () => {
+      dropMentions.current = null;
+    };
+  }, [editor, dropMentions]);
 
   // A draft changed from outside (history, a completed command, sending) loads into the editor.
   // Edits the user typed already match, so typing never reloads the document.
@@ -583,8 +679,26 @@ export default function Composer({
   const recalled = useRef<Recalled | null>(null);
 
   function complete(name: string) {
-    if (!editor) return;
-    // The menu only shows for a bare "/word" or "$word", so the whole draft is replaced by the pick.
+    if (!editor || !token) return;
+    // Later in the draft, the pick replaces just the word typed. /goal is only offered as the
+    // whole draft.
+    if (!token.whole) {
+      editor
+        .chain()
+        .focus()
+        .insertContentAt(
+          { from: token.from, to: token.to },
+          name.startsWith("$")
+            ? [
+                { type: "skillCommand", attrs: { name: name.slice(1) } },
+                { type: "text", text: " " },
+              ]
+            : `${name} `,
+        )
+        .run();
+      return;
+    }
+    // A pick for a draft that is a bare "/word" or "$word" replaces the whole draft.
     editor
       .chain()
       .focus()
@@ -605,7 +719,7 @@ export default function Composer({
   }
 
   function selectCommand(name: string) {
-    if (onSelectSlashCommand(name)) {
+    if (token?.whole && onSelectSlashCommand(name)) {
       editor?.chain().focus().clearContent().run();
       changed.current("");
       return;
@@ -674,7 +788,7 @@ export default function Composer({
         return true;
       }
       // Enter on a command typed in full sends it (a bare "/goal" shows the goal).
-      const typed = activeCommand !== undefined && value.toLowerCase() === activeCommand.name;
+      const typed = activeCommand !== undefined && slash === activeCommand.name;
       if (
         activeCommand &&
         (event.key === "Tab" || (event.key === "Enter" && !typed && !event.shiftKey))
@@ -725,6 +839,7 @@ export default function Composer({
         : "border border-border-strong bg-editor focus-within:border-accent";
   return (
     <div
+      ref={surfaceRef}
       className={`relative flex flex-col gap-2 rounded-[8px] pt-3.5 pr-3 pb-2.5 pl-3 ${surface}`}
       // The frame's padding and gaps belong to the text field: a click there keeps the caret in
       // the draft, so Ctrl+A still selects the draft.

@@ -96,12 +96,23 @@ fn frontmatter(text: &str) -> (Option<String>, Option<String>) {
     (value("name"), value("description"))
 }
 
-/// The skill a message starting with `$name` invokes, and the text after its name.
+/// The names of the `$name` words in a message, wherever they are, without trailing punctuation.
+pub fn mentioned(text: &str) -> impl Iterator<Item = &str> {
+    text.split_whitespace()
+        .filter_map(|word| word.strip_prefix('$'))
+        .map(|name| name.trim_end_matches(['.', ',', '!', '?', ';', ':', ')']))
+}
+
+/// The first skill a message names as `$name`, and the text it goes with: the text after the
+/// name when the message starts with it, or else the whole message as written.
 pub fn invoked<'a>(text: &'a str, skills: &[Skill]) -> Option<(Skill, &'a str)> {
-    let rest = text.trim_start().strip_prefix('$')?;
-    let (name, after) = rest.split_once(char::is_whitespace).unwrap_or((rest, ""));
-    let skill = skills.iter().find(|s| s.name == name)?.clone();
-    Some((skill, after.trim_start()))
+    let skill = mentioned(text).find_map(|name| skills.iter().find(|s| s.name == name))?.clone();
+    let rest = text.trim_start();
+    let after = rest
+        .strip_prefix('$')
+        .and_then(|r| r.strip_prefix(skill.name.as_str()))
+        .filter(|r| r.is_empty() || r.starts_with(char::is_whitespace));
+    Some((skill, after.unwrap_or(rest).trim()))
 }
 
 /// The message as the agent should get it when it invokes `skill`: Claude runs the skill as a
@@ -110,6 +121,8 @@ pub fn invoked<'a>(text: &'a str, skills: &[Skill]) -> Option<(Skill, &'a str)> 
 pub fn invocation(agent: AgentKind, skill: &Skill, rest: &str) -> String {
     let text = match agent {
         AgentKind::Claude => format!("/{PLUGIN}:{} {rest}", skill.name),
+        // A `$name` later in the message already mentions the skill.
+        AgentKind::Codex if mentioned(rest).any(|name| name == skill.name) => rest.to_string(),
         AgentKind::Codex => format!("${} {rest}", skill.name),
         AgentKind::OpenCode | AgentKind::Antigravity | AgentKind::Api => {
             format!("Use the {} skill: read {} and follow it.\n\n{rest}", skill.name, skill.path)

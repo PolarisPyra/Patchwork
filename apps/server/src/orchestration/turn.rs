@@ -147,7 +147,7 @@ impl Runner {
         let sends_context = context.is_some();
         let settings = server.store.settings();
         let skills = crate::skills::enabled(&settings);
-        // A message that starts with a skill's "$name" reaches the agent in the form it runs.
+        // A message that names a skill as "$name" anywhere reaches the agent in the form it runs.
         let text = match crate::skills::invoked(&text, &skills) {
             Some((skill, rest)) => crate::skills::invocation(agent, &skill, rest),
             None => text,

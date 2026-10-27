@@ -1002,7 +1002,7 @@ impl Server {
         if provider::is_goal_command(&text) {
             self.runner.retire_idle(&thread_id);
         }
-        // A message that starts with a skill's "$name" reaches the agent in the form it runs,
+        // A message that names a skill as "$name" anywhere reaches the agent in the form it runs,
         // as `start_turn` sends it too.
         let skills = skills::enabled(&self.store.settings());
         let steer_text = match (self.store.thread(&thread_id), skills::invoked(&text, &skills)) {

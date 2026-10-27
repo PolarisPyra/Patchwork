@@ -6,6 +6,7 @@ import { api } from "~/api";
 import { SYNTAX_CLASSES } from "~/components/canvas/syntaxClasses";
 import { ACTION_CLASS, CopyButton } from "~/components/chat/CopyButton";
 import { CHOICES_LANG } from "~/components/chat/choices";
+import { GOAL_CLASS, SKILL_CLASS } from "~/components/chat/composerExtensions";
 
 /** Links open in the system browser only with one of these protocols; others are shown as text. */
 const SAFE_LINK = /^(https?:|mailto:)/i;
@@ -103,16 +104,19 @@ const HIGHLIGHT_DELAY_MS = 150;
 export default memo(function Markdown({
   text,
   typed = false,
+  chips = false,
 }: {
   text: string;
   /** The user wrote the text, so an indented line is pasted text rather than a code block. */
   typed?: boolean;
+  /** Shows `/goal` and `$skill` as the chips the composer showed for them. */
+  chips?: boolean;
 }) {
   // Each block parses on its own, so a streaming reply re-parses only its last block.
   return (
     <div className="min-w-0 leading-[1.6] [word-break:break-word] selectable [&>:last-child]:mb-0 [&_p]:mt-0 [&_p]:mb-2">
       {splitBlocks(text).map((block, i) => (
-        <MarkdownBlock key={i} text={block} typed={typed} />
+        <MarkdownBlock key={i} text={block} typed={typed} chips={chips} />
       ))}
     </div>
   );
@@ -127,7 +131,13 @@ function remarkNoIndentedCode(this: { data: () => object }) {
 }
 const TYPED_REMARK_PLUGINS = [remarkGfm, remarkNoIndentedCode];
 
-type HastNode = { type: string; tagName?: string; value?: string; children?: HastNode[] };
+type HastNode = {
+  type: string;
+  tagName?: string;
+  value?: string;
+  properties?: Record<string, unknown>;
+  children?: HastNode[];
+};
 
 /**
  * A hard break renders as `<br>` followed by the newline that ended its line. Where paragraphs
@@ -147,6 +157,64 @@ function rehypeTrimBreaks() {
   return walk;
 }
 const REHYPE_PLUGINS = [rehypeTrimBreaks];
+
+/** A `$skill` anywhere in the text, after a space; skill names are lowercase words joined by
+ * hyphens, so `$HOME` or `$5` stays text. */
+const SKILL_TOKEN = /(^|\s)(\$[a-z][a-z0-9]*(?:[-_:][a-z0-9]+)*)(?=[\s.,!?;:)]|$)/g;
+
+function chip(label: string, className: string): HastNode {
+  return {
+    type: "element",
+    tagName: "span",
+    properties: { className },
+    children: [{ type: "text", value: label }],
+  };
+}
+
+/** A text node cut into text and chips: `/goal` when the text starts with it, and each `$skill`. */
+function chipPieces(value: string, start: boolean): HastNode[] {
+  const pieces: HastNode[] = [];
+  let last = 0;
+  const goal = start ? /^(\s*)\/goal(?=\s|$)/.exec(value) : null;
+  if (goal) {
+    if (goal[1]) pieces.push({ type: "text", value: goal[1] });
+    pieces.push(chip("/goal", GOAL_CLASS));
+    last = goal[0].length;
+  }
+  for (const match of value.matchAll(SKILL_TOKEN)) {
+    const at = match.index + match[1].length;
+    if (at < last) continue;
+    if (at > last) pieces.push({ type: "text", value: value.slice(last, at) });
+    pieces.push(chip(match[2], SKILL_CLASS));
+    last = at + match[2].length;
+  }
+  if (last < value.length) pieces.push({ type: "text", value: value.slice(last) });
+  return pieces;
+}
+
+/** Puts the chips into the text, outside code and links. */
+function rehypeChips() {
+  return (tree: HastNode) => {
+    let start = true;
+    const walk = (node: HastNode) => {
+      node.children = node.children?.flatMap((child) => {
+        if (child.type === "text") {
+          const pieces = chipPieces(child.value ?? "", start);
+          if (child.value?.trim()) start = false;
+          return pieces;
+        }
+        if (child.tagName === "code" || child.tagName === "pre" || child.tagName === "a") {
+          start = false;
+        } else {
+          walk(child);
+        }
+        return [child];
+      });
+    };
+    walk(tree);
+  };
+}
+const CHIP_REHYPE_PLUGINS = [rehypeTrimBreaks, rehypeChips];
 /** Blocks whose rendered output is kept, most recently used last. */
 const PARSED_LIMIT = 1000;
 const parsed = new Map<string, ReactElement>();
@@ -154,9 +222,9 @@ const parsed = new Map<string, ReactElement>();
 let lastParsed = "";
 
 /** A block's rendered output, kept so a row the chat list remounts while scrolling is not parsed again. */
-function parseBlock(text: string, typed: boolean): ReactElement {
-  // Typed text parses differently, so it is cached under its own key.
-  const key = typed ? `typed:${text}` : text;
+function parseBlock(text: string, typed: boolean, chips: boolean): ReactElement {
+  // Typed text and text with chips parse differently, so each is cached under its own key.
+  const key = `${chips ? "chips:" : ""}${typed ? "typed:" : ""}${text}`;
   let element = parsed.get(key);
   if (element) {
     parsed.delete(key);
@@ -165,7 +233,7 @@ function parseBlock(text: string, typed: boolean): ReactElement {
     element = ReactMarkdown({
       children: text,
       remarkPlugins: typed ? TYPED_REMARK_PLUGINS : REMARK_PLUGINS,
-      rehypePlugins: REHYPE_PLUGINS,
+      rehypePlugins: chips ? CHIP_REHYPE_PLUGINS : REHYPE_PLUGINS,
       components,
       skipHtml: true,
     });
@@ -180,11 +248,13 @@ function parseBlock(text: string, typed: boolean): ReactElement {
 const MarkdownBlock = memo(function MarkdownBlock({
   text,
   typed,
+  chips,
 }: {
   text: string;
   typed: boolean;
+  chips: boolean;
 }) {
-  return parseBlock(text, typed);
+  return parseBlock(text, typed, chips);
 });
 
 /** An opening or closing code fence: its marker, then the rest of the line. */

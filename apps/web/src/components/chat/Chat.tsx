@@ -34,7 +34,7 @@ import { ComposerStripPresence } from "~/components/chat/ComposerStrip";
 import BackgroundTasks from "~/components/chat/BackgroundTasks";
 import QueuedMessages from "~/components/chat/QueuedMessages";
 import LineageCard from "~/components/chat/LineageCard";
-import Composer, { type HistoryEntry } from "~/components/chat/Composer";
+import Composer, { type DropMentions, type HistoryEntry } from "~/components/chat/Composer";
 import Messages, { UsageLine } from "~/components/chat/Messages";
 import PendingApprovalBanner from "~/components/chat/PendingApprovalBanner";
 import TasksBadge from "~/components/chat/TasksBadge";
@@ -147,6 +147,7 @@ export default function Chat({
   // Files and images dropped into the composer, kept per thread like drafts.
   const [pending, setPending] = useState<Record<string, Attachment[]>>({});
   const [dropping, setDropping] = useState(false);
+  const dropMentions = useRef<DropMentions | null>(null);
   // Files the @ mention menu offers; they follow the project.
   const [files, setFiles] = useState<string[]>([]);
   const projectId = project?.id ?? null;
@@ -170,6 +171,9 @@ export default function Chat({
   }, [projectId]);
   // A project whose folder was moved or deleted cannot run its agent until it is pointed elsewhere.
   const projectPath = project?.path ?? null;
+  // Read by the drop listener, which is set up once.
+  const projectPathRef = useRef(projectPath);
+  projectPathRef.current = projectPath;
   const [folderMissing, setFolderMissing] = useState(false);
   useEffect(() => {
     setFolderMissing(false);
@@ -290,10 +294,24 @@ export default function Chat({
   // Adds files and folders, given as paths, to what the composer shows: the queued message being
   // edited, or else the draft. Drops and the composer's attach buttons both come through here; it
   // only reads refs and state setters, so it is safe to call from the drop listener set up once.
-  async function attach(paths: string[]) {
+  async function attach(paths: string[], mention?: ReturnType<DropMentions>) {
     const sentKey = keyRef.current;
     try {
-      const found = await Promise.all(paths.map((path) => api.attachmentForPath(path)));
+      let found = await Promise.all(paths.map((path) => api.attachmentForPath(path)));
+      // Files and folders dropped on the composer are written into the draft where they landed,
+      // as project-relative mentions when they are in the project. Images stay attachments.
+      if (mention) {
+        const root = projectPathRef.current;
+        mention(
+          found
+            .filter((a) => a.kind !== "image")
+            .map((a) => ({
+              id: a.path,
+              label: root && a.path.startsWith(`${root}/`) ? a.path.slice(root.length + 1) : a.path,
+            })),
+        );
+        found = found.filter((a) => a.kind === "image");
+      }
       const withFresh = (current: Attachment[]) => [
         ...current,
         ...found.filter((a) => !current.some((c) => c.path === a.path)),
@@ -313,14 +331,16 @@ export default function Chat({
   // Tauri hands dropped files over as paths (HTML drop events carry none), so drops are
   // listened for on the webview and kept only when they land on the chat.
   useEffect(() => {
+    // Positions are physical pixels; the chat's rect is in CSS pixels.
+    function cssPoint(position: { x: number; y: number }) {
+      const scale = window.devicePixelRatio;
+      return { x: position.x / scale, y: position.y / scale };
+    }
     function overChat(position: { x: number; y: number }) {
       const el = rootRef.current;
       if (!el) return false;
-      // Positions are physical pixels; the chat's rect is in CSS pixels.
-      const scale = window.devicePixelRatio;
       const r = el.getBoundingClientRect();
-      const x = position.x / scale;
-      const y = position.y / scale;
+      const { x, y } = cssPoint(position);
       return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
     }
     let cancelled = false;
@@ -331,7 +351,10 @@ export default function Chat({
           setDropping(false);
         } else if (payload.type === "drop") {
           setDropping(false);
-          if (overChat(payload.position)) void attach(payload.paths);
+          if (overChat(payload.position)) {
+            const mention = dropMentions.current?.(cssPoint(payload.position)) ?? undefined;
+            void attach(payload.paths, mention);
+          }
         } else {
           setDropping(overChat(payload.position));
         }
@@ -984,6 +1007,7 @@ export default function Chat({
             setComposerAttachments(composerAttachments.filter((_, j) => j !== i))
           }
           dropping={dropping}
+          dropMentions={dropMentions}
           history={history}
           files={files}
           deferFocus={showChoices || showQuestion}

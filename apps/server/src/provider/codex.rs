@@ -325,12 +325,12 @@ fn turn_start(spec: &TurnSpec, thread_id: &str, text: &str, resolved_model: Opti
 
 fn input_items(text: &str, attachments: &[Attachment], skills_dir: Option<&str>) -> Vec<Value> {
     let mut input = vec![json!({"type": "text", "text": text})];
-    // A message that invokes a skill starts with its "$name", which Codex takes with the skill.
-    if let Some(dir) = skills_dir
-        && let Some(name) = text.strip_prefix('$').and_then(|t| t.split_whitespace().next())
-        && let Some(skill) = crate::skills::list(std::path::Path::new(dir)).into_iter().find(|s| s.name == name)
-    {
-        input.push(json!({"type": "skill", "name": skill.name, "path": skill.path}));
+    // A message that invokes a skill names it as "$name", which Codex takes with the skill.
+    if let Some(dir) = skills_dir {
+        let skills = crate::skills::list(std::path::Path::new(dir));
+        if let Some(skill) = crate::skills::mentioned(text).find_map(|name| skills.iter().find(|s| s.name == name)) {
+            input.push(json!({"type": "skill", "name": skill.name, "path": skill.path}));
+        }
     }
     input.extend(
         attachments
