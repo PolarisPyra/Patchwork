@@ -172,13 +172,19 @@ pub fn suggest(target: &Target, root: &Path) -> Vec<String> {
     out
 }
 
-/// Adds the starting rules once: commands that only read run without asking, and commands that
-/// delete, escalate, or rewrite history always ask, whatever else allows them.
+/// Adds the starting rules once, so deleting one does not bring it back.
 pub fn seed(settings: &mut PermissionSettings) {
     if settings.seeded {
         return;
     }
     settings.seeded = true;
+    settings.everywhere.rules.extend(default_rules());
+}
+
+/// The starting rules for everywhere: commands that only read run without asking, and commands
+/// that delete, escalate, or rewrite history ask, whatever allow rule covers them. Settings →
+/// Permissions puts them back with Restore defaults.
+pub fn default_rules() -> Vec<PermissionRule> {
     let rule = |pattern: &str, effect: Effect| PermissionRule {
         id: format!("default:{pattern}"),
         kind: PermissionKind::Command,
@@ -208,9 +214,11 @@ pub fn seed(settings: &mut PermissionSettings) {
         "git show",
     ];
     let risky = ["sudo", "rm", "git push", "git reset", "git clean", "dd"];
-    let rules = &mut settings.everywhere.rules;
-    rules.extend(reads.iter().map(|p| rule(p, Effect::Allow)));
-    rules.extend(risky.iter().map(|p| rule(p, Effect::Ask)));
+    reads
+        .iter()
+        .map(|p| rule(p, Effect::Allow))
+        .chain(risky.iter().map(|p| rule(p, Effect::Ask)))
+        .collect()
 }
 
 /// One part of a request a rule has to cover.

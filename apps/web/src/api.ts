@@ -783,6 +783,8 @@ const pendingDetect: Partial<Record<AgentKind, Promise<AgentStatus>>> = {};
 export const api = {
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (settings: Settings) => invoke<void>("save_settings", { settings }),
+  /** The rules Settings → Permissions starts with, which Restore defaults puts back. */
+  defaultPermissionRules: () => invoke<PermissionRule[]>("default_permission_rules"),
   detectAgent: async (kind: AgentKind, forceRefresh = false): Promise<AgentStatus> => {
     if (!forceRefresh && agentStatusCache[kind]) {
       return agentStatusCache[kind]!;

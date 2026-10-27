@@ -130,3 +130,26 @@ export interface PermissionsContextValue {
 }
 
 export const PermissionsContext = createContext<PermissionsContextValue | null>(null);
+
+/** `rules` with the starting rules put back as they first were: deleted ones added again and
+ * changed ones reset. The user's own rules stay, and a starting rule is not added again where one
+ * of them already covers the same pattern. */
+export function withDefaultRules(
+  rules: PermissionRule[],
+  defaults: PermissionRule[],
+): PermissionRule[] {
+  const isDefault = (r: PermissionRule) => defaults.some((d) => d.id === r.id);
+  const own = rules.filter((r) => !isDefault(r));
+  const restored = defaults.filter(
+    (d) => !own.some((r) => r.kind === d.kind && r.pattern.trim() === d.pattern),
+  );
+  return [...restored, ...own];
+}
+
+/** Whether restoring the starting rules would change `rules`. */
+export function defaultsChanged(rules: PermissionRule[], defaults: PermissionRule[]): boolean {
+  const restored = withDefaultRules(rules, defaults);
+  const key = (r: PermissionRule) => JSON.stringify([r.id, r.kind, r.pattern, r.effect]);
+  const now = new Set(rules.map(key));
+  return restored.length !== rules.length || restored.some((r) => !now.has(key(r)));
+}

@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
+import { api } from "~/api";
 import { open } from "@tauri-apps/plugin-dialog";
-import { CaretDownIcon, DotsThreeIcon, FolderOpenIcon, XIcon } from "@phosphor-icons/react";
+import {
+  ArrowCounterClockwiseIcon,
+  CaretDownIcon,
+  DotsThreeIcon,
+  FolderOpenIcon,
+  XIcon,
+} from "@phosphor-icons/react";
 import type {
   Effect,
   PermissionKind,
@@ -14,11 +21,13 @@ import { CHIP_CLASS } from "~/components/chat/ModelPicker";
 import { Segmented, TextField, TokenRow } from "~/components/settings/SettingsDialog";
 import Dropdown from "~/components/workspace/Dropdown";
 import {
+  defaultsChanged,
   EFFECT_LABELS,
   PERMISSION_KINDS,
   sameScope,
   scopeName,
   scopeRules,
+  withDefaultRules,
   withScopeRules,
 } from "~/lib/permissions";
 
@@ -58,6 +67,12 @@ export default function PermissionsPane({
     change((p) => withScopeRules(p, scope, (s) => ({ ...s, rules: f(s.rules) })));
   const updateRule = (id: string, patch: Partial<PermissionRule>) =>
     changeRules((rules) => rules.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  // The starting rules, for Restore defaults; they live in the backend.
+  const [defaults, setDefaults] = useState<PermissionRule[] | null>(null);
+  useEffect(() => {
+    api.defaultPermissionRules().then(setDefaults, () => setDefaults(null));
+  }, []);
+  const restorable = everywhere && !!defaults && defaultsChanged(own.rules, defaults);
 
   const scopes: PermissionScope[] = [
     { type: "everywhere" },
@@ -110,6 +125,19 @@ export default function PermissionsPane({
             ))
           }
         </Dropdown>
+        {everywhere && (
+          <button
+            className="btn ml-auto"
+            disabled={!restorable}
+            title={restorable ? undefined : "The starting rules are all in place"}
+            onClick={() => {
+              if (defaults) changeRules((rules) => withDefaultRules(rules, defaults));
+            }}
+          >
+            <ArrowCounterClockwiseIcon size={14} />
+            Restore defaults
+          </button>
+        )}
       </div>
 
       <div className={HEADING}>Defaults</div>

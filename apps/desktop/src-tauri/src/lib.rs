@@ -34,6 +34,12 @@ fn get_settings(server: Srv) -> Settings {
     server.store.settings()
 }
 
+/// The rules Settings → Permissions starts with, which Restore defaults puts back.
+#[tauri::command]
+async fn default_permission_rules() -> Res<Vec<patchwork_server::types::PermissionRule>> {
+    Ok(patchwork_server::permissions::default_rules())
+}
+
 #[tauri::command]
 fn save_settings(app: AppHandle, server: Srv, settings: Settings) -> Res<()> {
     let logo = settings.logo.clone();
@@ -929,6 +935,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_settings,
+            default_permission_rules,
             save_settings,
             detect_agent,
             list_shells,
