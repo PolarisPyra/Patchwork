@@ -165,11 +165,14 @@ const clearSelectionOnBlank = (e: MouseEvent<HTMLElement>) => {
 };
 /** The collapsed-set key for a project or folder row. */
 const collapseKey = (t: Target) => (t.kind === "folder" ? `folder:${t.id}` : t.id);
-/** A tree row's fill: the selection colors while the tree is focused, a hover tint otherwise. */
+/** A tree row's fill: the selection colors while the tree is focused, a hover tint otherwise. Each
+ * row keeps 2px below it, so two filled rows next to each other do not run together. */
 const selectionFill = (selected: boolean) =>
-  selected
-    ? "bg-[var(--tree-inactive-selected,var(--bg-selected-muted))] hover:bg-[var(--tree-selected,var(--bg-selected))] group-focus-within/tree:bg-[var(--tree-selected,var(--bg-selected))] outline-transparent group-focus-within/tree:outline group-focus-within/tree:outline-1 group-focus-within/tree:-outline-offset-1 group-focus-within/tree:outline-[#3994bcb3]"
-    : "bg-transparent hover:bg-[var(--tree-hover,var(--bg-hover))]";
+  `mb-0.5 ${
+    selected
+      ? "bg-[var(--tree-inactive-selected,var(--bg-selected-muted))] hover:bg-[var(--tree-selected,var(--bg-selected))] group-focus-within/tree:bg-[var(--tree-selected,var(--bg-selected))] outline-transparent group-focus-within/tree:outline group-focus-within/tree:outline-1 group-focus-within/tree:-outline-offset-1 group-focus-within/tree:outline-[#3994bcb3]"
+      : "bg-transparent hover:bg-[var(--tree-hover,var(--bg-hover))]"
+  }`;
 
 /** The sidebar's width: dragged on its right edge, kept between launches, reset by a double-click. */
 const SIDEBAR_WIDTH = 300;
