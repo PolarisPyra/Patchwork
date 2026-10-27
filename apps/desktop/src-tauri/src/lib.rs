@@ -654,6 +654,26 @@ fn open_in_editor(server: Srv, project_id: String, path: String) -> Res<()> {
     workspace::open_in_editor(&server.project_root(&project_id)?, &path)
 }
 
+/// Shows a file selected in the system file manager. A relative path is taken from the project's
+/// root; an absolute one is used as is.
+#[tauri::command]
+async fn reveal_file(
+    app: AppHandle,
+    server: Srv<'_>,
+    project_id: Option<String>,
+    path: String,
+) -> Res<()> {
+    use tauri_plugin_opener::OpenerExt;
+    let path = match project_id {
+        Some(id) => std::path::Path::new(&server.project_root(&id)?).join(&path),
+        None => std::path::PathBuf::from(&path),
+    };
+    if !path.exists() {
+        return Err(format!("{} no longer exists", path.display()));
+    }
+    blocking(move || app.opener().reveal_item_in_dir(path).map_err(|e| e.to_string())).await?
+}
+
 /// Opens a web or mail link in the user's default app. On Linux `xdg-open` runs with the user's
 /// own environment, where the opener plugin would pass on the AppImage's.
 #[tauri::command]
@@ -1000,6 +1020,7 @@ pub fn run() {
             accept_file,
             revert_file,
             open_in_editor,
+            reveal_file,
             open_url,
             update_status,
             check_for_updates,

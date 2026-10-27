@@ -22,7 +22,7 @@ export const GOAL_CLASS =
   "rounded-[4px] bg-accent/30 px-1 font-[family-name:var(--font-mono)] text-[0.9em] leading-none text-fg [box-decoration-break:clone]";
 export const SKILL_CLASS =
   "rounded-[4px] bg-success/25 px-1 font-[family-name:var(--font-mono)] text-[0.9em] leading-none text-fg [box-decoration-break:clone]";
-const MENTION_CLASS = "rounded-[4px] bg-selected-muted px-1 text-accent-text";
+export const MENTION_CLASS = "rounded-[4px] bg-selected-muted px-1 text-accent-text";
 // The image chip has no line height of its own and is lowered a quarter em, so its middle is the
 // text's middle.
 const IMAGE_CLASS =

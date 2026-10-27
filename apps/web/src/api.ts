@@ -941,6 +941,9 @@ export const api = {
   revertFile: (projectId: string, path: string) => invoke<void>("revert_file", { projectId, path }),
   openInEditor: (projectId: string, path: string) =>
     invoke<void>("open_in_editor", { projectId, path }),
+  /** Shows a file selected in the file manager; a relative path is taken from the project's root. */
+  revealFile: (projectId: string | null, path: string) =>
+    invoke<void>("reveal_file", { projectId, path }),
   /** Watches the project's files in place of any other; `onProjectChanged` reports changes. */
   watchProject: (projectId: string) => invoke<void>("watch_project", { projectId }),
   /** Opens a web or mail link in the default browser or mail app. */

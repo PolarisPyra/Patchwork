@@ -7,7 +7,7 @@ import { highlightBlock } from "~/components/canvas/highlight";
 import { SYNTAX_CLASSES } from "~/components/canvas/syntaxClasses";
 import { ACTION_CLASS, CopyButton } from "~/components/chat/CopyButton";
 import { CHOICES_LANG } from "~/components/chat/choices";
-import { GOAL_CLASS, SKILL_CLASS } from "~/components/chat/composerExtensions";
+import { GOAL_CLASS, MENTION_CLASS, SKILL_CLASS } from "~/components/chat/composerExtensions";
 
 /** Links open in the system browser only with one of these protocols; others are shown as text. */
 const SAFE_LINK = /^(https?:|mailto:)/i;
@@ -110,7 +110,7 @@ export default memo(function Markdown({
   text: string;
   /** The user wrote the text, so an indented line is pasted text rather than a code block. */
   typed?: boolean;
-  /** Shows `/goal` and `$skill` as the chips the composer showed for them. */
+  /** Shows `/goal`, `$skill` and `@path` as the chips the composer showed for them. */
   chips?: boolean;
 }) {
   // Each block parses on its own, so a streaming reply re-parses only its last block.
@@ -163,16 +163,25 @@ const REHYPE_PLUGINS = [rehypeTrimBreaks];
  * hyphens, so `$HOME` or `$5` stays text. */
 const SKILL_TOKEN = /(^|\s)(\$[a-z][a-z0-9]*(?:[-_:][a-z0-9]+)*)(?=[\s.,!?;:)]|$)/g;
 
-function chip(label: string, className: string): HastNode {
+/** A file mention, `@path` after a space, as the composer writes it; punctuation after it stays
+ * text. Only a path with a slash or a dot counts, so `@name` stays text. */
+const MENTION_TOKEN = /(^|\s)(@\S*[^\s.,!?;:)])/g;
+
+function chip(
+  label: string,
+  className: string,
+  properties: Record<string, unknown> = {},
+): HastNode {
   return {
     type: "element",
     tagName: "span",
-    properties: { className },
+    properties: { className, ...properties },
     children: [{ type: "text", value: label }],
   };
 }
 
-/** A text node cut into text and chips: `/goal` when the text starts with it, and each `$skill`. */
+/** A text node cut into text and chips: `/goal` when the text starts with it, each `$skill`, and
+ * each `@path`, which carries its path for the click that opens it. */
 function chipPieces(value: string, start: boolean): HastNode[] {
   const pieces: HastNode[] = [];
   let last = 0;
@@ -182,11 +191,26 @@ function chipPieces(value: string, start: boolean): HastNode[] {
     pieces.push(chip("/goal", GOAL_CLASS));
     last = goal[0].length;
   }
-  for (const match of value.matchAll(SKILL_TOKEN)) {
+  const tokens = [
+    ...[...value.matchAll(SKILL_TOKEN)].map((match) => ({
+      match,
+      node: chip(match[2], SKILL_CLASS),
+    })),
+    ...[...value.matchAll(MENTION_TOKEN)]
+      .filter((match) => /[./]/.test(match[2].slice(1)))
+      .map((match) => ({
+        match,
+        node: chip(match[2], MENTION_CLASS, {
+          dataMention: match[2].slice(1),
+          title: match[2].slice(1),
+        }),
+      })),
+  ].sort((a, b) => a.match.index - b.match.index);
+  for (const { match, node } of tokens) {
     const at = match.index + match[1].length;
     if (at < last) continue;
     if (at > last) pieces.push({ type: "text", value: value.slice(last, at) });
-    pieces.push(chip(match[2], SKILL_CLASS));
+    pieces.push(node);
     last = at + match[2].length;
   }
   if (last < value.length) pieces.push({ type: "text", value: value.slice(last) });

@@ -1,5 +1,6 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
+import { api } from "~/api";
 import {
   ArrowClockwiseIcon,
   ArrowCounterClockwiseIcon,
@@ -116,6 +117,13 @@ export default function Messages({
     void listRef.current?.scrollToEnd();
   }, [lastUserMessageId, replyId]);
 
+  // A mention of a project file is relative to its root; one of a file outside it is absolute.
+  const projectId = thread.projectId;
+  const revealMention = useCallback(
+    (path: string) => void api.revealFile(projectId, path).catch(() => {}),
+    [projectId],
+  );
+
   // Rows re-render when these change, since the list keeps them memoized.
   const rowData = useMemo(() => ({ tokens, checkpoints, busy }), [tokens, checkpoints, busy]);
 
@@ -168,6 +176,7 @@ export default function Messages({
                   <UserMessage
                     message={item}
                     onRestore={!busy && checkpoints.has(item.id) ? onRestore : undefined}
+                    onReveal={revealMention}
                   />
                 ) : (
                   <AssistantMessage
@@ -212,10 +221,13 @@ const expandedMessages = new Set<string>();
 const UserMessage = memo(function UserMessage({
   message,
   onRestore,
+  onReveal,
 }: {
   message: Message;
   /** Set when the message's turn can be undone. */
   onRestore?: (message: Message) => void;
+  /** Shows the file an `@path` mention refers to in the file manager. */
+  onReveal: (path: string) => void;
 }) {
   // Images written into the text show above it with the other attachments.
   const full = useMemo(() => withoutImageMarkdown(message.text), [message.text]);
@@ -264,7 +276,14 @@ const UserMessage = memo(function UserMessage({
       {full && (
         // Line breaks the user typed are kept inside paragraphs only; between blocks they would show
         // as blank lines.
-        <div className="rounded-[12px] bg-[color-mix(in_srgb,var(--text)_10%,var(--bg-editor))] px-4 py-2.5 leading-[1.55] text-fg [word-break:break-word] selectable [&_h3]:mt-0 [&_h3]:mb-0 [&_p]:whitespace-pre-wrap">
+        <div
+          className="rounded-[12px] bg-[color-mix(in_srgb,var(--text)_10%,var(--bg-editor))] px-4 py-2.5 leading-[1.55] text-fg [word-break:break-word] selectable [&_h3]:mt-0 [&_h3]:mb-0 [&_p]:whitespace-pre-wrap [&_[data-mention]]:cursor-pointer [&_[data-mention]]:hover:underline"
+          onClick={(event) => {
+            const path = (event.target as Element).closest<HTMLElement>("[data-mention]")?.dataset
+              .mention;
+            if (path) onReveal(path);
+          }}
+        >
           {/* A goal or skill shows the chip the composer showed for it, in line with the text. */}
           <Markdown text={text} typed chips />
         </div>
