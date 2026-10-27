@@ -169,7 +169,9 @@ Most of each build is compiling the Rust dependencies. A tag's run can restore c
 
 - A push to `main` that changes `Cargo.lock`, a `Cargo.toml`, or the workflow builds Linux and
   Windows without publishing anything, and saves their caches. The release commit changes no Cargo
-  file, so its push to `main` starts no run; only its tag does.
+  file, so its push to `main` starts no run; only its tag does. GitHub matches the paths against
+  every commit in a push, so the script pushes commits that are not on `origin` yet on their own
+  first; one of them that changes a Cargo file starts its cache build under its own name.
 - Tag runs restore those caches and save none.
 - The Rust toolchain is pinned (`RUST_TOOLCHAIN` in the workflow), because a cache is only reused by
   the same compiler. Raising it rebuilds the caches on that push.

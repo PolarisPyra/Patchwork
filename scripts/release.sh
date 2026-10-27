@@ -112,6 +112,14 @@ cut_release() {
   scripts/changelog.sh check "$notes" "$version"
 
   step "Tagging $tag"
+  # Commits not on origin yet go up on their own first. GitHub matches the workflow's paths against
+  # every commit in a push, so one that changes a Cargo file would otherwise make the release's push
+  # to main start a run of its own. The release commit changes none, so its push starts only the
+  # tag's run. A pushed commit that does change a Cargo file starts its cache build under its own
+  # name, as any push of it would.
+  if [[ -n "$(git rev-list origin/main..HEAD)" ]]; then
+    git push origin main
+  fi
   set_version "$version"
   scripts/changelog.sh insert "$notes" "$version"
   git add CHANGELOG.md package.json apps/web/package.json apps/desktop/package.json \
