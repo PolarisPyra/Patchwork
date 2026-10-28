@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 
 use crate::types::{
     AccessMode, AgentEvent, AgentKind, AgentStatus, Attachment, AttachmentKind, ModelOption,
-    ProviderSlashCommand, Question, QuestionOption, TokenUsage,
+    PlanStep, ProviderSlashCommand, Question, QuestionOption, TokenUsage,
 };
 use crate::permissions::Target;
 use crate::types::PermissionKind;
@@ -299,7 +299,28 @@ fn tool(part: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
     if !failed && matches!(name, "write" | "edit" | "patch") {
         out.extend(path.map(|p| file_touched(message_id, relative(root, p))));
     }
+    if !failed {
+        out.extend(todo_plan(name, input, message_id));
+    }
     out
+}
+
+/// The task list a `todowrite` call keeps, as the message's plan. Its todos have the same
+/// `content` and `status` as Claude's `TodoWrite`.
+fn todo_plan(name: &str, input: &Value, message_id: &str) -> Option<Parsed> {
+    if name != "todowrite" {
+        return None;
+    }
+    let steps = input["todos"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|todo| PlanStep {
+            text: todo["content"].as_str().unwrap_or_default().into(),
+            status: super::claude::claude_step_status(todo["status"].as_str()),
+        })
+        .collect();
+    Some(Parsed::Event(AgentEvent::PlanUpdated { message_id: message_id.into(), steps }))
 }
 
 /// OpenCode's tool names, shown the way the other agents name theirs.
@@ -569,6 +590,9 @@ fn parse_serve(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
             if !failed && writes {
                 out.extend(input_path(&data["input"]).map(|p| file_touched(message_id, relative(spec.root, p))));
             }
+            if !failed {
+                out.extend(data["name"].as_str().and_then(|name| todo_plan(name, &data["input"], message_id)));
+            }
             out
         }
         Some("session.step.ended") => {
@@ -740,5 +764,58 @@ fn permission_title(action: &str) -> &str {
         "external_directory" => "Work outside the folder",
         "webfetch" | "websearch" => "Use the web",
         other => other,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::StepStatus;
+
+    fn todowrite(status: &str) -> Value {
+        json!({
+            "callID": "call-1",
+            "tool": "todowrite",
+            "state": {
+                "status": status,
+                "input": { "todos": [
+                    { "content": "Read the code", "status": "completed" },
+                    { "content": "Fix the bug", "status": "in_progress" },
+                    { "content": "Run the tests", "status": "pending" }
+                ] },
+                "output": "",
+                "error": "no"
+            }
+        })
+    }
+
+    #[test]
+    fn a_todowrite_call_reports_its_plan() {
+        let out = tool(&todowrite("completed"), "/project", "m1");
+        let Some(Parsed::Event(AgentEvent::PlanUpdated { message_id, steps })) = out.last() else {
+            panic!("expected a plan, got {} events", out.len());
+        };
+        assert_eq!(message_id, "m1");
+        let got: Vec<(&str, StepStatus)> =
+            steps.iter().map(|step| (step.text.as_str(), step.status)).collect();
+        assert_eq!(
+            got,
+            [
+                ("Read the code", StepStatus::Done),
+                ("Fix the bug", StepStatus::Running),
+                ("Run the tests", StepStatus::Pending),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_failed_todowrite_call_reports_no_plan() {
+        let out = tool(&todowrite("error"), "/project", "m1");
+        assert!(!out.is_empty(), "the call itself is still shown");
+        assert!(
+            !out.iter()
+                .any(|parsed| matches!(parsed, Parsed::Event(AgentEvent::PlanUpdated { .. }))),
+            "a failed call does not replace the plan"
+        );
     }
 }

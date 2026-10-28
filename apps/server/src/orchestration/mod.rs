@@ -85,8 +85,35 @@ pub fn is_upkeep(text: &str) -> bool {
             .any(|agent| text == goal::clear_command(agent))
 }
 
-/// Which shells are installed and which one runs the agent's commands, for agents that take
-/// instructions at launch.
+/// What an agent that takes instructions at launch is told: to keep its task list with its own
+/// tool, so the Tasks badge fills in, then which shells are installed and which one runs its
+/// commands.
+fn agent_instructions(settings: &Settings, agent: AgentKind) -> String {
+    [checklist_instructions(agent), Some(shell_instructions(settings))]
+        .into_iter()
+        .flatten()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+/// The line that tells `agent` to keep a checklist with its own tool. Antigravity has no such
+/// tool, and Patchwork's own agent is told in its own guidance.
+fn checklist_instructions(agent: AgentKind) -> Option<String> {
+    let tool = match agent {
+        AgentKind::Claude => "TodoWrite",
+        AgentKind::Codex => "update_plan",
+        AgentKind::OpenCode => "todowrite",
+        AgentKind::Antigravity | AgentKind::Api => return None,
+    };
+    Some(format!(
+        "For any task with more than one step, keep a checklist with your {tool} tool: add every \
+         step before you start, mark one in progress at a time, and mark each done as soon as it \
+         is finished."
+    ))
+}
+
+/// Which shells are installed and which one runs the agent's commands.
 fn shell_instructions(settings: &Settings) -> String {
     let mut prompt = String::new();
     let installed = crate::available_shells();
@@ -432,5 +459,38 @@ impl Runner {
             },
         );
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn each_agent_is_told_to_keep_a_checklist_with_its_own_tool() {
+        let settings = Settings::default();
+        for (agent, tool) in [
+            (AgentKind::Claude, "TodoWrite"),
+            (AgentKind::Codex, "update_plan"),
+            (AgentKind::OpenCode, "todowrite"),
+        ] {
+            let text = agent_instructions(&settings, agent);
+            assert!(text.contains(&format!("your {tool} tool")), "{agent:?}: {text}");
+        }
+        for agent in [AgentKind::Antigravity, AgentKind::Api] {
+            assert_eq!(checklist_instructions(agent), None, "{agent:?}");
+            let text = agent_instructions(&settings, agent);
+            assert!(!text.contains("checklist"), "{agent:?}: {text}");
+        }
+    }
+
+    #[test]
+    fn the_instructions_carry_the_checklist_and_the_shell_line() {
+        let shell = shell_instructions(&Settings::default());
+        let text = agent_instructions(&Settings::default(), AgentKind::Claude);
+        assert!(text.starts_with("For any task with more than one step"));
+        assert!(text.ends_with(&shell), "{text}");
+        assert!(!text.contains("\n\n\n"), "no double blank line: {text:?}");
+        assert!(!text.ends_with('\n'));
     }
 }

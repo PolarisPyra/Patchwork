@@ -177,7 +177,8 @@ impl Runner {
             AgentKind::Codex => codex::developer_instructions(&settings),
             // Patchwork's own agent has no skill loader, so it is told where the skills are.
             AgentKind::Api => {
-                let parts = [codex::developer_instructions(&settings), crate::skills::instructions(&skills)];
+                let shell = Some(super::agent_instructions(&settings, agent)).filter(|t| !t.is_empty());
+                let parts = [shell, crate::skills::instructions(&skills)];
                 Some(parts.into_iter().flatten().collect::<Vec<_>>().join("\n\n")).filter(|t| !t.is_empty())
             }
             AgentKind::Claude | AgentKind::Antigravity | AgentKind::OpenCode => None,

@@ -381,7 +381,7 @@ fn claude_questions(input: &Value) -> Vec<Question> {
         .collect()
 }
 
-fn claude_step_status(status: Option<&str>) -> StepStatus {
+pub(super) fn claude_step_status(status: Option<&str>) -> StepStatus {
     match status {
         Some("in_progress") => StepStatus::Running,
         Some("completed") => StepStatus::Done,
