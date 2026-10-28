@@ -82,10 +82,9 @@ one without a group, and one that breaks the style rules, so the author fixes it
 that only touches `.github/`, `scripts/`, `docs/`, or `*.md` is internal and needs none.
 `pnpm install` turns the hook on (`git config core.hooksPath scripts/hooks`).
 
-The `pre-push` hook in the same folder stops a push that was not asked for. Pushing is the user's
-call. To push on purpose, set `PATCHWORK_PUSH=1` or pass `--no-verify`; a push from
-`scripts/release.sh` sets `PATCHWORK_PUSH=1` itself, so a release still pushes in one step once the
-user has agreed to it.
+No hook stops a push. Pushing is the user's call, and only their asking for it is what pushes:
+an agent commits and says the work is unpushed. `scripts/release.sh` pushes the release and its tag
+in one step, because a release was asked for.
 
 **2. At release.** `scripts/release.sh` writes the release's section from the `Changelog:`
 paragraphs of the app commits since the last tag, each under its group, each entry once. A

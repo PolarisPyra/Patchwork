@@ -6,10 +6,8 @@
 #   scripts/release.sh X.Y.Z            Cut a release, with no questions asked: check, write the
 #                                       notes from the commits' Changelog: paragraphs, set the
 #                                       version, add the notes to CHANGELOG.md, commit, tag, and
-#                                       push, then print the build's link and end. It pushes on
-#                                       purpose, so it turns off the pre-push hook that otherwise
-#                                       stops a push nobody asked for; run it only when a release
-#                                       was asked for.
+#                                       push, then print the build's link and end. Run it only
+#                                       when a release was asked for.
 #   scripts/release.sh watch X.Y.Z      Follow X.Y.Z's build to the end, then check that
 #                                       latest.json names it.
 #   scripts/release.sh version X.Y.Z    Write a version into every file that names it.
@@ -115,12 +113,11 @@ cut_release() {
   scripts/changelog.sh check "$notes" "$version"
 
   step "Tagging $tag"
-  # This script exists to release, so its pushes are intended: it lifts the pre-push guard that stops
-  # a push nobody asked for, for these two commands only. Commits not on origin yet go up on their
-  # own first: GitHub matches the Release workflow's paths against every commit in a push, so one
-  # that changes a Cargo file would otherwise start a cache build beside the tag's run.
+  # Commits not on origin yet go up on their own first: GitHub matches the Release workflow's paths
+  # against every commit in a push, so one that changes a Cargo file would otherwise start a cache
+  # build beside the tag's run.
   if [[ -n "$(git rev-list origin/main..HEAD)" ]]; then
-    PATCHWORK_PUSH=1 git push origin main
+    git push origin main
   fi
   set_version "$version"
   scripts/changelog.sh insert "$notes" "$version"
@@ -128,7 +125,7 @@ cut_release() {
     apps/desktop/src-tauri/tauri.conf.json
   git commit -m "Release $tag"
   git tag -a "$tag" -m "Patchwork $version"
-  PATCHWORK_PUSH=1 git push origin main "$tag"
+  git push origin main "$tag"
   rm -f "$notes"
 
   # The build runs on GitHub from here; `scripts/release.sh watch` follows it.

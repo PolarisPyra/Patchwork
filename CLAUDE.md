@@ -89,7 +89,7 @@ Measure lag in the real dev window:
 
 ## Git
 
-- Don't commit until I've reviewed the change and say so. Don't push unless I ask.
+- Don't commit until I've reviewed the change and say so. Don't push unless I ask, every time: a commit I asked for is not a push, and no hook or flag will stop you, so say the work is on your machine and unpushed and leave it there.
 - Commit subjects are short, sentence-case, and imperative, with no prefix. Describe the user-visible change, for example "Nudge the header project dropdown 2px left".
 - `CHANGELOG.md` is user-facing: the app shows it in Settings → Updates and it is the text of each release. Every commit that changes the app needs a paragraph in its message starting with `Changelog:` and its group (Added, Changed, Fixed, Removed, or Security), written for users by the rules in `docs/changelog-style.md`: what they see or can do now, where, and what is different, for example "Changelog: Changed: Every loading indicator now uses the steady spinner from the thread list: plan steps, background tasks, … The old one rotated and looked like it shook." A change users can't notice gets `Changelog: none`. The `commit-msg` hook enforces both; if it turns a commit down, fix the message rather than bypassing the hook. At release, these paragraphs are the release's notes, word for word (see `docs/release.md`), so a follow-up to a change in the same release gets `Changelog: none`.
 - To fix notes that were already released, edit that release's section of `CHANGELOG.md`, commit it, and run `scripts/release.sh notes <version>`. Never rewrite pushed history for it.
