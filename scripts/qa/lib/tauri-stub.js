@@ -1,6 +1,6 @@
 // Stands in for the Rust backend so the workspace renders without it: default settings,
 // and two sample chats, one idle and one streaming, so task rows can be checked.
-const settings = { onboarded: true, pluginsDir: null, disabledPlugins: [], computerUse: true, skillsDir: null, disabledSkills: ["review-ui"], theme: "dark", agents: ["claude"], agentPaths: {}, integrations: { github: false, terminal: false, figma: false, browser: false }, projects: [{ id: "qa-project", name: "QA", path: "/tmp/qa" }, { id: "qa-other", name: "Other", path: "/tmp/other" }], activeProjectId: "qa-project", shell: null, notifications: { goalComplete: true, taskComplete: true }, updates: { checkEveryMinutes: 10 }, tokens: { showUsage: false, warnAbove: 150000, askBeforeResume: true, defaultModels: {} }, logging: { app: "info", window: "info", agents: "info", imports: "info" }, permissions: { everywhere: { defaults: {}, rules: [] }, chats: { defaults: {}, rules: [] }, projects: {}, seeded: true } };
+const settings = { onboarded: true, pluginsDir: null, disabledPlugins: [], computerUse: true, skillsDir: null, disabledSkills: ["review-ui"], theme: "dark", agents: ["claude"], agentPaths: {}, integrations: { github: false, terminal: false, figma: false, browser: false }, projects: [{ id: "qa-project", name: "QA", path: "/tmp/qa" }, { id: "qa-other", name: "Other", path: "/tmp/other" }], activeProjectId: "qa-project", shell: null, notifications: { goalComplete: true, taskComplete: true }, updates: { checkEveryMinutes: 10 }, tokens: { showUsage: false, warnAbove: 150000, askBeforeResume: true, defaultModels: {} }, terminal: { shellArgs: null, env: {}, inheritEnv: true, cwd: null, detectLocale: "auto", fontFamily: null, fontSize: 14, lineHeight: 1.1, letterSpacing: 0, fontWeight: "normal", fontWeightBold: "bold", cursorStyle: "block", cursorBlinking: false, cursorWidth: 1, scrollback: 1000, copyOnSelection: false, rightClickBehavior: "default", altClickMovesCursor: true, macOptionIsMeta: false, drawBoldTextInBrightColors: true, minimumContrastRatio: 4.5, smoothScrolling: false, mouseWheelScrollSensitivity: 1, fastScrollSensitivity: 5 }, logging: { app: "info", window: "info", agents: "info", imports: "info" }, permissions: { everywhere: { defaults: {}, rules: [] }, chats: { defaults: {}, rules: [] }, projects: {}, seeded: true } };
 const now = Date.now();
 const message = (status, createdAt, files = []) => ({ id: `m${createdAt}`, role: "assistant", text: "Working on it", parts: [], createdAt, finishedAt: null, status, tools: [], plan: [], files, approvals: [], attachments: [], background: [], error: null, steer: false, queued: false, usage: null });
 const chat = (id, title, messages, createdAt) => ({ id, projectId: "qa-project", title, agent: "claude", model: null, accessMode: "full-access", effort: null, sessionId: null, createdAt, messages, goal: null, folderId: null, archivedAt: null });
@@ -10,23 +10,34 @@ const threads = [
 ];
 const folders = [{ id: "qa-folder", projectId: "qa-project", name: "Old" }];
 const responses = { get_settings: settings, update_status: { currentVersion: "0.8.0", canInstall: true, state: { status: "idle" } }, list_threads: threads, list_folders: folders, get_last_thread: null, save_pasted_image: { kind: "image", path: "/tmp/pasted-image.png", name: "Pasted image.png" }, "plugin:app|version": "0.4.8", save_pasted_text: { kind: "file", path: "/tmp/pasted-text.txt", name: "Pasted text.txt" }, get_collapsed: [], list_api_providers: [{ id: "deepseek", name: "DeepSeek", preset: "deepseek", baseUrl: "https://api.deepseek.com", enabled: true, models: [{ id: "deepseek-chat", name: null }, { id: "deepseek-reasoner", name: null }], headers: [], keyEnv: null, keyStore: "keychain", logo: null, hasKey: true }], fetch_api_models: [{ id: "deepseek-chat", name: null }, { id: "deepseek-reasoner", name: null }], git_changes: [], is_folder: true, list_shells: { shells: ["/usr/bin/bash", "/usr/bin/fish", "/usr/bin/zsh"], default: "/usr/bin/zsh" }, list_skills: { dir: "/home/qa/.config/patchwork/skills", skills: [{ name: "release-notes", description: "Draft release notes from the commits since the last tag", path: "/home/qa/.config/patchwork/skills/release-notes/SKILL.md", enabled: true }, { name: "review-ui", description: "Measure and screenshot UI changes before and after", path: "/home/qa/.config/patchwork/skills/review-ui/SKILL.md", enabled: false }] } };
-// What the new panes read: a starter plugin, a scheduled task, and the Codex CLI.
+// What the new panes read: two plugins, a scheduled task, and the Codex CLI.
 responses.list_plugins = [
   {
-    id: "patchwork-review",
-    name: "Patchwork Review",
-    version: "1.0.0",
-    description: "Skills for reviewing a change before it lands, and for writing up work on a schedule.",
-    path: "/home/qa/.config/patchwork/plugins/patchwork-review",
-    skills: [
-      { name: "review-diff", description: "Review the uncommitted change in this project before it is kept.", path: "/home/qa/.config/patchwork/plugins/patchwork-review/skills/review-diff/SKILL.md", enabled: true },
-      { name: "scheduled-report", description: "Write the standing report a scheduled task asks for.", path: "/home/qa/.config/patchwork/plugins/patchwork-review/skills/scheduled-report/SKILL.md", enabled: true },
-    ],
-    mcpServers: [{ name: "review-tools", command: "./run", args: [] }],
+    id: "patchwork",
+    name: "Patchwork",
+    version: null,
+    description: "Patchwork's own hooks, in hooks.json beside this file.",
+    path: "/home/qa/.config/patchwork/plugins/patchwork",
+    hooks: [{ event: "stop", handler: { type: "command", command: "printf '%s %s\\n' \"$PATCHWORK_AGENT\" \"$PATCHWORK_STATUS\" >> .patchwork-turns.log", timeoutSecs: 10 } }],
+    apps: [],
     enabled: true,
-    bundled: true,
+  },
+  {
+    id: "design-sync",
+    name: "Design Sync",
+    version: "0.3.0",
+    description: null,
+    path: "/home/qa/.config/patchwork/plugins/design-sync",
+    hooks: [
+      { event: "userPromptSubmit", handler: { type: "mcpTool", server: "figma", tool: "get_selection" } },
+      { event: "stop", handler: { type: "prompt" } },
+      { event: "sessionEnd", handler: { type: "unsupported", kind: "webhook" } },
+    ],
+    apps: [{ name: "figma", id: "asdk_figma", required: true }, { name: "linear", id: "asdk_linear", required: false }],
+    enabled: false,
   },
 ];
+const run = (ago, outcome, detail = null) => ({ at: now - ago, threadId: outcome === "started" ? `t${ago}` : null, outcome, detail });
 responses.list_scheduled_tasks = [
   {
     id: "qa-task",
@@ -38,11 +49,40 @@ responses.list_scheduled_tasks = [
     model: null,
     accessMode: "supervised",
     enabled: true,
-    lastRunAt: null,
+    lastRunAt: now - 3_600_000,
     nextRunAt: now + 86_400_000,
     createdAt: now - 86_400_000,
+    recentRuns: [run(3_600_000, "started"), run(90_000_000, "failed", "Claude Code is not installed"), run(400_000_000, "skipped", "Its time went by more than a day ago"), run(500_000_000, "started")],
+  },
+  {
+    id: "qa-task-new",
+    name: "Dependency check",
+    prompt: "List outdated dependencies.",
+    schedule: { type: "daily", time: "07:30" },
+    projectId: null,
+    agent: "claude",
+    model: null,
+    accessMode: "supervised",
+    enabled: true,
+    lastRunAt: null,
+    nextRunAt: now + 43_200_000,
+    createdAt: now - 3_600_000,
+    recentRuns: [],
   },
 ];
+// The panel's terminal starts a shell; nothing runs, but the panel renders as it would.
+responses.terminal_spawn = { id: 1, name: "zsh", cwd: "/tmp/qa" };
+responses.terminal_write = null;
+responses.terminal_resize = null;
+responses.terminal_kill = null;
+// What the Screen pane shows: a drawn stand-in for a 2560×1440 screen, captured at half size.
+responses.computer_screenshot = {
+  dataUrl: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><rect width="1280" height="720" fill="#2b3a55"/><rect x="80" y="60" width="760" height="480" rx="8" fill="#f4f4f5"/><rect x="80" y="60" width="760" height="36" rx="8" fill="#d4d4d8"/><text x="110" y="160" font-family="sans-serif" font-size="40" fill="#18181b">A window on the screen</text></svg>'),
+  width: 1280,
+  height: 720,
+  screenWidth: 2560,
+  screenHeight: 1440,
+};
 responses.codex_info = {
   path: "/usr/lib/chatgpt/resources/codex",
   version: "codex-cli 0.163.0-alpha.11.1",

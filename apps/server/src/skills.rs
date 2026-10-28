@@ -65,16 +65,9 @@ pub fn list(dir: &Path) -> Vec<Skill> {
     skills
 }
 
-/// The skills in the skills folder and the enabled plugins' own, each marked enabled unless
-/// switched off in Settings.
+/// The skills in the skills folder, each marked enabled unless switched off in Settings.
 pub fn all(settings: &Settings) -> Vec<Skill> {
     let mut skills = list(&dir(settings));
-    // A plugin's skill loses to the skills folder's when both use a name.
-    for skill in crate::plugins::skills(settings) {
-        if !skills.iter().any(|own| own.name == skill.name) {
-            skills.push(skill);
-        }
-    }
     for skill in &mut skills {
         skill.enabled = !settings.disabled_skills.contains(&skill.name);
     }
@@ -213,7 +206,7 @@ const AGENT_SKILLS: [&str; 8] = [
 /// Every folder agents read skills from, which they may read without asking: Patchwork's skills
 /// folder, the links to its enabled skills, and the agents' own skills folders.
 pub fn folders(settings: &Settings) -> Vec<PathBuf> {
-    let mut out = vec![dir(settings), crate::plugins::dir(settings)];
+    let mut out = vec![dir(settings)];
     out.extend(CONFIG_DIR.get().map(|config| config.join("claude-plugin")));
     if let Some(home) = crate::provider::home_dir() {
         out.extend(AGENT_SKILLS.iter().map(|folder| home.join(folder)));

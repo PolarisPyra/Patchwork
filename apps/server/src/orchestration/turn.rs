@@ -212,6 +212,7 @@ impl Runner {
         // Agents often edit files through the shell, so changes are also found by
         // comparing git state before and after the turn.
         let attribution = Attribution::shared(workspace::git_changes(&root).unwrap_or_default());
+        plugin_hooks(server, "userPromptSubmit", &thread_id, &root, agent, None);
         if let Some(message_id) = &checkpoint {
             checkpoint::capture(&root, &thread_id, message_id);
         }
@@ -676,6 +677,17 @@ pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
             error,
         });
     }
+    // On a thread of its own, so a slow hook does not hold up the next turn.
+    {
+        let (server, thread_id, root) =
+            (turn.server.clone(), turn.thread_id.clone(), turn.root.clone());
+        let (agent, ended) = (turn.agent, if cancelled { "interrupt" } else { "stop" });
+        std::thread::spawn(move || {
+            for event in [ended, "sessionEnd"] {
+                plugin_hooks(&server, event, &thread_id, &root, agent, Some(status));
+            }
+        });
+    }
 
     // The agent drops the goal in a turn of its own; unanswered steers wait for that
     // system turn instead, and queued messages for the end of it.
@@ -741,6 +753,32 @@ pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
         // Queued messages go once the turn has finished; after Stop or an error they wait for
         // the user to send them.
         turn.server.send_queued_later(&turn.thread_id);
+    }
+}
+
+/// Runs the enabled plugins' hooks for `event` and logs the ones that failed.
+fn plugin_hooks(
+    server: &Server,
+    event: &str,
+    thread_id: &str,
+    root: &str,
+    agent: AgentKind,
+    status: Option<MessageStatus>,
+) {
+    let name = |value: serde_json::Result<Value>| {
+        value.ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default()
+    };
+    let agent = name(serde_json::to_value(agent));
+    let status = status.map(|status| name(serde_json::to_value(status)));
+    let context = crate::plugins::HookContext {
+        event,
+        thread_id,
+        root,
+        agent: &agent,
+        status: status.as_deref(),
+    };
+    for failure in crate::plugins::run_hooks(&server.store.settings(), &context) {
+        log::warn!("plugin hook {event} {failure}");
     }
 }
 

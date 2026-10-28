@@ -53,7 +53,7 @@ async fn run_scheduled_task(server: Srv<'_>, id: String) -> Res<Thread> {
 
 // ---- plugins ------------------------------------------------------------
 
-/// The plugin bundles in the plugins folder, with their skills and MCP servers.
+/// The plugin bundles in the plugins folder, with their hooks and apps.
 #[tauri::command]
 fn list_plugins(server: Srv) -> Vec<Plugin> {
     patchwork_server::plugins::list(&server.store.settings())

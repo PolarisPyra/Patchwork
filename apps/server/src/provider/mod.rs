@@ -261,7 +261,7 @@ pub fn probe_in(kind: AgentKind, args: &[&str], dir: &Path, timeout: Duration) -
     run_probe(cmd, args, timeout, |_| false)
 }
 
-fn run_probe(
+pub(crate) fn run_probe(
     mut cmd: Command,
     args: &[&str],
     timeout: Duration,

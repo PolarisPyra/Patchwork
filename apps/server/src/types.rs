@@ -638,7 +638,7 @@ impl Weekday {
     }
 }
 
-/// A plugin bundle: a folder with a `plugin.json`, its skills, and the MCP servers it adds.
+/// A plugin bundle: a folder with a `plugin.json`, the hooks it runs, and the apps it names.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Plugin {
@@ -648,20 +648,38 @@ pub struct Plugin {
     pub version: Option<String>,
     pub description: Option<String>,
     pub path: String,
-    pub skills: Vec<crate::skills::Skill>,
-    pub mcp_servers: Vec<PluginMcpServer>,
+    pub hooks: Vec<PluginHook>,
+    pub apps: Vec<PluginApp>,
     pub enabled: bool,
-    /// Shipped with the app, and rewritten on launch.
-    pub bundled: bool,
 }
 
-/// An MCP server a plugin offers, in the shape Settings → MCP Servers saves.
-#[derive(Debug, Clone, Serialize)]
+/// One handler a plugin runs on a turn event, such as `stop`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PluginMcpServer {
+pub struct PluginHook {
+    pub event: String,
+    pub handler: PluginHookHandler,
+}
+
+/// What a hook does. Only `Command` runs today; the rest are listed so the user sees them.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum PluginHookHandler {
+    Command { command: String, timeout_secs: u64 },
+    McpTool { server: String, tool: String },
+    Prompt,
+    Agent,
+    /// A handler type this version does not know.
+    Unsupported { kind: String },
+}
+
+/// A connector app a plugin asks for, as Codex lists them.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginApp {
     pub name: String,
-    pub command: String,
-    pub args: Vec<String>,
+    pub id: String,
+    pub required: bool,
 }
 
 /// How much an agent may do without asking.

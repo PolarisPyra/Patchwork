@@ -91,14 +91,28 @@ export type Schedule =
   | { type: "weekdays"; time: string }
   | { type: "weekly"; days: Weekday[]; time: string };
 
-/** An MCP server a plugin offers. */
-export interface PluginMcpServer {
-  name: string;
-  command: string;
-  args: string[];
+/** One handler a plugin runs on a turn event, such as `stop`. */
+export interface PluginHook {
+  event: string;
+  handler: PluginHookHandler;
 }
 
-/** A plugin bundle: a folder with a `plugin.json`, its skills, and the MCP servers it adds. */
+/** What a hook does. Only `command` runs today. */
+export type PluginHookHandler =
+  | { type: "command"; command: string; timeoutSecs: number }
+  | { type: "mcpTool"; server: string; tool: string }
+  | { type: "prompt" }
+  | { type: "agent" }
+  | { type: "unsupported"; kind: string };
+
+/** A connector app a plugin asks for. */
+export interface PluginApp {
+  name: string;
+  id: string;
+  required: boolean;
+}
+
+/** A plugin bundle: a folder with a `plugin.json`, the hooks it runs, and the apps it names. */
 export interface Plugin {
   /** The folder name, and what `disabledPlugins` records. */
   id: string;
@@ -106,10 +120,9 @@ export interface Plugin {
   version: string | null;
   description: string | null;
   path: string;
-  skills: Skill[];
-  mcpServers: PluginMcpServer[];
+  hooks: PluginHook[];
+  apps: PluginApp[];
   enabled: boolean;
-  bundled: boolean;
 }
 
 /** A feature flag of the installed Codex CLI. */

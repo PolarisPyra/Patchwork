@@ -87,7 +87,7 @@ type Section =
   | "environment"
   | "terminal"
   | "skills"
-  | "plugins"
+  | "hooks"
   | "scheduled"
   | "codex"
   | "custom-agents"
@@ -116,7 +116,7 @@ const GROUPS: { label: string; sections: { id: Section; label: string; Icon: Ico
       { id: "mcp", label: "MCP Servers", Icon: PlugIcon },
       { id: "custom-agents", label: "Agents", Icon: IdentificationBadgeIcon },
       { id: "skills", label: "Skills", Icon: BooksIcon },
-      { id: "plugins", label: "Plugins", Icon: PuzzlePieceIcon },
+      { id: "hooks", label: "Hooks", Icon: PuzzlePieceIcon },
       { id: "codex", label: "Codex CLI", Icon: TerminalWindowIcon },
       { id: "permissions", label: "Permissions", Icon: ShieldCheckIcon },
       { id: "tokens", label: "AI Tokenomics", Icon: GaugeIcon },
@@ -220,7 +220,7 @@ export default memo(function SettingsDialog({
             {section === "environment" && <EnvironmentPane {...paneProps} />}
             {section === "terminal" && <TerminalPane {...paneProps} />}
             {section === "skills" && <SkillsPane {...paneProps} />}
-            {section === "plugins" && <PluginsPane {...paneProps} />}
+            {section === "hooks" && <PluginsPane {...paneProps} />}
             {section === "codex" && <CodexPane {...paneProps} />}
             {section === "scheduled" && <ScheduledPane {...paneProps} />}
             {section === "custom-agents" && <AgentsPane />}
