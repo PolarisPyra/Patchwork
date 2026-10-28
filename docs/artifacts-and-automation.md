@@ -36,29 +36,29 @@ or named days.
 ## Plugins
 
 A bundle is a folder in the plugins folder (`<config>/plugins` unless Settings chooses another)
-with a `plugin.json`:
+with a `plugin.json`. A plugin carries hooks and apps; skills belong in the skills folder and MCP
+servers in Settings → MCP Servers. The app ships no plugins. Patchwork's own hooks live in a
+`patchwork` bundle there, switched on and off like any other:
 
-```json
-{
-  "name": "Patchwork Review",
-  "version": "1.0.0",
-  "description": "Skills for reviewing a change.",
-  "skills": [{ "name": "review-diff", "path": "skills/review-diff" }],
-  "mcpServers": [{ "name": "tools", "command": "./run", "args": [] }]
-}
+```
+plugins/patchwork/
+├── plugin.json   { "name": "Patchwork", "hooks": "./hooks.json" }
+└── hooks.json    { "hooks": { "stop": [ { "hooks": [ { "type": "command", "command": "…" } ] } ] } }
 ```
 
-`apps/server/src/plugins.rs` reads it from `.patchwork-plugin/plugin.json`, `.codex-plugin/plugin.json`,
-or a plain `plugin.json`, so a Codex bundle works as it is. The bundle's `skills/` folder is read
-whether or not the manifest lists it.
+`apps/server/src/plugins.rs` reads the manifest from `.patchwork-plugin/plugin.json`,
+`.codex-plugin/plugin.json`, or a plain `plugin.json`, so a Codex bundle works as it is. `hooks`
+and `apps` are each either inline (`{ "hooks": { … } }`, `{ "apps": { … } }`) or a path, relative to
+the bundle folder, to a file holding that. Each part is read on its own: one this version cannot
+read is left empty, and the rest of the bundle still loads.
 
-An enabled plugin's skills load beside the skills folder's own (`skills::all`), which is what the
-agents' skill folders link to. A skill in the skills folder wins over a plugin's with the same
-name.
-
-One bundle ships in the binary (`apps/server/plugins/`), and `seed` writes it once. The plugins
-folder keeps a `.seeded` list, so a bundle the user deleted is not written back; a folder they
-edited is left alone.
+Hook events match whatever their case: `userPromptSubmit`, `sessionStart`, `preToolUse`,
+`permissionRequest`, `postToolUse`, `preCompact`, `postCompact`, `subagentStart`,
+`subagentStop`, `stop`, `interrupt`, `sessionEnd`. Only `command` handlers run, and so far only on
+`userPromptSubmit` (before a turn starts) and `stop` or `interrupt` then `sessionEnd` (after it
+ends). A command runs in the user's shell in the turn's project folder, with `PATCHWORK_EVENT`,
+`PATCHWORK_THREAD`, `PATCHWORK_CWD`, `PATCHWORK_AGENT` and `PATCHWORK_STATUS` set, and is stopped
+at its `timeoutSec` (default 60, 1 to 600). A failed hook is logged and never stops the turn.
 
 ## Computer use
 
