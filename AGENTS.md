@@ -81,13 +81,13 @@ When writing or reviewing code that handles a lot of data, I/O, or work per requ
 - **Data structures:** Is it using the right data structure for how the data is read and written? How is the data laid out in memory?
 - **I/O:** How many reads, writes, syscalls, and network requests does it make? Cache, batch, or combine them to make fewer.
 
-## Pushing and releasing
+## Git
 
-- **NEVER** run `git push`, `git push --tags`, or anything else that updates a remote, unless the user asks for it in the current conversation. Committing locally is fine; pushing is theirs to ask for. A request to do the work, to commit, or to "finish up" is not a request to push. When the work is ready, stop at the commit and say it is unpushed.
-- The same goes for anything that publishes: `scripts/release.sh`, a version bump that ends in a tag, and `gh release`. Those push, so they need an explicit request too.
-- This overrides the `fullsend` skill's push step. "Full send" grants autonomy over the work and over testing, not over the remote: do the work, prove it, commit it, and stop there. If the user wants it pushed, they will say so, and that is the only thing that counts.
-
-Read [docs/release.md](docs/release.md) before any push, version bump, or release, once the user has asked for one. It has every rule, including the Discord changelog.
+- **NEVER** run a git command that changes the repository unless the user asks for it in the current conversation. That covers `git add`, `git commit`, `git reset`, `git restore`, `git checkout`, `git stash`, `git branch`, `git merge`, `git rebase`, `git tag`, `git push`, and anything else that writes. A request to do the work, to "finish up", or to use a skill is not a request for any of these.
+- Read-only git is fine and expected, because the work needs it: `git status`, `git diff`, `git log`, `git show`, `git ls-files`, `git check-ignore`.
+- When the work is done, **stop and summarize**: what changed, what you proved, and anything left undone. Leave the changes in the working tree. Do not stage them, do not commit them, do not push them.
+- The same goes for anything that publishes: `scripts/release.sh`, a version bump that ends in a tag, and `gh release`. Those commit and push, so they need an explicit request too. Read [docs/release.md](docs/release.md) before any of them, once the user has asked.
+- This overrides every skill that says otherwise, including `fullsend`. "Full send" grants autonomy over the work and over testing, not over git: do the work, prove it, summarize, and stop.
 
 ## Release and build setup for a Tauri project
 
