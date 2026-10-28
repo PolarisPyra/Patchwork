@@ -12,6 +12,7 @@ import type { UpdateSettings } from "~/app/App";
 import { CHIP_CLASS } from "~/components/chat/ModelPicker";
 import LogLevelPicker from "~/components/panel/LogLevelPicker";
 import OutputView from "~/components/panel/OutputView";
+import ScreenView from "~/components/panel/ScreenView";
 import { sortChannels, type Channel } from "~/components/panel/logs";
 import {
   applySettings,
@@ -25,7 +26,7 @@ import Dropdown from "~/components/workspace/Dropdown";
 import { shortcutContext } from "~/lib/shortcuts";
 import { errorText } from "~/lib/util";
 
-export type PanelTab = "terminal" | "output";
+export type PanelTab = "terminal" | "output" | "screen";
 
 interface PanelProps {
   tab: PanelTab;
@@ -169,6 +170,16 @@ export default function Panel({
           >
             Output
           </button>
+          {settings.computerUse && (
+            <button
+              role="tab"
+              aria-selected={tab === "screen"}
+              className={tabClass(tab === "screen")}
+              onClick={() => onTab("screen")}
+            >
+              Screen
+            </button>
+          )}
         </div>
         <div className="ml-auto flex min-w-0 items-center gap-1">
           {tab === "terminal" ? (
@@ -199,7 +210,7 @@ export default function Panel({
                 </button>
               )}
             </>
-          ) : (
+          ) : tab === "output" ? (
             <>
               <Dropdown
                 alignEnd
@@ -255,7 +266,7 @@ export default function Panel({
                 <FolderOpenIcon size={14} />
               </button>
             </>
-          )}
+          ) : null}
           <button
             className="btn-icon"
             aria-label="Close panel"
@@ -321,8 +332,10 @@ export default function Panel({
               </div>
             )}
           </>
-        ) : (
+        ) : tab === "output" ? (
           <OutputView channel={channel?.id ?? null} />
+        ) : (
+          <ScreenView enabled={settings.computerUse} />
         )}
       </div>
     </section>

@@ -1,4 +1,4 @@
-// Screenshots Settings → Plugins, Scheduled and Codex CLI, so each new pane can be looked
+// Screenshots Settings → Hooks, Scheduled and Codex CLI, and the panel's Screen tab, so each new pane can be looked
 // at. Usage: node checks/new-panes.mjs [outDir]  (default /tmp/new-panes)
 import { mkdirSync } from "node:fs";
 import { openWorkspace } from "../lib/open.mjs";
@@ -17,7 +17,7 @@ async function pane(name, file) {
   await page.waitForTimeout(150);
 }
 
-await pane("Plugins", "plugins");
+await pane("Hooks", "hooks");
 await pane("Scheduled", "scheduled");
 await pane("Codex CLI", "codex");
 // The screen tools are under Permissions, past the rules, so the pane is scrolled to them.
@@ -36,6 +36,17 @@ await page.getByRole("button", { name: "Scheduled", exact: true }).click();
 await page.getByRole("button", { name: "New task" }).click();
 await page.waitForTimeout(200);
 await page.screenshot({ path: `${out}/scheduled-editor.png` });
+await page.getByRole("button", { name: "Close", exact: true }).click();
+await page.waitForTimeout(150);
+
+// The panel's Screen tab, which shows while computer use is on.
+await page.keyboard.press("Control+Shift+U");
+await page.getByRole("tab", { name: "Screen", exact: true }).click();
+await page.getByAltText("The screen as the agent sees it").waitFor({ timeout: 5000 });
+await page.waitForTimeout(300);
+const chrome = await page.locator("section[aria-label='Panel'] span.text-fg-muted").first().textContent();
+console.log(`screen chrome: ${chrome}`);
+await page.screenshot({ path: `${out}/screen.png` });
 
 await browser.close();
 console.log(`saved ${out}`);
