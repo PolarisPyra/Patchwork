@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.29] - 2026-10-27
+
+### Changed
+
+- In Settings → Tokens → Claude compacts at, the first option is now called Default instead of Claude's own. It works the same way as before and leaves compacting to Claude.
+
+### Fixed
+
+- Selecting a whole code block in a reply, for example with a triple-click, and copying it now pastes just the code. Before, the code could come out wrapped in code fences.
+
 ## [0.10.28] - 2026-10-27
 
 ### Added
