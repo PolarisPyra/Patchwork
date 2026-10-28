@@ -65,6 +65,7 @@ Tauri desktop app: React frontend, Rust backend. Run everything from the repo ro
 
 - Cut taglines, helper text, and secondary labels. If a screen needs them, fix the layout.
 - Pick what improves UX, DX, and agent experience without breaking anything.
+- Every spinner turns in step. Use `apps/web/src/components/Spinner.tsx`, which pins each arc's animation to the page's timeline, also when it shows again after being hidden. Never add a rotating icon or a spinner with its own animation. Check with `pnpm qa:shot <out.png> --spinners`: all printed phases match.
 
 ## UI checks
 
