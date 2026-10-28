@@ -161,6 +161,29 @@ fn clean_name(name: &str) -> Result<String, String> {
     Ok(name.chars().take(120).collect())
 }
 
+/// The message without the attachments it opens with: `@name` mentions of files and images
+/// written as Markdown, which the composer puts first. `is_file` says whether a bare `@name` is
+/// a file; a word with a slash or a dot always is, as the composer writes paths.
+pub fn without_leading_attachments(text: &str, is_file: impl Fn(&str) -> bool) -> &str {
+    let mut rest = text.trim_start();
+    loop {
+        let end = if rest.starts_with("![") {
+            rest.find("](<")
+                .and_then(|open| rest[open..].find(">)").map(|close| open + close + 2))
+        } else if rest.starts_with('@') {
+            let token_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+            let word = &rest[1..token_end];
+            (word.contains(['/', '.']) || is_file(word)).then_some(token_end)
+        } else {
+            None
+        };
+        match end {
+            Some(end) => rest = rest[end..].trim_start(),
+            None => return rest,
+        }
+    }
+}
+
 /// A thread title from the first line of a message that is not a code fence, without a
 /// leading `/goal`.
 pub fn title_from(text: &str) -> String {
@@ -1139,7 +1162,8 @@ impl Server {
 
     /// Replaces the `placeholder` title with one a model writes from `text`, in the background,
     /// unless the thread has been renamed meanwhile. With titles switched off in Settings, a
-    /// slash command, or a message the model gives no title for, the first line names it.
+    /// slash command, or a message the model gives no title for, the first line names it. A
+    /// message that is only attachments stays blank.
     fn name_thread(
         self: &Arc<Self>,
         thread_id: &str,
@@ -1154,7 +1178,7 @@ impl Server {
         let enabled = self.store.settings().tokens.generate_titles;
         std::thread::spawn(move || {
             let first_line = title_from(&text);
-            let generated = if !enabled || first_line.starts_with('/') {
+            let generated = if !enabled || first_line.starts_with('/') || text.trim().is_empty() {
                 None
             } else {
                 title::generate(&text, agent, model.as_deref())
@@ -1244,7 +1268,12 @@ impl Server {
         let mut first_title = None;
         self.store.update_thread(&thread_id, |t| {
             if t.messages.is_empty() {
-                first_title = Some((t.title.clone(), t.agent, t.model.clone()));
+                first_title = Some((
+                    t.title.clone(),
+                    t.agent,
+                    t.model.clone(),
+                    t.project_id.clone(),
+                ));
             }
             // Subagents of the running turn still working, which a steer must not cut off.
             subagents = t
@@ -1259,8 +1288,21 @@ impl Server {
             t.messages.push(m);
             session_id = t.session_id.clone();
         })?;
-        if let Some((placeholder, agent, model)) = first_title {
-            self.name_thread(&thread_id, &text, placeholder, agent, model);
+        if let Some((placeholder, agent, model, project_id)) = first_title {
+            let root = project_id.and_then(|id| {
+                self.store
+                    .settings()
+                    .projects
+                    .into_iter()
+                    .find(|p| p.id == id)
+                    .map(|p| PathBuf::from(p.path))
+            });
+            // Files the message opens with, by attachment or by a name in the project, name nothing.
+            let subject = without_leading_attachments(&text, |word| {
+                attachments.iter().any(|a| a.name == word)
+                    || root.as_ref().is_some_and(|root| root.join(word).is_file())
+            });
+            self.name_thread(&thread_id, subject, placeholder, agent, model);
         }
         // A goal that has ended is over: the next message starts unrelated work, so its banner
         // goes. The agent has already dropped the goal, or `settle` told it to with a /goal

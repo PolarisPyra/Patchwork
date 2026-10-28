@@ -122,7 +122,7 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
                 .messages
                 .iter()
                 .find(|m| m.role == Role::User)
-                .map(|m| crate::title_from(&m.text))
+                .map(|m| crate::title_from(crate::without_leading_attachments(&m.text, |_| false)))
         })
         .unwrap_or_else(|| "Imported conversation".into());
     // An imported transcript has no agent session to resume; its first turn sends the transcript.
