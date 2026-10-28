@@ -116,6 +116,8 @@ interface ChatProps {
   onClearThread: (threadId: string) => Promise<void>;
   /** Undoes the turn of a user message and everything after it, the project's files included. */
   onRestoreCheckpoint: (threadId: string, messageId: string) => Promise<void>;
+  /** Starts a new thread with the conversation up to and including a reply. */
+  onForkThread: (threadId: string, messageId: string) => Promise<void>;
   /** Settings → Permissions, for the approval banner and the transcript. */
   permissionSettings: PermissionSettings;
   /** Answers to the agent's questions take a second click. */
@@ -217,6 +219,7 @@ export default function Chat({
   onNewChat,
   onClearThread,
   onRestoreCheckpoint,
+  onForkThread,
   onCancel,
   onSetModel,
   onSetAccessMode,
@@ -614,6 +617,16 @@ export default function Chat({
     }
   }
 
+  async function forkThread(message: Message) {
+    if (!thread) return;
+    setError(null);
+    try {
+      await onForkThread(thread.id, message.id);
+    } catch (e) {
+      setError(errorText(e));
+    }
+  }
+
   // /compact is passed to Claude Code, Codex, or OpenCode, which compact their own context. Other
   // agents have no such command, so the request is refused here rather than sent as plain text.
   function compactChat() {
@@ -733,9 +746,23 @@ export default function Chat({
 
   // The latest render's values, so the callbacks handed to Messages keep one identity
   // and its memoized rows skip re-rendering.
-  const latest = useRef({ dispatch, working, onOpenCanvas, onShowChanges, restoreCheckpoint });
+  const latest = useRef({
+    dispatch,
+    working,
+    onOpenCanvas,
+    onShowChanges,
+    restoreCheckpoint,
+    forkThread,
+  });
   useLayoutEffect(() => {
-    latest.current = { dispatch, working, onOpenCanvas, onShowChanges, restoreCheckpoint };
+    latest.current = {
+      dispatch,
+      working,
+      onOpenCanvas,
+      onShowChanges,
+      restoreCheckpoint,
+      forkThread,
+    };
   });
 
   const retry = useCallback((message: Message) => {
@@ -755,6 +782,7 @@ export default function Chat({
     (message: Message) => void latest.current.restoreCheckpoint(message),
     [],
   );
+  const fork = useCallback((message: Message) => void latest.current.forkThread(message), []);
 
   // Stops the running turn, goal or not. A goal it was pursuing is cleared once the agent has
   // exited, in the agent's session too.
@@ -1053,6 +1081,7 @@ export default function Chat({
               onRetry={retry}
               checkpoints={checkpoints}
               onRestore={restore}
+              onFork={fork}
               tokens={tokens}
             />
           </PermissionsContext.Provider>

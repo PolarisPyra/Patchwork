@@ -26,6 +26,8 @@ interface MessagesProps {
   /** User messages whose turn can be undone, and undoing one. */
   checkpoints: ReadonlySet<string>;
   onRestore: (message: Message) => void;
+  /** Starts a new thread from a reply. */
+  onFork: (message: Message) => void;
   tokens: TokenSettings;
 }
 
@@ -39,6 +41,7 @@ export default function Messages({
   onRetry,
   checkpoints,
   onRestore,
+  onFork,
   tokens,
 }: MessagesProps) {
   // Queued messages wait above the composer until the turn ends, so they are not shown here.
@@ -162,6 +165,7 @@ export default function Messages({
                     onOpenCanvas={onOpenCanvas}
                     onShowChanges={onShowChanges}
                     onRetry={onRetry}
+                    onFork={onFork}
                   />
                 )}
               </div>

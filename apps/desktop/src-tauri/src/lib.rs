@@ -314,6 +314,7 @@ pub fn run() {
             commands::threads::clear_thread,
             commands::threads::checkpoints,
             commands::threads::restore_checkpoint,
+            commands::threads::fork_thread,
             commands::threads::get_last_thread,
             commands::threads::set_last_thread,
             commands::threads::get_collapsed,

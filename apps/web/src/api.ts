@@ -486,6 +486,8 @@ export const api = {
    * and the ones after it. Returns the thread as it is now. */
   restoreCheckpoint: (threadId: string, messageId: string) =>
     invoke<Thread>("restore_checkpoint", { threadId, messageId }),
+  forkThread: (threadId: string, messageId: string) =>
+    invoke<Thread>("fork_thread", { threadId, messageId }),
   /** The thread that was open when the app last closed. */
   getLastThread: () => invoke<string | null>("get_last_thread"),
   setLastThread: (id: string) => invoke<void>("set_last_thread", { id }),

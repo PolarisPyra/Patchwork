@@ -75,6 +75,16 @@ pub(crate) fn restore_checkpoint(
 }
 
 #[tauri::command]
+pub(crate) async fn fork_thread(
+    server: Srv<'_>,
+    thread_id: String,
+    message_id: String,
+) -> Res<Thread> {
+    let server = server.inner().clone();
+    blocking(move || server.fork_thread(&thread_id, &message_id)).await?
+}
+
+#[tauri::command]
 pub(crate) fn get_last_thread(server: Srv) -> Option<String> {
     server.last_thread_id()
 }

@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { ArrowClockwiseIcon, ShieldWarningIcon } from "@phosphor-icons/react";
+import { ArrowClockwiseIcon, GitForkIcon, ShieldWarningIcon } from "@phosphor-icons/react";
 import { type AgentKind, type FileChange, type Message } from "~/api";
 import type { CanvasTab } from "~/components/canvas/Canvas";
 import { FileCards } from "~/components/chat/FileCard";
@@ -27,6 +27,7 @@ interface AssistantProps {
   onOpenCanvas?: OpenCanvas;
   onShowChanges: (messageId: string) => void;
   onRetry: (message: Message) => void;
+  onFork: (message: Message) => void;
 }
 
 export const AssistantMessage = memo(function AssistantMessage({
@@ -40,6 +41,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   onOpenCanvas,
   onShowChanges,
   onRetry,
+  onFork,
 }: AssistantProps) {
   const streaming = message.status === "streaming";
   const clearsGoal = retryMessage !== null && isGoalClearCommand(retryMessage.text);
@@ -116,6 +118,9 @@ export const AssistantMessage = memo(function AssistantMessage({
               <ArrowClockwiseIcon size={13} /> Retry
             </button>
           )}
+          <button className={ACTION_CLASS} onClick={() => onFork(message)}>
+            <GitForkIcon size={13} /> Fork
+          </button>
           <span className="ml-1.5 inline-flex h-6 items-center text-[length:var(--fs-xs)] text-fg-muted">
             {formatClock(message.createdAt)}
           </span>

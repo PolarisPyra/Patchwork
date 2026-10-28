@@ -68,6 +68,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     renameThread,
     clearThread,
     restoreCheckpoint,
+    forkThread,
     folders,
     createFolder,
     renameFolder,
@@ -467,6 +468,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
                   clearThread(id).catch((e: unknown) => setError(errorText(e)))
                 }
                 onRestoreCheckpoint={restoreCheckpoint}
+                onForkThread={forkThread}
                 onCancel={(id) => api.cancelTurn(id)}
                 onSetModel={setModel}
                 onSetAccessMode={setAccessMode}

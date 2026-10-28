@@ -791,6 +791,48 @@ impl Server {
         Ok(thread)
     }
 
+    /// Starts a new thread with the conversation of `thread_id` up to and including `message_id`,
+    /// and the same agent and settings. Its first turn gives the agent that conversation as a
+    /// transcript, in a session of its own, so the original thread goes on unchanged.
+    pub fn fork_thread(&self, thread_id: &str, message_id: &str) -> Result<Thread, String> {
+        let source = self.thread(thread_id)?;
+        let end = source
+            .messages
+            .iter()
+            .position(|m| m.id == message_id)
+            .ok_or("Message not found")?;
+        let created_at = now_ms();
+        // Message ids are unique across threads, so the copies get new ones.
+        let messages = source.messages[..=end]
+            .iter()
+            .map(|m| Message {
+                id: new_id(),
+                queued: false,
+                background: Vec::new(),
+                // The original thread's checkpoints stay with it.
+                turn: None,
+                ..m.clone()
+            })
+            .collect();
+        let thread = Thread {
+            id: new_id(),
+            title: format!("{} (fork)", source.title),
+            session_id: None,
+            created_at,
+            messages,
+            goal: None,
+            position: -(created_at as i64),
+            archived_at: None,
+            parent: None,
+            imported_from: None,
+            context_pending: true,
+            role_pending: false,
+            ..source
+        };
+        self.store.insert_threads(vec![thread.clone()])?;
+        Ok(thread)
+    }
+
     /// Starts a task in a new thread for `task`, and returns the thread.
     ///
     /// A task whose project no longer exists runs as a chat, so a deleted project does not stop

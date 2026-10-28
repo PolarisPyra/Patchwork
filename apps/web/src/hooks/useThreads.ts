@@ -488,6 +488,13 @@ export function useThreads(initialProjectId: string | null) {
     setThreads((prev) => prev.map((t) => (t.id === threadId ? restored : t)));
   }
 
+  /** Starts a new thread with the conversation up to and including a message, and selects it. */
+  async function forkThread(threadId: string, messageId: string): Promise<void> {
+    const thread = await api.forkThread(threadId, messageId);
+    setThreads((prev) => [thread, ...prev]);
+    setSelectedId(thread.id);
+  }
+
   async function renameThread(id: string, title: string): Promise<void> {
     await api.renameThread(id, title);
     setThreads((prev) => prev.map((t) => (t.id === id ? { ...t, title } : t)));
@@ -667,6 +674,7 @@ export function useThreads(initialProjectId: string | null) {
     renameThread,
     clearThread,
     restoreCheckpoint,
+    forkThread,
     createFolder,
     renameFolder,
     removeFolder,
