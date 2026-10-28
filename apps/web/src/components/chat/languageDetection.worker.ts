@@ -5,36 +5,9 @@ import cpuBackend from "@vscode/vscode-languagedetection/dist/lib/979.js?raw";
 import modelUrl from "@vscode/vscode-languagedetection/model/model.json?url";
 import weightsUrl from "@vscode/vscode-languagedetection/model/group1-shard1of1.bin?url";
 import type { ModelOperations, ModelResult } from "@vscode/vscode-languagedetection";
-import { grammarRelevance } from "~/components/canvas/highlight";
 
 /** VS Code's minimum confidence for a detected language. */
 const MIN_CONFIDENCE = 0.2;
-
-/**
- * Programming languages the model's best guess is taken for below that confidence, when the code
- * also matches enough of the language's grammar. A few lines are too little for the model to be
- * sure; text formats that plain text is mistaken for are never taken this way.
- */
-const SHORT_CODE_LANGUAGES = new Set([
-  "c",
-  "cpp",
-  "csharp",
-  "css",
-  "go",
-  "java",
-  "javascript",
-  "kotlin",
-  "lua",
-  "php",
-  "powershell",
-  "python",
-  "ruby",
-  "rust",
-  "swift",
-  "typescript",
-]);
-/** Grammar matches a short snippet needs for the model's best guess to be taken. */
-const MIN_GRAMMAR_RELEVANCE = 2;
 
 /** The model's ids, by the id code blocks use. Languages the composer has no label for are left out. */
 const LANGUAGES: Record<string, string> = {
@@ -119,25 +92,20 @@ function getModel(): ModelOperations {
   return model;
 }
 
+/** Replies with the model's guess, and whether VS Code would take that guess. */
 self.onmessage = async (e: MessageEvent<{ id: number; text: string }>) => {
   const { id, text } = e.data;
-  let language: string | null = null;
+  let reply: { guess: string | null; clear: boolean } = { guess: null, clear: false };
   try {
     // VS Code reads the first 10,000 characters.
-    const sample = text.slice(0, 10_000);
-    const results = await getModel().runModel(sample);
+    const results = await getModel().runModel(text.slice(0, 10_000));
     const top = results[0];
-    const guess = top ? (LANGUAGES[top.languageId] ?? null) : null;
-    if (guess && isClearWinner(results)) language = guess;
-    else if (
-      guess &&
-      SHORT_CODE_LANGUAGES.has(guess) &&
-      grammarRelevance(sample, guess) >= MIN_GRAMMAR_RELEVANCE
-    ) {
-      language = guess;
-    }
+    reply = {
+      guess: top ? (LANGUAGES[top.languageId] ?? null) : null,
+      clear: isClearWinner(results),
+    };
   } catch {
-    language = null;
+    // The model did not run, so the code stays unlabelled.
   }
-  self.postMessage({ id, language });
+  self.postMessage({ id, ...reply });
 };

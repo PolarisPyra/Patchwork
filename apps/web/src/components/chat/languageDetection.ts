@@ -1,20 +1,59 @@
-// Runs language detection in a worker. One worker serves every request, started on first use.
+import { grammarRelevance } from "~/components/canvas/highlight";
+
+// The model runs in a worker. One worker serves every request, started on first use.
 let worker: Worker | null = null;
 let nextId = 1;
-const pending = new Map<number, (language: string | null) => void>();
+const pending = new Map<number, { text: string; resolve: (language: string | null) => void }>();
+
+/**
+ * Programming languages the model's best guess is taken for below VS Code's confidence, when the
+ * code also matches enough of the language's grammar. A few lines are too little for the model to
+ * be sure; text formats that plain text is mistaken for are never taken this way.
+ */
+const SHORT_CODE_LANGUAGES = new Set([
+  "c",
+  "cpp",
+  "csharp",
+  "css",
+  "go",
+  "java",
+  "javascript",
+  "kotlin",
+  "lua",
+  "php",
+  "powershell",
+  "python",
+  "ruby",
+  "rust",
+  "swift",
+  "typescript",
+]);
+/** Grammar matches a short snippet needs for the model's best guess to be taken. */
+const MIN_GRAMMAR_RELEVANCE = 2;
+
+/** The language to label code with, from the model's guess and whether VS Code would take it. */
+function chooseLanguage(text: string, guess: string | null, clear: boolean): string | null {
+  if (!guess) return null;
+  if (clear) return guess;
+  const sample = text.slice(0, 10_000);
+  const grammarMatches =
+    SHORT_CODE_LANGUAGES.has(guess) && grammarRelevance(sample, guess) >= MIN_GRAMMAR_RELEVANCE;
+  return grammarMatches ? guess : null;
+}
 
 function getWorker(): Worker {
   if (worker) return worker;
   const w = new Worker(new URL("./languageDetection.worker.ts", import.meta.url), {
     type: "module",
   });
-  w.onmessage = (e: MessageEvent<{ id: number; language: string | null }>) => {
-    pending.get(e.data.id)?.(e.data.language);
+  w.onmessage = (e: MessageEvent<{ id: number; guess: string | null; clear: boolean }>) => {
+    const request = pending.get(e.data.id);
     pending.delete(e.data.id);
+    request?.resolve(chooseLanguage(request.text, e.data.guess, e.data.clear));
   };
   // A failed worker leaves code unlabelled rather than stuck; the next request starts a new one.
   w.onerror = () => {
-    for (const resolve of pending.values()) resolve(null);
+    for (const { resolve } of pending.values()) resolve(null);
     pending.clear();
     worker = null;
   };
@@ -61,7 +100,7 @@ export function detectLanguage(text: string): Promise<string | null> {
   if (isTerminalOutput(text)) return Promise.resolve(null);
   return new Promise((resolve) => {
     const id = nextId++;
-    pending.set(id, resolve);
+    pending.set(id, { text, resolve });
     getWorker().postMessage({ id, text });
   });
 }
