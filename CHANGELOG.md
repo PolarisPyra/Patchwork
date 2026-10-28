@@ -3,6 +3,20 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.28] - 2026-10-27
+
+### Added
+
+- Settings → Chats and threads is a new page under General. "Click answers twice to send" is there now. It used to sit at the bottom of CLI Providers.
+
+### Changed
+
+- Settings → Updates now lists only the three newest releases instead of every release.
+
+### Fixed
+
+- When you select code in a reply and copy it, only the code is pasted now, just like with the Copy button. Before, the pasted code could come wrapped in code fences.
+
 ## [0.10.27] - 2026-10-27
 
 ### Added
