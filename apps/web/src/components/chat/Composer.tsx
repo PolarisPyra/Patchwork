@@ -35,6 +35,7 @@ import {
 } from "~/components/chat/composerExtensions";
 import { MARKDOWN_COPY_ATTR } from "~/lib/markdownCopy";
 import { isAgent, useAgents } from "~/lib/agents";
+import { DEFAULT_SIGILS, getSigils, sigilKind } from "~/lib/sigils";
 import FormatBar from "~/components/chat/FormatBar";
 import ModelPicker from "~/components/chat/ModelPicker";
 
@@ -110,7 +111,10 @@ export type DropMentions = (
 
 /** The "/word", "$word" or "&word" the caret is at the end of, at the start of a line or after a space. */
 interface CommandToken {
+  /** What was typed, with the default sigil in place of the user's. */
   text: string;
+  /** What was typed. */
+  raw: string;
   from: number;
   to: number;
   /** The token is the whole draft, so a pick replaces the draft and can run a local command. */
@@ -123,14 +127,16 @@ function commandToken(editor: Editor): CommandToken | null {
   if (!selection.empty || $from.parent.type.spec.code) return null;
   // Chips and mentions read as one character that ends the token.
   const before = $from.parent.textBetween(0, $from.parentOffset, undefined, "\ufffc");
-  const match = /(?:^|\s)([/$&][^\s\ufffc]*)$/.exec(before);
-  if (!match) return null;
-  const text = match[1];
+  const match = /(?:^|\s)([^\s\ufffc]+)$/.exec(before);
+  const kind = match && sigilKind(match[1][0]);
+  if (!kind || kind === "files") return null;
+  const raw = match[1];
   return {
-    text,
-    from: $from.pos - text.length,
+    text: DEFAULT_SIGILS[kind] + raw.slice(1),
+    raw,
+    from: $from.pos - raw.length,
     to: $from.pos,
-    whole: doc.childCount === 1 && doc.textContent === text,
+    whole: doc.childCount === 1 && doc.textContent === raw,
   };
 }
 
@@ -454,7 +460,18 @@ function Composer({
   }
 
   const mentionSuggestion: MentionSuggestion = {
-    char: "@",
+    char: DEFAULT_SIGILS.files,
+    // Opens on the user's sigil for files; the mention is still sent with "@".
+    findSuggestionMatch: ({ $position }) => {
+      const text = $position.nodeBefore?.isText ? $position.nodeBefore.text : undefined;
+      const sigil = getSigils().files;
+      const at = text?.lastIndexOf(sigil) ?? -1;
+      if (!text || at < 0 || (at > 0 && text[at - 1] !== " ")) return null;
+      const word = text.slice(at);
+      if (/\s/.test(word)) return null;
+      const from = $position.pos - text.length + at;
+      return { range: { from, to: $position.pos }, query: word.slice(1), text: word };
+    },
     items: ({ query }) => {
       const q = query.toLowerCase();
       return filesRef.current
@@ -805,7 +822,7 @@ function Composer({
         return true;
       }
       // Enter on a command typed in full sends it (a bare "/goal" shows the goal).
-      const typed = activeCommand !== undefined && slash === activeCommand.name;
+      const typed = activeCommand !== undefined && token?.raw.toLowerCase() === activeCommand.name;
       if (
         activeCommand &&
         (event.key === "Tab" || (event.key === "Enter" && !typed && !event.shiftKey))
@@ -892,7 +909,10 @@ function Composer({
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => selectCommand(c.name)}
             >
-              <span className="font-[family-name:var(--font-mono)] text-fg">{c.name}</span>
+              {/* With the sigil that was typed, which may be the user's own. */}
+              <span className="font-[family-name:var(--font-mono)] text-fg">
+                {token ? token.raw[0] + c.name.slice(1) : c.name}
+              </span>
               <span className="text-[length:var(--fs-sm)] text-fg-muted">{c.description}</span>
             </button>
           ))}

@@ -1,10 +1,15 @@
 // Screenshots the composer's "$" skills menu, a picked skill's chip, and the Skills settings pane.
 // Prints the "/" and "$" menus' rows, and the Markdown a picked skill sends. With the last two
-// paths, does the same for the "&" agents menu and the Custom agents pane.
+// paths, does the same for the "&" agents menu and the Custom agents pane. With --sigils=<png>,
+// rebinds the skills sigil to "!" in Settings → Shortcuts → Sigils, screenshots that tab, and
+// prints what "!" and "$" do in the composer before resetting it.
 // Usage: node checks/skills.mjs <menu.png> <pane.png> [chip.png] [agents.png agents-pane.png]
+//   [--sigils=<sigils.png>]
 import { openWorkspace } from "../lib/open.mjs";
 
-const [menuOut, paneOut, chipOut, agentsOut, agentsPaneOut] = process.argv.slice(2);
+const args = process.argv.slice(2);
+const sigilsOut = args.find((a) => a.startsWith("--sigils="))?.slice("--sigils=".length);
+const [menuOut, paneOut, chipOut, agentsOut, agentsPaneOut] = args.filter((a) => !a.startsWith("--"));
 if (!menuOut || !paneOut) throw new Error("Usage: node checks/skills.mjs <menu.png> <pane.png>");
 
 const { browser, page } = await openWorkspace();
@@ -65,6 +70,68 @@ if (agentsPaneOut) {
   await dialog.getByRole("button", { name: "Custom agents" }).click();
   await page.waitForTimeout(200);
   await dialog.screenshot({ path: agentsPaneOut });
+}
+if (sigilsOut) {
+  await dialog.getByRole("button", { name: "Shortcuts" }).click();
+  await dialog.getByRole("button", { name: "Sigils", exact: true }).click();
+  await dialog.getByRole("button", { name: "Change sigil for Summon an agent" }).click();
+  await page.keyboard.press("@");
+  console.log(`"@" for agents: ${JSON.stringify(await dialog.locator(".text-danger").innerText())}`);
+  await page.keyboard.press("Escape");
+  await dialog.getByRole("button", { name: "Change sigil for Use a skill" }).click();
+  await page.keyboard.press("!");
+  await page.waitForTimeout(200);
+  await dialog.screenshot({ path: sigilsOut });
+  console.log(`saved: ${await page.evaluate(() => localStorage.getItem("patchworkSigils"))}`);
+  await dialog.getByRole("button", { name: "Close" }).click();
+  await editor.click();
+  await page.keyboard.type("!");
+  console.log(`"!" menu:\n  ${(await rows("Skills")).join("\n  ")}`);
+  await page.keyboard.type("rel");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("now !release-notes ");
+  const sent = await editor.evaluate((el) => el.editor?.getMarkdown());
+  console.log(`picked "!rel" and typed "!release-notes ", sends: ${JSON.stringify(sent)}`);
+  await page.keyboard.press("Control+A");
+  await page.keyboard.press("Delete");
+  await page.keyboard.type("$");
+  await page.waitForTimeout(300);
+  console.log(`"$" opens a menu: ${await page.locator('[role="listbox"]').count() > 0}`);
+  await page.keyboard.press("Backspace");
+  await page.locator('button[aria-label="Settings"]').first().click();
+  await dialog.getByRole("button", { name: "Shortcuts" }).click();
+  await dialog.getByRole("button", { name: "Sigils", exact: true }).click();
+  await dialog.getByRole("button", { name: "Change sigil for Run a command" }).click();
+  await page.keyboard.press(";");
+  await dialog.getByRole("button", { name: "Change sigil for Mention a file or folder" }).click();
+  await page.keyboard.press("#");
+  console.log(`saved: ${await page.evaluate(() => localStorage.getItem("patchworkSigils"))}`);
+  await dialog.getByRole("button", { name: "Close" }).click();
+  await editor.click();
+  await page.keyboard.type(";go");
+  console.log(`";go" menu:\n  ${(await rows("Slash commands")).join("\n  ")}`);
+  await page.keyboard.press("Enter");
+  const goal = await editor.evaluate((el) => el.editor?.getMarkdown());
+  console.log(`picked ";go", sends: ${JSON.stringify(goal)}`);
+  await page.keyboard.press("Control+A");
+  await page.keyboard.press("Delete");
+  for (const sigil of ["@", "#"]) {
+    await page.keyboard.type(`see ${sigil}`);
+    await page.waitForTimeout(300);
+    const files = page.locator("main .bottom-full button");
+    const shown = (await files.count()) + Number(await page.getByText("No matching files").isVisible());
+    console.log(`"${sigil}" opens the file menu: ${shown > 0}`);
+    if (shown > 0) {
+      await page.keyboard.press("Enter");
+      console.log(`picked a file, sends: ${JSON.stringify(await editor.evaluate((el) => el.editor?.getMarkdown()))}`);
+    }
+    await page.keyboard.press("Control+A");
+    await page.keyboard.press("Delete");
+  }
+  await page.locator('button[aria-label="Settings"]').first().click();
+  await dialog.getByRole("button", { name: "Shortcuts" }).click();
+  await dialog.getByRole("button", { name: "Reset all" }).click();
+  console.log(`after Reset all: ${await page.evaluate(() => localStorage.getItem("patchworkSigils"))}`);
 }
 await browser.close();
 console.log(`saved ${menuOut} and ${paneOut}`);

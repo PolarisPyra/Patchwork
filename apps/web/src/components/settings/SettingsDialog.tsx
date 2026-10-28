@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useState, type ReactNode } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { RELEASES_URL, restartToUpdate } from "~/lib/updates";
 import { useAgents } from "~/lib/agents";
+import { useSigils } from "~/lib/sigils";
 import {
   ArrowCircleUpIcon,
   BellIcon,
@@ -1544,6 +1545,7 @@ type SkillFilter = "on" | "off";
 
 /** The skills folder every agent loads, and the skills in it, kept up to date as it changes. */
 function SkillsPane({ settings, updateSettings }: PaneProps) {
+  const sigil = useSigils().skills;
   const [view, setView] = useState<SkillsView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<SkillFilter | null>(null);
@@ -1645,7 +1647,10 @@ function SkillsPane({ settings, updateSettings }: PaneProps) {
             <div className="flex w-full min-w-0 items-center gap-2.5">
               <Badge name={skill.name} size={32} />
               <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold">${skill.name}</div>
+                <div className="truncate font-semibold">
+                  {sigil}
+                  {skill.name}
+                </div>
                 <div className="truncate font-mono text-[length:var(--fs-xs)] text-fg-muted">
                   {skill.path.startsWith(`${view.dir}/`)
                     ? skill.path.slice(view.dir.length + 1)
@@ -1661,7 +1666,7 @@ function SkillsPane({ settings, updateSettings }: PaneProps) {
             </div>
             <div className="flex justify-end">
               <TokenSwitch
-                label={`$${skill.name}`}
+                label={`${sigil}${skill.name}`}
                 on={skill.enabled}
                 onChange={(on) => void toggle(skill.name, on)}
               />
@@ -1718,6 +1723,7 @@ You are DevEngineer. Plan before you change anything…`;
 /** The custom agents that "&name" summons, kept up to date as their folder changes. */
 function AgentsPane() {
   const view = useAgents();
+  const sigil = useSigils().agents;
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
@@ -1756,7 +1762,10 @@ function AgentsPane() {
             <div className="flex w-full min-w-0 items-center gap-2.5">
               <Badge name={agent.name} size={32} />
               <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold">&amp;{agent.name}</div>
+                <div className="truncate font-semibold">
+                  {sigil}
+                  {agent.name}
+                </div>
                 <div className="truncate font-mono text-[length:var(--fs-xs)] text-fg-muted">
                   {agent.name}.md
                 </div>

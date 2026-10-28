@@ -13,6 +13,16 @@ import {
   suspendShortcuts,
   useKeybindings,
 } from "~/lib/shortcuts";
+import {
+  DEFAULT_SIGILS,
+  resetSigil,
+  resetSigils,
+  setSigil,
+  SIGILS,
+  sigilProblem,
+  useSigils,
+  type SigilKind,
+} from "~/lib/sigils";
 
 const MOD = formatKey("mod")[0];
 
@@ -42,6 +52,10 @@ const FIXED: Record<ShortcutPage, { keys: string[]; action: string }[]> = {
 const PAGES = SHORTCUT_PAGES.filter(
   (p) => FIXED[p].length > 0 || COMMANDS.some((c) => c.page === p && !c.fixed),
 );
+/** The last tab: the characters that open the composer's menus. */
+const SIGILS_PAGE = "Sigils";
+type Page = ShortcutPage | typeof SIGILS_PAGE;
+const TABS: Page[] = [...PAGES, SIGILS_PAGE];
 
 function Keys({ parts }: { parts: string[] }) {
   return (
@@ -57,13 +71,16 @@ function Keys({ parts }: { parts: string[] }) {
 
 export default function KeybindingsPane() {
   const { rules, overrides } = useKeybindings();
-  const [page, setPage] = useState<ShortcutPage>(PAGES[0]);
+  const sigils = useSigils();
+  const [page, setPage] = useState<Page>(PAGES[0]);
   const [query, setQuery] = useState("");
   // The command whose new key is being recorded, and why the last key tried was refused.
   const [recording, setRecording] = useState<string | null>(null);
   // The fixed row last clicked, which says it cannot be changed.
   const [fixedNote, setFixedNote] = useState<string | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
+  // The sigil whose new character is being recorded.
+  const [recordingSigil, setRecordingSigil] = useState<SigilKind | null>(null);
 
   // While recording, the next key press is the new shortcut: nothing else may act on it.
   useEffect(() => {
@@ -94,13 +111,48 @@ export default function KeybindingsPane() {
     };
   }, [recording]);
 
+  // The same for a sigil: the next character typed is the new one.
+  useEffect(() => {
+    if (!recordingSigil) return;
+    const resume = suspendShortcuts();
+    function onKey(event: KeyboardEvent) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.isComposing || ["Shift", "AltGraph"].includes(event.key)) return;
+      if (event.key === "Escape") {
+        setRecordingSigil(null);
+        return;
+      }
+      const problem = sigilProblem(recordingSigil!, event.key);
+      if (problem) {
+        setRefused(problem);
+        return;
+      }
+      setSigil(recordingSigil!, event.key);
+      setRecordingSigil(null);
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      resume();
+    };
+  }, [recordingSigil]);
+
   const startRecording = (command: string) => {
     setRefused(null);
+    setRecordingSigil(null);
     setRecording((current) => (current === command ? null : command));
   };
 
-  const selectPage = (next: ShortcutPage) => {
+  const startRecordingSigil = (kind: SigilKind) => {
+    setRefused(null);
     setRecording(null);
+    setRecordingSigil((current) => (current === kind ? null : kind));
+  };
+
+  const selectPage = (next: Page) => {
+    setRecording(null);
+    setRecordingSigil(null);
     setFixedNote(null);
     setPage(next);
   };
@@ -121,6 +173,17 @@ export default function KeybindingsPane() {
       return commands.length + fixed.length > 0 ? [{ page: p, commands, fixed }] : [];
     });
   }, [page, query, rules, searching]);
+  const sigilRows = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!searching) return page === SIGILS_PAGE ? SIGILS : [];
+    return SIGILS.filter(
+      (s) =>
+        s.title.toLowerCase().includes(needle) ||
+        SIGILS_PAGE.toLowerCase().includes(needle) ||
+        sigils[s.kind] === needle,
+    );
+  }, [page, query, searching, sigils]);
+  const sigilsChanged = SIGILS.some((s) => sigils[s.kind] !== DEFAULT_SIGILS[s.kind]);
 
   return (
     <>
@@ -135,10 +198,12 @@ export default function KeybindingsPane() {
           />
           <button
             className="btn"
-            disabled={Object.keys(overrides).length === 0}
+            disabled={Object.keys(overrides).length === 0 && !sigilsChanged}
             onClick={() => {
               setRecording(null);
+              setRecordingSigil(null);
               resetKeybindings();
+              resetSigils();
             }}
           >
             Reset all
@@ -146,7 +211,7 @@ export default function KeybindingsPane() {
         </div>
         {!searching && (
           <div className="flex gap-1">
-            {PAGES.map((title) => (
+            {TABS.map((title) => (
               <button
                 key={title}
                 className={`h-7 cursor-pointer rounded-[var(--radius-sm)] border-none px-2.5 text-[length:var(--fs-sm)] ${title === page ? "bg-selected text-fg" : "bg-transparent text-fg-muted hover:bg-hover hover:text-fg"}`}
@@ -163,7 +228,14 @@ export default function KeybindingsPane() {
           Click a shortcut, then press the new keys. Esc cancels.
         </p>
       )}
-      {sections.length === 0 && <div className="py-4 text-fg-muted">No shortcuts match.</div>}
+      {sigilRows.length > 0 && !searching && (
+        <p className="mt-1 mb-1 text-[length:var(--fs-sm)] text-fg-muted">
+          Click a sigil, then type the new one. Esc cancels.
+        </p>
+      )}
+      {sections.length === 0 && sigilRows.length === 0 && (
+        <div className="py-4 text-fg-muted">No shortcuts match.</div>
+      )}
       {sections.map(({ page: sectionPage, commands, fixed }) => (
         <section key={sectionPage} className="mb-3">
           {searching && (
@@ -264,6 +336,55 @@ export default function KeybindingsPane() {
           ))}
         </section>
       ))}
+      {sigilRows.length > 0 && (
+        <section className="mb-3">
+          {searching && (
+            <h3 className="m-0 mt-2 mb-0.5 text-[length:var(--fs-sm)] font-medium text-fg-subtle">
+              {SIGILS_PAGE}
+            </h3>
+          )}
+          {sigilRows.map(({ kind, title }) => {
+            const isRecording = recordingSigil === kind;
+            return (
+              <div key={kind} className="border-b border-border py-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 text-fg">{title}</span>
+                  {sigils[kind] !== DEFAULT_SIGILS[kind] && !isRecording && (
+                    <button
+                      className="btn-icon !h-6 !w-6"
+                      title={`Reset to ${DEFAULT_SIGILS[kind]}`}
+                      aria-label={`Reset sigil for ${title}`}
+                      onClick={() => resetSigil(kind)}
+                    >
+                      <ArrowCounterClockwiseIcon size={12} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    title="Change sigil"
+                    aria-label={`Change sigil for ${title}`}
+                    className={`flex cursor-pointer items-center rounded-[var(--radius-sm)] border px-2 py-1 ${isRecording ? "border-accent bg-accent-soft" : "border-transparent bg-transparent hover:bg-hover"}`}
+                    onClick={() => startRecordingSigil(kind)}
+                  >
+                    {isRecording ? (
+                      <span className="text-[length:var(--fs-sm)] text-accent-text">
+                        Type a symbol…
+                      </span>
+                    ) : (
+                      <Keys parts={[sigils[kind]]} />
+                    )}
+                  </button>
+                </div>
+                {isRecording && refused && (
+                  <div className="mt-0.5 text-right text-[length:var(--fs-sm)] text-danger">
+                    {refused}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </section>
+      )}
     </>
   );
 }

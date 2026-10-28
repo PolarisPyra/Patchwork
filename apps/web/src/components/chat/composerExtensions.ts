@@ -14,6 +14,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { api } from "~/api";
 import CodeBlockNodeView from "~/components/chat/CodeBlockNodeView";
 import { codeHighlightPlugin } from "~/components/chat/codeHighlight";
+import { getSigils, type SigilKind } from "~/lib/sigils";
 
 // Chips sit inside a line of text, so they keep its height: no vertical padding, the mono face a
 // little smaller than the prose around it, and no line height of their own, since the mono face's
@@ -29,6 +30,25 @@ export const MENTION_CLASS = "rounded-[4px] bg-selected-muted px-1 text-accent-t
 // text's middle.
 const IMAGE_CLASS =
   "inline-flex items-center gap-1 rounded-[4px] bg-selected-muted px-1 align-[-0.25em] leading-none text-accent-text";
+
+/**
+ * Finds `<sigil><name> ` just typed, with the sigil the user picked for `kind` (see lib/sigils),
+ * and gives the handler the name and the length of the space before the sigil.
+ */
+function typedSigil(kind: SigilKind, name: string) {
+  let cached: { sigil: string; find: RegExp } | null = null;
+  return (text: string) => {
+    const sigil = getSigils()[kind];
+    if (cached?.sigil !== sigil) {
+      const escaped = sigil.replace(/[.*+?^${}()|[\]\\/-]/g, "\\$&");
+      cached = { sigil, find: new RegExp(`(^|\\s)${escaped}(${name})\\s$`) };
+    }
+    const match = cached.find.exec(text);
+    return match
+      ? { index: match.index, text: match[0], data: { name: match[2], lead: match[1].length } }
+      : null;
+  };
+}
 
 /** A slash command, such as `/goal`. It is an atom, so the whole command selects and deletes together. */
 export const GoalCommand = Node.create({
@@ -54,10 +74,11 @@ export const GoalCommand = Node.create({
     const type = this.type;
     return [
       new InputRule({
-        find: /\/goal\s$/,
-        handler: ({ state, range }) => {
-          if (range.from !== 1) return;
-          state.tr.replaceWith(range.from, range.to, [type.create(), state.schema.text(" ")]);
+        find: typedSigil("commands", "goal"),
+        handler: ({ state, range, match }) => {
+          const from = range.from + (match.data?.lead ?? 0);
+          if (from !== 1) return;
+          state.tr.replaceWith(from, range.to, [type.create(), state.schema.text(" ")]);
         },
       }),
     ];
@@ -102,15 +123,13 @@ export const SkillCommand = Node.create<{ isSkill: (name: string) => boolean }>(
     const isSkill = this.options.isSkill;
     return [
       new InputRule({
-        find: /(?:^|\s)\$([a-z][a-z0-9]*(?:[-_:][a-z0-9]+)*)\s$/,
+        find: typedSigil("skills", "[a-z][a-z0-9]*(?:[-_:][a-z0-9]+)*"),
         handler: ({ state, range, match }) => {
-          if (!isSkill(match[1])) return null;
-          // The match can start with the space before the `$`, which stays.
-          const from = range.from + match[0].indexOf("$");
-          state.tr.replaceWith(from, range.to, [
-            type.create({ name: match[1] }),
-            state.schema.text(" "),
-          ]);
+          const { name, lead } = match.data ?? {};
+          if (!isSkill(name)) return null;
+          // The match can start with the space before the sigil, which stays.
+          const from = range.from + lead;
+          state.tr.replaceWith(from, range.to, [type.create({ name }), state.schema.text(" ")]);
         },
       }),
     ];
@@ -151,15 +170,13 @@ export const AgentCommand = Node.create<{ isAgent: (name: string) => boolean }>(
     const isAgent = this.options.isAgent;
     return [
       new InputRule({
-        find: /(?:^|\s)&([A-Za-z][A-Za-z0-9]*(?:[-_][A-Za-z0-9]+)*)\s$/,
+        find: typedSigil("agents", "[A-Za-z][A-Za-z0-9]*(?:[-_][A-Za-z0-9]+)*"),
         handler: ({ state, range, match }) => {
-          if (!isAgent(match[1])) return null;
-          // The match can start with the space before the `&`, which stays.
-          const from = range.from + match[0].indexOf("&");
-          state.tr.replaceWith(from, range.to, [
-            type.create({ name: match[1] }),
-            state.schema.text(" "),
-          ]);
+          const { name, lead } = match.data ?? {};
+          if (!isAgent(name)) return null;
+          // The match can start with the space before the sigil, which stays.
+          const from = range.from + lead;
+          state.tr.replaceWith(from, range.to, [type.create({ name }), state.schema.text(" ")]);
         },
       }),
     ];
