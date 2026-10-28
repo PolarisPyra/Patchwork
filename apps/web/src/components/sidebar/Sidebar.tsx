@@ -22,6 +22,7 @@ import {
   ChatCircleIcon,
   ExportIcon,
   FolderIcon,
+  FolderOpenIcon,
   FolderPlusIcon,
   GitDiffIcon,
   LockOpenIcon,
@@ -549,6 +550,14 @@ function TasksView({
               label: "Change folder…",
               Icon: FolderIcon,
               onSelect: () => onRelocateProject(targets[0].id),
+            },
+            {
+              label: "Open folder location",
+              Icon: FolderOpenIcon,
+              onSelect: () => {
+                const project = projects.find((p) => p.id === targets[0].id);
+                if (project) void api.revealFile(null, project.path).catch(() => {});
+              },
             },
           ]
         : []),
