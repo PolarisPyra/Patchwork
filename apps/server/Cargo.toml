@@ -33,10 +33,19 @@ regex = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # Exporting the debug logs as one file to send with a bug report.
 zip = { version = "2", default-features = false, features = ["deflate"] }
-# Computer use: a screenshot of each monitor, and the pointer and keyboard under it.
-xcap = { version = "0.9", default-features = false }
+# Computer use: a screenshot of the primary monitor, and the pointer and keyboard under it.
 enigo = { version = "0.6" }
 image = { version = "0.25", default-features = false, features = ["png"] }
+
+# Screenshots. On Linux they are taken in src/screen.rs with crates the app already builds, since
+# xcap would also build PipeWire, which needs newer headers than the AppImage's build machine has.
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+xcap = { version = "0.9", default-features = false }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb = { version = "0.13", features = ["randr"] }
+zbus = "5"
+url = "2"
 
 [dev-dependencies]
 criterion = "0.8.2"

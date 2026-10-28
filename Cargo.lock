@@ -3783,9 +3783,12 @@ dependencies = [
  "toml 1.1.8+spec-1.1.0",
  "ts-rs",
  "ureq",
+ "url",
  "uuid",
  "which",
+ "x11rb",
  "xcap",
+ "zbus 5.19.0",
  "zip",
 ]
 

@@ -16,6 +16,7 @@ pub mod plugins;
 pub mod provider;
 pub mod scheduled;
 mod scope;
+mod screen;
 pub mod skills;
 pub mod terminal;
 mod time;

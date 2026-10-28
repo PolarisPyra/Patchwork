@@ -25,7 +25,6 @@
 //! disk. The thread writes each burst of records out as soon as it arrives, so a killed app
 //! loses at most the records still queued.
 
-use ts_rs::TS;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
@@ -39,6 +38,7 @@ use chrono::{Local, TimeZone};
 use regex::Regex;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
+use ts_rs::TS;
 
 use crate::types::{AgentKind, LogLevel, now_ms};
 

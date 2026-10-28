@@ -66,9 +66,13 @@ at its `timeoutSec` (default 60, 1 to 600). A failed hook is logged and never st
 under it. It is off until Settings → Permissions turns it on; `set_enabled` mirrors the setting so
 the tool list and the approval rules can ask without a database read.
 
-- A screenshot is captured with `xcap`, scaled to 1440 pixels wide with a triangle filter, and
-  written either as a `data:` URL (for the pane) or to a PNG (for the agent, which reads it with
-  `read_file`).
+- `apps/server/src/screen.rs` captures the primary monitor. On Windows and macOS that is `xcap`.
+  On Linux it is the desktop portal under Wayland, cut to the primary monitor that XWayland
+  reports, and the root window under X11. It uses `zbus` and `x11rb`, which the app already builds
+  for notifications and the clipboard. `xcap` is not used on Linux, since it would also build
+  PipeWire's bindings, which need newer headers than the Ubuntu the AppImage is built on.
+- The capture is never scaled: it is written at the screen's own size, either as a `data:` URL
+  (for the pane) or to a PNG (for the agent, which reads it with `read_file`).
 - A capture takes a moment on Wayland: the portal round-trip is about two and a half seconds on a 4K
   screen. That is the cost of the screenshot, not of the scaling.
 - Input uses `enigo`: move, click, type, press a key with modifiers, and scroll.

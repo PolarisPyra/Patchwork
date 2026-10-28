@@ -1050,8 +1050,9 @@ Help with software engineering tasks: fixing bugs, adding features, refactoring,
 
 const COMPUTER_USE: &str = "\
 Computer use is on. computer_screenshot writes a PNG of the screen and returns its path; read it \
-with read_file to see the screen. The picture is scaled down to 1440 pixels wide, so multiply a \
-position you see by screenWidth divided by the picture's width before clicking. Take a screenshot \
+with read_file to see the screen. The picture is the screen at its own size, so click where you see \
+something. Only on a scaled display is its width not screenWidth; then multiply a position by \
+screenWidth divided by the picture's width. Take a screenshot \
 before acting, and again after, because the screen only changes when you act. Prefer a tool over \
 the screen whenever one exists. Stop and report when a step needs the user's password.";
 

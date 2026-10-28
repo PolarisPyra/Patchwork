@@ -2,17 +2,15 @@
 //! what an agent needs to drive another application, the way Claude's and Codex's computer use
 //! does, and it is off unless Settings → Permissions turns it on.
 //!
-//! A screenshot comes back as PNG, scaled down so a model does not spend its context on pixels
-//! it cannot read. Input actions are the small set a model can ask for: move, click, type, press
-//! a key, scroll.
+//! A screenshot comes back as PNG at the screen's own size, never scaled. Input actions are the
+//! small set a model can ask for: move, click, type, press a key, scroll.
 
-use ts_rs::TS;
 use std::path::PathBuf;
 
 use base64::Engine as _;
 use enigo::{Axis, Button, Coordinate, Direction, Enigo, Keyboard, Mouse, Settings as EnigoSettings};
-use image::imageops::FilterType;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 /// Whether Settings → Permissions has turned computer use on. Kept here so the tool list and the
 /// approval rules can ask without a settings lookup.
@@ -28,20 +26,17 @@ pub fn enabled() -> bool {
     ENABLED.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-/// Widest a screenshot is sent. A 4K screen scaled to this is still legible for a model, and
-/// costs a fraction of the tokens.
-pub const MAX_WIDTH: u32 = 1440;
-
 /// A screenshot, as a data URL the webview can show, and the screen's size.
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Screenshot {
     /// `data:image/png;base64,…`
     pub data_url: String,
-    /// The size of the picture, after scaling.
+    /// The size of the picture, in the screen's own pixels.
     pub width: u32,
     pub height: u32,
-    /// The size of the screen it came from.
+    /// The size of the screen in the coordinates the pointer moves in. The same as the picture's,
+    /// except on a scaled Wayland desktop, where the portal's picture has the device pixels.
     pub screen_width: u32,
     pub screen_height: u32,
 }
@@ -85,38 +80,23 @@ fn left() -> String {
     "left".into()
 }
 
-/// The primary monitor as a PNG data URL, scaled to `MAX_WIDTH`.
+/// The primary monitor as a PNG data URL, at its own size.
 pub fn screenshot() -> Result<Screenshot, String> {
-    let monitors = xcap::Monitor::all().map_err(|e| format!("Could not list the screens: {e}"))?;
-    // The primary monitor is the one at the origin; failing that, the first one.
-    let monitor = monitors
-        .iter()
-        .find(|monitor| monitor.x().is_ok_and(|x| x == 0) && monitor.y().is_ok_and(|y| y == 0))
-        .or_else(|| monitors.first())
-        .ok_or("No screen to capture")?;
-    let screen_width = monitor.width().map_err(|e| format!("{e}"))?;
-    let screen_height = monitor.height().map_err(|e| format!("{e}"))?;
-    let image = monitor
-        .capture_image()
-        .map_err(|e| format!("Could not capture the screen: {e}"))?;
+    let crate::screen::Capture {
+        image,
+        screen_width,
+        screen_height,
+    } = crate::screen::capture()?;
     let (width, height) = (image.width(), image.height());
-    let scaled = if width > MAX_WIDTH {
-        let height = (height as u64 * MAX_WIDTH as u64 / width as u64) as u32;
-        // Triangle is a third of Lanczos3's time on a 4K screen and is legible at this scale;
-        // a screenshot is taken mid-turn, so its cost is felt.
-        image::DynamicImage::ImageRgba8(image).resize(MAX_WIDTH, height, FilterType::Triangle)
-    } else {
-        image::DynamicImage::ImageRgba8(image)
-    };
     let mut png = Vec::new();
-    scaled
+    image
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .map_err(|e| format!("Could not encode the screenshot: {e}"))?;
     let encoded = base64::engine::general_purpose::STANDARD.encode(&png);
     Ok(Screenshot {
         data_url: format!("data:image/png;base64,{encoded}"),
-        width: scaled.width(),
-        height: scaled.height(),
+        width,
+        height,
         screen_width,
         screen_height,
     })
@@ -361,7 +341,6 @@ mod tests {
         );
         assert!(shot.data_url.starts_with("data:image/png;base64,"));
         assert!(shot.width > 0 && shot.height > 0);
-        assert!(shot.screen_width >= shot.width, "scaled down, never up");
         // The PNG header, so the base64 really is a picture.
         let encoded = shot.data_url.split_once("base64,").expect("base64").1;
         let png = base64::engine::general_purpose::STANDARD

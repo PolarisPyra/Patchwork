@@ -6,13 +6,13 @@
 //! asks before using a server from a project's `.mcp.json`, and Codex reads a project's
 //! `.codex/config.toml` only in a project the user trusts.
 
-use ts_rs::TS;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock, PoisonError};
 
 use serde::Serialize;
 use serde_json::Value;
+use ts_rs::TS;
 
 use super::mcp::{self, McpServer, ToolInfo};
 use crate::types::{AgentKind, Project};

@@ -200,7 +200,7 @@ export default function PermissionsPane({
       <div className={HEADING}>Computer use</div>
       <TokenRow
         title="Let the agent use the screen"
-        desc="Adds screenshot, click, type, key and scroll tools to Patchwork's own agent. A screenshot is scaled to 1440 pixels wide. Each use asks here unless a rule above allows the screen."
+        desc="Adds screenshot, click, type, key and scroll tools to Patchwork's own agent. Each use asks here unless a rule above allows the screen."
       >
         <TokenSwitch
           label="Computer use"

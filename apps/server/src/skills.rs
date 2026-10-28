@@ -1,12 +1,12 @@
 //! Patchwork's skills: folders holding a `SKILL.md`, all kept in one skills folder that every
 //! agent loads. The folder is `skills` in the config folder unless the user picks another.
 
-use ts_rs::TS;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use notify::{RecursiveMode, Watcher as _};
 use serde::Serialize;
+use ts_rs::TS;
 
 use crate::types::{AgentKind, Settings};
 

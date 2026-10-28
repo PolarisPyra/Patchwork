@@ -7,7 +7,6 @@
 //! keys do, and the file keeps only their names; a value typed into the file by hand is used
 //! as is until the server is next saved.
 
-use ts_rs::TS;
 use std::collections::{BTreeMap, HashMap};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -19,6 +18,7 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use ts_rs::TS;
 
 const CONFIG_FILE: &str = "mcp-servers.json";
 const PROTOCOL: &str = "2025-06-18";

@@ -9,10 +9,11 @@ export type Screenshot = {
  */
 dataUrl: string, 
 /**
- * The size of the picture, after scaling.
+ * The size of the picture, in the screen's own pixels.
  */
 width: number, height: number, 
 /**
- * The size of the screen it came from.
+ * The size of the screen in the coordinates the pointer moves in. The same as the picture's,
+ * except on a scaled Wayland desktop, where the portal's picture has the device pixels.
  */
 screenWidth: number, screenHeight: number, };

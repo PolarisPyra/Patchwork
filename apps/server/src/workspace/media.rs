@@ -1,10 +1,10 @@
 //! What a file a reply produced looks like: an image to draw, source text the diff list keeps, or
 //! a card. Paths are judged by name and size, and nothing is read but the metadata.
 
-use ts_rs::TS;
 use std::path::{Component, Path};
 
 use serde::Serialize;
+use ts_rs::TS;
 
 use crate::Error;
 

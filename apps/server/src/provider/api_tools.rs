@@ -150,7 +150,7 @@ pub fn definitions(plan: bool) -> Value {
             ),
             tool(
                 "computer_click",
-                "Click the pointer at screen pixels. The screenshot is scaled, so work out the real position from the screenshot's size and the screen's.",
+                "Click the pointer at screen pixels, where you see the spot in the screenshot.",
                 json!({"type": "object", "properties": {
                     "x": {"type": "integer"},
                     "y": {"type": "integer"},

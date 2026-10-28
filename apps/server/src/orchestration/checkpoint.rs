@@ -3,15 +3,15 @@
 //! user's own index and branches are untouched, and kept alive by a ref under `refs/patchwork`.
 //! The pair around a turn is what the turn changed, whatever happens to the files later.
 
-use ts_rs::TS;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::process::Output;
 
-use crate::Server;
 use serde::Serialize;
+use ts_rs::TS;
 
+use crate::Server;
 use crate::types::new_id;
 use crate::types::{Thread, TurnTrees};
 

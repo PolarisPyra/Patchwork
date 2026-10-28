@@ -6,7 +6,6 @@
 //! way, since one may carry a secret (an `Authorization` or `X-Api-Key` header), and the config
 //! keeps only their names.
 
-use ts_rs::TS;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock, PoisonError};
@@ -14,6 +13,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use ts_rs::TS;
 
 use crate::types::ModelOption;
 
