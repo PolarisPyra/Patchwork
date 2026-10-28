@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.25] - 2026-10-27
+
+### Added
+
+- You can now paste files and folders you copied in your file manager into the chat box. They go in at the cursor, the same as when you drag them in.
+
+### Fixed
+
+- Pasting a screenshot or another copied image into the chat box now attaches it on macOS, Windows and Linux. Before, this only worked on Linux under Wayland.
+
 ## [0.10.24] - 2026-10-27
 
 ### Fixed
