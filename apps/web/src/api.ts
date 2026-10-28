@@ -953,8 +953,8 @@ export const api = {
   /** Classifies a dropped path as a file, folder, or image. */
   attachmentForPath: (path: string) => invoke<Attachment>("attachment_for_path", { path }),
   /** Saves a pasted image; `data` is the file's bytes, base64-encoded. */
-  savePastedImage: (mimeType: string, data: string) =>
-    invoke<Attachment>("save_pasted_image", { mimeType, data }),
+  savePastedImage: (mimeType: string, data: string, name: string) =>
+    invoke<Attachment>("save_pasted_image", { mimeType, data, name }),
   /** Saves the system clipboard's image to attach, or null when it holds none. */
   pasteClipboardImage: () => invoke<Attachment | null>("paste_clipboard_image"),
   /** The paths of files and folders copied in a file manager, or none. */

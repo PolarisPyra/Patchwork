@@ -40,6 +40,28 @@ pub fn image() -> Option<Vec<u8>> {
     Some(png.into_inner())
 }
 
+/// The file name the app that copied the image suggests for it, such as a KDE screenshot's.
+#[cfg(target_os = "linux")]
+pub fn image_name() -> Option<String> {
+    use std::io::Read;
+    use wl_clipboard_rs::paste::{ClipboardType, MimeType, Seat, get_contents};
+
+    let (mut pipe, _) = get_contents(
+        ClipboardType::Regular,
+        Seat::Unspecified,
+        MimeType::Specific("application/x-kde-suggestedfilename"),
+    )
+    .ok()?;
+    let mut name = String::new();
+    pipe.read_to_string(&mut name).ok()?;
+    Some(name).filter(|name| !name.trim().is_empty())
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn image_name() -> Option<String> {
+    None
+}
+
 /// The paths of files and folders copied in a file manager, or none when the copy is something
 /// else. Webviews give a paste the files' contents at most, never their paths.
 pub fn files() -> Vec<String> {

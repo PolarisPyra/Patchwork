@@ -490,8 +490,13 @@ fn attachment_for_path(path: String) -> Res<Attachment> {
 }
 
 #[tauri::command]
-fn save_pasted_image(server: Srv, mime_type: String, data: String) -> Res<Attachment> {
-    server.save_pasted_image(&mime_type, &data)
+fn save_pasted_image(
+    server: Srv,
+    mime_type: String,
+    data: String,
+    name: Option<String>,
+) -> Res<Attachment> {
+    server.save_pasted_image(&mime_type, &data, name.as_deref())
 }
 
 #[tauri::command]
@@ -514,7 +519,10 @@ async fn paste_clipboard_image(server: Srv<'_>) -> Res<Option<Attachment>> {
     let server = server.inner().clone();
     blocking(move || {
         clipboard::image()
-            .map(|png| server.save_pasted_image_bytes("image/png", &png))
+            .map(|png| {
+                let name = clipboard::image_name();
+                server.save_pasted_image_bytes("image/png", &png, name.as_deref())
+            })
             .transpose()
     })
     .await?

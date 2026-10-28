@@ -421,16 +421,27 @@ impl Server {
 
     /// Saves an image pasted from the clipboard (base64 `data`) as a file, and returns it as an
     /// attachment like a dropped image.
-    pub fn save_pasted_image(&self, mime_type: &str, data: &str) -> Res<Attachment> {
+    pub fn save_pasted_image(
+        &self,
+        mime_type: &str,
+        data: &str,
+        name: Option<&str>,
+    ) -> Res<Attachment> {
         use base64::Engine;
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(data)
             .map_err(|e| format!("Pasted image is not valid base64: {e}"))?;
-        self.save_pasted_image_bytes(mime_type, &bytes)
+        self.save_pasted_image_bytes(mime_type, &bytes, name)
     }
 
-    /// Saves a pasted image's raw bytes as a file, and returns it as an attachment.
-    pub fn save_pasted_image_bytes(&self, mime_type: &str, bytes: &[u8]) -> Res<Attachment> {
+    /// Saves a pasted image's raw bytes as a file, and returns it as an attachment named `name`,
+    /// the name the copy came with, or "Pasted image" when it has none.
+    pub fn save_pasted_image_bytes(
+        &self,
+        mime_type: &str,
+        bytes: &[u8],
+        name: Option<&str>,
+    ) -> Res<Attachment> {
         let ext = match mime_type {
             "image/png" => "png",
             "image/jpeg" => "jpg",
@@ -442,7 +453,10 @@ impl Server {
         let path = self.pasted_dir.join(format!("{}.{ext}", new_id()));
         std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
         let mut attachment = Attachment::from_path(&path.to_string_lossy())?;
-        attachment.name = format!("Pasted image.{ext}");
+        attachment.name = name
+            .and_then(|name| std::path::Path::new(name.trim()).file_name())
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| format!("Pasted image.{ext}"));
         Ok(attachment)
     }
 

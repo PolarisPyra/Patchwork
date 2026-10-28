@@ -497,7 +497,9 @@ export default function Chat({
         const found =
           images.length > 0
             ? await Promise.all(
-                images.map(async (image) => api.savePastedImage(image.type, await base64Of(image))),
+                images.map(async (image) =>
+                  api.savePastedImage(image.type, await base64Of(image), image.name),
+                ),
               )
             : [await api.pasteClipboardImage()].filter((image) => image !== null);
         if (found.length === 0) return;
