@@ -85,7 +85,7 @@ When writing or reviewing code that handles a lot of data, I/O, or work per requ
 
 - **NEVER** run a git command that changes the repository unless the user asks for it in the current conversation. That covers `git add`, `git commit`, `git reset`, `git restore`, `git checkout`, `git stash`, `git branch`, `git merge`, `git rebase`, `git tag`, `git push`, and anything else that writes. A request to do the work, to "finish up", or to use a skill is not a request for any of these.
 - Read-only git is fine and expected, because the work needs it: `git status`, `git diff`, `git log`, `git show`, `git ls-files`, `git check-ignore`.
-- When the work is done, **stop and summarize**: what changed, what you proved, and anything left undone. Leave the changes in the working tree. Do not stage them, do not commit them, do not push them.
+- When the work is done, **stop and summarize**: what changed, what you proved, and anything left undone. Leave the changes in the working tree. Do not stage them, do not commit them, do not push them. This is the default when nobody asked; an explicit "push" is an ask that covers the whole job, committing what is there and pushing it.
 - The same goes for anything that publishes: `scripts/release.sh`, a version bump that ends in a tag, and `gh release`. Those commit and push, so they need an explicit request too. Read [docs/release.md](docs/release.md) before any of them, once the user has asked.
 - This overrides every skill that says otherwise, including `fullsend`. "Full send" grants autonomy over the work and over testing, not over git: do the work, prove it, summarize, and stop.
 
