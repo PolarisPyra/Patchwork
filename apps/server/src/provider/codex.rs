@@ -407,6 +407,18 @@ pub fn steer_input(
     .to_string()
 }
 
+const INTERRUPT_REQUEST: u64 = 13;
+
+/// `turn/interrupt` stops the turn running now; Codex ends it with `turn/completed` and the
+/// status `interrupted`.
+pub fn interrupt(thread_id: &str, turn_id: &str) -> String {
+    json!({"id": INTERRUPT_REQUEST, "method": "turn/interrupt", "params": {
+        "threadId": thread_id,
+        "turnId": turn_id,
+    }})
+    .to_string()
+}
+
 /// A question's reply carries the answers by question id; declining it answers none.
 pub fn approval_reply(
     reply: &Value,
@@ -714,8 +726,9 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                 .and_then(|id| id.strip_prefix(SUBAGENT_READ)?.trim_start().split_once(' '));
             if let Some((thread, name)) = subagent {
                 out.push(subagent_started(thread, name, v, spec, message_id));
-            } else if id == SKILLS_REQUEST {
-                // Nothing to do: the skills folder is only an addition.
+            } else if id == SKILLS_REQUEST || id == INTERRUPT_REQUEST {
+                // Nothing to do: the skills folder is only an addition, and Stop sends SIGTERM to
+                // an agent that does not end its turn when interrupted.
             } else if id == STEER_REQUEST {
                 out.push(match error {
                     Some(message) => Parsed::SteerRejected(message.into()),

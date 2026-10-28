@@ -75,7 +75,7 @@ use super::stream::Unsaved;
 use super::subagents::finish_child;
 use super::subagents::open_child;
 use super::subagents::SubagentThread;
-use super::turn::{TurnEnd, finish, record_turn};
+use super::turn::{TurnEnd, finish, plugin_hooks, record_turn};
 use super::turn::{PendingApproval, Turn};
 use super::decide;
 use super::unasked;
@@ -346,6 +346,26 @@ pub(super) fn ingest(
                 Parsed::Check { .. } => {}
                 Parsed::Finished => {
                     ended = true;
+                    // Stop interrupted the agent and it ended its reply. Claude stays up for the
+                    // next message, as after any reply; Codex exits once its stdin closes. Until
+                    // the agent is idle or has exited, Stop still sends SIGTERM if it hangs.
+                    if turn.cancelled.load(Ordering::SeqCst) && turn.interrupts.waiting() {
+                        if stays_up(&turn, &running_tasks, &shell_tasks, &goal) {
+                            turn.interrupts.answer();
+                            // An error in the stopped reply does not carry over to the next one.
+                            stream_error = None;
+                            go_idle(&mut turn, &segments, &mut completed, &mut unsaved, true);
+                        } else if turn.agent == AgentKind::Codex {
+                            turn.stdin
+                                .lock()
+                                .unwrap_or_else(PoisonError::into_inner)
+                                .take();
+                        } else {
+                            // What it left running toward a goal or in the background stops too.
+                            terminate(pid, turn.exited.clone());
+                        }
+                        continue;
+                    }
                     let steered = !turn
                         .steers
                         .lock()
@@ -378,7 +398,7 @@ pub(super) fn ingest(
                     // sent to the background works, and takes messages meanwhile.
                     let background = running_tasks.values().any(Option::is_some);
                     if can_idle(&turn, &running_tasks, &shell_tasks, &goal, &stream_error) {
-                        go_idle(&mut turn, &segments, &mut completed, &mut unsaved);
+                        go_idle(&mut turn, &segments, &mut completed, &mut unsaved, false);
                     } else if !background {
                         end_input(&turn, goal_run, &goal_round);
                     }
@@ -466,7 +486,7 @@ pub(super) fn ingest(
                     if ended && can_idle(&turn, &running_tasks, &shell_tasks, &goal, &stream_error)
                     {
                         if completed < segments.len() {
-                            go_idle(&mut turn, &segments, &mut completed, &mut unsaved);
+                            go_idle(&mut turn, &segments, &mut completed, &mut unsaved, false);
                         }
                     } else if ended {
                         end_input(&turn, goal_run, &goal_round);
@@ -549,7 +569,7 @@ pub(super) fn ingest(
                     if ended && can_idle(&turn, &running_tasks, &shell_tasks, &goal, &stream_error)
                     {
                         if completed < segments.len() {
-                            go_idle(&mut turn, &segments, &mut completed, &mut unsaved);
+                            go_idle(&mut turn, &segments, &mut completed, &mut unsaved, false);
                         }
                     } else if ended && !background {
                         end_input(&turn, goal_run, &goal_round);
@@ -579,6 +599,9 @@ pub(super) fn ingest(
                     stream_error.get_or_insert(message);
                 }
                 Parsed::SessionLost => session_lost = true,
+                // A reply Stop interrupted ends as stopped, not as cut short by a steering message.
+                Parsed::Event(AgentEvent::MessageCutOff { .. })
+                    if turn.cancelled.load(Ordering::SeqCst) => {}
                 Parsed::Event(mut event) => {
                     steer_reply_empty = false;
                     if let AgentEvent::Thinking { .. } = &event {
@@ -769,9 +792,20 @@ fn can_idle(
     goal: &Option<Goal>,
     stream_error: &Option<String>,
 ) -> bool {
-    turn.agent == AgentKind::Claude
-        && stream_error.is_none()
+    stream_error.is_none()
         && !turn.cancelled.load(Ordering::SeqCst)
+        && stays_up(turn, running_tasks, shell_tasks, goal)
+}
+
+/// Whether Claude can stay up once its reply has ended: nothing it sent to the background but
+/// shell commands still runs, and it has no goal to pursue.
+fn stays_up(
+    turn: &Turn,
+    running_tasks: &HashMap<String, Option<bool>>,
+    shell_tasks: &HashMap<String, String>,
+    goal: &Option<Goal>,
+) -> bool {
+    turn.agent == AgentKind::Claude
         && !goal
             .as_ref()
             .is_some_and(|g| matches!(g.status, GoalStatus::Active | GoalStatus::Paused))
@@ -783,8 +817,15 @@ fn can_idle(
 
 /// Completes the replies not yet completed, with the files they changed, and marks the turn
 /// idle: the agent stays up and takes the next message as a new reply, starting with the
-/// messages queued meanwhile.
-fn go_idle(turn: &mut Turn, segments: &[String], completed: &mut usize, unsaved: &mut Unsaved) {
+/// messages queued meanwhile. `stopped` when Stop interrupted the last reply: it ends as
+/// stopped, its unanswered requests lapse, and the queued messages wait for the user.
+fn go_idle(
+    turn: &mut Turn,
+    segments: &[String],
+    completed: &mut usize,
+    unsaved: &mut Unsaved,
+    stopped: bool,
+) {
     turn.save_text(unsaved);
     let after = workspace::git_changes(&turn.root).unwrap_or_default();
     let changed = attribution::lock(&turn.attribution).settle(after);
@@ -806,16 +847,68 @@ fn go_idle(turn: &mut Turn, segments: &[String], completed: &mut usize, unsaved:
     });
     drop(handed_over);
     record_turn(turn, &segments[*completed..]);
-    segments[*completed..].iter().for_each(|id| {
-        turn.publish(AgentEvent::TurnCompleted {
-            message_id: id.clone(),
-            status: MessageStatus::Complete,
-            error: None,
+    let last = segments.len().saturating_sub(1);
+    segments
+        .iter()
+        .enumerate()
+        .skip(*completed)
+        .for_each(|(at, id)| {
+            let status = if stopped && at == last {
+                MessageStatus::Cancelled
+            } else {
+                MessageStatus::Complete
+            };
+            turn.publish(AgentEvent::TurnCompleted {
+                message_id: id.clone(),
+                status,
+                error: None,
+            });
         });
-    });
     *completed = segments.len();
+    if stopped {
+        // The interrupt ended the requests the agent was waiting on, and the steering messages
+        // it had not taken. A permission hook still holding a call hears it was refused.
+        let lapsed: Vec<String> = turn
+            .pending
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .drain()
+            .map(|(id, _)| id)
+            .collect();
+        let mut hooks = turn
+            .server
+            .runner
+            .hooks
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        lapsed
+            .iter()
+            .filter_map(|id| hooks.remove(id))
+            .for_each(|waiter| {
+                let _ = waiter.send(false);
+            });
+        drop(hooks);
+        turn.steers
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clear();
+        let (server, thread_id, root, agent) = (
+            turn.server.clone(),
+            turn.thread_id.clone(),
+            turn.root.clone(),
+            turn.agent,
+        );
+        std::thread::spawn(move || {
+            let status = Some(MessageStatus::Cancelled);
+            plugin_hooks(&server, "interrupt", &thread_id, &root, agent, status);
+        });
+        // The agent takes the next message again.
+        turn.cancelled.store(false, Ordering::SeqCst);
+    }
     turn.idle.store(true, Ordering::SeqCst);
-    turn.server.send_queued_later(&turn.thread_id);
+    if !stopped {
+        turn.server.send_queued_later(&turn.thread_id);
+    }
 }
 
 #[cfg(test)]

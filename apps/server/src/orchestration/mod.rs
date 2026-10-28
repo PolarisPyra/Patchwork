@@ -24,7 +24,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
-use process::{QUIT_GRACE, terminate, write_line, write_to};
+use process::{INTERRUPT_GRACE, QUIT_GRACE, terminate, write_line, write_to};
 use queue::FollowUp;
 pub use queue::FollowUpInput;
 pub use turn::TurnRequest;
@@ -338,14 +338,7 @@ impl Runner {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         let mut dropped = Vec::new();
         if let Some(turn) = turns.get(thread_id) {
-            turn.cancelled.store(true, Ordering::SeqCst);
-            dropped = turn
-                .queue
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .drain(..)
-                .map(|f| f.message_id)
-                .collect();
+            dropped = stop_turn(turn);
             let (pid, exited, scope) = (turn.pid, turn.exited.clone(), turn.scope.clone());
             let grace = if last_line.is_some_and(|line| write_line(&turn.stdin, &line)) {
                 Duration::from_millis(300)
@@ -360,6 +353,62 @@ impl Runner {
                 }
             });
         }
+        dropped
+    }
+
+    /// Stops the reply under way and drops the messages waiting for it, as `cancel` does, but
+    /// by interrupting the agent, which ends its turn cleanly in its session. Claude then stays
+    /// up for the next message. An agent that cannot be interrupted, or that does not end its
+    /// reply within `INTERRUPT_GRACE`, is stopped as `cancel` stops it. `session_id` is the
+    /// thread's agent session, which Codex needs.
+    pub fn interrupt(
+        &self,
+        thread_id: &str,
+        session_id: Option<&str>,
+        last_line: Option<String>,
+    ) -> Vec<String> {
+        let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+        let Some(turn) = turns.get(thread_id) else {
+            return Vec::new();
+        };
+        let turn_id = turn
+            .native_turn
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        // An idle agent has no reply to stop; it is stopped with the commands it left running.
+        let line = (!turn.idle.load(Ordering::SeqCst))
+            .then(|| provider::interrupt(turn.agent, session_id, turn_id.as_deref()))
+            .flatten();
+        let Some(line) = line else {
+            drop(turns);
+            return self.cancel(thread_id, last_line);
+        };
+        let dropped = stop_turn(turn);
+        if let Some(last_line) = &last_line {
+            write_line(&turn.stdin, last_line);
+        }
+        let asked = turn.interrupts.ask();
+        let wait = if write_line(&turn.stdin, &line) {
+            INTERRUPT_GRACE
+        } else {
+            Duration::ZERO
+        };
+        let (pid, exited, scope) = (turn.pid, turn.exited.clone(), turn.scope.clone());
+        let interrupts = turn.interrupts.clone();
+        std::thread::spawn(move || {
+            let deadline = Instant::now() + wait;
+            let done = || exited.load(Ordering::SeqCst) || interrupts.answered(asked);
+            while !done() && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            if !done() {
+                terminate(pid, exited);
+                if let Some(unit) = scope {
+                    scope::stop(&unit);
+                }
+            }
+        });
         dropped
     }
 
@@ -490,6 +539,17 @@ impl Runner {
         );
         Ok(())
     }
+}
+
+/// Marks the turn stopped and takes back the messages waiting for it, returning their ids.
+fn stop_turn(turn: &RunningTurn) -> Vec<String> {
+    turn.cancelled.store(true, Ordering::SeqCst);
+    turn.queue
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .drain(..)
+        .map(|f| f.message_id)
+        .collect()
 }
 
 #[cfg(test)]

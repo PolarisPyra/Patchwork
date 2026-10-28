@@ -182,6 +182,17 @@ pub fn stop_task(task_id: &str) -> String {
     .to_string()
 }
 
+/// Asks Claude to stop its reply. It ends the reply with a `result` whose `terminal_reason` is
+/// `aborted_streaming` or `aborted_tools`, and stays up for the next message.
+pub fn interrupt() -> String {
+    serde_json::json!({
+        "type": "control_request",
+        "request_id": crate::types::new_id(),
+        "request": {"subtype": "interrupt"},
+    })
+    .to_string()
+}
+
 /// Answers go back in the tool's input, each under its question's text, with several picks
 /// joined by commas.
 pub fn approval_reply(

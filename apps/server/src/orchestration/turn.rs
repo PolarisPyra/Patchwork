@@ -38,6 +38,7 @@ use super::claude;
 use super::codex;
 use super::ingest::ingest;
 use super::process::AgentStdin;
+use super::process::Interrupts;
 use super::process::close_stdin_unless_steered;
 use super::process::read_stderr_tail;
 use super::process::Stdin;
@@ -74,6 +75,8 @@ pub(super) type NativeTurn = Arc<Mutex<Option<String>>>;
 pub(super) struct RunningTurn {
     pub(super) pid: u32,
     pub(super) cancelled: Arc<AtomicBool>,
+    /// The interrupts Stop wrote to the agent, and whether it answered them.
+    pub(super) interrupts: Arc<Interrupts>,
     /// Set once the agent process has exited and been reaped.
     pub(super) exited: Arc<AtomicBool>,
     /// The systemd scope the agent runs in, when scopes are on.
@@ -313,6 +316,7 @@ impl Runner {
 
         let message = assistant_message();
         let cancelled = Arc::new(AtomicBool::new(false));
+        let interrupts = Arc::<Interrupts>::default();
         let timed_out = Arc::new(AtomicBool::new(false));
         let exited = Arc::new(AtomicBool::new(false));
         let pending = Pending::default();
@@ -328,6 +332,7 @@ impl Runner {
             message_id: message.id.clone(),
             agent,
             cancelled: cancelled.clone(),
+            interrupts: interrupts.clone(),
             timed_out: timed_out.clone(),
             exited: exited.clone(),
             attribution: attribution.clone(),
@@ -363,6 +368,7 @@ impl Runner {
                 RunningTurn {
                     pid: child.id(),
                     cancelled,
+                    interrupts,
                     exited,
                     scope: turn.scope.clone(),
                     agent,
@@ -458,6 +464,7 @@ pub(super) struct Turn {
     pub(super) message_id: String,
     pub(super) agent: AgentKind,
     pub(super) cancelled: Arc<AtomicBool>,
+    pub(super) interrupts: Arc<Interrupts>,
     /// Set when the turn ran past `TURN_TIMEOUT` and the agent was stopped for it.
     pub(super) timed_out: Arc<AtomicBool>,
     pub(super) exited: Arc<AtomicBool>,
@@ -821,7 +828,7 @@ pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
 }
 
 /// Runs the enabled plugins' hooks for `event` and logs the ones that failed.
-fn plugin_hooks(
+pub(super) fn plugin_hooks(
     server: &Server,
     event: &str,
     thread_id: &str,

@@ -574,6 +574,20 @@ pub fn goal_pause(agent: AgentKind, session_id: &str) -> Option<String> {
     (agent == AgentKind::Codex).then(|| codex::goal_pause(session_id))
 }
 
+/// The stdin line that stops the agent's reply without ending its process, for agents that can.
+/// Codex needs the id of the turn it is running.
+pub fn interrupt(
+    agent: AgentKind,
+    session_id: Option<&str>,
+    turn_id: Option<&str>,
+) -> Option<String> {
+    match agent {
+        AgentKind::Claude => Some(claude::interrupt()),
+        AgentKind::Codex => Some(codex::interrupt(session_id?, turn_id?)),
+        AgentKind::Antigravity | AgentKind::OpenCode | AgentKind::Api => None,
+    }
+}
+
 /// The stdin line that stops one subagent, for agents that can.
 pub fn stop_subagent(agent: AgentKind, task_id: &str) -> Option<String> {
     (agent == AgentKind::Claude).then(|| claude::stop_task(task_id))

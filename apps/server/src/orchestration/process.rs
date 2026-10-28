@@ -8,6 +8,7 @@ use std::process::ChildStdin;
 use std::process::ExitStatus;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 use std::sync::PoisonError;
@@ -26,6 +27,10 @@ pub(super) const KILL_AFTER: Duration = Duration::from_secs(5);
 
 /// How long quitting the app waits for agents to exit after SIGTERM.
 pub(super) const QUIT_GRACE: Duration = Duration::from_secs(2);
+
+/// How long a stopped agent gets to end its reply after being interrupted before it is sent
+/// SIGTERM.
+pub(super) const INTERRUPT_GRACE: Duration = Duration::from_secs(5);
 
 /// The longest line of agent output that is kept; longer lines are dropped whole.
 pub(super) const MAX_LINE_BYTES: usize = 8 << 20;
@@ -94,6 +99,37 @@ pub(super) fn terminate(pid: u32, exited: Arc<AtomicBool>) {
             workspace::signal_process_group(pid, workspace::SIGKILL);
         }
     });
+}
+
+/// The interrupts Stop has written to an agent, and how many of them the agent has answered by
+/// ending its reply and staying up for the next message. An agent that neither does so nor exits
+/// is stopped with a signal.
+#[derive(Default)]
+pub(super) struct Interrupts {
+    asked: AtomicU64,
+    answered: AtomicU64,
+}
+
+impl Interrupts {
+    /// Counts one more interrupt, and returns its number.
+    pub(super) fn ask(&self) -> u64 {
+        self.asked.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    /// Whether an interrupt is still waiting for the agent to end its reply.
+    pub(super) fn waiting(&self) -> bool {
+        self.answered.load(Ordering::SeqCst) < self.asked.load(Ordering::SeqCst)
+    }
+
+    /// The agent ended its reply and stays up, which answers every interrupt written so far.
+    pub(super) fn answer(&self) {
+        self.answered
+            .store(self.asked.load(Ordering::SeqCst), Ordering::SeqCst);
+    }
+
+    pub(super) fn answered(&self, number: u64) -> bool {
+        self.answered.load(Ordering::SeqCst) >= number
+    }
 }
 
 /// Why the agent's process ended, when it left no error message of its own.

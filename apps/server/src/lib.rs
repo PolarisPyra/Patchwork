@@ -1430,26 +1430,38 @@ impl Server {
         Ok(msg)
     }
 
-    /// Stops the running turn. Codex is first told to pause the goal it is pursuing,
-    /// so it does not carry on with it later.
+    /// Stops the running turn by interrupting the agent, so its session records the stop and an
+    /// agent that can stays up for the next message. Codex is first told to pause the goal it is
+    /// pursuing, so it does not carry on with it later.
     pub fn cancel_turn(&self, thread_id: &str) {
-        let pause = self.store.thread(thread_id).and_then(|t| {
+        self.stop_turn(thread_id, true);
+    }
+
+    /// Stops the running turn as `cancel_turn` does; without `interrupt`, the agent process ends
+    /// with it.
+    fn stop_turn(&self, thread_id: &str, interrupt: bool) {
+        let thread = self.store.thread(thread_id);
+        let session_id = thread.as_ref().and_then(|t| t.session_id.clone());
+        let pause = thread.and_then(|t| {
             let active = t.goal.is_some_and(|g| g.status == GoalStatus::Active);
             provider::goal_pause(t.agent, t.session_id.as_deref()?).filter(|_| active)
         });
-        self.runner
-            .cancel(thread_id, pause)
-            .into_iter()
-            .for_each(|message_id| {
-                orchestration::publish(
-                    self,
-                    thread_id,
-                    AgentEvent::MessageQueued {
-                        message_id,
-                        queued: false,
-                    },
-                );
-            });
+        let dropped = if interrupt {
+            self.runner
+                .interrupt(thread_id, session_id.as_deref(), pause)
+        } else {
+            self.runner.cancel(thread_id, pause)
+        };
+        dropped.into_iter().for_each(|message_id| {
+            orchestration::publish(
+                self,
+                thread_id,
+                AgentEvent::MessageQueued {
+                    message_id,
+                    queued: false,
+                },
+            );
+        });
     }
 
     /// Takes back a message sent mid-turn that has not started yet, so it can be edited.
@@ -1662,7 +1674,8 @@ impl Server {
     /// Clears a chat: any running turn is cancelled, then its messages and agent session are
     /// deleted. The chat stays in the sidebar, empty.
     pub fn clear_thread(&self, thread_id: &str) -> Result<(), String> {
-        self.cancel_turn(thread_id);
+        // The agent process goes too, since it holds the session being deleted.
+        self.stop_turn(thread_id, false);
         self.remove_checkpoints(thread_id);
         self.remove_api_session(thread_id);
         self.store.clear_thread(thread_id)
