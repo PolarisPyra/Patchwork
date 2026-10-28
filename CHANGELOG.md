@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.31] - 2026-10-28
+
+### Fixed
+
+- Choosing a section in Settings no longer makes its highlight shrink. The side menu now always keeps room for its scrollbar, so its rows keep the same width from the start instead of narrowing after you pick one.
+
 ## [0.10.30] - 2026-10-28
 
 ### Added
