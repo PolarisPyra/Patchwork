@@ -3,6 +3,29 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.38] - 2026-10-28
+
+### Added
+
+- Codex chats can now be compacted from the chat box, as Claude and OpenCode chats already could, to free up context in a long conversation.
+- Every finished reply has a Fork button that opens a new chat with the conversation up to that reply, so you can try a different direction without losing the original chat.
+- Settings → Claude CLI now lists the feature flags and models the installed Claude Code is using, like the Codex CLI page, and the thinking picker in the chat box now offers only the levels the model you picked accepts.
+- A project's right-click menu in the sidebar has "Open folder", which shows the project's folder in the file manager.
+- Background work the agent starts and leaves running, such as a command, a subagent, or a workflow, now appears above the chat box with how long it has run, until it finishes. You can stop it there when the agent allows it; Codex commands show without a stop button. Claude waits for its background work to report back, so it can carry on with the result.
+- Formulas in chat replies now render. Wrap one in double dollar signs, inline or on a line of its own, and copying it gives back the formula as typed. Single dollar signs stay plain text, so prices and shell variables are not read as formulas. Code in chat and the Canvas is coloured more accurately, and added and removed lines in a diff show in green and red.
+
+### Changed
+
+- Stop now interrupts a Claude or Codex reply instead of shutting the agent down, so Claude answers your next message straight away in the same session instead of starting up again.
+- Settings → Agents now has one Providers page instead of separate CLI Providers and API Providers pages. Installed agents and your API providers are listed together, and an API provider's form opens on the same page.
+- Settings → Scheduled shows each task as a card with its schedule, its project or scratch chat, its agent, its recent runs, and when it runs next. Paused tasks are marked Paused. New task and Refresh sit in one row at the top, and the task form labels every field.
+
+### Fixed
+
+- A chat or task that starts with an attached file or a file mention is now titled from the message after it, not from the file's name. A message that is only files gets no title.
+- On Wayland, a file, folder, link, or editor that Patchwork opens now comes to the front instead of staying behind your other windows. Showing a file in the file manager does too.
+- Fetch models in Settings → Providers now explains why a provider returned no models, instead of showing an empty list. Local servers such as LM Studio need /v1 at the end of the Base URL, and the message says so.
+
 ## [0.10.37] - 2026-10-28
 
 ### Added
