@@ -19,7 +19,8 @@ uuid = { version = "1", features = ["v4"] }
 which = "7"
 libc = "0.2"
 thiserror = "2"
-ts-rs = { version = "12", features = ["serde-json-impl"] }
+# `alias` on a variant is for reading old saved names, and the bindings don't need it.
+ts-rs = { version = "12", features = ["serde-json-impl", "no-serde-warnings"] }
 rusqlite = { version = "0.37", features = ["bundled"] }
 ureq = { version = "3", features = ["json"] }
 # API providers: keys in the system credential store, and the agent's file search tools.
