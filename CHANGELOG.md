@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.36] - 2026-10-28
+
+### Added
+
+- When an agent makes an image, such as a logo or a screenshot, its reply now shows a thumbnail you can click to open in the side panel. Other files it makes, such as a PDF, show as a card with their type and size and a button that opens the file in its usual app. Text files still appear only in the reply's list of changed files.
+
 ## [0.10.35] - 2026-10-28
 
 ### Added
