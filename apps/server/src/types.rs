@@ -526,14 +526,49 @@ pub enum Part {
     },
 }
 
-/// A shell command the agent started in the background, still running.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+/// Where a task the agent started stands.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
+pub enum TaskStatus {
+    Running,
+    /// Pending, or paused by the agent.
+    Waiting,
+    Done,
+    Failed,
+    /// Stopped by the user, or ended with the process that ran it.
+    #[default]
+    Stopped,
+}
+
+impl TaskStatus {
+    /// Whether the task still runs, so it is listed under the background.
+    pub fn is_live(self) -> bool {
+        matches!(self, Self::Running | Self::Waiting)
+    }
+}
+
+/// A task the agent started and left running past its reply, such as a background command, a
+/// subagent, or a workflow. It is listed under the message it started in until it ends.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
 pub struct BackgroundTask {
-    /// The id of the tool call that started it; stops it.
+    /// The id of the tool call that started it.
     pub tool_id: String,
-    /// What the command does, as the agent described it.
+    /// The id the agent gives the task. Stopping it takes this id, so None means it cannot be stopped.
+    pub task_id: Option<String>,
+    /// The agent's id for the run the task belongs to, when it has one.
+    pub run_id: Option<String>,
+    /// The kind of task: Claude's task type, such as `local_bash`, or `command` or `agent` for Codex.
+    pub kind: String,
+    /// What the task does, as the agent described it.
     pub description: String,
+    pub status: TaskStatus,
+    /// When it started, in Unix epoch milliseconds.
+    pub started_at: u64,
+    /// The latest one-line progress the agent reported.
+    pub summary: Option<String>,
+    /// The file its output was written to.
+    pub output: Option<String>,
 }
 
 /// A subagent an agent started, e.g. with Claude Code's Task tool.
@@ -1251,15 +1286,20 @@ pub enum AgentEvent {
     MessageEdited {
         message: Message,
     },
-    /// A background shell command started and is still running.
+    /// A task the agent left running past its reply is listed under the message it started in.
     BackgroundTaskStarted {
         message_id: String,
         task: BackgroundTask,
     },
-    /// A background shell command ended.
+    /// A listed task changed: its status, description, or progress.
+    BackgroundTaskUpdated {
+        message_id: String,
+        task: BackgroundTask,
+    },
+    /// A listed task ended, with its final status.
     BackgroundTaskEnded {
         message_id: String,
-        tool_id: String,
+        task: BackgroundTask,
     },
     /// The project's snapshots from before and after the turn that wrote the message.
     TurnRecorded {

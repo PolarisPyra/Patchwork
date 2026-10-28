@@ -34,7 +34,7 @@ use serde_json::Value;
 use crate::types::{
     AgentKind, AgentStatus, ModelOption, ProviderSlashCommand, StepStatus, ToolCall, tool_output,
     SubAgent, AccessMode, Question, AttachmentKind, Attachment, image_media_type, TokenUsage, Goal,
-    UsageWindow, AgentEvent, now_ms,
+    UsageWindow, AgentEvent, now_ms, BackgroundTask, TaskStatus,
 };
 use crate::workspace::{signal_process_group, SIGKILL};
 
@@ -768,6 +768,38 @@ pub fn approval_reply(
     }
 }
 
+/// One change to a task the agent started, as the agent reports it. Its `task_id` is the agent's
+/// own id for the task, which is how later changes name it.
+#[derive(Debug)]
+pub enum TaskEvent {
+    /// A task began. `top_level` is false for one a subagent started, which is listed under that
+    /// subagent's thread instead. `backgrounded` is set when it was started to run in the background.
+    Started {
+        task: BackgroundTask,
+        task_id: String,
+        top_level: bool,
+        backgrounded: bool,
+    },
+    /// The task's status or description changed, or it was moved to the background once started.
+    /// A status that has ended is reported as `Ended` instead.
+    Updated {
+        task_id: String,
+        status: Option<TaskStatus>,
+        description: Option<String>,
+        backgrounded: bool,
+    },
+    /// The one-line progress the task reported.
+    Progress { task_id: String, summary: String },
+    /// The task ended. The agent may report this twice, once as its status and once as its
+    /// notification with the output, in either order, so each part is merged in.
+    Ended {
+        task_id: String,
+        status: TaskStatus,
+        summary: Option<String>,
+        output: Option<String>,
+    },
+}
+
 /// What one JSONL line means for the turn.
 #[derive(Debug)]
 // Each event is built once and moved straight into the turn, so boxing the large variant would
@@ -777,21 +809,8 @@ pub enum Parsed {
     Event(AgentEvent),
     SessionId(String),
     SlashCommands(Vec<ProviderSlashCommand>),
-    /// The agent's own id for the subagent that the tool call `tool_id` started.
-    TaskStarted {
-        tool_id: String,
-        task_id: String,
-    },
-    /// A shell command the agent started itself, in the background; it runs past its tool call.
-    BackgroundTask {
-        tool_id: String,
-        description: String,
-    },
-    /// That subagent ended, which for one sent to the background is after its tool call.
-    TaskEnded {
-        tool_id: String,
-        failed: bool,
-    },
+    /// A task the agent reports on: started, moved to the background, progressing, or ended.
+    Task(TaskEvent),
     /// Subscription usage the agent reported along the way.
     Usage(Vec<UsageWindow>),
     /// Tokens one model request used. `top_level` is false for a subagent's request.

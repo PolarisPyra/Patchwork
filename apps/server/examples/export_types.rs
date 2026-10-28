@@ -78,6 +78,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     names.push("ToolCall");
     patchwork_server::types::BackgroundTask::export_all(&cfg)?;
     names.push("BackgroundTask");
+    patchwork_server::types::TaskStatus::export_all(&cfg)?;
+    names.push("TaskStatus");
     patchwork_server::types::SubAgent::export_all(&cfg)?;
     names.push("SubAgent");
     patchwork_server::types::PlanStep::export_all(&cfg)?;

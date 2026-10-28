@@ -7,6 +7,7 @@ pub mod checkpoint;
 pub mod claude;
 pub mod codex;
 mod attribution;
+mod background;
 mod ingest;
 pub(crate) mod goal;
 mod hook;

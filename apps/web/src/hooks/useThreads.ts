@@ -200,18 +200,16 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
       return { ...thread, messages: thread.messages.filter((m) => m.id !== event.messageId) };
     case "messageEdited":
       return updateMessage(thread, event.message.id, () => event.message);
-    case "backgroundTaskStarted": {
+    case "backgroundTaskStarted":
+    case "backgroundTaskUpdated":
+    case "backgroundTaskEnded": {
+      // A task is listed once, and each change replaces its record, which keeps its final status.
       const { messageId, task } = event;
       return updateMessage(thread, messageId, (m) => ({
         ...m,
-        background: [...m.background, task],
-      }));
-    }
-    case "backgroundTaskEnded": {
-      const { messageId, toolId } = event;
-      return updateMessage(thread, messageId, (m) => ({
-        ...m,
-        background: m.background.filter((t) => t.toolId !== toolId),
+        background: m.background.some((t) => t.toolId === task.toolId)
+          ? m.background.map((t) => (t.toolId === task.toolId ? task : t))
+          : [...m.background, task],
       }));
     }
     case "turnRecorded": {

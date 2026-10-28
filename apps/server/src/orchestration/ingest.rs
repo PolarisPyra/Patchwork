@@ -15,13 +15,13 @@ use serde_json::Value;
 use crate::provider::GoalUpdate;
 use crate::permissions;
 use crate::provider::Parsed;
+use crate::provider::TaskEvent;
 use crate::provider;
 use crate::scope;
 use crate::types::AgentEvent;
 use crate::types::AgentKind;
 use crate::types::Approval;
 use crate::types::ApprovalStatus;
-use crate::types::BackgroundTask;
 
 /// What kind of output a line is, as its `type` (or JSON-RPC `method`) and any `subtype`.
 fn line_kind(value: &Value) -> String {
@@ -59,6 +59,7 @@ use crate::types::LogLevel;
 use crate::workspace;
 
 use super::attribution;
+use super::background::Background;
 #[cfg(test)]
 use super::attribution::changed_paths;
 use super::goal::end_input;
@@ -100,11 +101,8 @@ pub(super) fn ingest(
     let mut tool_owner: HashMap<String, String> = HashMap::new();
     // The threads of the subagents still running, by the call that started each.
     let mut children: HashMap<String, SubagentThread> = HashMap::new();
-    // Subagents still running, and whether the call of one sent to the background, which
-    // returns at once, failed; it is reported finished when the subagent ends.
-    let mut running_tasks: HashMap<String, Option<bool>> = HashMap::new();
-    // Background shell commands the agent started itself: tool call id → the message they are shown in.
-    let mut shell_tasks: HashMap<String, String> = HashMap::new();
+    // The tasks the agent started, and which of them are listed under the background.
+    let mut background = Background::default();
     // Every message of the turn: the first reply, then one per steering message taken.
     let mut segments = vec![turn.message_id.clone()];
     // How many of `segments` were completed when the agent went idle.
@@ -350,7 +348,7 @@ pub(super) fn ingest(
                     // next message, as after any reply; Codex exits once its stdin closes. Until
                     // the agent is idle or has exited, Stop still sends SIGTERM if it hangs.
                     if turn.cancelled.load(Ordering::SeqCst) && turn.interrupts.waiting() {
-                        if stays_up(&turn, &running_tasks, &shell_tasks, &goal) {
+                        if stays_up(&turn, &goal) {
                             turn.interrupts.answer();
                             // An error in the stopped reply does not carry over to the next one.
                             stream_error = None;
@@ -393,13 +391,19 @@ pub(super) fn ingest(
                     if stream_error.is_some() {
                         goal_run = false;
                     }
+                    // Codex's calls still open are what its turn left running, so they are listed
+                    // under the background now.
+                    if turn.agent == AgentKind::Codex {
+                        for event in background.list_unreported(&turn.message_id) {
+                            publish_event(&turn, &mut children, &mut unsaved, event);
+                        }
+                    }
                     // Claude stays up idle for the next message, so its session and connectors
-                    // are not set up again for each one. It also stays up while a subagent it
-                    // sent to the background works, and takes messages meanwhile.
-                    let background = running_tasks.values().any(Option::is_some);
-                    if can_idle(&turn, &running_tasks, &shell_tasks, &goal, &stream_error) {
+                    // are not set up again for each one. It takes messages meanwhile, including
+                    // while a task it started keeps running.
+                    if can_idle(&turn, &goal, &stream_error) {
                         go_idle(&mut turn, &segments, &mut completed, &mut unsaved, false);
-                    } else if !background {
+                    } else if !background.keeps_stdin_open() {
                         end_input(&turn, goal_run, &goal_round);
                     }
                 }
@@ -483,12 +487,11 @@ pub(super) fn ingest(
                         && goal
                             .as_ref()
                             .is_some_and(|g| g.status == GoalStatus::Active);
-                    if ended && can_idle(&turn, &running_tasks, &shell_tasks, &goal, &stream_error)
-                    {
+                    if ended && can_idle(&turn, &goal, &stream_error) {
                         if completed < segments.len() {
                             go_idle(&mut turn, &segments, &mut completed, &mut unsaved, false);
                         }
-                    } else if ended {
+                    } else if ended && !background.keeps_stdin_open() {
                         end_input(&turn, goal_run, &goal_round);
                     }
                 }
@@ -504,25 +507,24 @@ pub(super) fn ingest(
                 Parsed::SlashCommands(commands) => {
                     turn.publish(AgentEvent::SlashCommandsUpdated { commands });
                 }
-                Parsed::TaskStarted { tool_id, task_id } => {
-                    running_tasks.insert(tool_id.clone(), None);
-                    turn.tasks
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .insert(tool_id, task_id);
-                }
-                Parsed::BackgroundTask {
-                    tool_id,
-                    description,
-                } => {
-                    shell_tasks.insert(tool_id.clone(), turn.message_id.clone());
-                    turn.publish(AgentEvent::BackgroundTaskStarted {
-                        message_id: turn.message_id.clone(),
-                        task: BackgroundTask {
-                            tool_id,
-                            description,
-                        },
-                    });
+                Parsed::Task(event) => {
+                    if let TaskEvent::Started { task, task_id, .. } = &event {
+                        turn.tasks
+                            .lock()
+                            .unwrap_or_else(PoisonError::into_inner)
+                            .insert(task.tool_id.clone(), task_id.clone());
+                    }
+                    for event in background.apply(event, &turn.message_id) {
+                        publish_event(&turn, &mut children, &mut unsaved, event);
+                    }
+                    // A reply that has ended goes idle, or closes stdin, once no task holds it open.
+                    if ended && can_idle(&turn, &goal, &stream_error) {
+                        if completed < segments.len() {
+                            go_idle(&mut turn, &segments, &mut completed, &mut unsaved, false);
+                        }
+                    } else if ended && !background.keeps_stdin_open() {
+                        end_input(&turn, goal_run, &goal_round);
+                    }
                 }
                 Parsed::Usage(windows) => turn.server.usage.record(turn.agent, windows),
                 Parsed::RequestUsage {
@@ -542,38 +544,6 @@ pub(super) fn ingest(
                         usage: message_usage(&requests, &message_id),
                         message_id,
                     });
-                }
-                Parsed::TaskEnded { tool_id, failed } => {
-                    let shell = shell_tasks.remove(&tool_id);
-                    if let Some(message_id) = &shell {
-                        turn.publish(AgentEvent::BackgroundTaskEnded {
-                            message_id: message_id.clone(),
-                            tool_id: tool_id.clone(),
-                        });
-                    }
-                    // A shell command's call was shown finished when it returned.
-                    if let Some(Some(call_failed)) = running_tasks.remove(&tool_id)
-                        && shell.is_none()
-                        && let Some(owner) = tool_owner.get(&tool_id)
-                    {
-                        turn.save_text(&mut unsaved);
-                        turn.publish(AgentEvent::ToolFinished {
-                            message_id: owner.clone(),
-                            tool_id: tool_id.clone(),
-                            is_error: failed || call_failed,
-                            output: None,
-                        });
-                        finish_child(&turn, &mut children, &tool_id, failed || call_failed);
-                    }
-                    let background = running_tasks.values().any(Option::is_some);
-                    if ended && can_idle(&turn, &running_tasks, &shell_tasks, &goal, &stream_error)
-                    {
-                        if completed < segments.len() {
-                            go_idle(&mut turn, &segments, &mut completed, &mut unsaved, false);
-                        }
-                    } else if ended && !background {
-                        end_input(&turn, goal_run, &goal_round);
-                    }
                 }
                 Parsed::TurnStarted(id) => {
                     ended = false;
@@ -632,6 +602,11 @@ pub(super) fn ingest(
                                 continue;
                             }
                             tool_owner.insert(tool.id.clone(), message_id.clone());
+                            if turn.agent == AgentKind::Codex
+                                && let Some(task) = provider::codex::background_task(tool)
+                            {
+                                background.start_unreported(task);
+                            }
                             if matches!(turn.agent, AgentKind::Claude | AgentKind::Codex)
                                 && tool.parent.is_none()
                                 && let Some(child) = open_child(&turn, tool)
@@ -658,13 +633,9 @@ pub(super) fn ingest(
                             if let Some(owner) = tool_owner.get(tool_id) {
                                 message_id.clone_from(owner);
                             }
-                            if let Some(held) = running_tasks.get_mut(tool_id.as_str()) {
-                                *held = Some(*is_error);
-                                // A backgrounded shell command's call has returned; the command
-                                // itself is shown among the background tasks.
-                                if !shell_tasks.contains_key(tool_id.as_str()) {
-                                    continue;
-                                }
+                            // A call whose task still runs is shown finished when the task ends.
+                            if background.call_returned(tool_id, message_id, *is_error) {
+                                continue;
                             }
                         }
                         _ => {}
@@ -676,13 +647,16 @@ pub(super) fn ingest(
                         let finished = match &event {
                             AgentEvent::ToolFinished {
                                 tool_id, is_error, ..
-                            } => Some((tool_id.clone(), *is_error)),
+                            } if turn.agent == AgentKind::Codex => {
+                                Some((tool_id.clone(), *is_error))
+                            }
                             _ => None,
                         };
-                        turn.save_text(&mut unsaved);
-                        turn.publish(event);
+                        publish_event(&turn, &mut children, &mut unsaved, event);
                         if let Some((tool_id, failed)) = finished {
-                            finish_child(&turn, &mut children, &tool_id, failed);
+                            for event in background.finish_unreported(&tool_id, failed) {
+                                publish_event(&turn, &mut children, &mut unsaved, event);
+                            }
                         }
                     }
                 }
@@ -693,15 +667,11 @@ pub(super) fn ingest(
     turn.save_text(&mut unsaved);
     // An idle agent changes files only through shell commands it left running; other changes
     // since its last reply are the user's own.
-    let idle_untouched = turn.idle.load(Ordering::SeqCst) && shell_tasks.is_empty();
-    // The agent process is gone, and the background commands it started with it.
-    shell_tasks.drain().for_each(|(tool_id, message_id)| {
-        turn.publish(AgentEvent::BackgroundTaskEnded {
-            message_id,
-            tool_id,
-        });
-    });
-
+    let idle_untouched = turn.idle.load(Ordering::SeqCst) && !background.any_listed_live();
+    // The agent process is gone, and the tasks it started go with it.
+    for event in background.stop_all() {
+        publish_event(&turn, &mut children, &mut unsaved, event);
+    }
     let exit = child.wait().ok();
     let status = exit.map_or("unknown".into(), |s| s.to_string());
     let level = if exit.is_some_and(|s| s.success()) {
@@ -783,36 +753,38 @@ pub(super) fn ingest(
     );
 }
 
-/// Whether Claude, having ended its reply cleanly, can stay up for the next message: nothing
-/// it sent to the background but shell commands still runs, and it has no goal to pursue.
-fn can_idle(
-    turn: &Turn,
-    running_tasks: &HashMap<String, Option<bool>>,
-    shell_tasks: &HashMap<String, String>,
-    goal: &Option<Goal>,
-    stream_error: &Option<String>,
-) -> bool {
-    stream_error.is_none()
-        && !turn.cancelled.load(Ordering::SeqCst)
-        && stays_up(turn, running_tasks, shell_tasks, goal)
+/// Whether Claude, having ended its reply cleanly, can stay up for the next message.
+fn can_idle(turn: &Turn, goal: &Option<Goal>, stream_error: &Option<String>) -> bool {
+    stream_error.is_none() && !turn.cancelled.load(Ordering::SeqCst) && stays_up(turn, goal)
 }
 
-/// Whether Claude can stay up once its reply has ended: nothing it sent to the background but
-/// shell commands still runs, and it has no goal to pursue.
-fn stays_up(
-    turn: &Turn,
-    running_tasks: &HashMap<String, Option<bool>>,
-    shell_tasks: &HashMap<String, String>,
-    goal: &Option<Goal>,
-) -> bool {
+/// Whether the agent's process can stay up once its reply has ended. Only Claude keeps its process
+/// between messages, and a goal still to be pursued keeps the turn going instead.
+fn stays_up(turn: &Turn, goal: &Option<Goal>) -> bool {
     turn.agent == AgentKind::Claude
         && !goal
             .as_ref()
             .is_some_and(|g| matches!(g.status, GoalStatus::Active | GoalStatus::Paused))
-        && running_tasks
-            .iter()
-            .filter(|(_, call)| call.is_some())
-            .all(|(id, _)| shell_tasks.contains_key(id))
+}
+
+/// Publishes one event of the turn. A subagent whose call finishes also closes its thread.
+fn publish_event(
+    turn: &Turn,
+    children: &mut HashMap<String, SubagentThread>,
+    unsaved: &mut Unsaved,
+    event: AgentEvent,
+) {
+    turn.save_text(unsaved);
+    let finished = match &event {
+        AgentEvent::ToolFinished {
+            tool_id, is_error, ..
+        } => Some((tool_id.clone(), *is_error)),
+        _ => None,
+    };
+    turn.publish(event);
+    if let Some((tool_id, failed)) = finished {
+        finish_child(turn, children, &tool_id, failed);
+    }
 }
 
 /// Completes the replies not yet completed, with the files they changed, and marks the turn

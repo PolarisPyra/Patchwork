@@ -448,7 +448,9 @@ fn watch(w: Watched) {
                 let finished = t.messages.last().and_then(|m| m.finished_at).unwrap_or(0);
                 let idle_ms = u64::try_from(IDLE_LIMIT.as_millis()).unwrap_or(u64::MAX);
                 now_ms().saturating_sub(finished) >= idle_ms
-                    && t.messages.iter().all(|m| m.background.is_empty())
+                    && t.messages
+                        .iter()
+                        .all(|m| m.background.iter().all(|task| !task.status.is_live()))
             });
         if retire {
             w.server.runner.retire_idle(&w.thread_id);
@@ -517,18 +519,15 @@ impl Turn {
                 let paths = attribution::lock(&self.attribution).tool_finished(tool_id);
                 Some((message_id.clone(), paths))
             }
-            // A background command writes until it ends, after its call has returned.
+            // A background task writes until it ends, after its call has returned.
             AgentEvent::BackgroundTaskStarted { task, .. } => {
                 let reach = Reach::Anything(task.description.clone());
                 let id = background_id(&task.tool_id);
                 attribution::lock(&self.attribution).tool_started(&id, None, reach);
                 None
             }
-            AgentEvent::BackgroundTaskEnded {
-                tool_id,
-                message_id,
-            } => {
-                let id = background_id(tool_id);
+            AgentEvent::BackgroundTaskEnded { message_id, task } => {
+                let id = background_id(&task.tool_id);
                 let paths = attribution::lock(&self.attribution).tool_finished(&id);
                 Some((message_id.clone(), paths))
             }

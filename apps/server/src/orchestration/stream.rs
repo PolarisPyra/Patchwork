@@ -147,6 +147,7 @@ pub(super) fn event_message(event: &AgentEvent) -> Option<&str> {
         | AgentEvent::Refused { message_id, .. }
         | AgentEvent::PlanProposed { message_id, .. }
         | AgentEvent::BackgroundTaskStarted { message_id, .. }
+        | AgentEvent::BackgroundTaskUpdated { message_id, .. }
         | AgentEvent::BackgroundTaskEnded { message_id, .. }
         | AgentEvent::TurnCompleted { message_id, .. } => Some(message_id),
     }
@@ -273,9 +274,19 @@ pub(super) fn apply(thread: &mut Thread, event: &AgentEvent) {
             end_thinking(msg);
             msg.parts.push(Part::Plan { text: text.clone() });
         }
-        AgentEvent::BackgroundTaskStarted { task, .. } => msg.background.push(task.clone()),
-        AgentEvent::BackgroundTaskEnded { tool_id, .. } => {
-            msg.background.retain(|t| t.tool_id != *tool_id);
+        // A task stays on its message once it ends, with its final status; the strip shows only
+        // the ones still live.
+        AgentEvent::BackgroundTaskStarted { task, .. }
+        | AgentEvent::BackgroundTaskUpdated { task, .. }
+        | AgentEvent::BackgroundTaskEnded { task, .. } => {
+            match msg
+                .background
+                .iter_mut()
+                .find(|t| t.tool_id == task.tool_id)
+            {
+                Some(listed) => *listed = task.clone(),
+                None => msg.background.push(task.clone()),
+            }
         }
         AgentEvent::FileTouched { path, .. } => {
             if !msg.files.contains(path) {

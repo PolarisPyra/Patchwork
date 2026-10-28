@@ -31,6 +31,7 @@ export type { MessageStatus } from "./MessageStatus";
 export type { StepStatus } from "./StepStatus";
 export type { ToolCall } from "./ToolCall";
 export type { BackgroundTask } from "./BackgroundTask";
+export type { TaskStatus } from "./TaskStatus";
 export type { SubAgent } from "./SubAgent";
 export type { PlanStep } from "./PlanStep";
 export type { ScheduledTask } from "./ScheduledTask";

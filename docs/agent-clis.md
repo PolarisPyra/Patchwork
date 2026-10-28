@@ -13,7 +13,7 @@ point where it touches them.
 | Run | `claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-mode <mode> --permission-prompt-tool stdio [--resume <session>] [--model <m>] [--effort <e>] --append-system-prompt <installed shells>` |
 | Access modes | Supervised `default`, Auto-accept edits `acceptEdits`, Auto `auto`, Full access `bypassPermissions`. |
 | Prompt | A stream-json `user` line on stdin, with images as base64 blocks. stdin stays open for the turn. |
-| Output used | `stream_event` text and reasoning deltas; `assistant` tool calls, token usage, and synthetic command output; `user` tool results; `system` init (session id) and background task start and end; `rate_limit_event` (usage limits); `result` (end of turn, errors). `TodoWrite` becomes the plan, edit tools become touched files, `Task`/`Agent` calls become subagents. |
+| Output used | `stream_event` text and reasoning deltas; `assistant` tool calls, token usage, and synthetic command output; `user` tool results; `system` init (session id) and the task events `task_started`, `task_updated`, `task_progress`, and `task_notification`; `rate_limit_event` (usage limits); `result` (end of turn, errors). `TodoWrite` becomes the plan, edit tools become touched files, `Task`/`Agent` calls become subagents. |
 | Approvals | `control_request` `can_use_tool` becomes an Allow / Deny request, answered with a `control_response`. In Full access every request is allowed at once, except `AskUserQuestion`. |
 | Questions | `AskUserQuestion` arrives as `can_use_tool` in every mode. The answers go back in `updatedInput.answers`, by question text. |
 | Steer | A `user` line with `"priority": "now"`, taken at the next tool boundary. |
@@ -70,6 +70,27 @@ point where it touches them.
 | Not available | Slash commands, `/goal` included. |
 | Import | Sessions from its SQLite database, `~/.local/share/opencode/opencode.db`. |
 | Usage limits | None to show: it bills through the providers it is signed in to. |
+
+## Background tasks
+
+Work an agent starts that runs past its reply is listed under the message it started in until it
+ends, with a stop button when the agent can stop it.
+
+- Claude: a task is listed when it starts in the background, or when `task_updated` moves it there
+  (a foreground command that overruns its timeout is moved this way). Each task is named by the
+  top-level `task_id` of its `task_started`, `task_updated`, `task_progress`, and
+  `task_notification`. A status in `task_updated` and the notification both end it. The CLI sent the
+  status first in both captures, but either order works; each adds what it has (the notification carries the output file, which is
+  empty for a subagent's own command). Progress is the line text `summary` or `description`.
+  Every task the CLI reports holds stdin open until it ends, whatever its kind, because the CLI
+  reports the end to the model and the turn's reply can end before it. Stopped with `stop_task`.
+- Codex: a command or subagent thread still open when its turn completes is listed without a stop
+  button, since Codex has no request that stops one. Its only stop is Stop, which ends the turn. It
+  holds nothing open, so its turn ends with it as before. Codex does not wake the agent when one
+  ends; the agent sees the result only when it polls.
+
+Not done yet: tailing a task's output file in the UI, resuming a task by sending it a message
+(`send_task_message`), keeping tasks alive across an app restart, and Monitor's per-line events.
 
 ## API providers
 
