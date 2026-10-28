@@ -1,7 +1,7 @@
-// Screenshots the MCP Servers settings pane: the card grid of Patchwork's servers and the ones
+// Screenshots the MCP Servers settings pane: the server list of Patchwork's servers and the ones
 // Claude Code and Codex use (a server both CLIs run shows once), with more tools on than an API
 // request takes; a search that matches tools; a server's own page; and a Patchwork server's page
-// after turning its tools off. Prints each card's text.
+// after turning its tools off. Prints each row's text.
 // Usage: node checks/mcp-servers-pane.mjs <out-prefix>
 import { openWorkspace } from "../lib/open.mjs";
 
@@ -93,14 +93,14 @@ await page.evaluate(() => {
 await page.locator('button[aria-label="Settings"]').first().click();
 const dialog = page.locator('[role="dialog"][aria-label="Settings"]');
 await dialog.getByRole("button", { name: "MCP Servers" }).click();
-const cards = dialog.locator(".grid > button");
+const cards = dialog.locator(".divide-y > button");
 await cards.first().waitFor();
 for (const card of await cards.allInnerTexts()) console.log(card.replace(/\n+/g, " | "));
-await dialog.screenshot({ path: `${prefix}-grid.png` });
-await dialog.getByPlaceholder("Search servers and tools").fill("snap");
+await dialog.screenshot({ path: `${prefix}-list.png` });
+await dialog.getByPlaceholder("Search", { exact: true }).fill("snap");
 console.log("search 'snap':", (await cards.allInnerTexts()).map((t) => t.split("\n")[0]).join(", "));
 await dialog.screenshot({ path: `${prefix}-search.png` });
-await dialog.getByPlaceholder("Search servers and tools").fill("");
+await dialog.getByPlaceholder("Search", { exact: true }).fill("");
 await cards.filter({ hasText: "ghidra-mcp" }).click();
 await dialog.getByPlaceholder("Filter tools").waitFor();
 await dialog.screenshot({ path: `${prefix}-detail.png` });

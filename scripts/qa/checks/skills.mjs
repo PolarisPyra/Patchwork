@@ -1,7 +1,7 @@
 // Screenshots the composer's "$" skills menu, a picked skill's chip, and the Skills settings pane.
 // Prints the "/" and "$" menus' rows, and the Markdown a picked skill sends. With the last two
 // paths, does the same for the "&" agents menu (with the project's own agents), the chat's agent
-// in the composer, and the Agent Management pane, where it also opens and cancels a new agent.
+// in the composer, and the Agents pane, where it also opens and cancels a new agent.
 // With --sigils=<png>, rebinds the skills sigil to "!" in Settings → Shortcuts → Sigils,
 // screenshots that tab, and prints what "!" and "$" do in the composer before resetting it.
 // Usage: node checks/skills.mjs <menu.png> <pane.png> [chip.png] [agents.png agents-pane.png]
@@ -70,7 +70,7 @@ await dialog.getByRole("button", { name: "Skills" }).click();
 await page.waitForTimeout(200);
 await dialog.screenshot({ path: paneOut });
 if (agentsPaneOut) {
-  await dialog.getByRole("button", { name: "Agent Management" }).click();
+  await dialog.getByRole("button", { name: "Agents", exact: true }).click();
   await page.waitForTimeout(200);
   await dialog.getByRole("button", { name: "New agent" }).click();
   await page.keyboard.press("Escape");
@@ -80,7 +80,7 @@ if (agentsPaneOut) {
   await dialog.screenshot({ path: agentsPaneOut });
   await page.keyboard.press("Enter");
   await page.waitForTimeout(200);
-  console.log(`after Create, the card is back: ${await dialog.getByRole("button", { name: "New agent" }).isVisible()}`);
+  console.log(`after Create, the name row is gone: ${!(await dialog.getByLabel("New agent's name").isVisible())}`);
 }
 if (sigilsOut) {
   await dialog.getByRole("button", { name: "Shortcuts" }).click();

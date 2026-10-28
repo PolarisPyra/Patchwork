@@ -106,8 +106,8 @@ const GROUPS: { label: string; sections: { id: Section; label: string; Icon: Ico
       { id: "agent", label: "CLI Providers", Icon: RobotIcon },
       { id: "api", label: "API Providers", Icon: PlugsConnectedIcon },
       { id: "mcp", label: "MCP Servers", Icon: PlugIcon },
+      { id: "custom-agents", label: "Agents", Icon: IdentificationBadgeIcon },
       { id: "skills", label: "Skills", Icon: BooksIcon },
-      { id: "custom-agents", label: "Agent Management", Icon: IdentificationBadgeIcon },
       { id: "permissions", label: "Permissions", Icon: ShieldCheckIcon },
       { id: "tokens", label: "AI Tokenomics", Icon: GaugeIcon },
     ],
@@ -1637,53 +1637,51 @@ function SkillsPane({ settings, updateSettings }: PaneProps) {
             onChange={(e) => setQuery(e.target.value)}
           />
         </label>
+        <button className="btn flex-none" onClick={() => run(api.openSkillsFolder())}>
+          <FolderSimpleIcon size={13} />
+          Open folder
+        </button>
       </div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(196px,1fr))] gap-2">
-        {shown.map((skill) => (
-          <div
-            key={skill.path}
-            className={`flex min-h-[124px] min-w-0 flex-col gap-2.5 rounded-[var(--radius-md)] border border-border p-3 text-fg ${skill.enabled ? "" : "opacity-55"}`}
-          >
-            <div className="flex w-full min-w-0 items-center gap-2.5">
-              <Badge name={skill.name} size={32} />
+      {shown.length > 0 && (
+        <div className="divide-y divide-border overflow-hidden rounded-[var(--radius-md)] border border-border">
+          {shown.map((skill) => (
+            <div
+              key={skill.path}
+              className={`flex min-w-0 items-center gap-2.5 px-3 py-2 ${skill.enabled ? "" : "opacity-55"}`}
+            >
+              <Badge name={skill.name} size={24} />
               <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold">
+                <div
+                  className="truncate font-semibold"
+                  title={
+                    skill.path.startsWith(`${view.dir}/`)
+                      ? skill.path.slice(view.dir.length + 1)
+                      : home(skill.path)
+                  }
+                >
                   {sigil}
                   {skill.name}
                 </div>
-                <div className="truncate font-mono text-[length:var(--fs-xs)] text-fg-muted">
-                  {skill.path.startsWith(`${view.dir}/`)
-                    ? skill.path.slice(view.dir.length + 1)
-                    : home(skill.path)}
+                <div
+                  className="truncate text-[length:var(--fs-sm)] text-fg-muted"
+                  title={skill.description ?? undefined}
+                >
+                  {skill.description}
                 </div>
               </div>
               <button className="btn flex-none" onClick={() => run(api.openSkill(skill.path))}>
                 Edit
               </button>
-            </div>
-            <div className="line-clamp-2 flex-1 text-[length:var(--fs-sm)] text-fg-muted">
-              {skill.description}
-            </div>
-            <div className="flex justify-end">
               <TokenSwitch
                 label={`${sigil}${skill.name}`}
                 on={skill.enabled}
                 onChange={(on) => void toggle(skill.name, on)}
               />
             </div>
-          </div>
-        ))}
-        {!q && !filter && (
-          <button
-            className="flex min-h-[124px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-dashed border-border-strong bg-transparent text-fg-muted hover:border-accent hover:text-fg"
-            onClick={() => run(api.openSkillsFolder())}
-          >
-            <FolderSimpleIcon size={20} />
-            <span className="text-[length:var(--fs-sm)]">Open folder</span>
-          </button>
-        )}
-      </div>
-      {(q || filter) && shown.length === 0 && (
+          ))}
+        </div>
+      )}
+      {shown.length === 0 && (
         <div className="py-6 text-center text-fg-muted">
           {q ? `Nothing matches “${query.trim()}”` : "No skills"}
         </div>
@@ -1729,7 +1727,8 @@ function AgentsPane() {
   const sigil = useSigils().agents;
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  // The name being typed for a new agent, while its card is open.
+  const [primaryOnly, setPrimaryOnly] = useState(false);
+  // The name being typed for a new agent, while its row is open.
   const [draft, setDraft] = useState<string | null>(null);
 
   const run = (action: Promise<void>) => {
@@ -1744,13 +1743,30 @@ function AgentsPane() {
     );
   };
   const q = query.trim().toLowerCase();
+  const primaries = view.agents.filter((a) => a.primary).length;
   const shown = view.agents.filter(
-    (a) => !q || `${a.name} ${a.title ?? ""} ${a.description ?? ""}`.toLowerCase().includes(q),
+    (a) =>
+      (!primaryOnly || a.primary) &&
+      (!q || `${a.name} ${a.title ?? ""} ${a.description ?? ""}`.toLowerCase().includes(q)),
   );
 
   return (
     <>
       <div className="flex items-center gap-1.5 pb-3">
+        <button
+          className={chip(!primaryOnly)}
+          aria-pressed={!primaryOnly}
+          onClick={() => setPrimaryOnly(false)}
+        >
+          All <span className="text-fg-muted">{view.agents.length}</span>
+        </button>
+        <button
+          className={chip(primaryOnly)}
+          aria-pressed={primaryOnly}
+          onClick={() => setPrimaryOnly(!primaryOnly)}
+        >
+          Primary <span className="text-fg-muted">{primaries}</span>
+        </button>
         <label className="relative ml-auto w-52">
           <MagnifyingGlassIcon
             size={13}
@@ -1764,69 +1780,24 @@ function AgentsPane() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </label>
+        <button className="btn flex-none" onClick={() => setDraft("")}>
+          <PlusIcon size={13} />
+          New agent
+        </button>
       </div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(196px,1fr))] gap-2">
-        {shown.map((agent) => (
-          <div
-            key={agent.path}
-            className="flex min-h-[124px] min-w-0 flex-col gap-2.5 rounded-[var(--radius-md)] border border-border p-3 text-fg"
-          >
-            <div className="flex w-full min-w-0 items-center gap-2.5">
-              <Badge name={agent.name} size={32} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold">
-                  {sigil}
-                  {agent.name}
-                </div>
-                <div className="truncate font-mono text-[length:var(--fs-xs)] text-fg-muted">
-                  {agent.title ?? `${agent.name}.md`}
-                </div>
-              </div>
-              <button className="btn flex-none" onClick={() => run(api.openAgent(agent.path))}>
-                Edit
-              </button>
-            </div>
-            <div className="line-clamp-3 flex-1 text-[length:var(--fs-sm)] text-fg-muted">
-              {agent.description}
-            </div>
-            {(agent.primary || agent.model) && (
-              <div className="flex min-w-0 gap-1.5 text-[length:var(--fs-xs)]">
-                {agent.primary && (
-                  <span
-                    className="flex-none rounded-[4px] bg-accent-soft px-1.5 text-accent-text"
-                    title="Stays the chat's agent once summoned"
-                  >
-                    Primary
-                  </span>
-                )}
-                {agent.model && (
-                  <span className="truncate font-mono text-fg-muted" title={agent.model}>
-                    {agent.model}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-        {!q &&
-          (draft === null ? (
-            <button
-              className="flex min-h-[124px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-dashed border-border-strong bg-transparent text-fg-muted hover:border-accent hover:text-fg"
-              onClick={() => setDraft("")}
-            >
-              <PlusIcon size={20} />
-              <span className="text-[length:var(--fs-sm)]">New agent</span>
-            </button>
-          ) : (
+      {(draft !== null || shown.length > 0) && (
+        <div className="divide-y divide-border overflow-hidden rounded-[var(--radius-md)] border border-border">
+          {draft !== null && (
             <form
-              className="flex min-h-[124px] flex-col items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed border-accent p-3"
+              className="flex items-center gap-2.5 px-3 py-2"
               onSubmit={(e) => {
                 e.preventDefault();
                 if (draft.trim()) create(draft.trim());
               }}
             >
+              <Badge name={draft.trim() || "?"} size={24} />
               <input
-                className={`${INPUT} font-mono`}
+                className={`${INPUT} flex-1 font-mono`}
                 value={draft}
                 placeholder="agent-name"
                 aria-label="New agent's name"
@@ -1839,14 +1810,67 @@ function AgentsPane() {
                   setDraft(null);
                 }}
               />
-              <button type="submit" className="btn" disabled={!draft.trim()}>
+              <button type="submit" className="btn flex-none" disabled={!draft.trim()}>
                 Create
               </button>
+              <button
+                type="button"
+                className="btn-icon flex-none"
+                aria-label="Cancel"
+                onClick={() => setDraft(null)}
+              >
+                <XIcon size={14} />
+              </button>
             </form>
+          )}
+          {shown.map((agent) => (
+            <div key={agent.path} className="flex min-w-0 items-center gap-2.5 px-3 py-2">
+              <Badge name={agent.name} size={24} />
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate font-semibold" title={agent.title ?? undefined}>
+                    {sigil}
+                    {agent.name}
+                  </span>
+                  {agent.primary && (
+                    <span
+                      className="flex-none rounded-[4px] bg-accent-soft px-1.5 text-[length:var(--fs-xs)] text-accent-text"
+                      title="Stays the chat's agent once summoned"
+                    >
+                      Primary
+                    </span>
+                  )}
+                </div>
+                <div
+                  className="truncate text-[length:var(--fs-sm)] text-fg-muted"
+                  title={agent.description ?? undefined}
+                >
+                  {agent.description}
+                </div>
+              </div>
+              {agent.model && (
+                <span
+                  className="max-w-[180px] flex-none truncate font-mono text-[length:var(--fs-xs)] text-fg-muted"
+                  title={agent.model}
+                >
+                  {agent.model}
+                </span>
+              )}
+              <button className="btn flex-none" onClick={() => run(api.openAgent(agent.path))}>
+                Edit
+              </button>
+            </div>
           ))}
-      </div>
-      {q && shown.length === 0 && (
-        <div className="py-6 text-center text-fg-muted">Nothing matches “{query.trim()}”</div>
+        </div>
+      )}
+      {draft === null && shown.length === 0 && (
+        <div className="py-6 text-center text-fg-muted">
+          {q
+            ? `Nothing matches “${query.trim()}”`
+            : primaryOnly
+              ? "No primary agents"
+              : "No agents"}
+        </div>
       )}
       {error && <div className="mt-2 text-[length:var(--fs-sm)] text-danger">{error}</div>}
       <div className="mt-3">

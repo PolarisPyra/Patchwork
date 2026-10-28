@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ArrowClockwiseIcon,
   CaretLeftIcon,
+  CaretRightIcon,
   MagnifyingGlassIcon,
   PlusIcon,
 } from "@phosphor-icons/react";
@@ -216,7 +217,7 @@ export default function McpServersPane({ appIcon }: { appIcon: string }) {
             </span>
           </button>
         ))}
-        <label className="relative ml-auto w-52">
+        <label className="relative ml-auto min-w-0 max-w-52 flex-1">
           <MagnifyingGlassIcon
             size={13}
             className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-fg-muted"
@@ -224,11 +225,18 @@ export default function McpServersPane({ appIcon }: { appIcon: string }) {
           <input
             className={`${INPUT} pl-7`}
             value={query}
-            placeholder="Search servers and tools"
+            placeholder="Search"
             spellCheck={false}
             onChange={(e) => setQuery(e.target.value)}
           />
         </label>
+        <button
+          className="btn flex-none"
+          onClick={() => setEditing({ previous: null, name: "", server: {} })}
+        >
+          <PlusIcon size={13} />
+          Add server
+        </button>
       </div>
       {over && (
         <div className="mb-3 rounded-[var(--radius-md)] border border-warning/40 bg-warning/10 px-3 py-2 text-[length:var(--fs-sm)]">
@@ -236,29 +244,24 @@ export default function McpServersPane({ appIcon }: { appIcon: string }) {
           left out; turn some off on a server's page.
         </div>
       )}
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(196px,1fr))] gap-2">
-        {shown.map((c) => (
-          <ServerCard
-            key={c.id}
-            card={c}
-            logo={logo}
-            matches={matches(c)}
-            over={over}
-            onOpen={() => setOpenId(c.id)}
-          />
-        ))}
-        {!q && (
-          <button
-            className="flex min-h-[124px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-dashed border-border-strong bg-transparent text-fg-muted hover:border-accent hover:text-fg"
-            onClick={() => setEditing({ previous: null, name: "", server: {} })}
-          >
-            <PlusIcon size={20} />
-            <span className="text-[length:var(--fs-sm)]">Add server</span>
-          </button>
-        )}
-      </div>
-      {q && shown.length === 0 && (
-        <div className="py-6 text-center text-fg-muted">Nothing matches “{query.trim()}”</div>
+      {shown.length > 0 && (
+        <div className="divide-y divide-border overflow-hidden rounded-[var(--radius-md)] border border-border">
+          {shown.map((c) => (
+            <ServerRow
+              key={c.id}
+              card={c}
+              logo={logo}
+              matches={matches(c)}
+              over={over}
+              onOpen={() => setOpenId(c.id)}
+            />
+          ))}
+        </div>
+      )}
+      {shown.length === 0 && (
+        <div className="py-6 text-center text-fg-muted">
+          {q ? `Nothing matches “${query.trim()}”` : "No servers"}
+        </div>
       )}
       {errorLine}
     </>
@@ -266,7 +269,7 @@ export default function McpServersPane({ appIcon }: { appIcon: string }) {
 }
 
 export function chip(on: boolean): string {
-  return `flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[length:var(--fs-sm)] ${on ? "border-accent bg-accent-soft text-fg" : "border-border bg-transparent text-fg hover:bg-hover"}`;
+  return `flex h-7 flex-none cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-[length:var(--fs-sm)] ${on ? "border-accent bg-accent-soft text-fg" : "border-border bg-transparent text-fg hover:bg-hover"}`;
 }
 
 /** Patchwork's servers and the CLIs', one card per server: the same command, arguments and
@@ -356,7 +359,7 @@ export function Badge({ name, size }: { name: string; size: number }) {
   );
 }
 
-function ServerCard({
+function ServerRow({
   card,
   logo,
   matches,
@@ -379,66 +382,66 @@ function ServerCard({
     ) : card.status === "starting" || card.status === "listing" ? (
       <span className="animate-pulse text-fg-muted">…</span>
     ) : card.status === "unapproved" ? (
-      <span className="text-[length:var(--fs-sm)] font-normal text-fg-muted">Not approved</span>
+      <span className="text-fg-muted">Not approved</span>
     ) : card.status === "signin" && card.tools.length === 0 ? (
-      <span className="text-[length:var(--fs-sm)] font-normal text-fg-muted">Signs in</span>
+      <span className="text-fg-muted">Signs in</span>
     ) : (
       <span className={warn ? "text-warning" : ""}>
         {on}
-        <span className="ml-1 text-[length:var(--fs-sm)] font-normal text-fg-muted">
+        <span className="ml-1 text-fg-muted">
           {on < card.tools.length ? `of ${card.tools.length} tools` : on === 1 ? "tool" : "tools"}
         </span>
       </span>
     );
   return (
     <button
-      className={`flex min-h-[124px] min-w-0 cursor-pointer flex-col gap-2.5 rounded-[var(--radius-md)] border border-border bg-transparent p-3 text-left text-fg hover:border-border-strong hover:bg-hover ${card.status === "off" || card.status === "unapproved" ? "opacity-55" : ""}`}
+      className={`flex w-full min-w-0 cursor-pointer items-center gap-2.5 border-x-0 border-t-0 border-b border-solid border-border bg-transparent last:border-b-0 px-3 py-2 text-left text-fg hover:bg-hover ${card.status === "off" || card.status === "unapproved" ? "opacity-55" : ""}`}
       title={card.status === "error" ? (card.uses.find((u) => u.error)?.error ?? "") : card.target}
       onClick={onOpen}
     >
-      <div className="flex w-full min-w-0 items-center gap-2.5">
-        <Badge name={card.name} size={32} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className="truncate font-semibold">{card.name}</span>
-            <span className={`size-1.5 flex-none rounded-full ${DOT[card.status]}`} />
+      <Badge name={card.name} size={24} />
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate font-semibold">{card.name}</span>
+          <span className={`size-1.5 flex-none rounded-full ${DOT[card.status]}`} />
+        </div>
+        {matches.length > 0 ? (
+          <div className="flex min-w-0 gap-1">
+            {matches.slice(0, 3).map((t) => (
+              <span
+                key={t.name}
+                className="min-w-0 truncate rounded-[var(--radius-sm)] bg-accent-soft px-1.5 font-mono text-[length:var(--fs-xs)]"
+              >
+                {t.name}
+              </span>
+            ))}
+            {matches.length > 3 && (
+              <span className="flex-none text-[length:var(--fs-xs)] text-fg-muted">
+                +{matches.length - 3}
+              </span>
+            )}
           </div>
+        ) : (
           <div className="truncate font-mono text-[length:var(--fs-xs)] text-fg-muted">
             {card.target}
           </div>
-        </div>
+        )}
       </div>
-      {matches.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
-          {matches.slice(0, 3).map((t) => (
-            <span
-              key={t.name}
-              className="max-w-full truncate rounded-[var(--radius-sm)] bg-accent-soft px-1.5 font-mono text-[length:var(--fs-xs)]"
-            >
-              {t.name}
-            </span>
-          ))}
-          {matches.length > 3 && (
-            <span className="text-[length:var(--fs-xs)] text-fg-muted">+{matches.length - 3}</span>
-          )}
-        </div>
-      ) : (
-        <div className="flex-1" />
-      )}
-      <div className="flex w-full items-center justify-between">
-        <span className="text-[length:var(--fs-xl)] leading-none font-semibold">{tally}</span>
-        <span className="flex items-center gap-1">
-          {clients.map((c) => (
-            <span
-              key={c}
-              className="grid size-6 place-items-center rounded-full border border-border bg-white"
-              title={c === "patchwork" ? "Patchwork" : AGENT_LABELS[c]}
-            >
-              {logo(c, 14)}
-            </span>
-          ))}
-        </span>
-      </div>
+      <span className="flex flex-none items-center gap-1">
+        {clients.map((c) => (
+          <span
+            key={c}
+            className="grid size-6 place-items-center rounded-full border border-border bg-white"
+            title={c === "patchwork" ? "Patchwork" : AGENT_LABELS[c]}
+          >
+            {logo(c, 14)}
+          </span>
+        ))}
+      </span>
+      <span className="w-28 flex-none text-right text-[length:var(--fs-sm)] font-semibold">
+        {tally}
+      </span>
+      <CaretRightIcon size={13} className="flex-none text-fg-muted" />
     </button>
   );
 }
