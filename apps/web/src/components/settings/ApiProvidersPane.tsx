@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowClockwiseIcon,
   CaretDownIcon,
@@ -40,7 +40,7 @@ const PRESETS: Preset[] = [
   { id: "custom", name: "Custom", baseUrl: "", models: [] },
 ];
 
-const blank = (preset: Preset): ApiProvider => ({
+export const blank = (preset: Preset): ApiProvider => ({
   id: "",
   name: preset.id === "custom" ? "" : preset.name,
   preset: preset.id,
@@ -58,7 +58,7 @@ const INPUT =
 
 /** Puts the API agent in `settings.agents` while a provider can run a task, and takes it out
  * when none can, so the model picker offers API models exactly when there are some. */
-function syncAgents(providers: ApiProviderView[], updateSettings: UpdateSettings) {
+export function syncAgents(providers: ApiProviderView[], updateSettings: UpdateSettings) {
   const usable = providers.some((p) => p.enabled && p.models.length > 0);
   void updateSettings((s: Settings) => {
     const has = s.agents.includes("api");
@@ -69,78 +69,37 @@ function syncAgents(providers: ApiProviderView[], updateSettings: UpdateSettings
   });
 }
 
-export default function ApiProvidersPane({ updateSettings }: { updateSettings: UpdateSettings }) {
-  const [providers, setProviders] = useState<ApiProviderView[] | null>(null);
-  const [editing, setEditing] = useState<ApiProvider | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const reload = async () => {
-    try {
-      const list = await api.listApiProviders();
-      setProviders(list);
-      syncAgents(list, updateSettings);
-    } catch (e) {
-      setError(errorText(e));
-    }
-  };
-
-  useEffect(() => {
-    void reload();
-  }, []);
-
-  const toggle = async (p: ApiProviderView) => {
-    setError(null);
-    try {
-      await api.saveApiProvider({ ...p, enabled: !p.enabled }, { action: "keep" });
-      await reload();
-    } catch (e) {
-      setError(errorText(e));
-    }
-  };
-
-  if (providers === null) return null;
-
-  if (editing !== null) {
-    return (
-      <ProviderForm
-        key={editing.id}
-        initial={editing}
-        hasKey={providers.some((p) => p.id === editing.id && p.hasKey)}
-        onDone={() => {
-          setEditing(null);
-          void reload();
-        }}
-      />
-    );
-  }
-
+/** A saved provider in the Providers list: click or Edit to change it, the switch to use it. */
+export function ApiProviderRow({
+  provider: p,
+  onEdit,
+  onToggle,
+}: {
+  provider: ApiProviderView;
+  onEdit: () => void;
+  onToggle: () => void;
+}) {
   return (
-    <>
-      {providers.map((p) => (
-        <div key={p.id} className="flex items-center gap-3 border-b border-border py-2.5">
-          <ProviderLogos kind="api" preset={p.preset} logo={p.logo} size={20} />
-          <button
-            className="min-w-0 flex-1 cursor-pointer border-none bg-transparent p-0 text-left text-fg"
-            onClick={() => setEditing(p)}
-          >
-            <div className="font-semibold">{p.name}</div>
-            <div className="truncate text-[length:var(--fs-sm)] text-fg-muted">{describe(p)}</div>
-          </button>
-          <button className="btn" onClick={() => setEditing(p)}>
-            Edit
-          </button>
-          <button
-            className="toggle"
-            role="switch"
-            aria-label={`Use ${p.name}`}
-            aria-checked={p.enabled}
-            onClick={() => void toggle(p)}
-          />
-        </div>
-      ))}
-      <PresetGrid onPick={(preset) => setEditing(blank(preset))} />
-      {error && <div className="text-[length:var(--fs-sm)] text-danger">{error}</div>}
-    </>
+    <div className="flex items-center gap-3 border-b border-border py-2.5">
+      <ProviderLogos kind="api" preset={p.preset} logo={p.logo} size={20} />
+      <button
+        className="min-w-0 flex-1 cursor-pointer border-none bg-transparent p-0 text-left text-fg"
+        onClick={onEdit}
+      >
+        <div className="font-semibold">{p.name}</div>
+        <div className="truncate text-[length:var(--fs-sm)] text-fg-muted">{describe(p)}</div>
+      </button>
+      <button className="btn" onClick={onEdit}>
+        Edit
+      </button>
+      <button
+        className="toggle"
+        role="switch"
+        aria-label={`Use ${p.name}`}
+        aria-checked={p.enabled}
+        onClick={onToggle}
+      />
+    </div>
   );
 }
 
@@ -171,7 +130,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function PresetGrid({ onPick }: { onPick: (p: Preset) => void }) {
+export function PresetGrid({ onPick }: { onPick: (p: Preset) => void }) {
   return (
     <div className="grid grid-cols-2 gap-2 py-2.5">
       {PRESETS.map((p) => (
@@ -269,7 +228,7 @@ function LogoPicker({
   );
 }
 
-function ProviderForm({
+export function ProviderForm({
   initial,
   hasKey,
   onDone,

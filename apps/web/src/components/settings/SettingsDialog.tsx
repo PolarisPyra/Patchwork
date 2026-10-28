@@ -23,7 +23,6 @@ import {
   PlugsConnectedIcon,
   PlusIcon,
   PuzzlePieceIcon,
-  RobotIcon,
   ShieldCheckIcon,
   ScrollIcon,
   TerminalIcon,
@@ -34,6 +33,8 @@ import {
 } from "@phosphor-icons/react";
 import {
   api,
+  type ApiProvider,
+  type ApiProviderView,
   onUpdateStatus,
   AGENT_LABELS,
   importSourcesFor,
@@ -67,7 +68,13 @@ import Markdown from "~/components/chat/Markdown";
 import { CHIP_CLASS } from "~/components/chat/ModelPicker";
 import Dropdown from "~/components/workspace/Dropdown";
 import KeybindingsPane from "~/components/settings/KeybindingsPane";
-import ApiProvidersPane from "~/components/settings/ApiProvidersPane";
+import {
+  ApiProviderRow,
+  blank,
+  PresetGrid,
+  ProviderForm,
+  syncAgents,
+} from "~/components/settings/ApiProvidersPane";
 import McpServersPane, { Badge, chip, home, INPUT } from "~/components/settings/McpServersPane";
 import PermissionsPane, { type PermissionsFocus } from "~/components/settings/PermissionsPane";
 import PluginsPane from "~/components/settings/PluginsPane";
@@ -77,9 +84,8 @@ import CodexPane from "~/components/settings/CodexPane";
 type Section =
   | "appearance"
   | "chat"
-  | "agent"
+  | "providers"
   | "permissions"
-  | "api"
   | "mcp"
   | "tokens"
   | "notifications"
@@ -111,8 +117,7 @@ const GROUPS: { label: string; sections: { id: Section; label: string; Icon: Ico
   {
     label: "Agents",
     sections: [
-      { id: "agent", label: "CLI Providers", Icon: RobotIcon },
-      { id: "api", label: "API Providers", Icon: PlugsConnectedIcon },
+      { id: "providers", label: "Providers", Icon: PlugsConnectedIcon },
       { id: "mcp", label: "MCP Servers", Icon: PlugIcon },
       { id: "custom-agents", label: "Agents", Icon: IdentificationBadgeIcon },
       { id: "skills", label: "Skills", Icon: BooksIcon },
@@ -208,9 +213,8 @@ export default memo(function SettingsDialog({
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
             {section === "appearance" && <AppearancePane {...paneProps} />}
             {section === "chat" && <ChatPane {...paneProps} />}
-            {section === "agent" && <AgentPane {...paneProps} />}
+            {section === "providers" && <ProvidersPane {...paneProps} />}
             {section === "permissions" && <PermissionsPane {...paneProps} focus={focus ?? null} />}
-            {section === "api" && <ApiProvidersPane updateSettings={updateSettings} />}
             {section === "mcp" && (
               <McpServersPane appIcon={LOGO_URLS[settings.logo ?? logoManifest.default]} />
             )}
@@ -806,7 +810,7 @@ function AntigravityInstall({ onInstalled }: { onInstalled: () => void }) {
   );
 }
 
-function AgentPane({ settings, updateSettings }: PaneProps) {
+function CliProviderRows({ settings, updateSettings }: PaneProps) {
   const [status, setStatus] = useState<Partial<Record<AgentKind, AgentStatus | null>>>({});
   // Re-reads an agent, skipping the cache, so a fresh install shows at once.
   const recheck = (kind: AgentKind) =>
@@ -851,12 +855,6 @@ function AgentPane({ settings, updateSettings }: PaneProps) {
       ...st,
       agents: st.agents.includes(kind) ? st.agents.filter((k) => k !== kind) : [...st.agents, kind],
     }));
-  const makeDefault = (kind: AgentKind) =>
-    void updateSettings((st) => ({
-      ...st,
-      agents: [kind, ...st.agents.filter((k) => k !== kind)],
-    }));
-
   return (
     <>
       {CLI_KINDS.map((kind) => {
@@ -900,16 +898,78 @@ function AgentPane({ settings, updateSettings }: PaneProps) {
           </div>
         );
       })}
+    </>
+  );
+}
+
+/** Every provider in one list: the CLIs, then the API endpoints. Editing an endpoint takes over
+ * the pane with its form, as it did on its own page. */
+function ProvidersPane({ settings, updateSettings }: PaneProps) {
+  const [providers, setProviders] = useState<ApiProviderView[]>([]);
+  const [editing, setEditing] = useState<ApiProvider | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = async () => {
+    try {
+      const list = await api.listApiProviders();
+      setProviders(list);
+      syncAgents(list, updateSettings);
+    } catch (e) {
+      setError(errorText(e));
+    }
+  };
+
+  useEffect(() => {
+    void reload();
+  }, []);
+
+  const toggle = async (p: ApiProviderView) => {
+    setError(null);
+    try {
+      await api.saveApiProvider({ ...p, enabled: !p.enabled }, { action: "keep" });
+      await reload();
+    } catch (e) {
+      setError(errorText(e));
+    }
+  };
+
+  if (editing !== null) {
+    return (
+      <ProviderForm
+        key={editing.id}
+        initial={editing}
+        hasKey={providers.some((p) => p.id === editing.id && p.hasKey)}
+        onDone={() => {
+          setEditing(null);
+          void reload();
+        }}
+      />
+    );
+  }
+
+  // Choosing a default reorders `agents`, not the buttons.
+  const connected = settings.agents;
+  const makeDefault = (kind: AgentKind) =>
+    void updateSettings((st) => ({
+      ...st,
+      agents: [kind, ...st.agents.filter((k) => k !== kind)],
+    }));
+
+  return (
+    <>
+      <CliProviderRows settings={settings} updateSettings={updateSettings} />
+      {providers.map((p) => (
+        <ApiProviderRow
+          key={p.id}
+          provider={p}
+          onEdit={() => setEditing(p)}
+          onToggle={() => void toggle(p)}
+        />
+      ))}
       {connected.length > 1 && (
         <div className="flex items-center gap-3 border-b border-border py-2.5">
-          <div className="min-w-0 flex-1">
-            <div className="font-semibold">Default for new tasks</div>
-            <div className="text-[length:var(--fs-sm)] text-fg-muted">
-              You can still pick an agent per task in the composer
-            </div>
-          </div>
+          <div className="min-w-0 flex-1 font-semibold">Default for new tasks</div>
           <div className="inline-flex overflow-hidden rounded-[var(--radius-sm)] border border-border-strong">
-            {/* Fixed order: choosing a default reorders `agents`, not the buttons. */}
             {AGENT_KINDS.filter((kind) => connected.includes(kind)).map((kind) => (
               <button
                 key={kind}
@@ -922,6 +982,8 @@ function AgentPane({ settings, updateSettings }: PaneProps) {
           </div>
         </div>
       )}
+      <PresetGrid onPick={(preset) => setEditing(blank(preset))} />
+      {error && <div className="text-[length:var(--fs-sm)] text-danger">{error}</div>}
     </>
   );
 }

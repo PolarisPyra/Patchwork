@@ -196,8 +196,8 @@ export default function CodexPane({
           title="The CLI in use"
           desc={
             settings.agentPaths.codex
-              ? "The Codex CLI you located under CLI Providers."
-              : "Codex on PATH. Set a path under CLI Providers to use another copy."
+              ? "The Codex CLI you located under Providers."
+              : "Codex on PATH. Set a path under Providers to use another copy."
           }
         >
           <button className="btn" onClick={() => run(async () => setInfo(await api.codexInfo()))}>

@@ -23,7 +23,7 @@ makes is reviewed in the app before you keep it.
 - **Every agent, one interface.** Claude Code, Codex, Antigravity, OpenCode, and API models share
   the same chat, plan, and diff views.
 - **Bring your own API key.** Add DeepSeek, or any OpenAI-compatible endpoint, under
-  **Settings → API Providers**. Keys are kept in the system keychain. Patchwork's built-in agent
+  **Settings → Providers**. Keys are kept in the system keychain. Patchwork's built-in agent
   reads, searches, and edits files, runs commands, and asks before acting, following the task's
   access mode.
 - **Review before you keep it.** Each task's canvas shows its Plan, Code, and Diff views. Stage the
@@ -63,7 +63,7 @@ installer for Windows, and a disk image for macOS on Apple silicon. To build fro
 ## Requirements
 
 Install at least one agent CLI and sign in to it with the CLI's own login command, or add an API
-provider in **Settings → API Providers**. Patchwork detects which CLIs are installed and uses them
+provider in **Settings → Providers**. Patchwork detects which CLIs are installed and uses them
 as they are.
 
 - [Claude Code](https://docs.claude.com/en/docs/claude-code) (`claude`)
