@@ -8,6 +8,7 @@ for people using it.
 | [Development](development.md) | Requirements, running the app, building, tests, and other checks |
 | [Architecture](architecture.md) | Repo layout, the SQLite data model, and where tasks and chats run |
 | [Agent CLIs](agent-clis.md) | How each agent is detected, run, approved, steered, and imported |
+| [Artifacts, scheduled tasks, plugins, memory, computer use](artifacts-and-automation.md) | The five features around the agents, and how each one decides what to do |
 | [Releasing](release.md) | Versions, the changelog, the release workflow, and the update server |
 | [UI checks](../scripts/qa/README.md) | Browser measurements and screenshots of the running dev session |
 

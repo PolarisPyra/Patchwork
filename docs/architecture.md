@@ -11,6 +11,10 @@ The repo is split into `apps/web`, `apps/server`, and `apps/desktop`:
   - `src/persistence/` — SQLite store and schema migrations
   - `src/import/` — reads each CLI's saved sessions for importing
   - `src/usage/` — subscription usage limits per provider
+  - `src/scheduled.rs` — the next run of a scheduled task, from its shape and the local clock
+  - `src/plugins.rs` — plugin bundles: their manifests, skills, and MCP servers, and the starter one the app ships
+  - `src/memory.rs` — the tree of instruction files the agents read, and reading one of them
+  - `src/computer.rs` — a screenshot, and the pointer and keyboard under it
   - `src/workspace.rs` — git and file access
   - `src/watch/` — watches the open project for file changes (see [File changes](#file-changes))
   - `src/types.rs` — data contract shared with the UI
@@ -18,6 +22,7 @@ The repo is split into `apps/web`, `apps/server`, and `apps/desktop`:
 - `apps/web` — the React UI (`~/` imports resolve to `apps/web/src`)
   - `src/app/` — app root; `src/api.ts` — typed bridge mirroring `apps/server/src/types.rs`
   - `src/components/{chat,sidebar,usage,settings,onboarding,canvas,workspace}/` — UI
+  - `src/components/chat/Artifact.tsx` — Mermaid diagrams and sandboxed HTML/SVG artifacts in a reply
   - `src/hooks/`, `src/lib/` — state and helpers; `src/theme.css` — design tokens
 
 ## Data model
@@ -31,6 +36,7 @@ Everything the sidebar shows comes from one SQLite database, `patchwork.db`, in 
 | `folders` | Sub-folders inside a project: `project_id`, `name`, `position`. Organisation only; no directory is created on disk. |
 | `threads` | Tasks and chats. `project_id` NULL makes it a chat. `folder_id` NULL puts it at the top level of its project. `session_id` lets the agent resume. |
 | `messages` | The messages of each thread, with text, tool calls, plan, file changes, approvals, and attachments. |
+| `scheduled_tasks` | Prompts that start a task on a schedule: its shape as JSON, the project, agent and access mode to run with, and when it last and next runs. |
 | `app_state` | Small key/value state that is not settings, such as the thread that was open last. |
 
 Where a thread runs:

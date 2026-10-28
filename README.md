@@ -39,6 +39,23 @@ makes is reviewed in the app before you keep it.
 - **Import existing work.** Bring in conversations from Claude Code, Codex, the Gemini CLI
   (Antigravity chats), and [T3 Code](https://github.com/pingdotgg/t3code). Each one becomes a task
   in its project, and follow-ups resume the original session.
+- **Artifacts in the chat.** A reply that contains a Mermaid diagram or an HTML or SVG artifact is
+  drawn where it is, whichever agent wrote it. A toggle shows the source, and the artifact runs in a
+  sandboxed frame that cannot reach the rest of the app.
+- **Scheduled tasks.** Under **Settings → Scheduled**, a prompt can start a task every few hours,
+  every day, on weekdays, or on the days you pick. It runs in a project you choose, or in a chat,
+  while Patchwork is open.
+- **Plugins.** Under **Settings → Plugins**, a bundle is a folder with a `plugin.json`, its skills,
+  and the MCP servers it adds. Two starter skills ship with the app, and a Codex plugin bundle works
+  as it is.
+- **Memory.** Under **Settings → Memory**, a tree shows every file the agents take instructions
+  from: a project's notes and its folders' notes, your global ones, and every enabled skill. Pick
+  one to read it, or open it in your editor.
+- **The Codex CLI, read from itself.** **Settings → Codex CLI** lists the installed Codex's version,
+  its feature flags, and its model catalog, with its own health check, MCP servers, and plugins.
+- **Computer use.** An optional screen tool for Patchwork's own agent: it can take a screenshot and
+  click, type, press keys, and scroll. It is off until you turn it on under
+  **Settings → Permissions**, and each use asks first unless a rule allows the screen.
 
 ## Installation
 
