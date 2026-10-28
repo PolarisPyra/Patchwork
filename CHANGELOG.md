@@ -3,6 +3,24 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.27] - 2026-10-27
+
+### Added
+
+- Settings → Agents → Click answers twice to send brings back the old way of answering an agent's question, where the first click only picks an answer.
+
+### Changed
+
+- Clicking an answer to an agent's question now sends it at once. Before, it took two clicks.
+- Ask rules in Settings → Permissions now make the agent wait for your answer in every access mode except Full Access, even for calls the mode would otherwise run on its own. Before, they only took effect when the agent stopped to ask you first.
+- Agents can read their skills folders without asking, so your skills keep working when reading other folders has to be asked about or is blocked.
+- An agent's questions and permission requests now show up in its reply at the point where they were asked, instead of collecting at the bottom. Answered questions stay in view when a finished reply folds up.
+- Claude now compacts a working task once its context reaches 200k, instead of waiting until the model's window is almost full. Settings → Tokens → Claude compacts at → Claude's own brings back the old behavior.
+
+### Security
+
+- Deny rules in Settings → Permissions, and a deny default you set for a kind of request, now block matching tool calls in every access mode, Full Access included. Before, in Full Access or any mode that ran a call on its own, a command, edit or read you had blocked could still run. Now the agent is told the call isn't allowed, and its reply carries on without it.
+
 ## [0.10.26] - 2026-10-27
 
 ### Changed
