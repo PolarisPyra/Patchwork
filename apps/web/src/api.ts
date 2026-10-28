@@ -895,7 +895,6 @@ export const api = {
     return invoke<AgentsView>("watch_agents", { onChange: channel });
   },
   openAgent: (path: string) => invoke<void>("open_agent", { path }),
-  openAgentsFolder: () => invoke<void>("open_agents_folder"),
   /** The agents a chat in the project can summon, with the project's own. */
   listAgents: (projectId: string | null) => invoke<CustomAgent[]>("list_agents", { projectId }),
   createAgent: (name: string) => invoke<void>("create_agent", { name }),

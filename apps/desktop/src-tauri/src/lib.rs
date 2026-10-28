@@ -164,12 +164,6 @@ async fn create_agent(server: Srv<'_>, name: String) -> Res<()> {
     .await?
 }
 
-/// Opens the agents folder in the file manager, creating it first.
-#[tauri::command]
-fn open_agents_folder(app: AppHandle, server: Srv) -> Res<()> {
-    open_folder(&app, server.agents.dir())
-}
-
 /// Opens the folder of the debug logs in the file manager, creating it first.
 #[tauri::command]
 fn open_logs_folder(app: AppHandle) -> Res<()> {
@@ -1044,7 +1038,6 @@ pub fn run() {
             open_skill,
             watch_agents,
             open_agent,
-            open_agents_folder,
             list_agents,
             create_agent,
             open_logs_folder,

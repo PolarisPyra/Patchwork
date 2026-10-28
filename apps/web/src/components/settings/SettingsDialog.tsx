@@ -107,7 +107,7 @@ const GROUPS: { label: string; sections: { id: Section; label: string; Icon: Ico
       { id: "api", label: "API Providers", Icon: PlugsConnectedIcon },
       { id: "mcp", label: "MCP Servers", Icon: PlugIcon },
       { id: "skills", label: "Skills", Icon: BooksIcon },
-      { id: "custom-agents", label: "Custom agents", Icon: IdentificationBadgeIcon },
+      { id: "custom-agents", label: "Agent Management", Icon: IdentificationBadgeIcon },
       { id: "permissions", label: "Permissions", Icon: ShieldCheckIcon },
       { id: "tokens", label: "AI Tokenomics", Icon: GaugeIcon },
     ],
@@ -168,7 +168,7 @@ export default memo(function SettingsDialog({
         aria-label="Settings"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <nav className="flex w-[180px] flex-none flex-col overflow-y-auto border-r border-border bg-panel px-2 py-2.5">
+        <nav className="flex w-[192px] flex-none flex-col overflow-y-auto border-r border-border bg-panel px-2 py-2.5">
           {GROUPS.map((group) => (
             <div key={group.label} className="flex flex-col gap-0.5 [&+&]:mt-3">
               <div className="px-2 pb-0.5 text-[length:var(--fs-xs)] font-semibold text-fg-subtle">
@@ -1793,7 +1793,7 @@ function AgentsPane() {
               <div className="flex min-w-0 gap-1.5 text-[length:var(--fs-xs)]">
                 {agent.primary && (
                   <span
-                    className="flex-none rounded-[4px] bg-warning/15 px-1.5 text-fg"
+                    className="flex-none rounded-[4px] bg-accent-soft px-1.5 text-accent-text"
                     title="Stays the chat's agent once summoned"
                   >
                     Primary
@@ -1844,15 +1844,6 @@ function AgentsPane() {
               </button>
             </form>
           ))}
-        {!q && (
-          <button
-            className="flex min-h-[124px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-dashed border-border-strong bg-transparent text-fg-muted hover:border-accent hover:text-fg"
-            onClick={() => run(api.openAgentsFolder())}
-          >
-            <FolderSimpleIcon size={20} />
-            <span className="text-[length:var(--fs-sm)]">Open folder</span>
-          </button>
-        )}
       </div>
       {q && shown.length === 0 && (
         <div className="py-6 text-center text-fg-muted">Nothing matches “{query.trim()}”</div>
@@ -1862,7 +1853,7 @@ function AgentsPane() {
         <TokenRow title="Folder" desc={view.dir}>
           {null}
         </TokenRow>
-        <TokenRow title="In a project" desc=".patchwork/agents or .opencode/agents">
+        <TokenRow title="In a project" desc=".patchwork/agents">
           {null}
         </TokenRow>
       </div>

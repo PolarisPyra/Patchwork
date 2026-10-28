@@ -1,9 +1,8 @@
 //! Custom agents: Markdown files in `agents` in the config folder, or in a project's
-//! `.patchwork/agents` or `.opencode/agents`, each a role an agent takes on when a message
-//! summons it as `&name`. The name is the file's name without `.md`; the frontmatter gives a
-//! title (`name`), a description, a model and a mode, and the text below it is the role's
-//! instructions. A `primary` agent stays the chat's agent once summoned; any other is summoned
-//! for one message.
+//! `.patchwork/agents`, each a role an agent takes on when a message summons it as `&name`. The
+//! name is the file's name without `.md`; the frontmatter gives a title (`name`), a description,
+//! a model and a mode, and the text below it is the role's instructions. A `primary` agent stays
+//! the chat's agent once summoned; any other is summoned for one message.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
@@ -83,8 +82,7 @@ impl Library {
     /// replace any of the same name.
     pub fn available(&self, root: &Path) -> Vec<Agent> {
         let mut agents = self.list().to_vec();
-        // `.patchwork` last, so it wins over `.opencode`.
-        for agent in PROJECT_DIRS.iter().flat_map(|dir| load(&root.join(dir))) {
+        for agent in load(&root.join(PROJECT_DIR)) {
             match agents.iter_mut().find(|a| a.name == agent.name) {
                 Some(same) => *same = agent,
                 None => agents.push(agent),
@@ -145,8 +143,8 @@ impl Library {
     }
 }
 
-/// The folders in a project that hold its own agents.
-const PROJECT_DIRS: [&str; 2] = [".opencode/agents", ".patchwork/agents"];
+/// The folder in a project that holds its own agents.
+const PROJECT_DIR: &str = ".patchwork/agents";
 
 /// What a chat's agent has been told of the chat's standing role, before a message.
 pub enum Standing<'a> {
