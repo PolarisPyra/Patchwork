@@ -1,5 +1,6 @@
 // Draws an artifact reply: a Mermaid diagram and an HTML artifact, as any provider's reply would
-// be rendered. Prints the diagram's size and whether the frame ran, then saves a screenshot.
+// be rendered. Prints the diagram's size, whether the frame ran, and what copying the whole reply
+// puts on the clipboard, then saves a screenshot.
 // Usage: node checks/artifacts.mjs [out.png]  (default /tmp/artifacts.png)
 import { openWorkspace } from "../lib/open.mjs";
 
@@ -58,6 +59,23 @@ const frames = page.locator("iframe[title='Artifact']");
 const diagrams = page.locator("svg[id^='patchwork-diagram-']");
 const box = await diagrams.first().boundingBox();
 const frameBox = await frames.first().boundingBox();
+// Copying the whole reply keeps each drawn block's source as a fence.
+const copied = await page.evaluate(() => {
+  const reply = document.querySelector("[data-artifact]")?.parentElement;
+  if (!reply) return null;
+  let text = null;
+  const read = (e) => (text = e.clipboardData.getData("text/plain"));
+  window.addEventListener("copy", read);
+  const range = document.createRange();
+  range.selectNodeContents(reply);
+  getSelection().removeAllRanges();
+  getSelection().addRange(range);
+  document.execCommand("copy");
+  window.removeEventListener("copy", read);
+  getSelection().removeAllRanges();
+  return text;
+});
+console.log(`copied: ${JSON.stringify(copied)}`);
 await page.screenshot({ path: out });
 await browser.close();
 if (!box) throw new Error("The Mermaid diagram did not render");

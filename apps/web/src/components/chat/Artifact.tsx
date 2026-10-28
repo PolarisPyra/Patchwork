@@ -149,7 +149,11 @@ export default function Artifact({
   const [showCode, setShowCode] = useState(false);
   const diagram = name === DIAGRAM;
   return (
-    <div className="my-2 overflow-hidden rounded-[var(--radius)] border border-border bg-panel">
+    <div
+      className="my-2 overflow-hidden rounded-[var(--radius)] border border-border bg-panel"
+      data-artifact={name}
+      data-artifact-source={code}
+    >
       <div
         data-copy-skip
         className="flex items-center justify-between border-b border-border py-0.5 pr-1 pl-2.5 text-[length:var(--fs-xs)] text-fg-subtle"

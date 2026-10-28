@@ -110,12 +110,22 @@ const indent = (text: string, by: string) =>
     .map((line, i) => (i === 0 || !line ? line : by + line))
     .join("\n");
 
+/** `code` in a fence longer than any run of backticks inside it. */
+function fence(code: string, info: string): string {
+  const ticks = "`".repeat(Math.max(3, ...(code.match(/`{3,}/g) ?? []).map((f) => f.length + 1)));
+  return `${ticks}${info}\n${code}\n${ticks}`;
+}
+
 function block(el: HTMLElement): string {
   if (el.hasAttribute("data-copy-skip")) return "";
   if (el.hasAttribute("data-code")) {
     const code = (el.querySelector("pre")?.textContent ?? "").replace(/\n$/, "");
-    const fence = "`".repeat(Math.max(3, ...(code.match(/`{3,}/g) ?? []).map((f) => f.length + 1)));
-    return `${fence}${el.getAttribute("data-code")}\n${code}\n${fence}`;
+    return fence(code, el.getAttribute("data-code") ?? "");
+  }
+  // A drawn diagram or artifact copies as its source.
+  if (el.hasAttribute("data-artifact")) {
+    const source = el.getAttribute("data-artifact-source") ?? "";
+    return fence(source, el.getAttribute("data-artifact") ?? "");
   }
   switch (el.tagName) {
     case "P":
