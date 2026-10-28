@@ -485,13 +485,13 @@ function TokensPane({ settings, updateSettings }: PaneProps) {
       </TokenRow>
       <TokenRow
         title="Claude compacts at"
-        desc="Compacts a working Claude task once its context reaches this. Claude's own waits until the model's window is almost full"
+        desc="Compacts a working Claude task once its context reaches this. Default waits until the model's window is almost full"
       >
         <ContextLevels
           label="Claude compacts at"
           value={tokens.claudeCompactWindow}
           levels={COMPACT_WINDOWS}
-          zero="Claude's own"
+          zero="Default"
           onChange={(claudeCompactWindow) => update({ claudeCompactWindow })}
         />
       </TokenRow>
