@@ -2,8 +2,9 @@
 // of 150 turns with Markdown, code, reasoning, and tool calls, 400 changed files, a 5000-line diff
 // and file, and 5000 project files. Times startup, the long thread (open, switch, stream, type,
 // scroll), the Changes view, the canvas diff and Code tabs, the archive, the command palette,
-// settings, and the @ file picker. Prints each scenario's main-thread time, layout and style counts,
-// frame rate, and its hottest functions by self time from a CPU profile.
+// settings (also while a reply streams), and the @ file picker. Prints each scenario's main-thread
+// time, layout and style counts, frame rate, and its hottest functions by self time from a CPU
+// profile.
 // Runs with GPU compositing off, as the software-rendered webview does.
 // Usage: node checks/profile-heavy.mjs   (QA_URL=http://localhost:4173/ for a vite preview build)
 import { readFileSync } from "node:fs";
@@ -205,6 +206,23 @@ await scenario("stream 60 deltas at 20/s into a 20 KB reply", async () => {
     await page.evaluate(() => window.__qaEmit("qa-big", { type: "textDelta", messageId: "live", text: "more words " }));
     await page.waitForTimeout(50);
   }
+});
+
+await scenario("settings: hover the sections while 100 deltas stream at 20/s", async () => {
+  await page.keyboard.press("Control+,");
+  const nav = page.locator('[role="dialog"] nav button');
+  await nav.filter({ hasText: "Shortcuts" }).click();
+  const box = await nav.first().boundingBox();
+  const count = await nav.count();
+  for (let i = 0; i < 100; i++) {
+    await page.evaluate(() => {
+      window.__qaEmit("qa-big", { type: "textDelta", messageId: "live", text: "more streamed words " });
+    });
+    await page.mouse.move(box.x + 40, box.y + (i % count) * 34 + 16);
+    await page.waitForTimeout(50);
+  }
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
 });
 
 await scenario("type 40 characters in the composer", async () => {

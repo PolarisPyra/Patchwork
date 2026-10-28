@@ -149,10 +149,11 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     setSettingsFocus({ scope, ruleId });
     setSettingsOpen(true);
   }, []);
-  const closeSettings = () => {
+  const closeSettings = useCallback(() => {
     setSettingsOpen(false);
     setSettingsFocus(null);
-  };
+  }, []);
+  const reloadImported = useCallback(() => void reload(), [reload]);
   const updatePermissions = useCallback(
     (change: (p: PermissionSettings) => PermissionSettings) =>
       void updateSettings((s) => ({ ...s, permissions: change(s.permissions) })),
@@ -540,7 +541,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
           settings={settings}
           updateSettings={updateSettings}
           focus={settingsFocus}
-          onImported={() => void reload()}
+          onImported={reloadImported}
           onClose={closeSettings}
         />
       )}

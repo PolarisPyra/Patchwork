@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useState, type ReactNode } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { RELEASES_URL, restartToUpdate } from "~/lib/updates";
 import {
@@ -139,7 +139,8 @@ interface SettingsDialogProps extends PaneProps {
   onClose: () => void;
 }
 
-export default function SettingsDialog({
+// Memoized: the workspace re-renders on every streamed delta, and the open pane should not.
+export default memo(function SettingsDialog({
   settings,
   updateSettings,
   focus,
@@ -212,7 +213,7 @@ export default function SettingsDialog({
       </div>
     </div>
   );
-}
+});
 
 const THEMES: { value: Theme; label: string }[] = [
   { value: "light", label: "Light" },
