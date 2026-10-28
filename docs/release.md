@@ -80,6 +80,11 @@ and one that breaks the style rules, so the author fixes it while the change is 
 that only touches `.github/`, `scripts/`, `docs/`, or `*.md` is internal and needs none.
 `pnpm install` turns the hook on (`git config core.hooksPath scripts/hooks`).
 
+The `pre-push` hook in the same folder stops a push that was not asked for. Pushing is the user's
+call, so an agent finishes at the commit. To push on purpose, set `PATCHWORK_PUSH=1` or pass
+`--no-verify`; a push from `scripts/release.sh` sets `PATCHWORK_PUSH=1` itself, so a release still
+pushes in one step once the user has agreed to it.
+
 **2. At release.** `scripts/release.sh` drafts the release's section with Claude (the `claude`
 CLI, signed in; `PATCHWORK_NOTES_MODEL` picks the model, Opus by default). Claude reads every app
 commit since the last tag, its `Changelog:` text, and its diff, then:

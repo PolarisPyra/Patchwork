@@ -6,7 +6,9 @@
 #   scripts/release.sh X.Y.Z            Cut a release, with no questions asked: check, draft and
 #                                       check the notes with Claude, set the version, add the
 #                                       notes to CHANGELOG.md, commit, tag, and push, then print
-#                                       the build's link and end.
+#                                       the build's link and end. It pushes on purpose, so it turns
+#                                       off the pre-push hook that otherwise stops a push nobody
+#                                       asked for; run it only when a release was asked for.
 #   scripts/release.sh watch X.Y.Z      Follow X.Y.Z's build to the end, then check that
 #                                       latest.json names it.
 #   scripts/release.sh version X.Y.Z    Write a version into every file that names it.
@@ -118,7 +120,9 @@ cut_release() {
   # tag's run. A pushed commit that does change a Cargo file starts its cache build under its own
   # name, as any push of it would.
   if [[ -n "$(git rev-list origin/main..HEAD)" ]]; then
-    git push origin main
+    # This script exists to release, so its pushes are intended: it lifts the pre-push guard that
+    # stops a push nobody asked for, for these two commands only.
+    PATCHWORK_PUSH=1 git push origin main
   fi
   set_version "$version"
   scripts/changelog.sh insert "$notes" "$version"
@@ -126,7 +130,7 @@ cut_release() {
     apps/desktop/src-tauri/tauri.conf.json
   git commit -m "Release $tag"
   git tag -a "$tag" -m "Patchwork $version"
-  git push origin main "$tag"
+  PATCHWORK_PUSH=1 git push origin main "$tag"
   rm -f "$notes" "$notes.json"
 
   # The build runs on GitHub from here; `scripts/release.sh watch` follows it.

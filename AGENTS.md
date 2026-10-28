@@ -83,7 +83,11 @@ When writing or reviewing code that handles a lot of data, I/O, or work per requ
 
 ## Pushing and releasing
 
-Read [docs/release.md](docs/release.md) before any push, version bump, or release. It has every rule, including the Discord changelog.
+- **NEVER** run `git push`, `git push --tags`, or anything else that updates a remote, unless the user asks for it in the current conversation. Committing locally is fine; pushing is theirs to ask for. A request to do the work, to commit, or to "finish up" is not a request to push. When the work is ready, stop at the commit and say it is unpushed.
+- The same goes for anything that publishes: `scripts/release.sh`, a version bump that ends in a tag, and `gh release`. Those push, so they need an explicit request too.
+- This overrides the `fullsend` skill's push step. "Full send" grants autonomy over the work and over testing, not over the remote: do the work, prove it, commit it, and stop there. If the user wants it pushed, they will say so, and that is the only thing that counts.
+
+Read [docs/release.md](docs/release.md) before any push, version bump, or release, once the user has asked for one. It has every rule, including the Discord changelog.
 
 ## Release and build setup for a Tauri project
 
