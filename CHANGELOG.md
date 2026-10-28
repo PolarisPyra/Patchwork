@@ -3,6 +3,22 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.32] - 2026-10-28
+
+### Added
+
+- Claude Code, Codex and OpenCode can now start your custom agents from Settings → Agents as subagents by name, each with its own instructions, so an agent like a docs lead can hand work to your other agents. A subagent uses the model its agent names when the chat's Claude Code, Codex or OpenCode has that model, and the chat's model otherwise.
+- Settings → Agents now has All and Primary filters at the top, so you can show only your primary agents.
+
+### Changed
+
+- Settings → MCP Servers, Agents and Skills now show one row per item instead of a grid of cards, so long lists stay easy to scan. Each row shows its badge, name and a one-line description next to its actions. A skill's file location and an agent's own name now show when you hover over its name. Add server, New agent and Open folder moved to the top, next to search.
+- Agent Management in Settings is now called Agents, and it sits right under MCP Servers.
+
+### Fixed
+
+- Subagents started by Codex now show in the chat as Agent steps, each with a thread of its own, the way Claude's do. Before, a Codex subagent didn't show at all, its reply could end up in the main reply, and its finishing could end the whole turn early.
+
 ## [0.10.31] - 2026-10-28
 
 ### Fixed
