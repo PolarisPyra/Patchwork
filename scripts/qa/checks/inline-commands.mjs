@@ -1,6 +1,7 @@
 // Shows "$skill" chips in a user message, at its start and later in the text, and prints each
 // chip's height next to the bubble's line height. Then types "/" and "$" words later in a draft:
 // prints whether each menu opens, the draft a pick leaves, and the chip a typed "$name " becomes.
+// Then "hello /comp" and "hello /nope": what "/" offers mid-draft, and the draft picking leaves.
 // Usage: node checks/inline-commands.mjs [bubble.png] [composer.png]
 
 import { openWorkspace } from "../lib/open.mjs";
@@ -51,6 +52,20 @@ const markdown = await editor.evaluate((el) => el.editor?.getMarkdown());
 console.log(`draft: ${JSON.stringify(markdown)}`);
 console.log(`composer chips: ${await page.locator(".ProseMirror [data-skill-command]").count()}`);
 await editor.screenshot({ path: composerOut });
+await page.keyboard.press("Control+A");
+await page.keyboard.press("Delete");
+// "/" opens its menu later in a draft too, and a local command picked there becomes the whole draft.
+await page.keyboard.type("hello /comp");
+await page.waitForTimeout(300);
+const offered = await page.locator('[role="listbox"][aria-label="Slash commands"] [role="option"]').allTextContents();
+console.log(`"hello /comp" offers: ${JSON.stringify(offered.map((o) => o.trim().split(/\s/)[0]))}`);
+await page.keyboard.press("Enter");
+await page.waitForTimeout(200);
+console.log(`draft after picking: ${JSON.stringify(await editor.evaluate((el) => el.editor?.getMarkdown()))}`);
+await page.keyboard.press("Control+A");
+await page.keyboard.press("Delete");
+await page.keyboard.type("hello /nope");
+console.log(`"hello /nope" opens a menu: ${(await menu("Slash commands")) > 0}`);
 await page.keyboard.press("Control+A");
 await page.keyboard.press("Delete");
 await browser.close();

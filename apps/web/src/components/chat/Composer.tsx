@@ -147,6 +147,12 @@ function commandToken(editor: Editor): CommandToken | null {
   };
 }
 
+/** Patchwork's own commands. They are read only when the sent draft is exactly the command, so
+ * picking one replaces the draft rather than going in mid-sentence. */
+const LOCAL_COMMANDS: ReadonlySet<string> = new Set(
+  SLASH_COMMANDS.filter((command) => command.runs !== "agent").map((command) => command.name),
+);
+
 /** Most characters a prompt can hold; a longer draft cannot be sent. */
 const PROMPT_LIMIT = 120_000;
 
@@ -430,11 +436,8 @@ function Composer({
     description: skill.description ?? "Skill",
   }));
   const slashCommands = [
-    // Patchwork does not run /goal in OpenCode. Its own commands only take effect as the whole
-    // message, so later in a draft only the agent's commands are offered.
-    ...(token?.whole ? SLASH_COMMANDS : []).filter(
-      (command) => agent !== "opencode" || command.name !== "/goal",
-    ),
+    // Patchwork does not run /goal in OpenCode.
+    ...SLASH_COMMANDS.filter((command) => agent !== "opencode" || command.name !== "/goal"),
     ...providerSlashCommands
       // Claude lists Patchwork's skills again as the "patchwork" plugin's; they are under "$".
       .filter((command) => {
@@ -766,9 +769,9 @@ function Composer({
           { type: "text", text: " " },
         ]
       : `${name} `;
-    // Later in the draft, the pick replaces just the word typed. /goal is only offered as the
-    // whole draft.
-    if (!token.whole) {
+    // Later in the draft, the pick replaces just the word typed. A local command only runs as the
+    // whole message, so it replaces the draft wherever it was typed.
+    if (!token.whole && !LOCAL_COMMANDS.has(name)) {
       editor.chain().focus().insertContentAt({ from: token.from, to: token.to }, picked).run();
       return;
     }
@@ -786,7 +789,7 @@ function Composer({
   }
 
   function selectCommand(name: string) {
-    if (token?.whole && onSelectSlashCommand(name)) {
+    if ((token?.whole || LOCAL_COMMANDS.has(name)) && onSelectSlashCommand(name)) {
       editor?.chain().focus().clearContent().run();
       changed.current("");
       return;

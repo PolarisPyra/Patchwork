@@ -4,7 +4,7 @@
  */
 type Runs = "pick" | "send" | "agent";
 
-/** Slash commands offered while the draft is a single "/word". */
+/** Patchwork's slash commands, offered wherever a "/word" is typed. */
 export const SLASH_COMMANDS = [
   { name: "/model", runs: "pick", description: "Switch the response model for this chat" },
   { name: "/plan", runs: "pick", description: "Switch this chat into plan mode" },
