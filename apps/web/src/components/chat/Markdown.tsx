@@ -7,11 +7,14 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import ReactMarkdown, { type Components } from "react-markdown";
+import ReactMarkdown, { type Components, type Options } from "react-markdown";
+import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import "katex/dist/katex.min.css";
 import { TextAlignLeftIcon } from "@phosphor-icons/react";
 import { api } from "~/api";
-import { highlightBlock } from "~/components/canvas/highlight";
+import { highlightBlock, MAX_HIGHLIGHT_LINES } from "~/components/canvas/highlight";
 import { SYNTAX_CLASSES } from "~/components/canvas/syntaxClasses";
 import Artifact, { isArtifact } from "~/components/chat/Artifact";
 import { ACTION_CLASS, CopyButton } from "~/components/chat/CopyButton";
@@ -155,7 +158,7 @@ export default memo(function Markdown({
   // Each block parses on its own, so a streaming reply re-parses only its last block.
   return (
     <div
-      className="min-w-0 leading-[1.6] [word-break:break-word] selectable [&>:last-child]:mb-0 [&_p]:mt-0 [&_p]:mb-2"
+      className="min-w-0 leading-[1.6] [word-break:break-word] selectable [&>:last-child]:mb-0 [&_p]:mt-0 [&_p]:mb-2 [&_.katex-display]:my-2 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex-display]:py-1"
       onCopy={copyMarkdown}
     >
       {splitBlocks(text).map((block, i) => (
@@ -165,7 +168,16 @@ export default memo(function Markdown({
   );
 });
 
-const REMARK_PLUGINS = [remarkGfm];
+/**
+ * Math is written $$tex$$, inline or on lines of its own. Single-dollar math stays off: a coding
+ * chat is full of dollar signs, and remark-math reads "costs $5 and $10" or "set $HOME and $PATH"
+ * as a formula, since it does not check for a space before the closing dollar. So $x$ shows as
+ * typed.
+ */
+const REMARK_PLUGINS: Options["remarkPlugins"] = [
+  remarkGfm,
+  [remarkMath, { singleDollarTextMath: false }],
+];
 
 /** Turns off indented code blocks; fenced blocks still render as code. */
 function remarkNoIndentedCode(this: { data: () => object }) {
@@ -199,7 +211,38 @@ function rehypeTrimBreaks() {
   };
   return walk;
 }
-const REHYPE_PLUGINS = [rehypeTrimBreaks];
+/** The text of the first descendant that is the TeX annotation KaTeX writes into its MathML. */
+function annotationTex(node: HastNode): string | null {
+  for (const child of node.children ?? []) {
+    if (child.tagName === "annotation") return child.children?.[0]?.value ?? null;
+    const tex = annotationTex(child);
+    if (tex !== null) return tex;
+  }
+  return null;
+}
+
+/**
+ * Puts each formula's TeX on its outermost KaTeX element as `data-tex`, which a copy takes in
+ * place of the two renderings KaTeX draws, even when only part of the formula is selected.
+ */
+function rehypeMathSource() {
+  const walk = (node: HastNode) => {
+    for (const child of node.children ?? []) {
+      const classes = child.properties?.className;
+      if (
+        Array.isArray(classes) &&
+        (classes.includes("katex-display") || classes.includes("katex"))
+      ) {
+        const tex = annotationTex(child);
+        if (tex !== null) child.properties = { ...child.properties, dataTex: tex };
+      } else {
+        walk(child);
+      }
+    }
+  };
+  return walk;
+}
+const REHYPE_PLUGINS = [rehypeKatex, rehypeMathSource, rehypeTrimBreaks];
 
 /** A `$skill` anywhere in the text, after a space; skill names are lowercase words joined by
  * hyphens, so `$HOME` or `$5` stays text. */
@@ -386,7 +429,12 @@ function CodeBlock({ lang, code, title }: { lang: string; code: string; title: s
   useEffect(() => {
     if (upToDate) return;
     const timer = setTimeout(
-      () => setHighlighted({ code, html: highlightBlock(code, lang) }),
+      () =>
+        setHighlighted({
+          code,
+          // A block too long to highlight stays plain, as it does in the composer and the Canvas.
+          html: code.split("\n").length > MAX_HIGHLIGHT_LINES ? null : highlightBlock(code, lang),
+        }),
       delay,
     );
     return () => clearTimeout(timer);
@@ -419,7 +467,7 @@ function CodeBlock({ lang, code, title }: { lang: string; code: string; title: s
         {html === null ? (
           <code>{code}</code>
         ) : (
-          // hljs output escapes the source text, so this HTML is safe.
+          // The highlighted HTML escapes the source text, so it is safe.
           <code className={SYNTAX_CLASSES} dangerouslySetInnerHTML={{ __html: html }} />
         )}
       </pre>

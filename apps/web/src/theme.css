@@ -84,6 +84,8 @@
   --syn-property: #c77dbb;
   --syn-type: #16baac;
   --syn-tag: #d5b778;
+  --syn-addition: #6aab73;
+  --syn-deletion: #db5c5c;
 
   --shadow-popup: 0 6px 24px rgba(0, 0, 0, 0.45);
 }
@@ -132,6 +134,8 @@
   --syn-property: #871094;
   --syn-type: #008080;
   --syn-tag: #0033b3;
+  --syn-addition: #208a3c;
+  --syn-deletion: #e55765;
 
   --shadow-popup: 0 6px 24px rgba(0, 0, 0, 0.12);
 }

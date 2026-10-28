@@ -23,8 +23,13 @@ export default defineConfig({
             { name: "tiptap", test: /node_modules[\\/](@tiptap|linkifyjs)/ },
             { name: "highlight", test: /node_modules[\\/]highlight\.js/ },
             {
+              name: "shiki",
+              test: /node_modules[\\/](shiki|@shikijs|oniguruma-to-es|oniguruma-parser|regex|regex-recursion|regex-utilities)[\\/]/,
+            },
+            { name: "katex", test: /node_modules[\\/]katex[\\/]/ },
+            {
               name: "markdown",
-              test: /node_modules[\\/](react-markdown|remark-|micromark|mdast-|hast-|unist-|unified|vfile|decode-named-character-reference|character-entities|property-information|space-separated-tokens|comma-separated-tokens|devlop|bail|trough|zwitch|ccount|markdown-table|longest-streak|html-url-attributes|estree-util-|style-to-js|style-to-object|inline-style-parser|trim-lines|is-plain-obj)/,
+              test: /node_modules[\\/](react-markdown|remark-|rehype-|html-void-elements|stringify-entities|micromark|mdast-|hast-|unist-|unified|vfile|decode-named-character-reference|character-entities|property-information|space-separated-tokens|comma-separated-tokens|devlop|bail|trough|zwitch|ccount|markdown-table|longest-streak|html-url-attributes|estree-util-|style-to-js|style-to-object|inline-style-parser|trim-lines|is-plain-obj)/,
             },
             { name: "react", test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
             { name: "xterm", test: /node_modules[\\/]@xterm/ },

@@ -35,7 +35,7 @@ import {
   keepDraftText,
   type MentionSuggestion,
 } from "~/components/chat/composerExtensions";
-import { MARKDOWN_COPY_ATTR } from "~/lib/markdownCopy";
+import { keepTexEscapes, MARKDOWN_COPY_ATTR } from "~/lib/markdownCopy";
 import { useAgents } from "~/lib/agents";
 import { DEFAULT_SIGILS, getSigils, sigilKind, useSigils } from "~/lib/sigils";
 import FormatBar from "~/components/chat/FormatBar";
@@ -608,7 +608,10 @@ function Composer({
           html.includes(MARKDOWN_COPY_ATTR) &&
           !view.state.selection.$from.parent.type.spec.code
         ) {
-          return editor?.commands.insertContent(text, { contentType: "markdown" }) ?? false;
+          return (
+            editor?.commands.insertContent(keepTexEscapes(text), { contentType: "markdown" }) ??
+            false
+          );
         }
         const { state } = view;
         // Inside a code block, and on a single line, the text goes in exactly as copied.
