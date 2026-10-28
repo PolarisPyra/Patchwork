@@ -208,6 +208,10 @@ fn begin(spec: &TurnSpec, thread_id: &str, resolved_model: Option<&str>) -> Vec<
     let goal =
         |params: Value| json!({"id": GOAL_REQUEST, "method": "thread/goal/set", "params": params});
     match goal_command(spec) {
+        // Codex compacts in a turn of its own, which it starts and reports like any other.
+        None if spec.text.trim() == "/compact" && spec.attachments.is_empty() => vec![send(
+            json!({"id": TURN_REQUEST, "method": "thread/compact/start", "params": {"threadId": thread_id}}),
+        )],
         None => vec![Parsed::Send(turn_start(
             spec,
             thread_id,
