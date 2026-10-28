@@ -46,7 +46,6 @@ installed and signed in.
 | Web typecheck | `pnpm typecheck` |
 | Format TSX | `pnpm format` (check only: `pnpm format:check`) |
 | Rust lint | `cargo clippy --workspace --all-targets` |
-| UI measurements and screenshots | `pnpm qa:stripe`, `pnpm qa:shot <out.png> [selector]`; see [`scripts/qa/README.md`](../scripts/qa/README.md) |
 
 ## Where things are
 

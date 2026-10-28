@@ -8,7 +8,6 @@ Tauri desktop app: React frontend, Rust backend. Run everything from the repo ro
   - `apps/desktop` (`patchwork-desktop`): Tauri app, owns `@tauri-apps/cli`.
   - `apps/web` (`patchwork-web`): frontend.
 - Cargo workspace: `apps/server` (providers, persistence, usage, thread import) and `apps/desktop/src-tauri`.
-- QA harness: `scripts/qa/` (see its README).
 
 ## Commands
 
@@ -24,7 +23,6 @@ Tauri desktop app: React frontend, Rust backend. Run everything from the repo ro
 | Rust tests | `cargo test --workspace` |
 | Rust bench | `cargo bench -p patchwork-server` |
 | Flamegraph | `cargo flamegraph -p patchwork-server --bench stream -- --bench <filter>` |
-| UI QA | `pnpm qa:activity-bar`, `pnpm qa:shot <out.png> [selector]` |
 
 - For backend perf, use the Criterion benches in `apps/server/benches/`, adding one for a new hot path. No one-off scripts.
 - `pnpm exec tauri` from the root fails. Use `pnpm tauri`.
@@ -67,37 +65,31 @@ Tauri desktop app: React frontend, Rust backend. Run everything from the repo ro
 
 - Cut taglines, helper text, and secondary labels. If a screen needs them, fix the layout.
 - Pick what improves UX, DX, and agent experience without breaking anything.
-- Every spinner turns in step. Use `apps/web/src/components/Spinner.tsx`, which pins each arc's animation to the page's timeline, also when it shows again after being hidden. Never add a rotating icon or a spinner with its own animation. Check with `pnpm qa:shot <out.png> --spinners`: all printed phases match.
+- Every spinner turns in step. Use `apps/web/src/components/Spinner.tsx`, which pins each arc's animation to the page's timeline, also when it shows again after being hidden. Never add a rotating icon or a spinner with its own animation.
 
-## UI checks
+## Scripts
 
-- Never write throwaway `.mjs`/`.js` files for QA: not in the repo, not in `scripts/`, not anywhere else.
-- For layout, spacing, or alignment issues, screenshot and measure the dev session before and after the change, using only the existing `pnpm qa:*` scripts.
-- If they can't measure what you need, extend an existing check in `scripts/qa/checks/` with an argument or option instead of adding a new file.
-- Add a new check file only when I ask for one or it will clearly be reused. Say so when you do.
-- Screenshots go where `qa:shot` puts them. Don't leave extra images or logs around.
-- You have standing permission to take these screenshots. Take them only for UI checks or when I ask.
-- Say so if you add or upgrade Playwright, since it changes `package.json` and the lockfile.
+- Never add scripts: no shell, Node, Python, or other script files, no QA checks or harnesses, and no new `package.json` scripts. Not in the repo, not in `scripts/`, and not anywhere else. Run what a task needs inline instead.
+- There is no QA harness. For a UI change, say what to look at in the dev window, and I check it.
 
 ## Performance checks
 
-Playwright's numbers don't match the app. Measure lag in the real dev window:
+Measure lag in the real dev window:
 
 1. Run a collector inline with `node -e` in the background, not as a saved file. It should listen on `127.0.0.1`, send CORS `*`, and print each POST body to stdout. Read the results from its output.
 2. Add a temporary `import.meta.env.DEV` block to `apps/web/src/main.tsx`. It should click the real element, record `requestAnimationFrame` gaps and how long the action takes, then POST the results to the collector.
 3. To find the cause, inject a `<style>` per suspect to turn one thing off at a time, and compare the frame gaps. Put the UI back the way you found it.
 4. Fix the cause, then measure again.
 5. Revert `main.tsx` and kill the collector by PID (not `pkill -f`). `git status` should show no new files. Tell me the window reloaded and what got clicked.
+
 ## Tests
 
 - Never write tests: no test files, runners, dependencies, or scripts.
 - You may run `cargo test --workspace`, but don't add to it.
-- Exception: Playwright under `scripts/qa/` as a measuring tool. It never asserts, has no spec files, and no `*.test.*` files.
 
 ## Git
 
 - Don't commit until I've reviewed the change and say so. Don't push unless I ask.
-- When a QA check is added or changed, commit it along with the change it checks. Never leave one untracked.
 - Commit subjects are short, sentence-case, and imperative, with no prefix. Describe the user-visible change, for example "Nudge the header project dropdown 2px left".
 - `CHANGELOG.md` is user-facing: the app shows it in Settings → Updates and it is the text of each release. Every commit that changes the app needs a paragraph in its message starting with `Changelog:`, written for users by the rules in `docs/changelog-style.md`: what they see or can do now, where, and what is different, for example "Changelog: Every loading indicator now uses the steady spinner from the thread list: plan steps, background tasks, … The old one rotated and looked like it shook." A change users can't notice gets `Changelog: none`. The `commit-msg` hook enforces both; if it turns a commit down, fix the message rather than bypassing the hook. At release, Claude turns these into the release's notes (see `docs/release.md`).
 - To fix notes that were already released, edit that release's section of `CHANGELOG.md`, commit it, and run `scripts/release.sh notes <version>`. Never rewrite pushed history for it.

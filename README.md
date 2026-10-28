@@ -111,7 +111,6 @@ Other project files:
 - [CHANGELOG.md](CHANGELOG.md): release history, generated from commit subjects
 - [AGENTS.md](AGENTS.md): instructions for coding agents working in the repo
 - [CLAUDE.md](CLAUDE.md): project rules for Claude Code
-- [UI checks](scripts/qa/README.md): browser measurements and screenshots of the dev session
 
 ## Releasing
 

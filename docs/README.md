@@ -10,7 +10,6 @@ for people using it.
 | [Agent CLIs](agent-clis.md) | How each agent is detected, run, approved, steered, and imported |
 | [Artifacts, scheduled tasks, plugins, computer use](artifacts-and-automation.md) | The four features around the agents, and how each one decides what to do |
 | [Releasing](release.md) | Versions, the changelog, the release workflow, and the update server |
-| [UI checks](../scripts/qa/README.md) | Browser measurements and screenshots of the running dev session |
 
 ## Adding a guide
 
