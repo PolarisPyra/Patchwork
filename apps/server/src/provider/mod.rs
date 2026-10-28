@@ -3,6 +3,7 @@
 
 pub mod claude;
 pub mod codex;
+pub mod codex_cli;
 pub mod antigravity;
 pub mod opencode;
 pub mod opencode_bridge;
@@ -62,6 +63,11 @@ fn located_or(kind: AgentKind, search: impl FnOnce() -> Option<PathBuf>) -> Opti
         Some(path) => path.is_file().then_some(path),
         None => search(),
     }
+}
+
+/// The Codex CLI in use: the one the user located, else `codex` on PATH.
+pub fn codex_binary() -> Option<PathBuf> {
+    located_or(AgentKind::Codex, || find_binary("codex"))
 }
 
 pub fn home_dir() -> Option<PathBuf> {
