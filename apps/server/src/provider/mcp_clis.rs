@@ -6,6 +6,7 @@
 //! asks before using a server from a project's `.mcp.json`, and Codex reads a project's
 //! `.codex/config.toml` only in a project the user trusts.
 
+use ts_rs::TS;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock, PoisonError};
@@ -24,7 +25,7 @@ type Listings = HashMap<String, Option<Result<Vec<ToolInfo>, String>>>;
 static TOOLS: OnceLock<Mutex<Listings>> = OnceLock::new();
 
 /// One CLI's servers, and the file that holds its own servers.
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CliGroup {
     pub agent: AgentKind,
@@ -34,7 +35,7 @@ pub struct CliGroup {
 
 /// A server as the settings show it. Environment and header values stay out, since they may
 /// hold secrets; only their names are shown.
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CliServer {
     /// Its identity (see `mcp::identity`), which names it for a refresh, and puts it on the
@@ -77,8 +78,16 @@ pub fn list(projects: &[Project]) -> Vec<CliGroup> {
     let codex = super::codex::home().unwrap_or_default().join("config.toml");
     let shared = mcp::shared_servers();
     [
-        (AgentKind::Claude, claude.clone(), claude_servers(&claude, projects)),
-        (AgentKind::Codex, codex.clone(), codex_servers(&codex, projects)),
+        (
+            AgentKind::Claude,
+            claude.clone(),
+            claude_servers(&claude, projects),
+        ),
+        (
+            AgentKind::Codex,
+            codex.clone(),
+            codex_servers(&codex, projects),
+        ),
     ]
     .into_iter()
     .map(|(agent, file, found)| CliGroup {
@@ -92,7 +101,10 @@ pub fn list(projects: &[Project]) -> Vec<CliGroup> {
 /// Reads the tools of the server with this key again.
 pub fn refresh(key: &str, projects: &[Project]) {
     cache().remove(key);
-    for found in all(projects).into_iter().filter(|f| mcp::identity(&f.server) == key) {
+    for found in all(projects)
+        .into_iter()
+        .filter(|f| mcp::identity(&f.server) == key)
+    {
         view(found, &[]);
     }
 }
@@ -107,9 +119,19 @@ pub fn enable(key: &str, projects: &[Project]) -> Result<(), String> {
         return Err("The CLI has not approved this project's server".into());
     }
     if mcp::list().iter().any(|s| s.name == found.name) {
-        return Err(format!("Patchwork already has a server named {}", found.name));
+        return Err(format!(
+            "Patchwork already has a server named {}",
+            found.name
+        ));
     }
-    mcp::save(found.name, None, McpServer { disabled: false, ..found.server })
+    mcp::save(
+        found.name,
+        None,
+        McpServer {
+            disabled: false,
+            ..found.server
+        },
+    )
 }
 
 /// Whether `path` is a config file a server was read from, which the settings may open.
@@ -163,7 +185,9 @@ fn view(found: Found, shared: &[(String, McpServer)]) -> CliServer {
     let relayed = !found.server.disabled
         && found.approved
         && mcp::relay_file().is_some()
-        && shared.iter().any(|(_, s)| mcp::same_server(&found.server, s));
+        && shared
+            .iter()
+            .any(|(_, s)| mcp::same_server(&found.server, s));
     let key = mcp::identity(&found.server);
     let state = if found.server.disabled || !found.approved {
         None
@@ -187,7 +211,10 @@ fn view(found: Found, shared: &[(String, McpServer)]) -> CliServer {
         None => ("off", Vec::new(), None),
         Some(None) => ("listing", Vec::new(), None),
         Some(Some(Ok(tools))) => ("ready", tools, None),
-        Some(Some(Err(e))) if found.server.url.is_some() && (e.contains("answered 401") || e.contains("answered 403")) => {
+        Some(Some(Err(e)))
+            if found.server.url.is_some()
+                && (e.contains("answered 401") || e.contains("answered 403")) =>
+        {
             ("signin", Vec::new(), None)
         }
         Some(Some(Err(e))) => ("error", Vec::new(), Some(e)),
@@ -202,7 +229,11 @@ fn view(found: Found, shared: &[(String, McpServer)]) -> CliServer {
         command: found.server.command.clone(),
         args: found.server.args.clone(),
         url: found.server.url.clone(),
-        env: if found.server.url.is_some() { names(&found.server.headers) } else { names(&found.server.env) },
+        env: if found.server.url.is_some() {
+            names(&found.server.headers)
+        } else {
+            names(&found.server.env)
+        },
         status,
         relayed,
         tools,
@@ -244,9 +275,16 @@ fn claude_servers(file: &Path, projects: &[Project]) -> Vec<Found> {
         .unwrap_or(Value::Null);
     let mut out = Vec::new();
     type Check<'a> = &'a dyn Fn(&str) -> bool;
-    let mut add = |map: &Value, scope, project: Option<&Project>, file: &Path, off: Check, approved: Check| {
+    let mut add = |map: &Value,
+                   scope,
+                   project: Option<&Project>,
+                   file: &Path,
+                   off: Check,
+                   approved: Check| {
         for (name, server) in map.as_object().into_iter().flatten() {
-            let Ok(mut server) = serde_json::from_value::<McpServer>(server.clone()) else { continue };
+            let Ok(mut server) = serde_json::from_value::<McpServer>(server.clone()) else {
+                continue;
+            };
             server.disabled = off(name);
             out.push(Found {
                 name: name.clone(),
@@ -263,20 +301,44 @@ fn claude_servers(file: &Path, projects: &[Project]) -> Vec<Found> {
     for project in projects {
         let settings = &config["projects"][&project.path];
         let listed = |key: &str, name: &str| {
-            settings[key].as_array().is_some_and(|names| names.iter().any(|n| n == name))
+            settings[key]
+                .as_array()
+                .is_some_and(|names| names.iter().any(|n| n == name))
         };
-        let off = |name: &str| listed("disabledMcpServers", name) || listed("disabledMcpjsonServers", name);
-        add(&settings["mcpServers"], "local", Some(project), file, &off, &all);
+        let off = |name: &str| {
+            listed("disabledMcpServers", name) || listed("disabledMcpjsonServers", name)
+        };
+        add(
+            &settings["mcpServers"],
+            "local",
+            Some(project),
+            file,
+            &off,
+            &all,
+        );
         let approved = |name: &str| {
-            let names = |v: &Value| v.as_array().is_some_and(|names| names.iter().any(|n| n == name));
+            let names = |v: &Value| {
+                v.as_array()
+                    .is_some_and(|names| names.iter().any(|n| n == name))
+            };
             settings["enableAllProjectMcpServers"] == true
                 || names(&settings["enabledMcpjsonServers"])
                 || user_settings["enableAllProjectMcpServers"] == true
                 || names(&user_settings["enabledMcpjsonServers"])
         };
         let shared = Path::new(&project.path).join(".mcp.json");
-        if let Some(json) = std::fs::read_to_string(&shared).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) {
-            add(&json["mcpServers"], "project", Some(project), &shared, &off, &approved);
+        if let Some(json) = std::fs::read_to_string(&shared)
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        {
+            add(
+                &json["mcpServers"],
+                "project",
+                Some(project),
+                &shared,
+                &off,
+                &approved,
+            );
         }
     }
     out
@@ -285,9 +347,17 @@ fn claude_servers(file: &Path, projects: &[Project]) -> Vec<Found> {
 /// Codex's servers: `[mcp_servers.*]` in its `config.toml`, and in each project's
 /// `.codex/config.toml`, which Codex reads only in a project the user trusts.
 fn codex_servers(file: &Path, projects: &[Project]) -> Vec<Found> {
-    let user: Option<toml::Value> = std::fs::read_to_string(file).ok().and_then(|t| toml::from_str(&t).ok());
+    let user: Option<toml::Value> = std::fs::read_to_string(file)
+        .ok()
+        .and_then(|t| toml::from_str(&t).ok());
     let trusted = |path: &str| {
-        let level = user.as_ref().and_then(|u| u.get("projects")?.get(path)?.get("trust_level")?.as_str().map(String::from));
+        let level = user.as_ref().and_then(|u| {
+            u.get("projects")?
+                .get(path)?
+                .get("trust_level")?
+                .as_str()
+                .map(String::from)
+        });
         level.as_deref() == Some("trusted")
     };
     let mut out = codex_file(file, "user", None, true);
@@ -297,13 +367,26 @@ fn codex_servers(file: &Path, projects: &[Project]) -> Vec<Found> {
         if shared == file {
             continue;
         }
-        out.extend(codex_file(&shared, "project", Some(project), trusted(&project.path)));
+        out.extend(codex_file(
+            &shared,
+            "project",
+            Some(project),
+            trusted(&project.path),
+        ));
     }
     out
 }
 
-fn codex_file(file: &Path, scope: &'static str, project: Option<&Project>, approved: bool) -> Vec<Found> {
-    let Some(config) = std::fs::read_to_string(file).ok().and_then(|t| toml::from_str::<toml::Value>(&t).ok()) else {
+fn codex_file(
+    file: &Path,
+    scope: &'static str,
+    project: Option<&Project>,
+    approved: bool,
+) -> Vec<Found> {
+    let Some(config) = std::fs::read_to_string(file)
+        .ok()
+        .and_then(|t| toml::from_str::<toml::Value>(&t).ok())
+    else {
         return Vec::new();
     };
     let strings = |v: Option<&toml::Value>| -> BTreeMap<String, String> {
@@ -366,18 +449,31 @@ pub fn overrides(agent: AgentKind, root: &str) -> Vec<String> {
     if shared.is_empty() {
         return Vec::new();
     }
-    let project = Project { id: String::new(), name: String::new(), path: root.to_string() };
+    let project = Project {
+        id: String::new(),
+        name: String::new(),
+        path: root.to_string(),
+    };
     let found = match agent {
         AgentKind::Claude => claude_servers(&claude_file(), std::slice::from_ref(&project)),
-        AgentKind::Codex => codex_servers(&super::codex::home().unwrap_or_default().join("config.toml"), std::slice::from_ref(&project)),
+        AgentKind::Codex => codex_servers(
+            &super::codex::home().unwrap_or_default().join("config.toml"),
+            std::slice::from_ref(&project),
+        ),
         _ => return Vec::new(),
     };
     let relays: BTreeMap<String, Vec<String>> = found
         .into_iter()
         .filter(|f| !f.server.disabled && f.approved)
         .filter_map(|f| {
-            let (ours, _) = shared.iter().find(|(_, s)| mcp::same_server(&f.server, s))?;
-            let args = vec![mcp::PROXY_ARG.to_string(), relay.display().to_string(), ours.clone()];
+            let (ours, _) = shared
+                .iter()
+                .find(|(_, s)| mcp::same_server(&f.server, s))?;
+            let args = vec![
+                mcp::PROXY_ARG.to_string(),
+                relay.display().to_string(),
+                ours.clone(),
+            ];
             Some((f.name, args))
         })
         .collect();
@@ -391,12 +487,18 @@ pub fn overrides(agent: AgentKind, root: &str) -> Vec<String> {
                 .into_iter()
                 .map(|(name, args)| (name, serde_json::json!({"command": exe, "args": args})))
                 .collect();
-            vec!["--mcp-config".into(), serde_json::json!({"mcpServers": servers}).to_string()]
+            vec![
+                "--mcp-config".into(),
+                serde_json::json!({"mcpServers": servers}).to_string(),
+            ]
         }
         _ => relays
             .into_iter()
             // `-c` splits its key on dots, so a name must not hold one.
-            .filter(|(name, _)| name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'))
+            .filter(|(name, _)| {
+                name.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+            })
             .flat_map(|(name, args)| {
                 // JSON strings and arrays of strings are also TOML.
                 [

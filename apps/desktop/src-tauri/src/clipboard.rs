@@ -5,6 +5,8 @@
 
 /// The `vscode-editor-data` JSON of the clipboard's current copy, or None when the copy came
 /// from somewhere else or the clipboard cannot be read (an X11 session, or another platform).
+use patchwork_server::Res;
+
 #[cfg(target_os = "linux")]
 pub fn editor_data() -> Option<String> {
     use std::io::Read;
@@ -77,7 +79,7 @@ pub fn files() -> Vec<String> {
 /// focused page and a fresh click, which a click that only brings the window forward is not. The
 /// copy is served from a background thread until something else is copied.
 #[cfg(target_os = "linux")]
-pub fn write_text(text: String) -> Result<(), String> {
+pub fn write_text(text: String) -> Res<()> {
     use wl_clipboard_rs::copy::{MimeType, Options, Source};
 
     Options::new()
@@ -86,7 +88,7 @@ pub fn write_text(text: String) -> Result<(), String> {
 }
 
 #[cfg(not(target_os = "linux"))]
-pub fn write_text(_text: String) -> Result<(), String> {
+pub fn write_text(_text: String) -> Res<()> {
     Err("Could not copy".into())
 }
 

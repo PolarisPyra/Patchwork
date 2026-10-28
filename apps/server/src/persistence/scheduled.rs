@@ -29,7 +29,7 @@ struct Row {
     created_at: i64,
 }
 
-pub(super) fn load(inner: &Inner) -> crate::Res<Vec<ScheduledTask>> {
+pub(super) fn load(inner: &Inner) -> Result<Vec<ScheduledTask>, String> {
     let mut stmt = inner
         .conn
         .prepare(
@@ -119,13 +119,19 @@ fn recent_runs(inner: &Inner) -> crate::Res<HashMap<String, Vec<ScheduledRun>>> 
 }
 
 /// Adds a run to a task's history and drops all but its newest few.
-fn record_run(inner: &Inner, task_id: &str, run: &ScheduledRun) -> crate::Res<()> {
+fn record_run(inner: &Inner, task_id: &str, run: &ScheduledRun) -> Result<(), String> {
     inner
         .conn
         .execute(
             "INSERT INTO scheduled_task_runs (task_id, started_at, thread_id, outcome, detail)
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![task_id, run.at, run.thread_id, enc(&run.outcome), run.detail],
+            params![
+                task_id,
+                run.at,
+                run.thread_id,
+                enc(&run.outcome),
+                run.detail
+            ],
         )
         .map_err(err)?;
     inner
@@ -141,7 +147,7 @@ fn record_run(inner: &Inner, task_id: &str, run: &ScheduledRun) -> crate::Res<()
     Ok(())
 }
 
-fn save(inner: &Inner, task: &ScheduledTask) -> crate::Res<()> {
+fn save(inner: &Inner, task: &ScheduledTask) -> Result<(), String> {
     inner
         .conn
         .execute(
@@ -188,7 +194,7 @@ impl Store {
     }
 
     /// Adds a task, or replaces the one with its id. A task without an id is given one.
-    pub fn save_scheduled_task(&self, mut task: ScheduledTask) -> crate::Res<ScheduledTask> {
+    pub fn save_scheduled_task(&self, mut task: ScheduledTask) -> Result<ScheduledTask, String> {
         if task.id.trim().is_empty() {
             task.id = new_id();
         }
@@ -209,7 +215,7 @@ impl Store {
         Ok(task)
     }
 
-    pub fn remove_scheduled_task(&self, id: &str) -> crate::Res<()> {
+    pub fn remove_scheduled_task(&self, id: &str) -> Result<(), String> {
         let inner = self.lock();
         inner
             .conn
@@ -230,7 +236,7 @@ impl Store {
         at: i64,
         next: Option<i64>,
         started: Result<&str, &str>,
-    ) -> crate::Res<()> {
+    ) -> Result<(), String> {
         let inner = self.lock();
         let changed = inner
             .conn
@@ -261,7 +267,7 @@ impl Store {
 
     /// Records that a task's slot went by too long ago to run late, and moves it on to `next`.
     /// The skipped run is dated by the slot it missed.
-    pub fn scheduled_task_skipped(&self, id: &str, next: Option<i64>) -> crate::Res<()> {
+    pub fn scheduled_task_skipped(&self, id: &str, next: Option<i64>) -> Result<(), String> {
         let inner = self.lock();
         let missed: Option<i64> = inner
             .conn

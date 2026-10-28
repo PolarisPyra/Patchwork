@@ -18,7 +18,11 @@ pub fn sessions(agent: AgentKind) -> Vec<Session> {
         ilog!("OpenCode: no home folder");
         return vec![];
     };
-    ilog!("OpenCode: reading {} (exists: {})", path.display(), path.is_file());
+    ilog!(
+        "OpenCode: reading {} (exists: {})",
+        path.display(),
+        path.is_file()
+    );
     if !path.is_file() {
         return vec![];
     }
@@ -84,7 +88,10 @@ fn read(conn: &Connection, agent: AgentKind) -> rusqlite::Result<Vec<Session>> {
             messages = session_messages(conn, &id)?;
             from = "message/part";
         }
-        ilog!("OpenCode: {id} ({cwd}): {} messages from {from}", messages.len());
+        ilog!(
+            "OpenCode: {id} ({cwd}): {} messages from {from}",
+            messages.len()
+        );
         Ok(Session {
             agent,
             session_id: id,
@@ -129,7 +136,10 @@ fn v2_session_messages(conn: &Connection, session: &str) -> rusqlite::Result<Vec
             continue;
         };
         let (role, text) = if kind == "user" {
-            (Role::User, info["text"].as_str().unwrap_or_default().to_string())
+            (
+                Role::User,
+                info["text"].as_str().unwrap_or_default().to_string(),
+            )
         } else {
             let texts: Vec<&str> = info["content"]
                 .as_array()
@@ -151,9 +161,8 @@ fn session_messages(conn: &Connection, session: &str) -> rusqlite::Result<Vec<Se
     let mut messages = conn.prepare(
         "SELECT id, data, time_created FROM message WHERE session_id = ?1 ORDER BY time_created",
     )?;
-    let mut parts = conn.prepare(
-        "SELECT data FROM part WHERE message_id = ?1 ORDER BY time_created, id",
-    )?;
+    let mut parts =
+        conn.prepare("SELECT data FROM part WHERE message_id = ?1 ORDER BY time_created, id")?;
     let mut out = Vec::new();
     let rows = messages.query_map(params![session], |r| {
         Ok((

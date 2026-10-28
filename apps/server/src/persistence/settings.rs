@@ -26,7 +26,6 @@ pub(super) fn save_settings(tx: &Transaction, settings: &Settings) -> rusqlite::
     Ok(())
 }
 
-
 pub(super) fn load_settings(conn: &Connection) -> rusqlite::Result<Settings> {
     let mut settings: Settings = conn
         .query_row("SELECT json FROM settings WHERE id = 1", [], |r| r.get(0))
@@ -57,4 +56,3 @@ pub(super) fn load_settings(conn: &Connection) -> rusqlite::Result<Settings> {
         .collect::<rusqlite::Result<_>>()?;
     Ok(settings)
 }
-

@@ -89,8 +89,14 @@ fn limit_slice() {
     let Some(total) = total_memory() else {
         return;
     };
-    let high = format!("MemoryHigh={}", total.saturating_sub(6 * GIB).max(total / 2));
-    let max = format!("MemoryMax={}", total.saturating_sub(4 * GIB).max(total / 4 * 3));
+    let high = format!(
+        "MemoryHigh={}",
+        total.saturating_sub(6 * GIB).max(total / 2)
+    );
+    let max = format!(
+        "MemoryMax={}",
+        total.saturating_sub(4 * GIB).max(total / 4 * 3)
+    );
     if !systemctl(&[
         "set-property",
         "--runtime",

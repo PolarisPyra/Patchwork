@@ -1,0 +1,5 @@
+# The code keeps its imports and modules in the order it was written, and it writes short struct
+# literals and calls on one line. These two settings keep rustfmt from reordering them, so a format
+# pass only changes what is actually misformatted.
+reorder_imports = false
+reorder_modules = false

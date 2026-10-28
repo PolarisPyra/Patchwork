@@ -4,13 +4,14 @@
 //! a model and a mode, and the text below it is the role's instructions. A `primary` agent stays
 //! the chat's agent once summoned; any other is summoned for one message.
 
+use ts_rs::TS;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 
 use serde::Serialize;
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Agent {
     pub name: String,

@@ -25,7 +25,10 @@ use crate::types::BackgroundTask;
 
 /// What kind of output a line is, as its `type` (or JSON-RPC `method`) and any `subtype`.
 fn line_kind(value: &Value) -> String {
-    let kind = value["type"].as_str().or_else(|| value["method"].as_str()).unwrap_or("untyped");
+    let kind = value["type"]
+        .as_str()
+        .or_else(|| value["method"].as_str())
+        .unwrap_or("untyped");
     match value["subtype"].as_str() {
         Some(subtype) => format!("{kind}/{subtype}"),
         None => kind.into(),
@@ -80,9 +83,13 @@ use super::usage::message_usage;
 use super::usage::record_request;
 use super::usage::Request;
 
-
 /// Reads the agent's stdout until it closes, then records the final status.
-pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stderr_tail: JoinHandle<String>) {
+pub(super) fn ingest(
+    mut turn: Turn,
+    mut child: Child,
+    stdout: ChildStdout,
+    stderr_tail: JoinHandle<String>,
+) {
     let pid = child.id();
     let mut has_text = false;
     // Antigravity streams one text block as many deltas; other agents send whole blocks.
@@ -138,7 +145,12 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
         }
         let Ok(value) = serde_json::from_str::<Value>(&line) else {
             if logged_kinds.insert("unparsed".into()) {
-                AGENTS.write(LogLevel::Warning, "unparsed", &source(&turn), Data::Outline(line));
+                AGENTS.write(
+                    LogLevel::Warning,
+                    "unparsed",
+                    &source(&turn),
+                    Data::Outline(line),
+                );
             }
             continue;
         };
@@ -194,19 +206,40 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
         if parsed.is_empty() && !routed && AGENTS.logs(LogLevel::Warning) {
             let kind = line_kind(&value);
             if logged_kinds.insert(kind.clone()) {
-                AGENTS.write(LogLevel::Warning, "ignored", &source(&turn), Data::Text(kind));
+                AGENTS.write(
+                    LogLevel::Warning,
+                    "ignored",
+                    &source(&turn),
+                    Data::Text(kind),
+                );
             }
         }
         for item in parsed {
             // A call the access mode runs without asking runs unless a rule refuses it or asks.
             let item = match item {
-                Parsed::Check { title, detail, reply, target } => {
+                Parsed::Check {
+                    title,
+                    detail,
+                    reply,
+                    target,
+                } => {
                     let asks = turn.mode != crate::types::AccessMode::FullAccess;
-                    if unasked(&turn.server, &turn.thread_id, &turn.root, &target, asks) == permissions::Unasked::Run {
-                        write_line(&turn.stdin, &provider::approval_reply(turn.agent, &reply, true, &HashMap::new()));
+                    if unasked(&turn.server, &turn.thread_id, &turn.root, &target, asks)
+                        == permissions::Unasked::Run
+                    {
+                        write_line(
+                            &turn.stdin,
+                            &provider::approval_reply(turn.agent, &reply, true, &HashMap::new()),
+                        );
                         continue;
                     }
-                    Parsed::Approval { title, detail, reply, questions: Vec::new(), target: Some(target) }
+                    Parsed::Approval {
+                        title,
+                        detail,
+                        reply,
+                        questions: Vec::new(),
+                        target: Some(target),
+                    }
                 }
                 item => item,
             };
@@ -214,11 +247,17 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                 Parsed::Send(line) => {
                     write_line(&turn.stdin, &line);
                 }
-                Parsed::McpCall { id, server, tool, arguments } => {
+                Parsed::McpCall {
+                    id,
+                    server,
+                    tool,
+                    arguments,
+                } => {
                     let stdin = turn.stdin.clone();
                     let (cancelled, exited) = (turn.cancelled.clone(), turn.exited.clone());
                     std::thread::spawn(move || {
-                        let stopped = || cancelled.load(Ordering::SeqCst) || exited.load(Ordering::SeqCst);
+                        let stopped =
+                            || cancelled.load(Ordering::SeqCst) || exited.load(Ordering::SeqCst);
                         let result = provider::mcp::call(&server, &tool, &arguments, &stopped);
                         write_line(&stdin, &provider::api::mcp_reply(&id, result));
                     });
@@ -246,17 +285,36 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                         auto: false,
                     };
                     // The user already allowed it through a permission hook.
-                    if target.as_ref().is_some_and(|t| turn.server.runner.take_grant(&turn.thread_id, t, Path::new(&turn.root))) {
-                        write_line(&turn.stdin, &provider::approval_reply(turn.agent, &reply, true, &HashMap::new()));
+                    if target.as_ref().is_some_and(|t| {
+                        turn.server
+                            .runner
+                            .take_grant(&turn.thread_id, t, Path::new(&turn.root))
+                    }) {
+                        write_line(
+                            &turn.stdin,
+                            &provider::approval_reply(turn.agent, &reply, true, &HashMap::new()),
+                        );
                         continue;
                     }
                     // A permission rule answers it without asking.
-                    if let Some(decision) = target.as_ref().and_then(|t| decide(&turn.server, &turn.thread_id, &turn.root, t)) {
+                    if let Some(decision) = target
+                        .as_ref()
+                        .and_then(|t| decide(&turn.server, &turn.thread_id, &turn.root, t))
+                    {
                         write_line(
                             &turn.stdin,
-                            &provider::approval_reply(turn.agent, &reply, decision.allow, &HashMap::new()),
+                            &provider::approval_reply(
+                                turn.agent,
+                                &reply,
+                                decision.allow,
+                                &HashMap::new(),
+                            ),
                         );
-                        approval.status = if decision.allow { ApprovalStatus::Allowed } else { ApprovalStatus::Denied };
+                        approval.status = if decision.allow {
+                            ApprovalStatus::Allowed
+                        } else {
+                            ApprovalStatus::Denied
+                        };
                         approval.rule = Some(decision.rule);
                         approval.auto = true;
                         turn.save_text(&mut unsaved);
@@ -266,15 +324,18 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                         });
                         continue;
                     }
-                    turn.pending.lock().unwrap_or_else(PoisonError::into_inner).insert(
-                        approval.id.clone(),
-                        PendingApproval {
-                            message_id: turn.message_id.clone(),
-                            reply,
-                            target,
-                            root: turn.root.clone(),
-                        },
-                    );
+                    turn.pending
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .insert(
+                            approval.id.clone(),
+                            PendingApproval {
+                                message_id: turn.message_id.clone(),
+                                reply,
+                                target,
+                                root: turn.root.clone(),
+                            },
+                        );
                     turn.save_text(&mut unsaved);
                     turn.publish(AgentEvent::ApprovalRequested {
                         message_id: turn.message_id.clone(),
@@ -402,7 +463,8 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                         && goal
                             .as_ref()
                             .is_some_and(|g| g.status == GoalStatus::Active);
-                    if ended && can_idle(&turn, &running_tasks, &shell_tasks, &goal, &stream_error) {
+                    if ended && can_idle(&turn, &running_tasks, &shell_tasks, &goal, &stream_error)
+                    {
                         if completed < segments.len() {
                             go_idle(&mut turn, &segments, &mut completed, &mut unsaved);
                         }
@@ -484,7 +546,8 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                         finish_child(&turn, &mut children, &tool_id, failed || call_failed);
                     }
                     let background = running_tasks.values().any(Option::is_some);
-                    if ended && can_idle(&turn, &running_tasks, &shell_tasks, &goal, &stream_error) {
+                    if ended && can_idle(&turn, &running_tasks, &shell_tasks, &goal, &stream_error)
+                    {
                         if completed < segments.len() {
                             go_idle(&mut turn, &segments, &mut completed, &mut unsaved);
                         }
@@ -500,7 +563,11 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                         .lock()
                         .unwrap_or_else(PoisonError::into_inner) = Some(id);
                 }
-                Parsed::Retrying { reason, attempt, max_attempts } => {
+                Parsed::Retrying {
+                    reason,
+                    attempt,
+                    max_attempts,
+                } => {
                     turn.emit(AgentEvent::Retrying {
                         message_id: turn.message_id.clone(),
                         reason,
@@ -556,7 +623,8 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                             is_error,
                             output,
                         } => {
-                            if let Some(name) = repeats.finished(tool_id, *is_error, output.as_deref())
+                            if let Some(name) =
+                                repeats.finished(tool_id, *is_error, output.as_deref())
                                 && stream_error.is_none()
                             {
                                 stream_error = Some(format!(
@@ -613,7 +681,11 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
 
     let exit = child.wait().ok();
     let status = exit.map_or("unknown".into(), |s| s.to_string());
-    let level = if exit.is_some_and(|s| s.success()) { LogLevel::Info } else { LogLevel::Error };
+    let level = if exit.is_some_and(|s| s.success()) {
+        LogLevel::Info
+    } else {
+        LogLevel::Error
+    };
     let source = Source::agent(turn.agent, pid, &turn.thread_id, Some(&turn.message_id));
     AGENTS.write(level, "exit", &source, Data::Text(status));
     // Whatever the agent left running in its group or scope (MCP servers, background
@@ -659,14 +731,12 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
     if !idle_untouched {
         let after = workspace::git_changes(&turn.root).unwrap_or_default();
         let changed = attribution::lock(&turn.attribution).settle(after);
-        changed
-            .into_iter()
-            .for_each(|path| {
-                turn.publish(AgentEvent::FileTouched {
-                    message_id: turn.message_id.clone(),
-                    path,
-                });
+        changed.into_iter().for_each(|path| {
+            turn.publish(AgentEvent::FileTouched {
+                message_id: turn.message_id.clone(),
+                path,
             });
+        });
     }
 
     // An agent that was idle held no goal, and a turn that replaced it may have set one since.
@@ -680,7 +750,13 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
     finish(
         turn,
         &segments[completed..],
-        TurnEnd { status, error, cancelled, clear_in_agent, session_lost },
+        TurnEnd {
+            status,
+            error,
+            cancelled,
+            clear_in_agent,
+            session_lost,
+        },
     );
 }
 
@@ -719,7 +795,12 @@ fn go_idle(turn: &mut Turn, segments: &[String], completed: &mut usize, unsaved:
         });
     });
     let queued = std::mem::take(&mut *turn.queue.lock().unwrap_or_else(PoisonError::into_inner));
-    let mut handed_over = turn.server.runner.handed_over.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut handed_over = turn
+        .server
+        .runner
+        .handed_over
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
     queued.iter().for_each(|message| {
         handed_over.remove(&message.message_id);
     });

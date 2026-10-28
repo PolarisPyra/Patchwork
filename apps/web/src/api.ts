@@ -1,3 +1,20 @@
+import type { AccessMode, AgentEvent, AgentEventEnvelope, AgentKind, AgentStatus, ApiModel, ApiProvider, Approval, ApprovalStatus, Attachment, AttachmentKind, BackgroundTask, CodexFeature, CodexInfo, CodexModel, Effect, FileChange, FileMedia, Folder, Goal, GoalStatus, ImportScan, ImportSource, Integrations, LogChunk, LoggingSettings, LogLevel, McpServer, Message as WireMessage, MessageStatus, ModelOption, NotificationSettings, Part, PermissionKind, PermissionRule, PermissionScope, PermissionSettings, PlanStep, Plugin, PluginApp, PluginHook, PluginHookHandler, Project, ProjectChanged, ProviderSlashCommand, ProviderUsage, Question, Refusal, Role, RuleRef, RunOutcome, Schedule, ScheduledRun, ScheduledTask, ScopeRules, Screenshot, Settings, ShellChoices, Skill, StepStatus, SubAgent, TerminalSettings, Theme, Thread as WireThread, TokenSettings, TokenUsage, ToolCall, TurnFile, TurnFileState, TurnTrees, UsageWindow, Weekday } from "~/bindings";
+export type { AccessMode, AgentEvent, AgentEventEnvelope, AgentKind, AgentStatus, ApiModel, ApiProvider, Approval, ApprovalStatus, Attachment, AttachmentKind, BackgroundTask, CodexFeature, CodexInfo, CodexModel, Effect, FileChange, FileMedia, Folder, Goal, GoalStatus, ImportScan, ImportSource, Integrations, LogChunk, LoggingSettings, LogLevel, McpServer, MessageStatus, ModelOption, NotificationSettings, Part, PermissionKind, PermissionRule, PermissionScope, PermissionSettings, PlanStep, Plugin, PluginApp, PluginHook, PluginHookHandler, Project, ProjectChanged, ProviderSlashCommand, ProviderUsage, Question, Refusal, Role, RuleRef, RunOutcome, Schedule, ScheduledRun, ScheduledTask, ScopeRules, Screenshot, Settings, ShellChoices, Skill, StepStatus, SubAgent, TerminalSettings, Theme, TokenSettings, TokenUsage, ToolCall, TurnFile, TurnFileState, TurnTrees, UsageWindow, Weekday };
+
+/**
+ * A message as the webview holds it: what the backend saves, plus what a reply adds in the UI while
+ * it runs.
+ */
+export type Message = WireMessage & {
+  /** The agent is checking whether the goal is met; not saved. */
+  checkingGoal?: boolean;
+  /** The agent is retrying a model request that failed or stalled; not saved. */
+  retry?: { reason: string; attempt: number; maxAttempts: number } | null;
+};
+
+/** A thread as the webview holds it. Set in the UI on a thread from `listThreads`, which carries only its last message and those still streaming, queued, or awaiting approval; `getThread` loads the rest. */
+export type Thread = Omit<WireThread, "messages"> & { messages: Message[]; partial?: boolean };
+
 // Typed bridge to the Rust backend. Mirrors apps/server/src/types.rs and the
 // commands registered in apps/desktop/src-tauri/src/lib.rs — keep all three in sync.
 import { Channel, invoke as tauriInvoke, type InvokeArgs } from "@tauri-apps/api/core";
@@ -7,172 +24,24 @@ import { profile } from "~/lib/profile";
 const invoke = <T>(cmd: string, args?: InvokeArgs) =>
   profile(`ipc:${cmd}`, () => tauriInvoke<T>(cmd, args));
 
-export type AgentKind = "claude" | "codex" | "antigravity" | "opencode" | "api";
 /** The agents that run an installed CLI. */
 export type CliKind = Exclude<AgentKind, "api">;
-export type Theme = "light" | "dark" | "system";
-export type Role = "user" | "assistant";
-export type MessageStatus = "streaming" | "complete" | "error" | "cancelled";
-export type StepStatus = "pending" | "running" | "done" | "error";
-export type AttachmentKind = "image" | "file" | "folder";
 
-export interface Integrations {
-  github: boolean;
-  terminal: boolean;
-  figma: boolean;
-  browser: boolean;
-}
 
-export interface Project {
-  id: string;
-  name: string;
-  path: string;
-}
 
-export interface Settings {
-  onboarded: boolean;
-  theme: Theme;
-  /** Connected agents; the first is the default for new tasks. */
-  agents: AgentKind[];
-  /** Agent CLIs the user located by hand, used instead of searching for them. */
-  agentPaths: Partial<Record<AgentKind, string>>;
-  integrations: Integrations;
-  projects: Project[];
-  activeProjectId: string | null;
-  logging: LoggingSettings;
-  terminal: TerminalSettings;
-  tokens: TokenSettings;
-  /** Model, `provider/model`, that reads the images of a message; null uses the main model. */
-  visionModel: string | null;
-  /** Shell that agents run commands in; null follows the SHELL environment variable. */
-  shell: string | null;
-  /** Folder of the skills every agent loads; null uses `skills` in the config folder. */
-  skillsDir: string | null;
-  /** Skills switched off in Settings, by name. */
-  disabledSkills: string[];
-  notifications: NotificationSettings;
-  updates: UpdatesSettings;
-  /** Id of the app icon color way in `assets/logos/manifest.json`; null uses the manifest default. */
-  logo: string | null;
-  permissions: PermissionSettings;
-  /** Answering an agent's question takes a second click on the picked answer. */
-  confirmAnswers: boolean;
-  /** Folder of plugin bundles; null uses `plugins` in the config folder. */
-  pluginsDir: string | null;
-  /** Plugins switched off in Settings, by folder name. */
-  disabledPlugins: string[];
-  /** Whether the agent may look at the screen and drive the pointer and keyboard. */
-  computerUse: boolean;
-}
 
-/** A scheduled task: a prompt that starts a task at a fixed time. Mirrors `ScheduledTask`. */
-export interface ScheduledTask {
-  id: string;
-  name: string;
-  prompt: string;
-  schedule: Schedule;
-  /** The project to run in; null starts a chat in a scratch folder. */
-  projectId: string | null;
-  agent: AgentKind;
-  model: string | null;
-  accessMode: AccessMode;
-  enabled: boolean;
-  lastRunAt: number | null;
-  nextRunAt: number | null;
-  createdAt: number;
-  /** The newest few runs, newest first. */
-  recentRuns: ScheduledRun[];
-}
 
-/** One time a scheduled task's slot came round. */
-export interface ScheduledRun {
-  /** When it started, or for a skipped run the slot it missed. */
-  at: number;
-  threadId: string | null;
-  outcome: RunOutcome;
-  detail: string | null;
-}
 
-/** `skipped`: its time went by more than a day ago, so it was not run late. */
-export type RunOutcome = "started" | "failed" | "skipped";
 
-export type Weekday = "MO" | "TU" | "WE" | "TH" | "FR" | "SA" | "SU";
 
-/** How often a scheduled task runs, in the shapes Codex's tasks use. */
-export type Schedule =
-  | { type: "hourly"; intervalHours: number }
-  | { type: "daily"; time: string }
-  | { type: "weekdays"; time: string }
-  | { type: "weekly"; days: Weekday[]; time: string };
 
-/** One handler a plugin runs on a turn event, such as `stop`. */
-export interface PluginHook {
-  event: string;
-  handler: PluginHookHandler;
-}
 
-/** What a hook does. Only `command` runs today. */
-export type PluginHookHandler =
-  | { type: "command"; command: string; timeoutSecs: number }
-  | { type: "mcpTool"; server: string; tool: string }
-  | { type: "prompt" }
-  | { type: "agent" }
-  | { type: "unsupported"; kind: string };
 
-/** A connector app a plugin asks for. */
-export interface PluginApp {
-  name: string;
-  id: string;
-  required: boolean;
-}
 
-/** A plugin bundle: a folder with a `plugin.json`, the hooks it runs, and the apps it names. */
-export interface Plugin {
-  /** The folder name, and what `disabledPlugins` records. */
-  id: string;
-  name: string;
-  version: string | null;
-  description: string | null;
-  path: string;
-  hooks: PluginHook[];
-  apps: PluginApp[];
-  enabled: boolean;
-}
 
-/** A feature flag of the installed Codex CLI. */
-export interface CodexFeature {
-  name: string;
-  /** `stable`, `beta`, `under development`, `deprecated`, or `removed`. */
-  stage: string;
-  enabled: boolean;
-}
 
-/** A model in the installed Codex CLI's catalog. */
-export interface CodexModel {
-  slug: string;
-  displayName: string;
-  contextWindow: number | null;
-  efforts: string[];
-  speedTiers: string[];
-  multiAgent: string | null;
-}
 
-/** What the installed Codex CLI offers. */
-export interface CodexInfo {
-  path: string;
-  version: string;
-  features: CodexFeature[];
-  models: CodexModel[];
-}
 
-/** The screen as a PNG data URL, and the size of the screen it came from. */
-export interface Screenshot {
-  dataUrl: string;
-  width: number;
-  height: number;
-  screenWidth: number;
-  screenHeight: number;
-}
 
 /** What to do with the pointer or keyboard. */
 export type ComputerAction =
@@ -182,46 +51,12 @@ export type ComputerAction =
   | { kind: "key"; key: string; modifiers?: ("ctrl" | "shift" | "alt" | "meta")[] }
   | { kind: "scroll"; amount: number; horizontal?: boolean };
 
-/** What agents may do without asking. Mirrors `PermissionSettings` in apps/server/src/types.rs. */
-export interface PermissionSettings {
-  everywhere: ScopeRules;
-  /** Chats without a project. */
-  chats: ScopeRules;
-  /** By project id. */
-  projects: Record<string, ScopeRules>;
-  seeded: boolean;
-}
 
-export interface ScopeRules {
-  /** What each kind of request gets when no rule matches it; a missing kind inherits. */
-  defaults: Partial<Record<PermissionKind, Effect>>;
-  rules: PermissionRule[];
-}
 
-export interface PermissionRule {
-  id: string;
-  kind: PermissionKind;
-  /** A folder, a command's leading words, a web host, or an MCP server; `*` is anything, and `.`
-   * is the thread's own folder. */
-  pattern: string;
-  effect: Effect;
-}
 
-export type PermissionKind = "edit" | "command" | "folder" | "web" | "mcp" | "screen";
 
-export type Effect = "allow" | "ask" | "deny";
 
-/** Where a permission rule applies. */
-export type PermissionScope =
-  | { type: "everywhere" }
-  | { type: "chats" }
-  | { type: "project"; projectId: string };
 
-/** The rule that answered an approval: a rule by id, or the scope's default for the kind. */
-export interface RuleRef {
-  scope: PermissionScope;
-  ruleId?: string;
-}
 
 /** How Patchwork keeps itself up to date. */
 export interface UpdatesSettings {
@@ -229,54 +64,8 @@ export interface UpdatesSettings {
   checkEveryMinutes: number;
 }
 
-/** How much a log records, as VS Code's log levels; each includes the ones before it. Below
- * Trace no conversation or file content is written. */
-export type LogLevel = "off" | "error" | "warning" | "info" | "debug" | "trace";
 
-/** How much each log in the launch's log folder records. */
-export interface LoggingSettings {
-  /** `main.log`: Patchwork's own messages. */
-  app: LogLevel;
-  /** `window/renderer.log`: the window's errors and warnings. */
-  window: LogLevel;
-  /** `agents/<agent>.log`: each agent's processes and their traffic. */
-  agents: LogLevel;
-  /** `imports.log`: each scan and import of saved conversations. */
-  imports: LogLevel;
-}
 
-/** The integrated terminal, as VS Code's `terminal.integrated.*` settings. Mirrors
- * `TerminalSettings` in apps/server/src/types.rs. */
-export interface TerminalSettings {
-  /** Null is `-l` on macOS, none elsewhere. */
-  shellArgs: string[] | null;
-  /** Null removes a variable; values may use `${env:NAME}` and `${workspaceFolder}`. */
-  env: Record<string, string | null>;
-  inheritEnv: boolean;
-  /** Null is the project folder. */
-  cwd: string | null;
-  detectLocale: "auto" | "off" | "on";
-  /** Null is the app's monospace font. */
-  fontFamily: string | null;
-  fontSize: number;
-  lineHeight: number;
-  letterSpacing: number;
-  fontWeight: string;
-  fontWeightBold: string;
-  cursorStyle: "block" | "line" | "underline";
-  cursorBlinking: boolean;
-  cursorWidth: number;
-  scrollback: number;
-  copyOnSelection: boolean;
-  rightClickBehavior: "default" | "copyPaste" | "paste" | "selectWord" | "nothing";
-  altClickMovesCursor: boolean;
-  macOptionIsMeta: boolean;
-  drawBoldTextInBrightColors: boolean;
-  minimumContrastRatio: number;
-  smoothScrolling: boolean;
-  mouseWheelScrollSensitivity: number;
-  fastScrollSensitivity: number;
-}
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 const isLinux = /Linux/.test(navigator.platform);
@@ -319,102 +108,18 @@ export interface StartedTerminal {
   cwd: string;
 }
 
-/** Part of a log for the Output panel. */
-export interface LogChunk {
-  text: string;
-  /** Where to read from next. */
-  offset: number;
-  /** The log started over, so what is shown is replaced. */
-  reset: boolean;
-}
 
-/** Desktop notifications shown while Patchwork is not the focused window. */
-export interface NotificationSettings {
-  /** When a task's goal is met. */
-  goalComplete: boolean;
-  /** When an agent finishes replying in a task that is not pursuing a goal. */
-  taskComplete: boolean;
-}
 
-/** Settings that trade a little convenience for fewer tokens spent. */
-export interface TokenSettings {
-  /** Shows the token counts under each finished reply. */
-  showUsage: boolean;
-  /** A context above this is flagged, and a cold task this large is asked about first. */
-  warnAbove: number;
-  /** Asks before a large task whose prompt cache has expired is resumed. */
-  askBeforeResume: boolean;
-  /** The context size at which Claude compacts mid-task. 0 leaves Claude's own. */
-  claudeCompactWindow: number;
-  /** Set once the 200k default for `claudeCompactWindow` replaced the old default, 0. */
-  compactWindowDefaulted: boolean;
-  /** Model for new tasks, per agent. A missing agent uses the CLI's own default. */
-  defaultModels: Partial<Record<AgentKind, string>>;
-  /** Names a new chat or task with a title its provider writes, rather than its first line. */
-  generateTitles: boolean;
-}
 
-export interface AgentStatus {
-  kind: AgentKind;
-  installed: boolean;
-  version: string | null;
-  signedIn: boolean;
-  detail: string;
-}
 
-/** A model the user can pick for an agent. `id: null` is the CLI's own default. */
-export interface ModelOption {
-  id: string | null;
-  label: string;
-  defaultModel?: string | null;
-  /** Superseded model; the picker lists it under "Legacy models". */
-  isLegacy: boolean;
-}
 
-/** An OpenAI-compatible endpoint the user added with their own key. Mirrors `ApiProvider` in
- * apps/server/src/provider/api_config.rs. */
-export interface ApiProvider {
-  /** The part of a model id before its `/`; empty for a provider not saved yet. */
-  id: string;
-  name: string;
-  /** The preset it was made from, e.g. "deepseek", or "custom". */
-  preset: string;
-  baseUrl: string;
-  enabled: boolean;
-  models: ApiModel[];
-  headers: { name: string; value: string }[];
-  /** Reads the key from this environment variable instead of a stored key. */
-  keyEnv: string | null;
-  /** Where the saved key is: the system credential store, or Patchwork's keys file. */
-  keyStore: "keychain" | "file" | null;
-  /** A logo chosen for it, as an image `data:` URL; replaces the preset's. */
-  logo: string | null;
-}
 
-export interface ApiModel {
-  id: string;
-  name: string | null;
-}
 
 /** A saved provider, which never carries its key back to the UI. */
 export interface ApiProviderView extends ApiProvider {
   hasKey: boolean;
 }
 
-/** An MCP server API tasks can use. Mirrors `McpServer` in apps/server/src/provider/mcp.rs,
- * which keeps the `mcpServers` shape other MCP clients use. */
-export interface McpServer {
-  command?: string;
-  args?: string[];
-  env?: Record<string, string>;
-  url?: string;
-  headers?: Record<string, string>;
-  disabled?: boolean;
-  /** Tools left out of API turns, by name. */
-  disabledTools?: string[];
-  /** Claude Code and Codex turns use Patchwork's copy instead of starting their own. */
-  share?: boolean;
-}
 
 export interface McpTool {
   name: string;
@@ -463,77 +168,13 @@ export interface CliMcpGroup {
 export type KeyChange = { action: "keep" } | { action: "set"; key: string } | { action: "clear" };
 
 
-/** Shells from /etc/shells, and the login shell that "System default" resolves to. */
-export interface ShellChoices {
-  shells: string[];
-  default: string | null;
-}
 
-export interface ToolCall {
-  id: string;
-  name: string;
-  summary: string;
-  status: StepStatus;
-  subagent: SubAgent | null;
-  /** The subagent call (its id) this call ran inside, if any. */
-  parent: string | null;
-  /** When the call started and ended (ms since epoch); null if unknown. */
-  startedAt: number | null;
-  endedAt: number | null;
-  /** What the call returned, cut to its first 16 KB. */
-  output?: string;
-  /** The thread holding the subagent's own transcript, for a call that started one. */
-  childThreadId?: string;
-}
 
-/** One step of a reply, in the order it happened. */
-export type Part =
-  | { type: "text"; text: string }
-  /** The agent's reasoning; `endedAt` is null while it still streams. */
-  | { type: "thinking"; text: string; startedAt: number; endedAt: number | null }
-  /** A tool call, by its id in the message's `tools`. */
-  | { type: "tool"; id: string }
-  /** A plan the agent proposed in plan mode, as Markdown. */
-  | { type: "plan"; text: string }
-  /** An approval or question, by its id in the message's `approvals`, where it was asked. */
-  | { type: "approval"; id: string };
 
-/** A shell command the agent started in the background, still running. */
-export interface BackgroundTask {
-  /** The tool call that started it; stops it. */
-  toolId: string;
-  description: string;
-}
 
-/** A subagent an agent started, e.g. with Claude Code's Task tool. */
-export interface SubAgent {
-  kind: string;
-  description: string;
-  /** null means the subagent inherits the parent's model. */
-  model: string | null;
-  /** The instructions it was given. */
-  prompt?: string | null;
-}
 
-export interface PlanStep {
-  text: string;
-  status: StepStatus;
-}
 
-export interface ProviderSlashCommand {
-  name: string;
-  description: string | null;
-}
 
-/** A skill in Patchwork's skills folder; "$name" in a message invokes it. */
-export interface Skill {
-  name: string;
-  description: string | null;
-  /** Its `SKILL.md`. */
-  path: string;
-  /** Switched on in Settings; agents only load enabled skills. */
-  enabled: boolean;
-}
 
 export interface SkillsView {
   /** The skills folder in use. */
@@ -561,282 +202,31 @@ export interface AgentsView {
   agents: CustomAgent[];
 }
 
-/** How much an agent may do without asking. */
-export type AccessMode = "supervised" | "auto-accept-edits" | "auto" | "full-access";
 
-export type ApprovalStatus = "pending" | "allowed" | "denied";
 
-/** An action the agent asked permission for during a turn. */
-export interface Approval {
-  id: string;
-  /** e.g. "Run command", "Edit files". */
-  title: string;
-  detail: string;
-  status: ApprovalStatus;
-  /** What the agent asks the user, when it asks rather than wanting permission. */
-  questions?: Question[];
-  /** The user's answers, by question id. */
-  answers?: Record<string, string[]>;
-  /** What kind of request it is, when a permission rule can answer it. */
-  kind?: PermissionKind;
-  /** The patterns "Always allow" saves; none when a rule could not safely cover it. */
-  suggestions?: string[];
-  /** The rule that answered it, or that the user saved when answering it. */
-  rule?: RuleRef;
-  /** Answered by a rule, without asking. */
-  auto?: boolean;
-}
 
-/** A question the agent asks the user, with the answers it offers. */
-export interface Question {
-  id: string;
-  /** A short label, such as "Library". */
-  header: string;
-  question: string;
-  options: { label: string; description: string }[];
-  multiSelect: boolean;
-}
 
-export interface Message {
-  id: string;
-  role: Role;
-  text: string;
-  createdAt: number; // epoch ms
-  status: MessageStatus;
-  tools: ToolCall[];
-  plan: PlanStep[];
-  files: string[]; // project-relative paths edited during this message
-  error: string | null;
-  approvals: Approval[];
-  attachments: Attachment[];
-  /** Sent while a turn was running, steering it. */
-  steer: boolean;
-  /** Sent while a turn was running and still waiting for it to end; then it starts the next turn. */
-  queued: boolean;
-  /** Background shell commands still running after the reply ended. */
-  background: BackgroundTask[];
-  /** Cut short by a steering message; the agent answered it in the next reply. */
-  cutOff: boolean;
-  /** The reply ended and the agent is checking it against the goal; not saved. */
-  checkingGoal?: boolean;
-  /** The agent is retrying a model request that failed or stalled; not saved. */
-  retry?: { reason: string; attempt: number; maxAttempts: number } | null;
-  /** A safety classifier blocked part of the reply; the agent's stated reason. */
-  refusal: Refusal | null;
-  /** The reply's text, reasoning, and tool calls in the order they happened; empty for replies
-   * saved before this was kept. */
-  parts: Part[];
-  /** When the reply finished (ms since epoch); null while it runs. */
-  finishedAt: number | null;
-  /** Tokens the reply used; null for agents that do not report usage. */
-  usage: TokenUsage | null;
-  /** The project before and after the turn that wrote the reply; null outside git projects and
-   * for older replies. */
-  turn?: TurnTrees | null;
-}
 
-/** Snapshots of a project's files, as git tree ids. */
-export interface TurnTrees {
-  before: string;
-  after: string;
-}
 
-/** Where a file a turn changed stands now. */
-export type TurnFileState = "uncommitted" | "committed" | "reverted" | "deleted" | "unchanged";
 
-/** A file a turn changed: lines the turn added and removed, and where the file stands now. */
-export interface TurnFile {
-  path: string;
-  additions: number;
-  deletions: number;
-  state: TurnFileState;
-}
 
-/** Why a safety classifier blocked a reply, as the agent reports it. */
-export interface Refusal {
-  /** The policy area, such as `cyber`; null when the agent names none. */
-  category: string | null;
-  explanation: string;
-}
 
-/** Tokens a reply used, summed over the model requests it made. */
-export interface TokenUsage {
-  /** Input that was neither read from nor written to the prompt cache. */
-  input: number;
-  cacheRead: number;
-  cacheWrite: number;
-  output: number;
-  /** Size of the prompt of the agent's last request: the context it is working in. */
-  context: number;
-}
 
-/** Something dropped into the composer, sent to the agent with the message. */
-export interface Attachment {
-  kind: AttachmentKind;
-  /** Absolute path on disk. */
-  path: string;
-  /** Last path component, for display. */
-  name: string;
-}
 
-export type GoalStatus =
-  "active" | "paused" | "blocked" | "usageLimited" | "budgetLimited" | "complete";
 
-/** A `/goal` the agent keeps working toward until it is met. */
-export interface Goal {
-  objective: string;
-  status: GoalStatus;
-  /** When the goal was set (ms since epoch). */
-  startedAt: number;
-  /** Evaluator checks so far (Claude). */
-  checks: number | null;
-  /** Tokens spent and the budget, and time spent, as the agent reports them (Codex). */
-  tokensUsed: number | null;
-  tokenBudget: number | null;
-  timeUsedSeconds: number | null;
-}
 
-export interface Thread {
-  id: string;
-  /** null for a chat without a project (runs in a private scratch folder). */
-  projectId: string | null;
-  title: string;
-  agent: AgentKind;
-  model: string | null;
-  accessMode: AccessMode;
-  /** Reasoning effort passed to the agent, e.g. "high"; null leaves the CLI's default. */
-  effort: string | null;
-  sessionId: string | null;
-  createdAt: number;
-  messages: Message[];
-  goal: Goal | null;
-  /** The folder this task is in; null for the project's top level. */
-  folderId: string | null;
-  /** When the thread was archived; null while it is in the task list. */
-  archivedAt: number | null;
-  /** Set on a subagent's thread: the thread and call that started it. Such a thread is
-   * read-only and not listed in the sidebar. */
-  parent: { threadId: string; toolId: string } | null;
-  /** Turns run in plan mode: the agent plans and proposes, without changing files. */
-  planMode: boolean;
-  slashCommands: ProviderSlashCommand[];
-  /** An imported chat that has not been sent yet: its agent can still be picked, and its
-   * transcript goes to the agent with the first message. */
-  contextPending: boolean;
-  /** The primary custom agent the chat is in the role of. */
-  role: string | null;
-  /** Set in the UI on a thread from `listThreads`, which carries only its last message and those
-   * still streaming, queued, or awaiting approval; `getThread` loads the rest. */
-  partial?: boolean;
-}
 
-/** A folder inside a project; its tasks are the threads whose `folderId` is its id. */
-export interface Folder {
-  id: string;
-  projectId: string;
-  name: string;
-}
 
-export interface FileChange {
-  path: string;
-  status: "modified" | "added" | "deleted" | "untracked" | "renamed";
-  additions: number;
-  deletions: number;
-  staged: boolean;
-}
+/** How a file a reply produced is shown: `image` as a thumbnail, `text` in the diff list, `other` as a card. */
+export type FileMediaKind = "image" | "text" | "other";
 
-/** One rate-limit window, e.g. the 5-hour session limit. */
-export interface UsageWindow {
-  label: string;
-  /** 0–100. */
-  usedPercent: number;
-  /** Epoch ms. */
-  resetsAt: number | null;
-}
 
-/** Subscription usage limits for one agent. */
-export interface ProviderUsage {
-  kind: AgentKind;
-  plan: string | null;
-  windows: UsageWindow[];
-  /** Why no windows are shown, e.g. "Not signed in". */
-  error: string | null;
-  updatedAt: number | null;
-}
 
-/** Where imported conversations come from: an agent CLI, another app, or OpenCode. */
-export type ImportSource = CliKind | "t3";
 
-/** Conversations a source saved on disk that can be imported. */
-export interface ImportScan {
-  kind: ImportSource;
-  found: number;
-  /** Not yet in Patchwork. */
-  new: number;
-  /** Sub-agent runs, which are not offered for import. */
-  subagents: number;
-}
 
-export type AgentEvent =
-  | { type: "goalUpdated"; goal: Goal | null }
-  | { type: "goalChecking"; messageId: string }
-  | { type: "retrying"; messageId: string; reason: string; attempt: number; maxAttempts: number }
-  | { type: "slashCommandsUpdated"; commands: ProviderSlashCommand[] }
-  | { type: "roleChanged"; role: string | null }
-  | { type: "modelChanged"; model: string | null }
-  | { type: "usage"; messageId: string; usage: TokenUsage }
-  | { type: "messageStarted"; message: Message }
-  | { type: "textDelta"; messageId: string; text: string }
-  | {
-      type: "thinking";
-      messageId: string;
-      text: string;
-      startedAt?: number;
-      endedAt?: number;
-    }
-  | { type: "toolStarted"; messageId: string; tool: ToolCall }
-  | {
-      type: "toolFinished";
-      messageId: string;
-      toolId: string;
-      isError: boolean;
-      output?: string;
-    }
-  | { type: "planUpdated"; messageId: string; steps: PlanStep[] }
-  | { type: "fileTouched"; messageId: string; path: string }
-  | { type: "approvalRequested"; messageId: string; approval: Approval }
-  | {
-      type: "approvalResolved";
-      messageId: string;
-      approvalId: string;
-      allowed: boolean;
-      answers?: Record<string, string[]>;
-      rule?: RuleRef;
-      auto?: boolean;
-    }
-  | { type: "messageQueued"; messageId: string; queued: boolean }
-  | { type: "messageSteered"; messageId: string }
-  | { type: "messageCutOff"; messageId: string }
-  | { type: "refused"; messageId: string; refusal: Refusal }
-  | { type: "planProposed"; messageId: string; text: string }
-  | { type: "threadCreated"; thread: Thread }
-  | { type: "titleUpdated"; title: string }
-  | { type: "messageRemoved"; messageId: string }
-  | { type: "messageEdited"; message: Message }
-  | { type: "backgroundTaskStarted"; messageId: string; task: BackgroundTask }
-  | { type: "backgroundTaskEnded"; messageId: string; toolId: string }
-  | { type: "turnRecorded"; messageId: string; turn: TurnTrees }
-  | {
-      type: "turnCompleted";
-      messageId: string;
-      status: Exclude<MessageStatus, "streaming">;
-      error: string | null;
-    };
 
-export interface AgentEventEnvelope {
-  threadId: string;
-  event: AgentEvent;
-}
+
+
 
 export const DEFAULT_SETTINGS: Settings = {
   onboarded: false,
@@ -845,6 +235,8 @@ export const DEFAULT_SETTINGS: Settings = {
   integrations: { github: false, terminal: false, figma: false, browser: false },
   projects: [],
   activeProjectId: null,
+  agent: null,
+  importLogDisabled: false,
   agentPaths: {},
   shell: null,
   skillsDir: null,
@@ -1177,6 +569,11 @@ export const api = {
   /** Which of `paths` no longer exist in the project. */
   missingFiles: (projectId: string, paths: string[]) =>
     invoke<string[]>("missing_files", { projectId, paths }),
+  /** What each of a reply's files is shown as: a thumbnail, a card, or a line in the diff list. */
+  fileMedia: (projectId: string, paths: string[]) =>
+    invoke<FileMedia[]>("file_media", { projectId, paths }),
+  /** Opens a file inside the project in the default app. */
+  openFile: (projectId: string, path: string) => invoke<void>("open_file", { projectId, path }),
   turnFiles: (projectId: string, turn: TurnTrees, paths: string[]) =>
     invoke<TurnFile[]>("turn_files", { projectId, turn, paths }),
   turnFileDiff: (projectId: string, turn: TurnTrees, path: string) =>
@@ -1210,15 +607,6 @@ export function onAgentEvent(cb: (e: AgentEventEnvelope) => void): Promise<Unlis
   return listen<AgentEventEnvelope>("agent-event", (e) => cb(e.payload));
 }
 
-/** A settled burst of file changes in the watched project, with git's state after it. */
-export interface ProjectChanged {
-  projectId: string;
-  /** Project-relative paths the burst touched; `.git/...` for commits, staging and checkouts. */
-  paths: string[];
-  branch: string | null;
-  /** Null when `git status` failed. */
-  changes: FileChange[] | null;
-}
 
 export function onProjectChanged(cb: (e: ProjectChanged) => void): Promise<UnlistenFn> {
   return listen<ProjectChanged>("project-changed", (e) => cb(e.payload));

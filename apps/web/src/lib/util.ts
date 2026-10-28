@@ -25,6 +25,20 @@ export function formatRelative(ts: number): string {
   return `${Math.floor(hours / 24)}d`;
 }
 
+const BYTE_UNITS = ["B", "kB", "MB", "GB"];
+
+/** File size, e.g. "787 B" or "12.4 kB". Decimal units, as file managers show them, so 1 kB is 1000 B. */
+export function formatBytes(bytes: number): string {
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1000 && unit < BYTE_UNITS.length - 1) {
+    value /= 1000;
+    unit++;
+  }
+  if (unit === 0) return `${value} B`;
+  return `${value < 100 ? value.toFixed(1) : Math.round(value)} ${BYTE_UNITS[unit]}`;
+}
+
 export function baseName(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
 }

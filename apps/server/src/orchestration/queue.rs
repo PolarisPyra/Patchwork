@@ -10,7 +10,6 @@ use crate::types::Attachment;
 use super::process::write_to;
 use super::Runner;
 
-
 /// A message sent during a turn, kept until the agent answers it or the turn ends.
 pub(super) struct FollowUp {
     /// The user message this is, so the thread can show it as queued or drop it.
@@ -40,7 +39,10 @@ impl Runner {
     pub fn enqueue(&self, thread_id: &str, input: FollowUpInput<'_>) -> Result<bool, String> {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         // An idle agent is not replying, so there is nothing to wait for.
-        let Some(turn) = turns.get(thread_id).filter(|t| !t.idle.load(Ordering::SeqCst)) else {
+        let Some(turn) = turns
+            .get(thread_id)
+            .filter(|t| !t.idle.load(Ordering::SeqCst))
+        else {
             return Ok(false);
         };
         let mut queue = turn.queue.lock().unwrap_or_else(PoisonError::into_inner);
@@ -64,7 +66,9 @@ impl Runner {
     /// been promoted, withdrawn, or the turn ended.
     pub fn edit_queued(&self, thread_id: &str, input: FollowUpInput<'_>) -> bool {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
-        let Some(turn) = turns.get(thread_id) else { return false };
+        let Some(turn) = turns.get(thread_id) else {
+            return false;
+        };
         let mut queue = turn.queue.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(follow_up) = queue.iter_mut().find(|f| f.message_id == input.message_id) else {
             return false;
@@ -121,12 +125,22 @@ impl Runner {
     ) -> bool {
         self.background_subagents(thread_id, subagents);
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
-        let Some(turn) = turns.get(thread_id) else { return false };
+        let Some(turn) = turns.get(thread_id) else {
+            return false;
+        };
         let mut queue = turn.queue.lock().unwrap_or_else(PoisonError::into_inner);
-        let Some(index) = queue.iter().position(|f| f.message_id == message_id) else { return false };
-        if turn.cancelled.load(Ordering::SeqCst) { return false; }
+        let Some(index) = queue.iter().position(|f| f.message_id == message_id) else {
+            return false;
+        };
+        if turn.cancelled.load(Ordering::SeqCst) {
+            return false;
+        }
         let follow_up = queue.remove(index);
-        let turn_id = turn.native_turn.lock().unwrap_or_else(PoisonError::into_inner).clone();
+        let turn_id = turn
+            .native_turn
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
         let prompt = provider::Prompt {
             text: &follow_up.text,
             attachments: &follow_up.attachments,
@@ -134,8 +148,14 @@ impl Runner {
         };
         let line = provider::steer_input(turn.agent, prompt, session_id, turn_id.as_deref());
         let mut stdin = turn.stdin.lock().unwrap_or_else(PoisonError::into_inner);
-        if line.as_deref().is_some_and(|line| write_to(&mut stdin, line)) {
-            turn.steers.lock().unwrap_or_else(PoisonError::into_inner).push_back(follow_up);
+        if line
+            .as_deref()
+            .is_some_and(|line| write_to(&mut stdin, line))
+        {
+            turn.steers
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push_back(follow_up);
             true
         } else {
             queue.insert(index, follow_up);

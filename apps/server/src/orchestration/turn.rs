@@ -54,7 +54,6 @@ use super::stream::Unsaved;
 use super::subagents::Controls;
 use super::subagents::Tasks;
 
-
 /// An approval waiting for the user.
 pub(super) struct PendingApproval {
     pub(super) message_id: String,
@@ -104,7 +103,12 @@ pub struct TurnRequest {
 
 impl Runner {
     pub fn start_turn(&self, server: &Arc<Server>, request: TurnRequest) -> Result<(), String> {
-        let TurnRequest { thread_id, text, attachments, images } = request;
+        let TurnRequest {
+            thread_id,
+            text,
+            attachments,
+            images,
+        } = request;
         // A turn of its own (a /goal, a compaction) replaces an idle agent process.
         self.retire_idle(&thread_id);
         let (agent, root, session_id, model, mode, effort, plan, context, project_id, checkpoint) = {
@@ -153,7 +157,12 @@ impl Runner {
                 thread.project_id.clone(),
                 // Project files are snapshotted before the newest user message's turn changes them.
                 thread.project_id.and(
-                    thread.messages.iter().rev().find(|m| m.role == Role::User).map(|m| m.id.clone()),
+                    thread
+                        .messages
+                        .iter()
+                        .rev()
+                        .find(|m| m.role == Role::User)
+                        .map(|m| m.id.clone()),
                 ),
             )
         };
@@ -177,13 +186,19 @@ impl Runner {
             AgentKind::Codex => codex::developer_instructions(&settings),
             // Patchwork's own agent has no skill loader, so it is told where the skills are.
             AgentKind::Api => {
-                let shell = Some(super::agent_instructions(&settings, agent)).filter(|t| !t.is_empty());
+                let shell =
+                    Some(super::agent_instructions(&settings, agent)).filter(|t| !t.is_empty());
                 let parts = [shell, crate::skills::instructions(&skills)];
-                Some(parts.into_iter().flatten().collect::<Vec<_>>().join("\n\n")).filter(|t| !t.is_empty())
+                Some(parts.into_iter().flatten().collect::<Vec<_>>().join("\n\n"))
+                    .filter(|t| !t.is_empty())
             }
             AgentKind::Claude | AgentKind::Antigravity | AgentKind::OpenCode => None,
         };
-        let skills_dir = Some(crate::skills::loaded_dir(&settings).to_string_lossy().into_owned());
+        let skills_dir = Some(
+            crate::skills::loaded_dir(&settings)
+                .to_string_lossy()
+                .into_owned(),
+        );
         let guarded = crate::permissions::guarded(&settings.permissions, project_id.as_deref());
         // The custom agents, for the CLIs that can start them as subagents.
         let agents = match agent {
@@ -265,10 +280,19 @@ impl Runner {
                 "{} in {root}: {} {}",
                 cmd.get_program().to_string_lossy(),
                 args.join(" "),
-                if session_id.is_some() { "(resumed)" } else { "" },
+                if session_id.is_some() {
+                    "(resumed)"
+                } else {
+                    ""
+                },
             );
             let source = Source::agent(agent, pid, &thread_id, None);
-            AGENTS.write(LogLevel::Info, "start", &source, Data::Text(started.trim_end().into()));
+            AGENTS.write(
+                LogLevel::Info,
+                "start",
+                &source,
+                Data::Text(started.trim_end().into()),
+            );
             log_cli_version(agent);
         }
         let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
@@ -276,7 +300,9 @@ impl Runner {
         };
         // The agent has the transcript now, so later turns resume its session instead.
         if sends_context {
-            server.store.update_thread(&thread_id, |t| t.context_pending = false)?;
+            server
+                .store
+                .update_thread(&thread_id, |t| t.context_pending = false)?;
         }
         let source = Source::agent(agent, pid, &thread_id, None);
         let stderr_tail = std::thread::spawn(move || read_stderr_tail(stderr, source));
@@ -476,7 +502,11 @@ impl Turn {
                 attribution::lock(&self.attribution).tool_started(&tool.id, tool.started_at, reach);
                 None
             }
-            AgentEvent::ToolFinished { tool_id, message_id, .. } => {
+            AgentEvent::ToolFinished {
+                tool_id,
+                message_id,
+                ..
+            } => {
                 let paths = attribution::lock(&self.attribution).tool_finished(tool_id);
                 Some((message_id.clone(), paths))
             }
@@ -487,7 +517,10 @@ impl Turn {
                 attribution::lock(&self.attribution).tool_started(&id, None, reach);
                 None
             }
-            AgentEvent::BackgroundTaskEnded { tool_id, message_id } => {
+            AgentEvent::BackgroundTaskEnded {
+                tool_id,
+                message_id,
+            } => {
                 let id = background_id(tool_id);
                 let paths = attribution::lock(&self.attribution).tool_finished(&id);
                 Some((message_id.clone(), paths))
@@ -497,7 +530,10 @@ impl Turn {
         publish(&self.server, &self.thread_id, event);
         if let Some((message_id, paths)) = covered {
             for path in paths {
-                let touched = AgentEvent::FileTouched { message_id: message_id.clone(), path };
+                let touched = AgentEvent::FileTouched {
+                    message_id: message_id.clone(),
+                    path,
+                };
                 publish(&self.server, &self.thread_id, touched);
             }
         }
@@ -581,24 +617,41 @@ pub(super) struct TurnEnd {
 /// changed files keep showing what the turn did once the changes are committed or edited again.
 pub(super) fn record_turn(turn: &Turn, replies: &[String]) {
     let Some(first) = replies.first() else { return };
-    let Some(thread) = turn.server.store.thread(&turn.thread_id) else { return };
+    let Some(thread) = turn.server.store.thread(&turn.thread_id) else {
+        return;
+    };
     if thread.project_id.is_none() {
         return;
     }
     // The snapshot before the turn belongs to the user message the first reply answers.
-    let Some(at) = thread.messages.iter().position(|m| &m.id == first) else { return };
-    let Some(asked) = thread.messages[..at].iter().rev().find(|m| m.role == Role::User) else {
+    let Some(at) = thread.messages.iter().position(|m| &m.id == first) else {
+        return;
+    };
+    let Some(asked) = thread.messages[..at]
+        .iter()
+        .rev()
+        .find(|m| m.role == Role::User)
+    else {
         return;
     };
     if let Some(trees) = checkpoint::record_end(&turn.root, &turn.thread_id, &asked.id, replies) {
         for id in replies {
-            turn.publish(AgentEvent::TurnRecorded { message_id: id.clone(), turn: trees.clone() });
+            turn.publish(AgentEvent::TurnRecorded {
+                message_id: id.clone(),
+                turn: trees.clone(),
+            });
         }
     }
 }
 
 pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
-    let TurnEnd { status, error, cancelled, clear_in_agent, session_lost } = end;
+    let TurnEnd {
+        status,
+        error,
+        cancelled,
+        clear_in_agent,
+        session_lost,
+    } = end;
     // Forget the turn before announcing it. Queued messages remain persisted in the
     // thread until the user explicitly resumes them; unanswered steers were already
     // delivered to the agent and continue automatically if needed.
@@ -625,9 +678,8 @@ pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
             .unwrap_or_else(PoisonError::into_inner)
             .drain(..)
             .collect::<Vec<_>>();
-        let queued = std::mem::take(
-            &mut *turn.queue.lock().unwrap_or_else(PoisonError::into_inner),
-        );
+        let queued =
+            std::mem::take(&mut *turn.queue.lock().unwrap_or_else(PoisonError::into_inner));
         let mut handed_over = turn
             .server
             .runner
@@ -648,12 +700,19 @@ pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
         if let Err(e) = reset {
             log::warn!("failed to drop a lost session: {e}");
         } else {
-            turn.publish(AgentEvent::MessageRemoved { message_id: turn.message_id.clone() });
+            turn.publish(AgentEvent::MessageRemoved {
+                message_id: turn.message_id.clone(),
+            });
             let (thread_id, text) = (turn.thread_id.clone(), turn.text.clone());
             let (attachments, images) = (turn.attachments.clone(), turn.images.clone());
             let started = server.runner.start_turn(
                 server,
-                TurnRequest { thread_id, text, attachments, images },
+                TurnRequest {
+                    thread_id,
+                    text,
+                    attachments,
+                    images,
+                },
             );
             match started {
                 Ok(()) => return,
@@ -680,8 +739,11 @@ pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
     }
     // On a thread of its own, so a slow hook does not hold up the next turn.
     {
-        let (server, thread_id, root) =
-            (turn.server.clone(), turn.thread_id.clone(), turn.root.clone());
+        let (server, thread_id, root) = (
+            turn.server.clone(),
+            turn.thread_id.clone(),
+            turn.root.clone(),
+        );
         let (agent, ended) = (turn.agent, if cancelled { "interrupt" } else { "stop" });
         std::thread::spawn(move || {
             for event in [ended, "sessionEnd"] {
@@ -731,23 +793,24 @@ pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
             .map(|f| f.text.as_str())
             .collect::<Vec<_>>()
             .join("\n\n");
-        let (attachments, images) = unanswered.into_iter().map(|f| (f.attachments, f.images)).fold(
-            (vec![], vec![]),
-            |(mut a, mut i), (fa, fi)| {
+        let (attachments, images) = unanswered
+            .into_iter()
+            .map(|f| (f.attachments, f.images))
+            .fold((vec![], vec![]), |(mut a, mut i), (fa, fi)| {
                 a.extend(fa);
                 i.extend(fi);
                 (a, i)
-            },
-        );
+            });
         let server = &turn.server;
-        if let Err(e) =
-            server
-                .runner
-                .start_turn(
-                    server,
-                    TurnRequest { thread_id: turn.thread_id.clone(), text, attachments, images },
-                )
-        {
+        if let Err(e) = server.runner.start_turn(
+            server,
+            TurnRequest {
+                thread_id: turn.thread_id.clone(),
+                text,
+                attachments,
+                images,
+            },
+        ) {
             log::warn!("failed to start the turn for queued messages: {e}");
         }
     } else if !cancelled && status == MessageStatus::Complete {
@@ -767,7 +830,10 @@ fn plugin_hooks(
     status: Option<MessageStatus>,
 ) {
     let name = |value: serde_json::Result<Value>| {
-        value.ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default()
+        value
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_string))
+            .unwrap_or_default()
     };
     let agent = name(serde_json::to_value(agent));
     let status = status.map(|status| name(serde_json::to_value(status)));
@@ -804,7 +870,15 @@ fn log_cli_version(agent: AgentKind) {
     }
     std::thread::spawn(move || {
         let version = provider::cli_version(agent).unwrap_or_else(|| "unknown".into());
-        let source = Source { agent: Some(agent), ..Source::default() };
-        AGENTS.write(LogLevel::Info, "cli", &source, Data::Text(format!("{agent:?} {version}")));
+        let source = Source {
+            agent: Some(agent),
+            ..Source::default()
+        };
+        AGENTS.write(
+            LogLevel::Info,
+            "cli",
+            &source,
+            Data::Text(format!("{agent:?} {version}")),
+        );
     });
 }

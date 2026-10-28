@@ -28,7 +28,11 @@ impl Runner {
         let Ok(kind) = serde_json::from_value(request["kind"].clone()) else {
             return json!({"deny": null});
         };
-        let resources = request["resources"].as_array().into_iter().flatten().filter_map(Value::as_str);
+        let resources = request["resources"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str);
         let target = Target::new(kind, resources);
         let full = server
             .store
@@ -40,7 +44,11 @@ impl Runner {
             Unasked::Ask => None,
         };
         let Some(message_id) = server.store.thread(&thread_id).and_then(|t| {
-            t.messages.iter().rev().find(|m| m.role == Role::Assistant).map(|m| m.id.clone())
+            t.messages
+                .iter()
+                .rev()
+                .find(|m| m.role == Role::Assistant)
+                .map(|m| m.id.clone())
         }) else {
             return refused("This turn is no longer running");
         };
@@ -60,7 +68,14 @@ impl Runner {
             approval.status = ApprovalStatus::Denied;
             approval.rule = Some(decision.rule);
             approval.auto = true;
-            publish(server, &thread_id, AgentEvent::ApprovalRequested { message_id, approval });
+            publish(
+                server,
+                &thread_id,
+                AgentEvent::ApprovalRequested {
+                    message_id,
+                    approval,
+                },
+            );
             return refused("A Patchwork permission rule refuses this call. Do not try it again.");
         }
 
@@ -75,19 +90,29 @@ impl Runner {
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .insert(approval.id.clone(), tx);
-            turn.pending.lock().unwrap_or_else(PoisonError::into_inner).insert(
-                approval.id.clone(),
-                PendingApproval {
-                    message_id: message_id.clone(),
-                    reply: json!({"hook": approval.id}),
-                    target: Some(target.clone()),
-                    root: root.clone(),
-                },
-            );
+            turn.pending
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .insert(
+                    approval.id.clone(),
+                    PendingApproval {
+                        message_id: message_id.clone(),
+                        reply: json!({"hook": approval.id}),
+                        target: Some(target.clone()),
+                        root: root.clone(),
+                    },
+                );
             [turn.cancelled.clone(), turn.exited.clone()]
         };
         let id = approval.id.clone();
-        publish(server, &thread_id, AgentEvent::ApprovalRequested { message_id, approval });
+        publish(
+            server,
+            &thread_id,
+            AgentEvent::ApprovalRequested {
+                message_id,
+                approval,
+            },
+        );
         loop {
             match rx.recv_timeout(Duration::from_secs(1)) {
                 Ok(true) => {
@@ -101,9 +126,13 @@ impl Runner {
                     return json!({"deny": null});
                 }
                 Ok(false) => return refused("The user declined this call. Do not try it again."),
-                Err(RecvTimeoutError::Timeout) if !stopped.iter().any(|s| s.load(Ordering::SeqCst)) => {}
+                Err(RecvTimeoutError::Timeout)
+                    if !stopped.iter().any(|s| s.load(Ordering::SeqCst)) => {}
                 Err(_) => {
-                    self.hooks.lock().unwrap_or_else(PoisonError::into_inner).remove(&id);
+                    self.hooks
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .remove(&id);
                     return refused("This turn is no longer running");
                 }
             }
@@ -113,8 +142,13 @@ impl Runner {
     /// Whether the user already allowed `target` through a hook, which then counts once.
     pub(super) fn take_grant(&self, thread_id: &str, target: &Target, root: &Path) -> bool {
         let mut grants = self.grants.lock().unwrap_or_else(PoisonError::into_inner);
-        let Some(granted) = grants.get_mut(thread_id) else { return false };
-        let Some(i) = granted.iter().position(|g| permissions::same_request(g, target, root)) else {
+        let Some(granted) = grants.get_mut(thread_id) else {
+            return false;
+        };
+        let Some(i) = granted
+            .iter()
+            .position(|g| permissions::same_request(g, target, root))
+        else {
             return false;
         };
         granted.remove(i);

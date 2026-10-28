@@ -11,8 +11,6 @@
 
 use rusqlite::{Connection, params};
 
-use super::codec::Res;
-
 struct Migration {
     id: u32,
     name: &'static str,
@@ -145,7 +143,7 @@ fn db(e: impl std::fmt::Display) -> String {
 
 /// Brings the schema up to date. Returns how many migrations had run before, so 0 means the
 /// database is new.
-pub(super) fn run(conn: &mut Connection) -> Res<usize> {
+pub(super) fn run(conn: &mut Connection) -> Result<usize, String> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS schema_migrations (
              id INTEGER PRIMARY KEY,
@@ -175,7 +173,7 @@ pub(super) fn run(conn: &mut Connection) -> Res<usize> {
 
 /// A database made before `schema_migrations` existed only has `user_version`. Its first
 /// `user_version` migrations are written into the table, under the names they have now.
-fn record_earlier_builds(conn: &mut Connection) -> Res<()> {
+fn record_earlier_builds(conn: &mut Connection) -> Result<(), String> {
     let recorded: usize = conn
         .query_row("SELECT COUNT(*) FROM schema_migrations", [], |r| r.get(0))
         .map_err(db)?;
@@ -199,7 +197,7 @@ fn record_earlier_builds(conn: &mut Connection) -> Res<()> {
     tx.commit().map_err(db)
 }
 
-fn recorded(conn: &Connection) -> Res<Vec<(u32, String)>> {
+fn recorded(conn: &Connection) -> Result<Vec<(u32, String)>, String> {
     let mut stmt = conn
         .prepare("SELECT id, name FROM schema_migrations ORDER BY id")
         .map_err(db)?;
@@ -211,7 +209,7 @@ fn recorded(conn: &Connection) -> Res<Vec<(u32, String)>> {
 
 /// The recorded history must be the start of `MIGRATIONS`, in order. Anything else was written
 /// by another build; carrying on could leave the schema half-applied.
-fn check_history(recorded: &[(u32, String)]) -> Res<()> {
+fn check_history(recorded: &[(u32, String)]) -> Result<(), String> {
     for (i, (id, name)) in recorded.iter().enumerate() {
         let Some(known) = MIGRATIONS.get(i) else {
             return Err(newer_build(i + 1));

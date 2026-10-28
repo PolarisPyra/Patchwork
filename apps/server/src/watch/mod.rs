@@ -80,7 +80,9 @@ fn run(
     rx: Receiver<Received>,
     mut on_change: impl FnMut(Vec<Change>),
 ) {
-    let Some(shared) = watcher.upgrade() else { return };
+    let Some(shared) = watcher.upgrade() else {
+        return;
+    };
     backend::watch_project(&mut lock(&shared), &root);
     drop(shared);
     let filter = Filter::new(&root);
@@ -105,7 +107,9 @@ fn run(
                 }
                 let before = changed.len();
                 for path in &event.paths {
-                    let Ok(rel) = path.strip_prefix(&root) else { continue };
+                    let Ok(rel) = path.strip_prefix(&root) else {
+                        continue;
+                    };
                     if !filter.keeps(path, rel) {
                         continue;
                     }
@@ -131,7 +135,12 @@ fn run(
             Err(RecvTimeoutError::Timeout) => {
                 if since.take().is_some() {
                     let burst = std::mem::take(&mut changed);
-                    on_change(burst.into_iter().map(|(path, at)| Change { path, at }).collect());
+                    on_change(
+                        burst
+                            .into_iter()
+                            .map(|(path, at)| Change { path, at })
+                            .collect(),
+                    );
                 }
             }
             Err(RecvTimeoutError::Disconnected) => return,

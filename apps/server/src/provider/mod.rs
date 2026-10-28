@@ -29,7 +29,11 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
-use crate::types::{AgentKind, AgentStatus, ModelOption, ProviderSlashCommand, StepStatus, ToolCall, tool_output, SubAgent, AccessMode, Question, AttachmentKind, Attachment, image_media_type, TokenUsage, Goal, UsageWindow, AgentEvent, now_ms};
+use crate::types::{
+    AgentKind, AgentStatus, ModelOption, ProviderSlashCommand, StepStatus, ToolCall, tool_output,
+    SubAgent, AccessMode, Question, AttachmentKind, Attachment, image_media_type, TokenUsage, Goal,
+    UsageWindow, AgentEvent, now_ms,
+};
 use crate::workspace::{signal_process_group, SIGKILL};
 
 /// Upper bound for any single agent CLI probe (`--version`, `auth status`, ...).
@@ -110,7 +114,11 @@ fn fallback_dirs() -> Vec<PathBuf> {
 
 fn find_binary(name: &str) -> Option<PathBuf> {
     which::which(name).ok().or_else(|| {
-        let names: &[&str] = if cfg!(windows) { &["exe", "cmd", "bat"] } else { &[""] };
+        let names: &[&str] = if cfg!(windows) {
+            &["exe", "cmd", "bat"]
+        } else {
+            &[""]
+        };
         fallback_dirs().into_iter().find_map(|d| {
             names
                 .iter()
@@ -125,14 +133,19 @@ fn find_binary(name: &str) -> Option<PathBuf> {
 /// the binary's directory prepended to PATH (codex needs `node` beside it).
 pub fn agent_command(kind: AgentKind) -> Result<Command, String> {
     let bin = match kind {
-        AgentKind::Claude => located_or(kind, || find_binary("claude"))
-            .ok_or("Claude Code is not installed")?,
-        AgentKind::Codex => located_or(kind, || find_binary("codex")).ok_or("Codex is not installed")?,
+        AgentKind::Claude => {
+            located_or(kind, || find_binary("claude")).ok_or("Claude Code is not installed")?
+        }
+        AgentKind::Codex => {
+            located_or(kind, || find_binary("codex")).ok_or("Codex is not installed")?
+        }
         AgentKind::Antigravity => {
             antigravity::antigravity_bin().ok_or("Antigravity CLI is not installed")?
         }
         AgentKind::OpenCode => opencode::opencode_bin().ok_or("OpenCode CLI is not installed")?,
-        AgentKind::Api => std::env::current_exe().map_err(|e| format!("Failed to find Patchwork: {e}"))?,
+        AgentKind::Api => {
+            std::env::current_exe().map_err(|e| format!("Failed to find Patchwork: {e}"))?
+        }
     };
     let mut cmd = crate::host_command(&bin);
     if let Some(dir) = bin.parent() {
@@ -151,7 +164,10 @@ pub fn agent_command(kind: AgentKind) -> Result<Command, String> {
 /// A command the user configured, such as an MCP server: found and run with the PATH their
 /// login shell sets up, as agents get it.
 pub fn user_command(program: &str) -> Command {
-    let mut paths: Vec<PathBuf> = shell_path().into_iter().flat_map(std::env::split_paths).collect();
+    let mut paths: Vec<PathBuf> = shell_path()
+        .into_iter()
+        .flat_map(std::env::split_paths)
+        .collect();
     if let Some(existing) = std::env::var_os("PATH") {
         paths.extend(std::env::split_paths(&existing));
     }
@@ -205,10 +221,13 @@ fn login_shell_value(name: &str, interactive: bool) -> Option<String> {
     let shell = crate::login_shell().or_else(|| std::env::var("SHELL").ok())?;
     let mut cmd = crate::host_command(shell);
     let flags = if interactive { "-lic" } else { "-lc" };
-    cmd.args([flags, &format!("printf '\\n{PATH_MARKER}%s\\n' \"${name}\"")])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+    cmd.args([
+        flags,
+        &format!("printf '\\n{PATH_MARKER}%s\\n' \"${name}\""),
+    ])
+    .stdin(Stdio::null())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::null());
     #[cfg(unix)]
     cmd.process_group(0);
     let mut child = cmd.spawn().ok()?;
@@ -387,7 +406,9 @@ pub fn detect_agent(kind: AgentKind) -> AgentStatus {
 
 /// The CLI's version, as `--version` prints it.
 pub fn cli_version(kind: AgentKind) -> Option<String> {
-    probe(kind, &["--version"]).filter(|p| p.success).and_then(|p| version_in(&p.stdout))
+    probe(kind, &["--version"])
+        .filter(|p| p.success)
+        .and_then(|p| version_in(&p.stdout))
 }
 
 /// "2.1.303 (Claude Code)", "codex-cli 0.163.0" and "0.64.0" all carry the version as a numeric word.
@@ -483,7 +504,9 @@ pub fn prompt(spec: &TurnSpec) -> String {
 
 /// `text` without the attachment list that `prompt_text` appends.
 pub(crate) fn without_attachments(text: &str) -> &str {
-    text.split_once("\n\nAttached:\n").map_or(text, |(text, _)| text).trim_end()
+    text.split_once("\n\nAttached:\n")
+        .map_or(text, |(text, _)| text)
+        .trim_end()
 }
 
 fn prompt_text(text: &str, attachments: &[Attachment]) -> String {
@@ -522,7 +545,11 @@ pub fn steer_input(
     session_id: Option<&str>,
     turn_id: Option<&str>,
 ) -> Option<String> {
-    let Prompt { text, attachments, images } = prompt;
+    let Prompt {
+        text,
+        attachments,
+        images,
+    } = prompt;
     match agent {
         AgentKind::Claude => Some(claude::steer_message(
             &prompt_text(text, attachments),
@@ -562,7 +589,11 @@ pub fn is_goal_command(text: &str) -> bool {
 /// Command-line arguments for one turn.
 pub fn turn_args(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
     match agent {
-        AgentKind::Claude => [claude::turn_args(spec), mcp_clis::overrides(agent, spec.root)].concat(),
+        AgentKind::Claude => [
+            claude::turn_args(spec),
+            mcp_clis::overrides(agent, spec.root),
+        ]
+        .concat(),
         AgentKind::Codex => [
             codex::turn_args(),
             mcp_clis::overrides(agent, spec.root),
@@ -595,7 +626,9 @@ pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)
                 .map(|config| ("OPENCODE_CONFIG_CONTENT", config)),
             )
             .collect(),
-        AgentKind::Claude | AgentKind::Codex | AgentKind::Antigravity | AgentKind::Api => Vec::new(),
+        AgentKind::Claude | AgentKind::Codex | AgentKind::Antigravity | AgentKind::Api => {
+            Vec::new()
+        }
     }
 }
 
@@ -605,7 +638,9 @@ pub fn turn_input(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
     match agent {
         // Claude only runs `/goal` from a text-only message, so a goal names its attachments by
         // path and Claude opens them with its own tools.
-        AgentKind::Claude if is_goal_command(spec.text) => vec![claude::user_message(&prompt(spec), &[])],
+        AgentKind::Claude if is_goal_command(spec.text) => {
+            vec![claude::user_message(&prompt(spec), &[])]
+        }
         AgentKind::Claude => vec![claude::user_message(&prompt(spec), spec.images)],
         AgentKind::Codex => codex::turn_input(spec),
         // The OpenCode bridge reads its turn from stdin, and answers and steers after it.
@@ -626,25 +661,47 @@ pub fn parse_line(agent: AgentKind, v: &Value, spec: &TurnSpec, message_id: &str
         AgentKind::OpenCode => opencode::parse(v, spec, message_id),
         AgentKind::Api => api::parse(v, message_id),
     };
-    parsed.into_iter().map(|p| unasked(agent, spec, p)).collect()
+    parsed
+        .into_iter()
+        .map(|p| unasked(agent, spec, p))
+        .collect()
 }
 
 /// An approval the access mode would not have asked the user for, which the agent sent only
 /// because a permission rule may cover it, as a check for the rules.
 fn unasked(agent: AgentKind, spec: &TurnSpec, parsed: Parsed) -> Parsed {
-    let Parsed::Approval { title, detail, reply, questions, target } = parsed else {
+    let Parsed::Approval {
+        title,
+        detail,
+        reply,
+        questions,
+        target,
+    } = parsed
+    else {
         return parsed;
     };
     match target {
-        Some(target) if questions.is_empty() && !mode_asks(agent, spec, &target) => {
-            Parsed::Check { title, detail, reply, target }
-        }
+        Some(target) if questions.is_empty() && !mode_asks(agent, spec, &target) => Parsed::Check {
+            title,
+            detail,
+            reply,
+            target,
+        },
         // Claude's full access still sends questions here, and calls no rule answers, such as
         // leaving plan mode, which are allowed at once.
-        None if questions.is_empty() && agent == AgentKind::Claude && spec.mode == AccessMode::FullAccess => {
+        None if questions.is_empty()
+            && agent == AgentKind::Claude
+            && spec.mode == AccessMode::FullAccess =>
+        {
             Parsed::Send(claude::approval_reply(&reply, true, &HashMap::new()))
         }
-        target => Parsed::Approval { title, detail, reply, questions, target },
+        target => Parsed::Approval {
+            title,
+            detail,
+            reply,
+            questions,
+            target,
+        },
     }
 }
 
@@ -653,14 +710,22 @@ fn mode_asks(agent: AgentKind, spec: &TurnSpec, target: &crate::permissions::Tar
     match (agent, spec.mode) {
         (_, AccessMode::FullAccess) => false,
         // Accept edits takes edits inside the folder without asking.
-        (AgentKind::Claude, AccessMode::AutoAcceptEdits) if target.kind == crate::types::PermissionKind::Edit => {
+        (AgentKind::Claude, AccessMode::AutoAcceptEdits)
+            if target.kind == crate::types::PermissionKind::Edit =>
+        {
             let root = Path::new(spec.root);
-            !target.resources.iter().all(|r| api_tools::resolve(root, r).starts_with(root))
+            !target
+                .resources
+                .iter()
+                .all(|r| api_tools::resolve(root, r).starts_with(root))
         }
         // Claude reads in its own folder without asking.
         (AgentKind::Claude, _) if target.kind == crate::types::PermissionKind::Folder => {
             let root = Path::new(spec.root);
-            !target.resources.iter().all(|r| api_tools::resolve(root, r).starts_with(root))
+            !target
+                .resources
+                .iter()
+                .all(|r| api_tools::resolve(root, r).starts_with(root))
         }
         (AgentKind::OpenCode, mode) => opencode::mode_asks(mode, target.kind),
         _ => true,
@@ -677,7 +742,9 @@ pub fn approval_reply(
     match agent {
         AgentKind::Claude => claude::approval_reply(reply, allow, answers),
         AgentKind::Codex => codex::approval_reply(reply, allow, answers),
-        AgentKind::OpenCode if opencode::uses_serve() => opencode::approval_reply(reply, allow, answers),
+        AgentKind::OpenCode if opencode::uses_serve() => {
+            opencode::approval_reply(reply, allow, answers)
+        }
         AgentKind::Api => api::approval_reply(reply, allow, answers),
         // Antigravity and `opencode run` run headless and never ask.
         AgentKind::Antigravity | AgentKind::OpenCode => String::new(),
@@ -797,7 +864,10 @@ pub(crate) fn one_line(s: &str) -> String {
 /// Strips the project root so paths are project-relative; other paths pass through.
 fn relative(root: &str, path: &str) -> String {
     let root = root.trim_end_matches('/');
-    let path = path.strip_prefix(root).and_then(|p| p.strip_prefix('/')).unwrap_or(path);
+    let path = path
+        .strip_prefix(root)
+        .and_then(|p| p.strip_prefix('/'))
+        .unwrap_or(path);
     path.strip_prefix("./").unwrap_or(path).to_string()
 }
 

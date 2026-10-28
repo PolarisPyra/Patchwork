@@ -1,11 +1,12 @@
 //! Shared data contract between the Rust backend and the TypeScript frontend.
 //! Mirrors `apps/web/src/api.ts` — keep both in sync. All fields serialize as camelCase.
 
+use ts_rs::TS;
 use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum AgentKind {
     Claude,
@@ -28,7 +29,7 @@ impl AgentKind {
     ];
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Theme {
     Light,
@@ -37,7 +38,7 @@ pub enum Theme {
     System,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Integrations {
     pub github: bool,
@@ -46,7 +47,7 @@ pub struct Integrations {
     pub browser: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
     pub id: String,
@@ -54,7 +55,7 @@ pub struct Project {
     pub path: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
     pub onboarded: bool,
@@ -100,7 +101,7 @@ pub struct Settings {
 }
 /// What agents may do without asking: for every project and chat, for chats without a project,
 /// and for each project.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PermissionSettings {
     pub everywhere: ScopeRules,
@@ -111,7 +112,7 @@ pub struct PermissionSettings {
     pub seeded: bool,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ScopeRules {
     /// What each kind of request gets when no rule matches it; a missing kind inherits.
@@ -119,7 +120,7 @@ pub struct ScopeRules {
     pub rules: Vec<PermissionRule>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PermissionRule {
     pub id: String,
@@ -131,7 +132,7 @@ pub struct PermissionRule {
 }
 
 /// The kinds of request a rule can answer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum PermissionKind {
     Edit,
@@ -143,7 +144,7 @@ pub enum PermissionKind {
     Screen,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Effect {
     Allow,
@@ -152,7 +153,7 @@ pub enum Effect {
 }
 
 /// Where a permission rule applies.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", content = "projectId", rename_all = "lowercase")]
 pub enum PermissionScope {
     Everywhere,
@@ -161,7 +162,7 @@ pub enum PermissionScope {
 }
 
 /// The rule that answered an approval: a rule by id, or the scope's default for the kind.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct RuleRef {
     pub scope: PermissionScope,
@@ -171,7 +172,7 @@ pub struct RuleRef {
 
 /// The integrated terminal, as VS Code's `terminal.integrated.*` settings set it up, with its
 /// defaults. The shell is `shell`, shared with the agents.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
 pub struct TerminalSettings {
     /// Arguments for the shell. None is `-l` on macOS, none elsewhere.
@@ -247,7 +248,7 @@ impl Default for TerminalSettings {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum DetectLocale {
     #[default]
@@ -256,7 +257,7 @@ pub enum DetectLocale {
     On,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum CursorStyle {
     #[default]
@@ -265,7 +266,7 @@ pub enum CursorStyle {
     Underline,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum RightClickBehavior {
     #[default]
@@ -277,7 +278,7 @@ pub enum RightClickBehavior {
 }
 
 /// How much each log in `logs/<launch>/` records, as VS Code sets each of its logs.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
 pub struct LoggingSettings {
     /// `main.log`: Patchwork's own messages.
@@ -292,7 +293,9 @@ pub struct LoggingSettings {
 
 /// How much a log records; each level includes the ones before it. Below Trace, no
 /// conversation or file content is written.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum LogLevel {
     Off,
@@ -306,7 +309,7 @@ pub enum LogLevel {
 }
 
 /// How Patchwork keeps itself up to date.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
 pub struct UpdateSettings {
     /// Minutes between checks for a new release: 10 to 60, in steps of 10.
@@ -315,12 +318,14 @@ pub struct UpdateSettings {
 
 impl Default for UpdateSettings {
     fn default() -> Self {
-        Self { check_every_minutes: 10 }
+        Self {
+            check_every_minutes: 10,
+        }
     }
 }
 
 /// Desktop notifications shown while Patchwork is not the focused window.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
 pub struct NotificationSettings {
     /// When a task's goal is met.
@@ -339,7 +344,7 @@ impl Default for NotificationSettings {
 }
 
 /// Settings that trade a little convenience for fewer tokens spent.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
 pub struct TokenSettings {
     /// Shows the token counts under each finished reply.
@@ -377,7 +382,7 @@ impl Default for TokenSettings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentStatus {
     pub kind: AgentKind,
@@ -389,7 +394,7 @@ pub struct AgentStatus {
 }
 
 /// A model the user can pick for an agent. `id: None` is the CLI's own default.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelOption {
     pub id: Option<String>,
@@ -401,7 +406,7 @@ pub struct ModelOption {
 }
 
 /// A slash command advertised by a provider CLI for this thread/workspace.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderSlashCommand {
     pub name: String,
@@ -410,21 +415,21 @@ pub struct ProviderSlashCommand {
 }
 
 /// The shells the Settings dropdown offers, and the one "System default" resolves to.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ShellChoices {
     pub shells: Vec<String>,
     pub default: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
     User,
     Assistant,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum MessageStatus {
     Streaming,
@@ -433,7 +438,7 @@ pub enum MessageStatus {
     Cancelled,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum StepStatus {
     Pending,
@@ -442,7 +447,7 @@ pub enum StepStatus {
     Error,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolCall {
     pub id: String,
@@ -487,8 +492,12 @@ pub fn tool_output(output: &str) -> Option<String> {
 }
 
 /// One step of a reply, in the order it happened.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum Part {
     Text {
         text: String,
@@ -514,7 +523,7 @@ pub enum Part {
 }
 
 /// A shell command the agent started in the background, still running.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct BackgroundTask {
     /// The id of the tool call that started it; stops it.
@@ -524,7 +533,7 @@ pub struct BackgroundTask {
 }
 
 /// A subagent an agent started, e.g. with Claude Code's Task tool.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SubAgent {
     /// The subagent type, e.g. "general-purpose" or "Explore".
@@ -538,7 +547,7 @@ pub struct SubAgent {
     pub prompt: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PlanStep {
     pub text: String,
@@ -546,7 +555,7 @@ pub struct PlanStep {
 }
 
 /// A scheduled task: a prompt that starts a task at a fixed time.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ScheduledTask {
     pub id: String,
@@ -570,7 +579,7 @@ pub struct ScheduledTask {
 }
 
 /// One time a scheduled task's slot came round.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ScheduledRun {
     /// When it started, or for a skipped run the slot it missed, in Unix milliseconds.
@@ -580,7 +589,7 @@ pub struct ScheduledRun {
     pub detail: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum RunOutcome {
     Started,
@@ -590,7 +599,7 @@ pub enum RunOutcome {
 }
 
 /// How often a scheduled task runs. The shapes Codex's own tasks use.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
@@ -616,7 +625,7 @@ pub enum Schedule {
 }
 
 /// A day of the week, written as Codex's schedules write it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub enum Weekday {
     #[serde(rename = "MO")]
     Mon,
@@ -662,7 +671,7 @@ impl Weekday {
 }
 
 /// A plugin bundle: a folder with a `plugin.json`, the hooks it runs, and the apps it names.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Plugin {
     /// The folder name, and what `disabled_plugins` records.
@@ -677,7 +686,7 @@ pub struct Plugin {
 }
 
 /// One handler a plugin runs on a turn event, such as `stop`.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginHook {
     pub event: String,
@@ -685,19 +694,31 @@ pub struct PluginHook {
 }
 
 /// What a hook does. Only `Command` runs today; the rest are listed so the user sees them.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum PluginHookHandler {
-    Command { command: String, timeout_secs: u64 },
-    McpTool { server: String, tool: String },
+    Command {
+        command: String,
+        timeout_secs: u64,
+    },
+    McpTool {
+        server: String,
+        tool: String,
+    },
     Prompt,
     Agent,
     /// A handler type this version does not know.
-    Unsupported { kind: String },
+    Unsupported {
+        kind: String,
+    },
 }
 
 /// A connector app a plugin asks for, as Codex lists them.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginApp {
     pub name: String,
@@ -706,7 +727,7 @@ pub struct PluginApp {
 }
 
 /// How much an agent may do without asking.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum AccessMode {
     /// Ask before commands and file changes.
@@ -719,7 +740,7 @@ pub enum AccessMode {
     FullAccess,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum ApprovalStatus {
     Pending,
@@ -728,7 +749,7 @@ pub enum ApprovalStatus {
 }
 
 /// An action the agent asked permission for during a turn.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Approval {
     pub id: String,
@@ -758,7 +779,7 @@ pub struct Approval {
 }
 
 /// A question the agent asks the user, with the answers it offers.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Question {
     /// The key its answer goes back under.
@@ -770,14 +791,14 @@ pub struct Question {
     pub multi_select: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct QuestionOption {
     pub label: String,
     pub description: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum AttachmentKind {
     Image,
@@ -786,7 +807,7 @@ pub enum AttachmentKind {
 }
 
 /// Something dropped into the composer, sent to the agent with the message.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Attachment {
     pub kind: AttachmentKind,
@@ -832,7 +853,7 @@ impl Attachment {
 }
 
 /// Why a safety classifier blocked a reply, as the agent reports it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Refusal {
     /// The policy area, such as `cyber`; None when the agent names none.
@@ -841,7 +862,7 @@ pub struct Refusal {
 }
 
 /// Tokens a reply used, summed over the model requests it made.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenUsage {
     /// Input that was neither read from nor written to the prompt cache.
@@ -853,7 +874,7 @@ pub struct TokenUsage {
     pub context: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
     pub id: String,
@@ -908,14 +929,14 @@ pub struct Message {
 }
 
 /// Snapshots of a project's files as git tree ids, kept alive by refs under `refs/patchwork`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnTrees {
     pub before: String,
     pub after: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Thread {
     pub id: String,
@@ -971,7 +992,7 @@ pub struct Thread {
 }
 
 /// Where a subagent's thread came from.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadParent {
     pub thread_id: String,
@@ -979,7 +1000,7 @@ pub struct ThreadParent {
 }
 
 /// A folder inside a project. Its threads are those whose `folder_id` names it.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Folder {
     pub id: String,
@@ -987,7 +1008,7 @@ pub struct Folder {
     pub name: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum GoalStatus {
     Active,
@@ -999,7 +1020,7 @@ pub enum GoalStatus {
 }
 
 /// A condition the agent keeps working toward until it is met (`/goal`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Goal {
     pub objective: String,
@@ -1014,7 +1035,7 @@ pub struct Goal {
     pub time_used_seconds: Option<u64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FileChange {
     pub path: String,
@@ -1026,7 +1047,7 @@ pub struct FileChange {
 }
 
 /// A settled burst of file changes in the watched project, with git's state after it.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectChanged {
     pub project_id: String,
@@ -1038,7 +1059,7 @@ pub struct ProjectChanged {
 }
 
 /// One rate-limit window, e.g. the 5-hour session limit.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageWindow {
     pub label: String,
@@ -1049,7 +1070,7 @@ pub struct UsageWindow {
 }
 
 /// Subscription usage limits for one agent, as reported by its provider.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderUsage {
     pub kind: AgentKind,
@@ -1064,7 +1085,7 @@ pub struct ProviderUsage {
 
 /// Where imported conversations come from: an agent CLI's own session
 /// files, or another app (OpenCode, for one) that ran those agents.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum ImportSource {
     Claude,
@@ -1076,7 +1097,7 @@ pub enum ImportSource {
 }
 
 /// Conversations a source has saved on disk that can be imported.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportScan {
     pub kind: ImportSource,
@@ -1089,14 +1110,14 @@ pub struct ImportScan {
 }
 
 /// Emitted on the Tauri event channel `"agent-event"`.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentEventEnvelope {
     pub thread_id: String,
     pub event: AgentEvent,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
@@ -1269,7 +1290,7 @@ pub fn new_id() -> String {
 }
 
 /// A feature flag of the installed Codex CLI, from `codex features list`.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexFeature {
     pub name: String,
@@ -1279,7 +1300,7 @@ pub struct CodexFeature {
 }
 
 /// A model in the installed Codex CLI's catalog, from `codex debug models`.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexModel {
     pub slug: String,
@@ -1291,7 +1312,7 @@ pub struct CodexModel {
 }
 
 /// What the installed Codex CLI offers: its version, flags, and models.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexInfo {
     pub path: String,
@@ -1299,4 +1320,3 @@ pub struct CodexInfo {
     pub features: Vec<CodexFeature>,
     pub models: Vec<CodexModel>,
 }
-

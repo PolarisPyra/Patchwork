@@ -40,7 +40,6 @@ use super::tool_started;
 use super::ToolStart;
 use super::TurnSpec;
 
-
 /// `$CODEX_HOME`, else `~/.codex`.
 pub fn home() -> Option<PathBuf> {
     std::env::var_os("CODEX_HOME")
@@ -322,7 +321,12 @@ fn goal_reply(spec: &TurnSpec, result: &Value) -> String {
 }
 
 /// The approval policy, reviewer, and sandbox for each access mode.
-fn turn_start(spec: &TurnSpec, thread_id: &str, text: &str, resolved_model: Option<&str>) -> String {
+fn turn_start(
+    spec: &TurnSpec,
+    thread_id: &str,
+    text: &str,
+    resolved_model: Option<&str>,
+) -> String {
     let (policy, reviewer, sandbox) = match spec.mode {
         AccessMode::Supervised => ("untrusted", "user", "readOnly"),
         AccessMode::AutoAcceptEdits => ("on-request", "user", "workspaceWrite"),
@@ -370,7 +374,9 @@ fn input_items(text: &str, attachments: &[Attachment], skills_dir: Option<&str>)
     // A message that invokes a skill names it as "$name", which Codex takes with the skill.
     if let Some(dir) = skills_dir {
         let skills = crate::skills::list(std::path::Path::new(dir));
-        if let Some(skill) = crate::skills::mentioned(text).find_map(|name| skills.iter().find(|s| s.name == name)) {
+        if let Some(skill) =
+            crate::skills::mentioned(text).find_map(|name| skills.iter().find(|s| s.name == name))
+        {
             input.push(json!({"type": "skill", "name": skill.name, "path": skill.path}));
         }
     }
@@ -479,7 +485,16 @@ fn codex_item(
         }
         Some("commandExecution") => {
             let command = item["command"].as_str().unwrap_or_default();
-            out.push(tool_started(message_id, ToolStart { id, name: "Shell", summary: one_line(command), subagent: None, parent: None }));
+            out.push(tool_started(
+                message_id,
+                ToolStart {
+                    id,
+                    name: "Shell",
+                    summary: one_line(command),
+                    subagent: None,
+                    parent: None,
+                },
+            ));
             if completed {
                 let exit_failed = item["exitCode"].as_i64().is_some_and(|c| c != 0);
                 let output = item["aggregatedOutput"].as_str().unwrap_or_default();
@@ -492,14 +507,32 @@ fn codex_item(
                 item["server"].as_str().unwrap_or_default(),
                 item["tool"].as_str().unwrap_or_default()
             );
-            out.push(tool_started(message_id, ToolStart { id, name: "MCP", summary, subagent: None, parent: None }));
+            out.push(tool_started(
+                message_id,
+                ToolStart {
+                    id,
+                    name: "MCP",
+                    summary,
+                    subagent: None,
+                    parent: None,
+                },
+            ));
             if completed {
                 out.push(tool_finished(message_id, id, failed, ""));
             }
         }
         Some("webSearch") => {
             let query = item["query"].as_str().unwrap_or_default();
-            out.push(tool_started(message_id, ToolStart { id, name: "WebSearch", summary: one_line(query), subagent: None, parent: None }));
+            out.push(tool_started(
+                message_id,
+                ToolStart {
+                    id,
+                    name: "WebSearch",
+                    summary: one_line(query),
+                    subagent: None,
+                    parent: None,
+                },
+            ));
             if completed {
                 out.push(tool_finished(message_id, id, false, ""));
             }
@@ -512,7 +545,16 @@ fn codex_item(
                 .filter_map(|c| c["path"].as_str())
                 .map(|p| relative(root, p))
                 .collect();
-            out.push(tool_started(message_id, ToolStart { id, name: "Edit", summary: one_line(&paths.join(", ")), subagent: None, parent: None }));
+            out.push(tool_started(
+                message_id,
+                ToolStart {
+                    id,
+                    name: "Edit",
+                    summary: one_line(&paths.join(", ")),
+                    subagent: None,
+                    parent: None,
+                },
+            ));
             if completed {
                 if !failed {
                     out.extend(paths.into_iter().map(|p| file_touched(message_id, p)));
@@ -836,7 +878,10 @@ fn policy_refusal(error: &Value) -> Option<Refusal> {
 }
 
 fn refused(message_id: &str, refusal: Refusal) -> Parsed {
-    Parsed::Event(AgentEvent::Refused { message_id: message_id.into(), refusal })
+    Parsed::Event(AgentEvent::Refused {
+        message_id: message_id.into(),
+        refusal,
+    })
 }
 
 #[cfg(test)]

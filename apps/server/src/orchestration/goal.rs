@@ -8,7 +8,6 @@ use std::time::Duration;
 
 use crate::provider::GoalUpdate;
 use crate::provider;
-use crate::Res;
 use crate::Server;
 use crate::types::AgentEvent;
 use crate::types::AgentEventEnvelope;
@@ -38,7 +37,10 @@ pub(crate) fn is_dismissed(
     dismissed.as_deref() == Some(signature(goal).as_str())
 }
 
-pub(crate) fn clear_dismissal(store: &crate::persistence::Store, thread_id: &str) -> Res<()> {
+pub(crate) fn clear_dismissal(
+    store: &crate::persistence::Store,
+    thread_id: &str,
+) -> Result<(), String> {
     store.set_state(&dismissal_key(thread_id), "")
 }
 
@@ -125,7 +127,7 @@ impl Server {
     /// Clears the goal, in the agent's session too, so the agent does not pick it up again.
     /// A goal's final status remains in the thread until the user clears it. The agent's own
     /// instructions are still cleared when pursuit ends (see `settle`).
-    pub fn stop_goal(self: &Arc<Self>, thread_id: &str) -> Res<()> {
+    pub fn stop_goal(self: &Arc<Self>, thread_id: &str) -> Result<(), String> {
         let Some(thread) = self.store.thread(thread_id) else {
             return Ok(());
         };
@@ -215,8 +217,10 @@ pub(super) fn settle(
             if judged == GoalStatus::Paused && checked {
                 claude_holds = turn.session_id.is_some();
                 if claude_holds
-                    && let Err(e) =
-                        turn.server.store.set_state(&held_key(&turn.thread_id), &signature(g))
+                    && let Err(e) = turn
+                        .server
+                        .store
+                        .set_state(&held_key(&turn.thread_id), &signature(g))
                 {
                     log::warn!("failed to note a held goal: {e}");
                 }

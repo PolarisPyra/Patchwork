@@ -14,6 +14,8 @@
     "tauri": "pnpm --filter patchwork-desktop tauri",
     "format": "prettier --write --log-level warn \"apps/**/*.tsx\"",
     "format:check": "prettier --check \"apps/**/*.tsx\"",
+    "types": "cargo run -q -p patchwork-server --example export_types",
+    "check": "pnpm types && pnpm typecheck && pnpm format:check && cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings",
     "qa:activity-bar": "node scripts/qa/checks/measure-activity-bar.mjs",
     "qa:artifacts": "node scripts/qa/checks/artifacts.mjs",
     "qa:new-panes": "node scripts/qa/checks/new-panes.mjs",

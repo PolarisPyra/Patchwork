@@ -67,7 +67,9 @@ pub fn run() -> i32 {
     let request: Request = match serde_json::from_str(&first) {
         Ok(request) => request,
         Err(e) => {
-            emit(&json!({"type": "bridge.error", "message": format!("Bad turn for OpenCode: {e}")}));
+            emit(
+                &json!({"type": "bridge.error", "message": format!("Bad turn for OpenCode: {e}")}),
+            );
             return 1;
         }
     };
@@ -106,9 +108,15 @@ fn turn(request: &Request, tx: &Sender<Msg>, rx: &Receiver<Msg>) -> Result<(), S
     let session_id = match &request.session_id {
         Some(id) if api.get(&format!("/api/session/{id}")).is_ok() => {
             if let Some(model) = model_ref(request) {
-                api.post(&format!("/api/session/{id}/model"), &json!({ "model": model }))?;
+                api.post(
+                    &format!("/api/session/{id}/model"),
+                    &json!({ "model": model }),
+                )?;
             }
-            api.post(&format!("/api/session/{id}/agent"), &json!({ "agent": request.agent }))?;
+            api.post(
+                &format!("/api/session/{id}/agent"),
+                &json!({ "agent": request.agent }),
+            )?;
             id.clone()
         }
         // The session is gone, so the turn runs again in a new one with the conversation.
@@ -173,12 +181,14 @@ fn send(api: &Api, session_id: &str, request: &Request) -> Result<(), String> {
     };
     let (route, body) = match &request.command {
         Some(command) if command.name == "compact" => ("compact", json!({})),
-        Some(command) if known.contains(&command.name) => {
-            ("command", json!({ "name": command.name, "text": command.text }))
-        }
+        Some(command) if known.contains(&command.name) => (
+            "command",
+            json!({ "name": command.name, "text": command.text }),
+        ),
         _ => ("prompt", prompt_body(&request.text, &request.files)),
     };
-    api.post(&format!("/api/session/{session_id}/{route}"), &body).map(drop)
+    api.post(&format!("/api/session/{session_id}/{route}"), &body)
+        .map(drop)
 }
 
 /// Lists the folder's commands for Patchwork's slash menu, and returns their names.
@@ -186,7 +196,9 @@ fn commands(api: &Api) -> Vec<String> {
     let started = std::time::Instant::now();
     // A fresh server lists none until it has loaded the folder.
     let list = loop {
-        let Ok(listed) = api.get("/api/command") else { return Vec::new() };
+        let Ok(listed) = api.get("/api/command") else {
+            return Vec::new();
+        };
         let list = listed["data"].as_array().cloned().unwrap_or_default();
         if !list.is_empty() || started.elapsed() > COMMANDS_TIMEOUT {
             break list;
@@ -194,12 +206,16 @@ fn commands(api: &Api) -> Vec<String> {
         std::thread::sleep(Duration::from_millis(100));
     };
     emit(&json!({"type": "bridge.commands", "commands": list}));
-    list.iter().filter_map(|c| c["name"].as_str().map(String::from)).collect()
+    list.iter()
+        .filter_map(|c| c["name"].as_str().map(String::from))
+        .collect()
 }
 
 /// Acts on one line from Patchwork: an approval or question reply, a steering message, or a stop.
 fn command(api: &Api, session_id: &str, line: &str, steers: &mut HashSet<String>) {
-    let Ok(v) = serde_json::from_str::<Value>(line) else { return };
+    let Ok(v) = serde_json::from_str::<Value>(line) else {
+        return;
+    };
     let request = v["requestID"].as_str().unwrap_or_default();
     let result = match v["type"].as_str() {
         Some("permission") => api
@@ -215,7 +231,10 @@ fn command(api: &Api, session_id: &str, line: &str, steers: &mut HashSet<String>
             )
             .map(drop),
         Some("question_reject") => api
-            .post(&format!("/api/session/{session_id}/question/{request}/reject"), &json!({}))
+            .post(
+                &format!("/api/session/{session_id}/question/{request}/reject"),
+                &json!({}),
+            )
             .map(drop),
         Some("form") => api
             .post(
@@ -293,8 +312,12 @@ fn events(api: &Api, session_id: &str, tx: Sender<Msg>) -> Result<(), String> {
         let mut tools: HashMap<String, (String, Value)> = HashMap::new();
         for line in BufReader::new(response).lines() {
             let Ok(line) = line else { break };
-            let Some(data) = line.strip_prefix("data:") else { continue };
-            let Ok(mut event) = serde_json::from_str::<Value>(data.trim()) else { continue };
+            let Some(data) = line.strip_prefix("data:") else {
+                continue;
+            };
+            let Ok(mut event) = serde_json::from_str::<Value>(data.trim()) else {
+                continue;
+            };
             // A form names its session inside the form.
             let owner = event["data"]["sessionID"]
                 .as_str()
@@ -357,7 +380,11 @@ struct Server {
 
 impl Server {
     fn start(request: &Request) -> Result<Self, String> {
-        let password = format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
+        let password = format!(
+            "{}{}",
+            uuid::Uuid::new_v4().simple(),
+            uuid::Uuid::new_v4().simple()
+        );
         let mut child = crate::host_command(&request.bin)
             .args(["serve", "--hostname", "127.0.0.1", "--port", "0"])
             .current_dir(&request.root)
@@ -370,8 +397,14 @@ impl Server {
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| format!("Failed to start OpenCode: {e}"))?;
-        let stdout = child.stdout.take().ok_or("OpenCode's output is unavailable")?;
-        let stderr = child.stderr.take().ok_or("OpenCode's output is unavailable")?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or("OpenCode's output is unavailable")?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or("OpenCode's output is unavailable")?;
         // The server's own messages go to the bridge's stderr, where Patchwork keeps the tail.
         std::thread::spawn(move || {
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
@@ -389,7 +422,11 @@ impl Server {
                 }
             }
         });
-        let mut server = Server { child, url: String::new(), password };
+        let mut server = Server {
+            child,
+            url: String::new(),
+            password,
+        };
         server.url = url
             .recv_timeout(START_TIMEOUT)
             .map_err(|_| "OpenCode's server did not start".to_string())?;
@@ -422,7 +459,8 @@ impl Api {
                 .build()
                 .into()
         };
-        let credentials = base64::engine::general_purpose::STANDARD.encode(format!("opencode:{password}"));
+        let credentials =
+            base64::engine::general_purpose::STANDARD.encode(format!("opencode:{password}"));
         Api {
             agent: config(Some(Duration::from_secs(30))),
             stream_agent: config(None),
@@ -475,7 +513,10 @@ impl Api {
             .call()
             .map_err(|e| format!("OpenCode's event stream failed: {e}"))?;
         if !response.status().is_success() {
-            return Err(format!("OpenCode's event stream answered {}", response.status()));
+            return Err(format!(
+                "OpenCode's event stream answered {}",
+                response.status()
+            ));
         }
         Ok(response.into_body().into_reader())
     }

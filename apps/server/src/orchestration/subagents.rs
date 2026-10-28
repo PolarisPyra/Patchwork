@@ -25,7 +25,6 @@ use super::stream::publish;
 use super::turn::assistant_message;
 use super::turn::Turn;
 
-
 /// Subagents the agent started: tool call id → the agent's own task id.
 pub(super) type Tasks = Arc<Mutex<HashMap<String, String>>>;
 

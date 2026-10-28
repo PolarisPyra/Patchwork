@@ -64,12 +64,19 @@ pub fn sessions(source: ImportSource, default_agent: AgentKind) -> Vec<Session> 
         .filter(|s| {
             let keep = s.messages.iter().any(|m| m.role == Role::User);
             if !keep {
-                ilog!("{source:?}: skipped {} ({}): no user message", s.session_id, s.cwd);
+                ilog!(
+                    "{source:?}: skipped {} ({}): no user message",
+                    s.session_id,
+                    s.cwd
+                );
             }
             keep
         })
         .collect();
-    ilog!("{source:?}: read {read} conversations, {} with a user message", kept.len());
+    ilog!(
+        "{source:?}: read {read} conversations, {} with a user message",
+        kept.len()
+    );
     kept
 }
 
@@ -180,7 +187,11 @@ pub fn transcript(messages: &[Message]) -> String {
     let mut turns = Vec::new();
     let mut size = 0;
     for message in messages.iter().rev() {
-        let who = if message.role == Role::User { "User" } else { "Assistant" };
+        let who = if message.role == Role::User {
+            "User"
+        } else {
+            "Assistant"
+        };
         let turn = format!("{who}:\n{}", message.text);
         size += turn.len();
         if size > MAX_CONTEXT_BYTES {

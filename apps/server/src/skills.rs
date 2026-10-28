@@ -1,6 +1,7 @@
 //! Patchwork's skills: folders holding a `SKILL.md`, all kept in one skills folder that every
 //! agent loads. The folder is `skills` in the config folder unless the user picks another.
 
+use ts_rs::TS;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
@@ -34,7 +35,7 @@ pub fn dir(settings: &Settings) -> PathBuf {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Skill {
     pub name: String,
@@ -57,8 +58,16 @@ pub fn list(dir: &Path) -> Vec<Skill> {
             let (name, description) = frontmatter(&text);
             let name = name.unwrap_or_else(|| entry.file_name().to_string_lossy().into_owned());
             // The real path, also for skills reached through the links agents load.
-            let path = std::fs::canonicalize(&path).unwrap_or(path).to_string_lossy().into_owned();
-            Some(Skill { name, description, path, enabled: true })
+            let path = std::fs::canonicalize(&path)
+                .unwrap_or(path)
+                .to_string_lossy()
+                .into_owned();
+            Some(Skill {
+                name,
+                description,
+                path,
+                enabled: true,
+            })
         })
         .collect();
     skills.sort_by(|a, b| a.name.cmp(&b.name));
@@ -117,7 +126,9 @@ pub fn mentioned(text: &str) -> impl Iterator<Item = &str> {
 /// The first skill a message names as `$name`, and the text it goes with: the text after the
 /// name when the message starts with it, or else the whole message as written.
 pub fn invoked<'a>(text: &'a str, skills: &[Skill]) -> Option<(Skill, &'a str)> {
-    let skill = mentioned(text).find_map(|name| skills.iter().find(|s| s.name == name))?.clone();
+    let skill = mentioned(text)
+        .find_map(|name| skills.iter().find(|s| s.name == name))?
+        .clone();
     let rest = text.trim_start();
     let after = rest
         .strip_prefix('$')
@@ -136,7 +147,10 @@ pub fn invocation(agent: AgentKind, skill: &Skill, rest: &str) -> String {
         AgentKind::Codex if mentioned(rest).any(|name| name == skill.name) => rest.to_string(),
         AgentKind::Codex => format!("${} {rest}", skill.name),
         AgentKind::OpenCode | AgentKind::Antigravity | AgentKind::Api => {
-            format!("Use the {} skill: read {} and follow it.\n\n{rest}", skill.name, skill.path)
+            format!(
+                "Use the {} skill: read {} and follow it.\n\n{rest}",
+                skill.name, skill.path
+            )
         }
     };
     text.trim_end().to_string()
@@ -155,7 +169,11 @@ pub fn claude_plugin(settings: &Settings) -> Option<PathBuf> {
     let manifest = plugin.join(".claude-plugin");
     std::fs::create_dir_all(&manifest).ok()?;
     let json = format!("{{\"name\":\"{PLUGIN}\"}}\n");
-    if std::fs::read_to_string(manifest.join("plugin.json")).ok().as_deref() != Some(json.as_str()) {
+    if std::fs::read_to_string(manifest.join("plugin.json"))
+        .ok()
+        .as_deref()
+        != Some(json.as_str())
+    {
         std::fs::write(manifest.join("plugin.json"), json).ok()?;
     }
     let links = plugin.join("skills");
@@ -173,7 +191,10 @@ pub fn claude_plugin(settings: &Settings) -> Option<PathBuf> {
         .collect();
     for entry in std::fs::read_dir(&links).ok()?.filter_map(Result::ok) {
         let target = std::fs::read_link(entry.path()).ok();
-        if !wanted.iter().any(|(name, folder)| *name == entry.file_name() && target.as_ref() == Some(folder)) {
+        if !wanted
+            .iter()
+            .any(|(name, folder)| *name == entry.file_name() && target.as_ref() == Some(folder))
+        {
             let _ = std::fs::remove_file(entry.path());
         }
     }
@@ -217,7 +238,9 @@ pub fn folders(settings: &Settings) -> Vec<PathBuf> {
 /// The folder agents load skills from: the links to the enabled skills, or the skills folder
 /// itself where there are no links.
 pub fn loaded_dir(settings: &Settings) -> PathBuf {
-    claude_plugin(settings).map(|plugin| plugin.join("skills")).unwrap_or_else(|| dir(settings))
+    claude_plugin(settings)
+        .map(|plugin| plugin.join("skills"))
+        .unwrap_or_else(|| dir(settings))
 }
 
 /// Watches the skills folder until dropped.

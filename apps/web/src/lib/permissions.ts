@@ -91,7 +91,7 @@ export type AllowChoice = "once" | "local" | "everywhere";
 
 const choiceKey = "patchwork-allow-choice";
 
-export function lastAllowChoice(kind: PermissionKind | undefined): AllowChoice {
+export function lastAllowChoice(kind: PermissionKind | null | undefined): AllowChoice {
   if (!kind) return "once";
   try {
     const saved = JSON.parse(localStorage.getItem(choiceKey) ?? "{}") as Record<
@@ -104,7 +104,7 @@ export function lastAllowChoice(kind: PermissionKind | undefined): AllowChoice {
   }
 }
 
-export function rememberAllowChoice(kind: PermissionKind | undefined, choice: AllowChoice) {
+export function rememberAllowChoice(kind: PermissionKind | null | undefined, choice: AllowChoice) {
   if (!kind) return;
   try {
     const saved = JSON.parse(localStorage.getItem(choiceKey) ?? "{}") as Record<

@@ -25,6 +25,7 @@
 //! disk. The thread writes each burst of records out as soon as it arrives, so a killed app
 //! loses at most the records still queued.
 
+use ts_rs::TS;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
@@ -172,7 +173,7 @@ pub fn channels() -> Vec<String> {
 }
 
 /// What the Output panel reads of a log.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LogChunk {
     pub text: String,

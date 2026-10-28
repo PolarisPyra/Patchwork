@@ -21,7 +21,12 @@ pub fn sessions() -> Vec<Session> {
     let titles = thread_names(&home.join("session_index.jsonl"));
     let dir = home.join("sessions");
     let files = provider::codex::rollout_files(&dir);
-    ilog!("Codex: reading {} (exists: {}), {} rollout files", dir.display(), dir.is_dir(), files.len());
+    ilog!(
+        "Codex: reading {} (exists: {}), {} rollout files",
+        dir.display(),
+        dir.is_dir(),
+        files.len()
+    );
     files
         .into_iter()
         .filter_map(|(_, path)| {
@@ -29,7 +34,10 @@ pub fn sessions() -> Vec<Session> {
                 .map_err(|e| ilog!("Codex: couldn't read {}: {e}", path.display()))
                 .ok()?;
             let Some(mut session) = parse(BufReader::new(file)) else {
-                ilog!("Codex: skipped {}: no session_meta with an id and folder", path.display());
+                ilog!(
+                    "Codex: skipped {}: no session_meta with an id and folder",
+                    path.display()
+                );
                 return None;
             };
             session.title = titles.get(&session.session_id).cloned();

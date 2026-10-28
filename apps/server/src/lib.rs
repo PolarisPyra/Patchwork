@@ -7,6 +7,7 @@ pub const VERSION: &str = env!("PATCHWORK_VERSION");
 pub mod agents;
 pub mod computer;
 pub mod debug_log;
+pub mod error;
 pub mod import;
 pub mod orchestration;
 pub mod permissions;
@@ -31,7 +32,13 @@ use orchestration::{ApprovalDecision, Delivery, FollowUpInput, Runner, TurnReque
 use persistence::Store;
 
 use crate::import::debug_log::ilog;
-use crate::types::{AgentKind, Project, Settings, LogLevel, Role, MessageStatus, StepStatus, AccessMode, ApprovalStatus, Attachment, Message, Thread, Folder, GoalStatus, ImportSource, ImportScan, AgentEventEnvelope, AgentEvent, now_ms, new_id};
+use crate::types::{
+    AgentKind, Project, Settings, LogLevel, Role, MessageStatus, StepStatus, AccessMode,
+    ApprovalStatus, Attachment, Message, Thread, Folder, GoalStatus, ImportSource, ImportScan,
+    AgentEventEnvelope, AgentEvent, now_ms, new_id,
+};
+
+pub use error::Error;
 
 pub type Res<T> = Result<T, String>;
 
@@ -145,7 +152,7 @@ fn host_env_changes() -> Vec<(std::ffi::OsString, Option<String>)> {
     changes
 }
 
-fn clean_name(name: &str) -> Res<String> {
+fn clean_name(name: &str) -> Result<String, String> {
     let name = name.trim();
     if name.is_empty() {
         return Err("Name can't be empty".into());
@@ -166,7 +173,11 @@ pub fn title_from(text: &str) -> String {
     } else {
         line
     };
-    let title = if objective.is_empty() { line } else { objective };
+    let title = if objective.is_empty() {
+        line
+    } else {
+        objective
+    };
     title.chars().take(60).collect()
 }
 
@@ -267,7 +278,9 @@ fn thread_summary(thread: &Thread) -> Thread {
             *i == last
                 || m.status == MessageStatus::Streaming
                 || m.queued
-                || m.approvals.iter().any(|a| a.status == ApprovalStatus::Pending)
+                || m.approvals
+                    .iter()
+                    .any(|a| a.status == ApprovalStatus::Pending)
         })
         .map(|(_, m)| m.clone())
         .collect();
@@ -352,9 +365,12 @@ impl Server {
 
     /// Downloads Antigravity's install script to a file, then runs it into Patchwork's CLI
     /// folder. The script is saved first, so the file that runs is the one that was fetched.
-    pub fn install_antigravity(&self) -> Res<()> {
+    pub fn install_antigravity(&self) -> Result<(), String> {
         if cfg!(windows) {
-            return Err("Setting up the Antigravity CLI from Patchwork is for macOS and Linux for now.".into());
+            return Err(
+                "Setting up the Antigravity CLI from Patchwork is for macOS and Linux for now."
+                    .into(),
+            );
         }
         std::fs::create_dir_all(&self.clis_dir).map_err(|e| e.to_string())?;
         let script = self.clis_dir.join("install-antigravity.sh");
@@ -397,7 +413,7 @@ impl Server {
         mime_type: &str,
         data: &str,
         name: Option<&str>,
-    ) -> Res<Attachment> {
+    ) -> Result<Attachment, String> {
         use base64::Engine;
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(data)
@@ -412,7 +428,7 @@ impl Server {
         mime_type: &str,
         bytes: &[u8],
         name: Option<&str>,
-    ) -> Res<Attachment> {
+    ) -> Result<Attachment, String> {
         let ext = match mime_type {
             "image/png" => "png",
             "image/jpeg" => "jpg",
@@ -433,7 +449,7 @@ impl Server {
 
     /// Saves text pasted from the clipboard as a file, and returns it as an attachment the agent
     /// opens itself, so a long paste does not fill the composer.
-    pub fn save_pasted_text(&self, text: &str) -> Res<Attachment> {
+    pub fn save_pasted_text(&self, text: &str) -> Result<Attachment, String> {
         std::fs::create_dir_all(&self.pasted_dir).map_err(|e| e.to_string())?;
         let path = self.pasted_dir.join(format!("{}.txt", new_id()));
         std::fs::write(&path, text).map_err(|e| e.to_string())?;
@@ -449,7 +465,7 @@ impl Server {
         self: &Arc<Self>,
         project_id: &str,
         on_change: impl Fn(types::ProjectChanged) + Send + 'static,
-    ) -> Res<()> {
+    ) -> Result<(), String> {
         let mut current = self
             .project_watch
             .lock()
@@ -463,7 +479,9 @@ impl Server {
         let server = Arc::downgrade(self);
         let id = project_id.to_string();
         let watcher = watch::ProjectWatcher::start(&watched, move |burst| {
-            let Some(server) = server.upgrade() else { return };
+            let Some(server) = server.upgrade() else {
+                return;
+            };
             let changes = workspace::git_changes(&root).ok();
             if let Some(changes) = &changes {
                 server.note_project_changes(&id, changes, &burst);
@@ -484,7 +502,7 @@ impl Server {
     pub fn watch_skills(
         self: &Arc<Self>,
         on_change: impl Fn(Vec<skills::Skill>) + Send + 'static,
-    ) -> Res<()> {
+    ) -> Result<(), String> {
         let mut current = self
             .skills_watch
             .lock()
@@ -508,7 +526,7 @@ impl Server {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 
-    pub fn project_root(&self, project_id: &str) -> Res<String> {
+    pub fn project_root(&self, project_id: &str) -> Result<String, String> {
         self.store
             .settings()
             .projects
@@ -520,7 +538,7 @@ impl Server {
 
     // ---- settings & projects ---------------------------------------------
 
-    pub fn save_settings(&self, settings: Settings) -> Res<()> {
+    pub fn save_settings(&self, settings: Settings) -> Result<(), String> {
         follow_log_levels(&settings);
         let guards_changed =
             !permissions::same_guards(&self.store.settings().permissions, &settings.permissions);
@@ -535,7 +553,7 @@ impl Server {
     }
 
     /// Adds `project` unless its path is already registered; returns the stored one.
-    fn register_project(&self, project: Project, activate: bool) -> Res<Project> {
+    fn register_project(&self, project: Project, activate: bool) -> Result<Project, String> {
         self.store.update_settings(|s| {
             let p = match s.projects.iter().find(|p| p.path == project.path) {
                 Some(existing) => existing.clone(),
@@ -551,15 +569,15 @@ impl Server {
         })
     }
 
-    pub fn add_project(&self, path: &str) -> Res<Project> {
+    pub fn add_project(&self, path: &str) -> Result<Project, String> {
         self.register_project(workspace::make_project(path)?, true)
     }
 
-    pub fn create_project(&self, parent: &str, name: &str) -> Res<Project> {
+    pub fn create_project(&self, parent: &str, name: &str) -> Result<Project, String> {
         self.register_project(workspace::create_project_dir(parent, name)?, true)
     }
 
-    pub fn rename_project(&self, id: &str, name: &str) -> Res<()> {
+    pub fn rename_project(&self, id: &str, name: &str) -> Result<(), String> {
         let name = clean_name(name)?;
         self.store.update_settings(|s| {
             let project = s.projects.iter_mut().find(|p| p.id == id);
@@ -570,7 +588,7 @@ impl Server {
 
     /// Points a project at another folder, such as after it was moved or renamed. Agents keep
     /// their sessions by folder, so the project's tasks start new ones, sent their transcript.
-    pub fn relocate_project(&self, id: &str, path: &str) -> Res<()> {
+    pub fn relocate_project(&self, id: &str, path: &str) -> Result<(), String> {
         let path = workspace::make_project(path)?.path;
         let threads: Vec<String> = self
             .store
@@ -605,7 +623,7 @@ impl Server {
         Ok(())
     }
 
-    pub fn remove_project(&self, id: &str) -> Res<()> {
+    pub fn remove_project(&self, id: &str) -> Result<(), String> {
         self.store.update_settings(|s| {
             s.projects.retain(|p| p.id != id);
             if s.active_project_id.as_deref() == Some(id) {
@@ -629,12 +647,12 @@ impl Server {
     }
 
     /// One thread with all its messages.
-    pub fn thread(&self, id: &str) -> Res<Thread> {
+    pub fn thread(&self, id: &str) -> Result<Thread, String> {
         Ok(self.store.thread(id).ok_or("Task not found")?)
     }
 
     /// Puts `ids` in `folder_id` (None: the top level) in their new order.
-    pub fn reorder_threads(&self, ids: &[String], folder_id: Option<&str>) -> Res<()> {
+    pub fn reorder_threads(&self, ids: &[String], folder_id: Option<&str>) -> Result<(), String> {
         if let Some(folder_id) = folder_id {
             self.folder(folder_id)?;
         }
@@ -642,8 +660,8 @@ impl Server {
     }
 
     /// Files of a project that a mention can refer to.
-    pub fn list_files(&self, project_id: &str) -> Res<Vec<String>> {
-        workspace::list_files(&self.project_root(project_id)?)
+    pub fn list_files(&self, project_id: &str) -> Result<Vec<String>, String> {
+        Ok(workspace::list_files(&self.project_root(project_id)?)?)
     }
 
     /// The thread that was open when the app last closed, if one was recorded.
@@ -651,7 +669,7 @@ impl Server {
         self.store.state(LAST_THREAD_KEY)
     }
 
-    pub fn set_last_thread_id(&self, id: &str) -> Res<()> {
+    pub fn set_last_thread_id(&self, id: &str) -> Result<(), String> {
         self.store.set_state(LAST_THREAD_KEY, id)
     }
 
@@ -663,7 +681,7 @@ impl Server {
             .unwrap_or_default()
     }
 
-    pub fn set_collapsed_sections(&self, ids: &[String]) -> Res<()> {
+    pub fn set_collapsed_sections(&self, ids: &[String]) -> Result<(), String> {
         let json = serde_json::to_string(ids).map_err(|e| e.to_string())?;
         self.store.set_state(COLLAPSED_KEY, &json)
     }
@@ -674,7 +692,7 @@ impl Server {
         self.store.folders()
     }
 
-    fn folder(&self, id: &str) -> Res<Folder> {
+    fn folder(&self, id: &str) -> Result<Folder, String> {
         self.store
             .folders()
             .into_iter()
@@ -682,7 +700,7 @@ impl Server {
             .ok_or_else(|| format!("unknown folder {id}"))
     }
 
-    pub fn create_folder(&self, project_id: &str, name: &str) -> Res<Folder> {
+    pub fn create_folder(&self, project_id: &str, name: &str) -> Result<Folder, String> {
         self.project_root(project_id)?;
         let folder = Folder {
             id: new_id(),
@@ -693,20 +711,26 @@ impl Server {
         Ok(folder)
     }
 
-    pub fn rename_folder(&self, id: &str, name: &str) -> Res<()> {
+    pub fn rename_folder(&self, id: &str, name: &str) -> Result<(), String> {
         let name = clean_name(name)?;
         self.folder(id)?;
         self.store.rename_folder(id, &name)
     }
 
     /// Its tasks move to the project's top level.
-    pub fn remove_folder(&self, id: &str) -> Res<()> {
+    pub fn remove_folder(&self, id: &str) -> Result<(), String> {
         self.folder(id)?;
         self.store.delete_folder(id)
     }
 
-    pub fn create_thread(&self, new: NewThread) -> Res<Thread> {
-        let NewThread { project_id, agent, model, access_mode, effort } = new;
+    pub fn create_thread(&self, new: NewThread) -> Result<Thread, String> {
+        let NewThread {
+            project_id,
+            agent,
+            model,
+            access_mode,
+            effort,
+        } = new;
         if let Some(id) = &project_id {
             self.project_root(id)?;
         }
@@ -747,7 +771,10 @@ impl Server {
     ///
     /// A task whose project no longer exists runs as a chat, so a deleted project does not stop
     /// the schedule without saying so.
-    pub fn start_scheduled_task(self: &Arc<Self>, task: &types::ScheduledTask) -> Res<Thread> {
+    pub fn start_scheduled_task(
+        self: &Arc<Self>,
+        task: &types::ScheduledTask,
+    ) -> Result<Thread, String> {
         let project_id = task.project_id.clone().filter(|id| {
             self.store
                 .settings()
@@ -780,7 +807,7 @@ impl Server {
     }
 
     /// Starts one scheduled task now, whatever its schedule says.
-    pub fn run_scheduled_task(self: &Arc<Self>, id: &str) -> Res<Thread> {
+    pub fn run_scheduled_task(self: &Arc<Self>, id: &str) -> Result<Thread, String> {
         let task = self
             .store
             .scheduled_tasks()
@@ -830,7 +857,12 @@ impl Server {
                 scheduled::Action::Run if self.busy_in_project(task.project_id.as_deref()) => {}
                 scheduled::Action::Run => match self.start_scheduled_task(task) {
                     Ok(thread) => {
-                        let ran = self.store.scheduled_task_ran(&task.id, now, next(), Ok(thread.id.as_str()));
+                        let ran = self.store.scheduled_task_ran(
+                            &task.id,
+                            now,
+                            next(),
+                            Ok(thread.id.as_str()),
+                        );
                         if let Err(e) = ran {
                             log::warn!("scheduled task {}: {e}", task.id);
                         }
@@ -839,7 +871,9 @@ impl Server {
                     Err(e) => {
                         log::warn!("scheduled task {} did not start: {e}", task.name);
                         // Record the attempt so a task that cannot start does not retry every tick.
-                        let _ = self.store.scheduled_task_ran(&task.id, now, next(), Err(e.as_str()));
+                        let _ =
+                            self.store
+                                .scheduled_task_ran(&task.id, now, next(), Err(e.as_str()));
                     }
                 },
             }
@@ -847,14 +881,14 @@ impl Server {
         started
     }
 
-    pub fn rename_thread(&self, id: &str, title: &str) -> Res<()> {
+    pub fn rename_thread(&self, id: &str, title: &str) -> Result<(), String> {
         let title = clean_name(title)?;
         self.store.thread(id).ok_or("Task not found")?;
         self.store.update_thread(id, |t| t.title = title)
     }
 
     /// Moves a thread to the archive, or back to the task list. Archiving stops its running turn.
-    pub fn set_thread_archived(&self, id: &str, archived: bool) -> Res<()> {
+    pub fn set_thread_archived(&self, id: &str, archived: bool) -> Result<(), String> {
         self.store.thread(id).ok_or("Task not found")?;
         if archived {
             self.runner.cancel(id, None);
@@ -904,7 +938,12 @@ impl Server {
     /// Sets the thread's model. The agent can only change before the first message,
     /// since the conversation session belongs to one CLI. An imported chat has no session yet,
     /// so it can take any agent until its first turn.
-    pub fn set_thread_model(&self, id: &str, agent: AgentKind, model: Option<String>) -> Res<()> {
+    pub fn set_thread_model(
+        &self,
+        id: &str,
+        agent: AgentKind,
+        model: Option<String>,
+    ) -> Result<(), String> {
         let thread = self.store.thread(id).ok_or("Task not found")?;
         if thread.agent != agent && !thread.messages.is_empty() && !thread.context_pending {
             return Err("The agent can't change after the conversation has started".into());
@@ -922,7 +961,7 @@ impl Server {
     }
 
     /// Takes effect from the thread's next turn.
-    pub fn set_thread_access_mode(&self, id: &str, mode: AccessMode) -> Res<()> {
+    pub fn set_thread_access_mode(&self, id: &str, mode: AccessMode) -> Result<(), String> {
         let thread = self.store.thread(id).ok_or("Task not found")?;
         self.store.update_thread(id, |t| t.access_mode = mode)?;
         // An idle agent was started with the old setting.
@@ -933,7 +972,7 @@ impl Server {
     }
 
     /// Writes `text` to `path`, a file the user picked in a save dialog.
-    pub fn save_text_file(&self, path: &str, text: &str) -> Res<()> {
+    pub fn save_text_file(&self, path: &str, text: &str) -> Result<(), String> {
         std::fs::write(path, text).map_err(|e| e.to_string())
     }
 
@@ -948,13 +987,16 @@ impl Server {
 
     fn thread_agents(&self, thread_id: &str) -> Vec<agents::Agent> {
         let project_id = self.store.with_threads(|threads| {
-            threads.iter().find(|t| t.id == thread_id).and_then(|t| t.project_id.clone())
+            threads
+                .iter()
+                .find(|t| t.id == thread_id)
+                .and_then(|t| t.project_id.clone())
         });
         self.project_agents(project_id.as_deref())
     }
 
     /// Makes `role` the chat's custom agent, or none; the agent is told with the next message.
-    pub fn set_thread_role(&self, id: &str, role: Option<String>) -> Res<()> {
+    pub fn set_thread_role(&self, id: &str, role: Option<String>) -> Result<(), String> {
         let mut changed = false;
         self.store.update_thread(id, |t| {
             if t.role != role {
@@ -964,7 +1006,10 @@ impl Server {
             }
         })?;
         if changed {
-            self.emit(AgentEventEnvelope { thread_id: id.into(), event: AgentEvent::RoleChanged { role } });
+            self.emit(AgentEventEnvelope {
+                thread_id: id.into(),
+                event: AgentEvent::RoleChanged { role },
+            });
         }
         Ok(())
     }
@@ -984,7 +1029,10 @@ impl Server {
             return;
         };
         let Some((agent, model)) = self.store.with_threads(|threads| {
-            threads.iter().find(|t| t.id == thread_id).map(|t| (t.agent, t.model.clone()))
+            threads
+                .iter()
+                .find(|t| t.id == thread_id)
+                .map(|t| (t.agent, t.model.clone()))
         }) else {
             return;
         };
@@ -1000,7 +1048,9 @@ impl Server {
         match self.set_thread_model(thread_id, agent, Some(offered.clone())) {
             Ok(()) => self.emit(AgentEventEnvelope {
                 thread_id: thread_id.into(),
-                event: AgentEvent::ModelChanged { model: Some(offered) },
+                event: AgentEvent::ModelChanged {
+                    model: Some(offered),
+                },
             }),
             Err(e) => log::warn!("failed to switch to the agent's model: {e}"),
         }
@@ -1010,9 +1060,17 @@ impl Server {
     /// chat's own agent when its agent was not told of it yet: the role was changed by hand, or
     /// `fresh`, a new agent session, knows of none. Also the primary agent it makes the chat's
     /// agent, which `told_role` keeps once the message is sent.
-    fn summon_agents(&self, thread_id: &str, text: String, fresh: bool) -> (String, Option<String>) {
+    fn summon_agents(
+        &self,
+        thread_id: &str,
+        text: String,
+        fresh: bool,
+    ) -> (String, Option<String>) {
         let Some((role, pending)) = self.store.with_threads(|threads| {
-            threads.iter().find(|t| t.id == thread_id).map(|t| (t.role.clone(), t.role_pending))
+            threads
+                .iter()
+                .find(|t| t.id == thread_id)
+                .map(|t| (t.role.clone(), t.role_pending))
         }) else {
             return (text, None);
         };
@@ -1033,9 +1091,9 @@ impl Server {
     /// Records that the chat's agent was told of its role with a message just sent, and makes
     /// `switched`, a primary agent the message summoned, the chat's agent.
     fn told_role(&self, thread_id: &str, switched: Option<String>) {
-        let pending = self.store.with_threads(|threads| {
-            threads.iter().any(|t| t.id == thread_id && t.role_pending)
-        });
+        let pending = self
+            .store
+            .with_threads(|threads| threads.iter().any(|t| t.id == thread_id && t.role_pending));
         if !pending && switched.is_none() {
             return;
         }
@@ -1056,7 +1114,7 @@ impl Server {
     }
 
     /// Takes effect from the thread's next turn.
-    pub fn set_thread_plan_mode(&self, id: &str, on: bool) -> Res<()> {
+    pub fn set_thread_plan_mode(&self, id: &str, on: bool) -> Result<(), String> {
         let thread = self.store.thread(id).ok_or("Task not found")?;
         self.store.update_thread(id, |t| t.plan_mode = on)?;
         // An idle agent was started with the old setting.
@@ -1067,9 +1125,10 @@ impl Server {
     }
 
     /// Takes effect from the thread's next turn.
-    pub fn set_thread_effort(&self, id: &str, effort: Option<String>) -> Res<()> {
+    pub fn set_thread_effort(&self, id: &str, effort: Option<String>) -> Result<(), String> {
         let thread = self.store.thread(id).ok_or("Task not found")?;
-        self.store.update_thread(id, |t| t.effort = effort.clone())?;
+        self.store
+            .update_thread(id, |t| t.effort = effort.clone())?;
         // An idle agent was started with the old setting.
         if thread.effort != effort {
             self.runner.retire_idle(id);
@@ -1127,7 +1186,7 @@ impl Server {
         text: String,
         attachments: Vec<Attachment>,
         queue: bool,
-    ) -> Res<Message> {
+    ) -> Result<Message, String> {
         let images = provider::load_images(&attachments)?;
         if provider::is_goal_command(&text) {
             if self.runner.is_running(&thread_id) {
@@ -1138,10 +1197,15 @@ impl Server {
             let agent = self.store.thread(&thread_id).map(|t| t.agent);
             let arg = text.trim()["/goal".len()..].trim().to_lowercase();
             if agent == Some(AgentKind::OpenCode) {
-                return Err("OpenCode has no /goal command. Describe the task in a message instead.".into());
+                return Err(
+                    "OpenCode has no /goal command. Describe the task in a message instead.".into(),
+                );
             }
             if agent == Some(AgentKind::Api) {
-                return Err("API providers have no /goal command. Describe the task in a message instead.".into());
+                return Err(
+                    "API providers have no /goal command. Describe the task in a message instead."
+                        .into(),
+                );
             }
             if agent == Some(AgentKind::Antigravity) {
                 if provider::antigravity::antigravity_bin().is_none() {
@@ -1233,14 +1297,24 @@ impl Server {
         // While a turn runs, the message steers it, or waits for it to end when the
         // agent cannot take it now.
         let delivery = if queue {
-            match self
-                .runner
-                .enqueue(&thread_id, FollowUpInput { message_id: &msg.id, text: &text, attachments: &attachments, images: &images })
-            {
+            match self.runner.enqueue(
+                &thread_id,
+                FollowUpInput {
+                    message_id: &msg.id,
+                    text: &text,
+                    attachments: &attachments,
+                    images: &images,
+                },
+            ) {
                 Ok(true) => Delivery::Queued,
                 Ok(false) => self.runner.steer(
                     &thread_id,
-                    FollowUpInput { message_id: &msg.id, text: &steer_text(), attachments: &attachments, images: &images },
+                    FollowUpInput {
+                        message_id: &msg.id,
+                        text: &steer_text(),
+                        attachments: &attachments,
+                        images: &images,
+                    },
                     session_id.as_deref(),
                     &subagents,
                 ),
@@ -1254,7 +1328,12 @@ impl Server {
         } else {
             self.runner.steer(
                 &thread_id,
-                FollowUpInput { message_id: &msg.id, text: &steer_text(), attachments: &attachments, images: &images },
+                FollowUpInput {
+                    message_id: &msg.id,
+                    text: &steer_text(),
+                    attachments: &attachments,
+                    images: &images,
+                },
                 session_id.as_deref(),
                 &subagents,
             )
@@ -1290,10 +1369,19 @@ impl Server {
                 // itself (a goal clear), so the chat learns of it before the reply starts.
                 self.emit(AgentEventEnvelope {
                     thread_id: thread_id.clone(),
-                    event: AgentEvent::MessageStarted { message: msg.clone() },
+                    event: AgentEvent::MessageStarted {
+                        message: msg.clone(),
+                    },
                 });
-                self.runner
-                    .start_turn(self, TurnRequest { thread_id, text, attachments, images })?
+                self.runner.start_turn(
+                    self,
+                    TurnRequest {
+                        thread_id,
+                        text,
+                        attachments,
+                        images,
+                    },
+                )?
             }
         }
         Ok(msg)
@@ -1306,20 +1394,23 @@ impl Server {
             let active = t.goal.is_some_and(|g| g.status == GoalStatus::Active);
             provider::goal_pause(t.agent, t.session_id.as_deref()?).filter(|_| active)
         });
-        self.runner.cancel(thread_id, pause).into_iter().for_each(|message_id| {
-            orchestration::publish(
-                self,
-                thread_id,
-                AgentEvent::MessageQueued {
-                    message_id,
-                    queued: false,
-                },
-            );
-        });
+        self.runner
+            .cancel(thread_id, pause)
+            .into_iter()
+            .for_each(|message_id| {
+                orchestration::publish(
+                    self,
+                    thread_id,
+                    AgentEvent::MessageQueued {
+                        message_id,
+                        queued: false,
+                    },
+                );
+            });
     }
 
     /// Takes back a message sent mid-turn that has not started yet, so it can be edited.
-    pub fn remove_queued(&self, thread_id: &str, message_id: &str) -> Res<()> {
+    pub fn remove_queued(&self, thread_id: &str, message_id: &str) -> Result<(), String> {
         let Some(thread) = self.store.thread(thread_id) else {
             return Err("Thread not found".into());
         };
@@ -1352,13 +1443,24 @@ impl Server {
         message_id: &str,
         text: String,
         attachments: Vec<Attachment>,
-    ) -> Res<()> {
+    ) -> Result<(), String> {
         let images = provider::load_images(&attachments)?;
         let thread = self.store.thread(thread_id).ok_or("Thread not found")?;
-        let original = thread.messages.iter().find(|m| m.id == message_id && m.queued)
+        let original = thread
+            .messages
+            .iter()
+            .find(|m| m.id == message_id && m.queued)
             .ok_or("That message is no longer queued")?;
         if self.runner.is_running(thread_id)
-            && !self.runner.edit_queued(thread_id, FollowUpInput { message_id, text: &text, attachments: &attachments, images: &images })
+            && !self.runner.edit_queued(
+                thread_id,
+                FollowUpInput {
+                    message_id,
+                    text: &text,
+                    attachments: &attachments,
+                    images: &images,
+                },
+            )
         {
             return Err("That message has already been promoted".into());
         }
@@ -1366,12 +1468,20 @@ impl Server {
         edited.text = text;
         edited.attachments = attachments;
         self.store.update_thread(thread_id, |t| {
-            if let Some(m) = t.messages.iter_mut().find(|m| m.id == message_id && m.queued) {
+            if let Some(m) = t
+                .messages
+                .iter_mut()
+                .find(|m| m.id == message_id && m.queued)
+            {
                 m.text = edited.text.clone();
                 m.attachments = edited.attachments.clone();
             }
         })?;
-        orchestration::publish(self, thread_id, AgentEvent::MessageEdited { message: edited });
+        orchestration::publish(
+            self,
+            thread_id,
+            AgentEvent::MessageEdited { message: edited },
+        );
         Ok(())
     }
 
@@ -1392,7 +1502,7 @@ impl Server {
 
     /// Sends persisted queued messages in their original order, as one message: to the idle
     /// agent when one is up, as a normal message would go, otherwise in a new turn.
-    pub fn resume_queued(self: &Arc<Self>, thread_id: &str) -> Res<()> {
+    pub fn resume_queued(self: &Arc<Self>, thread_id: &str) -> Result<(), String> {
         if self.runner.is_running(thread_id) {
             return Err("This turn is already running".into());
         }
@@ -1401,53 +1511,114 @@ impl Server {
         if queued.is_empty() {
             return Err("There are no queued messages to resume".into());
         }
-        let text = queued.iter().map(|m| m.text.as_str()).collect::<Vec<_>>().join("\n\n");
+        let text = queued
+            .iter()
+            .map(|m| m.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n\n");
         let attachments: Vec<_> = queued.iter().flat_map(|m| m.attachments.clone()).collect();
         let images = provider::load_images(&attachments)?;
         self.store.update_thread(thread_id, |t| {
-            t.messages.iter_mut().filter(|m| queued.iter().any(|q| q.id == m.id)).for_each(|m| m.queued = false);
+            t.messages
+                .iter_mut()
+                .filter(|m| queued.iter().any(|q| q.id == m.id))
+                .for_each(|m| m.queued = false);
         })?;
-        queued.iter().for_each(|m| orchestration::publish(self, thread_id, AgentEvent::MessageQueued { message_id: m.id.clone(), queued: false }));
+        queued.iter().for_each(|m| {
+            orchestration::publish(
+                self,
+                thread_id,
+                AgentEvent::MessageQueued {
+                    message_id: m.id.clone(),
+                    queued: false,
+                },
+            )
+        });
         let first = &queued[0].id;
-        let input = FollowUpInput { message_id: first, text: &text, attachments: &attachments, images: &images };
+        let input = FollowUpInput {
+            message_id: first,
+            text: &text,
+            attachments: &attachments,
+            images: &images,
+        };
         if !matches!(
-            self.runner.steer(thread_id, input, thread.session_id.as_deref(), &[]),
+            self.runner
+                .steer(thread_id, input, thread.session_id.as_deref(), &[]),
             Delivery::NotRunning
         ) {
             self.capture_checkpoint(thread_id, first);
             return Ok(());
         }
-        if let Err(error) = self.runner.start_turn(self, TurnRequest { thread_id: thread_id.into(), text, attachments, images }) {
+        if let Err(error) = self.runner.start_turn(
+            self,
+            TurnRequest {
+                thread_id: thread_id.into(),
+                text,
+                attachments,
+                images,
+            },
+        ) {
             self.store.update_thread(thread_id, |t| {
-                t.messages.iter_mut().filter(|m| queued.iter().any(|q| q.id == m.id)).for_each(|m| m.queued = true);
+                t.messages
+                    .iter_mut()
+                    .filter(|m| queued.iter().any(|q| q.id == m.id))
+                    .for_each(|m| m.queued = true);
             })?;
-            queued.iter().for_each(|m| orchestration::publish(self, thread_id, AgentEvent::MessageQueued { message_id: m.id.clone(), queued: true }));
+            queued.iter().for_each(|m| {
+                orchestration::publish(
+                    self,
+                    thread_id,
+                    AgentEvent::MessageQueued {
+                        message_id: m.id.clone(),
+                        queued: true,
+                    },
+                )
+            });
             return Err(error);
         }
         Ok(())
     }
 
     /// Promotes an existing queued message into the running turn.
-    pub fn steer_queued(&self, thread_id: &str, message_id: &str) -> Res<()> {
+    pub fn steer_queued(&self, thread_id: &str, message_id: &str) -> Result<(), String> {
         let thread = self.store.thread(thread_id).ok_or("Thread not found")?;
-        if !thread.messages.iter().any(|m| m.id == message_id) { return Err("Message not found".into()); }
-        let subagents: Vec<String> = thread.messages.iter().flat_map(|m| &m.tools)
-            .filter(|c| c.subagent.is_some() && c.parent.is_none() && c.status == StepStatus::Running)
-            .map(|c| c.id.clone()).collect();
-        if !self.runner.promote_queued(thread_id, message_id, thread.session_id.as_deref(), &subagents) {
+        if !thread.messages.iter().any(|m| m.id == message_id) {
+            return Err("Message not found".into());
+        }
+        let subagents: Vec<String> = thread
+            .messages
+            .iter()
+            .flat_map(|m| &m.tools)
+            .filter(|c| {
+                c.subagent.is_some() && c.parent.is_none() && c.status == StepStatus::Running
+            })
+            .map(|c| c.id.clone())
+            .collect();
+        if !self.runner.promote_queued(
+            thread_id,
+            message_id,
+            thread.session_id.as_deref(),
+            &subagents,
+        ) {
             return Err("That message is no longer queued or could not be sent".into());
         }
-        orchestration::publish(self, thread_id, AgentEvent::MessageSteered { message_id: message_id.into() });
+        orchestration::publish(
+            self,
+            thread_id,
+            AgentEvent::MessageSteered {
+                message_id: message_id.into(),
+            },
+        );
         Ok(())
     }
 
-    pub fn stop_subagent(&self, thread_id: &str, tool_id: &str) -> Res<()> {
+    pub fn stop_subagent(&self, thread_id: &str, tool_id: &str) -> Result<(), String> {
         self.runner.stop_subagent(thread_id, tool_id)
     }
 
     /// Clears a chat: any running turn is cancelled, then its messages and agent session are
     /// deleted. The chat stays in the sidebar, empty.
-    pub fn clear_thread(&self, thread_id: &str) -> Res<()> {
+    pub fn clear_thread(&self, thread_id: &str) -> Result<(), String> {
         self.cancel_turn(thread_id);
         self.remove_checkpoints(thread_id);
         self.remove_api_session(thread_id);
@@ -1456,7 +1627,9 @@ impl Server {
 
     /// Deletes the saved conversation of an API task, which Patchwork keeps itself.
     fn remove_api_session(&self, thread_id: &str) {
-        let Some(thread) = self.store.thread(thread_id) else { return };
+        let Some(thread) = self.store.thread(thread_id) else {
+            return;
+        };
         if let (AgentKind::Api, Some(session)) = (thread.agent, &thread.session_id) {
             let file = provider::api_config::sessions_dir().join(format!("{session}.json"));
             let _ = std::fs::remove_file(file);
@@ -1471,11 +1644,16 @@ impl Server {
         allow: bool,
         answers: std::collections::HashMap<String, Vec<String>>,
         rule: Option<types::RuleRef>,
-    ) -> Res<()> {
+    ) -> Result<(), String> {
         self.runner.respond(
             self,
             thread_id,
-            ApprovalDecision { approval_id, allow, answers, rule },
+            ApprovalDecision {
+                approval_id,
+                allow,
+                answers,
+                rule,
+            },
         )
     }
 
@@ -1491,7 +1669,13 @@ impl Server {
         known: &[(AgentKind, String)],
         imported: &[String],
     ) -> (u32, u32, Vec<import::Session>) {
-        let default_agent = self.store.settings().agents.first().copied().unwrap_or(AgentKind::Claude);
+        let default_agent = self
+            .store
+            .settings()
+            .agents
+            .first()
+            .copied()
+            .unwrap_or(AgentKind::Claude);
         let all = import::sessions(source, default_agent);
         let subagents = all.iter().filter(|s| s.subagent).count() as u32;
         // Patchwork's own chats are not the user's imports, so they are not counted.
@@ -1557,7 +1741,7 @@ impl Server {
     /// the project if needed. A conversation found by more than one source (a
     /// T3 Code thread is also in the agent's own files) is imported once.
     /// Returns how many threads were added.
-    pub fn import_threads(&self, sources: &[ImportSource]) -> Res<u32> {
+    pub fn import_threads(&self, sources: &[ImportSource]) -> Result<u32, String> {
         self.start_import_log(&format!("import started: {sources:?}"));
         let mut known = self.store.session_keys();
         let mut imported = self.store.imported_sources();
@@ -1566,7 +1750,10 @@ impl Server {
             for session in self.importable(source, &known, &imported).2 {
                 if session.imported {
                     if imported.contains(&session.session_id) {
-                        ilog!("{source:?}: skipped {}: imported from another source", session.session_id);
+                        ilog!(
+                            "{source:?}: skipped {}: imported from another source",
+                            session.session_id
+                        );
                         continue;
                     }
                     imported.push(session.session_id.clone());
@@ -1575,19 +1762,33 @@ impl Server {
                         .iter()
                         .any(|(a, id)| *a == session.agent && *id == session.session_id)
                     {
-                        ilog!("{source:?}: skipped {}: imported from another source", session.session_id);
+                        ilog!(
+                            "{source:?}: skipped {}: imported from another source",
+                            session.session_id
+                        );
                         continue;
                     }
                     known.push((session.agent, session.session_id.clone()));
                 }
                 let project_id = if import::is_chat_folder(Path::new(&session.cwd)) {
-                    ilog!("{source:?}: importing {} as a chat ({})", session.session_id, session.cwd);
+                    ilog!(
+                        "{source:?}: importing {} as a chat ({})",
+                        session.session_id,
+                        session.cwd
+                    );
                     None
                 } else {
-                    ilog!("{source:?}: importing {} into project {}", session.session_id, session.cwd);
+                    ilog!(
+                        "{source:?}: importing {} into project {}",
+                        session.session_id,
+                        session.cwd
+                    );
                     let project = workspace::make_project(&session.cwd)
+                        .map_err(|e| e.to_string())
                         .and_then(|p| self.register_project(p, false))
-                        .inspect_err(|e| ilog!("{source:?}: couldn't add project {}: {e}", session.cwd))?;
+                        .inspect_err(|e| {
+                            ilog!("{source:?}: couldn't add project {}: {e}", session.cwd)
+                        })?;
                     Some(project.id)
                 };
                 threads.push(import::to_thread(session, project_id));

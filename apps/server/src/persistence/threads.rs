@@ -94,7 +94,6 @@ pub(super) fn save_message(
     Ok(())
 }
 
-
 pub(super) fn load_folders(conn: &Connection) -> rusqlite::Result<Vec<Folder>> {
     let mut stmt = conn.prepare("SELECT id, project_id, name FROM folders ORDER BY position")?;
     let folders = stmt
@@ -108,7 +107,6 @@ pub(super) fn load_folders(conn: &Connection) -> rusqlite::Result<Vec<Folder>> {
         .collect::<rusqlite::Result<_>>()?;
     Ok(folders)
 }
-
 
 pub(super) fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
     let mut stmt = conn.prepare(
@@ -190,4 +188,3 @@ pub(super) fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
     }
     Ok(threads)
 }
-

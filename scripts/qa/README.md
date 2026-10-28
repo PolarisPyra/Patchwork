@@ -26,5 +26,7 @@ checks layout and rendering. It does not check saved data, agent turns, or the b
 ## Adding a check
 
 Add a file under `checks/` that calls `openWorkspace()` from `lib/open.mjs`, prints its
-result, and calls `browser.close()`. Add a `qa:` script in the root `package.json` if
+result, and calls `browser.close()`. For the data the check shows, use `message()` and
+`installMocks()` from `lib/fixtures.mjs`: it replaces the backend commands a check needs with
+functions that run in the page, and `threads` swaps in a thread's messages. Add a `qa:` script in the root `package.json` if
 it will be reused.

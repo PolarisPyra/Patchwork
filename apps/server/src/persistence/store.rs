@@ -8,7 +8,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use rusqlite::{Connection, OptionalExtension, params};
 
-use super::codec::{Res, enc, err};
+use super::codec::{enc, err};
 use super::connection;
 use super::settings::{load_settings, save_settings};
 use super::threads::{load_folders, load_threads, save_message, save_thread_row};
@@ -26,7 +26,7 @@ pub(super) struct Inner {
 }
 
 impl Store {
-    pub fn open(dir: PathBuf) -> Res<Self> {
+    pub fn open(dir: PathBuf) -> Result<Self, String> {
         let mut conn = connection::open(&dir)?;
         // A turn that was streaming when the app quit can never finish.
         conn.execute(
@@ -45,7 +45,11 @@ impl Store {
         // process ended with the app. It is paused, so it can be resumed rather than shown as active.
         let tx = conn.transaction().map_err(err)?;
         for t in threads.iter_mut() {
-            if let Some(goal) = t.goal.as_mut().filter(|g| g.status == crate::types::GoalStatus::Active) {
+            if let Some(goal) = t
+                .goal
+                .as_mut()
+                .filter(|g| g.status == crate::types::GoalStatus::Active)
+            {
                 goal.status = crate::types::GoalStatus::Paused;
                 save_thread_row(&tx, t).map_err(err)?;
             }
@@ -70,7 +74,7 @@ impl Store {
         self.lock().settings.clone()
     }
 
-    pub fn update_settings<R>(&self, f: impl FnOnce(&mut Settings) -> R) -> Res<R> {
+    pub fn update_settings<R>(&self, f: impl FnOnce(&mut Settings) -> R) -> Result<R, String> {
         let mut inner = self.lock();
         let mut next = inner.settings.clone();
         let r = f(&mut next);
@@ -114,7 +118,7 @@ impl Store {
             .collect()
     }
 
-    pub fn insert_threads(&self, threads: Vec<Thread>) -> Res<()> {
+    pub fn insert_threads(&self, threads: Vec<Thread>) -> Result<(), String> {
         let mut inner = self.lock();
         let tx = inner.conn.transaction().map_err(err)?;
         for t in &threads {
@@ -129,7 +133,7 @@ impl Store {
     }
 
     /// Atomically remember the goal's dismissal and clear it from storage and memory.
-    pub fn dismiss_goal(&self, id: &str, signature: &str) -> Res<()> {
+    pub fn dismiss_goal(&self, id: &str, signature: &str) -> Result<(), String> {
         let mut inner = self.lock();
         let index = inner
             .threads
@@ -151,7 +155,7 @@ impl Store {
     }
 
     /// Mutate one thread (no-op if missing) and persist what changed.
-    pub fn update_thread(&self, id: &str, f: impl FnOnce(&mut Thread)) -> Res<()> {
+    pub fn update_thread(&self, id: &str, f: impl FnOnce(&mut Thread)) -> Result<(), String> {
         let mut inner = self.lock();
         let Some(index) = inner.threads.iter().position(|t| t.id == id) else {
             return Ok(());
@@ -194,7 +198,7 @@ impl Store {
         id: &str,
         message_id: Option<&str>,
         f: impl FnOnce(&mut Thread),
-    ) -> Res<()> {
+    ) -> Result<(), String> {
         let mut guard = self.lock();
         let inner = &mut *guard;
         let Some(thread) = inner.threads.iter_mut().find(|t| t.id == id) else {
@@ -221,13 +225,15 @@ impl Store {
     pub fn state(&self, key: &str) -> Option<String> {
         self.lock()
             .conn
-            .query_row("SELECT value FROM app_state WHERE key = ?1", [key], |r| r.get(0))
+            .query_row("SELECT value FROM app_state WHERE key = ?1", [key], |r| {
+                r.get(0)
+            })
             .optional()
             .ok()
             .flatten()
     }
 
-    pub fn set_state(&self, key: &str, value: &str) -> Res<()> {
+    pub fn set_state(&self, key: &str, value: &str) -> Result<(), String> {
         self.lock()
             .conn
             .execute(
@@ -243,7 +249,7 @@ impl Store {
         self.lock().folders.clone()
     }
 
-    pub fn create_folder(&self, folder: Folder) -> Res<()> {
+    pub fn create_folder(&self, folder: Folder) -> Result<(), String> {
         let mut inner = self.lock();
         inner
             .conn
@@ -258,7 +264,7 @@ impl Store {
         Ok(())
     }
 
-    pub fn rename_folder(&self, id: &str, name: &str) -> Res<()> {
+    pub fn rename_folder(&self, id: &str, name: &str) -> Result<(), String> {
         let mut inner = self.lock();
         inner
             .conn
@@ -274,7 +280,7 @@ impl Store {
     }
 
     /// Removes a folder. Its tasks move to the project's top level.
-    pub fn delete_folder(&self, id: &str) -> Res<()> {
+    pub fn delete_folder(&self, id: &str) -> Result<(), String> {
         let mut inner = self.lock();
         let tx = inner.conn.transaction().map_err(err)?;
         // Back to the default order at the top level: newest first, as for a new task.
@@ -300,7 +306,7 @@ impl Store {
     /// whole destination list, so a thread that came from elsewhere joins it here.
     /// Archived threads are not in `ids`; they keep their slots in the list, so restoring
     /// one puts it back where it was.
-    pub fn reorder_threads(&self, ids: &[String], folder_id: Option<&str>) -> Res<()> {
+    pub fn reorder_threads(&self, ids: &[String], folder_id: Option<&str>) -> Result<(), String> {
         let mut inner = self.lock();
         let ids = {
             let project_id = ids
@@ -351,7 +357,7 @@ impl Store {
 
     /// Deletes a thread's messages and its agent session, so its next turn starts a new
     /// conversation. The thread itself stays.
-    pub fn clear_thread(&self, id: &str) -> Res<()> {
+    pub fn clear_thread(&self, id: &str) -> Result<(), String> {
         let mut inner = self.lock();
         let tx = inner.conn.transaction().map_err(err)?;
         tx.execute("DELETE FROM messages WHERE thread_id = ?1", [id])
@@ -370,7 +376,7 @@ impl Store {
         Ok(())
     }
 
-    pub fn delete_thread(&self, id: &str) -> Res<()> {
+    pub fn delete_thread(&self, id: &str) -> Result<(), String> {
         let mut inner = self.lock();
         inner
             .conn
@@ -381,7 +387,7 @@ impl Store {
     }
 
     /// Deletes a project's tasks and folders.
-    pub fn delete_project_threads(&self, project_id: &str) -> Res<()> {
+    pub fn delete_project_threads(&self, project_id: &str) -> Result<(), String> {
         let mut inner = self.lock();
         inner
             .conn
@@ -398,4 +404,3 @@ impl Store {
         Ok(())
     }
 }
-

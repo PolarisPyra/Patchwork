@@ -23,14 +23,21 @@ impl Repeats {
     /// Codex reports a call when it starts and again when it completes; the first counts.
     pub(super) fn started(&mut self, tool: &ToolCall) {
         let call = format!("{}\0{}", tool.name, tool.summary);
-        self.calls.entry(tool.id.clone()).or_insert((tool.name.clone(), call));
+        self.calls
+            .entry(tool.id.clone())
+            .or_insert((tool.name.clone(), call));
     }
 
     /// Records a finished call. Returns its tool's name once the agent has made the same call
     /// with the same result, or had the same call fail whatever the error said, `LOOP_LIMIT`
     /// times in a row. Different calls that fail, such as searches that find nothing, do not
     /// count as a loop.
-    pub(super) fn finished(&mut self, id: &str, failed: bool, output: Option<&str>) -> Option<String> {
+    pub(super) fn finished(
+        &mut self,
+        id: &str,
+        failed: bool,
+        output: Option<&str>,
+    ) -> Option<String> {
         let (name, call) = self.calls.remove(id)?;
         let outcome = if failed {
             format!("{call}\0failed")

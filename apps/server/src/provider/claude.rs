@@ -40,7 +40,6 @@ use super::tool_started;
 use super::ToolStart;
 use super::TurnSpec;
 
-
 /// `$CLAUDE_CONFIG_DIR`, else `~/.claude`.
 pub fn home() -> Option<PathBuf> {
     std::env::var_os("CLAUDE_CONFIG_DIR")
@@ -332,10 +331,14 @@ fn claude_control_request(v: &Value, root: &str) -> Parsed {
 /// What a tool call asks to do, for the permission rules.
 fn claude_target(tool: &str, input: &Value, root: &str) -> Option<Target> {
     let text = |key: &str| input[key].as_str().unwrap_or_default();
-    let path = input["file_path"].as_str().or(input["notebook_path"].as_str());
+    let path = input["file_path"]
+        .as_str()
+        .or(input["notebook_path"].as_str());
     match tool {
         "Bash" => Some(Target::new(PermissionKind::Command, [text("command")])),
-        "Edit" | "Write" | "MultiEdit" | "NotebookEdit" => Some(Target::new(PermissionKind::Edit, path)),
+        "Edit" | "Write" | "MultiEdit" | "NotebookEdit" => {
+            Some(Target::new(PermissionKind::Edit, path))
+        }
         // Reading outside the folder: the file's folder, or the folder searched.
         "Read" => {
             let path = std::path::Path::new(path?);
@@ -349,7 +352,10 @@ fn claude_target(tool: &str, input: &Value, root: &str) -> Option<Target> {
         "WebFetch" => Some(Target::new(PermissionKind::Web, [text("url")])),
         _ => {
             let (server, tool) = tool.strip_prefix("mcp__")?.split_once("__")?;
-            Some(Target::new(PermissionKind::Mcp, [format!("{server}/{tool}")]))
+            Some(Target::new(
+                PermissionKind::Mcp,
+                [format!("{server}/{tool}")],
+            ))
         }
     }
 }
@@ -409,7 +415,16 @@ fn claude_tool_use(
     let id = block["id"].as_str().unwrap_or_default();
     let name = block["name"].as_str().unwrap_or("Tool");
     let input = &block["input"];
-    out.push(tool_started(message_id, ToolStart { id, name, summary: summarize(input, root), subagent: subagent_of(input), parent }));
+    out.push(tool_started(
+        message_id,
+        ToolStart {
+            id,
+            name,
+            summary: summarize(input, root),
+            subagent: subagent_of(input),
+            parent,
+        },
+    ));
 
     let path_of = |key: &str| input[key].as_str().map(|p| relative(root, p));
     let touched = match name {
@@ -534,7 +549,10 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
                 .filter_map(Value::as_str)
                 .map(|name| name.trim().trim_start_matches('/').to_owned())
                 .filter(|name| !name.is_empty())
-                .map(|name| ProviderSlashCommand { name, description: None })
+                .map(|name| ProviderSlashCommand {
+                    name,
+                    description: None,
+                })
                 .collect::<Vec<_>>();
             out.push(Parsed::SlashCommands(commands));
         }
@@ -653,7 +671,10 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
             if v["request"]["subtype"] == "can_use_tool"
                 && v["request"]["tool_name"] == "ExitPlanMode" =>
         {
-            let plan = v["request"]["input"]["plan"].as_str().unwrap_or_default().trim();
+            let plan = v["request"]["input"]["plan"]
+                .as_str()
+                .unwrap_or_default()
+                .trim();
             if !plan.is_empty() {
                 out.push(Parsed::Event(AgentEvent::PlanProposed {
                     message_id: message_id.into(),
@@ -685,8 +706,7 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
 
 /// What went wrong, for a `terminal_reason` that ends a turn as failed.
 fn terminal_error(reason: &str) -> Option<&'static str> {
-    const CONTEXT_FULL: &str =
-        "Claude stopped: the prompt exceeds the model's context window. Run /compact or start a new task.";
+    const CONTEXT_FULL: &str = "Claude stopped: the prompt exceeds the model's context window. Run /compact or start a new task.";
     Some(match reason {
         "api_error" => "Claude gave up after repeated API errors.",
         "malformed_tool_use_exhausted" => "Claude gave up after repeated malformed tool calls.",
@@ -700,7 +720,9 @@ fn terminal_error(reason: &str) -> Option<&'static str> {
         "turn_setup_failed" => "Claude could not start the turn.",
         // The CLI also reports a full context window this way.
         "blocking_limit" | "prompt_too_long" => CONTEXT_FULL,
-        "rapid_refill_breaker" => "Claude stopped: the context refilled too quickly after compaction.",
+        "rapid_refill_breaker" => {
+            "Claude stopped: the context refilled too quickly after compaction."
+        }
         "image_error" => "Claude stopped: an image in the conversation could not be processed.",
         "model_error" => "Claude stopped: the model returned an error.",
         _ => return None,
@@ -791,8 +813,14 @@ mod tests {
         let init =
             json!({"type": "system", "subtype": "init", "cwd": "/abs", "session_id": "9578"});
         let out = parse(&init, "/abs", "m1");
-        assert!(out.iter().any(|item| matches!(item, Parsed::SessionId(id) if id == "9578")));
-        assert!(out.iter().any(|item| matches!(item, Parsed::SlashCommands(commands) if commands.is_empty())));
+        assert!(
+            out.iter()
+                .any(|item| matches!(item, Parsed::SessionId(id) if id == "9578"))
+        );
+        assert!(
+            out.iter()
+                .any(|item| matches!(item, Parsed::SlashCommands(commands) if commands.is_empty()))
+        );
 
         let hook = json!({"type": "system", "subtype": "hook_started"});
         assert!(parse(&hook, "/abs", "m1").is_empty());

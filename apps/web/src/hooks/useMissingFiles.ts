@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
 import { api, type FileChange } from "~/api";
+import { useAsync } from "~/hooks/useAsync";
 
 const NONE: ReadonlySet<string> = new Set();
 
@@ -13,23 +13,12 @@ export function useMissingFiles(
   paths: string[],
   changes: FileChange[],
 ): ReadonlySet<string> {
-  const [missing, setMissing] = useState(NONE);
   const unchanged = paths.filter((p) => !changes.some((c) => c.path === p)).join("\0");
-  useEffect(() => {
-    if (!projectId || !unchanged) {
-      setMissing(NONE);
-      return;
-    }
-    let live = true;
-    api.missingFiles(projectId, unchanged.split("\0")).then(
-      (found) => {
-        if (live) setMissing(new Set(found));
-      },
-      () => {},
-    );
-    return () => {
-      live = false;
-    };
-  }, [projectId, unchanged, changes]);
-  return missing;
+  const missing = useAsync(
+    projectId && unchanged
+      ? () => api.missingFiles(projectId, unchanged.split("\0")).then((found) => new Set(found))
+      : null,
+    [projectId, unchanged, changes],
+  );
+  return missing ?? NONE;
 }

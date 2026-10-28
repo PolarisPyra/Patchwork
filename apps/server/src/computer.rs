@@ -6,12 +6,11 @@
 //! it cannot read. Input actions are the small set a model can ask for: move, click, type, press
 //! a key, scroll.
 
+use ts_rs::TS;
 use std::path::PathBuf;
 
 use base64::Engine as _;
-use enigo::{
-    Axis, Button, Coordinate, Direction, Enigo, Keyboard, Mouse, Settings as EnigoSettings,
-};
+use enigo::{Axis, Button, Coordinate, Direction, Enigo, Keyboard, Mouse, Settings as EnigoSettings};
 use image::imageops::FilterType;
 use serde::{Deserialize, Serialize};
 
@@ -34,7 +33,7 @@ pub fn enabled() -> bool {
 pub const MAX_WIDTH: u32 = 1440;
 
 /// A screenshot, as a data URL the webview can show, and the screen's size.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Screenshot {
     /// `data:image/png;base64,…`

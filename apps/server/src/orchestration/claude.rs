@@ -15,7 +15,10 @@ pub fn launch_args(settings: &Settings) -> Vec<String> {
         super::agent_instructions(settings, AgentKind::Claude),
     ];
     if let Some(plugin) = crate::skills::claude_plugin(settings) {
-        args.extend(["--plugin-dir".to_string(), plugin.to_string_lossy().into_owned()]);
+        args.extend([
+            "--plugin-dir".to_string(),
+            plugin.to_string_lossy().into_owned(),
+        ]);
     }
     args
 }
@@ -77,13 +80,16 @@ pub fn permission_args(guarded: &[Guarded], root: &str) -> Vec<String> {
     let root = Path::new(root);
     let ask: Vec<String> = guarded.iter().flat_map(|g| claude_rules(g, root)).collect();
     // No rule names every MCP tool, so a hook asks about them all.
-    let every_mcp = guarded.iter().any(|g| g.kind == PermissionKind::Mcp && g.all());
+    let every_mcp = guarded
+        .iter()
+        .any(|g| g.kind == PermissionKind::Mcp && g.all());
     if ask.is_empty() && !every_mcp {
         return Vec::new();
     }
     let mut settings = serde_json::json!({ "permissions": { "ask": ask } });
     if every_mcp {
-        let answer = r#"{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask"}}"#;
+        let answer =
+            r#"{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask"}}"#;
         settings["hooks"] = serde_json::json!({ "PreToolUse": [{
             "matcher": "mcp__.*",
             "hooks": [{ "type": "command", "command": format!("printf %s '{answer}'") }],
@@ -102,7 +108,9 @@ fn claude_rules(guarded: &Guarded, root: &Path) -> Vec<String> {
             .flat_map(|p| [format!("Bash({p})"), format!("Bash({p} *)")])
             .collect(),
         PermissionKind::Edit if all => vec!["Edit".into()],
-        PermissionKind::Edit => patterns.map(|p| format!("Edit({})", folder_rule(p, root))).collect(),
+        PermissionKind::Edit => patterns
+            .map(|p| format!("Edit({})", folder_rule(p, root)))
+            .collect(),
         // Every read asks, and Patchwork runs those in the thread's own folder at once.
         PermissionKind::Folder if all => vec!["Read".into()],
         PermissionKind::Folder => patterns

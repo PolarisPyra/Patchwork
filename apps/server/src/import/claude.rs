@@ -12,7 +12,11 @@ pub fn sessions() -> Vec<Session> {
         ilog!("Claude: no home folder");
         return vec![];
     };
-    ilog!("Claude: reading {} (exists: {})", projects.display(), projects.is_dir());
+    ilog!(
+        "Claude: reading {} (exists: {})",
+        projects.display(),
+        projects.is_dir()
+    );
     let dirs = std::fs::read_dir(projects).into_iter().flatten().flatten();
     // Conversations are `<project>/<session>.jsonl`; sub-agent runs are
     // `<project>/<session>/subagents/*.jsonl`.

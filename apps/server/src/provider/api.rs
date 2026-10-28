@@ -11,7 +11,10 @@ use crate::types::{
 };
 use crate::permissions::Target;
 use super::{Image, Parsed, ToolStart, TurnSpec};
-use super::{api_bridge, api_config, api_tools, mcp, file_touched, prompt, text_delta, thinking, tool_finished, tool_started};
+use super::{
+    api_bridge, api_config, api_tools, mcp, file_touched, prompt, text_delta, thinking,
+    tool_finished, tool_started,
+};
 
 pub fn auth(status: &mut AgentStatus) {
     let providers = api_config::providers();
@@ -55,7 +58,8 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         .iter()
         .map(|i| json!({"mediaType": i.media_type, "data": i.data}))
         .collect();
-    let command = (spec.attachments.is_empty() && spec.text.trim() == "/compact").then_some("compact");
+    let command =
+        (spec.attachments.is_empty() && spec.text.trim() == "/compact").then_some("compact");
     let fields = json!({
         "root": spec.root,
         "sessionsDir": api_config::sessions_dir(),
@@ -93,7 +97,11 @@ pub fn mcp_reply(id: &Value, result: Result<String, String>) -> String {
     json!({"type": "reply", "id": id, "output": output, "error": error}).to_string()
 }
 
-pub fn approval_reply(reply: &Value, allow: bool, answers: &HashMap<String, Vec<String>>) -> String {
+pub fn approval_reply(
+    reply: &Value,
+    allow: bool,
+    answers: &HashMap<String, Vec<String>>,
+) -> String {
     json!({"type": "reply", "id": reply["id"], "allow": allow, "answers": answers}).to_string()
 }
 
@@ -144,11 +152,22 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
             let name = api_tools::display_name(text("name"));
             vec![tool_started(
                 message_id,
-                ToolStart { id: text("id"), name, summary: text("summary").into(), subagent: None, parent: None },
+                ToolStart {
+                    id: text("id"),
+                    name,
+                    summary: text("summary").into(),
+                    subagent: None,
+                    parent: None,
+                },
             )]
         }
         Some("api.tool_done") => {
-            let mut out = vec![tool_finished(message_id, text("id"), v["error"] == true, text("output"))];
+            let mut out = vec![tool_finished(
+                message_id,
+                text("id"),
+                v["error"] == true,
+                text("output"),
+            )];
             if let Some(path) = v["path"].as_str() {
                 out.push(file_touched(message_id, path.into()));
             }
@@ -168,7 +187,10 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
                     },
                 })
                 .collect();
-            vec![Parsed::Event(AgentEvent::PlanUpdated { message_id: message_id.into(), steps })]
+            vec![Parsed::Event(AgentEvent::PlanUpdated {
+                message_id: message_id.into(),
+                steps,
+            })]
         }
         Some("api.plan") => vec![Parsed::Event(AgentEvent::PlanProposed {
             message_id: message_id.into(),
@@ -180,15 +202,29 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
             reply: json!({"id": v["id"]}),
             questions: Vec::new(),
             target: serde_json::from_value(v["kind"].clone()).ok().map(|kind| {
-                let resources = v["resources"].as_array().into_iter().flatten().filter_map(Value::as_str);
+                let resources = v["resources"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str);
                 Target::new(kind, resources)
             }),
         }],
         Some("api.check") => serde_json::from_value(v["kind"].clone()).ok().map_or_else(
             // A check names its kind; without one it runs.
-            || vec![Parsed::Send(approval_reply(&json!({"id": v["id"]}), true, &HashMap::new()))],
+            || {
+                vec![Parsed::Send(approval_reply(
+                    &json!({"id": v["id"]}),
+                    true,
+                    &HashMap::new(),
+                ))]
+            },
             |kind| {
-                let resources = v["resources"].as_array().into_iter().flatten().filter_map(Value::as_str);
+                let resources = v["resources"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str);
                 vec![Parsed::Check {
                     title: text("title").into(),
                     detail: super::one_line(text("detail")),
@@ -220,7 +256,10 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
                 .collect();
             vec![Parsed::Approval {
                 title: "Question".into(),
-                detail: questions.first().map(|q| q.question.clone()).unwrap_or_default(),
+                detail: questions
+                    .first()
+                    .map(|q| q.question.clone())
+                    .unwrap_or_default(),
                 reply: json!({"id": v["id"]}),
                 questions,
                 target: None,

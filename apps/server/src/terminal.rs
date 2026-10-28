@@ -88,10 +88,7 @@ pub fn launch(settings: &Settings, workspace: Option<&Path>) -> Launch {
     env.insert("TERM".into(), "xterm-256color".into());
     env.insert("COLORTERM".into(), "truecolor".into());
     env.insert("TERM_PROGRAM".into(), "patchwork".into());
-    env.insert(
-        "TERM_PROGRAM_VERSION".into(),
-        crate::VERSION.into(),
-    );
+    env.insert("TERM_PROGRAM_VERSION".into(), crate::VERSION.into());
     let lang = env.get("LANG").cloned().unwrap_or_default();
     let utf8 =
         lang.to_ascii_lowercase().contains("utf-8") || lang.to_ascii_lowercase().contains("utf8");

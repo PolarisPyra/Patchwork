@@ -153,10 +153,16 @@ mod tests {
         let loaded = store.thread(&t.id).unwrap();
         assert_eq!(loaded.title, "renamed");
         assert_eq!(loaded.slash_commands[0].name, "review");
-        assert_eq!(loaded.slash_commands[0].description.as_deref(), Some("Review the current changes"));
+        assert_eq!(
+            loaded.slash_commands[0].description.as_deref(),
+            Some("Review the current changes")
+        );
         let texts: Vec<_> = loaded.messages.iter().map(|m| m.text.as_str()).collect();
         assert_eq!(texts, ["ab", "c"]);
-        assert_eq!(store.session_keys(), [(AgentKind::Antigravity, "s".to_string())]);
+        assert_eq!(
+            store.session_keys(),
+            [(AgentKind::Antigravity, "s".to_string())]
+        );
 
         store.delete_thread(&t.id).unwrap();
         let count: i64 = store
@@ -227,7 +233,9 @@ mod tests {
         assert_eq!(tasks[0].schedule, saved.schedule);
         assert!(store.has_scheduled_task(&saved.id));
 
-        store.scheduled_task_ran(&saved.id, 99, Some(123), Ok("thread")).unwrap();
+        store
+            .scheduled_task_ran(&saved.id, 99, Some(123), Ok("thread"))
+            .unwrap();
         assert_eq!(store.scheduled_tasks()[0].last_run_at, Some(99));
         assert_eq!(store.scheduled_tasks()[0].next_run_at, Some(123));
 
@@ -235,14 +243,18 @@ mod tests {
         store.scheduled_task_skipped(&saved.id, Some(456)).unwrap();
         assert_eq!(store.scheduled_tasks()[0].next_run_at, Some(456));
         for at in 200..205 {
-            store.scheduled_task_ran(&saved.id, at, Some(456), Err("no agent")).unwrap();
+            store
+                .scheduled_task_ran(&saved.id, at, Some(456), Err("no agent"))
+                .unwrap();
         }
         let runs = &store.scheduled_tasks()[0].recent_runs;
         let ats: Vec<i64> = runs.iter().map(|run| run.at).collect();
         assert_eq!(ats, [204, 203, 202, 201, 200]);
         assert_eq!(runs[0].outcome, crate::types::RunOutcome::Failed);
         assert_eq!(runs[0].detail.as_deref(), Some("no agent"));
-        store.scheduled_task_ran(&saved.id, 100, Some(456), Ok("thread")).unwrap();
+        store
+            .scheduled_task_ran(&saved.id, 100, Some(456), Ok("thread"))
+            .unwrap();
         store.scheduled_task_skipped(&saved.id, Some(789)).unwrap();
         let runs = &store.scheduled_tasks()[0].recent_runs;
         assert_eq!(runs[0].at, 456, "the skipped slot");

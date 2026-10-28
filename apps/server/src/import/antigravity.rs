@@ -25,10 +25,7 @@ pub fn sessions() -> Vec<Session> {
         tmp.is_dir(),
         roots.len()
     );
-    let dirs = std::fs::read_dir(tmp)
-        .into_iter()
-        .flatten()
-        .flatten();
+    let dirs = std::fs::read_dir(tmp).into_iter().flatten().flatten();
     let mut out = Vec::new();
     for dir in dirs {
         let name = dir.file_name().to_string_lossy().into_owned();
@@ -60,7 +57,10 @@ pub fn sessions() -> Vec<Session> {
                 parse_jsonl(&text, &cwd)
             };
             if parsed.is_none() {
-                ilog!("Antigravity: skipped {}: unrecognized chat file", chat.display());
+                ilog!(
+                    "Antigravity: skipped {}: unrecognized chat file",
+                    chat.display()
+                );
             }
             out.extend(parsed);
         }

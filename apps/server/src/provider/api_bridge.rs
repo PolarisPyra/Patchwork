@@ -52,8 +52,7 @@ const CONTEXT_PHRASES: [&str; 9] = [
     "too long",
 ];
 const DENIED: &str = "The user denied this. Do not retry it; ask what they would like instead, or carry on another way.";
-const REMOVED_RESULT: &str =
-    "(This output was removed to fit the context window. Run the tool again if it is still needed.)";
+const REMOVED_RESULT: &str = "(This output was removed to fit the context window. Run the tool again if it is still needed.)";
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -124,7 +123,9 @@ pub fn run() -> i32 {
     let request: Request = match serde_json::from_str(&first) {
         Ok(request) => request,
         Err(e) => {
-            emit(&json!({"type": "api.error", "message": format!("Bad turn for the API agent: {e}")}));
+            emit(
+                &json!({"type": "api.error", "message": format!("Bad turn for the API agent: {e}")}),
+            );
             return 1;
         }
     };
@@ -132,7 +133,9 @@ pub fn run() -> i32 {
     std::thread::spawn(move || {
         for line in stdin.lines() {
             let Ok(line) = line else { break };
-            let Ok(v) = serde_json::from_str::<Value>(&line) else { continue };
+            let Ok(v) = serde_json::from_str::<Value>(&line) else {
+                continue;
+            };
             if tx.send(v).is_err() {
                 break;
             }
@@ -257,7 +260,11 @@ impl Agent {
             None => (uuid::Uuid::new_v4().to_string(), false),
         };
         let session_file = Path::new(&request.sessions_dir).join(format!("{session_id}.json"));
-        let messages = if existing { load(&session_file).unwrap_or_default() } else { Vec::new() };
+        let messages = if existing {
+            load(&session_file).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         let http = ureq::Agent::config_builder()
             .timeout_connect(Some(Duration::from_secs(30)))
             // A reasoning model can think for minutes before its first token. The body has no
@@ -304,7 +311,8 @@ impl Agent {
             return self.compact();
         }
         let content = self.user_content(&self.request.text, &self.request.images);
-        self.messages.push(json!({"role": "user", "content": content}));
+        self.messages
+            .push(json!({"role": "user", "content": content}));
         self.save()?;
 
         for _ in 0..MAX_STEPS {
@@ -335,12 +343,14 @@ impl Agent {
             for call in &reply.calls {
                 let (result, stop) = self.call(call);
                 proposed |= stop;
-                self.messages.push(json!({"role": "tool", "tool_call_id": call.id, "content": result}));
+                self.messages
+                    .push(json!({"role": "tool", "tool_call_id": call.id, "content": result}));
             }
             if !self.read_images.is_empty() {
                 let images = std::mem::take(&mut self.read_images);
                 let content = self.user_content("The images read_file opened:", &images);
-                self.messages.push(json!({"role": "user", "content": content}));
+                self.messages
+                    .push(json!({"role": "user", "content": content}));
             }
             if !reply.calls.is_empty() {
                 self.save()?;
@@ -364,7 +374,8 @@ impl Agent {
                     .collect();
                 let text = steer["text"].as_str().unwrap_or_default();
                 let content = self.user_content(text, &images);
-                self.messages.push(json!({"role": "user", "content": content}));
+                self.messages
+                    .push(json!({"role": "user", "content": content}));
                 emit(&json!({"type": "api.steered"}));
             }
             if steered {
@@ -375,7 +386,9 @@ impl Agent {
                 return Ok(());
             }
         }
-        Err(format!("Stopped after {MAX_STEPS} model requests in one turn"))
+        Err(format!(
+            "Stopped after {MAX_STEPS} model requests in one turn"
+        ))
     }
 
     /// Summarizes the conversation and keeps only the summary.
@@ -398,7 +411,8 @@ impl Agent {
             .and_then(|m| m["content"].as_str())
             .map(str::to_string);
         let reply = loop {
-            self.messages.push(json!({"role": "user", "content": COMPACT_PROMPT}));
+            self.messages
+                .push(json!({"role": "user", "content": COMPACT_PROMPT}));
             let reply = self.complete(false);
             self.messages.pop();
             match reply {
@@ -409,9 +423,14 @@ impl Agent {
         if reply.content.trim().is_empty() {
             return Err("The model returned an empty summary, so the conversation was kept".into());
         }
-        let mut summary = format!("This conversation was compacted. A summary of it so far:\n\n{}", reply.content.trim());
+        let mut summary = format!(
+            "This conversation was compacted. A summary of it so far:\n\n{}",
+            reply.content.trim()
+        );
         if let Some(latest) = latest {
-            summary.push_str(&format!("\n\nThe user's latest message, which the work above was answering:\n\n{latest}"));
+            summary.push_str(&format!(
+                "\n\nThe user's latest message, which the work above was answering:\n\n{latest}"
+            ));
         }
         self.messages = vec![json!({"role": "user", "content": summary})];
         Ok(())
@@ -433,7 +452,9 @@ impl Agent {
                     }
                 }
                 Failure::Context(_) if !summarized => {
-                    emit(&json!({"type": "api.retry", "reason": "The conversation is too long for the model, so it is being summarized", "attempt": 1, "max": 1}));
+                    emit(
+                        &json!({"type": "api.retry", "reason": "The conversation is too long for the model, so it is being summarized", "attempt": 1, "max": 1}),
+                    );
                     self.summarize(true)?;
                     summarized = true;
                 }
@@ -449,11 +470,16 @@ impl Agent {
 
     /// Cuts every tool result but the last `keep` to a note; returns whether any was cut.
     fn trim_results(&mut self, keep: usize) -> bool {
-        let results: Vec<usize> = (0..self.messages.len()).filter(|&i| self.messages[i]["role"] == "tool").collect();
+        let results: Vec<usize> = (0..self.messages.len())
+            .filter(|&i| self.messages[i]["role"] == "tool")
+            .collect();
         let mut cut = false;
         for &i in results.iter().rev().skip(keep) {
             let content = &mut self.messages[i]["content"];
-            if content.as_str().is_some_and(|c| c.len() > REMOVED_RESULT.len()) {
+            if content
+                .as_str()
+                .is_some_and(|c| c.len() > REMOVED_RESULT.len())
+            {
                 *content = json!(REMOVED_RESULT);
                 cut = true;
             }
@@ -475,7 +501,8 @@ impl Agent {
             .unwrap_or(len - 1);
         self.messages.drain(..start);
         if self.messages.first().is_some_and(|m| m["role"] != "user") {
-            self.messages.insert(0, json!({"role": "user", "content": LEFT_OUT}));
+            self.messages
+                .insert(0, json!({"role": "user", "content": LEFT_OUT}));
         }
         true
     }
@@ -515,18 +542,29 @@ impl Agent {
 
     /// Runs one tool call and returns its result for the model, and whether the turn ends here.
     fn call(&mut self, call: &Call) -> (String, bool) {
-        let args: Value = match serde_json::from_str(if call.arguments.trim().is_empty() { "{}" } else { &call.arguments }) {
+        let args: Value = match serde_json::from_str(if call.arguments.trim().is_empty() {
+            "{}"
+        } else {
+            &call.arguments
+        }) {
             Ok(args) => args,
             Err(e) => {
-                let message = format!("The arguments were not valid JSON ({e}); call the tool again");
+                let message =
+                    format!("The arguments were not valid JSON ({e}); call the tool again");
                 emit(&json!({"type": "api.tool", "id": call.id, "name": call.name, "summary": ""}));
-                emit(&json!({"type": "api.tool_done", "id": call.id, "error": true, "output": message}));
+                emit(
+                    &json!({"type": "api.tool_done", "id": call.id, "error": true, "output": message}),
+                );
                 return (message, false);
             }
         };
         let summary = api_tools::summary(&call.name, &args, &self.root);
         emit(&json!({"type": "api.tool", "id": call.id, "name": call.name, "summary": summary}));
-        let mcp = self.request.mcp_tools.iter().position(|t| t.name == call.name);
+        let mcp = self
+            .request
+            .mcp_tools
+            .iter()
+            .position(|t| t.name == call.name);
         let (result, error, stop) = if let Some(index) = mcp {
             let result = self.call_mcp(index, &call.id, &args);
             let error = result.is_err();
@@ -535,23 +573,37 @@ impl Agent {
             match call.name.as_str() {
                 "update_plan" => {
                     emit(&json!({"type": "api.todos", "steps": args["steps"]}));
-                    (Ok("The plan is shown to the user.".to_string()), false, false)
+                    (
+                        Ok("The plan is shown to the user.".to_string()),
+                        false,
+                        false,
+                    )
                 }
                 "propose_plan" => {
                     let plan = args["plan"].as_str().unwrap_or_default();
                     emit(&json!({"type": "api.plan", "text": plan}));
-                    (Ok("The plan was shown to the user, who will reply.".to_string()), false, true)
+                    (
+                        Ok("The plan was shown to the user, who will reply.".to_string()),
+                        false,
+                        true,
+                    )
                 }
                 "ask_user" => match self.ask(&call.id, &args) {
                     Ok(answer) => (Ok(answer), false, false),
                     Err(e) => (Err(e), true, false),
                 },
                 name => {
-                    let allowed = match api_tools::approval(name, &args, self.request.mode, &self.root) {
-                        Some((title, detail, target, asks)) => self.approve(&call.id, &title, &detail, target, asks),
-                        None => true,
-                    };
-                    if allowed && name == "read_file" && let Some(image) = self.read_image(&args) {
+                    let allowed =
+                        match api_tools::approval(name, &args, self.request.mode, &self.root) {
+                            Some((title, detail, target, asks)) => {
+                                self.approve(&call.id, &title, &detail, target, asks)
+                            }
+                            None => true,
+                        };
+                    if allowed
+                        && name == "read_file"
+                        && let Some(image) = self.read_image(&args)
+                    {
                         let error = image.is_err();
                         (image, error, false)
                     } else if allowed {
@@ -567,12 +619,16 @@ impl Agent {
         let text = match &result {
             Ok(text) | Err(text) => text.clone(),
         };
-        let mut done = json!({"type": "api.tool_done", "id": call.id, "error": error, "output": text});
+        let mut done =
+            json!({"type": "api.tool_done", "id": call.id, "error": error, "output": text});
         if !error
             && api_tools::writes(&call.name)
             && let Some(path) = args["path"].as_str()
         {
-            done["path"] = json!(api_tools::shown(&api_tools::resolve(&self.root, path), &self.root));
+            done["path"] = json!(api_tools::shown(
+                &api_tools::resolve(&self.root, path),
+                &self.root
+            ));
         }
         emit(&done);
         (text, stop)
@@ -588,7 +644,10 @@ impl Agent {
             .and_then(|a| super::load_images(&[a]))
             .map(|mut images| images.remove(0));
         Some(image.map(|image| {
-            self.read_images.push(ImageIn { media_type: image.media_type.into(), data: image.data });
+            self.read_images.push(ImageIn {
+                media_type: image.media_type.into(),
+                data: image.data,
+            });
             format!("{path} is an image; it follows the tool results.")
         }))
     }
@@ -612,10 +671,18 @@ impl Agent {
         ) {
             return Err(DENIED.into());
         }
-        emit(&json!({"type": "api.mcp_call", "id": id, "server": server, "tool": name, "arguments": args}));
-        let reply = self.wait(id).ok_or("The turn ended before the tool finished")?;
+        emit(
+            &json!({"type": "api.mcp_call", "id": id, "server": server, "tool": name, "arguments": args}),
+        );
+        let reply = self
+            .wait(id)
+            .ok_or("The turn ended before the tool finished")?;
         let output = api_tools::cap(reply["output"].as_str().unwrap_or_default().to_string());
-        if reply["error"] == true { Err(output) } else { Ok(output) }
+        if reply["error"] == true {
+            Err(output)
+        } else {
+            Ok(output)
+        }
     }
 
     /// Asks Patchwork for an approval, or with `asks` false for the permission rules' answer to a
@@ -636,21 +703,27 @@ impl Agent {
             .unwrap_or_default()
             .into_iter()
             .enumerate()
-            .map(|(i, q)| json!({
-                "id": format!("q{i}"),
-                "header": q["header"].as_str().unwrap_or_default(),
-                "question": q["question"].as_str().unwrap_or_default(),
-                "options": q["options"],
-                "multiSelect": q["multi_select"] == true,
-            }))
+            .map(|(i, q)| {
+                json!({
+                    "id": format!("q{i}"),
+                    "header": q["header"].as_str().unwrap_or_default(),
+                    "question": q["question"].as_str().unwrap_or_default(),
+                    "options": q["options"],
+                    "multiSelect": q["multi_select"] == true,
+                })
+            })
             .collect();
         if questions.is_empty() {
             return Err("Give at least one question".into());
         }
         emit(&json!({"type": "api.question", "id": id, "questions": questions}));
-        let reply = self.wait(id).ok_or("The turn ended before the user answered")?;
+        let reply = self
+            .wait(id)
+            .ok_or("The turn ended before the user answered")?;
         if reply["allow"] != true {
-            return Err("The user dismissed the questions. Carry on with your best judgment.".into());
+            return Err(
+                "The user dismissed the questions. Carry on with your best judgment.".into(),
+            );
         }
         let lines: Vec<String> = questions
             .iter()
@@ -662,7 +735,11 @@ impl Agent {
                     .flatten()
                     .filter_map(Value::as_str)
                     .collect();
-                let answer = if answer.is_empty() { "(no answer)".into() } else { answer.join(", ") };
+                let answer = if answer.is_empty() {
+                    "(no answer)".into()
+                } else {
+                    answer.join(", ")
+                };
                 format!("{}: {answer}", q["question"].as_str().unwrap_or_default())
             })
             .collect();
@@ -719,7 +796,11 @@ impl Agent {
             messages: Messages {
                 system: &self.system,
                 history: &history,
-                last_user: self.messages.iter().rposition(|m| m["role"] == "user").unwrap_or(0),
+                last_user: self
+                    .messages
+                    .iter()
+                    .rposition(|m| m["role"] == "user")
+                    .unwrap_or(0),
             },
             stream: true,
             stream_options: json!({"include_usage": true}),
@@ -728,12 +809,20 @@ impl Agent {
         };
         let body = serde_json::to_string(&body).map_err(|e| e.to_string())?;
         let has_images = self.messages.iter().any(|m| {
-            m["content"].as_array().is_some_and(|parts| parts.iter().any(|p| p["type"] == "image_url"))
+            m["content"]
+                .as_array()
+                .is_some_and(|parts| parts.iter().any(|p| p["type"] == "image_url"))
         });
-        let url = format!("{}/chat/completions", self.request.base_url.trim_end_matches('/'));
+        let url = format!(
+            "{}/chat/completions",
+            self.request.base_url.trim_end_matches('/')
+        );
         let mut attempt = 1;
         loop {
-            let mut request = self.http.post(&url).header("Content-Type", "application/json");
+            let mut request = self
+                .http
+                .post(&url)
+                .header("Content-Type", "application/json");
             if let Some(key) = &self.request.api_key {
                 request = request.header("Authorization", &format!("Bearer {key}"));
             }
@@ -742,7 +831,9 @@ impl Agent {
             }
             let failure = match request.send(body.as_str()) {
                 Ok(response) if response.status().is_success() => {
-                    return self.stream(response.into_body().into_reader()).map_err(Failure::Other);
+                    return self
+                        .stream(response.into_body().into_reader())
+                        .map_err(Failure::Other);
                 }
                 Ok(mut response) => {
                     let status = response.status().as_u16();
@@ -752,23 +843,31 @@ impl Agent {
                     // The whole body, so codes and errors wrapped by a router count too.
                     let lower = text.to_lowercase();
                     let refused = matches!(status, 400 | 413 | 415 | 422);
-                    if status == 413 || (refused && CONTEXT_PHRASES.iter().any(|p| lower.contains(p))) {
+                    if status == 413
+                        || (refused && CONTEXT_PHRASES.iter().any(|p| lower.contains(p)))
+                    {
                         return Err(Failure::Context(message));
                     }
                     let about_images = lower.contains("image") || lower.contains("multimodal");
                     if refused && has_images && about_images {
                         return Err(Failure::Images(message));
                     }
-                    let retry = matches!(status, 408 | 409 | 425 | 429 | 500 | 502 | 503 | 504 | 529);
+                    let retry =
+                        matches!(status, 408 | 409 | 425 | 429 | 500 | 502 | 503 | 504 | 529);
                     (message, retry)
                 }
-                Err(e) => (format!("Could not reach {}: {e}", self.request.provider), true),
+                Err(e) => (
+                    format!("Could not reach {}: {e}", self.request.provider),
+                    true,
+                ),
             };
             let (message, retry) = failure;
             if !retry || attempt >= MAX_ATTEMPTS {
                 return Err(Failure::Other(message));
             }
-            emit(&json!({"type": "api.retry", "reason": message, "attempt": attempt, "max": MAX_ATTEMPTS - 1}));
+            emit(
+                &json!({"type": "api.retry", "reason": message, "attempt": attempt, "max": MAX_ATTEMPTS - 1}),
+            );
             std::thread::sleep(Duration::from_secs(2u64.pow(attempt)));
             attempt += 1;
         }
@@ -801,22 +900,32 @@ impl Agent {
                     ));
                 }
             };
-            let line = line.map_err(|e| format!("The reply from {} broke off: {e}", self.request.provider))?;
-            let Some(data) = line.strip_prefix("data:") else { continue };
+            let line = line
+                .map_err(|e| format!("The reply from {} broke off: {e}", self.request.provider))?;
+            let Some(data) = line.strip_prefix("data:") else {
+                continue;
+            };
             let data = data.trim();
             if data == "[DONE]" {
                 break;
             }
-            let Ok(chunk) = serde_json::from_str::<Value>(data) else { continue };
+            let Ok(chunk) = serde_json::from_str::<Value>(data) else {
+                continue;
+            };
             if !chunk["error"].is_null() {
                 return Err(super::api::error_text(0, &chunk, data));
             }
             if chunk["usage"].is_object() {
                 usage = chunk["usage"].clone();
             }
-            let Some(choice) = chunk["choices"].get(0) else { continue };
+            let Some(choice) = chunk["choices"].get(0) else {
+                continue;
+            };
             let delta = &choice["delta"];
-            if let Some(text) = delta["reasoning_content"].as_str().filter(|t| !t.is_empty()) {
+            if let Some(text) = delta["reasoning_content"]
+                .as_str()
+                .filter(|t| !t.is_empty())
+            {
                 reply.reasoning_content = true;
                 reply.reasoning.push_str(text);
                 emit(&json!({"type": "api.reasoning", "delta": text}));
@@ -867,7 +976,6 @@ impl Agent {
             .collect();
         Ok(reply)
     }
-
 }
 
 /// Replaces the images in a message with a note that they were left out; returns how many.
@@ -889,7 +997,11 @@ fn strip_images(message: &mut Value, provider: &str) -> usize {
 
 /// Stands in for images a provider cannot read, so the model can tell the user.
 fn images_note(provider: &str, count: usize) -> String {
-    let what = if count == 1 { "an image, which" } else { "images, which" };
+    let what = if count == 1 {
+        "an image, which"
+    } else {
+        "images, which"
+    };
     let it = if count == 1 { "it was" } else { "they were" };
     format!("(The user attached {what} {provider} cannot read, so {it} left out. Tell the user.)")
 }
@@ -916,7 +1028,9 @@ fn system_prompt(request: &Request, root_dir: &Path) -> String {
     for name in ["AGENTS.md", "CLAUDE.md"] {
         if let Ok(text) = std::fs::read_to_string(root_dir.join(name)) {
             let text: String = text.chars().take(MAX_INSTRUCTIONS).collect();
-            prompt.push_str(&format!("\n\nThe project's instructions, from {name}:\n\n{text}"));
+            prompt.push_str(&format!(
+                "\n\nThe project's instructions, from {name}:\n\n{text}"
+            ));
             break;
         }
     }

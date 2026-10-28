@@ -1,35 +1,13 @@
-import { useEffect, useState } from "react";
 import { FileIcon, FolderIcon, ImageIcon, XIcon } from "@phosphor-icons/react";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { api, type Attachment, type AttachmentKind } from "~/api";
+
+import { type Attachment, type AttachmentKind } from "~/api";
+import { usePreviewSrc } from "~/hooks/useImageSrc";
 
 const ICONS: Record<AttachmentKind, typeof FileIcon> = {
   image: ImageIcon,
   file: FileIcon,
   folder: FolderIcon,
 };
-
-/**
- * The webview URL for an image attachment, or null for other kinds and while it loads.
- * Asks the backend to allow the file first, since the asset scope is not kept across restarts.
- */
-export function usePreviewSrc(attachment: Attachment): string | null {
-  const [src, setSrc] = useState<string | null>(null);
-  useEffect(() => {
-    if (attachment.kind !== "image") return;
-    let cancelled = false;
-    api.allowPreview(attachment.path).then(
-      () => {
-        if (!cancelled) setSrc(convertFileSrc(attachment.path));
-      },
-      () => {},
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [attachment.kind, attachment.path]);
-  return src;
-}
 
 interface AttachmentChipProps {
   attachment: Attachment;

@@ -3,11 +3,15 @@
 
 fn main() {
     // An OpenCode turn starts this binary as its bridge to `opencode serve`, without the app.
-    if std::env::args().nth(1).as_deref() == Some(patchwork_server::provider::opencode_bridge::BRIDGE_ARG) {
+    if std::env::args().nth(1).as_deref()
+        == Some(patchwork_server::provider::opencode_bridge::BRIDGE_ARG)
+    {
         std::process::exit(patchwork_server::provider::opencode_bridge::run());
     }
     // An API provider's turn starts this binary as Patchwork's own agent, without the app.
-    if std::env::args().nth(1).as_deref() == Some(patchwork_server::provider::api_bridge::BRIDGE_ARG) {
+    if std::env::args().nth(1).as_deref()
+        == Some(patchwork_server::provider::api_bridge::BRIDGE_ARG)
+    {
         std::process::exit(patchwork_server::provider::api_bridge::run());
     }
     // Codex and Antigravity start this binary as a hook that checks a tool call against the
@@ -39,6 +43,8 @@ fn main() {
 fn installed_launcher() -> bool {
     let data_home = std::env::var_os("XDG_DATA_HOME")
         .map(std::path::PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join(".local/share")));
+        .or_else(|| {
+            std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join(".local/share"))
+        });
     data_home.is_some_and(|dir| dir.join("applications/dev.patchwork.ade.desktop").is_file())
 }

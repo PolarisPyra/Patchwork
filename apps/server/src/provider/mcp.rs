@@ -7,6 +7,7 @@
 //! keys do, and the file keeps only their names; a value typed into the file by hand is used
 //! as is until the server is next saved.
 
+use ts_rs::TS;
 use std::collections::{BTreeMap, HashMap};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -38,7 +39,7 @@ static POOL: OnceLock<Mutex<HashMap<String, Arc<Entry>>>> = OnceLock::new();
 /// Serializes changes to the config file.
 static WRITE: Mutex<()> = Mutex::new(());
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct McpServer {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -79,7 +80,7 @@ struct Config {
 }
 
 /// A server as the settings show it, without its environment and header values.
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerView {
     pub name: String,
@@ -94,14 +95,14 @@ pub struct ServerView {
 }
 
 /// A server's tool, as the settings list it.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, TS)]
 pub struct ToolInfo {
     pub name: String,
     pub description: String,
 }
 
 /// A tool as an API turn offers it to the model.
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnTool {
     /// `mcp__server__tool`, cut to what endpoints accept.
@@ -139,14 +140,19 @@ fn read_config() -> Config {
 }
 
 fn pool() -> std::sync::MutexGuard<'static, HashMap<String, Arc<Entry>>> {
-    POOL.get_or_init(Default::default).lock().unwrap_or_else(PoisonError::into_inner)
+    POOL.get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
 }
 
 pub fn list() -> Vec<ServerView> {
     let servers = read_config().mcp_servers;
     let pool = pool();
     // A server added to the file by hand has not been started yet.
-    if servers.iter().any(|(name, s)| !s.disabled && !pool.contains_key(name)) {
+    if servers
+        .iter()
+        .any(|(name, s)| !s.disabled && !pool.contains_key(name))
+    {
         restart_changed();
     }
     servers
@@ -163,12 +169,21 @@ pub fn list() -> Vec<ServerView> {
                 None => ("starting", Vec::new(), None),
                 Some(entry) => match entry.conn.try_lock().as_deref() {
                     Err(_) | Ok(None) => ("starting", Vec::new(), None),
-                    Ok(Some(Ok(conn))) if !conn.alive() => ("error", Vec::new(), Some("The server exited".into())),
+                    Ok(Some(Ok(conn))) if !conn.alive() => {
+                        ("error", Vec::new(), Some("The server exited".into()))
+                    }
                     Ok(Some(Ok(conn))) => ("ready", conn.tool_infos(), None),
                     Ok(Some(Err(e))) => ("error", Vec::new(), Some(e.clone())),
                 },
             };
-            ServerView { name, server, status, tools, error, identity }
+            ServerView {
+                name,
+                server,
+                status,
+                tools,
+                error,
+                identity,
+            }
         })
         .collect()
 }
@@ -190,7 +205,11 @@ pub fn save(name: String, previous: Option<String>, server: McpServer) -> Result
         let mut config = read_config();
         let old = previous.clone().unwrap_or_else(|| name.clone());
         // An empty value keeps the one the server has now, from the store or the file.
-        let kept = config.mcp_servers.get(&old).map(|s| resolved(&old, s)).unwrap_or_default();
+        let kept = config
+            .mcp_servers
+            .get(&old)
+            .map(|s| resolved(&old, s))
+            .unwrap_or_default();
         let mut server = server;
         let secrets = Secrets {
             env: take_values(&mut server.env, &kept.env),
@@ -215,7 +234,10 @@ pub fn save(name: String, previous: Option<String>, server: McpServer) -> Result
 }
 
 /// Empties each value, returning the values to store: the one given, or else the kept one.
-fn take_values(values: &mut BTreeMap<String, String>, kept: &BTreeMap<String, String>) -> BTreeMap<String, String> {
+fn take_values(
+    values: &mut BTreeMap<String, String>,
+    kept: &BTreeMap<String, String>,
+) -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
     for (key, value) in values.iter_mut() {
         let value = match std::mem::take(value) {
@@ -236,12 +258,24 @@ fn secret_name(name: &str) -> String {
 /// The server as it runs: its stored values filled in, and without the tools turned off or
 /// the sharing, which change only who uses it, so changing them restarts nothing.
 fn resolved(name: &str, server: &McpServer) -> McpServer {
-    let mut server = McpServer { disabled_tools: Vec::new(), share: false, ..server.clone() };
-    if server.env.values().chain(server.headers.values()).any(String::is_empty) {
+    let mut server = McpServer {
+        disabled_tools: Vec::new(),
+        share: false,
+        ..server.clone()
+    };
+    if server
+        .env
+        .values()
+        .chain(server.headers.values())
+        .any(String::is_empty)
+    {
         let stored: Secrets = super::api_config::read_secret(&secret_name(name))
             .and_then(|text| serde_json::from_str(&text).ok())
             .unwrap_or_default();
-        for (values, stored) in [(&mut server.env, stored.env), (&mut server.headers, stored.headers)] {
+        for (values, stored) in [
+            (&mut server.env, stored.env),
+            (&mut server.headers, stored.headers),
+        ] {
             for (key, value) in values.iter_mut() {
                 if value.is_empty()
                     && let Some(v) = stored.get(key)
@@ -301,7 +335,13 @@ fn live_servers() -> Vec<(String, Arc<Conn>)> {
             .map(|(name, config)| {
                 let entry = pool
                     .entry(name.clone())
-                    .or_insert_with(|| Arc::new(Entry { config, conn: Mutex::new(None), notices: Arc::default() }))
+                    .or_insert_with(|| {
+                        Arc::new(Entry {
+                            config,
+                            conn: Mutex::new(None),
+                            notices: Arc::default(),
+                        })
+                    })
                     .clone();
                 (name, entry)
             })
@@ -311,12 +351,19 @@ fn live_servers() -> Vec<(String, Arc<Conn>)> {
         .into_iter()
         .map(|(name, entry)| std::thread::spawn(move || entry.connect().ok().map(|c| (name, c))))
         .collect();
-    handles.into_iter().filter_map(|h| h.join().ok().flatten()).collect()
+    handles
+        .into_iter()
+        .filter_map(|h| h.join().ok().flatten())
+        .collect()
 }
 
 /// How many MCP tools a turn may offer, after Patchwork's own.
 pub fn tool_budget() -> usize {
-    MAX_TOOLS.saturating_sub(super::api_tools::definitions(false).as_array().map_or(0, Vec::len))
+    MAX_TOOLS.saturating_sub(
+        super::api_tools::definitions(false)
+            .as_array()
+            .map_or(0, Vec::len),
+    )
 }
 
 /// The servers that are up, without waiting on any. One still starting is left out of the
@@ -326,13 +373,22 @@ fn ready_servers() -> Vec<(String, McpServer, Arc<Conn>)> {
     let mut start = false;
     {
         let pool = pool();
-        for (name, server) in read_config().mcp_servers.into_iter().filter(|(_, s)| !s.disabled) {
-            let Some(entry) = pool.get(&name).filter(|e| e.config == resolved(&name, &server)) else {
+        for (name, server) in read_config()
+            .mcp_servers
+            .into_iter()
+            .filter(|(_, s)| !s.disabled)
+        {
+            let Some(entry) = pool
+                .get(&name)
+                .filter(|e| e.config == resolved(&name, &server))
+            else {
                 start = true;
                 continue;
             };
             // Locked while it starts.
-            let Ok(conn) = entry.conn.try_lock().map(|c| c.clone()) else { continue };
+            let Ok(conn) = entry.conn.try_lock().map(|c| c.clone()) else {
+                continue;
+            };
             match conn {
                 Some(Ok(conn)) if conn.alive() => out.push((name, server, conn)),
                 Some(Err(_)) => {}
@@ -383,21 +439,38 @@ pub fn probe(config: &McpServer) -> Result<Vec<ToolInfo>, String> {
 /// A name with only the characters tool names allow.
 fn clean(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 
 /// Calls a tool, giving up once `stopped` says the turn was stopped. Ok carries its result for
 /// the model; Err a failure the model is told about.
-pub fn call(server: &str, tool: &str, arguments: &Value, stopped: &dyn Fn() -> bool) -> Result<String, String> {
-    let entry = pool().get(server).cloned().ok_or_else(|| format!("The MCP server {server} is not running"))?;
+pub fn call(
+    server: &str,
+    tool: &str,
+    arguments: &Value,
+    stopped: &dyn Fn() -> bool,
+) -> Result<String, String> {
+    let entry = pool()
+        .get(server)
+        .cloned()
+        .ok_or_else(|| format!("The MCP server {server} is not running"))?;
     let params = json!({"name": tool, "arguments": arguments});
     let conn = entry.connect()?;
     let result = match conn.request("tools/call", params.clone(), CALL_TIMEOUT, stopped) {
         // The server died or dropped the session; one new start, then the call once more.
         Err(e) if !conn.alive() && !stopped() => {
             entry.drop_conn();
-            entry.connect()?.request("tools/call", params, CALL_TIMEOUT, stopped).map_err(|_| e)?
+            entry
+                .connect()?
+                .request("tools/call", params, CALL_TIMEOUT, stopped)
+                .map_err(|_| e)?
         }
         other => other?,
     };
@@ -410,8 +483,15 @@ pub fn call(server: &str, tool: &str, arguments: &Value, stopped: &dyn Fn() -> b
             Some("resource") => part["resource"]["text"]
                 .as_str()
                 .map(String::from)
-                .unwrap_or_else(|| format!("(resource {})", part["resource"]["uri"].as_str().unwrap_or_default())),
-            Some("resource_link") => format!("(resource {})", part["uri"].as_str().unwrap_or_default()),
+                .unwrap_or_else(|| {
+                    format!(
+                        "(resource {})",
+                        part["resource"]["uri"].as_str().unwrap_or_default()
+                    )
+                }),
+            Some("resource_link") => {
+                format!("(resource {})", part["uri"].as_str().unwrap_or_default())
+            }
             Some(kind) => format!("({kind} content left out)"),
             None => String::new(),
         })
@@ -422,7 +502,11 @@ pub fn call(server: &str, tool: &str, arguments: &Value, stopped: &dyn Fn() -> b
     } else {
         text
     };
-    if result["isError"] == true { Err(text) } else { Ok(text) }
+    if result["isError"] == true {
+        Err(text)
+    } else {
+        Ok(text)
+    }
 }
 
 struct Entry {
@@ -438,7 +522,10 @@ type Notices = Arc<Mutex<Vec<Sender<Value>>>>;
 
 /// Passes a notification to every listener, forgetting those that have gone.
 fn announce(notices: &Notices, notice: &Value) {
-    notices.lock().unwrap_or_else(PoisonError::into_inner).retain(|l| l.send(notice.clone()).is_ok());
+    notices
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .retain(|l| l.send(notice.clone()).is_ok());
 }
 
 impl Entry {
@@ -449,7 +536,8 @@ impl Entry {
         {
             *conn = None;
         }
-        conn.get_or_insert_with(|| Conn::start(&self.config, self.notices.clone()).map(Arc::new)).clone()
+        conn.get_or_insert_with(|| Conn::start(&self.config, self.notices.clone()).map(Arc::new))
+            .clone()
     }
 
     fn drop_conn(&self) {
@@ -480,17 +568,29 @@ enum Transport {
 impl Conn {
     fn start(config: &McpServer, notices: Notices) -> Result<Conn, String> {
         let transport = match (&config.command, &config.url) {
-            (Some(command), _) => Transport::Stdio(StdioServer::spawn(command, &config.args, &config.env, notices)?),
+            (Some(command), _) => Transport::Stdio(StdioServer::spawn(
+                command,
+                &config.args,
+                &config.env,
+                notices,
+            )?),
             (None, Some(url)) => Transport::Http(HttpServer::new(url, &config.headers, notices)),
             (None, None) => return Err("No command or URL".into()),
         };
-        let mut conn = Conn { transport, tools: Vec::new(), next_id: AtomicU64::new(1), info: Value::Null };
+        let mut conn = Conn {
+            transport,
+            tools: Vec::new(),
+            next_id: AtomicU64::new(1),
+            info: Value::Null,
+        };
         let init = json!({
             "protocolVersion": PROTOCOL,
             "capabilities": {},
             "clientInfo": {"name": "Patchwork", "version": crate::VERSION},
         });
-        conn.info = conn.request("initialize", init, START_TIMEOUT, &|| false).map_err(|e| conn.explain(e))?;
+        conn.info = conn
+            .request("initialize", init, START_TIMEOUT, &|| false)
+            .map_err(|e| conn.explain(e))?;
         conn.notify("notifications/initialized");
         let mut cursor: Option<String> = None;
         loop {
@@ -498,9 +598,13 @@ impl Conn {
                 Some(c) => json!({"cursor": c}),
                 None => json!({}),
             };
-            let page = conn.request("tools/list", params, START_TIMEOUT, &|| false).map_err(|e| conn.explain(e))?;
+            let page = conn
+                .request("tools/list", params, START_TIMEOUT, &|| false)
+                .map_err(|e| conn.explain(e))?;
             for t in page["tools"].as_array().into_iter().flatten() {
-                let Some(name) = t["name"].as_str() else { continue };
+                let Some(name) = t["name"].as_str() else {
+                    continue;
+                };
                 let mut schema = t["inputSchema"].clone();
                 if !schema.is_object() {
                     schema = json!({"type": "object", "properties": {}});
@@ -527,7 +631,10 @@ impl Conn {
     fn tool_infos(&self) -> Vec<ToolInfo> {
         self.tools
             .iter()
-            .map(|t| ToolInfo { name: t.name.clone(), description: t.description.clone() })
+            .map(|t| ToolInfo {
+                name: t.name.clone(),
+                description: t.description.clone(),
+            })
             .collect()
     }
 
@@ -554,7 +661,13 @@ impl Conn {
 
     /// Sends a request and waits for its answer. A request that runs out of time, or whose turn
     /// is stopped, is cancelled at the server.
-    fn request(&self, method: &str, params: Value, timeout: Duration, stopped: &dyn Fn() -> bool) -> Result<Value, String> {
+    fn request(
+        &self,
+        method: &str,
+        params: Value,
+        timeout: Duration,
+        stopped: &dyn Fn() -> bool,
+    ) -> Result<Value, String> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let mut message = json!({"jsonrpc": "2.0", "id": id, "method": method});
         // A request without params leaves them out; some servers refuse a null.
@@ -569,11 +682,17 @@ impl Conn {
         let reply = loop {
             match answer.recv_timeout(POLL) {
                 Ok(reply) => break reply?,
-                Err(mpsc::RecvTimeoutError::Disconnected) => return Err("The MCP server exited".into()),
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err("The MCP server exited".into());
+                }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
                     let stop = stopped();
                     if stop || Instant::now() >= deadline {
-                        let reason = if stop { "The turn was stopped" } else { "Timed out" };
+                        let reason = if stop {
+                            "The turn was stopped"
+                        } else {
+                            "Timed out"
+                        };
                         self.cancel(id, reason);
                         return Err(if stop {
                             reason.into()
@@ -585,7 +704,10 @@ impl Conn {
             }
         };
         if let Some(error) = reply.get("error") {
-            return Err(error["message"].as_str().map(String::from).unwrap_or_else(|| error.to_string()));
+            return Err(error["message"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_else(|| error.to_string()));
         }
         Ok(reply["result"].clone())
     }
@@ -607,7 +729,10 @@ impl Conn {
         let message = json!({"jsonrpc": "2.0", "method": "notifications/cancelled", "params": {"requestId": id, "reason": reason}});
         match &self.transport {
             Transport::Stdio(s) => {
-                s.waiters.lock().unwrap_or_else(PoisonError::into_inner).remove(&id);
+                s.waiters
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .remove(&id);
                 let _ = s.send(&message);
             }
             Transport::Http(h) => {
@@ -630,7 +755,12 @@ struct StdioServer {
 }
 
 impl StdioServer {
-    fn spawn(command: &str, args: &[String], env: &BTreeMap<String, String>, notices: Notices) -> Result<Self, String> {
+    fn spawn(
+        command: &str,
+        args: &[String],
+        env: &BTreeMap<String, String>,
+        notices: Notices,
+    ) -> Result<Self, String> {
         let mut cmd = super::user_command(command.trim());
         cmd.args(args)
             .envs(env)
@@ -640,7 +770,9 @@ impl StdioServer {
         // Its own process group, so stopping it also stops what it started (npx's node).
         #[cfg(unix)]
         std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
-        let mut child = cmd.spawn().map_err(|e| format!("Could not start {command}: {e}"))?;
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| format!("Could not start {command}: {e}"))?;
         let stdin = Arc::new(Mutex::new(child.stdin.take().ok_or("No stdin")?));
         let stdout = child.stdout.take().ok_or("No stdout")?;
         let stderr_pipe = child.stderr.take().ok_or("No stderr")?;
@@ -655,7 +787,9 @@ impl StdioServer {
                     tail.push('\n');
                     if tail.len() > STDERR_TAIL {
                         let cut = tail.len() - STDERR_TAIL;
-                        let cut = (cut..tail.len()).find(|&i| tail.is_char_boundary(i)).unwrap_or(0);
+                        let cut = (cut..tail.len())
+                            .find(|&i| tail.is_char_boundary(i))
+                            .unwrap_or(0);
                         tail.drain(..cut);
                     }
                 }
@@ -665,7 +799,9 @@ impl StdioServer {
             let (waiters, stdin) = (waiters.clone(), stdin.clone());
             std::thread::spawn(move || {
                 for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-                    let Ok(v) = serde_json::from_str::<Value>(&line) else { continue };
+                    let Ok(v) = serde_json::from_str::<Value>(&line) else {
+                        continue;
+                    };
                     match (v.get("id"), v.get("method")) {
                         // A request from the server: answer pings, refuse the rest.
                         (Some(id), Some(method)) => {
@@ -679,9 +815,12 @@ impl StdioServer {
                             let _ = stdin.flush();
                         }
                         (Some(id), None) => {
-                            let waiter = id
-                                .as_u64()
-                                .and_then(|id| waiters.lock().unwrap_or_else(PoisonError::into_inner).remove(&id));
+                            let waiter = id.as_u64().and_then(|id| {
+                                waiters
+                                    .lock()
+                                    .unwrap_or_else(PoisonError::into_inner)
+                                    .remove(&id)
+                            });
                             if let Some(waiter) = waiter {
                                 let _ = waiter.send(Ok(v));
                             }
@@ -691,26 +830,48 @@ impl StdioServer {
                     }
                 }
                 // The server exited: wake everyone still waiting.
-                waiters.lock().unwrap_or_else(PoisonError::into_inner).clear();
+                waiters
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .clear();
             });
         }
-        Ok(StdioServer { child: Mutex::new(child), stdin, waiters, stderr })
+        Ok(StdioServer {
+            child: Mutex::new(child),
+            stdin,
+            waiters,
+            stderr,
+        })
     }
 
     fn alive(&self) -> bool {
-        matches!(self.child.lock().unwrap_or_else(PoisonError::into_inner).try_wait(), Ok(None))
+        matches!(
+            self.child
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .try_wait(),
+            Ok(None)
+        )
     }
 
     fn send(&self, message: &Value) -> Result<(), String> {
         let mut stdin = self.stdin.lock().unwrap_or_else(PoisonError::into_inner);
-        writeln!(stdin, "{message}").and_then(|_| stdin.flush()).map_err(|e| format!("The MCP server closed: {e}"))
+        writeln!(stdin, "{message}")
+            .and_then(|_| stdin.flush())
+            .map_err(|e| format!("The MCP server closed: {e}"))
     }
 
     fn send_request(&self, id: u64, message: &Value) -> Result<Answer, String> {
         let (tx, rx) = mpsc::channel();
-        self.waiters.lock().unwrap_or_else(PoisonError::into_inner).insert(id, tx);
+        self.waiters
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(id, tx);
         if let Err(e) = self.send(message) {
-            self.waiters.lock().unwrap_or_else(PoisonError::into_inner).remove(&id);
+            self.waiters
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .remove(&id);
             return Err(e);
         }
         Ok(rx)
@@ -760,7 +921,12 @@ impl HttpServer {
             .header("Content-Type", "application/json")
             .header("Accept", "application/json, text/event-stream")
             .header("MCP-Protocol-Version", PROTOCOL);
-        if let Some(session) = self.session.lock().unwrap_or_else(PoisonError::into_inner).as_deref() {
+        if let Some(session) = self
+            .session
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_deref()
+        {
             request = request.header("Mcp-Session-Id", session);
         }
         for (name, value) in self.headers.iter() {
@@ -770,7 +936,11 @@ impl HttpServer {
             self.alive.store(false, Ordering::Relaxed);
             format!("Could not reach {}: {e}", self.url)
         })?;
-        if let Some(session) = response.headers().get("mcp-session-id").and_then(|v| v.to_str().ok()) {
+        if let Some(session) = response
+            .headers()
+            .get("mcp-session-id")
+            .and_then(|v| v.to_str().ok())
+        {
             *self.session.lock().unwrap_or_else(PoisonError::into_inner) = Some(session.into());
         }
         Ok(response)
@@ -791,14 +961,27 @@ impl HttpServer {
         let mut response = self.post(message)?;
         let status = response.status().as_u16();
         // A server answers 404 to a session it has ended; a new one starts on the next call.
-        if status == 404 && self.session.lock().unwrap_or_else(PoisonError::into_inner).is_some() {
+        if status == 404
+            && self
+                .session
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .is_some()
+        {
             self.alive.store(false, Ordering::Relaxed);
             return Err("The MCP server ended its session".into());
         }
         if !response.status().is_success() {
             let text = response.body_mut().read_to_string().unwrap_or_default();
-            let hint = if matches!(status, 401 | 403) { " Check the server's headers." } else { "" };
-            return Err(format!("The MCP server answered {status}: {}.{hint}", text.trim().chars().take(300).collect::<String>()));
+            let hint = if matches!(status, 401 | 403) {
+                " Check the server's headers."
+            } else {
+                ""
+            };
+            return Err(format!(
+                "The MCP server answered {status}: {}.{hint}",
+                text.trim().chars().take(300).collect::<String>()
+            ));
         }
         let sse = response
             .headers()
@@ -809,7 +992,8 @@ impl HttpServer {
         if !sse {
             let mut text = String::new();
             body.read_to_string(&mut text).map_err(|e| e.to_string())?;
-            return serde_json::from_str(&text).map_err(|e| format!("The MCP server sent bad JSON: {e}"));
+            return serde_json::from_str(&text)
+                .map_err(|e| format!("The MCP server sent bad JSON: {e}"));
         }
         let mut data = String::new();
         for line in BufReader::new(body).lines() {
@@ -856,7 +1040,9 @@ pub fn set_hook_handler(handler: HookHandler) {
 
 /// The file the relay reads its port and token from, once Patchwork is listening.
 pub fn relay_file() -> Option<PathBuf> {
-    RELAY_READY.load(Ordering::Relaxed).then(|| path().with_file_name(RELAY_FILE))
+    RELAY_READY
+        .load(Ordering::Relaxed)
+        .then(|| path().with_file_name(RELAY_FILE))
 }
 
 fn serve_relay() -> Result<(), String> {
@@ -876,15 +1062,26 @@ fn serve_relay() -> Result<(), String> {
 /// Serves one CLI's relay: its first line names the server and carries the token, and later
 /// lines are JSON-RPC messages, each answered from Patchwork's copy of the server.
 fn relay_client(stream: std::net::TcpStream, token: &str) {
-    let Ok(reader) = stream.try_clone() else { return };
+    let Ok(reader) = stream.try_clone() else {
+        return;
+    };
     let mut lines = BufReader::new(reader).lines().map_while(Result::ok);
-    let Some(hello) = lines.next().and_then(|l| serde_json::from_str::<Value>(&l).ok()) else { return };
+    let Some(hello) = lines
+        .next()
+        .and_then(|l| serde_json::from_str::<Value>(&l).ok())
+    else {
+        return;
+    };
     if hello["token"].as_str() != Some(token) {
         return;
     }
     // A permission hook asks once and waits for the answer.
     if !hello["hook"].is_null() {
-        let answer = HOOK_HANDLER.get().map_or(json!({"deny": "Patchwork is still starting"}), |handle| handle(&hello["hook"]));
+        let answer = HOOK_HANDLER
+            .get()
+            .map_or(json!({"deny": "Patchwork is still starting"}), |handle| {
+                handle(&hello["hook"])
+            });
         let mut stream = stream;
         let _ = writeln!(stream, "{answer}");
         return;
@@ -905,13 +1102,22 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
     // rest, such as a changed tool list, to every CLI sharing the server.
     if let Some(entry) = pool().get(&server).cloned() {
         let (tx, rx) = mpsc::channel::<Value>();
-        entry.notices.lock().unwrap_or_else(PoisonError::into_inner).push(tx);
+        entry
+            .notices
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(tx);
         let (out, tokens) = (out.clone(), tokens.clone());
         std::thread::spawn(move || {
             for mut notice in rx {
                 if notice["method"] == "notifications/progress" {
                     let ours = notice["params"]["progressToken"].to_string();
-                    let Some(theirs) = tokens.lock().unwrap_or_else(PoisonError::into_inner).get(&ours).cloned() else {
+                    let Some(theirs) = tokens
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .get(&ours)
+                        .cloned()
+                    else {
                         continue;
                     };
                     notice["params"]["progressToken"] = theirs;
@@ -924,28 +1130,41 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
         });
     }
     for line in lines {
-        let Ok(message) = serde_json::from_str::<Value>(&line) else { continue };
+        let Ok(message) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
         let method = message["method"].as_str().unwrap_or_default().to_string();
         let Some(id) = message.get("id").cloned() else {
             if method == "notifications/cancelled" {
                 let key = message["params"]["requestId"].to_string();
-                if let Some(flag) = running.lock().unwrap_or_else(PoisonError::into_inner).get(&key) {
+                if let Some(flag) = running
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .get(&key)
+                {
                     flag.store(true, Ordering::Relaxed);
                 }
             }
             continue;
         };
-        let (out, running, server, tokens) = (out.clone(), running.clone(), server.clone(), tokens.clone());
+        let (out, running, server, tokens) =
+            (out.clone(), running.clone(), server.clone(), tokens.clone());
         let mut params = message["params"].clone();
         let token = params["_meta"]["progressToken"].clone();
         let ours = (!token.is_null()).then(|| {
             let ours = Value::from(format!("patchwork-{}", uuid::Uuid::new_v4().simple()));
             params["_meta"]["progressToken"] = ours.clone();
-            tokens.lock().unwrap_or_else(PoisonError::into_inner).insert(ours.to_string(), token);
+            tokens
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .insert(ours.to_string(), token);
             ours
         });
         let stop = Arc::new(AtomicBool::new(false));
-        running.lock().unwrap_or_else(PoisonError::into_inner).insert(id.to_string(), stop.clone());
+        running
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(id.to_string(), stop.clone());
         std::thread::spawn(move || {
             let entry = pool().get(&server).cloned();
             let result = entry
@@ -954,15 +1173,25 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
                 .and_then(|conn| match method.as_str() {
                     "initialize" => Ok(conn.info.clone()),
                     "ping" => Ok(json!({})),
-                    _ => conn.request(&method, params, CALL_TIMEOUT, &|| stop.load(Ordering::Relaxed)),
+                    _ => conn.request(&method, params, CALL_TIMEOUT, &|| {
+                        stop.load(Ordering::Relaxed)
+                    }),
                 });
-            running.lock().unwrap_or_else(PoisonError::into_inner).remove(&id.to_string());
+            running
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .remove(&id.to_string());
             if let Some(ours) = ours {
-                tokens.lock().unwrap_or_else(PoisonError::into_inner).remove(&ours.to_string());
+                tokens
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .remove(&ours.to_string());
             }
             let answer = match result {
                 Ok(result) => json!({"jsonrpc": "2.0", "id": id, "result": result}),
-                Err(message) => json!({"jsonrpc": "2.0", "id": id, "error": {"code": -32603, "message": message}}),
+                Err(message) => {
+                    json!({"jsonrpc": "2.0", "id": id, "error": {"code": -32603, "message": message}})
+                }
             };
             reply(&out, answer);
         });
@@ -977,7 +1206,10 @@ pub fn run_proxy() -> i32 {
         eprintln!("Usage: {PROXY_ARG} <relay file> <server>");
         return 2;
     };
-    let relay: Value = match std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str(&t).ok()) {
+    let relay: Value = match std::fs::read_to_string(file)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+    {
         Some(relay) => relay,
         None => {
             eprintln!("Patchwork is not running");
@@ -996,11 +1228,16 @@ pub fn run_proxy() -> i32 {
     if writeln!(stream, "{hello}").is_err() {
         return 1;
     }
-    let Ok(incoming) = stream.try_clone() else { return 1 };
+    let Ok(incoming) = stream.try_clone() else {
+        return 1;
+    };
     std::thread::spawn(move || {
         let mut stdout = std::io::stdout();
         for line in BufReader::new(incoming).lines().map_while(Result::ok) {
-            if writeln!(stdout, "{line}").and_then(|_| stdout.flush()).is_err() {
+            if writeln!(stdout, "{line}")
+                .and_then(|_| stdout.flush())
+                .is_err()
+            {
                 break;
             }
         }
@@ -1046,7 +1283,9 @@ pub fn identity(server: &McpServer) -> String {
     })
     .to_string();
     // FNV-1a, 64-bit.
-    let hash = text.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3));
+    let hash = text.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    });
     format!("{hash:016x}")
 }
 
@@ -1054,5 +1293,8 @@ pub fn identity(server: &McpServer) -> String {
 /// and environment, so it would be a second copy of it.
 pub fn same_server(cli: &McpServer, ours: &McpServer) -> bool {
     let command = |s: &McpServer| s.command.as_deref().map(str::trim).map(String::from);
-    command(cli).is_some() && command(cli) == command(ours) && cli.args == ours.args && cli.env == ours.env
+    command(cli).is_some()
+        && command(cli) == command(ours)
+        && cli.args == ours.args
+        && cli.env == ours.env
 }

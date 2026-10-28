@@ -3,8 +3,6 @@
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-pub(super) type Res<T> = Result<T, String>;
-
 pub(super) fn err(e: impl std::fmt::Display) -> String {
     format!("Database error: {e}")
 }

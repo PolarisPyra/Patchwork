@@ -6,6 +6,7 @@
 //! installed from a release (a dev or source build) cannot replace itself, so it only reports the
 //! version.
 
+use patchwork_server::Res;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -32,17 +33,31 @@ const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
 /// Where updating stands, as the Settings pane shows it.
 #[derive(Clone, Serialize)]
-#[serde(tag = "status", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "status",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum UpdateState {
     Idle,
     Checking,
     UpToDate,
     /// A newer release this copy cannot install itself.
-    Available { version: String },
-    Downloading { version: String, downloaded: u64, total: Option<u64> },
+    Available {
+        version: String,
+    },
+    Downloading {
+        version: String,
+        downloaded: u64,
+        total: Option<u64>,
+    },
     /// Installed (downloaded, on Windows); it runs once Patchwork restarts.
-    Ready { version: String },
-    Failed { message: String },
+    Ready {
+        version: String,
+    },
+    Failed {
+        message: String,
+    },
 }
 
 #[derive(Clone, Serialize)]
@@ -58,10 +73,16 @@ pub struct UpdateStatus {
 
 /// What `restart_to_update` did.
 #[derive(Serialize)]
-#[serde(tag = "result", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "result",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum RestartResult {
     /// Agents are replying in this many tasks; restarting would stop them.
-    Busy { running: usize },
+    Busy {
+        running: usize,
+    },
     /// Nothing is ready to install.
     NothingReady,
     Restarting,
@@ -167,12 +188,19 @@ impl Updates {
             current_version: app.package_info().version.to_string(),
             can_install: can_install(),
             state: self.state().unwrap_or(UpdateState::Idle),
-            notes: self.notes.lock().unwrap_or_else(PoisonError::into_inner).clone(),
+            notes: self
+                .notes
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone(),
         }
     }
 
     fn state(&self) -> Option<UpdateState> {
-        self.state.lock().unwrap_or_else(PoisonError::into_inner).clone()
+        self.state
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 
     fn set(&self, app: &AppHandle, state: UpdateState) {
@@ -190,13 +218,21 @@ impl Updates {
         }
         if self.busy.swap(true, Ordering::SeqCst) {
             // A background check is running: it reports to the pane from now on.
-            if manual && matches!(self.state(), None | Some(UpdateState::UpToDate | UpdateState::Failed { .. })) {
+            if manual
+                && matches!(
+                    self.state(),
+                    None | Some(UpdateState::UpToDate | UpdateState::Failed { .. })
+                )
+            {
                 self.set(app, UpdateState::Checking);
             }
             return;
         }
         let _busy = Busy(self);
-        *self.last_check.lock().unwrap_or_else(PoisonError::into_inner) = Some(SystemTime::now());
+        *self
+            .last_check
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(SystemTime::now());
         // An installed update waits for the restart; checking again would download it again.
         if let Some(UpdateState::Ready { .. }) = self.state() {
             return;
@@ -216,7 +252,8 @@ impl Updates {
         };
         let watched = self.watched.swap(false, Ordering::SeqCst);
         let version = release.tag_name.trim_start_matches('v').to_string();
-        let newer = semver::Version::parse(&version).is_ok_and(|latest| latest > app.package_info().version);
+        let newer = semver::Version::parse(&version)
+            .is_ok_and(|latest| latest > app.package_info().version);
         if !newer {
             let shown = self.state();
             if watched || matches!(shown, None | Some(UpdateState::Failed { .. })) {
@@ -227,7 +264,12 @@ impl Updates {
         *self.notes.lock().unwrap_or_else(PoisonError::into_inner) =
             release.body.clone().filter(|body| !body.trim().is_empty());
         if !can_install() {
-            self.set(app, UpdateState::Available { version: version.clone() });
+            self.set(
+                app,
+                UpdateState::Available {
+                    version: version.clone(),
+                },
+            );
             return;
         }
         if let Err(message) = self.download_and_install(app, &release, &version) {
@@ -235,10 +277,15 @@ impl Updates {
             self.set(app, UpdateState::Failed { message });
             return;
         }
-        self.set(app, UpdateState::Ready { version: version.clone() });
+        self.set(
+            app,
+            UpdateState::Ready {
+                version: version.clone(),
+            },
+        );
     }
 
-    fn download_and_install(&self, app: &AppHandle, release: &Release, version: &str) -> Result<(), String> {
+    fn download_and_install(&self, app: &AppHandle, release: &Release, version: &str) -> Res<()> {
         let asset = release
             .assets
             .iter()
@@ -255,7 +302,13 @@ impl Updates {
             .ok_or("The release does not publish this download's signature.")?;
         let signature = minisign_verify::Signature::decode(signature)
             .map_err(|e| format!("The release has an unreadable signature: {e}"))?;
-        let file = self.download(app, &asset.browser_download_url, sha256, &signature, version)?;
+        let file = self.download(
+            app,
+            &asset.browser_download_url,
+            sha256,
+            &signature,
+            version,
+        )?;
         install(file, self)
     }
 
@@ -267,11 +320,20 @@ impl Updates {
         sha256: &str,
         signature: &minisign_verify::Signature,
         version: &str,
-    ) -> Result<PathBuf, String> {
-        let key = minisign_verify::PublicKey::from_base64(SIGNING_KEY).map_err(|e| e.to_string())?;
-        let mut verifier =
-            key.verify_stream(signature).map_err(|e| format!("The release has an unusable signature: {e}"))?;
-        self.set(app, UpdateState::Downloading { version: version.into(), downloaded: 0, total: None });
+    ) -> Res<PathBuf> {
+        let key =
+            minisign_verify::PublicKey::from_base64(SIGNING_KEY).map_err(|e| e.to_string())?;
+        let mut verifier = key
+            .verify_stream(signature)
+            .map_err(|e| format!("The release has an unusable signature: {e}"))?;
+        self.set(
+            app,
+            UpdateState::Downloading {
+                version: version.into(),
+                downloaded: 0,
+                total: None,
+            },
+        );
         let mut response = agent(DOWNLOAD_TIMEOUT)
             .get(url)
             .call()
@@ -280,7 +342,8 @@ impl Updates {
         let name = url.rsplit('/').next().unwrap_or("patchwork-update");
         let path = std::env::temp_dir().join(format!("patchwork-{version}-{name}"));
         let result = (|| {
-            let mut file = std::fs::File::create(&path).map_err(|e| format!("Could not save the download: {e}"))?;
+            let mut file = std::fs::File::create(&path)
+                .map_err(|e| format!("Could not save the download: {e}"))?;
             let mut reader = response.body_mut().with_config().limit(u64::MAX).reader();
             let mut hasher = Sha256::new();
             let mut buf = vec![0u8; 1 << 16];
@@ -288,27 +351,41 @@ impl Updates {
             // Each whole percent, or each MiB when the size is unknown.
             let step = total.map_or(1 << 20, |t| (t / 100).max(1));
             loop {
-                let read = reader.read(&mut buf).map_err(|e| format!("The download stopped: {e}"))?;
+                let read = reader
+                    .read(&mut buf)
+                    .map_err(|e| format!("The download stopped: {e}"))?;
                 if read == 0 {
                     break;
                 }
                 hasher.update(&buf[..read]);
                 verifier.update(&buf[..read]);
-                file.write_all(&buf[..read]).map_err(|e| format!("Could not save the download: {e}"))?;
+                file.write_all(&buf[..read])
+                    .map_err(|e| format!("Could not save the download: {e}"))?;
                 downloaded += read as u64;
                 if downloaded / step != shown / step {
                     shown = downloaded;
-                    self.set(app, UpdateState::Downloading { version: version.into(), downloaded, total });
+                    self.set(
+                        app,
+                        UpdateState::Downloading {
+                            version: version.into(),
+                            downloaded,
+                            total,
+                        },
+                    );
                 }
             }
             file.sync_all().map_err(|e| e.to_string())?;
-            let got: String = hasher.finalize().iter().map(|b| format!("{b:02x}")).collect();
+            let got: String = hasher
+                .finalize()
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect();
             if !got.eq_ignore_ascii_case(sha256) {
                 return Err("The download does not match its checksum.".to_string());
             }
-            verifier
-                .finalize()
-                .map_err(|_| "The download is not signed with Patchwork's release key.".to_string())?;
+            verifier.finalize().map_err(|_| {
+                "The download is not signed with Patchwork's release key.".to_string()
+            })?;
             Ok(())
         })();
         match result {
@@ -323,7 +400,10 @@ impl Updates {
     /// Whether `every` has passed since the last check. Measured on the wall clock, so time spent
     /// asleep counts.
     fn due(&self, every: Duration) -> bool {
-        let last = *self.last_check.lock().unwrap_or_else(PoisonError::into_inner);
+        let last = *self
+            .last_check
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
         last.is_none_or(|last| last.elapsed().map_or(true, |since| since >= every))
     }
 
@@ -346,7 +426,12 @@ impl Updates {
     /// installer closes the app, and starts it again when this quit is a restart.
     pub fn install_on_exit(&self) {
         #[cfg(windows)]
-        if let Some(installer) = self.pending.lock().unwrap_or_else(PoisonError::into_inner).take() {
+        if let Some(installer) = self
+            .pending
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take()
+        {
             // Passive mode with a progress bar, as an update, like the installer's own updates.
             let mut cmd = std::process::Command::new(&installer);
             cmd.args(["/P", "/UPDATE"]);
@@ -361,7 +446,7 @@ impl Updates {
     }
 }
 
-fn latest_release() -> Result<Release, String> {
+fn latest_release() -> Res<Release> {
     let mut response = agent(CHECK_TIMEOUT)
         .get(LATEST_RELEASE)
         .call()
@@ -374,14 +459,17 @@ fn latest_release() -> Result<Release, String> {
 
 /// Keeps the verified installer for the restart or the quit, since running it closes the app.
 #[cfg(windows)]
-fn install(file: PathBuf, updates: &Updates) -> Result<(), String> {
-    *updates.pending.lock().unwrap_or_else(PoisonError::into_inner) = Some(file);
+fn install(file: PathBuf, updates: &Updates) -> Res<()> {
+    *updates
+        .pending
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner) = Some(file);
     Ok(())
 }
 
 /// Swaps the app bundle for the verified one.
 #[cfg(target_os = "macos")]
-fn install(file: PathBuf, _updates: &Updates) -> Result<(), String> {
+fn install(file: PathBuf, _updates: &Updates) -> Res<()> {
     let result = install_bundle(&file);
     let _ = std::fs::remove_file(&file);
     result
@@ -389,7 +477,7 @@ fn install(file: PathBuf, _updates: &Updates) -> Result<(), String> {
 
 /// Moves the verified AppImage over the running one, which keeps its open file until the restart.
 #[cfg(all(unix, not(target_os = "macos")))]
-fn install(file: PathBuf, _updates: &Updates) -> Result<(), String> {
+fn install(file: PathBuf, _updates: &Updates) -> Res<()> {
     use std::os::unix::fs::PermissionsExt;
     let target = PathBuf::from(std::env::var_os("APPIMAGE").ok_or("Not running as an AppImage.")?);
     // Copied beside the AppImage first, so the move into place is a rename on one filesystem.
@@ -408,13 +496,16 @@ fn install(file: PathBuf, _updates: &Updates) -> Result<(), String> {
 /// Unpacks the new app bundle beside the running one, then swaps them. A bundle in a folder the
 /// user cannot write to is not replaced.
 #[cfg(target_os = "macos")]
-fn install_bundle(archive: &std::path::Path) -> Result<(), String> {
+fn install_bundle(archive: &std::path::Path) -> Res<()> {
     let bundle = app_bundle().ok_or("Not running from an app bundle.")?;
     let parent = bundle.parent().ok_or("The app bundle has no folder.")?;
     let staging = parent.join(".patchwork-update");
     let _ = std::fs::remove_dir_all(&staging);
     std::fs::create_dir_all(&staging).map_err(|e| {
-        format!("Patchwork cannot write to {}, so download the update from the releases page: {e}", parent.display())
+        format!(
+            "Patchwork cannot write to {}, so download the update from the releases page: {e}",
+            parent.display()
+        )
     })?;
     let result = (|| {
         let unpacked = std::process::Command::new("tar")
@@ -432,7 +523,8 @@ fn install_bundle(archive: &std::path::Path) -> Result<(), String> {
             return Err("The update has no Patchwork.app.".to_string());
         }
         let old = staging.join("previous.app");
-        std::fs::rename(&bundle, &old).map_err(|e| format!("Could not replace {}: {e}", bundle.display()))?;
+        std::fs::rename(&bundle, &old)
+            .map_err(|e| format!("Could not replace {}: {e}", bundle.display()))?;
         if let Err(e) = std::fs::rename(&new, &bundle) {
             let _ = std::fs::rename(&old, &bundle);
             return Err(format!("Could not replace {}: {e}", bundle.display()));
@@ -445,7 +537,12 @@ fn install_bundle(archive: &std::path::Path) -> Result<(), String> {
 
 /// How often to check, from Settings: 10 minutes to an hour.
 fn check_every(app: &AppHandle) -> Duration {
-    let minutes = app.state::<Arc<Server>>().store.settings().updates.check_every_minutes;
+    let minutes = app
+        .state::<Arc<Server>>()
+        .store
+        .settings()
+        .updates
+        .check_every_minutes;
     Duration::from_secs(u64::from(minutes.clamp(10, 60)) * 60)
 }
 
@@ -458,7 +555,8 @@ pub fn start(app: &AppHandle) {
             let handle = app.clone();
             if handle.state::<Updates>().due(check_every(&handle)) {
                 // In its own thread, so a panic in one check does not end the checks.
-                let check = std::thread::spawn(move || handle.state::<Updates>().check(&handle, false));
+                let check =
+                    std::thread::spawn(move || handle.state::<Updates>().check(&handle, false));
                 if check.join().is_err() {
                     log::warn!("update check stopped");
                 }

@@ -44,7 +44,8 @@ import Composer, {
   type MentionItem,
 } from "~/components/chat/Composer";
 import { inlineImagePaths } from "~/components/chat/composerExtensions";
-import Messages, { UsageLine } from "~/components/chat/Messages";
+import Messages from "~/components/chat/Messages";
+import { UsageLine } from "~/components/chat/messages/UsageLine";
 import PendingApprovalBanner from "~/components/chat/PendingApprovalBanner";
 import {
   PermissionsContext,

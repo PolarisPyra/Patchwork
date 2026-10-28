@@ -3,12 +3,12 @@
 //! user's own index and branches are untouched, and kept alive by a ref under `refs/patchwork`.
 //! The pair around a turn is what the turn changed, whatever happens to the files later.
 
+use ts_rs::TS;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::process::Output;
 
-use crate::Res;
 use crate::Server;
 use serde::Serialize;
 
@@ -32,12 +32,21 @@ fn end_ref(thread_id: &str, message_id: &str) -> String {
 }
 
 /// Runs git in `root`, reading the index from `index` when given, and writing `input` to its stdin.
-fn run(root: &str, index: Option<&Path>, args: &[&str], input: Option<&[u8]>) -> Res<Output> {
+fn run(
+    root: &str,
+    index: Option<&Path>,
+    args: &[&str],
+    input: Option<&[u8]>,
+) -> Result<Output, String> {
     let mut cmd = crate::host_command("git");
     cmd.args(args)
         .current_dir(root)
         .env("GIT_LITERAL_PATHSPECS", "1")
-        .stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() })
+        .stdin(if input.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     if let Some(index) = index {
@@ -59,18 +68,22 @@ fn run(root: &str, index: Option<&Path>, args: &[&str], input: Option<&[u8]>) ->
     }
 }
 
-fn git(root: &str, args: &[&str]) -> Res<String> {
+fn git(root: &str, args: &[&str]) -> Result<String, String> {
     let out = run(root, None, args, None)?;
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
 /// A tree of the project's files as they are now. The user's index is copied first, so git only
 /// re-reads the files that changed since it was last refreshed.
-fn snapshot(root: &str) -> Res<String> {
+fn snapshot(root: &str) -> Result<String, String> {
     let index = PathBuf::from(root).join(git(root, &["rev-parse", "--git-path", "index"])?);
     let temp = PathBuf::from(root).join(git(
         root,
-        &["rev-parse", "--git-path", &format!("patchwork-index-{}", new_id())],
+        &[
+            "rev-parse",
+            "--git-path",
+            &format!("patchwork-index-{}", new_id()),
+        ],
     )?);
     if index.exists() {
         std::fs::copy(&index, &temp).map_err(|e| e.to_string())?;
@@ -87,8 +100,12 @@ pub(super) fn capture(root: &str, thread_id: &str, message_id: &str) {
     if git(root, &["rev-parse", "--git-dir"]).is_err() {
         return;
     }
-    let taken = snapshot(root)
-        .and_then(|tree| git(root, &["update-ref", &ref_name(thread_id, message_id), &tree]));
+    let taken = snapshot(root).and_then(|tree| {
+        git(
+            root,
+            &["update-ref", &ref_name(thread_id, message_id), &tree],
+        )
+    });
     if let Err(e) = taken {
         log::warn!("failed to take a checkpoint: {e}");
     }
@@ -103,8 +120,19 @@ pub(super) fn record_end(
     user_message_id: &str,
     replies: &[String],
 ) -> Option<TurnTrees> {
-    let before = git(root, &["rev-parse", "--verify", "-q", &ref_name(thread_id, user_message_id)]).ok()?;
-    let after = snapshot(root).map_err(|e| log::warn!("failed to snapshot a turn's end: {e}")).ok()?;
+    let before = git(
+        root,
+        &[
+            "rev-parse",
+            "--verify",
+            "-q",
+            &ref_name(thread_id, user_message_id),
+        ],
+    )
+    .ok()?;
+    let after = snapshot(root)
+        .map_err(|e| log::warn!("failed to snapshot a turn's end: {e}"))
+        .ok()?;
     for id in replies {
         let _ = git(root, &["update-ref", &end_ref(thread_id, id), &after]);
     }
@@ -112,7 +140,7 @@ pub(super) fn record_end(
 }
 
 /// Where a file a turn changed stands now.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum TurnFileState {
     /// Still differs from the last commit.
@@ -128,7 +156,7 @@ pub enum TurnFileState {
 }
 
 /// A file a turn changed: lines added and removed by the turn, and where it stands now.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnFile {
     pub path: String,
@@ -138,8 +166,23 @@ pub struct TurnFile {
 }
 
 /// Fields of `git diff-tree -z` output for the turn's changes to `paths`.
-fn turn_diff_fields(root: &str, turn: &TurnTrees, format: &str, paths: &[String]) -> Res<Vec<String>> {
-    let mut args = vec!["diff-tree", "-r", "-z", "--relative", "--no-renames", format, &turn.before, &turn.after, "--"];
+fn turn_diff_fields(
+    root: &str,
+    turn: &TurnTrees,
+    format: &str,
+    paths: &[String],
+) -> Result<Vec<String>, String> {
+    let mut args = vec![
+        "diff-tree",
+        "-r",
+        "-z",
+        "--relative",
+        "--no-renames",
+        format,
+        &turn.before,
+        &turn.after,
+        "--",
+    ];
     args.extend(paths.iter().map(String::as_str));
     let out = run(root, None, &args, None)?;
     Ok(String::from_utf8_lossy(&out.stdout)
@@ -150,38 +193,71 @@ fn turn_diff_fields(root: &str, turn: &TurnTrees, format: &str, paths: &[String]
 }
 
 /// What the turn did to each of `paths` (project-relative), and where each file stands now.
-pub fn turn_files(root: &str, turn: &TurnTrees, paths: &[String]) -> Res<Vec<TurnFile>> {
+pub fn turn_files(root: &str, turn: &TurnTrees, paths: &[String]) -> Result<Vec<TurnFile>, String> {
     // `A\0path\0` pairs, and `added\tdeleted\tpath\0` lines (`-` for binary files).
     let status: Vec<String> = turn_diff_fields(root, turn, "--name-status", paths)?;
-    let status: std::collections::HashMap<&str, &str> =
-        status.chunks(2).filter_map(|p| Some((p.get(1)?.as_str(), p[0].as_str()))).collect();
+    let status: std::collections::HashMap<&str, &str> = status
+        .chunks(2)
+        .filter_map(|p| Some((p.get(1)?.as_str(), p[0].as_str())))
+        .collect();
     let mut counts = std::collections::HashMap::new();
     for line in turn_diff_fields(root, turn, "--numstat", paths)? {
         let mut parts = line.splitn(3, '\t');
-        let (Some(add), Some(del), Some(path)) = (parts.next(), parts.next(), parts.next()) else { continue };
-        counts.insert(path.to_string(), (add.parse().unwrap_or(0), del.parse().unwrap_or(0)));
+        let (Some(add), Some(del), Some(path)) = (parts.next(), parts.next(), parts.next()) else {
+            continue;
+        };
+        counts.insert(
+            path.to_string(),
+            (add.parse().unwrap_or(0), del.parse().unwrap_or(0)),
+        );
     }
     // The blobs to compare: before the turn, at the last commit, and on disk now.
     let present: Vec<&String> = paths
         .iter()
-        .filter(|p| status.get(p.as_str()).is_some_and(|s| *s != "D") && Path::new(root).join(p).is_file())
+        .filter(|p| {
+            status.get(p.as_str()).is_some_and(|s| *s != "D") && Path::new(root).join(p).is_file()
+        })
         .collect();
     // Both read paths from the repository's top, which the project may sit below.
     let prefix = git(root, &["rev-parse", "--show-prefix"])?;
     let queries: String = present
         .iter()
-        .flat_map(|p| [format!("{}:{prefix}{p}\n", turn.before), format!("HEAD:{prefix}{p}\n")])
+        .flat_map(|p| {
+            [
+                format!("{}:{prefix}{p}\n", turn.before),
+                format!("HEAD:{prefix}{p}\n"),
+            ]
+        })
         .collect();
-    let known = run(root, None, &["cat-file", "--batch-check=%(objectname)"], Some(queries.as_bytes()))?;
+    let known = run(
+        root,
+        None,
+        &["cat-file", "--batch-check=%(objectname)"],
+        Some(queries.as_bytes()),
+    )?;
     let known = String::from_utf8_lossy(&known.stdout).into_owned();
     let mut known = known.lines();
-    let names: String = present.iter().map(|p| format!("{}\n", Path::new(root).join(p).display())).collect();
-    let now = run(root, None, &["hash-object", "--stdin-paths"], Some(names.as_bytes()))?;
+    let names: String = present
+        .iter()
+        .map(|p| format!("{}\n", Path::new(root).join(p).display()))
+        .collect();
+    let now = run(
+        root,
+        None,
+        &["hash-object", "--stdin-paths"],
+        Some(names.as_bytes()),
+    )?;
     let now = String::from_utf8_lossy(&now.stdout).into_owned();
     let mut blobs = std::collections::HashMap::new();
     for (path, now) in present.iter().zip(now.lines()) {
-        let (before, head) = (known.next().unwrap_or_default(), known.next().unwrap_or_default());
-        blobs.insert(path.as_str(), (before.to_string(), head.to_string(), now.to_string()));
+        let (before, head) = (
+            known.next().unwrap_or_default(),
+            known.next().unwrap_or_default(),
+        );
+        blobs.insert(
+            path.as_str(),
+            (before.to_string(), head.to_string(), now.to_string()),
+        );
     }
     Ok(paths
         .iter()
@@ -194,14 +270,30 @@ pub fn turn_files(root: &str, turn: &TurnTrees, paths: &[String]) -> Res<Vec<Tur
                 (_, Some((_, head, now))) if head == now => TurnFileState::Committed,
                 _ => TurnFileState::Uncommitted,
             };
-            TurnFile { path: path.clone(), additions, deletions, state }
+            TurnFile {
+                path: path.clone(),
+                additions,
+                deletions,
+                state,
+            }
         })
         .collect())
 }
 
 /// The turn's diff of one project-relative file, in `git diff` form.
-pub fn turn_file_diff(root: &str, turn: &TurnTrees, path: &str) -> Res<String> {
-    git(root, &["diff", "--no-color", "--relative", &turn.before, &turn.after, "--", path])
+pub fn turn_file_diff(root: &str, turn: &TurnTrees, path: &str) -> Result<String, String> {
+    git(
+        root,
+        &[
+            "diff",
+            "--no-color",
+            "--relative",
+            &turn.before,
+            &turn.after,
+            "--",
+            path,
+        ],
+    )
 }
 
 /// The messages of the thread that have a snapshot from before their turn.
@@ -217,14 +309,31 @@ pub fn list(root: &str, thread_id: &str) -> Vec<String> {
 
 /// Puts the project's files back as they were before the turn for `message_id`: files changed or
 /// deleted since are rewritten, and files created since are deleted. Ignored files are left alone.
-pub fn restore(root: &str, thread_id: &str, message_id: &str) -> Res<()> {
-    let saved = git(root, &["rev-parse", "--verify", "-q", &ref_name(thread_id, message_id)])
-        .map_err(|_| "This message has no checkpoint to restore")?;
+pub fn restore(root: &str, thread_id: &str, message_id: &str) -> Result<(), String> {
+    let saved = git(
+        root,
+        &[
+            "rev-parse",
+            "--verify",
+            "-q",
+            &ref_name(thread_id, message_id),
+        ],
+    )
+    .map_err(|_| "This message has no checkpoint to restore")?;
     let now = snapshot(root)?;
     let diff = run(
         root,
         None,
-        &["diff-tree", "-r", "-z", "--relative", "--no-renames", "--name-status", &saved, &now],
+        &[
+            "diff-tree",
+            "-r",
+            "-z",
+            "--relative",
+            "--no-renames",
+            "--name-status",
+            &saved,
+            &now,
+        ],
         None,
     )?;
     let fields: Vec<&[u8]> = diff.stdout.split(|&b| b == 0).collect();
@@ -265,7 +374,14 @@ pub fn remove(root: &str, thread_id: &str, message_ids: Option<&[String]>) {
     });
     // Replies have end snapshots but no snapshot of their own, so they are not in `list`.
     if message_ids.is_none() {
-        let ends = git(root, &["for-each-ref", "--format=%(refname)", &format!("{END_REFS}/{thread_id}/")]);
+        let ends = git(
+            root,
+            &[
+                "for-each-ref",
+                "--format=%(refname)",
+                &format!("{END_REFS}/{thread_id}/"),
+            ],
+        );
         for name in ends.unwrap_or_default().lines() {
             let _ = git(root, &["update-ref", "-d", name]);
         }
@@ -298,7 +414,7 @@ impl Server {
     /// files go back to how they were before that turn, and the message and the ones after it
     /// leave the thread. The agent starts a new session next turn, given the remaining messages
     /// as a transcript, since its own session still holds the undone turns.
-    pub fn restore_checkpoint(&self, thread_id: &str, message_id: &str) -> Res<Thread> {
+    pub fn restore_checkpoint(&self, thread_id: &str, message_id: &str) -> Result<Thread, String> {
         if self.runner.is_running(thread_id) {
             return Err("Stop the running turn before restoring a checkpoint".into());
         }
@@ -314,7 +430,10 @@ impl Server {
             .position(|m| m.id == message_id)
             .ok_or("Message not found")?;
         restore(&root, thread_id, message_id)?;
-        let undone: Vec<String> = thread.messages[start..].iter().map(|m| m.id.clone()).collect();
+        let undone: Vec<String> = thread.messages[start..]
+            .iter()
+            .map(|m| m.id.clone())
+            .collect();
         remove(&root, thread_id, Some(&undone));
         self.store.update_thread(thread_id, |t| {
             t.messages.truncate(start);

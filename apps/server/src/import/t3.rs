@@ -17,7 +17,11 @@ pub fn sessions() -> Vec<Session> {
         ilog!("T3: no home folder");
         return vec![];
     };
-    ilog!("T3: reading {} (exists: {})", path.display(), path.is_file());
+    ilog!(
+        "T3: reading {} (exists: {})",
+        path.display(),
+        path.is_file()
+    );
     if !path.is_file() {
         return vec![];
     }

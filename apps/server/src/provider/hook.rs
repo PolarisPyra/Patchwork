@@ -23,7 +23,9 @@ const ENV: &str = "PATCHWORK_PERMISSION_HOOK";
 
 /// Environment that tells the hook which thread it works for, for the agents that run one.
 pub fn env(agent: AgentKind, thread_id: &str, root: &str) -> Vec<(&'static str, String)> {
-    let Some(relay) = super::mcp::relay_file() else { return Vec::new() };
+    let Some(relay) = super::mcp::relay_file() else {
+        return Vec::new();
+    };
     if !matches!(agent, AgentKind::Codex | AgentKind::Antigravity) {
         return Vec::new();
     }
@@ -54,7 +56,9 @@ pub fn codex_args(spec: &TurnSpec) -> Vec<String> {
     if tools.is_empty() || super::mcp::relay_file().is_none() {
         return Vec::new();
     }
-    let Some(command) = command("codex") else { return Vec::new() };
+    let Some(command) = command("codex") else {
+        return Vec::new();
+    };
     // The user may take a while to answer a request the hook holds.
     let hooks = format!(
         "hooks.PreToolUse=[{{matcher={},hooks=[{{type=\"command\",timeout=86400,command={}}}]}}]",
@@ -64,7 +68,9 @@ pub fn codex_args(spec: &TurnSpec) -> Vec<String> {
     match codex_trust(&hooks, spec.root) {
         Some(trust) => vec!["-c".into(), hooks, "-c".into(), trust],
         None => {
-            log::warn!("Codex did not list Patchwork's permission hook, so deny rules are not enforced");
+            log::warn!(
+                "Codex did not list Patchwork's permission hook, so deny rules are not enforced"
+            );
             Vec::new()
         }
     }
@@ -74,11 +80,19 @@ pub fn codex_args(spec: &TurnSpec) -> Vec<String> {
 fn codex_trust(hooks: &str, root: &str) -> Option<String> {
     static TRUSTED: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
     let cache = TRUSTED.get_or_init(Mutex::default);
-    if let Some(trust) = cache.lock().unwrap_or_else(PoisonError::into_inner).get(hooks) {
+    if let Some(trust) = cache
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(hooks)
+    {
         return Some(trust.clone());
     }
     let (key, hash) = list_codex_hook(hooks, root)?;
-    let trust = format!("hooks.state={{{}={{trusted_hash={}}}}}", json!(key), json!(hash));
+    let trust = format!(
+        "hooks.state={{{}={{trusted_hash={}}}}}",
+        json!(key),
+        json!(hash)
+    );
     cache
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
@@ -111,7 +125,9 @@ fn list_codex_hook(hooks: &str, root: &str) -> Option<(String, String)> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-            let Ok(v) = serde_json::from_str::<Value>(&line) else { continue };
+            let Ok(v) = serde_json::from_str::<Value>(&line) else {
+                continue;
+            };
             if v["id"] == 2 {
                 let _ = tx.send(v);
                 return;
@@ -174,7 +190,9 @@ pub fn run() -> i32 {
         (_, None) => json!({"decision": "allow"}).to_string(),
     };
     let mut stdout = std::io::stdout();
-    let _ = stdout.write_all(answer.as_bytes()).and_then(|_| stdout.flush());
+    let _ = stdout
+        .write_all(answer.as_bytes())
+        .and_then(|_| stdout.flush());
     0
 }
 
@@ -190,7 +208,8 @@ fn ask(title: &str, detail: &str, target: Target) -> Result<Option<String>, Stri
         .and_then(|file| std::fs::read_to_string(file).ok())
         .and_then(|text| serde_json::from_str(&text).ok())
         .ok_or(UNREACHABLE)?;
-    let port = u16::try_from(relay["port"].as_u64().unwrap_or_default()).map_err(|_| UNREACHABLE)?;
+    let port =
+        u16::try_from(relay["port"].as_u64().unwrap_or_default()).map_err(|_| UNREACHABLE)?;
     let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).map_err(|_| UNREACHABLE)?;
     let hello = json!({"token": relay["token"], "hook": {
         "thread": context["thread"], "root": context["root"],
@@ -198,7 +217,9 @@ fn ask(title: &str, detail: &str, target: Target) -> Result<Option<String>, Stri
     }});
     writeln!(stream, "{hello}").map_err(|_| UNREACHABLE)?;
     let mut line = String::new();
-    BufReader::new(stream).read_line(&mut line).map_err(|_| UNREACHABLE)?;
+    BufReader::new(stream)
+        .read_line(&mut line)
+        .map_err(|_| UNREACHABLE)?;
     let answer: Value = serde_json::from_str(&line).map_err(|_| UNREACHABLE)?;
     Ok(answer["deny"].as_str().map(String::from))
 }
@@ -210,24 +231,40 @@ fn codex_call(call: &Value) -> Option<(String, String, Target)> {
     match tool {
         "Bash" => {
             let command = match &input["command"] {
-                Value::Array(words) => words.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" "),
+                Value::Array(words) => words
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .collect::<Vec<_>>()
+                    .join(" "),
                 command => command.as_str()?.to_string(),
             };
             let target = Target::new(PermissionKind::Command, [command.clone()]);
             Some(("Run command".into(), command, target))
         }
         "apply_patch" => {
-            let patch = input["command"].as_str().or(input["patch"].as_str()).or(input["input"].as_str())?;
+            let patch = input["command"]
+                .as_str()
+                .or(input["patch"].as_str())
+                .or(input["input"].as_str())?;
             let paths: Vec<&str> = patch
                 .lines()
                 .filter_map(|line| {
-                    ["*** Add File: ", "*** Update File: ", "*** Delete File: ", "*** Move to: "]
-                        .iter()
-                        .find_map(|prefix| line.strip_prefix(prefix))
+                    [
+                        "*** Add File: ",
+                        "*** Update File: ",
+                        "*** Delete File: ",
+                        "*** Move to: ",
+                    ]
+                    .iter()
+                    .find_map(|prefix| line.strip_prefix(prefix))
                 })
                 .map(str::trim)
                 .collect();
-            Some(("Edit files".into(), paths.join(", "), Target::new(PermissionKind::Edit, paths)))
+            Some((
+                "Edit files".into(),
+                paths.join(", "),
+                Target::new(PermissionKind::Edit, paths),
+            ))
         }
         _ => mcp_call(tool, input),
     }
@@ -237,7 +274,11 @@ fn codex_call(call: &Value) -> Option<(String, String, Target)> {
 fn mcp_call(tool: &str, input: &Value) -> Option<(String, String, Target)> {
     let (server, name) = tool.strip_prefix("mcp__")?.split_once("__")?;
     let target = Target::new(PermissionKind::Mcp, [format!("{server}/{name}")]);
-    Some((format!("Use {name} from {server}"), super::one_line(&input.to_string()), target))
+    Some((
+        format!("Use {name} from {server}"),
+        super::one_line(&input.to_string()),
+        target,
+    ))
 }
 
 /// An Antigravity hook's tool call as a request for the rules: `toolCall` with its `name` and
@@ -246,32 +287,65 @@ fn mcp_call(tool: &str, input: &Value) -> Option<(String, String, Target)> {
 fn antigravity_call(call: &Value) -> Option<(String, String, Target)> {
     let tool = call["toolCall"]["name"].as_str()?;
     let args = &call["toolCall"]["args"];
-    let arg = |keys: &[&str]| keys.iter().find_map(|k| args[*k].as_str()).map(String::from);
-    let path = || arg(&["TargetFile", "AbsolutePath", "path", "file_path", "filePath", "DirectoryPath", "SearchPath"]);
+    let arg = |keys: &[&str]| {
+        keys.iter()
+            .find_map(|k| args[*k].as_str())
+            .map(String::from)
+    };
+    let path = || {
+        arg(&[
+            "TargetFile",
+            "AbsolutePath",
+            "path",
+            "file_path",
+            "filePath",
+            "DirectoryPath",
+            "SearchPath",
+        ])
+    };
     match tool {
         "run_command" | "execute_command" | "shell" => {
             let command = arg(&["CommandLine", "command", "cmd"])?;
             let target = Target::new(PermissionKind::Command, [command.clone()]);
             Some(("Run command".into(), command, target))
         }
-        "write_file" | "write_to_file" | "edit_file" | "replace_file_content" | "multi_replace_file_content"
-        | "create_file" | "delete_file" => {
+        "write_file"
+        | "write_to_file"
+        | "edit_file"
+        | "replace_file_content"
+        | "multi_replace_file_content"
+        | "create_file"
+        | "delete_file" => {
             let path = path()?;
-            Some(("Edit files".into(), path.clone(), Target::new(PermissionKind::Edit, [path])))
+            Some((
+                "Edit files".into(),
+                path.clone(),
+                Target::new(PermissionKind::Edit, [path]),
+            ))
         }
         "read_file" | "view_file" | "list_dir" | "grep_search" | "find_by_name" => {
             let path = path()?;
             // Reading a file asks for its folder.
             let folder = if tool.contains("file") {
-                Path::new(&path).parent().map_or(path.clone(), |p| p.to_string_lossy().into_owned())
+                Path::new(&path)
+                    .parent()
+                    .map_or(path.clone(), |p| p.to_string_lossy().into_owned())
             } else {
                 path.clone()
             };
-            Some(("Read outside the project".into(), path, Target::new(PermissionKind::Folder, [folder])))
+            Some((
+                "Read outside the project".into(),
+                path,
+                Target::new(PermissionKind::Folder, [folder]),
+            ))
         }
         "read_url" | "read_url_content" | "execute_url" | "fetch_url" => {
             let url = arg(&["Url", "url", "URL"])?;
-            Some(("Fetch a web page".into(), url.clone(), Target::new(PermissionKind::Web, [url])))
+            Some((
+                "Fetch a web page".into(),
+                url.clone(),
+                Target::new(PermissionKind::Web, [url]),
+            ))
         }
         _ => mcp_call(tool, args),
     }

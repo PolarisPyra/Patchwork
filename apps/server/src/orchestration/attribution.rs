@@ -22,8 +22,17 @@ use crate::watch::Change;
 const GRACE: Duration = Duration::from_secs(1);
 
 /// Calls that only read, as each agent's parser names them.
-const READ_ONLY: [&str; 9] =
-    ["Read", "NotebookRead", "Grep", "Glob", "LS", "WebFetch", "WebSearch", "TodoWrite", "BashOutput"];
+const READ_ONLY: [&str; 9] = [
+    "Read",
+    "NotebookRead",
+    "Grep",
+    "Glob",
+    "LS",
+    "WebFetch",
+    "WebSearch",
+    "TodoWrite",
+    "BashOutput",
+];
 /// Calls that write only the files their summary names, comma-separated as Codex lists them.
 const EDITS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 
@@ -133,7 +142,9 @@ impl Attribution {
 
     /// Ends a call's window and returns the waiting paths it covers, which are the reply's.
     pub(super) fn tool_finished(&mut self, id: &str) -> Vec<String> {
-        let Some((start, reach)) = self.running.remove(id) else { return Vec::new() };
+        let Some((start, reach)) = self.running.remove(id) else {
+            return Vec::new();
+        };
         self.ran.push((start..Instant::now() + GRACE, reach));
         let covered: Vec<String> = self
             .pending
@@ -148,26 +159,48 @@ impl Attribution {
     }
 
     fn cover(&self, path: &str, at: Instant) -> Cover {
-        let running = self.running.values().filter(|(start, _)| *start <= at).map(|(_, r)| r);
-        let ran = self.ran.iter().filter(|(span, _)| span.contains(&at)).map(|(_, r)| r);
+        let running = self
+            .running
+            .values()
+            .filter(|(start, _)| *start <= at)
+            .map(|(_, r)| r);
+        let ran = self
+            .ran
+            .iter()
+            .filter(|(span, _)| span.contains(&at))
+            .map(|(_, r)| r);
         running
             .chain(ran)
             .filter(|reach| reach.can_write(path))
-            .map(|reach| if reach.names(path) { Cover::Named } else { Cover::Yes })
+            .map(|reach| {
+                if reach.names(path) {
+                    Cover::Named
+                } else {
+                    Cover::Yes
+                }
+            })
             .max()
             .unwrap_or(Cover::No)
     }
 
     /// The changes in a settled burst this reply could claim: those that differ from the
     /// baseline and are not `listed` yet, with whether one of its calls covers each.
-    fn candidates(&self, changes: &[FileChange], burst: &[Change], listed: &[String]) -> Vec<Candidate> {
+    fn candidates(
+        &self,
+        changes: &[FileChange],
+        burst: &[Change],
+        listed: &[String],
+    ) -> Vec<Candidate> {
         let mut found = Vec::new();
         for path in changed_paths(&self.baseline, changes) {
             if listed.contains(&path) || self.taken.contains(&path) {
                 continue;
             }
-            let own: Vec<Instant> =
-                burst.iter().filter(|c| covers_path(&c.path, &path)).map(|c| c.at).collect();
+            let own: Vec<Instant> = burst
+                .iter()
+                .filter(|c| covers_path(&c.path, &path))
+                .map(|c| c.at)
+                .collect();
             // A path with no event of its own, such as a file a commit took out of the list,
             // goes by the burst's other events, such as `.git/index`, unless it already waits.
             let times = if !own.is_empty() {
@@ -177,7 +210,11 @@ impl Attribution {
             } else {
                 burst.iter().map(|c| c.at).collect()
             };
-            let cover = times.iter().map(|&at| self.cover(&path, at)).max().unwrap_or(Cover::No);
+            let cover = times
+                .iter()
+                .map(|&at| self.cover(&path, at))
+                .max()
+                .unwrap_or(Cover::No);
             found.push(Candidate { path, times, cover });
         }
         found
@@ -190,7 +227,10 @@ impl Attribution {
                 self.pending.remove(&candidate.path);
             }
             Outcome::Waits => {
-                self.pending.entry(candidate.path).or_default().extend(candidate.times);
+                self.pending
+                    .entry(candidate.path)
+                    .or_default()
+                    .extend(candidate.times);
             }
             Outcome::Taken => {
                 self.pending.remove(&candidate.path);
@@ -223,7 +263,8 @@ enum Outcome {
 /// Whether an event at `event_path` stands for a change to `path`: the path itself, or a folder
 /// above it, as when a whole folder is removed.
 fn covers_path(event_path: &str, path: &str) -> bool {
-    path.strip_prefix(event_path).is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+    path.strip_prefix(event_path)
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
 }
 
 /// Paths whose git status or line counts differ between two snapshots, and paths that left the
@@ -236,7 +277,9 @@ pub(super) fn changed_paths(before: &[FileChange], after: &[FileChange]) -> Vec<
             .find(|b| b.path == a.path)
             .is_none_or(|b| key(b) != key(a))
     });
-    let gone = before.iter().filter(|b| !after.iter().any(|a| a.path == b.path));
+    let gone = before
+        .iter()
+        .filter(|b| !after.iter().any(|a| a.path == b.path));
     changed.chain(gone).map(|c| c.path.clone()).collect()
 }
 
@@ -245,10 +288,17 @@ impl Server {
     /// there, so a reply lists its files as they change, deletions made through the shell
     /// included. `changes` is the project's `git status` after the burst. A file two replies
     /// could claim goes to those whose call named it, and to all of them when none did.
-    pub(crate) fn note_project_changes(&self, project_id: &str, changes: &[FileChange], burst: &[Change]) {
+    pub(crate) fn note_project_changes(
+        &self,
+        project_id: &str,
+        changes: &[FileChange],
+        burst: &[Change],
+    ) {
         let mut replies = Vec::new();
         for (thread_id, attribution) in self.runner.attributions() {
-            let Some(thread) = self.store.thread(&thread_id) else { continue };
+            let Some(thread) = self.store.thread(&thread_id) else {
+                continue;
+            };
             if thread.project_id.as_deref() != Some(project_id) {
                 continue;
             }
@@ -283,7 +333,10 @@ impl Server {
             }
             drop(attribution);
             for path in claimed {
-                let touched = AgentEvent::FileTouched { message_id: message_id.clone(), path };
+                let touched = AgentEvent::FileTouched {
+                    message_id: message_id.clone(),
+                    path,
+                };
                 publish(self, &thread_id, touched);
             }
         }

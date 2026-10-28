@@ -124,14 +124,18 @@ pub fn permission_config(spec: &TurnSpec) -> Option<Value> {
         rules.extend(GUARDED.map(|kind| (kind.to_string(), json!("ask"))));
     }
     for guarded in spec.guarded.iter().filter(|g| g.refuses()) {
-        let Some(action) = action(guarded.kind) else { continue };
+        let Some(action) = action(guarded.kind) else {
+            continue;
+        };
         let action = if action == "shell" { "bash" } else { action };
         if guarded.denied || guarded.deny.iter().any(|p| p == "*") {
             rules.insert(action.into(), json!("deny"));
         } else if action == "bash" {
             // Commands take patterns; the rest of the kinds only a whole answer.
             let mut patterns = match rules.remove(action) {
-                Some(Value::String(rest)) => serde_json::Map::from_iter([("*".to_string(), json!(rest))]),
+                Some(Value::String(rest)) => {
+                    serde_json::Map::from_iter([("*".to_string(), json!(rest))])
+                }
                 _ => serde_json::Map::new(),
             };
             for p in &guarded.deny {
@@ -193,7 +197,9 @@ pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
     if uses_serve() {
         return vec![opencode_bridge::BRIDGE_ARG.into()];
     }
-    let mut args: Vec<String> = ["run", "--format", "json", "--thinking"].map(String::from).into();
+    let mut args: Vec<String> = ["run", "--format", "json", "--thinking"]
+        .map(String::from)
+        .into();
     if spec.mode == AccessMode::FullAccess {
         args.push("--auto".into());
     }
@@ -210,7 +216,11 @@ pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
         args.extend(["--variant".into(), effort.into()]);
     }
     // Images go with the message as files; every attachment is also named in the prompt.
-    for image in spec.attachments.iter().filter(|a| a.kind == AttachmentKind::Image) {
+    for image in spec
+        .attachments
+        .iter()
+        .filter(|a| a.kind == AttachmentKind::Image)
+    {
         args.extend(["--file".into(), image.path.clone()]);
     }
     // After `--`, a prompt that starts with "-" is not read as a flag.
@@ -232,8 +242,14 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
             .map(|id| Parsed::SessionId(id.into()))
             .into_iter()
             .collect(),
-        Some("text") => text_of(part).map(|t| text_delta(message_id, t)).into_iter().collect(),
-        Some("reasoning") => text_of(part).map(|t| thinking(message_id, t)).into_iter().collect(),
+        Some("text") => text_of(part)
+            .map(|t| text_delta(message_id, t))
+            .into_iter()
+            .collect(),
+        Some("reasoning") => text_of(part)
+            .map(|t| thinking(message_id, t))
+            .into_iter()
+            .collect(),
         Some("tool_use") => tool(part, spec.root, message_id),
         Some("step_finish") => step_usage(part).into_iter().collect(),
         Some("error") => {
@@ -267,7 +283,9 @@ fn tool(part: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
         return Vec::new();
     };
     let input = &state["input"];
-    let path = input["filePath"].as_str().or_else(|| input["path"].as_str());
+    let path = input["filePath"]
+        .as_str()
+        .or_else(|| input["path"].as_str());
     let summary = match path {
         Some(path) => relative(root, path),
         None => summarize(input, root),
@@ -295,7 +313,12 @@ fn tool(part: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
     } else {
         state["output"].as_str()
     };
-    out.push(tool_finished(message_id, id, failed, output.unwrap_or_default()));
+    out.push(tool_finished(
+        message_id,
+        id,
+        failed,
+        output.unwrap_or_default(),
+    ));
     if !failed && matches!(name, "write" | "edit" | "patch") {
         out.extend(path.map(|p| file_touched(message_id, relative(root, p))));
     }
@@ -320,7 +343,10 @@ fn todo_plan(name: &str, input: &Value, message_id: &str) -> Option<Parsed> {
             status: super::claude::claude_step_status(todo["status"].as_str()),
         })
         .collect();
-    Some(Parsed::Event(AgentEvent::PlanUpdated { message_id: message_id.into(), steps }))
+    Some(Parsed::Event(AgentEvent::PlanUpdated {
+        message_id: message_id.into(),
+        steps,
+    }))
 }
 
 /// OpenCode's tool names, shown the way the other agents name theirs.
@@ -370,7 +396,9 @@ pub fn uses_serve() -> bool {
 
 /// The bridge's first stdin line: everything the turn needs.
 pub fn bridge_request(spec: &TurnSpec) -> String {
-    let bin = opencode_bin().map(|b| b.display().to_string()).unwrap_or_default();
+    let bin = opencode_bin()
+        .map(|b| b.display().to_string())
+        .unwrap_or_default();
     json!({
         "bin": bin,
         "root": spec.root,
@@ -405,7 +433,10 @@ fn slash_commands(list: &Value) -> Vec<ProviderSlashCommand> {
         .flatten()
         .filter_map(|c| {
             let name = c["name"].as_str()?.trim();
-            let description = c["description"].as_str().map(str::trim).filter(|d| !d.is_empty());
+            let description = c["description"]
+                .as_str()
+                .map(str::trim)
+                .filter(|d| !d.is_empty());
             (!name.is_empty()).then(|| ProviderSlashCommand {
                 name: name.into(),
                 description: description.map(String::from),
@@ -425,20 +456,33 @@ fn image_paths(attachments: &[Attachment]) -> Vec<String> {
 /// The session's permission rules for the access mode; the last matching rule wins. An empty
 /// list keeps OpenCode's own rules, which Auto uses.
 fn serve_permissions(spec: &TurnSpec) -> Value {
-    let rule = |action: &str, effect: &str| json!({"action": action, "resource": "*", "effect": effect});
+    let rule =
+        |action: &str, effect: &str| json!({"action": action, "resource": "*", "effect": effect});
     let mut rules = match spec.mode {
         AccessMode::FullAccess => vec![rule("*", "allow")],
         AccessMode::Auto => Vec::new(),
         AccessMode::AutoAcceptEdits => {
-            vec![rule("shell", "ask"), rule("edit", "allow"), rule("external_directory", "ask")]
+            vec![
+                rule("shell", "ask"),
+                rule("edit", "allow"),
+                rule("external_directory", "ask"),
+            ]
         }
         AccessMode::Supervised => {
-            vec![rule("shell", "ask"), rule("edit", "ask"), rule("external_directory", "ask")]
+            vec![
+                rule("shell", "ask"),
+                rule("edit", "ask"),
+                rule("external_directory", "ask"),
+            ]
         }
     };
     // An MCP tool asks under its id, `<server>_<tool>`. Every id with an underscore also covers
     // OpenCode's own two, which full access goes on allowing.
-    for guarded in spec.guarded.iter().filter(|g| g.kind == PermissionKind::Mcp) {
+    for guarded in spec
+        .guarded
+        .iter()
+        .filter(|g| g.kind == PermissionKind::Mcp)
+    {
         if guarded.all() {
             rules.push(rule("*_*", "ask"));
             if spec.mode == AccessMode::FullAccess {
@@ -464,7 +508,11 @@ fn serve_permissions(spec: &TurnSpec) -> Value {
 /// The OpenCode action of an MCP rule's pattern: `server` covers its tools, `server/tool` one.
 fn mcp_action(pattern: &str) -> String {
     match pattern.split_once('/') {
-        Some((server, tool)) => format!("{}_{}", crate::permissions::opencode_name(server), crate::permissions::opencode_name(tool)),
+        Some((server, tool)) => format!(
+            "{}_{}",
+            crate::permissions::opencode_name(server),
+            crate::permissions::opencode_name(tool)
+        ),
         None => format!("{}_*", crate::permissions::opencode_name(pattern)),
     }
 }
@@ -487,7 +535,9 @@ pub fn mode_asks(mode: AccessMode, kind: PermissionKind) -> bool {
     match mode {
         AccessMode::FullAccess => false,
         AccessMode::Auto => kind == PermissionKind::Folder,
-        AccessMode::AutoAcceptEdits => matches!(kind, PermissionKind::Command | PermissionKind::Folder),
+        AccessMode::AutoAcceptEdits => {
+            matches!(kind, PermissionKind::Command | PermissionKind::Folder)
+        }
         AccessMode::Supervised => kind != PermissionKind::Web && kind != PermissionKind::Mcp,
     }
 }
@@ -498,7 +548,11 @@ pub fn steer_line(text: &str, attachments: &[Attachment]) -> String {
 }
 
 /// The bridge line that answers a permission request or a question.
-pub fn approval_reply(reply: &Value, allow: bool, answers: &HashMap<String, Vec<String>>) -> String {
+pub fn approval_reply(
+    reply: &Value,
+    allow: bool,
+    answers: &HashMap<String, Vec<String>>,
+) -> String {
     let request = &reply["requestID"];
     if reply["kind"] == "form" {
         if !allow {
@@ -507,8 +561,12 @@ pub fn approval_reply(reply: &Value, allow: bool, answers: &HashMap<String, Vec<
         // A multiselect field takes a list; any other takes its answer as text.
         let mut answer = serde_json::Map::new();
         for field in reply["fields"].as_array().into_iter().flatten() {
-            let Some(key) = field["key"].as_str() else { continue };
-            let Some(picks) = answers.get(key).filter(|p| !p.is_empty()) else { continue };
+            let Some(key) = field["key"].as_str() else {
+                continue;
+            };
+            let Some(picks) = answers.get(key).filter(|p| !p.is_empty()) else {
+                continue;
+            };
             let value = if field["type"] == "multiselect" {
                 json!(picks)
             } else {
@@ -578,20 +636,36 @@ fn parse_serve(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
             )]
         }
         Some(kind @ ("session.tool.success" | "session.tool.failed")) => {
-            let Some(id) = data["id"].as_str() else { return Vec::new() };
+            let Some(id) = data["id"].as_str() else {
+                return Vec::new();
+            };
             let failed = kind == "session.tool.failed";
             let output = if failed {
-                data["error"]["message"].as_str().or_else(|| data["error"].as_str())
+                data["error"]["message"]
+                    .as_str()
+                    .or_else(|| data["error"].as_str())
             } else {
                 data["content"][0]["text"].as_str()
             };
-            let mut out = vec![tool_finished(message_id, id, failed, output.unwrap_or_default())];
+            let mut out = vec![tool_finished(
+                message_id,
+                id,
+                failed,
+                output.unwrap_or_default(),
+            )];
             let writes = matches!(data["name"].as_str(), Some("write" | "edit" | "patch"));
             if !failed && writes {
-                out.extend(input_path(&data["input"]).map(|p| file_touched(message_id, relative(spec.root, p))));
+                out.extend(
+                    input_path(&data["input"])
+                        .map(|p| file_touched(message_id, relative(spec.root, p))),
+                );
             }
             if !failed {
-                out.extend(data["name"].as_str().and_then(|name| todo_plan(name, &data["input"], message_id)));
+                out.extend(
+                    data["name"]
+                        .as_str()
+                        .and_then(|name| todo_plan(name, &data["input"], message_id)),
+                );
             }
             out
         }
@@ -601,7 +675,9 @@ fn parse_serve(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
             let input = count(&tokens["input"]);
             let cache_read = count(&tokens["cache"]["read"]);
             let cache_write = count(&tokens["cache"]["write"]);
-            let Some(request_id) = v["id"].as_str() else { return Vec::new() };
+            let Some(request_id) = v["id"].as_str() else {
+                return Vec::new();
+            };
             vec![Parsed::RequestUsage {
                 request_id: request_id.into(),
                 usage: TokenUsage {
@@ -615,7 +691,9 @@ fn parse_serve(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
             }]
         }
         Some("permission.asked" | "permission.v2.asked") => {
-            let Some(request) = data["id"].as_str() else { return Vec::new() };
+            let Some(request) = data["id"].as_str() else {
+                return Vec::new();
+            };
             let action = data["action"].as_str().unwrap_or("act");
             let resources: Vec<&str> = data["resources"]
                 .as_array()
@@ -632,7 +710,9 @@ fn parse_serve(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
             }]
         }
         Some("question.asked" | "question.v2.asked") => {
-            let Some(request) = data["id"].as_str() else { return Vec::new() };
+            let Some(request) = data["id"].as_str() else {
+                return Vec::new();
+            };
             let questions: Vec<Question> = data["questions"]
                 .as_array()
                 .into_iter()
@@ -657,7 +737,10 @@ fn parse_serve(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
             let ids: Vec<&str> = questions.iter().map(|q| q.id.as_str()).collect();
             vec![Parsed::Approval {
                 title: "Question".into(),
-                detail: questions.first().map(|q| q.question.clone()).unwrap_or_default(),
+                detail: questions
+                    .first()
+                    .map(|q| q.question.clone())
+                    .unwrap_or_default(),
                 reply: json!({"kind": "question", "requestID": request, "questions": ids}),
                 questions,
                 target: None,
@@ -666,7 +749,9 @@ fn parse_serve(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
         // OpenCode 2.1 asks its question tool's questions as a form, one field per question.
         Some("form.created") => {
             let form = &data["form"];
-            let Some(request) = form["id"].as_str() else { return Vec::new() };
+            let Some(request) = form["id"].as_str() else {
+                return Vec::new();
+            };
             let fields: Vec<&Value> = form["fields"]
                 .as_array()
                 .into_iter()
@@ -701,7 +786,10 @@ fn parse_serve(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                 .collect();
             vec![Parsed::Approval {
                 title: "Question".into(),
-                detail: questions.first().map(|q| q.question.clone()).unwrap_or_default(),
+                detail: questions
+                    .first()
+                    .map(|q| q.question.clone())
+                    .unwrap_or_default(),
                 reply: json!({"kind": "form", "requestID": request, "fields": shapes}),
                 questions,
                 target: None,
@@ -730,7 +818,9 @@ fn message_of(v: &Value) -> String {
 
 /// 2.x names a file `path`; 1.x `filePath`.
 fn input_path(input: &Value) -> Option<&str> {
-    input["path"].as_str().or_else(|| input["filePath"].as_str())
+    input["path"]
+        .as_str()
+        .or_else(|| input["filePath"].as_str())
 }
 
 fn tool_summary(input: &Value, root: &str) -> String {
@@ -796,8 +886,10 @@ mod tests {
             panic!("expected a plan, got {} events", out.len());
         };
         assert_eq!(message_id, "m1");
-        let got: Vec<(&str, StepStatus)> =
-            steps.iter().map(|step| (step.text.as_str(), step.status)).collect();
+        let got: Vec<(&str, StepStatus)> = steps
+            .iter()
+            .map(|step| (step.text.as_str(), step.status))
+            .collect();
         assert_eq!(
             got,
             [

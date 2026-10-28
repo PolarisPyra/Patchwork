@@ -5,14 +5,14 @@ use std::path::Path;
 
 use rusqlite::Connection;
 
-use super::codec::{Res, err};
+use super::codec::err;
 use super::{legacy, migrations};
 
 pub(super) const DB_FILE: &str = "patchwork.db";
 
 /// Opens the database in `dir`, creating it if need be, with the schema up to date. A new
 /// database takes in the settings and threads of the old JSON files, if they are there.
-pub(super) fn open(dir: &Path) -> Res<Connection> {
+pub(super) fn open(dir: &Path) -> Result<Connection, String> {
     std::fs::create_dir_all(dir).map_err(err)?;
     let mut conn = Connection::open(dir.join(DB_FILE)).map_err(err)?;
     // With WAL, NORMAL syncs at checkpoints instead of every commit. A commit made a 4 ms fsync,

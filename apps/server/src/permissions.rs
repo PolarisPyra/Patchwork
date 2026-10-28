@@ -191,7 +191,10 @@ fn answer(
     // Reading in its own folder is not working outside it.
     if target.kind == PermissionKind::Folder
         && !target.resources.is_empty()
-        && target.resources.iter().all(|r| folder_of(root, r).starts_with(root))
+        && target
+            .resources
+            .iter()
+            .all(|r| folder_of(root, r).starts_with(root))
     {
         return Answer::Open;
     }
@@ -473,7 +476,9 @@ fn covers(rule: &PermissionRule, unit: &Unit, root: &Path) -> bool {
         }
         Unit::Tool(tool) => {
             let opencode_id = match pattern.split_once('/') {
-                Some((server, name)) => format!("{}_{}", opencode_name(server), opencode_name(name)),
+                Some((server, name)) => {
+                    format!("{}_{}", opencode_name(server), opencode_name(name))
+                }
                 None => opencode_name(pattern),
             };
             tool == pattern
@@ -714,6 +719,12 @@ fn is_assignment(word: &str) -> bool {
 /// and `-` becomes `_`.
 pub fn opencode_name(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }

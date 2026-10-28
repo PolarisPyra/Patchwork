@@ -18,7 +18,6 @@ use crate::types::{AgentKind, LogLevel};
 use crate::workspace;
 use super::queue::Steers;
 
-
 /// How much of the agent's stderr is kept for error reporting.
 pub(super) const STDERR_TAIL_BYTES: usize = 4096;
 
@@ -73,7 +72,12 @@ pub(super) fn write_to(stdin: &mut Option<AgentStdin>, line: &str) -> bool {
     match writeln!(pipe, "{line}").and_then(|()| pipe.flush()) {
         Ok(()) => true,
         Err(e) => {
-            AGENTS.write(LogLevel::Error, "write_failed", source, Data::Text(e.to_string()));
+            AGENTS.write(
+                LogLevel::Error,
+                "write_failed",
+                source,
+                Data::Text(e.to_string()),
+            );
             log::warn!("failed to write to agent: {e}");
             false
         }
@@ -163,7 +167,12 @@ pub(super) fn read_stderr_tail(stderr: ChildStderr, source: Source) -> String {
     let mut line = Vec::new();
     while reader.read_until(b'\n', &mut line).unwrap_or(0) > 0 {
         let text = String::from_utf8_lossy(&line);
-        AGENTS.write(LogLevel::Debug, "stderr", &source, Data::Text(text.trim_end().into()));
+        AGENTS.write(
+            LogLevel::Debug,
+            "stderr",
+            &source,
+            Data::Text(text.trim_end().into()),
+        );
         tail.push_str(&text);
         line.clear();
         if tail.len() > STDERR_TAIL_BYTES {

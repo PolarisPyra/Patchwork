@@ -23,7 +23,6 @@ use super::tool_started;
 use super::ToolStart;
 use super::TurnSpec;
 
-
 /// The Antigravity CLI: Patchwork's own install (`patchwork/clis` in the config folder),
 /// else `agy` on PATH.
 pub fn antigravity_bin() -> Option<PathBuf> {
@@ -127,7 +126,16 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                     || summarize(params, spec.root),
                     |path| relative(spec.root, path),
                 );
-                out.push(tool_started(message_id, ToolStart { id: &id, name, summary, subagent: None, parent: None }));
+                out.push(tool_started(
+                    message_id,
+                    ToolStart {
+                        id: &id,
+                        name,
+                        summary,
+                        subagent: None,
+                        parent: None,
+                    },
+                ));
                 if step["state"] == "DONE" {
                     let failed = tool["error"].as_str().is_some_and(|e| !e.is_empty());
                     out.push(tool_finished(message_id, &id, failed, ""));

@@ -6,7 +6,7 @@ use std::path::Path;
 use rusqlite::Connection;
 use serde::de::DeserializeOwned;
 
-use super::codec::{Res, err};
+use super::codec::err;
 use super::connection::DB_FILE;
 use super::settings::save_settings;
 use super::threads::{save_message, save_thread_row};
@@ -15,7 +15,7 @@ use crate::types::{Settings, Thread};
 /// Moves the database and legacy JSON files from `old` into `new`, once:
 /// only when `new` has no database yet. Earlier builds kept them in the
 /// app-identifier config folder.
-pub fn adopt_old_dir(old: &Path, new: &Path) -> Res<()> {
+pub fn adopt_old_dir(old: &Path, new: &Path) -> Result<(), String> {
     if old == new || new.join(DB_FILE).exists() || !old.is_dir() {
         return Ok(());
     }
@@ -49,10 +49,9 @@ fn load_json<T: DeserializeOwned + Default>(path: &Path) -> T {
         .unwrap_or_default()
 }
 
-
 /// Moves `settings.json` / `threads.json` from before SQLite into a new database,
 /// keeping the old files as `*.json.bak`.
-pub(super) fn import_legacy_json(conn: &mut Connection, dir: &Path) -> Res<()> {
+pub(super) fn import_legacy_json(conn: &mut Connection, dir: &Path) -> Result<(), String> {
     let settings_path = dir.join("settings.json");
     let threads_path = dir.join("threads.json");
     if !settings_path.exists() && !threads_path.exists() {
@@ -80,4 +79,3 @@ pub(super) fn import_legacy_json(conn: &mut Connection, dir: &Path) -> Res<()> {
         });
     Ok(())
 }
-

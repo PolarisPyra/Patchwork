@@ -9,10 +9,12 @@ import {
 } from "@phosphor-icons/react";
 import Spinner from "~/components/Spinner";
 import { api, onProjectChanged, type FileChange, type Message } from "~/api";
+import { useImageSrc } from "~/hooks/useImageSrc";
 import CodeView from "~/components/canvas/CodeView";
 import DiffView from "~/components/canvas/DiffView";
 import PlanView from "~/components/canvas/PlanView";
 import { describeFile, splitLines } from "~/components/canvas/highlight";
+import { useFileMedia } from "~/hooks/useFileMedia";
 import { copyText } from "~/lib/clipboard";
 
 export type CanvasTab = "plan" | "code" | "diff";
@@ -61,6 +63,11 @@ export default function Canvas({
 
   const key = `${projectId}\u0000${path ?? ""}`;
   const activeTab: CanvasTab = path === null ? "plan" : tab;
+  // An image shows as a picture on the code tab, as the backend judges what may be previewed.
+  const media = useFileMedia(projectId, path ? [path] : []);
+  const shown = media?.find((m) => m.path === path);
+  const image = shown?.kind === "image";
+  const src = useImageSrc(shown?.kind === "image" ? shown.absolute : null);
 
   useEffect(() => {
     setTab(initialTab ?? (path ? "code" : "plan"));
@@ -190,6 +197,13 @@ export default function Canvas({
   function renderBody(): ReactNode {
     if (activeTab === "plan" || !path) {
       return <PlanView message={message} />;
+    }
+    if (activeTab === "code" && image) {
+      return (
+        <div className="grid h-full place-items-center p-4">
+          {src && <img src={src} alt={name} className="max-h-full max-w-full object-contain" />}
+        </div>
+      );
     }
     const result = activeTab === "code" ? code : diff;
     if (!result || (result.value === undefined && result.error === undefined)) {

@@ -2,7 +2,6 @@
 //! that were cut off end with an error, and goals are dismissed or paused.
 
 use crate::persistence::Store;
-use crate::Res;
 use crate::types::GoalStatus;
 use crate::types::MessageStatus;
 use super::goal;
@@ -11,11 +10,13 @@ use super::goal;
 /// dismisses them, including cached reports from the provider on its next run. Unfinished
 /// goals survive, paused if their agent was interrupted by quitting, and replies that were
 /// still streaming end with an error.
-pub(crate) fn recover(store: &Store) -> Res<()> {
+pub(crate) fn recover(store: &Store) -> Result<(), String> {
     for mut thread in store.threads() {
-        if let Some(finished) = thread.goal.as_ref().filter(|goal| {
-            matches!(goal.status, GoalStatus::Complete | GoalStatus::Blocked)
-        }) {
+        if let Some(finished) = thread
+            .goal
+            .as_ref()
+            .filter(|goal| matches!(goal.status, GoalStatus::Complete | GoalStatus::Blocked))
+        {
             store.dismiss_goal(&thread.id, &goal::signature(finished))?;
             thread.goal = None;
         }

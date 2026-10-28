@@ -15,6 +15,8 @@ Tauri desktop app: React frontend, Rust backend. Run everything from the repo ro
 | Task | Command |
 |---|---|
 | Dev app | `pnpm tauri dev` |
+| All static checks | `pnpm check` (regenerates the types, then typecheck, format, rustfmt, clippy) |
+| Wire types | `pnpm types` writes `apps/web/src/bindings` from the Rust types in `apps/server` |
 | Web typecheck | `pnpm typecheck` |
 | Format TSX | `pnpm format` / `pnpm format:check` (only `apps/**/*.tsx`) |
 | Rust format | `cargo fmt --all` / `cargo fmt --all -- --check` |
@@ -44,7 +46,7 @@ Tauri desktop app: React frontend, Rust backend. Run everything from the repo ro
 - JS `invoke()` takes camelCase arguments, which Tauri maps to snake_case in Rust. Keep it that way, and don't add renames to fight it.
 - Stream output to the frontend with `tauri::ipc::Channel`, not global events.
 - Keep capabilities minimal. Never widen a permission or use a wildcard just to make something work.
-- When a command signature or a serde struct the frontend uses changes, update the matching TS types in the same change.
+- Wire types the frontend reads come from `apps/server` through `pnpm types`, so change the Rust type and run `pnpm types`. Give a new public serde type `TS` and add it to `apps/server/examples/export_types.rs`. The frontend-only fields of a message or thread are added in `apps/web/src/api.ts`.
 
 ## Dev session
 

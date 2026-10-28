@@ -62,7 +62,13 @@ fn decide(server: &Server, thread_id: &str, root: &str, target: &Target) -> Opti
 
 /// What the permission rules answer to `target` in the thread when the access mode runs it
 /// without asking.
-fn unasked(server: &Server, thread_id: &str, root: &str, target: &Target, asks: bool) -> permissions::Unasked {
+fn unasked(
+    server: &Server,
+    thread_id: &str,
+    root: &str,
+    target: &Target,
+    asks: bool,
+) -> permissions::Unasked {
     let project = server.store.thread(thread_id).and_then(|t| t.project_id);
     let settings = server.store.settings();
     permissions::unasked(
@@ -89,12 +95,15 @@ pub fn is_upkeep(text: &str) -> bool {
 /// tool, so the Tasks badge fills in, then which shells are installed and which one runs its
 /// commands.
 fn agent_instructions(settings: &Settings, agent: AgentKind) -> String {
-    [checklist_instructions(agent), Some(shell_instructions(settings))]
-        .into_iter()
-        .flatten()
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n\n")
+    [
+        checklist_instructions(agent),
+        Some(shell_instructions(settings)),
+    ]
+    .into_iter()
+    .flatten()
+    .filter(|part| !part.is_empty())
+    .collect::<Vec<_>>()
+    .join("\n\n")
 }
 
 /// The line that tells `agent` to keep a checklist with its own tool. Antigravity has no such
@@ -149,7 +158,6 @@ pub enum Delivery {
     /// No turn is running.
     NotRunning,
 }
-
 
 #[derive(Default)]
 pub struct Runner {
@@ -236,7 +244,6 @@ impl Runner {
         });
     }
 
-
     /// Hands a message to the turn running in `thread_id`: written to the agent when it
     /// can take input mid-turn, otherwise kept to start the next turn.
     /// `subagents` are the subagent calls still running in the foreground.
@@ -247,7 +254,12 @@ impl Runner {
         session_id: Option<&str>,
         subagents: &[String],
     ) -> Delivery {
-        let FollowUpInput { message_id, text, attachments, images } = input;
+        let FollowUpInput {
+            message_id,
+            text,
+            attachments,
+            images,
+        } = input;
         self.background_subagents(thread_id, subagents);
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(turn) = turns.get(thread_id) else {
@@ -276,7 +288,11 @@ impl Runner {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone();
-        let prompt = provider::Prompt { text, attachments, images };
+        let prompt = provider::Prompt {
+            text,
+            attachments,
+            images,
+        };
         let line = provider::steer_input(turn.agent, prompt, session_id, turn_id.as_deref());
         // Under the stdin lock, so the reader cannot close stdin between the write and
         // recording that an answer is due.
@@ -313,7 +329,6 @@ impl Runner {
             .push(follow_up);
         Delivery::Queued
     }
-
 
     /// Stops the turn and drops the messages waiting for it. `last_line` is written
     /// to the agent first, with a moment to act on it. The agent's scope is stopped along
@@ -361,7 +376,9 @@ impl Runner {
                 (turn.pid, turn.exited.clone())
             })
             .collect();
-        running.iter().for_each(|(pid, _)| workspace::signal_process_group(*pid, workspace::SIGTERM));
+        running
+            .iter()
+            .for_each(|(pid, _)| workspace::signal_process_group(*pid, workspace::SIGTERM));
         let deadline = Instant::now() + QUIT_GRACE;
         while Instant::now() < deadline && running.iter().any(|(_, e)| !e.load(Ordering::SeqCst)) {
             std::thread::sleep(Duration::from_millis(50));
@@ -424,7 +441,12 @@ impl Runner {
         decision: ApprovalDecision<'_>,
         auto: bool,
     ) -> Result<(), String> {
-        let ApprovalDecision { approval_id, allow, answers, rule } = decision;
+        let ApprovalDecision {
+            approval_id,
+            allow,
+            answers,
+            rule,
+        } = decision;
         let (agent, stdin, pending) = {
             let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
             let turn = turns
@@ -440,11 +462,19 @@ impl Runner {
         };
         // A permission hook holds the call until it hears the answer.
         if pending.reply.get("hook").is_some() {
-            if let Some(waiter) = self.hooks.lock().unwrap_or_else(PoisonError::into_inner).remove(approval_id) {
+            if let Some(waiter) = self
+                .hooks
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .remove(approval_id)
+            {
                 let _ = waiter.send(allow);
             }
         } else {
-            write_line(&stdin, &provider::approval_reply(agent, &pending.reply, allow, &answers));
+            write_line(
+                &stdin,
+                &provider::approval_reply(agent, &pending.reply, allow, &answers),
+            );
         }
         publish(
             server,
@@ -475,7 +505,10 @@ mod tests {
             (AgentKind::OpenCode, "todowrite"),
         ] {
             let text = agent_instructions(&settings, agent);
-            assert!(text.contains(&format!("your {tool} tool")), "{agent:?}: {text}");
+            assert!(
+                text.contains(&format!("your {tool} tool")),
+                "{agent:?}: {text}"
+            );
         }
         for agent in [AgentKind::Antigravity, AgentKind::Api] {
             assert_eq!(checklist_instructions(agent), None, "{agent:?}");

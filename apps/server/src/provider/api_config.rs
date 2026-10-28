@@ -6,6 +6,7 @@
 //! way, since one may carry a secret (an `Authorization` or `X-Api-Key` header), and the config
 //! keeps only their names.
 
+use ts_rs::TS;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock, PoisonError};
@@ -48,7 +49,7 @@ fn keys() -> std::sync::MutexGuard<'static, HashMap<String, String>> {
         .unwrap_or_else(PoisonError::into_inner)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiProvider {
     /// A slug, the part of a model id before its `/`.
@@ -85,7 +86,7 @@ fn yes() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiModel {
     pub id: String,
@@ -94,13 +95,13 @@ pub struct ApiModel {
     pub name: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Header {
     pub name: String,
     pub value: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum KeyStore {
     /// The system credential store.
@@ -152,7 +153,7 @@ pub fn provider(id: &str) -> Option<ApiProvider> {
 }
 
 /// A provider as the settings show it: without its key, but saying whether it has one.
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderView {
     #[serde(flatten)]
@@ -193,7 +194,11 @@ pub fn save(mut provider: ApiProvider, key: KeyChange) -> Result<ProviderView, S
         .map(|v| v.trim().trim_start_matches('$').to_string())
         .filter(|v| !v.is_empty());
     provider.headers.retain(|h| !h.name.trim().is_empty());
-    let values: Vec<String> = provider.headers.iter().map(|h| h.value.trim().to_string()).collect();
+    let values: Vec<String> = provider
+        .headers
+        .iter()
+        .map(|h| h.value.trim().to_string())
+        .collect();
     for h in &mut provider.headers {
         h.name = h.name.trim().to_string();
         h.value.clear();
@@ -205,7 +210,9 @@ pub fn save(mut provider: ApiProvider, key: KeyChange) -> Result<ProviderView, S
         return Err("The logo must be an image under 256 KB".into());
     }
     let mut seen = std::collections::HashSet::new();
-    provider.models.retain(|m| !m.id.trim().is_empty() && seen.insert(m.id.clone()));
+    provider
+        .models
+        .retain(|m| !m.id.trim().is_empty() && seen.insert(m.id.clone()));
 
     let _guard = WRITE.lock().unwrap_or_else(PoisonError::into_inner);
     let mut config = read_config();
@@ -264,12 +271,19 @@ fn unique_id(name: &str, taken: &[ApiProvider]) -> String {
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join("-");
-    let base = if base.is_empty() { "provider".to_string() } else { base };
+    let base = if base.is_empty() {
+        "provider".to_string()
+    } else {
+        base
+    };
     let free = |id: &str| !taken.iter().any(|p| p.id == id);
     if free(&base) {
         return base;
     }
-    (2..).map(|n| format!("{base}-{n}")).find(|id| free(id)).unwrap_or(base)
+    (2..)
+        .map(|n| format!("{base}-{n}"))
+        .find(|id| free(id))
+        .unwrap_or(base)
 }
 
 /// A secret's entry in the credential store. A provider's key is named by the provider's id,
@@ -442,8 +456,14 @@ pub fn fetch_models(query: ModelsQuery) -> Result<Vec<ApiModel>, String> {
             let var = query.key_env.filter(|v| !v.trim().is_empty());
             let saved = query.provider_id.as_deref().and_then(provider);
             match (var, saved) {
-                (Some(var), _) => key(&ApiProvider { key_env: Some(var), ..blank() }),
-                (None, Some(saved)) => key(&ApiProvider { key_env: None, ..saved }),
+                (Some(var), _) => key(&ApiProvider {
+                    key_env: Some(var),
+                    ..blank()
+                }),
+                (None, Some(saved)) => key(&ApiProvider {
+                    key_env: None,
+                    ..saved
+                }),
                 (None, None) => None,
             }
         });
@@ -461,14 +481,18 @@ pub fn fetch_models(query: ModelsQuery) -> Result<Vec<ApiModel>, String> {
     for h in &query.headers {
         request = request.header(h.name.trim(), h.value.trim());
     }
-    let mut response = request.call().map_err(|e| format!("Could not reach {base}: {e}"))?;
+    let mut response = request
+        .call()
+        .map_err(|e| format!("Could not reach {base}: {e}"))?;
     let status = response.status();
     let text = response.body_mut().read_to_string().unwrap_or_default();
     let body: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
     if !status.is_success() {
         return Err(super::api::error_text(status.as_u16(), &body, &text));
     }
-    let list = body["data"].as_array().or_else(|| body["models"].as_array());
+    let list = body["data"]
+        .as_array()
+        .or_else(|| body["models"].as_array());
     let mut models: Vec<ApiModel> = list
         .into_iter()
         .flatten()
@@ -499,13 +523,17 @@ fn blank() -> ApiProvider {
 /// The request line the API bridge reads first: everything a turn needs, key included, so
 /// the key never appears in the bridge's arguments or environment.
 pub fn connection(model: Option<&str>) -> Result<Value, String> {
-    let model = model.map(String::from).or_else(default_model).ok_or(
-        "Add a model to an API provider in Settings → API Providers first",
-    )?;
+    let model = model
+        .map(String::from)
+        .or_else(default_model)
+        .ok_or("Add a model to an API provider in Settings → API Providers first")?;
     let (provider, model_id) =
         resolve(&model).ok_or_else(|| format!("No API provider has the model {model}"))?;
     if !provider.enabled {
-        return Err(format!("{} is turned off in Settings → API Providers", provider.name));
+        return Err(format!(
+            "{} is turned off in Settings → API Providers",
+            provider.name
+        ));
     }
     check_url(&provider.base_url)?;
     let provider = with_headers(provider);

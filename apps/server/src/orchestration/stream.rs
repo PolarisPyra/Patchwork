@@ -1,5 +1,4 @@
 //! Streaming agent output to the frontend, and saving events onto the stored thread.
-use crate::Res;
 use crate::Server;
 use crate::types::AgentEvent;
 use crate::types::AgentEventEnvelope;
@@ -11,7 +10,6 @@ use crate::types::Part;
 use crate::types::StepStatus;
 use crate::types::Thread;
 use super::turn::Turn;
-
 
 impl Turn {
     /// Streams a text delta to the frontend without saving it; the reader
@@ -101,7 +99,11 @@ pub(super) struct Unsaved {
 /// Applies one event to the stored message. Used for both persistence and replay.
 /// Applies `event` to the stored thread. Removing a message moves the ones after it, so
 /// that goes through `update_thread`; every other event changes at most one message in place.
-pub(super) fn save_event(server: &Server, thread_id: &str, event: &AgentEvent) -> Res<()> {
+pub(super) fn save_event(
+    server: &Server,
+    thread_id: &str,
+    event: &AgentEvent,
+) -> Result<(), String> {
     if let AgentEvent::MessageRemoved { .. } = event {
         return server.store.update_thread(thread_id, |t| apply(t, event));
     }
@@ -210,9 +212,12 @@ pub(super) fn apply(thread: &mut Thread, event: &AgentEvent) {
             match msg.parts.last_mut() {
                 Some(Part::Text { text: last }) => last.push_str(text),
                 None
-                | Some(Part::Thinking { .. } | Part::Tool { .. } | Part::Plan { .. } | Part::Approval { .. }) => {
-                    msg.parts.push(Part::Text { text: text.clone() })
-                }
+                | Some(
+                    Part::Thinking { .. }
+                    | Part::Tool { .. }
+                    | Part::Plan { .. }
+                    | Part::Approval { .. },
+                ) => msg.parts.push(Part::Text { text: text.clone() }),
             }
         }
         AgentEvent::Thinking {
@@ -258,7 +263,10 @@ pub(super) fn apply(thread: &mut Thread, event: &AgentEvent) {
         AgentEvent::PlanUpdated { steps, .. } => msg.plan = steps.clone(),
         AgentEvent::Usage { usage, .. } => msg.usage = Some(*usage),
         AgentEvent::MessageQueued { queued, .. } => msg.queued = *queued,
-        AgentEvent::MessageSteered { .. } => { msg.queued = false; msg.steer = true; }
+        AgentEvent::MessageSteered { .. } => {
+            msg.queued = false;
+            msg.steer = true;
+        }
         AgentEvent::MessageCutOff { .. } => msg.cut_off = true,
         AgentEvent::Refused { refusal, .. } => msg.refusal = Some(refusal.clone()),
         AgentEvent::PlanProposed { text, .. } => {

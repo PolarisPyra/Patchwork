@@ -30,16 +30,26 @@ impl Filter {
     /// its top level counts, without git's index lock and watchman's cookie files.
     pub(super) fn keeps(&self, path: &Path, rel: &Path) -> bool {
         let mut parts = rel.iter();
-        let Some(first) = parts.next() else { return false };
+        let Some(first) = parts.next() else {
+            return false;
+        };
         if first == ".git" {
-            let Some(name) = parts.next() else { return false };
+            let Some(name) = parts.next() else {
+                return false;
+            };
             return parts.next().is_none() && name != "index.lock" && !is_cookie(name);
         }
         if is_cookie(rel.file_name().unwrap_or_default()) {
             return false;
         }
-        let skipped = rel.iter().any(|part| SKIPPED_DIRS.iter().any(|dir| part == *dir));
-        !skipped && !self.ignored.matched_path_or_any_parents(path, path.is_dir()).is_ignore()
+        let skipped = rel
+            .iter()
+            .any(|part| SKIPPED_DIRS.iter().any(|dir| part == *dir));
+        !skipped
+            && !self
+                .ignored
+                .matched_path_or_any_parents(path, path.is_dir())
+                .is_ignore()
     }
 }
 

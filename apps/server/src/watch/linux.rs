@@ -21,13 +21,19 @@ pub(super) fn watch_project(watcher: &mut RecommendedWatcher, root: &Path) {
 /// already in it, which were written before its watch was in place. Listing its parent applies
 /// every ignore file above it.
 pub(super) fn dir_created(watcher: &mut RecommendedWatcher, dir: &Path) -> Vec<PathBuf> {
-    let Some(parent) = dir.parent() else { return Vec::new() };
+    let Some(parent) = dir.parent() else {
+        return Vec::new();
+    };
     let kept = walker(parent)
         .max_depth(Some(1))
         .build()
         .flatten()
         .any(|entry| entry.path() == dir);
-    if kept { watch_tree(watcher, dir) } else { Vec::new() }
+    if kept {
+        watch_tree(watcher, dir)
+    } else {
+        Vec::new()
+    }
 }
 
 /// Adds a watch on `dir` and each folder under it that git keeps; returns the files found.
