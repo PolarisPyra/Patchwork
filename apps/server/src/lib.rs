@@ -5,12 +5,16 @@
 pub const VERSION: &str = env!("PATCHWORK_VERSION");
 
 pub mod agents;
+pub mod computer;
 pub mod debug_log;
 pub mod import;
 pub mod orchestration;
 pub mod permissions;
+pub mod memory;
 pub mod persistence;
+pub mod plugins;
 pub mod provider;
+pub mod scheduled;
 mod scope;
 pub mod skills;
 pub mod terminal;
@@ -350,6 +354,7 @@ impl Server {
         provider::api_config::init(&config_dir);
         provider::mcp::init(&config_dir);
         skills::init(&config_dir);
+        plugins::init(&config_dir);
         let agents = agents::Library::open(&config_dir);
         std::thread::spawn(scope::prepare);
         let clis_dir = config_dir.join("clis");
@@ -781,6 +786,83 @@ impl Server {
         };
         self.store.insert_threads(vec![thread.clone()])?;
         Ok(thread)
+    }
+
+    /// Starts a task in a new thread for `task`, and returns the thread.
+    ///
+    /// A task whose project no longer exists runs as a chat, so a deleted project does not stop
+    /// the schedule without saying so.
+    pub fn start_scheduled_task(self: &Arc<Self>, task: &types::ScheduledTask) -> Res<Thread> {
+        let project_id = task.project_id.clone().filter(|id| {
+            self.store
+                .settings()
+                .projects
+                .iter()
+                .any(|project| &project.id == id)
+        });
+        let thread = self.create_thread(NewThread {
+            project_id,
+            agent: task.agent,
+            model: task.model.clone(),
+            access_mode: task.access_mode,
+            effort: None,
+        })?;
+        let thread = self.store.thread(&thread.id).unwrap_or(thread);
+        self.emit(AgentEventEnvelope {
+            thread_id: thread.id.clone(),
+            event: AgentEvent::ThreadCreated {
+                thread: thread.clone(),
+            },
+        });
+        self.send_message(thread.id.clone(), task.prompt.clone(), Vec::new(), false)?;
+        // Named after the task, not after its prompt: the first message is what the schedule says,
+        // and the task's own name is what the list should show. This comes after the message so
+        // the naming a new thread gets from its first line cannot take the name back.
+        self.store
+            .update_thread(&thread.id, |t| t.title = task.name.clone())?;
+        let thread = self.store.thread(&thread.id).unwrap_or(thread);
+        Ok(thread)
+    }
+
+    /// Starts one scheduled task now, whatever its schedule says.
+    pub fn run_scheduled_task(self: &Arc<Self>, id: &str) -> Res<Thread> {
+        let task = self
+            .store
+            .scheduled_tasks()
+            .into_iter()
+            .find(|task| task.id == id)
+            .ok_or("The scheduled task no longer exists")?;
+        let thread = self.start_scheduled_task(&task)?;
+        let now = now_ms() as i64;
+        let next = scheduled::next_run_at(&task.schedule, chrono::Local::now());
+        self.store.scheduled_task_ran(&task.id, now, next)?;
+        Ok(thread)
+    }
+
+    /// Starts every scheduled task whose time has come, and returns their names. Called on a
+    /// timer by the desktop shell; a task that fails to start is logged and skipped.
+    pub fn run_due_scheduled_tasks(self: &Arc<Self>) -> Vec<String> {
+        let now = now_ms() as i64;
+        let tasks = self.store.scheduled_tasks();
+        let mut started = Vec::new();
+        for task in scheduled::due(&tasks, now) {
+            match self.start_scheduled_task(task) {
+                Ok(_) => {
+                    let next = scheduled::next_run_at(&task.schedule, chrono::Local::now());
+                    if let Err(e) = self.store.scheduled_task_ran(&task.id, now, next) {
+                        log::warn!("scheduled task {}: {e}", task.id);
+                    }
+                    started.push(task.name.clone());
+                }
+                Err(e) => {
+                    log::warn!("scheduled task {} did not start: {e}", task.name);
+                    // Record the attempt so a task that cannot start does not retry every tick.
+                    let next = scheduled::next_run_at(&task.schedule, chrono::Local::now());
+                    let _ = self.store.scheduled_task_ran(&task.id, now, next);
+                }
+            }
+        }
+        started
     }
 
     pub fn rename_thread(&self, id: &str, title: &str) -> Res<()> {

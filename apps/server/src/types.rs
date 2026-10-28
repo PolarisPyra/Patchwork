@@ -88,8 +88,13 @@ pub struct Settings {
     pub permissions: PermissionSettings,
     /// Answering an agent's question takes a second click on the picked answer.
     pub confirm_answers: bool,
+    /// Folder of plugin bundles. None uses `plugins` in the config folder.
+    pub plugins_dir: Option<String>,
+    /// Plugins switched off in Settings, by folder name.
+    pub disabled_plugins: Vec<String>,
+    /// Whether the agent may look at the screen and drive the pointer and keyboard.
+    pub computer_use: bool,
 }
-
 /// What agents may do without asking: for every project and chat, for chats without a project,
 /// and for each project.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -131,6 +136,8 @@ pub enum PermissionKind {
     Folder,
     Web,
     Mcp,
+    /// The screen: a screenshot, or the pointer and keyboard.
+    Screen,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -540,6 +547,149 @@ pub struct SubAgent {
 pub struct PlanStep {
     pub text: String,
     pub status: StepStatus,
+}
+
+/// A scheduled task: a prompt that starts a task at a fixed time.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduledTask {
+    pub id: String,
+    pub name: String,
+    pub prompt: String,
+    pub schedule: Schedule,
+    /// The project to run in; None starts a chat in a scratch folder.
+    pub project_id: Option<String>,
+    pub agent: AgentKind,
+    pub model: Option<String>,
+    pub access_mode: AccessMode,
+    pub enabled: bool,
+    /// When the task last started, in Unix milliseconds.
+    pub last_run_at: Option<i64>,
+    /// When it next starts, in Unix milliseconds.
+    pub next_run_at: Option<i64>,
+    pub created_at: i64,
+}
+
+/// How often a scheduled task runs. The shapes Codex's own tasks use.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum Schedule {
+    Hourly {
+        interval_hours: u32,
+    },
+    /// Every day at `time`, `HH:MM` in local time.
+    Daily {
+        time: String,
+    },
+    /// Monday to Friday at `time`.
+    Weekdays {
+        time: String,
+    },
+    /// On each of `days` at `time`.
+    Weekly {
+        days: Vec<Weekday>,
+        time: String,
+    },
+}
+
+/// A day of the week, written as Codex's schedules write it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Weekday {
+    #[serde(rename = "MO")]
+    Mon,
+    #[serde(rename = "TU")]
+    Tue,
+    #[serde(rename = "WE")]
+    Wed,
+    #[serde(rename = "TH")]
+    Thu,
+    #[serde(rename = "FR")]
+    Fri,
+    #[serde(rename = "SA")]
+    Sat,
+    #[serde(rename = "SU")]
+    Sun,
+}
+
+impl Weekday {
+    pub fn from_chrono(day: chrono::Weekday) -> Self {
+        match day {
+            chrono::Weekday::Mon => Weekday::Mon,
+            chrono::Weekday::Tue => Weekday::Tue,
+            chrono::Weekday::Wed => Weekday::Wed,
+            chrono::Weekday::Thu => Weekday::Thu,
+            chrono::Weekday::Fri => Weekday::Fri,
+            chrono::Weekday::Sat => Weekday::Sat,
+            chrono::Weekday::Sun => Weekday::Sun,
+        }
+    }
+
+    /// `Mon`, `Tue`, … for a list row.
+    pub fn short(self) -> &'static str {
+        match self {
+            Weekday::Mon => "Mon",
+            Weekday::Tue => "Tue",
+            Weekday::Wed => "Wed",
+            Weekday::Thu => "Thu",
+            Weekday::Fri => "Fri",
+            Weekday::Sat => "Sat",
+            Weekday::Sun => "Sun",
+        }
+    }
+}
+
+/// A plugin bundle: a folder with a `plugin.json`, its skills, and the MCP servers it adds.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Plugin {
+    /// The folder name, and what `disabled_plugins` records.
+    pub id: String,
+    pub name: String,
+    pub version: Option<String>,
+    pub description: Option<String>,
+    pub path: String,
+    pub skills: Vec<crate::skills::Skill>,
+    pub mcp_servers: Vec<PluginMcpServer>,
+    pub enabled: bool,
+    /// Shipped with the app, and rewritten on launch.
+    pub bundled: bool,
+}
+
+/// An MCP server a plugin offers, in the shape Settings → MCP Servers saves.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginMcpServer {
+    pub name: String,
+    pub command: String,
+    pub args: Vec<String>,
+}
+
+/// One entry in the memory tree: a place an agent takes instructions from.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryNode {
+    pub name: String,
+    /// The file to read, or None for a group heading.
+    pub path: Option<String>,
+    /// `file`, `folder`, or `skill`.
+    pub kind: MemoryKind,
+    /// A skill's description, or why a file is listed and missing.
+    pub note: Option<String>,
+    /// Bytes on disk, for a file.
+    pub size: Option<u64>,
+    pub children: Vec<MemoryNode>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MemoryKind {
+    File,
+    Folder,
+    Skill,
 }
 
 /// How much an agent may do without asking.
@@ -1104,3 +1254,36 @@ pub fn now_ms() -> u64 {
 pub fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
 }
+
+/// A feature flag of the installed Codex CLI, from `codex features list`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexFeature {
+    pub name: String,
+    /// `stable`, `beta`, `under development`, `deprecated`, or `removed`.
+    pub stage: String,
+    pub enabled: bool,
+}
+
+/// A model in the installed Codex CLI's catalog, from `codex debug models`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexModel {
+    pub slug: String,
+    pub display_name: String,
+    pub context_window: Option<u64>,
+    pub efforts: Vec<String>,
+    pub speed_tiers: Vec<String>,
+    pub multi_agent: Option<String>,
+}
+
+/// What the installed Codex CLI offers: its version, flags, and models.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexInfo {
+    pub path: String,
+    pub version: String,
+    pub features: Vec<CodexFeature>,
+    pub models: Vec<CodexModel>,
+}
+

@@ -11,6 +11,7 @@ mod codec;
 mod connection;
 mod legacy;
 mod migrations;
+mod scheduled;
 mod settings;
 mod store;
 mod threads;
@@ -164,6 +165,100 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM messages", [], |r| r.get(0))
             .unwrap();
         assert_eq!(count, 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    /// Computer use is a setting, so it survives a restart. The flag the tools read is mirrored
+    /// from it; that mirror is checked on its own, since every `Store` in a test process writes
+    /// it and the tests run side by side.
+    #[test]
+    fn computer_use_is_a_setting_and_a_mirror() {
+        let dir = temp_dir();
+        let store = Store::open(dir.clone()).unwrap();
+        assert!(!store.settings().computer_use, "off until it is turned on");
+        store.update_settings(|s| s.computer_use = true).unwrap();
+        drop(store);
+
+        let store = Store::open(dir.clone()).unwrap();
+        assert!(store.settings().computer_use);
+        store.update_settings(|s| s.computer_use = false).unwrap();
+        assert!(!store.settings().computer_use);
+
+        crate::computer::set_enabled(true);
+        assert!(crate::computer::enabled());
+        crate::computer::set_enabled(false);
+        assert!(!crate::computer::enabled());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scheduled_tasks_survive_reopen() {
+        use crate::types::{Schedule, ScheduledTask, Weekday};
+
+        let dir = temp_dir();
+        let store = Store::open(dir.clone()).unwrap();
+        let task = ScheduledTask {
+            id: String::new(),
+            name: "Weekly report".into(),
+            prompt: "Report on what landed.".into(),
+            schedule: Schedule::Weekly {
+                days: vec![Weekday::Mon, Weekday::Fri],
+                time: "09:00".into(),
+            },
+            project_id: Some("p".into()),
+            agent: AgentKind::Codex,
+            model: None,
+            access_mode: crate::types::AccessMode::Auto,
+            enabled: true,
+            last_run_at: None,
+            next_run_at: None,
+            created_at: 7,
+        };
+        let saved = store.save_scheduled_task(task).unwrap();
+        assert!(!saved.id.is_empty(), "a new task is given an id");
+        assert!(saved.next_run_at.is_some(), "a saved task is scheduled");
+        drop(store);
+
+        let store = Store::open(dir.clone()).unwrap();
+        let tasks = store.scheduled_tasks();
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].name, "Weekly report");
+        assert_eq!(tasks[0].agent, AgentKind::Codex);
+        assert_eq!(tasks[0].schedule, saved.schedule);
+        assert!(store.has_scheduled_task(&saved.id));
+
+        store.scheduled_task_ran(&saved.id, 99, Some(123)).unwrap();
+        assert_eq!(store.scheduled_tasks()[0].last_run_at, Some(99));
+        assert_eq!(store.scheduled_tasks()[0].next_run_at, Some(123));
+
+        store.remove_scheduled_task(&saved.id).unwrap();
+        assert!(store.scheduled_tasks().is_empty());
+        assert!(!store.has_scheduled_task(&saved.id));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_task_without_a_name_or_a_time_is_refused() {
+        use crate::types::{Schedule, ScheduledTask};
+
+        let dir = temp_dir();
+        let store = Store::open(dir.clone()).unwrap();
+        let task = |name: &str, time: &str| ScheduledTask {
+            id: String::new(),
+            name: name.into(),
+            prompt: "p".into(),
+            schedule: Schedule::Daily { time: time.into() },
+            project_id: None,
+            agent: AgentKind::Claude,
+            model: None,
+            access_mode: crate::types::AccessMode::Supervised,
+            enabled: true,
+            last_run_at: None,
+            next_run_at: None,
+            created_at: 0,
+        };
+        assert!(store.save_scheduled_task(task("", "09:00")).is_err());
+        assert!(store.save_scheduled_task(task("n", "nine")).is_err());
+        assert!(store.scheduled_tasks().is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

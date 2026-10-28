@@ -55,7 +55,117 @@ export interface Settings {
   permissions: PermissionSettings;
   /** Answering an agent's question takes a second click on the picked answer. */
   confirmAnswers: boolean;
+  /** Folder of plugin bundles; null uses `plugins` in the config folder. */
+  pluginsDir: string | null;
+  /** Plugins switched off in Settings, by folder name. */
+  disabledPlugins: string[];
+  /** Whether the agent may look at the screen and drive the pointer and keyboard. */
+  computerUse: boolean;
 }
+
+/** A scheduled task: a prompt that starts a task at a fixed time. Mirrors `ScheduledTask`. */
+export interface ScheduledTask {
+  id: string;
+  name: string;
+  prompt: string;
+  schedule: Schedule;
+  /** The project to run in; null starts a chat in a scratch folder. */
+  projectId: string | null;
+  agent: AgentKind;
+  model: string | null;
+  accessMode: AccessMode;
+  enabled: boolean;
+  lastRunAt: number | null;
+  nextRunAt: number | null;
+  createdAt: number;
+}
+
+export type Weekday = "MO" | "TU" | "WE" | "TH" | "FR" | "SA" | "SU";
+
+/** How often a scheduled task runs, in the shapes Codex's tasks use. */
+export type Schedule =
+  | { type: "hourly"; intervalHours: number }
+  | { type: "daily"; time: string }
+  | { type: "weekdays"; time: string }
+  | { type: "weekly"; days: Weekday[]; time: string };
+
+/** An MCP server a plugin offers. */
+export interface PluginMcpServer {
+  name: string;
+  command: string;
+  args: string[];
+}
+
+/** A plugin bundle: a folder with a `plugin.json`, its skills, and the MCP servers it adds. */
+export interface Plugin {
+  /** The folder name, and what `disabledPlugins` records. */
+  id: string;
+  name: string;
+  version: string | null;
+  description: string | null;
+  path: string;
+  skills: Skill[];
+  mcpServers: PluginMcpServer[];
+  enabled: boolean;
+  bundled: boolean;
+}
+
+/** One entry in the memory tree: a place an agent takes instructions from. */
+export interface MemoryNode {
+  name: string;
+  /** The file to read, or null for a group heading. */
+  path: string | null;
+  kind: MemoryKind;
+  /** A skill's description, or why a file is listed and missing. */
+  note: string | null;
+  size: number | null;
+  children: MemoryNode[];
+}
+
+export type MemoryKind = "file" | "folder" | "skill";
+
+/** A feature flag of the installed Codex CLI. */
+export interface CodexFeature {
+  name: string;
+  /** `stable`, `beta`, `under development`, `deprecated`, or `removed`. */
+  stage: string;
+  enabled: boolean;
+}
+
+/** A model in the installed Codex CLI's catalog. */
+export interface CodexModel {
+  slug: string;
+  displayName: string;
+  contextWindow: number | null;
+  efforts: string[];
+  speedTiers: string[];
+  multiAgent: string | null;
+}
+
+/** What the installed Codex CLI offers. */
+export interface CodexInfo {
+  path: string;
+  version: string;
+  features: CodexFeature[];
+  models: CodexModel[];
+}
+
+/** The screen as a PNG data URL, and the size of the screen it came from. */
+export interface Screenshot {
+  dataUrl: string;
+  width: number;
+  height: number;
+  screenWidth: number;
+  screenHeight: number;
+}
+
+/** What to do with the pointer or keyboard. */
+export type ComputerAction =
+  | { kind: "move"; x: number; y: number }
+  | { kind: "click"; x: number; y: number; button?: "left" | "middle" | "right"; double?: boolean }
+  | { kind: "type"; text: string }
+  | { kind: "key"; key: string; modifiers?: ("ctrl" | "shift" | "alt" | "meta")[] }
+  | { kind: "scroll"; amount: number; horizontal?: boolean };
 
 /** What agents may do without asking. Mirrors `PermissionSettings` in apps/server/src/types.rs. */
 export interface PermissionSettings {
@@ -82,7 +192,7 @@ export interface PermissionRule {
   effect: Effect;
 }
 
-export type PermissionKind = "edit" | "command" | "folder" | "web" | "mcp";
+export type PermissionKind = "edit" | "command" | "folder" | "web" | "mcp" | "screen";
 
 export type Effect = "allow" | "ask" | "deny";
 
@@ -751,6 +861,9 @@ export const DEFAULT_SETTINGS: Settings = {
     seeded: false,
   },
   confirmAnswers: false,
+  pluginsDir: null,
+  disabledPlugins: [],
+  computerUse: false,
 };
 
 /** Agent used for new tasks: the first connected one, else Claude Code. */
@@ -879,6 +992,27 @@ export const api = {
   /** Installed login shells, as paths from /etc/shells, and the default shell's path. */
   listShells: () => invoke<ShellChoices>("list_shells"),
   listSkills: () => invoke<SkillsView>("list_skills"),
+  /** The plugin bundles in the plugins folder, with their skills and MCP servers. */
+  listPlugins: () => invoke<Plugin[]>("list_plugins"),
+  openPluginsFolder: () => invoke<void>("open_plugins_folder"),
+  /** The scheduled tasks, as saved. */
+  listScheduledTasks: () => invoke<ScheduledTask[]>("list_scheduled_tasks"),
+  /** Adds or replaces a task, and returns it with its next run worked out. */
+  saveScheduledTask: (task: ScheduledTask) => invoke<ScheduledTask>("save_scheduled_task", { task }),
+  removeScheduledTask: (id: string) => invoke<void>("remove_scheduled_task", { id }),
+  /** Starts a task now, whatever its schedule says. */
+  runScheduledTask: (id: string) => invoke<Thread>("run_scheduled_task", { id }),
+  /** Every place an agent takes standing instructions from, as a tree. */
+  memoryTree: () => invoke<MemoryNode[]>("memory_tree"),
+  readMemory: (path: string) => invoke<string>("read_memory", { path }),
+  openMemoryFile: (path: string) => invoke<void>("open_memory_file", { path }),
+  /** What the installed Codex CLI offers: its version, flags, and models. */
+  codexInfo: () => invoke<CodexInfo>("codex_info"),
+  /** The output of `codex doctor`, `codex mcp list`, or `codex plugin list`. */
+  codexCommand: (kind: "doctor" | "mcp" | "plugins") => invoke<string>("codex_command", { kind }),
+  /** The screen as a PNG data URL; refuses unless computer use is on. */
+  computerScreenshot: () => invoke<Screenshot>("computer_screenshot"),
+  computerAction: (action: ComputerAction) => invoke<void>("computer_action", { action }),
   openSkillsFolder: () => invoke<void>("open_skills_folder"),
   /** The skills now, and on `onChange` after each change to the folder until `unwatchSkills`. */
   watchSkills: (onChange: (view: SkillsView) => void) => {

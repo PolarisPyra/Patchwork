@@ -8,6 +8,7 @@ import {
   BellIcon,
   BooksIcon,
   CaretDownIcon,
+  ClockIcon,
   ChatCircleIcon,
   CaretRightIcon,
   DownloadSimpleIcon,
@@ -21,12 +22,14 @@ import {
   PlugIcon,
   PlugsConnectedIcon,
   PlusIcon,
+  PuzzlePieceIcon,
   RobotIcon,
   ShieldCheckIcon,
   ScrollIcon,
   TerminalIcon,
   TerminalWindowIcon,
   TrashIcon,
+  TreeStructureIcon,
   XIcon,
   type Icon,
 } from "@phosphor-icons/react";
@@ -68,6 +71,10 @@ import KeybindingsPane from "~/components/settings/KeybindingsPane";
 import ApiProvidersPane from "~/components/settings/ApiProvidersPane";
 import McpServersPane, { Badge, chip, home, INPUT } from "~/components/settings/McpServersPane";
 import PermissionsPane, { type PermissionsFocus } from "~/components/settings/PermissionsPane";
+import PluginsPane from "~/components/settings/PluginsPane";
+import ScheduledPane from "~/components/settings/ScheduledPane";
+import MemoryPane from "~/components/settings/MemoryPane";
+import CodexPane from "~/components/settings/CodexPane";
 
 type Section =
   | "appearance"
@@ -82,6 +89,10 @@ type Section =
   | "environment"
   | "terminal"
   | "skills"
+  | "plugins"
+  | "scheduled"
+  | "memory"
+  | "codex"
   | "custom-agents"
   | "projects"
   | "shortcuts"
@@ -108,6 +119,9 @@ const GROUPS: { label: string; sections: { id: Section; label: string; Icon: Ico
       { id: "mcp", label: "MCP Servers", Icon: PlugIcon },
       { id: "custom-agents", label: "Agents", Icon: IdentificationBadgeIcon },
       { id: "skills", label: "Skills", Icon: BooksIcon },
+      { id: "plugins", label: "Plugins", Icon: PuzzlePieceIcon },
+      { id: "memory", label: "Memory", Icon: TreeStructureIcon },
+      { id: "codex", label: "Codex CLI", Icon: TerminalWindowIcon },
       { id: "permissions", label: "Permissions", Icon: ShieldCheckIcon },
       { id: "tokens", label: "AI Tokenomics", Icon: GaugeIcon },
     ],
@@ -116,6 +130,7 @@ const GROUPS: { label: string; sections: { id: Section; label: string; Icon: Ico
     label: "Projects",
     sections: [
       { id: "projects", label: "Projects", Icon: FolderSimpleIcon },
+      { id: "scheduled", label: "Scheduled", Icon: ClockIcon },
       { id: "imports", label: "Imports", Icon: DownloadSimpleIcon },
     ],
   },
@@ -209,6 +224,10 @@ export default memo(function SettingsDialog({
             {section === "environment" && <EnvironmentPane {...paneProps} />}
             {section === "terminal" && <TerminalPane {...paneProps} />}
             {section === "skills" && <SkillsPane {...paneProps} />}
+            {section === "plugins" && <PluginsPane {...paneProps} />}
+            {section === "memory" && <MemoryPane {...paneProps} />}
+            {section === "codex" && <CodexPane {...paneProps} />}
+            {section === "scheduled" && <ScheduledPane {...paneProps} />}
             {section === "custom-agents" && <AgentsPane />}
             {section === "projects" && <ProjectsPane {...paneProps} />}
             {section === "shortcuts" && <KeybindingsPane />}
@@ -316,7 +335,7 @@ export function TokenRow({
   );
 }
 
-function TokenSwitch({
+export function TokenSwitch({
   label,
   on,
   onChange,

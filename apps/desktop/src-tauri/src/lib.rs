@@ -9,7 +9,7 @@ mod updates;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use patchwork_server::types::{AgentKind, Project, Settings, AgentStatus, ModelOption, ShellChoices, Role, MessageStatus, AccessMode, Attachment, Message, Thread, Folder, GoalStatus, FileChange, ProviderUsage, ImportSource, ImportScan, AgentEventEnvelope, AgentEvent, TurnTrees};
+use patchwork_server::types::{AgentKind, Project, Settings, AgentStatus, ModelOption, ShellChoices, Role, MessageStatus, AccessMode, Attachment, Message, Thread, Folder, GoalStatus, FileChange, ProviderUsage, ImportSource, ImportScan, AgentEventEnvelope, AgentEvent, TurnTrees, ScheduledTask, Plugin, MemoryNode, CodexInfo};
 use patchwork_server::{NewThread, Res, Server, orchestration, persistence, provider};
 use tauri::ipc::Channel;
 use tauri::menu::{Menu, MenuItem};
@@ -25,6 +25,115 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
     tauri::async_runtime::spawn_blocking(f)
         .await
         .map_err(|e| e.to_string())
+}
+
+// ---- scheduled tasks ----------------------------------------------------
+
+#[tauri::command]
+fn list_scheduled_tasks(server: Srv) -> Vec<ScheduledTask> {
+    server.store.scheduled_tasks()
+}
+
+/// Adds or replaces a task, and returns it as saved, with its next run worked out.
+#[tauri::command]
+fn save_scheduled_task(server: Srv, task: ScheduledTask) -> Res<ScheduledTask> {
+    server.store.save_scheduled_task(task)
+}
+
+#[tauri::command]
+fn remove_scheduled_task(server: Srv, id: String) -> Res<()> {
+    server.store.remove_scheduled_task(&id)
+}
+
+/// Starts a task now, whatever its schedule says.
+#[tauri::command]
+async fn run_scheduled_task(server: Srv<'_>, id: String) -> Res<Thread> {
+    server.run_scheduled_task(&id)
+}
+
+// ---- plugins ------------------------------------------------------------
+
+/// The plugin bundles in the plugins folder, with their skills and MCP servers.
+#[tauri::command]
+fn list_plugins(server: Srv) -> Vec<Plugin> {
+    patchwork_server::plugins::list(&server.store.settings())
+}
+
+#[tauri::command]
+fn open_plugins_folder(app: AppHandle, server: Srv) -> Res<()> {
+    open_folder(
+        &app,
+        &patchwork_server::plugins::dir(&server.store.settings()),
+    )
+}
+
+// ---- memory -------------------------------------------------------------
+
+/// Every place an agent takes standing instructions from, as a tree.
+#[tauri::command]
+fn memory_tree(server: Srv) -> Vec<MemoryNode> {
+    patchwork_server::memory::tree(&server.store.settings())
+}
+
+/// Reads one of the tree's files.
+#[tauri::command]
+fn read_memory(server: Srv, path: String) -> Res<String> {
+    patchwork_server::memory::read(&server.store.settings(), &path)
+}
+
+/// Opens one of the tree's files in the editor the app uses for files.
+#[tauri::command]
+fn open_memory_file(path: String) -> Res<()> {
+    let dir = std::path::Path::new(&path)
+        .parent()
+        .map(|parent| parent.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let name = std::path::Path::new(&path)
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    workspace::open_in_editor(&dir, &name)
+}
+
+// ---- codex CLI ----------------------------------------------------------
+
+/// What the installed Codex CLI offers: its version, flags, and models.
+#[tauri::command]
+async fn codex_info() -> Res<CodexInfo> {
+    blocking(patchwork_server::provider::codex_cli::info).await?
+}
+
+/// The output of one of the Codex CLI's read-only diagnostics commands.
+#[tauri::command]
+async fn codex_command(kind: String) -> Res<String> {
+    let kind = match kind.as_str() {
+        "doctor" => patchwork_server::provider::codex_cli::InfoCommand::Doctor,
+        "mcp" => patchwork_server::provider::codex_cli::InfoCommand::McpList,
+        "plugins" => patchwork_server::provider::codex_cli::InfoCommand::PluginList,
+        other => return Err(format!("There is no Codex command named {other}")),
+    };
+    blocking(move || patchwork_server::provider::codex_cli::command(kind)).await?
+}
+
+// ---- computer use -------------------------------------------------------
+
+/// The screen as a PNG data URL. Behind Settings → Permissions: the command refuses when
+/// computer use is off, so a stray call cannot look at the screen.
+#[tauri::command]
+async fn computer_screenshot(server: Srv<'_>) -> Res<patchwork_server::computer::Screenshot> {
+    if !server.store.settings().computer_use {
+        return Err("Computer use is off in Settings → Permissions".into());
+    }
+    blocking(patchwork_server::computer::screenshot).await?
+}
+
+/// Moves the pointer, clicks, types, presses a key, or scrolls.
+#[tauri::command]
+async fn computer_action(server: Srv<'_>, action: patchwork_server::computer::Action) -> Res<()> {
+    if !server.store.settings().computer_use {
+        return Err("Computer use is off in Settings → Permissions".into());
+    }
+    blocking(move || patchwork_server::computer::perform(&action)).await?
 }
 
 // ---- settings & projects -------------------------------------------------
@@ -944,6 +1053,25 @@ impl Notifier {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// How often a scheduled task is looked for. A tick that finds nothing to start does no work.
+const SCHEDULED_TICK: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Starts the tasks whose time has come, on a timer of its own, for the life of the app.
+fn start_scheduled_tasks(server: Arc<Server>) {
+    std::thread::Builder::new()
+        .name("scheduled-tasks".into())
+        .spawn(move || {
+            loop {
+                for name in server.run_due_scheduled_tasks() {
+                    log::info!("scheduled task started: {name}");
+                }
+                std::thread::sleep(SCHEDULED_TICK);
+            }
+        })
+        .map(|_| ())
+        .unwrap_or_else(|e| log::warn!("scheduled tasks will not run: {e}"));
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -1011,6 +1139,7 @@ pub fn run() {
             )?;
             server.start_idle_compaction();
             server.continue_interrupted();
+            start_scheduled_tasks(Arc::clone(&server));
             let logo = server.store.settings().logo;
             app.manage(server);
             let tray = create_tray(app);
@@ -1027,6 +1156,19 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_settings,
+            list_scheduled_tasks,
+            save_scheduled_task,
+            remove_scheduled_task,
+            run_scheduled_task,
+            list_plugins,
+            open_plugins_folder,
+            memory_tree,
+            read_memory,
+            open_memory_file,
+            codex_info,
+            codex_command,
+            computer_screenshot,
+            computer_action,
             default_permission_rules,
             save_settings,
             detect_agent,
