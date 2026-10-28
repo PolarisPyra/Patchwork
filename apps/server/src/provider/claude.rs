@@ -920,6 +920,7 @@ mod tests {
             root: "/abs",
             session_id: Some("sid"),
             model: Some("opus"),
+            vision_model: None,
             text: "do it",
             mode: AccessMode::FullAccess,
             plan: false,

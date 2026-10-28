@@ -328,7 +328,7 @@ impl Updates {
     }
 
     /// Restarts into the installed update, unless agents are replying and `force` is off. The app
-    /// quits the usual way, which records their turns as interrupted, so they carry on after it.
+    /// quits the usual way.
     pub fn restart(&self, app: &AppHandle, force: bool) -> RestartResult {
         if !matches!(self.state(), Some(UpdateState::Ready { .. })) {
             return RestartResult::NothingReady;

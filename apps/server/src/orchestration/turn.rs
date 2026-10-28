@@ -191,10 +191,12 @@ impl Runner {
             }
             AgentKind::Antigravity | AgentKind::Api => Vec::new(),
         };
+        let vision_model = settings.vision_model.clone();
         let spec = TurnSpec {
             root: &root,
             session_id: session_id.as_deref(),
             model: model.as_deref(),
+            vision_model: vision_model.as_deref(),
             text: &text,
             mode,
             plan,
@@ -313,6 +315,7 @@ impl Runner {
             root,
             session_id,
             model,
+            vision_model,
             text,
             mode,
             plan,
@@ -445,6 +448,7 @@ pub(super) struct Turn {
     pub(super) root: String,
     pub(super) session_id: Option<String>,
     pub(super) model: Option<String>,
+    pub(super) vision_model: Option<String>,
     pub(super) text: String,
     pub(super) mode: AccessMode,
     pub(super) plan: bool,
@@ -517,6 +521,7 @@ impl Turn {
             root: &self.root,
             session_id: self.session_id.as_deref(),
             model: self.model.as_deref(),
+            vision_model: self.vision_model.as_deref(),
             text: &self.text,
             mode: self.mode,
             plan: self.plan,

@@ -29,7 +29,6 @@ import {
   TerminalIcon,
   TerminalWindowIcon,
   TrashIcon,
-  TreeStructureIcon,
   XIcon,
   type Icon,
 } from "@phosphor-icons/react";
@@ -73,7 +72,6 @@ import McpServersPane, { Badge, chip, home, INPUT } from "~/components/settings/
 import PermissionsPane, { type PermissionsFocus } from "~/components/settings/PermissionsPane";
 import PluginsPane from "~/components/settings/PluginsPane";
 import ScheduledPane from "~/components/settings/ScheduledPane";
-import MemoryPane from "~/components/settings/MemoryPane";
 import CodexPane from "~/components/settings/CodexPane";
 
 type Section =
@@ -91,7 +89,6 @@ type Section =
   | "skills"
   | "plugins"
   | "scheduled"
-  | "memory"
   | "codex"
   | "custom-agents"
   | "projects"
@@ -120,7 +117,6 @@ const GROUPS: { label: string; sections: { id: Section; label: string; Icon: Ico
       { id: "custom-agents", label: "Agents", Icon: IdentificationBadgeIcon },
       { id: "skills", label: "Skills", Icon: BooksIcon },
       { id: "plugins", label: "Plugins", Icon: PuzzlePieceIcon },
-      { id: "memory", label: "Memory", Icon: TreeStructureIcon },
       { id: "codex", label: "Codex CLI", Icon: TerminalWindowIcon },
       { id: "permissions", label: "Permissions", Icon: ShieldCheckIcon },
       { id: "tokens", label: "AI Tokenomics", Icon: GaugeIcon },
@@ -225,7 +221,6 @@ export default memo(function SettingsDialog({
             {section === "terminal" && <TerminalPane {...paneProps} />}
             {section === "skills" && <SkillsPane {...paneProps} />}
             {section === "plugins" && <PluginsPane {...paneProps} />}
-            {section === "memory" && <MemoryPane {...paneProps} />}
             {section === "codex" && <CodexPane {...paneProps} />}
             {section === "scheduled" && <ScheduledPane {...paneProps} />}
             {section === "custom-agents" && <AgentsPane />}
@@ -390,13 +385,17 @@ function ContextLevels({
   );
 }
 
-/** The model new tasks of one agent start with. The CLI's own default is the empty choice. */
+/** A model picked from one agent's models. The empty choice is `empty`, such as the CLI's own default. */
 function DefaultModel({
   kind,
+  label,
+  empty,
   value,
   onChange,
 }: {
   kind: AgentKind;
+  label: string;
+  empty: string;
   value: string | undefined;
   onChange: (id: string | undefined) => void;
 }) {
@@ -417,12 +416,12 @@ function DefaultModel({
   }, [kind]);
   return (
     <select
-      aria-label={`${AGENT_LABELS[kind]} model for new tasks`}
+      aria-label={label}
       className="h-7 w-[200px] rounded-[var(--radius-sm)] border border-border-strong bg-editor px-2 text-[length:var(--fs-sm)] text-fg"
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value || undefined)}
     >
-      <option value="">{kind === "api" ? "First model" : "CLI default"}</option>
+      <option value="">{empty}</option>
       {models.flatMap((m) =>
         m.id
           ? [
@@ -489,27 +488,6 @@ function TokensPane({ settings, updateSettings }: PaneProps) {
         />
       </TokenRow>
       <TokenRow
-        title="Compact idle tasks"
-        desc="Claude tasks are compacted about 55 minutes after their last reply, before the cache expires"
-      >
-        <TokenSwitch
-          label="Compact idle tasks"
-          on={tokens.autoCompact}
-          onChange={(autoCompact) => update({ autoCompact })}
-        />
-      </TokenRow>
-      <TokenRow
-        title="Compact above"
-        desc="Only idle tasks whose context is larger than this are compacted"
-      >
-        <ContextLevels
-          label="Compact above"
-          value={tokens.autoCompactAbove}
-          levels={COMPACT_WINDOWS}
-          onChange={(autoCompactAbove) => update({ autoCompactAbove })}
-        />
-      </TokenRow>
-      <TokenRow
         title="Claude compacts at"
         desc="Compacts a working Claude task once its context reaches this. Default waits until the model's window is almost full"
       >
@@ -529,11 +507,24 @@ function TokensPane({ settings, updateSettings }: PaneProps) {
         >
           <DefaultModel
             kind={kind}
+            label={`${AGENT_LABELS[kind]} model for new tasks`}
+            empty={kind === "api" ? "First model" : "CLI default"}
             value={tokens.defaultModels[kind]}
             onChange={(id) => setDefaultModel(kind, id)}
           />
         </TokenRow>
       ))}
+      {connected.includes("api") && (
+        <TokenRow title="Vision model">
+          <DefaultModel
+            kind="api"
+            label="Vision model"
+            empty="Main model"
+            value={settings.visionModel ?? undefined}
+            onChange={(id) => void updateSettings((s) => ({ ...s, visionModel: id ?? null }))}
+          />
+        </TokenRow>
+      )}
     </>
   );
 }

@@ -19,7 +19,7 @@ point where it touches them.
 | Steer | A `user` line with `"priority": "now"`, taken at the next tool boundary. |
 | Subagents | Stopped with a `stop_task` control request. |
 | Goals | `/goal <objective>` and `/goal clear` are sent as messages and handled by Claude; its `Goal set` / `Goal active` / `Goal cleared` replies and `Stop hook feedback` checks are read from the stream. Whether a goal was met is read from the session transcript, `~/.claude/projects/*/<session>.jsonl`. |
-| Compaction | `/compact` is sent as a message. An idle chat whose context is over the threshold is compacted just before its prompt cache expires (an hour after the last reply). |
+| Compaction | `/compact` is sent as a message, when the user sends it. |
 | Import | Sessions in `~/.claude/projects/<folder>/*.jsonl`: titles, user and assistant text, session id, and folder. |
 | Usage limits | The OAuth token from `~/.claude/.credentials.json` (or the macOS keychain), sent to `api.anthropic.com/api/oauth/usage` and `/profile`; during a turn, `rate_limit_event` updates them. The token is never refreshed or written. |
 

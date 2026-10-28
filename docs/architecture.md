@@ -13,7 +13,6 @@ The repo is split into `apps/web`, `apps/server`, and `apps/desktop`:
   - `src/usage/` — subscription usage limits per provider
   - `src/scheduled.rs` — the next run of a scheduled task, from its shape and the local clock
   - `src/plugins.rs` — plugin bundles: their manifests, skills, and MCP servers, and the starter one the app ships
-  - `src/memory.rs` — the tree of instruction files the agents read, and reading one of them
   - `src/computer.rs` — a screenshot, and the pointer and keyboard under it
   - `src/workspace.rs` — git and file access
   - `src/watch/` — watches the open project for file changes (see [File changes](#file-changes))

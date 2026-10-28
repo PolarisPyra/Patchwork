@@ -42,6 +42,8 @@ export interface Settings {
   logging: LoggingSettings;
   terminal: TerminalSettings;
   tokens: TokenSettings;
+  /** Model, `provider/model`, that reads the images of a message; null uses the main model. */
+  visionModel: string | null;
   /** Shell that agents run commands in; null follows the SHELL environment variable. */
   shell: string | null;
   /** Folder of the skills every agent loads; null uses `skills` in the config folder. */
@@ -109,20 +111,6 @@ export interface Plugin {
   enabled: boolean;
   bundled: boolean;
 }
-
-/** One entry in the memory tree: a place an agent takes instructions from. */
-export interface MemoryNode {
-  name: string;
-  /** The file to read, or null for a group heading. */
-  path: string | null;
-  kind: MemoryKind;
-  /** A skill's description, or why a file is listed and missing. */
-  note: string | null;
-  size: number | null;
-  children: MemoryNode[];
-}
-
-export type MemoryKind = "file" | "folder" | "skill";
 
 /** A feature flag of the installed Codex CLI. */
 export interface CodexFeature {
@@ -329,10 +317,6 @@ export interface TokenSettings {
   warnAbove: number;
   /** Asks before a large task whose prompt cache has expired is resumed. */
   askBeforeResume: boolean;
-  /** Compacts an idle Claude task just before its prompt cache expires. */
-  autoCompact: boolean;
-  /** The context size above which an idle task is compacted. 0 follows `claudeCompactWindow`. */
-  autoCompactAbove: number;
   /** The context size at which Claude compacts mid-task. 0 leaves Claude's own. */
   claudeCompactWindow: number;
   /** Set once the 200k default for `claudeCompactWindow` replaced the old default, 0. */
@@ -838,12 +822,11 @@ export const DEFAULT_SETTINGS: Settings = {
   shell: null,
   skillsDir: null,
   disabledSkills: [],
+  visionModel: null,
   tokens: {
     showUsage: true,
     warnAbove: 150_000,
     askBeforeResume: true,
-    autoCompact: true,
-    autoCompactAbove: 0,
     claudeCompactWindow: 200_000,
     compactWindowDefaulted: true,
     defaultModels: {},
@@ -1002,10 +985,6 @@ export const api = {
   removeScheduledTask: (id: string) => invoke<void>("remove_scheduled_task", { id }),
   /** Starts a task now, whatever its schedule says. */
   runScheduledTask: (id: string) => invoke<Thread>("run_scheduled_task", { id }),
-  /** Every place an agent takes standing instructions from, as a tree. */
-  memoryTree: () => invoke<MemoryNode[]>("memory_tree"),
-  readMemory: (path: string) => invoke<string>("read_memory", { path }),
-  openMemoryFile: (path: string) => invoke<void>("open_memory_file", { path }),
   /** What the installed Codex CLI offers: its version, flags, and models. */
   codexInfo: () => invoke<CodexInfo>("codex_info"),
   /** The output of `codex doctor`, `codex mcp list`, or `codex plugin list`. */

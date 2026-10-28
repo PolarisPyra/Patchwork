@@ -9,7 +9,7 @@ mod updates;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use patchwork_server::types::{AgentKind, Project, Settings, AgentStatus, ModelOption, ShellChoices, Role, MessageStatus, AccessMode, Attachment, Message, Thread, Folder, GoalStatus, FileChange, ProviderUsage, ImportSource, ImportScan, AgentEventEnvelope, AgentEvent, TurnTrees, ScheduledTask, Plugin, MemoryNode, CodexInfo};
+use patchwork_server::types::{AgentKind, Project, Settings, AgentStatus, ModelOption, ShellChoices, Role, MessageStatus, AccessMode, Attachment, Message, Thread, Folder, GoalStatus, FileChange, ProviderUsage, ImportSource, ImportScan, AgentEventEnvelope, AgentEvent, TurnTrees, ScheduledTask, Plugin, CodexInfo};
 use patchwork_server::{NewThread, Res, Server, orchestration, persistence, provider};
 use tauri::ipc::Channel;
 use tauri::menu::{Menu, MenuItem};
@@ -65,34 +65,6 @@ fn open_plugins_folder(app: AppHandle, server: Srv) -> Res<()> {
         &app,
         &patchwork_server::plugins::dir(&server.store.settings()),
     )
-}
-
-// ---- memory -------------------------------------------------------------
-
-/// Every place an agent takes standing instructions from, as a tree.
-#[tauri::command]
-fn memory_tree(server: Srv) -> Vec<MemoryNode> {
-    patchwork_server::memory::tree(&server.store.settings())
-}
-
-/// Reads one of the tree's files.
-#[tauri::command]
-fn read_memory(server: Srv, path: String) -> Res<String> {
-    patchwork_server::memory::read(&server.store.settings(), &path)
-}
-
-/// Opens one of the tree's files in the editor the app uses for files.
-#[tauri::command]
-fn open_memory_file(path: String) -> Res<()> {
-    let dir = std::path::Path::new(&path)
-        .parent()
-        .map(|parent| parent.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let name = std::path::Path::new(&path)
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    workspace::open_in_editor(&dir, &name)
 }
 
 // ---- codex CLI ----------------------------------------------------------
@@ -1137,8 +1109,6 @@ pub fn run() {
                     let _ = handle.emit("agent-event", event);
                 }),
             )?;
-            server.start_idle_compaction();
-            server.continue_interrupted();
             start_scheduled_tasks(Arc::clone(&server));
             let logo = server.store.settings().logo;
             app.manage(server);
@@ -1162,9 +1132,6 @@ pub fn run() {
             run_scheduled_task,
             list_plugins,
             open_plugins_folder,
-            memory_tree,
-            read_memory,
-            open_memory_file,
             codex_info,
             codex_command,
             computer_screenshot,

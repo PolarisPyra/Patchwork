@@ -70,6 +70,9 @@ pub struct Settings {
     pub projects: Vec<Project>,
     pub active_project_id: Option<String>,
     pub tokens: TokenSettings,
+    /// Model, `provider/model`, that reads the images of a message on Patchwork's own agent.
+    /// None sends images to the main model.
+    pub vision_model: Option<String>,
     /// Shell that agents run commands in. None follows the SHELL environment variable.
     pub shell: Option<String>,
     /// Folder of the skills every agent loads. None uses `skills` in the config folder.
@@ -345,11 +348,6 @@ pub struct TokenSettings {
     pub warn_above: u64,
     /// Asks before a large task whose prompt cache has expired is resumed.
     pub ask_before_resume: bool,
-    /// Compacts an idle Claude task just before its prompt cache expires.
-    pub auto_compact: bool,
-    /// The context size above which an idle task is compacted. 0 follows
-    /// `claude_compact_window`, or 200k when that is Claude's own.
-    pub auto_compact_above: u64,
     /// The context size at which Claude compacts mid-task. 0 leaves Claude's own, near the
     /// model's full window.
     pub claude_compact_window: u64,
@@ -371,8 +369,6 @@ impl Default for TokenSettings {
             show_usage: true,
             warn_above: 150_000,
             ask_before_resume: true,
-            auto_compact: true,
-            auto_compact_above: 0,
             claude_compact_window: 200_000,
             compact_window_defaulted: true,
             default_models: HashMap::new(),
@@ -666,30 +662,6 @@ pub struct PluginMcpServer {
     pub name: String,
     pub command: String,
     pub args: Vec<String>,
-}
-
-/// One entry in the memory tree: a place an agent takes instructions from.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MemoryNode {
-    pub name: String,
-    /// The file to read, or None for a group heading.
-    pub path: Option<String>,
-    /// `file`, `folder`, or `skill`.
-    pub kind: MemoryKind,
-    /// A skill's description, or why a file is listed and missing.
-    pub note: Option<String>,
-    /// Bytes on disk, for a file.
-    pub size: Option<u64>,
-    pub children: Vec<MemoryNode>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum MemoryKind {
-    File,
-    Folder,
-    Skill,
 }
 
 /// How much an agent may do without asking.

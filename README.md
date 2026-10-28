@@ -48,9 +48,6 @@ makes is reviewed in the app before you keep it.
 - **Plugins.** Under **Settings → Plugins**, a bundle is a folder with a `plugin.json`, its skills,
   and the MCP servers it adds. Two starter skills ship with the app, and a Codex plugin bundle works
   as it is.
-- **Memory.** Under **Settings → Memory**, a tree shows every file the agents take instructions
-  from: a project's notes and its folders' notes, your global ones, and every enabled skill. Pick
-  one to read it, or open it in your editor.
 - **The Codex CLI, read from itself.** **Settings → Codex CLI** lists the installed Codex's version,
   its feature flags, and its model catalog, with its own health check, MCP servers, and plugins.
 - **Computer use.** An optional screen tool for Patchwork's own agent: it can take a screenshot and

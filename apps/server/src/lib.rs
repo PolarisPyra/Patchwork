@@ -10,7 +10,6 @@ pub mod debug_log;
 pub mod import;
 pub mod orchestration;
 pub mod permissions;
-pub mod memory;
 pub mod persistence;
 pub mod plugins;
 pub mod provider;
@@ -32,7 +31,7 @@ use orchestration::{ApprovalDecision, Delivery, FollowUpInput, Runner, TurnReque
 use persistence::Store;
 
 use crate::import::debug_log::ilog;
-use crate::types::{AgentKind, Project, Settings, TokenSettings, LogLevel, Role, MessageStatus, StepStatus, AccessMode, ApprovalStatus, Attachment, Message, Thread, Folder, GoalStatus, ImportSource, ImportScan, AgentEventEnvelope, AgentEvent, now_ms, new_id};
+use crate::types::{AgentKind, Project, Settings, LogLevel, Role, MessageStatus, StepStatus, AccessMode, ApprovalStatus, Attachment, Message, Thread, Folder, GoalStatus, ImportSource, ImportScan, AgentEventEnvelope, AgentEvent, now_ms, new_id};
 
 pub type Res<T> = Result<T, String>;
 
@@ -71,8 +70,6 @@ pub struct Server {
     pub store: Store,
     pub usage: usage::UsageCache,
     runner: Runner,
-    /// Threads whose turns the last app session cut off, until `continue_interrupted` takes them.
-    interrupted: std::sync::Mutex<Vec<String>>,
     /// Parent of the scratch folders that project-less chats run in.
     chats_dir: PathBuf,
     /// Images pasted into a chat, saved as files so they attach like dropped ones.
@@ -93,13 +90,6 @@ pub struct Server {
 const LAST_THREAD_KEY: &str = "last_thread_id";
 /// `app_state` key for the projects and folders the sidebar has collapsed (JSON array).
 const COLLAPSED_KEY: &str = "collapsed_sections";
-/// Claude Code writes prompt-cache entries that last an hour.
-const CACHE_TTL_MS: u64 = 60 * 60 * 1000;
-/// Idle threads are compacted this long before their cache expires, so the compaction's own
-/// request still reads the cache.
-const COMPACT_LEAD_MS: u64 = 5 * 60 * 1000;
-/// How often idle threads are checked for compaction.
-const IDLE_CHECK: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// A command for a program on the user's system. The AppImage's launcher points the library,
 /// Python, GTK and data paths into the AppImage for Patchwork itself; agents, git, and the other
@@ -287,40 +277,6 @@ fn thread_summary(thread: &Thread) -> Thread {
     }
 }
 
-fn idle_compaction_due(thread: &Thread, now: u64, tokens: &TokenSettings) -> bool {
-    if thread.agent != AgentKind::Claude
-        || thread
-            .goal
-            .as_ref()
-            .is_some_and(|g| g.status == GoalStatus::Active)
-    {
-        return false;
-    }
-    // Compacting leaves the context reported by the compaction's own request large, so a
-    // thread is not compacted again until its user writes something after the last one.
-    let last_user = thread.messages.iter().rev().find(|m| m.role == Role::User);
-    if last_user.is_some_and(|m| m.text.trim() == "/compact") {
-        return false;
-    }
-    // Only a finished reply has an idle time.
-    let Some(finished) = thread.messages.last().and_then(|m| m.finished_at) else {
-        return false;
-    };
-    let idle = now.saturating_sub(finished);
-    let above = match (tokens.auto_compact_above, tokens.claude_compact_window) {
-        (0, 0) => 200_000,
-        (0, window) => window,
-        (above, _) => above,
-    };
-    let window = (CACHE_TTL_MS - COMPACT_LEAD_MS)..CACHE_TTL_MS;
-    window.contains(&idle)
-        && thread
-            .messages
-            .last()
-            .and_then(|m| m.usage)
-            .is_some_and(|u| u.context > above)
-}
-
 /// A message the user sent, complete from the start.
 fn user_message(text: &str, attachments: Vec<Attachment>) -> Message {
     Message {
@@ -364,12 +320,11 @@ impl Server {
         debug_log::AGENTS.init(logs);
         let store = Store::open(config_dir)?;
         follow_log_levels(&store.settings());
-        let interrupted = orchestration::recovery::recover(&store)?;
+        orchestration::recovery::recover(&store)?;
         let server = Arc::new(Self {
             store,
             usage: usage::UsageCache::default(),
             runner: Runner::default(),
-            interrupted: std::sync::Mutex::new(interrupted),
             chats_dir: data_dir.join("chats"),
             pasted_dir: data_dir.join("pasted"),
             clis_dir,
@@ -888,7 +843,6 @@ impl Server {
     }
 
     pub fn stop_agents(&self) {
-        orchestration::recovery::remember_interrupted(&self.store, &self.runner.running());
         self.runner.stop_all();
     }
 
@@ -1096,46 +1050,6 @@ impl Server {
         Ok(())
     }
 
-    /// Starts the background check that compacts idle Claude threads just before their prompt
-    /// cache expires. The check ends with the server.
-    pub fn start_idle_compaction(self: &Arc<Self>) {
-        let server = Arc::downgrade(self);
-        std::thread::spawn(move || {
-            loop {
-                std::thread::sleep(IDLE_CHECK);
-                let Some(server) = server.upgrade() else {
-                    return;
-                };
-                server.compact_idle_threads();
-            }
-        });
-    }
-
-    fn compact_idle_threads(self: &Arc<Self>) {
-        let tokens = self.store.settings().tokens;
-        if !tokens.auto_compact {
-            return;
-        }
-        let now = now_ms();
-        let due: Vec<String> = self.store.with_threads(|threads| {
-            threads
-                .iter()
-                .filter(|t| idle_compaction_due(t, now, &tokens))
-                .map(|t| t.id.clone())
-                .collect()
-        });
-        for id in due {
-            // A message sent since the check has started a turn, which keeps the thread. An
-            // idle agent is left up too, since compacting would stop the commands it runs.
-            if self.runner.has_agent(&id) {
-                continue;
-            }
-            if let Err(e) = self.compact_thread(&id) {
-                log::warn!("failed to compact an idle task: {e}");
-            }
-        }
-    }
-
     /// Replaces the `placeholder` title with one a model writes from `text`, in the background,
     /// unless the thread has been renamed meanwhile. With titles switched off in Settings, a
     /// slash command, or a message the model gives no title for, the first line names it.
@@ -1176,14 +1090,6 @@ impl Server {
                 });
             }
         });
-    }
-
-    /// Sends `/compact` as a turn of its own, shown in the thread like a typed one.
-    fn compact_thread(self: &Arc<Self>, thread_id: &str) -> Res<()> {
-        let message = user_message("/compact", vec![]);
-        orchestration::publish(self, thread_id, AgentEvent::MessageStarted { message });
-        self.runner
-            .start_turn(self, TurnRequest { thread_id: thread_id.into(), text: "/compact".into(), attachments: vec![], images: vec![] })
     }
 
     /// Appends the user message, then starts the agent turn in the background.

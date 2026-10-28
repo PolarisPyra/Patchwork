@@ -848,6 +848,7 @@ mod tests {
             root: "/abs",
             session_id,
             model: Some("gpt"),
+            vision_model: None,
             text: "go",
             mode,
             plan: false,

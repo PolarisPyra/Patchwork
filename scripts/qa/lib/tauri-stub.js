@@ -1,6 +1,6 @@
 // Stands in for the Rust backend so the workspace renders without it: default settings,
 // and two sample chats, one idle and one streaming, so task rows can be checked.
-const settings = { onboarded: true, pluginsDir: null, disabledPlugins: [], computerUse: true, skillsDir: null, disabledSkills: ["review-ui"], theme: "dark", agents: ["claude"], agentPaths: {}, integrations: { github: false, terminal: false, figma: false, browser: false }, projects: [{ id: "qa-project", name: "QA", path: "/tmp/qa" }, { id: "qa-other", name: "Other", path: "/tmp/other" }], activeProjectId: "qa-project", shell: null, notifications: { goalComplete: true, taskComplete: true }, updates: { checkEveryMinutes: 10 }, tokens: { showUsage: false, warnAbove: 150000, askBeforeResume: true, autoCompact: true, autoCompactAbove: 200000, defaultModels: {} }, logging: { app: "info", window: "info", agents: "info", imports: "info" }, permissions: { everywhere: { defaults: {}, rules: [] }, chats: { defaults: {}, rules: [] }, projects: {}, seeded: true } };
+const settings = { onboarded: true, pluginsDir: null, disabledPlugins: [], computerUse: true, skillsDir: null, disabledSkills: ["review-ui"], theme: "dark", agents: ["claude"], agentPaths: {}, integrations: { github: false, terminal: false, figma: false, browser: false }, projects: [{ id: "qa-project", name: "QA", path: "/tmp/qa" }, { id: "qa-other", name: "Other", path: "/tmp/other" }], activeProjectId: "qa-project", shell: null, notifications: { goalComplete: true, taskComplete: true }, updates: { checkEveryMinutes: 10 }, tokens: { showUsage: false, warnAbove: 150000, askBeforeResume: true, defaultModels: {} }, logging: { app: "info", window: "info", agents: "info", imports: "info" }, permissions: { everywhere: { defaults: {}, rules: [] }, chats: { defaults: {}, rules: [] }, projects: {}, seeded: true } };
 const now = Date.now();
 const message = (status, createdAt, files = []) => ({ id: `m${createdAt}`, role: "assistant", text: "Working on it", parts: [], createdAt, finishedAt: null, status, tools: [], plan: [], files, approvals: [], attachments: [], background: [], error: null, steer: false, queued: false, usage: null });
 const chat = (id, title, messages, createdAt) => ({ id, projectId: "qa-project", title, agent: "claude", model: null, accessMode: "full-access", effort: null, sessionId: null, createdAt, messages, goal: null, folderId: null, archivedAt: null });
@@ -10,7 +10,7 @@ const threads = [
 ];
 const folders = [{ id: "qa-folder", projectId: "qa-project", name: "Old" }];
 const responses = { get_settings: settings, update_status: { currentVersion: "0.8.0", canInstall: true, state: { status: "idle" } }, list_threads: threads, list_folders: folders, get_last_thread: null, save_pasted_image: { kind: "image", path: "/tmp/pasted-image.png", name: "Pasted image.png" }, "plugin:app|version": "0.4.8", save_pasted_text: { kind: "file", path: "/tmp/pasted-text.txt", name: "Pasted text.txt" }, get_collapsed: [], list_api_providers: [{ id: "deepseek", name: "DeepSeek", preset: "deepseek", baseUrl: "https://api.deepseek.com", enabled: true, models: [{ id: "deepseek-chat", name: null }, { id: "deepseek-reasoner", name: null }], headers: [], keyEnv: null, keyStore: "keychain", logo: null, hasKey: true }], fetch_api_models: [{ id: "deepseek-chat", name: null }, { id: "deepseek-reasoner", name: null }], git_changes: [], is_folder: true, list_shells: { shells: ["/usr/bin/bash", "/usr/bin/fish", "/usr/bin/zsh"], default: "/usr/bin/zsh" }, list_skills: { dir: "/home/qa/.config/patchwork/skills", skills: [{ name: "release-notes", description: "Draft release notes from the commits since the last tag", path: "/home/qa/.config/patchwork/skills/release-notes/SKILL.md", enabled: true }, { name: "review-ui", description: "Measure and screenshot UI changes before and after", path: "/home/qa/.config/patchwork/skills/review-ui/SKILL.md", enabled: false }] } };
-// What the new panes read: a starter plugin, a scheduled task, the memory tree, and the Codex CLI.
+// What the new panes read: a starter plugin, a scheduled task, and the Codex CLI.
 responses.list_plugins = [
   {
     id: "patchwork-review",
@@ -43,49 +43,6 @@ responses.list_scheduled_tasks = [
     createdAt: now - 86_400_000,
   },
 ];
-responses.memory_tree = [
-  {
-    name: "Global",
-    path: null,
-    kind: "folder",
-    note: null,
-    size: null,
-    children: [
-      { name: ".codex/AGENTS.md", path: "/home/qa/.codex/AGENTS.md", kind: "file", note: null, size: 23644, children: [] },
-    ],
-  },
-  {
-    name: "Projects",
-    path: null,
-    kind: "folder",
-    note: null,
-    size: null,
-    children: [
-      {
-        name: "QA",
-        path: "/tmp/qa",
-        kind: "folder",
-        note: "/tmp/qa",
-        size: null,
-        children: [
-          { name: "AGENTS.md", path: "/tmp/qa/AGENTS.md", kind: "file", note: null, size: 812, children: [] },
-          { name: "crates/app/CLAUDE.md", path: "/tmp/qa/crates/app/CLAUDE.md", kind: "file", note: null, size: 204, children: [] },
-        ],
-      },
-    ],
-  },
-  {
-    name: "Skills",
-    path: null,
-    kind: "folder",
-    note: null,
-    size: null,
-    children: [
-      { name: "review-diff", path: "/home/qa/.config/patchwork/plugins/patchwork-review/skills/review-diff/SKILL.md", kind: "skill", note: "Review the uncommitted change before it is kept.", size: null, children: [] },
-    ],
-  },
-];
-responses.read_memory = "# Global rules\n\n- Use uv for Python.\n- Review the diff before staging it.\n";
 responses.codex_info = {
   path: "/usr/lib/chatgpt/resources/codex",
   version: "codex-cli 0.163.0-alpha.11.1",

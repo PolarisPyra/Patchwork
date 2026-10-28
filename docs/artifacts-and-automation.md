@@ -1,6 +1,6 @@
-# Artifacts, scheduled tasks, plugins, memory, and computer use
+# Artifacts, scheduled tasks, plugins, and computer use
 
-Five features that sit around the agents. Each one is off or empty until it is used, and none of
+Four features that sit around the agents. Each one is off or empty until it is used, and none of
 them changes how a turn is run.
 
 ## Artifacts
@@ -59,20 +59,6 @@ name.
 One bundle ships in the binary (`apps/server/plugins/`), and `seed` writes it once. The plugins
 folder keeps a `.seeded` list, so a bundle the user deleted is not written back; a folder they
 edited is left alone.
-
-## Memory
-
-`apps/server/src/memory.rs` builds a tree of the files the agents already read, so the pane shows
-what is really loaded rather than a second copy of it:
-
-- a project's `AGENTS.md`, `CLAUDE.md`, or `CONTEXT.md`, and the ones in its folders up to three
-  deep, skipping hidden folders, `node_modules`, and `target`
-- the user's global notes: `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`,
-  `~/.config/opencode/AGENTS.md`, `~/.config/patchwork/AGENTS.md`, and `~/AGENTS.md`
-- the skills folder's skills, and each enabled plugin's
-
-`memory::read` refuses any path the tree does not list, so the viewer cannot be pointed at the rest
-of the disk.
 
 ## Computer use
 

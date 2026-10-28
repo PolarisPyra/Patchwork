@@ -5,6 +5,7 @@
 //! steer the turn, and stdout carries `api.*` events as JSON lines. Each session's
 //! conversation is a JSON file in the sessions folder.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -70,6 +71,9 @@ struct Request {
     text: String,
     #[serde(default)]
     images: Vec<ImageIn>,
+    /// Whether `model` reads images. When it does not, the images in the conversation are left
+    /// out of the request, and the conversation keeps them for a turn that can read them.
+    images_ok: bool,
     mode: AccessMode,
     plan: bool,
     effort: Option<String>,
@@ -482,16 +486,18 @@ impl Agent {
         let mut dropped = false;
         let provider = &self.request.provider;
         for m in &mut self.messages {
-            let Some(parts) = m["content"].as_array() else { continue };
-            let images = parts.iter().filter(|p| p["type"] == "image_url").count();
-            if images == 0 {
-                continue;
-            }
-            let text = parts.iter().filter_map(|p| p["text"].as_str()).collect::<Vec<_>>().join("\n");
-            m["content"] = json!(format!("{text}\n\n{}", images_note(provider, images)));
-            dropped = true;
+            dropped |= strip_images(m, provider) > 0;
         }
         dropped
+    }
+
+    /// The conversation as a model that cannot read images gets it: the images left out.
+    fn without_images(&self) -> Vec<Value> {
+        let mut messages = self.messages.clone();
+        for m in &mut messages {
+            strip_images(m, &self.request.provider);
+        }
+        messages
     }
 
     /// A user message's content: plain text, or text and images. A model that cannot read the
@@ -703,11 +709,16 @@ impl Agent {
     /// Sends the conversation and streams the reply, retrying a request that failed before
     /// any of it arrived.
     fn complete(&self, with_tools: bool) -> Result<Reply, Failure> {
+        let history: Cow<[Value]> = if self.request.images_ok {
+            Cow::Borrowed(&self.messages[..])
+        } else {
+            Cow::Owned(self.without_images())
+        };
         let body = Body {
             model: &self.request.model,
             messages: Messages {
                 system: &self.system,
-                history: &self.messages,
+                history: &history,
                 last_user: self.messages.iter().rposition(|m| m["role"] == "user").unwrap_or(0),
             },
             stream: true,
@@ -744,7 +755,8 @@ impl Agent {
                     if status == 413 || (refused && CONTEXT_PHRASES.iter().any(|p| lower.contains(p))) {
                         return Err(Failure::Context(message));
                     }
-                    if refused && has_images && lower.contains("image") {
+                    let about_images = lower.contains("image") || lower.contains("multimodal");
+                    if refused && has_images && about_images {
                         return Err(Failure::Images(message));
                     }
                     let retry = matches!(status, 408 | 409 | 425 | 429 | 500 | 502 | 503 | 504 | 529);
@@ -856,6 +868,23 @@ impl Agent {
         Ok(reply)
     }
 
+}
+
+/// Replaces the images in a message with a note that they were left out; returns how many.
+fn strip_images(message: &mut Value, provider: &str) -> usize {
+    let Some(parts) = message["content"].as_array() else {
+        return 0;
+    };
+    let images = parts.iter().filter(|p| p["type"] == "image_url").count();
+    if images > 0 {
+        let text = parts
+            .iter()
+            .filter_map(|p| p["text"].as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        message["content"] = json!(format!("{text}\n\n{}", images_note(provider, images)));
+    }
+    images
 }
 
 /// Stands in for images a provider cannot read, so the model can tell the user.

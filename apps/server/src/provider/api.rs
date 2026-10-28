@@ -33,7 +33,20 @@ pub fn turn_args() -> Vec<String> {
 /// The first stdin line: the connection, the conversation's session, and the message. A turn
 /// that cannot run, such as one whose provider is gone, gets a line the agent reports as is.
 pub fn bridge_request(spec: &TurnSpec) -> String {
-    let mut request = match api_config::connection(spec.model) {
+    // A message with images goes to the vision model when one is set. The main model sees the
+    // images in the conversation only when it is the vision model.
+    let main = spec
+        .model
+        .map(String::from)
+        .or_else(api_config::default_model);
+    let model = match spec.vision_model {
+        Some(vision) if !spec.images.is_empty() => Some(vision.to_string()),
+        _ => main,
+    };
+    let images_ok = spec
+        .vision_model
+        .is_none_or(|vision| model.as_deref() == Some(vision));
+    let mut request = match api_config::connection(model.as_deref()) {
         Ok(connection) => connection,
         Err(message) => return json!({"error": message}).to_string(),
     };
@@ -49,6 +62,7 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         "sessionId": spec.session_id,
         "text": prompt(spec),
         "images": images,
+        "imagesOk": images_ok,
         "mode": spec.mode,
         "plan": spec.plan,
         "effort": spec.effort,

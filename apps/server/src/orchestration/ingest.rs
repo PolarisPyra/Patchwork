@@ -787,6 +787,7 @@ mod tests {
             root: root_str,
             session_id: None,
             model: (agent == AgentKind::Claude).then_some("haiku"),
+            vision_model: None,
             text: "Create a file named hello.txt whose only content is the two letters hi (no period). Do nothing else.",
             mode,
             plan: false,

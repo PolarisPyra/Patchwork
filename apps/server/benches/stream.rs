@@ -34,6 +34,7 @@ fn parse(c: &mut Criterion) {
         root: "/home/user/project",
         session_id: Some("s"),
         model: None,
+        vision_model: None,
         text: "",
         mode: AccessMode::Auto,
         plan: false,
