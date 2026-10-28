@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.24] - 2026-10-27
+
+### Fixed
+
+- On Linux in a Wayland session, pasting a screenshot or other copied image into the chat box now attaches it, the same as dragging it in. Before, the paste did nothing.
+
 ## [0.10.23] - 2026-10-27
 
 ### Fixed
