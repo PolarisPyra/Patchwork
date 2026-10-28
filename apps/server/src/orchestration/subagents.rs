@@ -146,6 +146,8 @@ pub(super) fn open_child(turn: &Turn, tool: &ToolCall) -> Option<SubagentThread>
         slash_commands: vec![],
         imported_from: None,
         context_pending: false,
+        role: None,
+        role_pending: false,
     };
     if let Err(e) = turn.server.store.insert_threads(vec![thread.clone()]) {
         log::warn!("failed to save a subagent's thread: {e}");

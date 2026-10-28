@@ -73,28 +73,32 @@ pub fn enabled(settings: &Settings) -> Vec<Skill> {
     all(settings).into_iter().filter(|s| s.enabled).collect()
 }
 
-/// `name` and `description` from the `---` block at the top of a `SKILL.md`. A value may be
-/// quoted, or folded onto the indented lines below its key.
+/// `name` and `description` from the `---` block at the top of a `SKILL.md`.
 pub(crate) fn frontmatter(text: &str) -> (Option<String>, Option<String>) {
-    let Some(rest) = text.strip_prefix("---") else { return (None, None) };
+    (field(text, "name"), field(text, "description"))
+}
+
+/// `key`'s value in the `---` block at the top of a Markdown file. A value may be quoted, or
+/// folded onto the indented lines below its key.
+pub(crate) fn field(text: &str, key: &str) -> Option<String> {
+    let rest = text.strip_prefix("---")?;
     let block = rest.split("\n---").next().unwrap_or_default();
     let lines: Vec<&str> = block.lines().collect();
-    let value = |key: &str| -> Option<String> {
-        let at = lines.iter().position(|l| l.strip_prefix(key).is_some_and(|r| r.starts_with(':')))?;
-        let inline = lines[at][key.len() + 1..].trim();
-        let text = if matches!(inline, "" | ">" | "|" | ">-" | "|-") {
-            lines[at + 1..]
-                .iter()
-                .take_while(|l| l.starts_with([' ', '\t']))
-                .map(|l| l.trim())
-                .collect::<Vec<_>>()
-                .join(" ")
-        } else {
-            inline.trim_matches(['"', '\'']).to_string()
-        };
-        Some(text).filter(|t| !t.is_empty())
+    let at = lines
+        .iter()
+        .position(|l| l.strip_prefix(key).is_some_and(|r| r.starts_with(':')))?;
+    let inline = lines[at][key.len() + 1..].trim();
+    let text = if matches!(inline, "" | ">" | "|" | ">-" | "|-") {
+        lines[at + 1..]
+            .iter()
+            .take_while(|l| l.starts_with([' ', '\t']))
+            .map(|l| l.trim())
+            .collect::<Vec<_>>()
+            .join(" ")
+    } else {
+        inline.trim_matches(['"', '\'']).to_string()
     };
-    (value("name"), value("description"))
+    Some(text).filter(|t| !t.is_empty())
 }
 
 /// The names of the `$name` words in a message, wherever they are, without trailing punctuation.

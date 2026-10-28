@@ -143,6 +143,27 @@ fn open_agent(server: Srv, path: String) -> Res<()> {
     workspace::open_in_editor(&dir.to_string_lossy(), &name.to_string_lossy())
 }
 
+/// The custom agents a chat in the project can summon, with the project's own.
+#[tauri::command]
+async fn list_agents(
+    server: Srv<'_>,
+    project_id: Option<String>,
+) -> Res<Vec<patchwork_server::agents::Agent>> {
+    let server = server.inner().clone();
+    blocking(move || server.project_agents(project_id.as_deref())).await
+}
+
+/// Adds an agent to the agents folder and opens it in the user's editor.
+#[tauri::command]
+async fn create_agent(server: Srv<'_>, name: String) -> Res<()> {
+    let server = server.inner().clone();
+    blocking(move || {
+        server.agents.create(&name)?;
+        workspace::open_in_editor(&server.agents.dir().to_string_lossy(), &format!("{name}.md"))
+    })
+    .await?
+}
+
 /// Opens the agents folder in the file manager, creating it first.
 #[tauri::command]
 fn open_agents_folder(app: AppHandle, server: Srv) -> Res<()> {
@@ -496,6 +517,11 @@ fn set_thread_access_mode(server: Srv, id: String, mode: AccessMode) -> Res<()> 
 #[tauri::command]
 fn save_text_file(server: Srv, path: String, text: String) -> Res<()> {
     server.save_text_file(&path, &text)
+}
+
+#[tauri::command]
+fn set_thread_role(server: Srv, id: String, role: Option<String>) -> Res<()> {
+    server.set_thread_role(&id, role)
 }
 
 #[tauri::command]
@@ -1019,6 +1045,8 @@ pub fn run() {
             watch_agents,
             open_agent,
             open_agents_folder,
+            list_agents,
+            create_agent,
             open_logs_folder,
             log_channels,
             read_log,
@@ -1074,6 +1102,7 @@ pub fn run() {
             set_thread_model,
             set_thread_access_mode,
             set_thread_plan_mode,
+            set_thread_role,
             save_text_file,
             set_thread_effort,
             send_message,

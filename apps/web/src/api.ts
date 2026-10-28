@@ -424,7 +424,13 @@ export interface SkillsView {
 export interface CustomAgent {
   /** The file's name without `.md`. */
   name: string;
+  /** The frontmatter's `name`, when it differs from the file's. */
+  title: string | null;
   description: string | null;
+  /** The model the chat switches to when the agent is summoned, if the chat's CLI has it. */
+  model: string | null;
+  /** Summoned, it stays the chat's agent until another replaces it. */
+  primary: boolean;
   path: string;
 }
 
@@ -596,6 +602,8 @@ export interface Thread {
   /** An imported chat that has not been sent yet: its agent can still be picked, and its
    * transcript goes to the agent with the first message. */
   contextPending: boolean;
+  /** The primary custom agent the chat is in the role of. */
+  role: string | null;
   /** Set in the UI on a thread from `listThreads`, which carries only its last message and those
    * still streaming, queued, or awaiting approval; `getThread` loads the rest. */
   partial?: boolean;
@@ -653,6 +661,8 @@ export type AgentEvent =
   | { type: "goalChecking"; messageId: string }
   | { type: "retrying"; messageId: string; reason: string; attempt: number; maxAttempts: number }
   | { type: "slashCommandsUpdated"; commands: ProviderSlashCommand[] }
+  | { type: "roleChanged"; role: string | null }
+  | { type: "modelChanged"; model: string | null }
   | { type: "usage"; messageId: string; usage: TokenUsage }
   | { type: "messageStarted"; message: Message }
   | { type: "textDelta"; messageId: string; text: string }
@@ -886,6 +896,11 @@ export const api = {
   },
   openAgent: (path: string) => invoke<void>("open_agent", { path }),
   openAgentsFolder: () => invoke<void>("open_agents_folder"),
+  /** The agents a chat in the project can summon, with the project's own. */
+  listAgents: (projectId: string | null) => invoke<CustomAgent[]>("list_agents", { projectId }),
+  createAgent: (name: string) => invoke<void>("create_agent", { name }),
+  setThreadRole: (id: string, role: string | null) =>
+    invoke<void>("set_thread_role", { id, role }),
   openLogsFolder: () => invoke<void>("open_logs_folder"),
   exportLogs: (path: string) => invoke<void>("export_logs", { path }),
   logChannels: () => invoke<string[]>("log_channels"),

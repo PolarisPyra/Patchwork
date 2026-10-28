@@ -1025,6 +1025,9 @@ export default function Chat({
     onAttachPaths: (paths: string[]) => void attach(paths),
     onRemoveAttachment: (i: number) =>
       setComposerAttachments(composerAttachments.filter((_, j) => j !== i)),
+    onClearRole: () => {
+      if (thread) api.setThreadRole(thread.id, null).catch((e: unknown) => setError(errorText(e)));
+    },
   });
 
   return (
@@ -1222,6 +1225,9 @@ export default function Chat({
           files={files}
           deferFocus={showChoices || showQuestion}
           disabled={folderMissing}
+          projectId={projectId}
+          role={thread?.role ?? null}
+          onClearRole={composerHandlers.onClearRole}
         />
       </div>
     </div>

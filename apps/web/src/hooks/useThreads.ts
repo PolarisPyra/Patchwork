@@ -78,6 +78,10 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
     }
     case "slashCommandsUpdated":
       return { ...thread, slashCommands: event.commands };
+    case "roleChanged":
+      return { ...thread, role: event.role };
+    case "modelChanged":
+      return { ...thread, model: event.model };
     case "titleUpdated":
       return { ...thread, title: event.title };
     case "usage": {

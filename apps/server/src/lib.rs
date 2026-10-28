@@ -776,6 +776,8 @@ impl Server {
             slash_commands: vec![],
             imported_from: None,
             context_pending: false,
+            role: None,
+            role_pending: false,
         };
         self.store.insert_threads(vec![thread.clone()])?;
         Ok(thread)
@@ -870,6 +872,126 @@ impl Server {
     /// Writes `text` to `path`, a file the user picked in a save dialog.
     pub fn save_text_file(&self, path: &str, text: &str) -> Res<()> {
         std::fs::write(path, text).map_err(|e| e.to_string())
+    }
+
+    /// The custom agents a chat in the project can summon: the agents folder's and the
+    /// project's own. A chat without a project has only the folder's.
+    pub fn project_agents(&self, project_id: Option<&str>) -> Vec<agents::Agent> {
+        match project_id.and_then(|id| self.project_root(id).ok()) {
+            Some(root) => self.agents.available(Path::new(&root)),
+            None => self.agents.list().to_vec(),
+        }
+    }
+
+    fn thread_agents(&self, thread_id: &str) -> Vec<agents::Agent> {
+        let project_id = self.store.with_threads(|threads| {
+            threads.iter().find(|t| t.id == thread_id).and_then(|t| t.project_id.clone())
+        });
+        self.project_agents(project_id.as_deref())
+    }
+
+    /// Makes `role` the chat's custom agent, or none; the agent is told with the next message.
+    pub fn set_thread_role(&self, id: &str, role: Option<String>) -> Res<()> {
+        let mut changed = false;
+        self.store.update_thread(id, |t| {
+            if t.role != role {
+                t.role = role.clone();
+                t.role_pending = true;
+                changed = true;
+            }
+        })?;
+        if changed {
+            self.emit(AgentEventEnvelope { thread_id: id.into(), event: AgentEvent::RoleChanged { role } });
+        }
+        Ok(())
+    }
+
+    /// Switches the chat to the model of the last custom agent `text` summons that names one,
+    /// when the chat's CLI offers it, as `provider/model` or as the model alone. An idle agent
+    /// is replaced; a running turn keeps its model until it ends.
+    fn switch_to_agent_model(&self, thread_id: &str, text: &str) {
+        if !text.contains('&') {
+            return;
+        }
+        let agents = self.thread_agents(thread_id);
+        let Some(wanted) = agents::mentioned(text)
+            .filter_map(|name| agents.iter().find(|a| a.name == name)?.model.as_deref())
+            .last()
+        else {
+            return;
+        };
+        let Some((agent, model)) = self.store.with_threads(|threads| {
+            threads.iter().find(|t| t.id == thread_id).map(|t| (t.agent, t.model.clone()))
+        }) else {
+            return;
+        };
+        let bare = wanted.rsplit_once('/').map_or(wanted, |(_, bare)| bare);
+        let Some(offered) = provider::list_models(agent)
+            .into_iter()
+            .filter_map(|m| m.id)
+            .find(|id| id == wanted || id == bare)
+        else {
+            return;
+        };
+        if model.as_ref() == Some(&offered) {
+            return;
+        }
+        match self.set_thread_model(thread_id, agent, Some(offered.clone())) {
+            Ok(()) => self.emit(AgentEventEnvelope {
+                thread_id: thread_id.into(),
+                event: AgentEvent::ModelChanged { model: Some(offered) },
+            }),
+            Err(e) => log::warn!("failed to switch to the agent's model: {e}"),
+        }
+    }
+
+    /// `text` with the roles of the custom agents it summons (see `agents::summon`), and of the
+    /// chat's own agent when its agent was not told of it yet: the role was changed by hand, or
+    /// `fresh`, a new agent session, knows of none. Also the primary agent it makes the chat's
+    /// agent, which `told_role` keeps once the message is sent.
+    fn summon_agents(&self, thread_id: &str, text: String, fresh: bool) -> (String, Option<String>) {
+        let Some((role, pending)) = self.store.with_threads(|threads| {
+            threads.iter().find(|t| t.id == thread_id).map(|t| (t.role.clone(), t.role_pending))
+        }) else {
+            return (text, None);
+        };
+        let standing = match &role {
+            Some(name) if pending || fresh => agents::Standing::Untold(name),
+            None if pending => agents::Standing::Removed,
+            _ => agents::Standing::Told,
+        };
+        // Most messages summon no one, and then the agents are not read.
+        if matches!(standing, agents::Standing::Told) && !text.contains('&') {
+            return (text, None);
+        }
+        let summoned = agents::summon(&self.thread_agents(thread_id), text, standing);
+        let switched = summoned.role.filter(|new| role.as_ref() != Some(new));
+        (summoned.text, switched)
+    }
+
+    /// Records that the chat's agent was told of its role with a message just sent, and makes
+    /// `switched`, a primary agent the message summoned, the chat's agent.
+    fn told_role(&self, thread_id: &str, switched: Option<String>) {
+        let pending = self.store.with_threads(|threads| {
+            threads.iter().any(|t| t.id == thread_id && t.role_pending)
+        });
+        if !pending && switched.is_none() {
+            return;
+        }
+        let saved = self.store.update_thread(thread_id, |t| {
+            t.role_pending = false;
+            if let Some(role) = &switched {
+                t.role = Some(role.clone());
+            }
+        });
+        if let Err(e) = saved {
+            log::warn!("failed to save the chat's agent: {e}");
+        } else if switched.is_some() {
+            self.emit(AgentEventEnvelope {
+                thread_id: thread_id.into(),
+                event: AgentEvent::RoleChanged { role: switched },
+            });
+        }
     }
 
     /// Takes effect from the thread's next turn.
@@ -1073,18 +1195,28 @@ impl Server {
                 .dismiss_goal(&thread_id, &orchestration::goal::signature(&goal))?;
             orchestration::publish(self, &thread_id, AgentEvent::GoalUpdated { goal: None });
         }
+        self.switch_to_agent_model(&thread_id, &text);
         // A /goal runs as a turn of its own, not in an idle agent's process.
         if provider::is_goal_command(&text) {
             self.runner.retire_idle(&thread_id);
         }
         // A message that names a skill as "$name" or summons an agent as "&name" anywhere reaches
-        // the agent in the form it runs, as `start_turn` sends it too.
-        let skills = skills::enabled(&self.store.settings());
-        let steer_text = match (self.store.thread(&thread_id), skills::invoked(&text, &skills)) {
-            (Some(thread), Some((skill, rest))) => skills::invocation(thread.agent, &skill, rest),
-            _ => text.clone(),
+        // the agent in the form it runs, as `start_turn` sends it too. Only a steer sends it
+        // from here, since summoning can change the chat's agent.
+        let mut switched = None;
+        let mut steer_text = || {
+            let skills = skills::enabled(&self.store.settings());
+            let agent = self.store.with_threads(|threads| {
+                threads.iter().find(|t| t.id == thread_id).map(|t| t.agent)
+            });
+            let text = match (agent, skills::invoked(&text, &skills)) {
+                (Some(agent), Some((skill, rest))) => skills::invocation(agent, &skill, rest),
+                _ => text.clone(),
+            };
+            let (text, role) = self.summon_agents(&thread_id, text, false);
+            switched = Some(role);
+            text
         };
-        let steer_text = self.agents.summon(steer_text);
         // While a turn runs, the message steers it, or waits for it to end when the
         // agent cannot take it now.
         let delivery = if queue {
@@ -1095,7 +1227,7 @@ impl Server {
                 Ok(true) => Delivery::Queued,
                 Ok(false) => self.runner.steer(
                     &thread_id,
-                    FollowUpInput { message_id: &msg.id, text: &steer_text, attachments: &attachments, images: &images },
+                    FollowUpInput { message_id: &msg.id, text: &steer_text(), attachments: &attachments, images: &images },
                     session_id.as_deref(),
                     &subagents,
                 ),
@@ -1109,11 +1241,17 @@ impl Server {
         } else {
             self.runner.steer(
                 &thread_id,
-                FollowUpInput { message_id: &msg.id, text: &steer_text, attachments: &attachments, images: &images },
+                FollowUpInput { message_id: &msg.id, text: &steer_text(), attachments: &attachments, images: &images },
                 session_id.as_deref(),
                 &subagents,
             )
         };
+        // A message that did not reach the running turn starts one, which summons again.
+        if !matches!(delivery, Delivery::NotRunning)
+            && let Some(switched) = switched
+        {
+            self.told_role(&thread_id, switched);
+        }
         match delivery {
             Delivery::Steered => {
                 msg.steer = true;

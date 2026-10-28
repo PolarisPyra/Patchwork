@@ -165,8 +165,9 @@ impl Runner {
             Some((skill, rest)) => crate::skills::invocation(agent, &skill, rest),
             None => text,
         };
-        // And with the role of an agent it summons as "&name".
-        let text = server.agents.summon(text);
+        // And with the roles of the custom agents it summons as "&name", and the chat's own.
+        let (text, switched) = server.summon_agents(&thread_id, text, session_id.is_none());
+        server.told_role(&thread_id, switched);
         let text = match context {
             Some(context) => format!("{context}{text}"),
             None => text,

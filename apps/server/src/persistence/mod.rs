@@ -78,6 +78,8 @@ mod tests {
             slash_commands: vec![],
             imported_from: None,
             context_pending: false,
+            role: None,
+            role_pending: false,
         }
     }
 

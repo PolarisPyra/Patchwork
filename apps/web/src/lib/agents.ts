@@ -36,9 +36,3 @@ const subscribe = (listener: () => void) => {
 export function useAgents(): AgentsView {
   return useSyncExternalStore(subscribe, () => store.view);
 }
-
-/** Whether `name` is an agent, for the editor, which reads it outside React. */
-export function isAgent(name: string): boolean {
-  start();
-  return store.view.agents.some((agent) => agent.name === name);
-}

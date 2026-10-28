@@ -1,6 +1,9 @@
-//! Custom agents: Markdown files in `agents` in the config folder, each a role an agent takes on
-//! when a message summons it as `&name`. The name is the file's name without `.md`; the
-//! frontmatter gives a description, and the text below it is the role's instructions.
+//! Custom agents: Markdown files in `agents` in the config folder, or in a project's
+//! `.patchwork/agents` or `.opencode/agents`, each a role an agent takes on when a message
+//! summons it as `&name`. The name is the file's name without `.md`; the frontmatter gives a
+//! title (`name`), a description, a model and a mode, and the text below it is the role's
+//! instructions. A `primary` agent stays the chat's agent once summoned; any other is summoned
+//! for one message.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
@@ -11,7 +14,13 @@ use serde::Serialize;
 #[serde(rename_all = "camelCase")]
 pub struct Agent {
     pub name: String,
+    /// The frontmatter's `name`, which can differ from the file's.
+    pub title: Option<String>,
     pub description: Option<String>,
+    /// The model the chat switches to when the agent is summoned, if the chat's CLI has it.
+    pub model: Option<String>,
+    /// `mode: primary`: summoned, it stays the chat's agent until another replaces it.
+    pub primary: bool,
     pub path: String,
     /// The text below the frontmatter, which goes with each message that summons the agent.
     #[serde(skip)]
@@ -70,6 +79,43 @@ impl Library {
             .clone()
     }
 
+    /// The agents a chat in `root` can summon: the agents folder's, and the project's own, which
+    /// replace any of the same name.
+    pub fn available(&self, root: &Path) -> Vec<Agent> {
+        let mut agents = self.list().to_vec();
+        // `.patchwork` last, so it wins over `.opencode`.
+        for agent in PROJECT_DIRS.iter().flat_map(|dir| load(&root.join(dir))) {
+            match agents.iter_mut().find(|a| a.name == agent.name) {
+                Some(same) => *same = agent,
+                None => agents.push(agent),
+            }
+        }
+        agents.sort_by(|a, b| a.name.cmp(&b.name));
+        agents
+    }
+
+    /// Adds `name.md` to the agents folder, for the user to fill in.
+    pub fn create(&self, name: &str) -> Result<(), String> {
+        if !summonable(name) {
+            return Err("Use letters and digits joined by - or _, starting with a letter".into());
+        }
+        let path = self.dir.join(format!("{name}.md"));
+        let template = format!(
+            "---\nname: {name}\ndescription:\nmode: subagent\nmodel:\n---\n\nInstructions for the {name} agent.\n"
+        );
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .and_then(|mut file| std::io::Write::write_all(&mut file, template.as_bytes()))
+            .map_err(|e| match e.kind() {
+                std::io::ErrorKind::AlreadyExists => {
+                    format!("There is already an agent named {name}")
+                }
+                _ => e.to_string(),
+            })
+    }
+
     /// Passes the agents to `on_change` after each change to them, in place of any earlier one.
     pub fn subscribe(&self, on_change: impl Fn(Arc<[Agent]>) + Send + 'static) {
         *self
@@ -97,22 +143,86 @@ impl Library {
             on_change(agents);
         }
     }
+}
 
-    /// The message with the role of the first agent it summons as `&name` after it, or the
-    /// message as it is when it summons none. The role goes last, so a message that starts with
-    /// a command still does.
-    pub fn summon(&self, text: String) -> String {
-        let agents = self.list();
-        let Some(agent) = mentioned(&text).find_map(|name| agents.iter().find(|a| a.name == name))
-        else {
-            return text;
-        };
-        format!(
-            "{text}\n\n<agent name=\"{name}\">\nFor this message, act as the {name} agent and follow these instructions:\n\n{prompt}\n</agent>",
-            name = agent.name,
-            prompt = agent.prompt.trim(),
-        )
+/// The folders in a project that hold its own agents.
+const PROJECT_DIRS: [&str; 2] = [".opencode/agents", ".patchwork/agents"];
+
+/// What a chat's agent has been told of the chat's standing role, before a message.
+pub enum Standing<'a> {
+    /// Nothing new: it knows the role, or there is none.
+    Told,
+    /// The chat's agent is this one, and the agent was not told yet.
+    Untold(&'a str),
+    /// The chat's agent was removed, and the agent was not told yet.
+    Removed,
+}
+
+pub struct Summoned {
+    pub text: String,
+    /// The primary agent the message summoned, which is the chat's agent from now on.
+    pub role: Option<String>,
+}
+
+/// `text` with the roles it summons as `&name` after it, each once and in order, and the chat's
+/// standing role when the agent must be told of it. The roles go last, so a message that starts
+/// with a command still does. A message sent again, in a new turn, keeps the roles it has.
+pub fn summon(agents: &[Agent], text: String, standing: Standing) -> Summoned {
+    let written = text
+        .split_once("\n\n<agent")
+        .map_or(text.as_str(), |(written, _)| written);
+    let has = |agent: &Agent| text.contains(&format!("<agent name=\"{}\">", agent.name));
+    let mut summoned: Vec<&Agent> = Vec::new();
+    for agent in mentioned(written).filter_map(|name| agents.iter().find(|a| a.name == name)) {
+        if !summoned.iter().any(|a| a.name == agent.name) {
+            summoned.push(agent);
+        }
     }
+    let role = summoned
+        .iter()
+        .rev()
+        .find(|a| a.primary)
+        .map(|a| a.name.clone());
+    let mut roles = Vec::new();
+    if role.is_none() {
+        match standing {
+            Standing::Told => {}
+            Standing::Untold(name) => roles.extend(
+                agents
+                    .iter()
+                    .find(|a| a.name == name && !has(a))
+                    .map(|agent| block(agent, "In this chat")),
+            ),
+            Standing::Removed if !text.contains(REMOVED) => roles.push(REMOVED.to_string()),
+            Standing::Removed => {}
+        }
+    }
+    for agent in summoned.into_iter().filter(|a| !has(a)) {
+        let scope = if role.as_ref() == Some(&agent.name) {
+            "From now on in this chat"
+        } else {
+            "For this message"
+        };
+        roles.push(block(agent, scope));
+    }
+    let text = if roles.is_empty() {
+        text
+    } else {
+        format!("{text}\n\n{}", roles.join("\n\n"))
+    };
+    Summoned { text, role }
+}
+
+/// What the agent is told when the chat's agent was removed.
+const REMOVED: &str = "<agent>\nThe custom agent role given earlier in this chat no longer applies; go on as yourself.\n</agent>";
+
+/// An agent's role, for as long as `scope` says.
+fn block(agent: &Agent, scope: &str) -> String {
+    format!(
+        "<agent name=\"{name}\">\n{scope}, act as the {name} agent and follow these instructions:\n\n{prompt}\n</agent>",
+        name = agent.name,
+        prompt = agent.prompt.trim(),
+    )
 }
 
 /// Whether `name` can be summoned: words of letters and digits joined by `-` or `_`, starting
@@ -139,10 +249,13 @@ fn load(dir: &Path) -> Vec<Agent> {
                 return None;
             }
             let text = std::fs::read_to_string(&path).ok()?;
-            let (_, description) = crate::skills::frontmatter(&text);
+            let field = |key| crate::skills::field(&text, key);
             Some(Agent {
                 name: name.to_string(),
-                description,
+                title: field("name").filter(|title| title != name),
+                description: field("description"),
+                model: field("model"),
+                primary: field("mode").is_some_and(|mode| mode == "primary"),
                 prompt: body(&text).to_string(),
                 path: path.to_string_lossy().into_owned(),
             })

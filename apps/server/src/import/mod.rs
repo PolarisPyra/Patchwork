@@ -134,6 +134,8 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
         session_id,
         imported_from,
         context_pending: session.imported,
+        role: None,
+        role_pending: false,
         created_at: session.created_at,
         position: -(session.created_at as i64),
         folder_id: None,

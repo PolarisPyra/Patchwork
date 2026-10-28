@@ -1,6 +1,7 @@
 // Screenshots the composer's "$" skills menu, a picked skill's chip, and the Skills settings pane.
 // Prints the "/" and "$" menus' rows, and the Markdown a picked skill sends. With the last two
-// paths, does the same for the "&" agents menu and the Custom agents pane. With --sigils=<png>,
+// paths, does the same for the "&" agents menu (with the project's own agents), the chat's agent
+// in the composer, and the Custom agents pane, where it also opens and cancels a new agent. With --sigils=<png>,
 // rebinds the skills sigil to "!" in Settings → Shortcuts → Sigils, screenshots that tab, and
 // prints what "!" and "$" do in the composer before resetting it.
 // Usage: node checks/skills.mjs <menu.png> <pane.png> [chip.png] [agents.png agents-pane.png]
@@ -42,6 +43,8 @@ await page.keyboard.press("Control+A");
 await page.keyboard.press("Delete");
 
 if (agentsOut) {
+  const role = page.locator(`main [title="This chat's agent"]`);
+  console.log(`chat's agent: ${(await role.count()) ? JSON.stringify(await role.innerText()) : "none"}`);
   await page.keyboard.type("&");
   console.log(`"&" menu:\n  ${(await rows("Agents")).join("\n  ")}`);
   await page.keyboard.type("dev");
@@ -69,7 +72,15 @@ await dialog.screenshot({ path: paneOut });
 if (agentsPaneOut) {
   await dialog.getByRole("button", { name: "Custom agents" }).click();
   await page.waitForTimeout(200);
+  await dialog.getByRole("button", { name: "New agent" }).click();
+  await page.keyboard.press("Escape");
+  console.log(`Esc in the new agent's name keeps Settings open: ${await dialog.isVisible()}`);
+  await dialog.getByRole("button", { name: "New agent" }).click();
+  await page.keyboard.type("reviewer");
   await dialog.screenshot({ path: agentsPaneOut });
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(200);
+  console.log(`after Create, the card is back: ${await dialog.getByRole("button", { name: "New agent" }).isVisible()}`);
 }
 if (sigilsOut) {
   await dialog.getByRole("button", { name: "Shortcuts" }).click();

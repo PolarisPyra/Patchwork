@@ -1716,7 +1716,10 @@ const AGENTS_EXAMPLE = `agents/
 
 dev-engineer.md
 ---
+name: DevEngineer
 description: Senior developer: plans, implements features and fixes with explicit risk control
+mode: primary
+model: claude-sonnet-5-5
 ---
 You are DevEngineer. Plan before you change anything…`;
 
@@ -1726,14 +1729,23 @@ function AgentsPane() {
   const sigil = useSigils().agents;
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  // The name being typed for a new agent, while its card is open.
+  const [draft, setDraft] = useState<string | null>(null);
 
   const run = (action: Promise<void>) => {
     setError(null);
     action.catch((e) => setError(errorText(e)));
   };
+  const create = (name: string) => {
+    setError(null);
+    api.createAgent(name).then(
+      () => setDraft(null),
+      (e) => setError(errorText(e)),
+    );
+  };
   const q = query.trim().toLowerCase();
   const shown = view.agents.filter(
-    (a) => !q || `${a.name} ${a.description ?? ""}`.toLowerCase().includes(q),
+    (a) => !q || `${a.name} ${a.title ?? ""} ${a.description ?? ""}`.toLowerCase().includes(q),
   );
 
   return (
@@ -1767,7 +1779,7 @@ function AgentsPane() {
                   {agent.name}
                 </div>
                 <div className="truncate font-mono text-[length:var(--fs-xs)] text-fg-muted">
-                  {agent.name}.md
+                  {agent.title ?? `${agent.name}.md`}
                 </div>
               </div>
               <button className="btn flex-none" onClick={() => run(api.openAgent(agent.path))}>
@@ -1777,8 +1789,61 @@ function AgentsPane() {
             <div className="line-clamp-3 flex-1 text-[length:var(--fs-sm)] text-fg-muted">
               {agent.description}
             </div>
+            {(agent.primary || agent.model) && (
+              <div className="flex min-w-0 gap-1.5 text-[length:var(--fs-xs)]">
+                {agent.primary && (
+                  <span
+                    className="flex-none rounded-[4px] bg-warning/15 px-1.5 text-fg"
+                    title="Stays the chat's agent once summoned"
+                  >
+                    Primary
+                  </span>
+                )}
+                {agent.model && (
+                  <span className="truncate font-mono text-fg-muted" title={agent.model}>
+                    {agent.model}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         ))}
+        {!q &&
+          (draft === null ? (
+            <button
+              className="flex min-h-[124px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-dashed border-border-strong bg-transparent text-fg-muted hover:border-accent hover:text-fg"
+              onClick={() => setDraft("")}
+            >
+              <PlusIcon size={20} />
+              <span className="text-[length:var(--fs-sm)]">New agent</span>
+            </button>
+          ) : (
+            <form
+              className="flex min-h-[124px] flex-col items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed border-accent p-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (draft.trim()) create(draft.trim());
+              }}
+            >
+              <input
+                className={`${INPUT} font-mono`}
+                value={draft}
+                placeholder="agent-name"
+                aria-label="New agent's name"
+                spellCheck={false}
+                autoFocus
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Escape") return;
+                  e.stopPropagation();
+                  setDraft(null);
+                }}
+              />
+              <button type="submit" className="btn" disabled={!draft.trim()}>
+                Create
+              </button>
+            </form>
+          ))}
         {!q && (
           <button
             className="flex min-h-[124px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-dashed border-border-strong bg-transparent text-fg-muted hover:border-accent hover:text-fg"
@@ -1795,6 +1860,9 @@ function AgentsPane() {
       {error && <div className="mt-2 text-[length:var(--fs-sm)] text-danger">{error}</div>}
       <div className="mt-3">
         <TokenRow title="Folder" desc={view.dir}>
+          {null}
+        </TokenRow>
+        <TokenRow title="In a project" desc=".patchwork/agents or .opencode/agents">
           {null}
         </TokenRow>
       </div>

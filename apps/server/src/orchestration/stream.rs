@@ -121,6 +121,8 @@ pub(super) fn event_message(event: &AgentEvent) -> Option<&str> {
         AgentEvent::MessageStarted { .. }
         | AgentEvent::GoalUpdated { .. }
         | AgentEvent::SlashCommandsUpdated { .. }
+        | AgentEvent::RoleChanged { .. }
+        | AgentEvent::ModelChanged { .. }
         | AgentEvent::ThreadCreated { .. }
         | AgentEvent::TitleUpdated { .. }
         | AgentEvent::MessageRemoved { .. } => None,
@@ -169,6 +171,14 @@ pub(super) fn apply(thread: &mut Thread, event: &AgentEvent) {
         }
         AgentEvent::SlashCommandsUpdated { commands } => {
             thread.slash_commands = commands.clone();
+            return;
+        }
+        AgentEvent::RoleChanged { role } => {
+            thread.role = role.clone();
+            return;
+        }
+        AgentEvent::ModelChanged { model } => {
+            thread.model = model.clone();
             return;
         }
         AgentEvent::TitleUpdated { title } => {
@@ -324,6 +334,8 @@ pub(super) fn apply(thread: &mut Thread, event: &AgentEvent) {
         | AgentEvent::GoalChecking { .. }
         | AgentEvent::Retrying { .. }
         | AgentEvent::SlashCommandsUpdated { .. }
+        | AgentEvent::RoleChanged { .. }
+        | AgentEvent::ModelChanged { .. }
         | AgentEvent::ThreadCreated { .. }
         | AgentEvent::TitleUpdated { .. }
         | AgentEvent::MessageRemoved { .. }

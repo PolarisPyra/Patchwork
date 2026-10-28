@@ -6,6 +6,7 @@ import {
   FolderIcon,
   PaperclipIcon,
   SquareIcon,
+  XIcon,
 } from "@phosphor-icons/react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
@@ -18,6 +19,7 @@ import {
   type AccessMode,
   type AgentKind,
   type Attachment,
+  type CustomAgent,
   type ModelOption,
   type ProviderSlashCommand,
   type Skill,
@@ -34,8 +36,8 @@ import {
   type MentionSuggestion,
 } from "~/components/chat/composerExtensions";
 import { MARKDOWN_COPY_ATTR } from "~/lib/markdownCopy";
-import { isAgent, useAgents } from "~/lib/agents";
-import { DEFAULT_SIGILS, getSigils, sigilKind } from "~/lib/sigils";
+import { useAgents } from "~/lib/agents";
+import { DEFAULT_SIGILS, getSigils, sigilKind, useSigils } from "~/lib/sigils";
 import FormatBar from "~/components/chat/FormatBar";
 import ModelPicker from "~/components/chat/ModelPicker";
 
@@ -85,6 +87,11 @@ interface ComposerProps {
   deferFocus: boolean;
   /** Nothing can be written or sent, such as while the project's folder is missing. */
   disabled: boolean;
+  /** The project, whose own custom agents can be summoned too. */
+  projectId: string | null;
+  /** The primary custom agent the chat is in the role of. */
+  role: string | null;
+  onClearRole: () => void;
 }
 
 export interface HistoryEntry {
@@ -352,6 +359,9 @@ function Composer({
   files,
   deferFocus,
   disabled,
+  projectId,
+  role,
+  onClearRole,
 }: ComposerProps) {
   const models = useModels(agents);
   // Several files or several folders at once; the dialog cannot pick both kinds together.
@@ -374,7 +384,30 @@ function Composer({
       : null;
   const skillMenu = slash?.startsWith("$") ?? false;
   const agentMenu = slash?.startsWith("&") ?? false;
-  const customAgents = useAgents().agents;
+  const sigils = useSigils();
+  // The agents folder's agents are watched; the project's own are read again, with them, each
+  // time the menu opens.
+  const folderAgents = useAgents().agents;
+  const [listed, setListed] = useState<{
+    projectId: string | null;
+    folder: CustomAgent[];
+    agents: CustomAgent[];
+  }>();
+  useEffect(() => {
+    if (agentMenu)
+      api.listAgents(projectId).then(
+        (agents) => setListed({ projectId, folder: folderAgents, agents }),
+        () => undefined,
+      );
+  }, [agentMenu, projectId, folderAgents]);
+  // A list read for another project, or before the folder last changed, is stale.
+  const customAgents =
+    listed?.projectId === projectId && listed.folder === folderAgents
+      ? listed.agents
+      : folderAgents;
+  // The editor's `&name ` rule reads the agents through this.
+  const customAgentsRef = useRef(customAgents);
+  customAgentsRef.current = customAgents;
   const agentCommands = customAgents.map((custom) => ({
     name: `&${custom.name}`,
     description: custom.description ?? "Agent",
@@ -542,7 +575,7 @@ function Composer({
       "Reply or describe the next change…",
       mentionSuggestion,
       (name) => skillsRef.current.some((skill) => skill.name === name),
-      isAgent,
+      (name) => customAgentsRef.current.some((custom) => custom.name === name),
     ),
     content: value,
     contentType: "markdown",
@@ -957,9 +990,26 @@ function Composer({
         />
         <EffortPicker agent={agent} effort={effort} onPick={onPickEffort} />
         <AccessPicker mode={accessMode} onPick={onPickAccess} />
+        {role && (
+          <span
+            className="inline-flex h-7 items-center gap-1 rounded-[var(--radius-sm)] bg-warning/15 pr-1 pl-2 font-[family-name:var(--font-mono)] text-[length:var(--fs-sm)] text-fg"
+            title="This chat's agent"
+          >
+            {sigils.agents}
+            {role}
+            <button
+              className="grid h-4 w-4 flex-none cursor-pointer place-items-center rounded-full border-none bg-transparent p-0 text-fg-muted hover:bg-hover hover:text-fg"
+              onClick={onClearRole}
+              title="Stop acting as this agent"
+              aria-label={`Stop acting as ${role}`}
+            >
+              <XIcon size={10} />
+            </button>
+          </span>
+        )}
         <span className="flex-1" />
         {/* Hidden when the composer is too narrow for the pickers and the formatting buttons together. */}
-        <div className="hidden @[640px]:block">
+        <div className={role ? "hidden @[780px]:block" : "hidden @[640px]:block"}>
           <FormatBar editor={editor} />
         </div>
         <div className="flex items-center gap-0.5">

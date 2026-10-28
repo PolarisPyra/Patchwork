@@ -799,6 +799,12 @@ pub struct Thread {
     /// holds it yet. Cleared once a turn has started.
     #[serde(default)]
     pub context_pending: bool,
+    /// The primary custom agent the chat is in the role of (see `agents`).
+    #[serde(default)]
+    pub role: Option<String>,
+    /// The role changed since the agent was last told of it, by hand rather than by summoning.
+    #[serde(skip)]
+    pub role_pending: bool,
 }
 
 /// Where a subagent's thread came from.
@@ -1012,6 +1018,14 @@ pub enum AgentEvent {
     /// Provider-native slash command names advertised by the active CLI session.
     SlashCommandsUpdated {
         commands: Vec<ProviderSlashCommand>,
+    },
+    /// The chat's custom agent changed (see `Thread::role`).
+    RoleChanged {
+        role: Option<String>,
+    },
+    /// The chat switched to a custom agent's model.
+    ModelChanged {
+        model: Option<String>,
     },
     /// The tokens a reply has used so far; replaces the count it had.
     Usage {
