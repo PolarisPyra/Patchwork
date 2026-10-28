@@ -3,6 +3,25 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.33] - 2026-10-28
+
+### Added
+
+- Mermaid diagrams in a reply are now drawn as diagrams instead of shown as code, whichever agent wrote the reply. HTML and SVG artifacts are shown running too, in a frame that cannot reach the rest of Patchwork. A button on each one switches between it and its source, and another copies the source.
+- Settings has a new Scheduled page where you give a prompt a name and a time, such as every few hours, every day, on weekdays or on the days you pick, and Patchwork starts it on its own in the project you choose or as a chat. You can switch a task off, start it now with Run, edit or delete it, and see when each task last ran and when it runs next. Tasks only run while Patchwork is open.
+- Settings has a new Plugins page that lists each plugin bundle with the skills and tools it adds. Patchwork comes with one bundle that has two starter skills, one for reviewing a change and one for writing a scheduled report. Bundles made for Codex work as they are.
+- Settings has a new Codex CLI page that shows the version of Codex you have installed, its feature switches and its models. From there you can also run Codex's own health check and list its servers and add-ons.
+- Settings → Permissions has a new Computer use switch. When it is on, Patchwork's own agent can take screenshots and move the pointer, click, type, press keys and scroll to work in other apps, and screenshots are made smaller first so they use less of the agent's context. It is off by default, is never offered while planning, and asks before each use unless one of your rules allows it.
+- There is a new Vision model setting beside the model choices in Settings. Messages with pictures go to the model you pick there, so a model that only reads text no longer fails when you attach an image.
+
+### Changed
+
+- If a reply was cut off when Patchwork closed, it now ends with an error. Before, Patchwork sent the agent a message on the next launch telling it to carry on.
+
+### Removed
+
+- Chats and tasks are no longer compacted on their own while they sit idle. This used to add a compact message you never sent. The Compact idle tasks and Compact above settings are gone.
+
 ## [0.10.32] - 2026-10-28
 
 ### Added
