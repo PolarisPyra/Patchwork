@@ -3,6 +3,31 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.34] - 2026-10-28
+
+### Added
+
+- A plugin in Settings → Hooks can now run commands in your project when you send a message and when a reply finishes or is stopped. Each plugin can be switched on or off there, and a hook that fails never stops the reply.
+- With computer use on in Settings → Permissions, the panel under the chat has a Screen tab that shows the screen as the agent sees it. Capture takes a new picture, and Live keeps taking new ones. It only shows the screen: every click and keystroke still goes through the agent with your approval.
+- Each task in Settings → Scheduled now shows its last few runs as dots under its schedule, with the newest one spelled out. Hover over them to see when each run happened, failed, or was skipped, and why.
+
+### Changed
+
+- Settings → Plugins is now called Settings → Hooks.
+- A scheduled run missed while Patchwork was closed still starts when Patchwork opens, but only if it was due within the last day. An older one is now skipped and shows up in the task's history.
+- A scheduled task for a project now waits until a reply already running in that project has finished, instead of starting at the same time.
+- Claude and Codex are now asked to keep a checklist as they work through a task with several steps, so the Tasks badge above a reply fills in more often. OpenCode's own checklist now shows in the Tasks badge too.
+- When you type a slash after other text in the chat box, the slash command menu now lists Patchwork's own commands, such as model and plan, not only the agent's. Picking one of Patchwork's commands there clears everything you had typed, because those commands only work as a message on their own.
+
+### Fixed
+
+- When you copy a reply that contains a diagram or an HTML artifact, the copied text now includes each one's source. Before, they were left out of what you pasted.
+
+### Removed
+
+- Plugins no longer add skills or MCP servers. Add those in Settings → Skills and Settings → MCP Servers instead.
+- Patchwork no longer comes with the Patchwork Review plugin. If you already had it, its review-diff and scheduled-report skills are gone.
+
 ## [0.10.33] - 2026-10-28
 
 ### Added
