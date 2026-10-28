@@ -552,7 +552,7 @@ function TasksView({
               onSelect: () => onRelocateProject(targets[0].id),
             },
             {
-              label: "Open folder location",
+              label: "Open folder",
               Icon: FolderOpenIcon,
               onSelect: () => {
                 const project = projects.find((p) => p.id === targets[0].id);
