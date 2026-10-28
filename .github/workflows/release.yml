@@ -55,12 +55,14 @@ jobs:
 
       # The runner's Azure apt mirror is sometimes throttled (55 MB once took 20 minutes), so
       # drop it from the mirror list and use archive.ubuntu.com directly.
+      # libpipewire-0.3-dev: xcap, behind computer use's screenshots, builds PipeWire's bindings
+      # from its headers. A cache hit used to skip that build, so the missing headers went unnoticed.
       - name: Install Tauri Linux dependencies
         run: |
           sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
           sudo apt-get update
           sudo apt-get install -y -o Acquire::Retries=3 build-essential file libayatana-appindicator3-dev libfuse2 \
-            librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
+            librsvg2-dev libpipewire-0.3-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
 
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
