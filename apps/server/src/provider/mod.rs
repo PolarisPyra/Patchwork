@@ -432,6 +432,8 @@ pub struct TurnSpec<'a> {
     pub skills_dir: Option<&'a str>,
     /// The kinds the thread's permission rules guard, for agents told to ask before those calls.
     pub guarded: &'a [crate::permissions::Guarded],
+    /// The custom agents the turn's CLI can start as its own subagents, by name.
+    pub agents: &'a [crate::agents::Agent],
 }
 
 /// An attached image, base64-encoded for the agent's input.
@@ -553,7 +555,13 @@ pub fn is_goal_command(text: &str) -> bool {
 pub fn turn_args(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
     match agent {
         AgentKind::Claude => [claude::turn_args(spec), mcp_clis::overrides(agent, spec.root)].concat(),
-        AgentKind::Codex => [codex::turn_args(), mcp_clis::overrides(agent, spec.root), hook::codex_args(spec)].concat(),
+        AgentKind::Codex => [
+            codex::turn_args(),
+            mcp_clis::overrides(agent, spec.root),
+            hook::codex_args(spec),
+            codex::agents_args(spec),
+        ]
+        .concat(),
         AgentKind::Antigravity => antigravity::turn_args(spec),
         AgentKind::OpenCode => opencode::turn_args(spec),
         AgentKind::Api => api::turn_args(),
@@ -565,10 +573,19 @@ pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)
     match agent {
         // The bridge sets up its own server, which inherits this environment.
         AgentKind::OpenCode if opencode::uses_serve() => {
-            opencode::skills_config(spec).map(|config| ("OPENCODE_CONFIG_CONTENT", config)).into_iter().collect()
+            opencode::config_content([opencode::skills_config(spec), opencode::agents_config(spec)])
+                .map(|config| ("OPENCODE_CONFIG_CONTENT", config))
+                .into_iter()
+                .collect()
         }
         AgentKind::OpenCode => std::iter::once(("PWD", spec.root.to_string()))
-            .chain(opencode::permission_config(spec).map(|config| ("OPENCODE_CONFIG_CONTENT", config)))
+            .chain(
+                opencode::config_content([
+                    opencode::permission_config(spec),
+                    opencode::agents_config(spec),
+                ])
+                .map(|config| ("OPENCODE_CONFIG_CONTENT", config)),
+            )
             .collect(),
         AgentKind::Claude | AgentKind::Codex | AgentKind::Antigravity | AgentKind::Api => Vec::new(),
     }

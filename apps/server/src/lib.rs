@@ -925,11 +925,9 @@ impl Server {
         }) else {
             return;
         };
-        let bare = wanted.rsplit_once('/').map_or(wanted, |(_, bare)| bare);
-        let Some(offered) = provider::list_models(agent)
-            .into_iter()
-            .filter_map(|m| m.id)
-            .find(|id| id == wanted || id == bare)
+        let models = provider::list_models(agent);
+        let Some(offered) = agents::offered(wanted, models.iter().filter_map(|m| m.id.as_deref()))
+            .map(str::to_string)
         else {
             return;
         };

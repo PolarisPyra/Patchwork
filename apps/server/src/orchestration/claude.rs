@@ -2,6 +2,7 @@
 
 use std::path::Path;
 
+use crate::agents::{self, Agent};
 use crate::permissions::Guarded;
 use crate::provider::api_tools::resolve;
 use crate::types::{PermissionKind, Settings};
@@ -17,6 +18,44 @@ pub fn launch_args(settings: &Settings) -> Vec<String> {
         args.extend(["--plugin-dir".to_string(), plugin.to_string_lossy().into_owned()]);
     }
     args
+}
+
+/// `--agents` with the custom agents, so Claude can start them as subagents by name. They go
+/// in a file, since a long list could pass the size an argument may have.
+pub fn agents_args(agents: &[Agent], root: &str) -> Vec<String> {
+    if agents.is_empty() {
+        return Vec::new();
+    }
+    let models = crate::provider::claude::models();
+    let ids = || models.iter().filter_map(|m| m.id.as_deref());
+    let list: serde_json::Map<String, serde_json::Value> = agents
+        .iter()
+        .map(|agent| {
+            let mut entry =
+                serde_json::json!({ "description": agent.about(), "prompt": agent.prompt.trim() });
+            // Claude can't run another CLI's model, so the agent takes the chat's.
+            if let Some(model) = agent
+                .model
+                .as_deref()
+                .and_then(|m| agents::offered(m, ids()))
+            {
+                entry["model"] = model.into();
+            }
+            (agent.name.clone(), entry)
+        })
+        .collect();
+    match agents::launch_file(
+        "claude",
+        root,
+        "agents.json",
+        &serde_json::Value::Object(list).to_string(),
+    ) {
+        Ok(file) => vec!["--agents".to_string(), file.to_string_lossy().into_owned()],
+        Err(e) => {
+            log::warn!("failed to hand Claude the custom agents: {e}");
+            Vec::new()
+        }
+    }
 }
 
 /// Environment for Claude's process. The claude.ai connectors are left out, since their tool

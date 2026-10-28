@@ -43,6 +43,7 @@ fn parse(c: &mut Criterion) {
         instructions: None,
         skills_dir: None,
         guarded: &[],
+        agents: &[],
     };
     let result = tool_result();
     let mut group = c.benchmark_group("parse_line");

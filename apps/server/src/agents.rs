@@ -4,6 +4,7 @@
 //! a model and a mode, and the text below it is the role's instructions. A `primary` agent stays
 //! the chat's agent once summoned; any other is summoned for one message.
 
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 
@@ -281,4 +282,41 @@ pub fn mentioned(text: &str) -> impl Iterator<Item = &str> {
     text.split_whitespace()
         .filter_map(|word| word.strip_prefix('&'))
         .map(|name| name.trim_end_matches(['.', ',', '!', '?', ';', ':', ')']))
+}
+
+/// `wanted`, a model an agent names, as the one of `ids` a CLI offers: the whole name, or the
+/// model alone when it is written `provider/model`.
+pub fn offered<'a>(wanted: &str, mut ids: impl Iterator<Item = &'a str>) -> Option<&'a str> {
+    let bare = wanted.rsplit_once('/').map_or(wanted, |(_, bare)| bare);
+    ids.find(|id| *id == wanted || *id == bare)
+}
+
+impl Agent {
+    /// What the agent is for, which a CLI reads to pick it as a subagent.
+    pub fn about(&self) -> &str {
+        self.description
+            .as_deref()
+            .or(self.title.as_deref())
+            .unwrap_or(&self.name)
+    }
+}
+
+/// Writes `content` to `name` in a folder of the config folder that `cli` reads at launch for
+/// the project at `root`, unless the file holds it already, and returns the file's path.
+pub fn launch_file(cli: &str, root: &str, name: &str, content: &str) -> std::io::Result<PathBuf> {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    root.hash(&mut hasher);
+    let dir = crate::skills::config_dir()
+        .ok_or_else(|| std::io::Error::other("no config folder"))?
+        .join(format!("{cli}-agents"))
+        .join(format!("{:016x}", hasher.finish()));
+    std::fs::create_dir_all(&dir)?;
+    let file = dir.join(name);
+    if std::fs::read_to_string(&file).ok().as_deref() != Some(content) {
+        // Written whole and then moved in, so a turn starting at the same time never reads half.
+        let part = dir.join(format!("{}.part", uuid::Uuid::new_v4().simple()));
+        std::fs::write(&part, content)?;
+        std::fs::rename(&part, &file)?;
+    }
+    Ok(file)
 }

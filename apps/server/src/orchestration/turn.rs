@@ -184,6 +184,13 @@ impl Runner {
         };
         let skills_dir = Some(crate::skills::loaded_dir(&settings).to_string_lossy().into_owned());
         let guarded = crate::permissions::guarded(&settings.permissions, project_id.as_deref());
+        // The custom agents, for the CLIs that can start them as subagents.
+        let agents = match agent {
+            AgentKind::Claude | AgentKind::Codex | AgentKind::OpenCode => {
+                server.thread_agents(&thread_id)
+            }
+            AgentKind::Antigravity | AgentKind::Api => Vec::new(),
+        };
         let spec = TurnSpec {
             root: &root,
             session_id: session_id.as_deref(),
@@ -197,6 +204,7 @@ impl Runner {
             instructions: instructions.as_deref(),
             skills_dir: skills_dir.as_deref(),
             guarded: &guarded,
+            agents: &agents,
         };
 
         // Agents often edit files through the shell, so changes are also found by
@@ -209,6 +217,7 @@ impl Runner {
         if agent == AgentKind::Claude {
             args.extend(claude::launch_args(&settings));
             args.extend(claude::permission_args(&guarded, &root));
+            args.extend(claude::agents_args(&agents, &root));
         }
         let input = provider::turn_input(agent, &spec);
         let (mut cmd, scope) = scope::scoped(provider::turn_command(agent)?);
@@ -313,6 +322,7 @@ impl Runner {
             instructions,
             skills_dir,
             guarded,
+            agents,
         };
         self.turns
             .lock()
@@ -447,6 +457,8 @@ pub(super) struct Turn {
     pub(super) skills_dir: Option<String>,
     /// What `spec` passes as `TurnSpec::guarded`.
     pub(super) guarded: Vec<crate::permissions::Guarded>,
+    /// What `spec` passes as `TurnSpec::agents`.
+    pub(super) agents: Vec<crate::agents::Agent>,
 }
 
 impl Turn {
@@ -514,6 +526,7 @@ impl Turn {
             instructions: self.instructions.as_deref(),
             skills_dir: self.skills_dir.as_deref(),
             guarded: &self.guarded,
+            agents: &self.agents,
         }
     }
 }

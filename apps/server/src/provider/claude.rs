@@ -929,6 +929,7 @@ mod tests {
             instructions: None,
             skills_dir: None,
             guarded: &[],
+            agents: &[],
         };
         assert_eq!(
             turn_args(&spec),

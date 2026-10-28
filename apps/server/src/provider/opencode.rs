@@ -112,7 +112,7 @@ const GUARDED: [&str; 6] = [
 /// prompt, so an "ask" rule refuses the call and the run goes on. Without rules OpenCode keeps its
 /// own: full access approves them with `--auto`, and auto lets OpenCode decide. Patchwork's deny
 /// rules are added as they are, since a run cannot ask Patchwork either.
-pub fn permission_config(spec: &TurnSpec) -> Option<String> {
+pub fn permission_config(spec: &TurnSpec) -> Option<Value> {
     let mut rules = serde_json::Map::new();
     let edit = match spec.mode {
         AccessMode::FullAccess | AccessMode::Auto => None,
@@ -141,12 +141,51 @@ pub fn permission_config(spec: &TurnSpec) -> Option<String> {
             rules.insert(action.into(), Value::Object(patterns));
         }
     }
-    (!rules.is_empty()).then(|| json!({ "permission": rules }).to_string())
+    (!rules.is_empty()).then(|| json!({ "permission": rules }))
 }
 
-/// The skills folder for 2.x's `skills.paths`, as `OPENCODE_CONFIG_CONTENT`.
-pub fn skills_config(spec: &TurnSpec) -> Option<String> {
-    spec.skills_dir.map(|dir| json!({ "skills": { "paths": [dir] } }).to_string())
+/// The skills folder for 2.x's `skills.paths`.
+pub fn skills_config(spec: &TurnSpec) -> Option<Value> {
+    spec.skills_dir
+        .map(|dir| json!({ "skills": { "paths": [dir] } }))
+}
+
+/// The custom agents as OpenCode subagents, which it can start by name. `build` and
+/// `plan` are left to OpenCode, since every turn runs as one of them.
+pub fn agents_config(spec: &TurnSpec) -> Option<Value> {
+    // Listing the models runs OpenCode, so only when an agent names one.
+    let models = if spec.agents.iter().any(|a| a.model.is_some()) {
+        models()
+    } else {
+        Vec::new()
+    };
+    let agents: serde_json::Map<String, Value> = spec
+        .agents
+        .iter()
+        .filter(|agent| agent.name != "build" && agent.name != "plan")
+        .map(|agent| {
+            let mut entry = json!({ "mode": "subagent", "description": agent.about(), "prompt": agent.prompt.trim() });
+            // A model OpenCode doesn't have fails the subagent, so it takes the chat's instead.
+            if let Some(model) = agent.model.as_deref().and_then(|m| {
+                crate::agents::offered(m, models.iter().filter_map(|o| o.id.as_deref()))
+            }) {
+                entry["model"] = model.into();
+            }
+            (agent.name.clone(), entry)
+        })
+        .collect();
+    (!agents.is_empty()).then(|| json!({ "agent": agents }))
+}
+
+/// Config parts, each an object of its own keys, as one `OPENCODE_CONFIG_CONTENT`.
+pub fn config_content(parts: impl IntoIterator<Item = Option<Value>>) -> Option<String> {
+    let mut config = serde_json::Map::new();
+    for part in parts.into_iter().flatten() {
+        if let Value::Object(part) = part {
+            config.extend(part);
+        }
+    }
+    (!config.is_empty()).then(|| Value::Object(config).to_string())
 }
 
 pub fn turn_args(spec: &TurnSpec) -> Vec<String> {

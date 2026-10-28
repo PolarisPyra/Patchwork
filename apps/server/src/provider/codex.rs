@@ -12,6 +12,7 @@ use crate::types::AgentKind;
 use crate::types::AgentStatus;
 use crate::types::Attachment;
 use crate::types::AttachmentKind;
+use crate::types::SubAgent;
 use crate::types::Goal;
 use crate::types::TokenUsage;
 use crate::types::ModelOption;
@@ -103,6 +104,45 @@ pub fn rollout_files(dir: &Path) -> Vec<(std::time::SystemTime, PathBuf)> {
 /// `codex app-server` speaks JSON-RPC on stdio; `turn_input` starts the conversation.
 pub fn turn_args() -> Vec<String> {
     vec!["app-server".into()]
+}
+
+/// `-c` overrides that give Codex the custom agents as roles its `spawn_agent` starts by name.
+/// A role's instructions and model live in a file of their own, which the role points to.
+pub fn agents_args(spec: &TurnSpec) -> Vec<String> {
+    let models = models();
+    let mut args = Vec::new();
+    for agent in spec.agents {
+        // JSON strings are TOML strings too.
+        let mut role = format!("developer_instructions = {}\n", json!(agent.prompt.trim()));
+        // Codex can't run another CLI's model, so the role takes the chat's.
+        if let Some(model) = agent
+            .model
+            .as_deref()
+            .and_then(|m| crate::agents::offered(m, models.iter().filter_map(|o| o.id.as_deref())))
+        {
+            role.push_str(&format!("model = {}\n", json!(model)));
+        }
+        let file = match crate::agents::launch_file(
+            "codex",
+            spec.root,
+            &format!("{}.toml", agent.name),
+            &role,
+        ) {
+            Ok(file) => file,
+            Err(e) => {
+                log::warn!("failed to hand Codex the {} agent: {e}", agent.name);
+                continue;
+            }
+        };
+        let key = format!("agents.{}", agent.name);
+        args.extend([
+            "-c".to_string(),
+            format!("{key}.description={}", json!(agent.about())),
+            "-c".to_string(),
+            format!("{key}.config_file={}", json!(file.to_string_lossy())),
+        ]);
+    }
+    args
 }
 
 /// Request id of `thread/start` / `thread/resume`; its response carries the thread id.
@@ -388,10 +428,40 @@ fn plan_step_status(status: Option<&str>) -> StepStatus {
 }
 
 /// Maps `item/started` / `item/completed`.
-fn codex_item(completed: bool, item: &Value, root: &str, message_id: &str, out: &mut Vec<Parsed>) {
+fn codex_item(
+    completed: bool,
+    item: &Value,
+    spec: &TurnSpec,
+    message_id: &str,
+    out: &mut Vec<Parsed>,
+) {
+    let root = spec.root;
     let id = item["id"].as_str().unwrap_or_default();
     let failed = matches!(item["status"].as_str(), Some("failed" | "declined"));
     match item["type"].as_str() {
+        // A subagent starting or ending. Its own frames come under its thread, `agentThreadId`,
+        // which is also the id of the call that shows it. Its path ends in the name the model
+        // gave it; the agent it runs as is on its thread, so the call shows once that is read.
+        Some("subAgentActivity") => {
+            let Some(thread) = item["agentThreadId"].as_str() else {
+                return;
+            };
+            match item["kind"].as_str() {
+                Some("started") if !completed => {
+                    let name = item["agentPath"].as_str().unwrap_or_default();
+                    let name = name.rsplit('/').next().unwrap_or_default();
+                    out.push(Parsed::Send(
+                        json!({"id": format!("{SUBAGENT_READ} {thread} {name}"), "method": "thread/read",
+                            "params": {"threadId": thread}})
+                        .to_string(),
+                    ));
+                }
+                Some("completed") if completed => {
+                    out.push(tool_finished(message_id, thread, false, ""))
+                }
+                _ => {}
+            }
+        }
         Some("plan") if completed => {
             let text = item["text"].as_str().unwrap_or_default().trim();
             if !text.is_empty() {
@@ -452,6 +522,68 @@ fn codex_item(completed: bool, item: &Value, root: &str, message_id: &str, out: 
         }
         _ => {}
     }
+}
+
+/// The start of the id of a `thread/read` for a subagent's thread, which goes on with the
+/// thread's id and the name the model gave the subagent.
+const SUBAGENT_READ: &str = "subagent";
+
+/// The call that shows the subagent on `thread`, from the read of that thread, or `name` when
+/// it could not be read.
+fn subagent_started(
+    thread: &str,
+    name: &str,
+    read: &Value,
+    spec: &TurnSpec,
+    message_id: &str,
+) -> Parsed {
+    let found = &read["result"]["thread"];
+    let kind = subagent_kind(found["agentRole"].as_str().unwrap_or(name), spec);
+    let subagent = SubAgent {
+        kind: kind.clone(),
+        description: kind.clone(),
+        model: found["model"].as_str().map(String::from),
+        prompt: None,
+    };
+    tool_started(
+        message_id,
+        ToolStart {
+            id: thread,
+            name: "Agent",
+            summary: kind,
+            subagent: Some(subagent),
+            parent: None,
+        },
+    )
+}
+
+/// The custom agent `name` is, when it is one, else `name` as written. Codex can write a role's
+/// `-` as `_`, so a custom agent is found by either.
+fn subagent_kind(name: &str, spec: &TurnSpec) -> String {
+    spec.agents
+        .iter()
+        .find(|a| a.name == name || a.name.replace('-', "_") == name)
+        .map_or_else(|| name.replace('_', "-"), |a| a.name.clone())
+}
+
+/// What a subagent's own frames add to its thread: its text, and the calls it makes.
+pub fn subagent_events(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<AgentEvent> {
+    let mut out = Vec::new();
+    if let Some(kind @ ("item/started" | "item/completed")) = v["method"].as_str() {
+        codex_item(
+            kind == "item/completed",
+            &v["params"]["item"],
+            spec,
+            message_id,
+            &mut out,
+        );
+    }
+    out.into_iter()
+        .filter_map(|p| match p {
+            Parsed::Event(event) => Some(event),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Maps a request Codex sends us. Approvals wait for the user; anything else is refused.
@@ -535,7 +667,12 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
         // A response to one of our requests.
         (Some(id), None) => {
             let error = v["error"]["message"].as_str();
-            if id == SKILLS_REQUEST {
+            let subagent = id
+                .as_str()
+                .and_then(|id| id.strip_prefix(SUBAGENT_READ)?.trim_start().split_once(' '));
+            if let Some((thread, name)) = subagent {
+                out.push(subagent_started(thread, name, v, spec, message_id));
+            } else if id == SKILLS_REQUEST {
                 // Nothing to do: the skills folder is only an addition.
             } else if id == STEER_REQUEST {
                 out.push(match error {
@@ -598,7 +735,7 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
             codex_item(
                 kind == "item/completed",
                 &params["item"],
-                spec.root,
+                spec,
                 message_id,
                 &mut out,
             );
@@ -720,6 +857,7 @@ mod tests {
             instructions: None,
             skills_dir: None,
             guarded: &[],
+            agents: &[],
         }
     }
 

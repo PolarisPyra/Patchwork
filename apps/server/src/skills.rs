@@ -17,6 +17,11 @@ pub fn init(config_dir: &Path) {
     let _ = std::fs::create_dir_all(default_dir());
 }
 
+/// The config folder, once `init` has run.
+pub(crate) fn config_dir() -> Option<&'static Path> {
+    CONFIG_DIR.get().map(PathBuf::as_path)
+}
+
 fn default_dir() -> PathBuf {
     CONFIG_DIR.get().cloned().unwrap_or_default().join("skills")
 }

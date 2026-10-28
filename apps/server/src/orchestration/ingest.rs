@@ -32,6 +32,19 @@ fn line_kind(value: &Value) -> String {
     }
 }
 
+/// Publishes a subagent's events to its own thread, with its replies a paragraph apart.
+fn publish_child(turn: &Turn, child: &mut SubagentThread, events: Vec<AgentEvent>) {
+    for mut event in events {
+        if let AgentEvent::TextDelta { text, .. } = &mut event {
+            if child.has_text {
+                text.insert_str(0, "\n\n");
+            }
+            child.has_text = true;
+        }
+        publish(&turn.server, &child.thread_id, event);
+    }
+}
+
 #[cfg(test)]
 use crate::types::FileChange;
 use crate::types::Goal;
@@ -158,15 +171,22 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                 .and_then(|id| children.get_mut(id))
         {
             let events = provider::claude::subagent_events(&value, &turn.root, &child.message_id);
-            for mut event in events {
-                if let AgentEvent::TextDelta { text, .. } = &mut event {
-                    if child.has_text {
-                        text.insert_str(0, "\n\n");
-                    }
-                    child.has_text = true;
-                }
-                publish(&turn.server, &child.thread_id, event);
+            publish_child(&turn, child, events);
+        }
+        // Codex sends a subagent's notifications on the same stream, under the subagent's own
+        // thread. They go to its thread alone: its finished turn is not this one's. Its requests,
+        // such as approvals, are answered here like any other.
+        if turn.agent == AgentKind::Codex
+            && value.get("id").is_none()
+            && let Some(thread) = value["params"]["threadId"].as_str()
+            && turn.session_id.as_deref().is_some_and(|own| own != thread)
+        {
+            if let Some(child) = children.get_mut(thread) {
+                let events =
+                    provider::codex::subagent_events(&value, &turn.spec(), &child.message_id);
+                publish_child(&turn, child, events);
             }
+            continue;
         }
         let parsed = provider::parse_line(turn.agent, &value, &turn.spec(), &turn.message_id);
         // A subagent's frames went to its own thread above.
@@ -522,7 +542,7 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                                 continue;
                             }
                             tool_owner.insert(tool.id.clone(), message_id.clone());
-                            if turn.agent == AgentKind::Claude
+                            if matches!(turn.agent, AgentKind::Claude | AgentKind::Codex)
                                 && tool.parent.is_none()
                                 && let Some(child) = open_child(&turn, tool)
                             {
@@ -776,6 +796,7 @@ mod tests {
             instructions: None,
             skills_dir: None,
             guarded: &[],
+            agents: &[],
         };
         let baseline = workspace::git_changes(root_str).unwrap();
         let input = provider::turn_input(agent, &spec);
