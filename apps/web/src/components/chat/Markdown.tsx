@@ -13,6 +13,7 @@ import { TextAlignLeftIcon } from "@phosphor-icons/react";
 import { api } from "~/api";
 import { highlightBlock } from "~/components/canvas/highlight";
 import { SYNTAX_CLASSES } from "~/components/canvas/syntaxClasses";
+import Artifact, { isArtifact } from "~/components/chat/Artifact";
 import { ACTION_CLASS, CopyButton } from "~/components/chat/CopyButton";
 import { CHOICES_LANG } from "~/components/chat/choices";
 import {
@@ -102,7 +103,10 @@ const components: Components = {
     const code = String(child.props.children ?? "").replace(/\n$/, "");
     // The fence's info string after the language is kept on the hast <code> node as data.meta.
     const meta = (node?.children[0] as { data?: { meta?: string | null } } | undefined)?.data?.meta;
-    return <CodeBlock lang={lang} code={code} title={codeTitle(meta)} />;
+    const title = codeTitle(meta);
+    // A diagram or an artifact is drawn rather than shown, whichever provider wrote it.
+    if (isArtifact(lang)) return <Artifact lang={lang} code={code} title={title} />;
+    return <CodeBlock lang={lang} code={code} title={title} />;
   },
   a: ({ href, children }) =>
     href && SAFE_LINK.test(href) ? (

@@ -15,6 +15,8 @@
     "format": "prettier --write --log-level warn \"apps/**/*.tsx\"",
     "format:check": "prettier --check \"apps/**/*.tsx\"",
     "qa:activity-bar": "node scripts/qa/checks/measure-activity-bar.mjs",
+    "qa:artifacts": "node scripts/qa/checks/artifacts.mjs",
+    "qa:new-panes": "node scripts/qa/checks/new-panes.mjs",
     "qa:shot": "node scripts/qa/checks/screenshot.mjs",
     "qa:frames": "node scripts/qa/checks/frame-rate.mjs",
     "qa:profile": "node scripts/qa/checks/profile-heavy.mjs"
