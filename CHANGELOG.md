@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.23] - 2026-10-27
+
+### Fixed
+
+- Sending two steers right after each other no longer leaves an empty extra reply stuck on Thinking under the second one. When the agent picks up both steers at once, the chat now shows one reply that answers them both.
+
 ## [0.10.22] - 2026-10-27
 
 ### Changed
