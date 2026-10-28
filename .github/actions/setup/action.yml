@@ -1,0 +1,30 @@
+name: Set up the build
+description: >
+  The pinned Rust toolchain, pnpm, Node, and the JavaScript dependencies, which every build job in
+  release.yml needs. The Rust cache stays in each job, since its key and folders differ by platform.
+inputs:
+  rust-toolchain:
+    description: The Rust version to install, pinned in release.yml.
+    required: true
+  directory:
+    description: Where to install the JavaScript dependencies, for a job that builds outside the checkout.
+    default: .
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+      with:
+        toolchain: ${{ inputs.rust-toolchain }}
+
+    - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      with:
+        version: 10
+
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: 22
+
+    - name: Install JavaScript dependencies
+      shell: bash
+      working-directory: ${{ inputs.directory }}
+      run: pnpm install --frozen-lockfile
