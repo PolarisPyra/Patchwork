@@ -3,6 +3,20 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.30] - 2026-10-28
+
+### Added
+
+- You can now write your own agents and summon one by typing & and its name in the chat box, such as &reviewer, so that message follows the agent's instructions. You can summon several agents in one message, and a project can keep its own agents, which take the place of any with the same name.
+- An agent can name a model, and summoning it switches the chat to that model if the chat's coding agent offers it. An agent marked primary stays the chat's agent for every message until you remove it with the × next to its name in the chat box.
+- The new Settings → Agent Management lists your agents with each one's title, description and model, and tags the primary ones. The list stays up to date as you add, edit or remove agents. It opens an agent for editing, can create a new one for you to fill in, and shows where agents are kept, both for all chats and inside a project.
+- Settings → Shortcuts has a new Sigils tab where you can change the symbol that opens each menu in the chat box: @ for files, $ for skills, & for agents and / for commands. Pick another symbol, such as # or !, and the menus and Settings show it, while your messages still reach the agent with the usual symbols.
+
+### Fixed
+
+- Settings no longer stutters while an agent is replying in the background. Before, every word that streamed in made the open settings page redraw, so hovering and clicking could lag.
+- Every spinner now turns in step with the others, also when it shows again after being hidden, such as a working chat's spinner in the sidebar when you hover its row or expand its folder. Before, a spinner that showed again after being hidden, or that was added while hidden and shown later, could turn out of step with the others.
+
 ## [0.10.29] - 2026-10-27
 
 ### Changed
