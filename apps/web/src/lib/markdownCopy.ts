@@ -178,6 +178,9 @@ function block(el: HTMLElement): string {
   }
 }
 
+const isCodeBlock = (node: Node): node is HTMLElement =>
+  node instanceof HTMLElement && node.hasAttribute("data-code");
+
 /** The Markdown of the selection inside `root`, a rendered reply, or null when the browser's own
  * copy is better: a selection that leaves the reply, or one inside a code block, whose text is
  * already exact. */
@@ -193,6 +196,18 @@ export function selectionMarkdown(root: HTMLElement): { markdown: string; html: 
   // The selection keeps the element it sits in, so a list item keeps its list and a cell its table.
   const wrapper = container.cloneNode(false) as HTMLElement;
   wrapper.append(range.cloneContents());
+  // A selection that reaches a code block from outside it (a triple-click, say) and holds only
+  // code copies as that code, with no fence.
+  const nodes = [...wrapper.childNodes];
+  const codes = nodes.filter(isCodeBlock);
+  if (codes.length > 0 && nodes.every((node) => isCodeBlock(node) || !node.textContent?.trim())) {
+    const code = codes
+      .map((el) => (el.querySelector("pre")?.textContent ?? "").replace(/\n$/, ""))
+      .join("\n\n");
+    const pre = document.createElement("pre");
+    pre.textContent = code;
+    return { markdown: code, html: pre.outerHTML };
+  }
   // Part of one paragraph, heading or item is copied as its text, without the block's marker.
   const markdown = /^(P|H\d|LI|SPAN|STRONG|EM|A|CODE|DEL)$/.test(wrapper.tagName)
     ? inline(wrapper.childNodes)
