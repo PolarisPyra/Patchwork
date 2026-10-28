@@ -35,7 +35,7 @@ pub(crate) async fn open_file(
 ) -> Res<()> {
     let root = server.project_root(&project_id)?;
     let file = blocking(move || workspace::resolve_inside(&root, &path)).await??;
-    blocking(move || open_in_viewer(&app, &file)).await?
+    open_in_viewer(&app, &file).await
 }
 
 /// What a reply's turn did to each of `paths`, and where each file stands now.
@@ -116,8 +116,14 @@ pub(crate) fn revert_file(server: Srv, project_id: String, path: String) -> Res<
 }
 
 #[tauri::command]
-pub(crate) fn open_in_editor(server: Srv, project_id: String, path: String) -> Res<()> {
-    workspace::open_in_editor(&server.project_root(&project_id)?, &path).map_err(String::from)
+pub(crate) async fn open_in_editor(
+    app: AppHandle,
+    server: Srv<'_>,
+    project_id: String,
+    path: String,
+) -> Res<()> {
+    let root = server.project_root(&project_id)?;
+    edit_file(&app, root, path).await
 }
 
 /// Shows a file selected in the system file manager. A relative path is taken from the project's
@@ -129,7 +135,6 @@ pub(crate) async fn reveal_file(
     project_id: Option<String>,
     path: String,
 ) -> Res<()> {
-    use tauri_plugin_opener::OpenerExt;
     let path = match project_id {
         Some(id) => std::path::Path::new(&server.project_root(&id)?).join(&path),
         None => std::path::PathBuf::from(&path),
@@ -137,19 +142,14 @@ pub(crate) async fn reveal_file(
     if !path.exists() {
         return Err(format!("{} no longer exists", path.display()));
     }
-    blocking(move || {
-        app.opener()
-            .reveal_item_in_dir(path)
-            .map_err(|e| e.to_string())
-    })
-    .await?
+    let token = activation::token(&app).await;
+    blocking(move || reveal_in_file_manager(&app, &path, token.as_deref())).await?
 }
 
 /// Opens a web or mail link in the user's default app. On Linux `xdg-open` runs with the user's
 /// own environment, where the opener plugin would pass on the AppImage's.
 #[tauri::command]
-#[cfg_attr(target_os = "linux", allow(unused_variables))]
-pub(crate) fn open_url(app: AppHandle, url: String) -> Res<()> {
+pub(crate) async fn open_url(app: AppHandle, url: String) -> Res<()> {
     let scheme = url
         .split_once(':')
         .map(|(scheme, _)| scheme.to_ascii_lowercase());
@@ -158,15 +158,9 @@ pub(crate) fn open_url(app: AppHandle, url: String) -> Res<()> {
     }
     #[cfg(target_os = "linux")]
     {
-        let mut child = patchwork_server::host_command("xdg-open")
-            .arg(&url)
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .map_err(|e| format!("Could not open the link: {e}"))?;
-        std::thread::spawn(move || child.wait());
-        Ok(())
+        let token = activation::token(&app).await;
+        patchwork_server::launch::xdg_open(std::ffi::OsStr::new(&url), token.as_deref())
+            .map_err(|e| format!("Could not open the link: {e}"))
     }
     #[cfg(not(target_os = "linux"))]
     {

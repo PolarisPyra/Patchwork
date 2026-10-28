@@ -72,7 +72,7 @@ pub(crate) fn unwatch_skills(server: Srv) {
 
 /// Opens a skill's file in the user's editor.
 #[tauri::command]
-pub(crate) fn open_skill(server: Srv, path: String) -> Res<()> {
+pub(crate) async fn open_skill(app: AppHandle, server: Srv<'_>, path: String) -> Res<()> {
     if !patchwork_server::skills::all(&server.store.settings())
         .iter()
         .any(|s| s.path == path)
@@ -83,16 +83,22 @@ pub(crate) fn open_skill(server: Srv, path: String) -> Res<()> {
     let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
         return Err("That is not a skill".into());
     };
-    workspace::open_in_editor(&dir.to_string_lossy(), &name.to_string_lossy()).map_err(String::from)
+    edit_file(
+        &app,
+        dir.to_string_lossy().into(),
+        name.to_string_lossy().into(),
+    )
+    .await
 }
 
 /// Opens the skills folder in the file manager, creating it first.
 #[tauri::command]
-pub(crate) fn open_skills_folder(app: AppHandle, server: Srv) -> Res<()> {
+pub(crate) async fn open_skills_folder(app: AppHandle, server: Srv<'_>) -> Res<()> {
     open_folder(
         &app,
         &patchwork_server::skills::dir(&server.store.settings()),
     )
+    .await
 }
 
 #[derive(serde::Serialize)]
@@ -121,7 +127,7 @@ pub(crate) fn watch_agents(server: Srv, on_change: Channel<AgentsView>) -> Agent
 
 /// Opens a custom agent's file in the user's editor.
 #[tauri::command]
-pub(crate) fn open_agent(server: Srv, path: String) -> Res<()> {
+pub(crate) async fn open_agent(app: AppHandle, server: Srv<'_>, path: String) -> Res<()> {
     if !server.agents.list().iter().any(|a| a.path == path) {
         return Err("That is not an agent".into());
     }
@@ -129,7 +135,12 @@ pub(crate) fn open_agent(server: Srv, path: String) -> Res<()> {
     let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
         return Err("That is not an agent".into());
     };
-    workspace::open_in_editor(&dir.to_string_lossy(), &name.to_string_lossy()).map_err(String::from)
+    edit_file(
+        &app,
+        dir.to_string_lossy().into(),
+        name.to_string_lossy().into(),
+    )
+    .await
 }
 
 /// The custom agents a chat in the project can summon, with the project's own.
@@ -144,28 +155,23 @@ pub(crate) async fn list_agents(
 
 /// Adds an agent to the agents folder and opens it in the user's editor.
 #[tauri::command]
-pub(crate) async fn create_agent(server: Srv<'_>, name: String) -> Res<()> {
+pub(crate) async fn create_agent(app: AppHandle, server: Srv<'_>, name: String) -> Res<()> {
     let server = server.inner().clone();
-    blocking(move || {
-        server.agents.create(&name)?;
-        workspace::open_in_editor(
-            &server.agents.dir().to_string_lossy(),
-            &format!("{name}.md"),
-        )
-    })
-    .await?
-    .map_err(String::from)
+    let dir = server.agents.dir().to_string_lossy().into_owned();
+    let file = format!("{name}.md");
+    blocking(move || server.agents.create(&name)).await??;
+    edit_file(&app, dir, file).await
 }
 
 /// Opens the folder of the debug logs in the file manager, creating it first.
 #[tauri::command]
-pub(crate) fn open_logs_folder(app: AppHandle) -> Res<()> {
+pub(crate) async fn open_logs_folder(app: AppHandle) -> Res<()> {
     let dir = app
         .path()
         .config_dir()
         .map_err(|e| e.to_string())?
         .join("patchwork/logs");
-    open_folder(&app, &dir)
+    open_folder(&app, &dir).await
 }
 
 /// This launch's logs, for the Output panel.

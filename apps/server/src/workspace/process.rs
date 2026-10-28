@@ -27,7 +27,7 @@ pub const SIGKILL: i32 = 9;
 #[cfg(not(unix))]
 pub const SIGTERM: i32 = 15;
 
-pub fn open_in_editor(root: &str, rel: &str) -> Result<(), Error> {
+pub fn open_in_editor(root: &str, rel: &str, token: Option<&str>) -> Result<(), Error> {
     let path = Path::new(root).join(rel);
     let fallback = if cfg!(target_os = "macos") {
         "open"
@@ -36,7 +36,9 @@ pub fn open_in_editor(root: &str, rel: &str) -> Result<(), Error> {
     };
     let candidates = ["idea", "code", "zed", fallback];
     for program in candidates {
-        let spawned = crate::host_command(program)
+        let mut cmd = crate::host_command(program);
+        crate::launch::pass_token(&mut cmd, token);
+        let spawned = cmd
             .arg(&path)
             .stdin(Stdio::null())
             .stdout(Stdio::null())

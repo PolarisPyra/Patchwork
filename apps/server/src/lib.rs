@@ -9,6 +9,7 @@ pub mod computer;
 pub mod debug_log;
 pub mod error;
 pub mod import;
+pub mod launch;
 pub mod orchestration;
 pub mod permissions;
 pub mod persistence;

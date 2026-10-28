@@ -15,7 +15,7 @@ pub mod threads;
 
 use std::sync::Arc;
 
-use crate::{clipboard, logo, updates};
+use crate::{activation, clipboard, logo, updates};
 
 use patchwork_server::types::{
     AgentKind, Project, Settings, AgentStatus, ModelOption, ShellChoices, AccessMode, Attachment,
@@ -36,25 +36,19 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
         .map_err(|e| e.to_string())
 }
 
-fn open_folder(app: &AppHandle, dir: &std::path::Path) -> Res<()> {
+async fn open_folder(app: &AppHandle, dir: &std::path::Path) -> Res<()> {
     std::fs::create_dir_all(dir).map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
-    open_in_viewer(app, dir)
+    open_in_viewer(app, dir).await
 }
 
 /// Opens a file or folder in the user's default app.
-#[cfg_attr(target_os = "linux", allow(unused_variables))]
-fn open_in_viewer(app: &AppHandle, path: &std::path::Path) -> Res<()> {
+#[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
+async fn open_in_viewer(app: &AppHandle, path: &std::path::Path) -> Res<()> {
+    let token = activation::token(app).await;
     #[cfg(target_os = "linux")]
     {
-        let mut child = patchwork_server::host_command("xdg-open")
-            .arg(path)
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .map_err(|e| format!("Could not open {}: {e}", path.display()))?;
-        std::thread::spawn(move || child.wait());
-        Ok(())
+        patchwork_server::launch::xdg_open(path.as_os_str(), token.as_deref())
+            .map_err(|e| format!("Could not open {}: {e}", path.display()))
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -63,6 +57,30 @@ fn open_in_viewer(app: &AppHandle, path: &std::path::Path) -> Res<()> {
             .open_path(path.to_string_lossy(), None::<&str>)
             .map_err(|e| e.to_string())
     }
+}
+
+/// Shows `path` selected in the file manager.
+#[allow(unused_variables)]
+fn reveal_in_file_manager(app: &AppHandle, path: &std::path::Path, token: Option<&str>) -> Res<()> {
+    #[cfg(target_os = "linux")]
+    {
+        patchwork_server::launch::reveal(path, token).map_err(String::from)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        use tauri_plugin_opener::OpenerExt;
+        app.opener()
+            .reveal_item_in_dir(path)
+            .map_err(|e| e.to_string())
+    }
+}
+
+/// Opens `name` in the folder `dir` in the user's editor.
+async fn edit_file(app: &AppHandle, dir: String, name: String) -> Res<()> {
+    let token = activation::token(app).await;
+    blocking(move || workspace::open_in_editor(&dir, &name, token.as_deref()))
+        .await?
+        .map_err(String::from)
 }
 
 #[tauri::command]

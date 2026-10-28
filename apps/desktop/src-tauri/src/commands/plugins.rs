@@ -9,9 +9,10 @@ pub(crate) fn list_plugins(server: Srv) -> Vec<Plugin> {
 }
 
 #[tauri::command]
-pub(crate) fn open_plugins_folder(app: AppHandle, server: Srv) -> Res<()> {
+pub(crate) async fn open_plugins_folder(app: AppHandle, server: Srv<'_>) -> Res<()> {
     open_folder(
         &app,
         &patchwork_server::plugins::dir(&server.store.settings()),
     )
+    .await
 }

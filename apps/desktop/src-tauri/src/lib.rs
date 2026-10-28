@@ -1,6 +1,7 @@
 //! Tauri shell: exposes `patchwork_server::Server` as commands and forwards
 //! agent events to the web UI on the `"agent-event"` channel.
 
+mod activation;
 mod clipboard;
 mod logo;
 mod terminal;

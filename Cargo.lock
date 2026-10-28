@@ -3739,6 +3739,7 @@ name = "patchwork"
 version = "0.0.0"
 dependencies = [
  "arboard",
+ "gdk",
  "glib",
  "image",
  "log",
@@ -3785,6 +3786,8 @@ dependencies = [
  "ureq",
  "url",
  "uuid",
+ "wayland-client",
+ "wayland-protocols",
  "which",
  "x11rb",
  "xcap",

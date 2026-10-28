@@ -60,7 +60,7 @@ pub(crate) async fn enable_cli_mcp_server(server: Srv<'_>, key: String) -> Res<(
 
 /// Opens a file MCP servers are configured in, in the user's editor.
 #[tauri::command]
-pub(crate) fn open_mcp_config(server: Srv, path: String) -> Res<()> {
+pub(crate) async fn open_mcp_config(app: AppHandle, server: Srv<'_>, path: String) -> Res<()> {
     let path = std::path::PathBuf::from(path);
     if !provider::mcp_clis::is_config_file(&path, &server.store.settings().projects) {
         return Err("That is not an MCP config file".into());
@@ -68,7 +68,12 @@ pub(crate) fn open_mcp_config(server: Srv, path: String) -> Res<()> {
     let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
         return Err("That is not an MCP config file".into());
     };
-    workspace::open_in_editor(&dir.to_string_lossy(), &name.to_string_lossy()).map_err(String::from)
+    edit_file(
+        &app,
+        dir.to_string_lossy().into(),
+        name.to_string_lossy().into(),
+    )
+    .await
 }
 
 #[tauri::command]
