@@ -9,6 +9,9 @@ export default defineConfig({
   clearScreen: false,
   server: { port: 1420, strictPort: true },
   build: {
+    // Mermaid's layout engine (about 1.5 MB), its parser, and the language detector's model load
+    // only when a diagram or pasted code needs them, so their size is not a startup cost.
+    chunkSizeWarningLimit: 1500,
     rolldownOptions: {
       output: {
         codeSplitting: {
