@@ -168,7 +168,7 @@ export default memo(function SettingsDialog({
         aria-label="Settings"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <nav className="flex w-[192px] flex-none flex-col overflow-y-auto border-r border-border bg-panel px-2 py-2.5">
+        <nav className="flex w-[192px] flex-none flex-col overflow-y-scroll border-r border-border bg-panel px-2 py-2.5">
           {GROUPS.map((group) => (
             <div key={group.label} className="flex flex-col gap-0.5 [&+&]:mt-3">
               <div className="px-2 pb-0.5 text-[length:var(--fs-xs)] font-semibold text-fg-subtle">
