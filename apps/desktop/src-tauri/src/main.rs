@@ -10,6 +10,11 @@ fn main() {
     if std::env::args().nth(1).as_deref() == Some(patchwork_server::provider::api_bridge::BRIDGE_ARG) {
         std::process::exit(patchwork_server::provider::api_bridge::run());
     }
+    // Codex and Antigravity start this binary as a hook that checks a tool call against the
+    // permission rules.
+    if std::env::args().nth(1).as_deref() == Some(patchwork_server::provider::hook::HOOK_ARG) {
+        std::process::exit(patchwork_server::provider::hook::run());
+    }
     // Claude Code and Codex start this binary as a relay to an MCP server Patchwork runs.
     if std::env::args().nth(1).as_deref() == Some(patchwork_server::provider::mcp::PROXY_ARG) {
         std::process::exit(patchwork_server::provider::mcp::run_proxy());

@@ -73,6 +73,12 @@ pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
         AccessMode::Auto => args.push("--mode=auto".into()),
         AccessMode::Supervised => {}
     }
+    // Patchwork's permission hook runs before each tool call when the rules guard any.
+    if !spec.guarded.is_empty()
+        && let Some(dir) = super::hook::antigravity_dir()
+    {
+        args.push(format!("--add-dir={}", dir.display()));
+    }
     if let Some(id) = spec.session_id {
         args.push(format!("--conversation={id}"));
     }

@@ -37,6 +37,14 @@ pub(super) fn load_settings(conn: &Connection) -> rusqlite::Result<Settings> {
         settings.logging.imports = crate::types::LogLevel::Off;
     }
     crate::permissions::seed(&mut settings.permissions);
+    // Claude compacted only near the model's full window by default, far past where it gets costly.
+    let tokens = &mut settings.tokens;
+    if !tokens.compact_window_defaulted {
+        tokens.compact_window_defaulted = true;
+        if tokens.claude_compact_window == 0 {
+            tokens.claude_compact_window = 200_000;
+        }
+    }
     let mut stmt = conn.prepare("SELECT id, name, path FROM projects ORDER BY position")?;
     settings.projects = stmt
         .query_map([], |r| {

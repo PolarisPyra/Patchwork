@@ -11,6 +11,7 @@ pub mod api_bridge;
 pub mod api_config;
 pub mod api_tools;
 pub mod mcp;
+pub mod hook;
 pub mod mcp_clis;
 pub mod model_manifest;
 
@@ -429,6 +430,8 @@ pub struct TurnSpec<'a> {
     pub instructions: Option<&'a str>,
     /// Patchwork's skills folder, which the agent loads skills from.
     pub skills_dir: Option<&'a str>,
+    /// The kinds the thread's permission rules guard, for agents told to ask before those calls.
+    pub guarded: &'a [crate::permissions::Guarded],
 }
 
 /// An attached image, base64-encoded for the agent's input.
@@ -550,7 +553,7 @@ pub fn is_goal_command(text: &str) -> bool {
 pub fn turn_args(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
     match agent {
         AgentKind::Claude => [claude::turn_args(spec), mcp_clis::overrides(agent, spec.root)].concat(),
-        AgentKind::Codex => [codex::turn_args(), mcp_clis::overrides(agent, spec.root)].concat(),
+        AgentKind::Codex => [codex::turn_args(), mcp_clis::overrides(agent, spec.root), hook::codex_args(spec)].concat(),
         AgentKind::Antigravity => antigravity::turn_args(spec),
         AgentKind::OpenCode => opencode::turn_args(spec),
         AgentKind::Api => api::turn_args(),
@@ -591,29 +594,51 @@ pub fn turn_input(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
 
 /// Maps one line of the agent's JSONL output.
 pub fn parse_line(agent: AgentKind, v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
-    match agent {
-        AgentKind::Claude => {
-            let parsed = claude::parse(v, spec.root, message_id);
-            if spec.mode != AccessMode::FullAccess {
-                return parsed;
-            }
-            // Full access still routes questions here; anything else is allowed at once.
-            parsed
-                .into_iter()
-                .map(|p| match p {
-                    Parsed::Approval {
-                        reply, questions, ..
-                    } if questions.is_empty() => {
-                        Parsed::Send(claude::approval_reply(&reply, true, &HashMap::new()))
-                    }
-                    p => p,
-                })
-                .collect()
-        }
+    let parsed = match agent {
+        AgentKind::Claude => claude::parse(v, spec.root, message_id),
         AgentKind::Codex => codex::parse(v, spec, message_id),
         AgentKind::Antigravity => antigravity::parse(v, spec, message_id),
         AgentKind::OpenCode => opencode::parse(v, spec, message_id),
         AgentKind::Api => api::parse(v, message_id),
+    };
+    parsed.into_iter().map(|p| unasked(agent, spec, p)).collect()
+}
+
+/// An approval the access mode would not have asked the user for, which the agent sent only
+/// because a permission rule may cover it, as a check for the rules.
+fn unasked(agent: AgentKind, spec: &TurnSpec, parsed: Parsed) -> Parsed {
+    let Parsed::Approval { title, detail, reply, questions, target } = parsed else {
+        return parsed;
+    };
+    match target {
+        Some(target) if questions.is_empty() && !mode_asks(agent, spec, &target) => {
+            Parsed::Check { title, detail, reply, target }
+        }
+        // Claude's full access still sends questions here, and calls no rule answers, such as
+        // leaving plan mode, which are allowed at once.
+        None if questions.is_empty() && agent == AgentKind::Claude && spec.mode == AccessMode::FullAccess => {
+            Parsed::Send(claude::approval_reply(&reply, true, &HashMap::new()))
+        }
+        target => Parsed::Approval { title, detail, reply, questions, target },
+    }
+}
+
+/// Whether the access mode has the agent ask the user about `target`.
+fn mode_asks(agent: AgentKind, spec: &TurnSpec, target: &crate::permissions::Target) -> bool {
+    match (agent, spec.mode) {
+        (_, AccessMode::FullAccess) => false,
+        // Accept edits takes edits inside the folder without asking.
+        (AgentKind::Claude, AccessMode::AutoAcceptEdits) if target.kind == crate::types::PermissionKind::Edit => {
+            let root = Path::new(spec.root);
+            !target.resources.iter().all(|r| api_tools::resolve(root, r).starts_with(root))
+        }
+        // Claude reads in its own folder without asking.
+        (AgentKind::Claude, _) if target.kind == crate::types::PermissionKind::Folder => {
+            let root = Path::new(spec.root);
+            !target.resources.iter().all(|r| api_tools::resolve(root, r).starts_with(root))
+        }
+        (AgentKind::OpenCode, mode) => opencode::mode_asks(mode, target.kind),
+        _ => true,
     }
 }
 
@@ -698,6 +723,14 @@ pub enum Parsed {
         /// What it asks to do, when a permission rule can answer it.
         target: Option<crate::permissions::Target>,
     },
+    /// The agent waits for an answer to a call the access mode runs without asking, which only
+    /// the permission rules may stop; answered like an approval.
+    Check {
+        title: String,
+        detail: String,
+        reply: Value,
+        target: crate::permissions::Target,
+    },
     /// The agent answered the control request with this id.
     ControlResponse(String),
     /// The agent took a steering message (Codex acknowledges each one).
@@ -727,7 +760,7 @@ pub enum GoalUpdate {
 }
 
 /// Collapses whitespace and caps the length, for tool summaries.
-fn one_line(s: &str) -> String {
+pub(crate) fn one_line(s: &str) -> String {
     s.split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")

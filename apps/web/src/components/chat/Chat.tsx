@@ -117,6 +117,8 @@ interface ChatProps {
   onRestoreCheckpoint: (threadId: string, messageId: string) => Promise<void>;
   /** Settings → Permissions, for the approval banner and the transcript. */
   permissionSettings: PermissionSettings;
+  /** Answers to the agent's questions take a second click. */
+  confirmAnswers: boolean;
   projects: Project[];
   onUpdatePermissions: (change: (p: PermissionSettings) => PermissionSettings) => void;
   /** Opens Settings → Permissions on a scope, with one of its rules picked out. */
@@ -221,6 +223,7 @@ export default function Chat({
   onStartThread,
   onSetEffort,
   permissionSettings,
+  confirmAnswers,
   projects,
   onUpdatePermissions,
   onOpenPermissions,
@@ -1128,6 +1131,7 @@ export default function Chat({
             options={question.options.map((o) => o.label)}
             descriptions={question.options.map((o) => o.description)}
             onPick={answerQuestion}
+            confirm={confirmAnswers}
             onOwn={() => setOwnAnswer(asking.id)}
             onDismiss={() => respond(asking.id, false)}
           />

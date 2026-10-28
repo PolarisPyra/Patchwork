@@ -845,6 +845,15 @@ pub const PROXY_ARG: &str = "--mcp-proxy";
 const RELAY_FILE: &str = "mcp-relay.json";
 static RELAY_READY: AtomicBool = AtomicBool::new(false);
 
+/// Answers a permission hook's request (see `super::hook`).
+type HookHandler = Box<dyn Fn(&Value) -> Value + Send + Sync>;
+static HOOK_HANDLER: OnceLock<HookHandler> = OnceLock::new();
+
+/// Sets what answers permission hooks; called once when the server opens.
+pub fn set_hook_handler(handler: HookHandler) {
+    let _ = HOOK_HANDLER.set(handler);
+}
+
 /// The file the relay reads its port and token from, once Patchwork is listening.
 pub fn relay_file() -> Option<PathBuf> {
     RELAY_READY.load(Ordering::Relaxed).then(|| path().with_file_name(RELAY_FILE))
@@ -871,6 +880,13 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
     let mut lines = BufReader::new(reader).lines().map_while(Result::ok);
     let Some(hello) = lines.next().and_then(|l| serde_json::from_str::<Value>(&l).ok()) else { return };
     if hello["token"].as_str() != Some(token) {
+        return;
+    }
+    // A permission hook asks once and waits for the answer.
+    if !hello["hook"].is_null() {
+        let answer = HOOK_HANDLER.get().map_or(json!({"deny": "Patchwork is still starting"}), |handle| handle(&hello["hook"]));
+        let mut stream = stream;
+        let _ = writeln!(stream, "{answer}");
         return;
     }
     let server = hello["server"].as_str().unwrap_or_default().to_string();

@@ -174,39 +174,42 @@ pub fn shown(path: &Path, root: &Path) -> String {
     path.strip_prefix(root).unwrap_or(path).display().to_string()
 }
 
-/// The approval a call needs before it runs, as its title, its detail, and what it asks to do for
-/// the permission rules, or None to run at once.
-pub fn approval(name: &str, args: &Value, mode: AccessMode, root: &Path) -> Option<(String, String, Target)> {
-    if mode == AccessMode::FullAccess {
-        return None;
-    }
+/// What a call asks to do, as its title, its detail, what it asks to do for the permission rules,
+/// and whether the access mode asks the user about it; otherwise only a rule may stop it. None
+/// when no rule can answer it, so it runs at once.
+pub fn approval(name: &str, args: &Value, mode: AccessMode, root: &Path) -> Option<(String, String, Target, bool)> {
     let path = args["path"].as_str().map(|p| resolve(root, p));
     if let Some(path) = &path
         && !path.starts_with(root)
     {
+        let asks = mode != AccessMode::FullAccess;
         let shown = path.display().to_string();
         if writes(name) {
             let target = Target::new(PermissionKind::Edit, [shown.clone()]);
-            return Some(("Change a file outside the project".into(), shown, target));
+            return Some(("Change a file outside the project".into(), shown, target, asks));
         }
         // Reading a file asks for its folder.
         let folder = if name == "read_file" { path.parent().unwrap_or(path) } else { path };
         let target = Target::new(PermissionKind::Folder, [folder.display().to_string()]);
-        return Some(("Read outside the project".into(), shown, target));
+        return Some(("Read outside the project".into(), shown, target, asks));
     }
     match name {
-        "write_file" | "edit_file" if mode == AccessMode::Supervised => {
+        "write_file" | "edit_file" => {
             let title = if name == "write_file" { "Write a file" } else { "Edit a file" };
             let target = Target::new(PermissionKind::Edit, path.iter().map(|p| p.display().to_string()));
-            Some((title.into(), path.map(|p| shown(&p, root)).unwrap_or_default(), target))
+            let asks = mode == AccessMode::Supervised;
+            Some((title.into(), path.map(|p| shown(&p, root)).unwrap_or_default(), target, asks))
         }
-        "bash" if matches!(mode, AccessMode::Supervised | AccessMode::AutoAcceptEdits) => {
+        "bash" => {
             let command = args["command"].as_str().unwrap_or_default();
-            Some(("Run a command".into(), command.into(), Target::new(PermissionKind::Command, [command])))
+            let target = Target::new(PermissionKind::Command, [command]);
+            let asks = matches!(mode, AccessMode::Supervised | AccessMode::AutoAcceptEdits);
+            Some(("Run a command".into(), command.into(), target, asks))
         }
-        "fetch_url" if mode == AccessMode::Supervised => {
+        "fetch_url" => {
             let url = args["url"].as_str().unwrap_or_default();
-            Some(("Fetch a web page".into(), url.into(), Target::new(PermissionKind::Web, [url])))
+            let target = Target::new(PermissionKind::Web, [url]);
+            Some(("Fetch a web page".into(), url.into(), target, mode == AccessMode::Supervised))
         }
         _ => None,
     }

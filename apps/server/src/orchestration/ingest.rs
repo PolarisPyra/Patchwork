@@ -62,6 +62,7 @@ use super::subagents::SubagentThread;
 use super::turn::{TurnEnd, finish, record_turn};
 use super::turn::{PendingApproval, Turn};
 use super::decide;
+use super::unasked;
 use super::usage::message_usage;
 use super::usage::record_request;
 use super::usage::Request;
@@ -177,6 +178,18 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
             }
         }
         for item in parsed {
+            // A call the access mode runs without asking runs unless a rule refuses it or asks.
+            let item = match item {
+                Parsed::Check { title, detail, reply, target } => {
+                    let asks = turn.mode != crate::types::AccessMode::FullAccess;
+                    if unasked(&turn.server, &turn.thread_id, &turn.root, &target, asks) == permissions::Unasked::Run {
+                        write_line(&turn.stdin, &provider::approval_reply(turn.agent, &reply, true, &HashMap::new()));
+                        continue;
+                    }
+                    Parsed::Approval { title, detail, reply, questions: Vec::new(), target: Some(target) }
+                }
+                item => item,
+            };
             match item {
                 Parsed::Send(line) => {
                     write_line(&turn.stdin, &line);
@@ -212,6 +225,11 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                         rule: None,
                         auto: false,
                     };
+                    // The user already allowed it through a permission hook.
+                    if target.as_ref().is_some_and(|t| turn.server.runner.take_grant(&turn.thread_id, t, Path::new(&turn.root))) {
+                        write_line(&turn.stdin, &provider::approval_reply(turn.agent, &reply, true, &HashMap::new()));
+                        continue;
+                    }
                     // A permission rule answers it without asking.
                     if let Some(decision) = target.as_ref().and_then(|t| decide(&turn.server, &turn.thread_id, &turn.root, t)) {
                         write_line(
@@ -243,6 +261,8 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                         approval,
                     });
                 }
+                // Answered above.
+                Parsed::Check { .. } => {}
                 Parsed::Finished => {
                     ended = true;
                     let steered = !turn
@@ -755,6 +775,7 @@ mod tests {
             images: &[],
             instructions: None,
             skills_dir: None,
+            guarded: &[],
         };
         let baseline = workspace::git_changes(root_str).unwrap();
         let input = provider::turn_input(agent, &spec);

@@ -53,6 +53,8 @@ export interface Settings {
   /** Id of the app icon color way in `assets/logos/manifest.json`; null uses the manifest default. */
   logo: string | null;
   permissions: PermissionSettings;
+  /** Answering an agent's question takes a second click on the picked answer. */
+  confirmAnswers: boolean;
 }
 
 /** What agents may do without asking. Mirrors `PermissionSettings` in apps/server/src/types.rs. */
@@ -223,6 +225,8 @@ export interface TokenSettings {
   autoCompactAbove: number;
   /** The context size at which Claude compacts mid-task. 0 leaves Claude's own. */
   claudeCompactWindow: number;
+  /** Set once the 200k default for `claudeCompactWindow` replaced the old default, 0. */
+  compactWindowDefaulted: boolean;
   /** Model for new tasks, per agent. A missing agent uses the CLI's own default. */
   defaultModels: Partial<Record<AgentKind, string>>;
   /** Names a new chat or task with a title its provider writes, rather than its first line. */
@@ -369,7 +373,9 @@ export type Part =
   /** A tool call, by its id in the message's `tools`. */
   | { type: "tool"; id: string }
   /** A plan the agent proposed in plan mode, as Markdown. */
-  | { type: "plan"; text: string };
+  | { type: "plan"; text: string }
+  /** An approval or question, by its id in the message's `approvals`, where it was asked. */
+  | { type: "approval"; id: string };
 
 /** A shell command the agent started in the background, still running. */
 export interface BackgroundTask {
@@ -704,7 +710,8 @@ export const DEFAULT_SETTINGS: Settings = {
     askBeforeResume: true,
     autoCompact: true,
     autoCompactAbove: 0,
-    claudeCompactWindow: 0,
+    claudeCompactWindow: 200_000,
+    compactWindowDefaulted: true,
     defaultModels: {},
     generateTitles: true,
   },
@@ -719,6 +726,7 @@ export const DEFAULT_SETTINGS: Settings = {
     projects: {},
     seeded: false,
   },
+  confirmAnswers: false,
 };
 
 /** Agent used for new tasks: the first connected one, else Claude Code. */

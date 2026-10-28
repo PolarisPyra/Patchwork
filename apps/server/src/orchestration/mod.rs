@@ -9,6 +9,7 @@ pub mod codex;
 mod attribution;
 mod ingest;
 pub(crate) mod goal;
+mod hook;
 mod process;
 mod queue;
 pub(crate) mod recovery;
@@ -49,11 +50,28 @@ use crate::workspace;
 /// What the permission rules answer to `target` in the thread, or None to ask the user.
 fn decide(server: &Server, thread_id: &str, root: &str, target: &Target) -> Option<Decision> {
     let project = server.store.thread(thread_id).and_then(|t| t.project_id);
+    let settings = server.store.settings();
     permissions::decide(
-        &server.store.settings().permissions,
+        &settings.permissions,
         project.as_deref(),
         std::path::Path::new(root),
         target,
+        &crate::skills::folders(&settings),
+    )
+}
+
+/// What the permission rules answer to `target` in the thread when the access mode runs it
+/// without asking.
+fn unasked(server: &Server, thread_id: &str, root: &str, target: &Target, asks: bool) -> permissions::Unasked {
+    let project = server.store.thread(thread_id).and_then(|t| t.project_id);
+    let settings = server.store.settings();
+    permissions::unasked(
+        &settings.permissions,
+        project.as_deref(),
+        std::path::Path::new(root),
+        target,
+        &crate::skills::folders(&settings),
+        asks,
     )
 }
 
@@ -112,6 +130,11 @@ pub struct Runner {
     /// Messages this process has handed to a turn, whether steered or queued. Written under the
     /// `turns` lock, so a withdrawal sees it in the same order as the queue it checks.
     handed_over: Mutex<HashSet<String>>,
+    /// Permission hooks waiting for the user, by approval id.
+    hooks: Mutex<HashMap<String, std::sync::mpsc::Sender<bool>>>,
+    /// Calls the user allowed through a hook, by thread, so the agent's own request for them
+    /// is not asked again.
+    grants: Mutex<HashMap<String, Vec<Target>>>,
 }
 
 impl Runner {
@@ -151,6 +174,17 @@ impl Runner {
             .filter(|(_, turn)| !turn.idle.load(Ordering::SeqCst))
             .map(|(id, _)| id.clone())
             .collect()
+    }
+
+    /// Stops every idle agent, as `retire_idle` does.
+    pub fn retire_all_idle(&self) {
+        let threads: Vec<String> = {
+            let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+            turns.keys().cloned().collect()
+        };
+        for thread_id in threads {
+            self.retire_idle(&thread_id);
+        }
     }
 
     /// Stops the thread's idle agent, and the shell commands it left running, so a turn that
@@ -377,10 +411,14 @@ impl Runner {
                 .ok_or("This request was already answered")?;
             (turn.agent, turn.stdin.clone(), pending)
         };
-        write_line(
-            &stdin,
-            &provider::approval_reply(agent, &pending.reply, allow, &answers),
-        );
+        // A permission hook holds the call until it hears the answer.
+        if pending.reply.get("hook").is_some() {
+            if let Some(waiter) = self.hooks.lock().unwrap_or_else(PoisonError::into_inner).remove(approval_id) {
+                let _ = waiter.send(allow);
+            }
+        } else {
+            write_line(&stdin, &provider::approval_reply(agent, &pending.reply, allow, &answers));
+        }
         publish(
             server,
             thread_id,

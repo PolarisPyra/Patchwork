@@ -363,23 +363,16 @@ const AssistantMessage = memo(function AssistantMessage({
         clearsGoal={clearsGoal}
         onOpenThread={onOpenThread}
         onOpenFile={openFile}
+        renderApprovals={(ids) => (
+          <Approvals approvals={message.approvals.filter((a) => ids.includes(a.id))} />
+        )}
       />
-      {/* A pending approval is answered in the banner above the composer. */}
-      {groupApprovals(message.approvals).map(({ approval, count }) =>
-        approval.status === "pending" ? (
-          <p
-            key={approval.id}
-            className="m-0 flex items-center gap-1.5 px-1 text-[length:var(--fs-sm)] text-warning"
-          >
-            <ShieldWarningIcon size={15} />
-            {approval.questions?.length
-              ? "Waiting for your answer"
-              : `Waiting for approval: ${approval.title}`}
-          </p>
-        ) : (
-          <ApprovalCard key={approval.id} approval={approval} count={count} />
-        ),
-      )}
+      {/* Replies saved before approvals had their place in the timeline show them here. */}
+      <Approvals
+        approvals={message.approvals.filter(
+          (a) => !message.parts.some((p) => p.type === "approval" && p.id === a.id),
+        )}
+      />
       {openFile && message.files.length > 0 && (
         <ChangeSummary
           projectId={projectId}
@@ -460,6 +453,25 @@ function CompactedDivider({ before }: { before: number | undefined }) {
 
 /** Approvals in order, with each run of the same resolved request, answered the same way,
  * folded into its first one and counted. */
+/** A reply's approvals and questions. A pending one is answered in the banner above the composer. */
+function Approvals({ approvals }: { approvals: Approval[] }) {
+  return groupApprovals(approvals).map(({ approval, count }) =>
+    approval.status === "pending" ? (
+      <p
+        key={approval.id}
+        className="m-0 flex items-center gap-1.5 px-1 text-[length:var(--fs-sm)] text-warning"
+      >
+        <ShieldWarningIcon size={15} />
+        {approval.questions?.length
+          ? "Waiting for your answer"
+          : `Waiting for approval: ${approval.title}`}
+      </p>
+    ) : (
+      <ApprovalCard key={approval.id} approval={approval} count={count} />
+    ),
+  );
+}
+
 function groupApprovals(approvals: Approval[]): { approval: Approval; count: number }[] {
   const groups: { approval: Approval; count: number }[] = [];
   for (const approval of approvals) {

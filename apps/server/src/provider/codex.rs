@@ -719,6 +719,7 @@ mod tests {
             images: &[],
             instructions: None,
             skills_dir: None,
+            guarded: &[],
         }
     }
 

@@ -477,6 +477,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
                 }
                 onSetEffort={setEffort}
                 permissionSettings={settings.permissions}
+                confirmAnswers={settings.confirmAnswers}
                 projects={settings.projects}
                 onUpdatePermissions={updatePermissions}
                 onOpenPermissions={openPermissions}

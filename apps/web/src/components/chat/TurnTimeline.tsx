@@ -165,7 +165,9 @@ type Step =
   /** Subagents started one after another, shown as cards. */
   | { kind: "agents"; tools: ToolCall[] }
   /** A plan proposed in plan mode. */
-  | { kind: "plan"; text: string; index: number };
+  | { kind: "plan"; text: string; index: number }
+  /** Approvals and questions asked one after another, by id. */
+  | { kind: "approvals"; ids: string[] };
 
 /** The reply's parts as steps. Replies saved before parts were kept show their calls, then their
  * text. */
@@ -188,6 +190,12 @@ function stepsOf(message: Message): Step[] {
     }
     if (part.type === "plan") {
       steps.push({ kind: "plan", text: part.text, index });
+      return;
+    }
+    if (part.type === "approval") {
+      const last = steps.at(-1);
+      if (last?.kind === "approvals") last.ids.push(part.id);
+      else steps.push({ kind: "approvals", ids: [part.id] });
       return;
     }
     let entry: Entry;
@@ -240,6 +248,7 @@ export default function TurnTimeline({
   clearsGoal = false,
   onOpenThread,
   onOpenFile,
+  renderApprovals,
 }: {
   message: Message;
   agent: AgentKind;
@@ -249,6 +258,8 @@ export default function TurnTimeline({
   onOpenThread: (id: string) => void;
   /** Opens a file; edit rows link to their file when given. */
   onOpenFile?: (path: string) => void;
+  /** The approvals and questions with these ids, shown where they were asked. */
+  renderApprovals?: (ids: string[]) => ReactNode;
 }) {
   const streaming = message.status === "streaming";
   const steps = stepsOf(message);
@@ -262,10 +273,15 @@ export default function TurnTimeline({
   const folds =
     !streaming && message.status !== "error" && (hidden > 0 || stopped || message.cutOff);
   const [open, setOpen] = useState(false);
-  // Subagents still working stay in view when the reply folds.
+  // Subagents still working, and the questions the agent asked, stay in view when the reply folds.
+  const asked = (s: Step) =>
+    s.kind === "approvals" &&
+    s.ids.some((id) => message.approvals.some((a) => a.id === id && a.questions?.length));
   const shown =
     folds && !open
-      ? steps.filter((s, i) => i >= hidden || (s.kind === "agents" && s.tools.some(isActive)))
+      ? steps.filter(
+          (s, i) => i >= hidden || (s.kind === "agents" && s.tools.some(isActive)) || asked(s),
+        )
       : steps;
   const last = steps.at(-1);
   // Text still streaming in may skip renders in favor of input and scrolling.
@@ -306,6 +322,10 @@ export default function TurnTimeline({
         ) : step.kind === "plan" ? (
           <div key={`p${step.index}`} className="px-1 py-0.5 pb-2">
             <ProposedPlanCard markdown={step.text} />
+          </div>
+        ) : step.kind === "approvals" ? (
+          <div key={`q${step.ids[0]}`} className="flex flex-col gap-2.5 pb-2">
+            {renderApprovals?.(step.ids)}
           </div>
         ) : step.kind === "agents" ? (
           <SubagentCards

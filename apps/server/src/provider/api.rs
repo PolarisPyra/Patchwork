@@ -170,6 +170,19 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
                 Target::new(kind, resources)
             }),
         }],
+        Some("api.check") => serde_json::from_value(v["kind"].clone()).ok().map_or_else(
+            // A check names its kind; without one it runs.
+            || vec![Parsed::Send(approval_reply(&json!({"id": v["id"]}), true, &HashMap::new()))],
+            |kind| {
+                let resources = v["resources"].as_array().into_iter().flatten().filter_map(Value::as_str);
+                vec![Parsed::Check {
+                    title: text("title").into(),
+                    detail: super::one_line(text("detail")),
+                    reply: json!({"id": v["id"]}),
+                    target: Target::new(kind, resources),
+                }]
+            },
+        ),
         Some("api.question") => {
             let questions: Vec<Question> = v["questions"]
                 .as_array()

@@ -542,7 +542,7 @@ impl Agent {
                 },
                 name => {
                     let allowed = match api_tools::approval(name, &args, self.request.mode, &self.root) {
-                        Some((title, detail, target)) => self.approve(&call.id, &title, &detail, target),
+                        Some((title, detail, target, asks)) => self.approve(&call.id, &title, &detail, target, asks),
                         None => true,
                     };
                     if allowed && name == "read_file" && let Some(image) = self.read_image(&args) {
@@ -587,20 +587,22 @@ impl Agent {
         }))
     }
 
-    /// Has Patchwork call an MCP tool, once the user approves where the access mode asks.
+    /// Has Patchwork call an MCP tool, once the user approves where the access mode asks and the
+    /// permission rules allow it.
     fn call_mcp(&mut self, index: usize, id: &str, args: &Value) -> Result<String, String> {
         let tool = &self.request.mcp_tools[index];
-        let ask = match self.request.mode {
+        let asks = match self.request.mode {
             AccessMode::FullAccess => false,
             AccessMode::Supervised => true,
             _ => !tool.read_only,
         };
         let (server, name) = (tool.server.clone(), tool.tool.clone());
-        if ask && !self.approve(
+        if !self.approve(
             id,
             &format!("Use {name} from {server}"),
             &args.to_string(),
             Target::new(PermissionKind::Mcp, [format!("{server}/{name}")]),
+            asks,
         ) {
             return Err(DENIED.into());
         }
@@ -610,11 +612,12 @@ impl Agent {
         if reply["error"] == true { Err(output) } else { Ok(output) }
     }
 
-    /// Asks Patchwork for an approval and waits for the answer.
-    fn approve(&mut self, id: &str, title: &str, detail: &str, target: Target) -> bool {
+    /// Asks Patchwork for an approval, or with `asks` false for the permission rules' answer to a
+    /// call the access mode runs without asking, and waits for the answer.
+    fn approve(&mut self, id: &str, title: &str, detail: &str, target: Target, asks: bool) -> bool {
         let Target { kind, resources } = target;
         emit(&json!({
-            "type": "api.approval", "id": id, "title": title, "detail": detail,
+            "type": if asks { "api.approval" } else { "api.check" }, "id": id, "title": title, "detail": detail,
             "kind": kind, "resources": resources,
         }));
         self.wait(id).is_some_and(|reply| reply["allow"] == true)

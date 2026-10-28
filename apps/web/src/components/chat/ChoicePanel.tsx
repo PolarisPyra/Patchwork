@@ -13,12 +13,14 @@ interface ChoicePanelProps {
   onOwn: () => void;
   /** Hides the panel without an answer, on Escape. */
   onDismiss: () => void;
+  /** A click or a number key only highlights an option, and a second one sends it. */
+  confirm?: boolean;
 }
 
 /**
- * Numbered options above the composer. A click, a number key, or the arrows highlight an option;
- * Enter or a click on the highlighted option sends it. The last row writes an answer instead of
- * sending.
+ * Numbered options above the composer. A click or a number key sends an option, and the arrows
+ * highlight one for Enter; with `confirm`, a click or a number key highlights it and a second
+ * sends it. The last row writes an answer instead of sending.
  */
 export default function ChoicePanel({
   question,
@@ -27,6 +29,7 @@ export default function ChoicePanel({
   onPick,
   onOwn,
   onDismiss,
+  confirm = false,
 }: ChoicePanelProps) {
   // Rows are the options, then "Submit my own response" at index options.length.
   const own = options.length;
@@ -74,13 +77,15 @@ export default function ChoicePanel({
       if (Number.isInteger(n) && n >= 1 && n <= own + 1) {
         e.preventDefault();
         e.stopPropagation();
-        setActive(n - 1);
+        if (confirm && current !== n - 1) setActive(n - 1);
+        else if (n - 1 === own) onOwn();
+        else onPick(options[n - 1]);
       }
     };
     // Capture phase, so the editor does not also act on these keys (history, send).
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [options, onPick, onOwn, onDismiss, own]);
+  }, [options, onPick, onOwn, onDismiss, own, confirm]);
 
   const rowClass = (highlighted: boolean) =>
     `flex w-full cursor-pointer items-center gap-3 rounded-[var(--radius-sm)] border-none px-2.5 py-1.5 text-left text-[length:var(--fs-md)] text-fg ${highlighted ? "bg-selected" : "bg-transparent hover:bg-hover"}`;
@@ -102,7 +107,7 @@ export default function ChoicePanel({
           role="option"
           aria-selected={active === i}
           className={rowClass(active === i)}
-          onClick={() => (active === i ? onPick(option) : setActive(i))}
+          onClick={() => (confirm && active !== i ? setActive(i) : onPick(option))}
         >
           <kbd className="kbd flex-none">{i + 1}</kbd>
           <span className="min-w-0 flex-1 truncate">{option}</span>

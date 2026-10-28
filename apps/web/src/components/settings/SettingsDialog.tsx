@@ -330,11 +330,14 @@ function ContextLevels({
   value,
   onChange,
   levels = TOKEN_LEVELS,
+  zero = "Default",
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
   levels?: number[];
+  /** What 0 is called. */
+  zero?: string;
 }) {
   return (
     <div
@@ -350,7 +353,7 @@ function ContextLevels({
           className={`grid h-6 w-auto cursor-pointer place-items-center border-none px-2.5 py-0 text-[length:var(--fs-sm)] tabular-nums [&+&]:border-l [&+&]:border-border-strong ${value === level ? "bg-selected text-fg" : "bg-transparent text-fg-muted hover:bg-hover hover:text-fg"}`}
           onClick={() => onChange(level)}
         >
-          {level === 0 ? "Default" : formatTokens(level)}
+          {level === 0 ? zero : formatTokens(level)}
         </button>
       ))}
     </div>
@@ -478,12 +481,13 @@ function TokensPane({ settings, updateSettings }: PaneProps) {
       </TokenRow>
       <TokenRow
         title="Claude compacts at"
-        desc="Compacts a working Claude task once its context reaches this. Default waits until the model's window is almost full"
+        desc="Compacts a working Claude task once its context reaches this. Claude's own waits until the model's window is almost full"
       >
         <ContextLevels
           label="Claude compacts at"
           value={tokens.claudeCompactWindow}
           levels={COMPACT_WINDOWS}
+          zero="Claude's own"
           onChange={(claudeCompactWindow) => update({ claudeCompactWindow })}
         />
       </TokenRow>
@@ -885,6 +889,13 @@ function AgentPane({ settings, updateSettings }: PaneProps) {
           </div>
         </div>
       )}
+      <TokenRow title="Click answers twice to send">
+        <TokenSwitch
+          label="Click answers twice to send"
+          on={settings.confirmAnswers}
+          onChange={(confirmAnswers) => void updateSettings((st) => ({ ...st, confirmAnswers }))}
+        />
+      </TokenRow>
     </>
   );
 }

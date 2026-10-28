@@ -356,7 +356,7 @@ impl Server {
         let store = Store::open(config_dir)?;
         follow_log_levels(&store.settings());
         let interrupted = orchestration::recovery::recover(&store)?;
-        Ok(Arc::new(Self {
+        let server = Arc::new(Self {
             store,
             usage: usage::UsageCache::default(),
             runner: Runner::default(),
@@ -367,7 +367,13 @@ impl Server {
             sink,
             project_watch: std::sync::Mutex::default(),
             skills_watch: std::sync::Mutex::default(),
-        }))
+        });
+        let weak = Arc::downgrade(&server);
+        provider::mcp::set_hook_handler(Box::new(move |request| match weak.upgrade() {
+            Some(server) => server.runner.hook_request(&server, request),
+            None => serde_json::json!({"deny": "Patchwork is closing"}),
+        }));
+        Ok(server)
     }
 
     fn emit(&self, event: AgentEventEnvelope) {
@@ -551,9 +557,15 @@ impl Server {
 
     pub fn save_settings(&self, settings: Settings) -> Res<()> {
         follow_log_levels(&settings);
+        let guards_changed =
+            !permissions::same_guards(&self.store.settings().permissions, &settings.permissions);
         self.store.update_settings(|s| *s = settings)?;
         // A rule the user just added may answer requests already waiting.
         self.runner.apply_rules(self);
+        // Idle agents were told the old deny and ask rules, so the next message starts a new one.
+        if guards_changed {
+            self.runner.retire_all_idle();
+        }
         Ok(())
     }
 

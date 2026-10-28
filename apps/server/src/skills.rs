@@ -181,6 +181,29 @@ pub fn claude_plugin(_settings: &Settings) -> Option<PathBuf> {
     None
 }
 
+/// The agents' own skills folders under the home folder.
+const AGENT_SKILLS: [&str; 8] = [
+    ".claude/skills",
+    ".claude/plugins",
+    ".codex/skills",
+    ".agents/skills",
+    ".config/opencode/skills",
+    ".config/opencode/skill",
+    ".config/opencode/.opencode/skills",
+    ".opencode/skills",
+];
+
+/// Every folder agents read skills from, which they may read without asking: Patchwork's skills
+/// folder, the links to its enabled skills, and the agents' own skills folders.
+pub fn folders(settings: &Settings) -> Vec<PathBuf> {
+    let mut out = vec![dir(settings)];
+    out.extend(CONFIG_DIR.get().map(|config| config.join("claude-plugin")));
+    if let Some(home) = crate::provider::home_dir() {
+        out.extend(AGENT_SKILLS.iter().map(|folder| home.join(folder)));
+    }
+    out
+}
+
 /// The folder agents load skills from: the links to the enabled skills, or the skills folder
 /// itself where there are no links.
 pub fn loaded_dir(settings: &Settings) -> PathBuf {

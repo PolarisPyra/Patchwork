@@ -200,7 +200,7 @@ pub(super) fn apply(thread: &mut Thread, event: &AgentEvent) {
             match msg.parts.last_mut() {
                 Some(Part::Text { text: last }) => last.push_str(text),
                 None
-                | Some(Part::Thinking { .. } | Part::Tool { .. } | Part::Plan { .. }) => {
+                | Some(Part::Thinking { .. } | Part::Tool { .. } | Part::Plan { .. } | Part::Approval { .. }) => {
                     msg.parts.push(Part::Text { text: text.clone() })
                 }
             }
@@ -265,7 +265,13 @@ pub(super) fn apply(thread: &mut Thread, event: &AgentEvent) {
             }
         }
         AgentEvent::TurnRecorded { turn, .. } => msg.turn = Some(turn.clone()),
-        AgentEvent::ApprovalRequested { approval, .. } => msg.approvals.push(approval.clone()),
+        AgentEvent::ApprovalRequested { approval, .. } => {
+            end_thinking(msg);
+            msg.parts.push(Part::Approval {
+                id: approval.id.clone(),
+            });
+            msg.approvals.push(approval.clone());
+        }
         AgentEvent::ApprovalResolved {
             approval_id,
             allowed,

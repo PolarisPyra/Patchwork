@@ -109,18 +109,39 @@ const GUARDED: [&str; 6] = [
 ];
 
 /// Permission rules for the access mode, as `OPENCODE_CONFIG_CONTENT`. A run cannot answer a
-/// prompt, so an "ask" rule refuses the call and the run goes on. None keeps OpenCode's own
-/// rules: full access approves them with `--auto`, and auto lets OpenCode decide.
+/// prompt, so an "ask" rule refuses the call and the run goes on. Without rules OpenCode keeps its
+/// own: full access approves them with `--auto`, and auto lets OpenCode decide. Patchwork's deny
+/// rules are added as they are, since a run cannot ask Patchwork either.
 pub fn permission_config(spec: &TurnSpec) -> Option<String> {
-    let edit = match spec.mode {
-        AccessMode::FullAccess | AccessMode::Auto => return None,
-        AccessMode::AutoAcceptEdits => "allow",
-        AccessMode::Supervised => "ask",
-    };
     let mut rules = serde_json::Map::new();
-    rules.insert("edit".into(), json!(edit));
-    rules.extend(GUARDED.map(|kind| (kind.to_string(), json!("ask"))));
-    Some(json!({ "permission": rules }).to_string())
+    let edit = match spec.mode {
+        AccessMode::FullAccess | AccessMode::Auto => None,
+        AccessMode::AutoAcceptEdits => Some("allow"),
+        AccessMode::Supervised => Some("ask"),
+    };
+    if let Some(edit) = edit {
+        rules.insert("edit".into(), json!(edit));
+        rules.extend(GUARDED.map(|kind| (kind.to_string(), json!("ask"))));
+    }
+    for guarded in spec.guarded.iter().filter(|g| g.refuses()) {
+        let Some(action) = action(guarded.kind) else { continue };
+        let action = if action == "shell" { "bash" } else { action };
+        if guarded.denied || guarded.deny.iter().any(|p| p == "*") {
+            rules.insert(action.into(), json!("deny"));
+        } else if action == "bash" {
+            // Commands take patterns; the rest of the kinds only a whole answer.
+            let mut patterns = match rules.remove(action) {
+                Some(Value::String(rest)) => serde_json::Map::from_iter([("*".to_string(), json!(rest))]),
+                _ => serde_json::Map::new(),
+            };
+            for p in &guarded.deny {
+                patterns.insert(p.clone(), json!("deny"));
+                patterns.insert(format!("{p} *"), json!("deny"));
+            }
+            rules.insert(action.into(), Value::Object(patterns));
+        }
+    }
+    (!rules.is_empty()).then(|| json!({ "permission": rules }).to_string())
 }
 
 /// The skills folder for 2.x's `skills.paths`, as `OPENCODE_CONFIG_CONTENT`.
@@ -355,11 +376,59 @@ fn serve_permissions(spec: &TurnSpec) -> Value {
             vec![rule("shell", "ask"), rule("edit", "ask"), rule("external_directory", "ask")]
         }
     };
+    // An MCP tool asks under its id, `<server>_<tool>`. Every id with an underscore also covers
+    // OpenCode's own two, which full access goes on allowing.
+    for guarded in spec.guarded.iter().filter(|g| g.kind == PermissionKind::Mcp) {
+        if guarded.all() {
+            rules.push(rule("*_*", "ask"));
+            if spec.mode == AccessMode::FullAccess {
+                rules.extend(["doom_loop", "external_directory"].map(|a| rule(a, "allow")));
+            }
+        } else {
+            rules.extend(guarded.patterns().map(|p| rule(&mcp_action(p), "ask")));
+        }
+    }
+    // Patchwork's deny and ask rules answer what they cover, so those calls ask it first.
+    for guarded in spec.guarded {
+        if let Some(action) = action(guarded.kind) {
+            rules.push(rule(action, "ask"));
+        }
+    }
     // Plan mode only reads and plans.
     if spec.plan {
         rules.push(rule("edit", "deny"));
     }
     Value::Array(rules)
+}
+
+/// The OpenCode action of an MCP rule's pattern: `server` covers its tools, `server/tool` one.
+fn mcp_action(pattern: &str) -> String {
+    match pattern.split_once('/') {
+        Some((server, tool)) => format!("{}_{}", crate::permissions::opencode_name(server), crate::permissions::opencode_name(tool)),
+        None => format!("{}_*", crate::permissions::opencode_name(pattern)),
+    }
+}
+
+/// The action OpenCode asks permission for, for a kind of request.
+fn action(kind: PermissionKind) -> Option<&'static str> {
+    match kind {
+        PermissionKind::Edit => Some("edit"),
+        PermissionKind::Command => Some("shell"),
+        PermissionKind::Folder => Some("external_directory"),
+        PermissionKind::Web => Some("webfetch"),
+        PermissionKind::Mcp => None,
+    }
+}
+
+/// Whether the access mode asks the user about a kind of request; OpenCode's own rules, which
+/// auto keeps, ask only about other folders.
+pub fn mode_asks(mode: AccessMode, kind: PermissionKind) -> bool {
+    match mode {
+        AccessMode::FullAccess => false,
+        AccessMode::Auto => kind == PermissionKind::Folder,
+        AccessMode::AutoAcceptEdits => matches!(kind, PermissionKind::Command | PermissionKind::Folder),
+        AccessMode::Supervised => kind != PermissionKind::Web && kind != PermissionKind::Mcp,
+    }
 }
 
 /// The bridge line that steers the running turn with another message.
@@ -614,6 +683,10 @@ fn permission_target(action: &str, resources: &[&str]) -> Option<Target> {
         "shell" | "bash" => PermissionKind::Command,
         "external_directory" => PermissionKind::Folder,
         "webfetch" => PermissionKind::Web,
+        // An MCP tool asks under its id, `<server>_<tool>`.
+        _ if action.contains('_') && action != "doom_loop" => {
+            return Some(Target::new(PermissionKind::Mcp, [action]));
+        }
         _ => return None,
     };
     Some(Target::new(kind, resources.iter().copied()))

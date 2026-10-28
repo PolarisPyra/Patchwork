@@ -86,6 +86,8 @@ pub struct Settings {
     pub logging: LoggingSettings,
     pub terminal: TerminalSettings,
     pub permissions: PermissionSettings,
+    /// Answering an agent's question takes a second click on the picked answer.
+    pub confirm_answers: bool,
 }
 
 /// What agents may do without asking: for every project and chat, for chats without a project,
@@ -344,6 +346,11 @@ pub struct TokenSettings {
     /// The context size at which Claude compacts mid-task. 0 leaves Claude's own, near the
     /// model's full window.
     pub claude_compact_window: u64,
+    /// Set once the 200k default for `claude_compact_window` replaced the old default, 0, so
+    /// choosing 0 again sticks.
+    // Missing in settings saved before it, unlike the struct's default.
+    #[serde(default)]
+    pub compact_window_defaulted: bool,
     /// Model for new tasks, per agent. A missing agent uses the CLI's own default.
     pub default_models: HashMap<AgentKind, String>,
     /// Names a new chat or task with a title its provider writes from the first message,
@@ -359,7 +366,8 @@ impl Default for TokenSettings {
             ask_before_resume: true,
             auto_compact: true,
             auto_compact_above: 0,
-            claude_compact_window: 0,
+            claude_compact_window: 200_000,
+            compact_window_defaulted: true,
             default_models: HashMap::new(),
             generate_titles: true,
         }
@@ -495,6 +503,10 @@ pub enum Part {
     /// A plan the agent proposed in plan mode, as Markdown.
     Plan {
         text: String,
+    },
+    /// An approval or question, by its id in the message's `approvals`, where it was asked.
+    Approval {
+        id: String,
     },
 }
 

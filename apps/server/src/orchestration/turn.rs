@@ -107,7 +107,7 @@ impl Runner {
         let TurnRequest { thread_id, text, attachments, images } = request;
         // A turn of its own (a /goal, a compaction) replaces an idle agent process.
         self.retire_idle(&thread_id);
-        let (agent, root, session_id, model, mode, effort, plan, context, checkpoint) = {
+        let (agent, root, session_id, model, mode, effort, plan, context, project_id, checkpoint) = {
             let thread = server.store.thread(&thread_id).ok_or("Task not found")?;
             // The message being sent is the newest user message; the transcript is what came before.
             let context = thread.context_pending.then(|| {
@@ -150,6 +150,7 @@ impl Runner {
                 thread.effort,
                 thread.plan_mode,
                 context,
+                thread.project_id.clone(),
                 // Project files are snapshotted before the newest user message's turn changes them.
                 thread.project_id.and(
                     thread.messages.iter().rev().find(|m| m.role == Role::User).map(|m| m.id.clone()),
@@ -179,6 +180,7 @@ impl Runner {
             AgentKind::Claude | AgentKind::Antigravity | AgentKind::OpenCode => None,
         };
         let skills_dir = Some(crate::skills::loaded_dir(&settings).to_string_lossy().into_owned());
+        let guarded = crate::permissions::guarded(&settings.permissions, project_id.as_deref());
         let spec = TurnSpec {
             root: &root,
             session_id: session_id.as_deref(),
@@ -191,6 +193,7 @@ impl Runner {
             images: &images,
             instructions: instructions.as_deref(),
             skills_dir: skills_dir.as_deref(),
+            guarded: &guarded,
         };
 
         // Agents often edit files through the shell, so changes are also found by
@@ -202,6 +205,7 @@ impl Runner {
         let mut args = provider::turn_args(agent, &spec);
         if agent == AgentKind::Claude {
             args.extend(claude::launch_args(&settings));
+            args.extend(claude::permission_args(&guarded, &root));
         }
         let input = provider::turn_input(agent, &spec);
         let (mut cmd, scope) = scope::scoped(provider::turn_command(agent)?);
@@ -213,6 +217,7 @@ impl Runner {
         }
         cmd.args(&args)
             .envs(provider::turn_env(agent, &spec))
+            .envs(provider::hook::env(agent, &thread_id, &root))
             .current_dir(&root)
             .stdin(if input.is_empty() {
                 Stdio::null()
@@ -304,6 +309,7 @@ impl Runner {
             images,
             instructions,
             skills_dir,
+            guarded,
         };
         self.turns
             .lock()
@@ -436,6 +442,8 @@ pub(super) struct Turn {
     pub(super) instructions: Option<String>,
     /// What `spec` passes as `TurnSpec::skills_dir`.
     pub(super) skills_dir: Option<String>,
+    /// What `spec` passes as `TurnSpec::guarded`.
+    pub(super) guarded: Vec<crate::permissions::Guarded>,
 }
 
 impl Turn {
@@ -502,6 +510,7 @@ impl Turn {
             images: &self.images,
             instructions: self.instructions.as_deref(),
             skills_dir: self.skills_dir.as_deref(),
+            guarded: &self.guarded,
         }
     }
 }

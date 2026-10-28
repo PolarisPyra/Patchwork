@@ -39,16 +39,143 @@ pub struct Decision {
     pub rule: RuleRef,
 }
 
+/// The rules' answer to a request the access mode would run without asking.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Unasked {
+    /// No rule stops it.
+    Run,
+    /// A deny rule, or the kind's deny default, refuses it.
+    Refuse(Decision),
+    /// An ask rule covers it, so the user is asked anyway.
+    Ask,
+}
+
+/// What `decide` found.
+enum Answer {
+    Given(Decision),
+    AskRule,
+    Open,
+}
+
 /// The rules' answer to `target` in a thread of `project` (None for a chat) working in `root`, or
 /// None when the user is to be asked. Deny and ask rules win when they cover any part of the
-/// request; allow rules have to cover all of it. Then the scope's default for the kind decides,
-/// then the default for everywhere.
+/// request; allow rules have to cover all of it, and reading in a `skills` folder needs none.
+/// Then the scope's default for the kind decides, then the default for everywhere.
 pub fn decide(
     settings: &PermissionSettings,
     project: Option<&str>,
     root: &Path,
     target: &Target,
+    skills: &[PathBuf],
 ) -> Option<Decision> {
+    match answer(settings, project, root, target, skills) {
+        Answer::Given(decision) => Some(decision),
+        Answer::AskRule | Answer::Open => None,
+    }
+}
+
+/// The rules' answer to `target` when the access mode would run it without asking: deny rules
+/// and a deny default still refuse it, and ask rules ask unless `asks` is false, as in full
+/// access, which never asks.
+pub fn unasked(
+    settings: &PermissionSettings,
+    project: Option<&str>,
+    root: &Path,
+    target: &Target,
+    skills: &[PathBuf],
+    asks: bool,
+) -> Unasked {
+    match answer(settings, project, root, target, skills) {
+        Answer::Given(decision) if !decision.allow => Unasked::Refuse(decision),
+        Answer::AskRule if asks => Unasked::Ask,
+        _ => Unasked::Run,
+    }
+}
+
+/// The deny and ask rules of one kind that hold in a thread, for agents that decide on their own
+/// what to ask about, so they ask Patchwork before a call these rules cover.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Guarded {
+    pub kind: PermissionKind,
+    pub deny: Vec<String>,
+    pub ask: Vec<String>,
+    /// Whether the kind is denied where no rule covers it, so every request of it is guarded.
+    pub denied: bool,
+}
+
+impl Guarded {
+    /// Whether every request of the kind is guarded.
+    pub fn all(&self) -> bool {
+        self.denied || self.patterns().any(|p| p == "*")
+    }
+
+    /// The deny and ask rules' patterns.
+    pub fn patterns(&self) -> impl Iterator<Item = &str> {
+        self.deny.iter().chain(&self.ask).map(String::as_str)
+    }
+
+    /// Whether a request of the kind may be refused, rather than only asked about.
+    pub fn refuses(&self) -> bool {
+        self.denied || !self.deny.is_empty()
+    }
+}
+
+/// The kinds a thread of `project` (None for a chat) has deny or ask rules for, or denies by
+/// default.
+pub fn guarded(settings: &PermissionSettings, project: Option<&str>) -> Vec<Guarded> {
+    let empty = ScopeRules::default();
+    let local = match project {
+        Some(id) => settings.projects.get(id).unwrap_or(&empty),
+        None => &settings.chats,
+    };
+    let scopes = [local, &settings.everywhere];
+    [
+        PermissionKind::Edit,
+        PermissionKind::Command,
+        PermissionKind::Folder,
+        PermissionKind::Web,
+        PermissionKind::Mcp,
+    ]
+    .into_iter()
+    .filter_map(|kind| {
+        let (mut deny, mut ask) = (Vec::<String>::new(), Vec::<String>::new());
+        for rule in scopes.iter().flat_map(|s| &s.rules) {
+            let pattern = rule.pattern.trim();
+            let list = match rule.effect {
+                Effect::Deny => &mut deny,
+                Effect::Ask => &mut ask,
+                Effect::Allow => continue,
+            };
+            if rule.kind == kind && !pattern.is_empty() && !list.iter().any(|p| p == pattern) {
+                list.push(pattern.into());
+            }
+        }
+        let denied = scopes.iter().find_map(|s| s.defaults.get(&kind)) == Some(&Effect::Deny);
+        (denied || !deny.is_empty() || !ask.is_empty()).then_some(Guarded {
+            kind,
+            deny,
+            ask,
+            denied,
+        })
+    })
+    .collect()
+}
+
+/// Whether `a` and `b` guard the same calls in every chat and project, so agents launched with
+/// one need not start again for the other.
+pub fn same_guards(a: &PermissionSettings, b: &PermissionSettings) -> bool {
+    let mut projects = a.projects.keys().chain(b.projects.keys());
+    guarded(a, None) == guarded(b, None)
+        && projects.all(|id| guarded(a, Some(id)) == guarded(b, Some(id)))
+}
+
+fn answer(
+    settings: &PermissionSettings,
+    project: Option<&str>,
+    root: &Path,
+    target: &Target,
+    skills: &[PathBuf],
+) -> Answer {
     let empty = ScopeRules::default();
     let (local_scope, local) = match project {
         Some(id) => (
@@ -61,6 +188,13 @@ pub fn decide(
         (&local_scope, local),
         (&PermissionScope::Everywhere, &settings.everywhere),
     ];
+    // Reading in its own folder is not working outside it.
+    if target.kind == PermissionKind::Folder
+        && !target.resources.is_empty()
+        && target.resources.iter().all(|r| folder_of(root, r).starts_with(root))
+    {
+        return Answer::Open;
+    }
     let (units, allowable) = units(target, root);
     let found = |scope: &PermissionScope, rule: &PermissionRule| RuleRef {
         scope: scope.clone(),
@@ -75,7 +209,10 @@ pub fn decide(
                 .filter(|r| r.kind == target.kind && r.effect == effect)
                 .find(|r| units.iter().any(|u| covers(r, u, root)));
             if let Some(rule) = hit {
-                return (effect == Effect::Deny).then(|| Decision {
+                if effect == Effect::Ask {
+                    return Answer::AskRule;
+                }
+                return Answer::Given(Decision {
                     allow: false,
                     rule: found(scope, rule),
                 });
@@ -85,6 +222,16 @@ pub fn decide(
 
     if allowable {
         let allowing = |unit: &Unit| {
+            // Agents read their skills without asking.
+            if target.kind == PermissionKind::Folder
+                && let Unit::Path(path) = unit
+                && skills.iter().any(|folder| path.starts_with(folder))
+            {
+                return Some(RuleRef {
+                    scope: PermissionScope::Everywhere,
+                    rule_id: None,
+                });
+            }
             scopes.iter().find_map(|(scope, rules)| {
                 rules
                     .rules
@@ -107,15 +254,15 @@ pub fn decide(
             }
         }
         if let Some(rule) = first {
-            return Some(Decision { allow: true, rule });
+            return Answer::Given(Decision { allow: true, rule });
         }
     }
 
     for (scope, rules) in scopes {
         match rules.defaults.get(&target.kind) {
-            Some(Effect::Ask) => return None,
+            Some(Effect::Ask) => return Answer::Open,
             Some(effect) => {
-                return Some(Decision {
+                return Answer::Given(Decision {
                     allow: *effect == Effect::Allow,
                     rule: RuleRef {
                         scope: scope.clone(),
@@ -126,7 +273,7 @@ pub fn decide(
             None => {}
         }
     }
-    None
+    Answer::Open
 }
 
 /// The patterns "Always allow" saves for `target`: the thread's own folder or the folder outside
@@ -170,6 +317,12 @@ pub fn suggest(target: &Target, root: &Path) -> Vec<String> {
             .for_each(|r| add(r.split('/').next().unwrap_or_default().into())),
     }
     out
+}
+
+/// Whether `b` asks for what `a` did: the same kind and the same commands, paths, hosts, or tools.
+/// A request that names nothing, as Codex's file changes do, matches any of its kind.
+pub fn same_request(a: &Target, b: &Target, root: &Path) -> bool {
+    a.kind == b.kind && (b.resources.is_empty() || units(a, root).0 == units(b, root).0)
 }
 
 /// Adds the starting rules once, so deleting one does not bring it back.
@@ -222,7 +375,7 @@ pub fn default_rules() -> Vec<PermissionRule> {
 }
 
 /// One part of a request a rule has to cover.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum Unit {
     Path(PathBuf),
     /// A simple command's words.
@@ -308,10 +461,21 @@ fn covers(rule: &PermissionRule, unit: &Unit, root: &Path) -> bool {
             !host.is_empty() && (*host == pattern || host.ends_with(&format!(".{pattern}")))
         }
         Unit::Tool(tool) => {
+            let opencode_id = match pattern.split_once('/') {
+                Some((server, name)) => format!("{}_{}", opencode_name(server), opencode_name(name)),
+                None => opencode_name(pattern),
+            };
             tool == pattern
                 || tool
                     .strip_prefix(pattern)
                     .is_some_and(|rest| rest.starts_with('/'))
+                // OpenCode names a tool `<server>_<tool>`.
+                || !tool.contains('/')
+                    && (*tool == opencode_id
+                        || (!pattern.contains('/')
+                            && tool
+                                .strip_prefix(&opencode_id)
+                                .is_some_and(|rest| rest.starts_with('_'))))
         }
         Unit::Unknown => false,
     }
@@ -533,4 +697,12 @@ fn is_assignment(word: &str) -> bool {
             && !name.starts_with(|c: char| c.is_ascii_digit())
             && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
     })
+}
+
+/// A server or tool name as OpenCode puts it in a tool's id: anything but letters, digits, `_`,
+/// and `-` becomes `_`.
+pub fn opencode_name(name: &str) -> String {
+    name.chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+        .collect()
 }

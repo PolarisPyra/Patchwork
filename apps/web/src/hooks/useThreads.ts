@@ -161,6 +161,7 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
       const { messageId, approval } = event;
       return updateMessage(thread, messageId, (m) => ({
         ...m,
+        parts: [...endThinking(m.parts), { type: "approval", id: approval.id }],
         approvals: [...m.approvals, approval],
       }));
     }
