@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
+use crate::computer;
 use crate::permissions::Target;
 use crate::types::{AccessMode, PermissionKind};
 
@@ -133,6 +134,57 @@ pub fn definitions(plan: bool) -> Value {
             }, "required": ["command"]}),
         ),
     ]);
+    // Computer use is only offered once Settings → Permissions has turned it on.
+    if !plan && crate::computer::enabled() {
+        tools.extend([
+            tool(
+                "computer_screenshot",
+                "Look at the screen. Returns the path of a PNG screenshot, which read_file can show you. Take one before and after each group of actions, since the screen changes only when you act.",
+                json!({"type": "object", "properties": {}}),
+            ),
+            tool(
+                "computer_move",
+                "Move the pointer, in screen pixels, without clicking.",
+                json!({"type": "object", "properties": {
+                    "x": {"type": "integer"},
+                    "y": {"type": "integer"}
+                }, "required": ["x", "y"]}),
+            ),
+            tool(
+                "computer_click",
+                "Click the pointer at screen pixels. The screenshot is scaled, so work out the real position from the screenshot's size and the screen's.",
+                json!({"type": "object", "properties": {
+                    "x": {"type": "integer"},
+                    "y": {"type": "integer"},
+                    "button": {"type": "string", "enum": ["left", "middle", "right"]},
+                    "double": {"type": "boolean"}
+                }, "required": ["x", "y"]}),
+            ),
+            tool(
+                "computer_type",
+                "Type text into the focused field, as the keyboard would.",
+                json!({"type": "object", "properties": {
+                    "text": {"type": "string"}
+                }, "required": ["text"]}),
+            ),
+            tool(
+                "computer_key",
+                "Press one key, with modifiers held. Keys are named as on the keyboard: enter, tab, escape, space, backspace, delete, up, down, left, right, home, end, pageup, pagedown, or a single character.",
+                json!({"type": "object", "properties": {
+                    "key": {"type": "string"},
+                    "modifiers": {"type": "array", "items": {"type": "string", "enum": ["ctrl", "shift", "alt", "meta"]}}
+                }, "required": ["key"]}),
+            ),
+            tool(
+                "computer_scroll",
+                "Scroll the window under the pointer by notches; positive is down, or right when horizontal.",
+                json!({"type": "object", "properties": {
+                    "amount": {"type": "integer"},
+                    "horizontal": {"type": "boolean"}
+                }, "required": ["amount"]}),
+            ),
+        ]);
+    }
     Value::Array(tools)
 }
 
@@ -150,6 +202,12 @@ pub fn display_name(name: &str) -> &str {
         "ask_user" => "AskUserQuestion",
         "update_plan" => "TodoWrite",
         "propose_plan" => "ExitPlanMode",
+        "computer_screenshot" => "Screenshot",
+        "computer_move" => "MoveMouse",
+        "computer_click" => "Click",
+        "computer_type" => "Type",
+        "computer_key" => "PressKey",
+        "computer_scroll" => "Scroll",
         other => other,
     }
 }
@@ -162,7 +220,22 @@ pub fn summary(name: &str, args: &Value, root: &Path) -> String {
         "fetch_url" => field("url"),
         "glob" | "grep" => field("pattern"),
         "ask_user" => args["questions"][0]["question"].as_str().unwrap_or_default().to_string(),
-        "update_plan" | "propose_plan" => String::new(),
+        "update_plan" | "propose_plan" | "computer_screenshot" => String::new(),
+        "computer_move" | "computer_click" => format!("{}, {}", field("x"), field("y")),
+        "computer_type" => field("text"),
+        "computer_key" => {
+            let mut parts: Vec<String> = args["modifiers"]
+                .as_array()
+                .map(|list| {
+                    list.iter()
+                        .filter_map(|m| m.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            parts.push(field("key"));
+            parts.join("+")
+        }
+        "computer_scroll" => format!("{} {}", field("amount"), args["horizontal"]),
         _ if name.starts_with("mcp__") => args.to_string(),
         _ => args["path"].as_str().map(|p| shown(&resolve(root, p), root)).unwrap_or_default(),
     };
@@ -211,6 +284,26 @@ pub fn approval(name: &str, args: &Value, mode: AccessMode, root: &Path) -> Opti
             let target = Target::new(PermissionKind::Web, [url]);
             Some(("Fetch a web page".into(), url.into(), target, mode == AccessMode::Supervised))
         }
+        // Looking at the screen and driving it are the same permission, named for the screen.
+        "computer_screenshot"
+        | "computer_move"
+        | "computer_click"
+        | "computer_type"
+        | "computer_key"
+        | "computer_scroll" => {
+            let verb = if name == "computer_screenshot" {
+                "Look at"
+            } else {
+                "Use"
+            };
+            let target = Target::new(PermissionKind::Screen, ["screen"]);
+            Some((
+                format!("{verb} the screen"),
+                "the whole screen".into(),
+                target,
+                matches!(mode, AccessMode::Supervised | AccessMode::AutoAcceptEdits),
+            ))
+        }
         _ => None,
     }
 }
@@ -238,6 +331,26 @@ pub fn resolve(root: &Path, path: &str) -> PathBuf {
         }
     }
     out
+}
+
+/// An integer argument.
+fn number(args: &Value, key: &str) -> Result<i32, String> {
+    args[key]
+        .as_i64()
+        .map(|n| n.clamp(i32::MIN as i64, i32::MAX as i64) as i32)
+        .ok_or_else(|| format!("{key} is required"))
+}
+
+/// Takes a screenshot and returns its path, for the model to read as an image.
+fn computer_screenshot() -> Result<String, String> {
+    let dir = crate::skills::config_dir()
+        .ok_or("Patchwork's config folder is not known")?
+        .join("screenshots");
+    let path = crate::computer::screenshot_to_file(&dir)?;
+    Ok(format!(
+        "Screenshot written to {}. Read it with read_file to see the screen.",
+        path.display()
+    ))
 }
 
 /// Runs a file, search, shell, or web tool. Ok carries the result for the model; Err a failure
@@ -285,6 +398,48 @@ pub fn run(name: &str, args: &Value, root: &Path) -> Result<String, String> {
             root,
         ),
         "fetch_url" => fetch_url(&text("url")?),
+        "computer_screenshot" => computer_screenshot(),
+        "computer_move" => computer::perform(&computer::Action::Move {
+            x: number(args, "x")?,
+            y: number(args, "y")?,
+        })
+        .map(|()| "Moved the pointer".to_string()),
+        "computer_click" => {
+            let action = computer::Action::Click {
+                x: number(args, "x")?,
+                y: number(args, "y")?,
+                button: args["button"].as_str().unwrap_or("left").to_string(),
+                double: args["double"] == true,
+            };
+            computer::perform(&action).map(|()| computer::describe(&action))
+        }
+        "computer_type" => {
+            let action = computer::Action::Type {
+                text: text("text")?,
+            };
+            computer::perform(&action).map(|()| computer::describe(&action))
+        }
+        "computer_key" => {
+            let action = computer::Action::Key {
+                key: text("key")?,
+                modifiers: args["modifiers"]
+                    .as_array()
+                    .map(|list| {
+                        list.iter()
+                            .filter_map(|m| m.as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+            };
+            computer::perform(&action).map(|()| computer::describe(&action))
+        }
+        "computer_scroll" => {
+            let action = computer::Action::Scroll {
+                amount: number(args, "amount")?,
+                horizontal: args["horizontal"] == true,
+            };
+            computer::perform(&action).map(|()| computer::describe(&action))
+        }
         other => Err(format!("There is no tool named {other}")),
     }?;
     Ok(cap(result))

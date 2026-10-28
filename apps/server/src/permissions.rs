@@ -299,6 +299,11 @@ pub fn suggest(target: &Target, root: &Path) -> Vec<String> {
                 }
             }
         }
+        PermissionKind::Screen => {
+            for resource in &target.resources {
+                add(resource.clone());
+            }
+        }
         PermissionKind::Command => {
             for line in &target.resources {
                 let (segments, safe) = split_command(line);
@@ -416,6 +421,12 @@ fn units(target: &Target, root: &Path) -> (Vec<Unit>, bool) {
             .map(|r| Unit::Host(host(r)))
             .collect(),
         PermissionKind::Mcp => target
+            .resources
+            .iter()
+            .map(|r| Unit::Tool(r.clone()))
+            .collect(),
+        // The screen is one resource, named `screen`, and a rule either covers it or not.
+        PermissionKind::Screen => target
             .resources
             .iter()
             .map(|r| Unit::Tool(r.clone()))

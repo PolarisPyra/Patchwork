@@ -39,6 +39,7 @@ impl Store {
         .map_err(err)?;
         let settings = load_settings(&conn).map_err(err)?;
         crate::provider::set_agent_paths(&settings.agent_paths);
+        crate::computer::set_enabled(settings.computer_use);
         let mut threads = load_threads(&conn).map_err(err)?;
         // A goal that was being pursued when the app quit is no longer pursued: its agent
         // process ended with the app. It is paused, so it can be resumed rather than shown as active.
@@ -77,6 +78,7 @@ impl Store {
         save_settings(&tx, &next).map_err(err)?;
         tx.commit().map_err(err)?;
         crate::provider::set_agent_paths(&next.agent_paths);
+        crate::computer::set_enabled(next.computer_use);
         inner.settings = next;
         Ok(r)
     }

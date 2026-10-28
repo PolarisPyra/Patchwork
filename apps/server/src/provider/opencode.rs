@@ -455,7 +455,8 @@ fn action(kind: PermissionKind) -> Option<&'static str> {
         PermissionKind::Command => Some("shell"),
         PermissionKind::Folder => Some("external_directory"),
         PermissionKind::Web => Some("webfetch"),
-        PermissionKind::Mcp => None,
+        // OpenCode asks for no screen access; only Patchwork's own agent uses the screen.
+        PermissionKind::Mcp | PermissionKind::Screen => None,
     }
 }
 

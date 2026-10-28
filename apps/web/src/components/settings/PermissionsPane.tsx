@@ -18,7 +18,7 @@ import type {
 } from "~/api";
 import type { UpdateSettings } from "~/app/App";
 import { CHIP_CLASS } from "~/components/chat/ModelPicker";
-import { Segmented, TextField, TokenRow } from "~/components/settings/SettingsDialog";
+import { Segmented, TextField, TokenRow, TokenSwitch } from "~/components/settings/SettingsDialog";
 import Dropdown from "~/components/workspace/Dropdown";
 import {
   defaultsChanged,
@@ -196,6 +196,18 @@ export default function PermissionsPane({
         );
       })}
       <AddRule onAdd={(rule) => changeRules((rs) => [...rs, rule])} />
+
+      <div className={HEADING}>Computer use</div>
+      <TokenRow
+        title="Let the agent use the screen"
+        desc="Adds screenshot, click, type, key and scroll tools to Patchwork's own agent. A screenshot is scaled to 1440 pixels wide. Each use asks here unless a rule above allows the screen."
+      >
+        <TokenSwitch
+          label="Computer use"
+          on={settings.computerUse}
+          onChange={(on) => void updateSettings((s) => ({ ...s, computerUse: on }))}
+        />
+      </TokenRow>
     </>
   );
 }

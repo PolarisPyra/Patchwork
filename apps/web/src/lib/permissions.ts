@@ -16,6 +16,7 @@ export const PERMISSION_KINDS: { kind: PermissionKind; label: string; placeholde
   { kind: "folder", label: "Work outside the folder", placeholder: "~/Downloads" },
   { kind: "web", label: "Use the web", placeholder: "github.com" },
   { kind: "mcp", label: "MCP tools", placeholder: "server" },
+  { kind: "screen", label: "Use the screen", placeholder: "screen" },
 ];
 
 export const kindLabel = (kind: PermissionKind) =>

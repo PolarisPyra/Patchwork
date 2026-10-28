@@ -881,6 +881,8 @@ fn system_prompt(request: &Request, root_dir: &Path) -> String {
     }
     if request.plan {
         prompt.push_str(&format!("\n\n{PLAN_MODE}"));
+    } else if crate::computer::enabled() {
+        prompt.push_str(&format!("\n\n{COMPUTER_USE}"));
     }
     for name in ["AGENTS.md", "CLAUDE.md"] {
         if let Ok(text) = std::fs::read_to_string(root_dir.join(name)) {
@@ -902,6 +904,13 @@ Help with software engineering tasks: fixing bugs, adding features, refactoring,
 - Ask with ask_user only when a decision is genuinely the user's; otherwise make the sensible choice.
 - When a tool is denied, do not retry it; find another way or ask.
 - Be brief. Write in Markdown, and say what you changed and anything left undone when you finish.";
+
+const COMPUTER_USE: &str = "\
+Computer use is on. computer_screenshot writes a PNG of the screen and returns its path; read it \
+with read_file to see the screen. The picture is scaled down to 1440 pixels wide, so multiply a \
+position you see by screenWidth divided by the picture's width before clicking. Take a screenshot \
+before acting, and again after, because the screen only changes when you act. Prefer a tool over \
+the screen whenever one exists. Stop and report when a step needs the user's password.";
 
 const PLAN_MODE: &str = "\
 Plan mode is on: do not change anything. Research with the read-only tools, then call propose_plan \

@@ -48,7 +48,7 @@ pub fn codex_args(spec: &TurnSpec) -> Vec<String> {
             PermissionKind::Command => Some("Bash"),
             PermissionKind::Edit => Some("apply_patch"),
             PermissionKind::Mcp => Some("mcp__.*"),
-            PermissionKind::Folder | PermissionKind::Web => None,
+            PermissionKind::Folder | PermissionKind::Web | PermissionKind::Screen => None,
         })
         .collect();
     if tools.is_empty() || super::mcp::relay_file().is_none() {

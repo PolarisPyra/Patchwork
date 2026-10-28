@@ -31,6 +31,10 @@ regex = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # Exporting the debug logs as one file to send with a bug report.
 zip = { version = "2", default-features = false, features = ["deflate"] }
+# Computer use: a screenshot of each monitor, and the pointer and keyboard under it.
+xcap = { version = "0.9", default-features = false }
+enigo = { version = "0.6" }
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [dev-dependencies]
 criterion = "0.8.2"

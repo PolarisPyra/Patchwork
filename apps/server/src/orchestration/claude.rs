@@ -113,6 +113,8 @@ fn claude_rules(guarded: &Guarded, root: &Path) -> Vec<String> {
         PermissionKind::Web => patterns
             .map(|p| format!("WebFetch(domain:{})", p.trim_start_matches("*.")))
             .collect(),
+        // Claude has no screen tool of its own; Patchwork's rules still decide before it looks.
+        PermissionKind::Screen => Vec::new(),
         PermissionKind::Mcp => patterns
             .map(|p| match p.split_once('/') {
                 Some((server, tool)) => format!("mcp__{server}__{tool}"),
