@@ -73,6 +73,8 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
     let mut has_text = false;
     // Antigravity streams one text block as many deltas; other agents send whole blocks.
     let mut last_was_text = false;
+    // The reply opened for a steer has nothing in it yet, so a steer right after it shares it.
+    let mut steer_reply_empty = false;
     // Tool id → the message it was started in, which a steer may since have moved on from.
     let mut tool_owner: HashMap<String, String> = HashMap::new();
     // The threads of the subagents still running, by the call that started each.
@@ -295,9 +297,12 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                         .lock()
                         .unwrap_or_else(PoisonError::into_inner)
                         .pop_front();
-                    turn.next_segment(&mut unsaved);
-                    segments.push(turn.message_id.clone());
-                    (has_text, last_was_text) = (false, false);
+                    if !steer_reply_empty {
+                        turn.next_segment(&mut unsaved);
+                        segments.push(turn.message_id.clone());
+                        (has_text, last_was_text) = (false, false);
+                        steer_reply_empty = true;
+                    }
                     if ended && !goal_run {
                         turn.close_unless_steered();
                     }
@@ -468,6 +473,7 @@ pub(super) fn ingest(mut turn: Turn, mut child: Child, stdout: ChildStdout, stde
                 }
                 Parsed::SessionLost => session_lost = true,
                 Parsed::Event(mut event) => {
+                    steer_reply_empty = false;
                     if let AgentEvent::Thinking { .. } = &event {
                         turn.stream_thinking(event, &mut unsaved);
                         continue;
