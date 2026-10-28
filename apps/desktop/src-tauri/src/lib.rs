@@ -514,10 +514,16 @@ async fn paste_clipboard_image(server: Srv<'_>) -> Res<Option<Attachment>> {
     let server = server.inner().clone();
     blocking(move || {
         clipboard::image()
-            .map(|(mime, bytes)| server.save_pasted_image_bytes(mime, &bytes))
+            .map(|png| server.save_pasted_image_bytes("image/png", &png))
             .transpose()
     })
     .await?
+}
+
+/// The paths of files and folders copied in a file manager, to attach like dropped ones.
+#[tauri::command]
+async fn clipboard_files() -> Res<Vec<String>> {
+    blocking(clipboard::files).await
 }
 
 /// Copies `text` when the webview's own clipboard refused it.
@@ -1028,6 +1034,7 @@ pub fn run() {
             save_pasted_text,
             clipboard_editor_data,
             paste_clipboard_image,
+            clipboard_files,
             copy_text,
             allow_preview,
             cancel_turn,

@@ -32,6 +32,9 @@ semver = "1"
 minisign-verify = "0.3"
 # The integrated terminal's pseudo-terminals.
 portable-pty = "0.9"
+# Pasted images and copied files, which the webview does not give the page on every system.
+arboard = { version = "3.7", features = ["wayland-data-control"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 wl-clipboard-rs = "0.9"

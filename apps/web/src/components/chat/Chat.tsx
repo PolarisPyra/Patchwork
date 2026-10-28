@@ -133,6 +133,18 @@ function mentionFor(attachment: Attachment, root: string | null): MentionItem {
   };
 }
 
+/** The local path of a file:// URI, such as one a file manager copies. */
+function pathOfFileUri(uri: string): string | null {
+  let path: string;
+  try {
+    path = decodeURIComponent(new URL(uri).pathname);
+  } catch {
+    return null;
+  }
+  // Windows paths come as /C:/…, without the drive's leading slash.
+  return /^\/[A-Za-z]:/.test(path) ? path.slice(1) : path;
+}
+
 function mentions(text: string, file: Attachment, root: string | null) {
   return text.includes(`@${mentionFor(file, root).label}`);
 }
@@ -463,14 +475,23 @@ export default function Chat({
     };
   }, []);
 
-  // Images pasted into the chat are saved to files and go in at the caret, like dropped ones. The
-  // event stops here, so the composer does not also try to paste them as text.
+  // Files and folders copied in a file manager go in like dropped ones, and pasted images are
+  // saved to files and go in at the caret. The event stops here, so the composer does not also
+  // try to paste them as text.
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;
-    async function attachPasted(images: File[]) {
+    async function attachPasted(images: File[], copiedPaths: string[]) {
       const sentKey = keyRef.current;
       try {
+        // Webviews give a pasted file's contents at most, never its path, so the paths are read
+        // from the system clipboard.
+        const clipboardPaths = await api.clipboardFiles();
+        const paths = clipboardPaths.length > 0 ? clipboardPaths : copiedPaths;
+        if (paths.length > 0) {
+          await attach(paths);
+          return;
+        }
         // The Linux webview gives no file for an image copied on its own, such as a screenshot,
         // so the image is read from the system clipboard instead.
         const found =
@@ -497,14 +518,24 @@ export default function Chat({
       }
     }
     function onPaste(event: ClipboardEvent) {
-      const images = Array.from(event.clipboardData?.files ?? []).filter((file) =>
-        file.type.startsWith("image/"),
-      );
+      const files = Array.from(event.clipboardData?.files ?? []);
       const text = event.clipboardData?.getData("text/plain") ?? "";
-      if (images.length > 0 || !text) {
+      // A copy from a file manager lists its files as file:// URIs, which some webviews pass on
+      // only as text.
+      const uris = (event.clipboardData?.getData("text/uri-list") || text)
+        .split(/\r?\n/)
+        .filter((line) => line && !line.startsWith("#"));
+      const copiedPaths =
+        uris.length > 0 && uris.every((line) => line.startsWith("file://"))
+          ? uris.map(pathOfFileUri).filter((path) => path !== null)
+          : [];
+      if (files.length > 0 || copiedPaths.length > 0 || !text) {
         event.preventDefault();
         event.stopPropagation();
-        void attachPasted(images);
+        void attachPasted(
+          files.filter((file) => file.type.startsWith("image/")),
+          copiedPaths,
+        );
         return;
       }
       // A long paste, such as a full log, is attached as a file the agent opens, rather than
