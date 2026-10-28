@@ -3,13 +3,15 @@
 # rules and docs/release.md how it fits into a release.
 #
 #   scripts/changelog.sh hook MSGFILE       The commit-msg hook: a commit that changes the app needs
-#                                           a `Changelog:` paragraph for users, or `Changelog: none`.
+#                                           a `Changelog: <Group>: <text>` paragraph for users, or
+#                                           `Changelog: none`.
 #   scripts/changelog.sh lint               Checks the entry on stdin against the style rules.
-#   scripts/changelog.sh check FILE VERSION Checks a drafted release section for VERSION.
-#   scripts/changelog.sh draft TAG FILE     Drafts TAG's section into FILE from the commits since the
-#                                           last tag, with Claude, unless FILE already exists.
+#   scripts/changelog.sh check FILE VERSION Checks a release section for VERSION.
+#   scripts/changelog.sh draft TAG FILE     Writes TAG's section into FILE from the Changelog:
+#                                           paragraphs since the last tag, unless FILE exists.
 #   scripts/changelog.sh insert FILE VERSION
-#                                           Adds VERSION's section in FILE to the top of CHANGELOG.md.
+#                                           Adds VERSION's section in FILE to the top of CHANGELOG.md,
+#                                           merging in the sections of tags that never published.
 #   scripts/changelog.sh section TAG        Prints TAG's section of CHANGELOG.md.
 set -euo pipefail
 
@@ -19,14 +21,11 @@ cd "$repo_root"
 STYLE=docs/changelog-style.md
 # Changes to these paths are internal and never need an entry. Keep in step with is_app_path.
 INTERNAL_PATHS=(':!.github' ':!scripts' ':!docs' ':!*.md')
-# Left out of the diffs Claude reads: generated and binary files.
-UNREAD_PATHS=(':!*.lock' ':!pnpm-lock.yaml' ':!*.png' ':!*.jpg' ':!*.ico' ':!*.icns' ':!*.svg' ':!assets')
-# Diff lines of one commit Claude reads; the file list always comes in full.
-DIFF_LINES=600
-MODEL="${PATCHWORK_NOTES_MODEL:-claude-opus-5-5}"
-# Drafts and checks, each draft getting the problems the last one had.
-ATTEMPTS=3
+# The groups, in the order a section lists them. A paragraph names one; one that names none (from
+# before groups were required) is Changed.
 SECTIONS=(Added Changed Fixed Removed Security)
+# What a release with only internal changes says.
+NOTHING_NEW="Behind-the-scenes improvements, with nothing new to see."
 # Product and platform names whose capitals the identifier checks would flag.
 NAMES='GitHub|GitLab|AppImage|JavaScript|TypeScript|OpenCode|PowerShell|YouTube|macOS|iOS|iPadOS|LaTeX|DeepSeek|OpenAI|OpenRouter|ChatGPT|WebKit|WebView|Node\.js|Next\.js'
 
@@ -55,6 +54,15 @@ is_none() {
   [[ "$1" =~ ^[Nn][Oo][Nn][Ee]\.?$ ]]
 }
 
+# The group a paragraph names, or nothing.
+group_of() {
+  local group
+  for group in "${SECTIONS[@]}"; do
+    [[ "$1" == "$group: "* ]] && echo "$group" && return
+  done
+  return 0
+}
+
 # Prints what breaks the style rules in one entry, or nothing.
 problems() {
   local text="$1" bare
@@ -74,7 +82,7 @@ problems() {
 }
 
 hook() {
-  local file="$1" msg subject text found
+  local file="$1" msg subject text found group
   msg=$(tr -d '\r' < "$file" | grep -v '^#' || true)
   subject=$(head -n 1 <<< "$msg")
   [[ "$subject" =~ ^(Release\ v|Merge\ |fixup!\ |squash!\ |amend!\ ) ]] && return 0
@@ -91,7 +99,7 @@ hook() {
 This commit changes the app (${app[0]}$([[ ${#app[@]} -gt 1 ]] && echo ", and $((${#app[@]} - 1)) more")),
 so its message needs a paragraph for the changelog, which users read in Settings → Updates:
 
-  Changelog: <what users see or can do now, where, and what is different, in plain words>
+  Changelog: <${SECTIONS[*]// /|}>: <what users see or can do now, where, and what is different>
 
 or, for a change users can't notice, "Changelog: none". The rules are in $STYLE.
 EOF
@@ -99,8 +107,10 @@ EOF
   fi
   text=$(paragraph "$msg")
   is_none "$text" && return 0
+  group=$(group_of "$text")
+  [[ -n "$group" ]] || die "The Changelog: paragraph needs its group first, one of ${SECTIONS[*]}: \"Changelog: Fixed: …\"."
   local issues
-  issues=$(problems "$text")
+  issues=$(problems "${text#"$group: "}")
   if [[ -n "$issues" ]]; then
     {
       echo "The Changelog: paragraph breaks the rules in $STYLE:"
@@ -158,168 +168,73 @@ app_commits() {
     grep -vE '^[0-9a-f]+ Release v' | cut -d' ' -f1 || true
 }
 
-# What Claude reads about each commit.
-describe() {
-  local hash text
-  for hash in "$@"; do
-    text=$(paragraph "$(git show -s --format=%B "$hash")")
-    echo "=== commit ${hash:0:12}"
-    echo "Subject: $(git show -s --format=%s "$hash")"
-    if is_none "$text"; then
-      echo "Changelog: none (its author judged it internal)"
-    elif [[ -n "$text" ]]; then
-      echo "Changelog: $text"
-    else
-      echo "Changelog: (none written)"
-    fi
-    echo "Files:"
-    git show --format= --stat=200 "$hash" -- . "${INTERNAL_PATHS[@]}"
-    echo "Diff:"
-    git show --format= "$hash" -- . "${INTERNAL_PATHS[@]}" "${UNREAD_PATHS[@]}" | head -n "$DIFF_LINES"
-    echo
-  done
-}
-
-# Runs Claude with no tools on the prompt on stdin, and prints its structured output.
-ask() {
-  local system="$1" schema="$2" out
-  out=$(claude -p --model "$MODEL" --output-format json --json-schema "$schema" --tools "" \
-    --strict-mcp-config --disable-slash-commands --no-session-persistence \
-    --system-prompt "$system") || die "claude failed: $out"
-  jq -e '.is_error == false and .structured_output != null' <<< "$out" > /dev/null ||
-    die "claude gave no notes: $(jq -r '.result // .' <<< "$out" | head -c 500)"
-  jq -c .structured_output <<< "$out"
-}
-
-DRAFT_SCHEMA='{"type":"object","additionalProperties":false,"required":["entries","internal"],"properties":{
-  "entries":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["group","text","commits"],"properties":{
-    "group":{"enum":["Added","Changed","Fixed","Removed","Security"]},
-    "text":{"type":"string"},
-    "commits":{"type":"array","minItems":1,"items":{"type":"string"}}}}},
-  "internal":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["commit","reason"],"properties":{
-    "commit":{"type":"string"},"reason":{"type":"string"}}}}}}'
-
-REVIEW_SCHEMA='{"type":"object","additionalProperties":false,"required":["problems"],"properties":{
-  "problems":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["about","problem"],"properties":{
-    "about":{"type":"string"},"problem":{"type":"string"}}}}}}'
-
-# What is wrong with a draft that a script can tell: commits it leaves out or makes up, and entries
-# that break the style rules.
-mechanical() {
-  local draft="$1"
-  shift
-  local want got issues issue text
-  want=$(printf '%s\n' "$@" | cut -c1-12 | sort -u)
-  got=$(jq -r '(.entries[].commits[], .internal[].commit) | .[0:12]' <<< "$draft" | sort -u | sed '/^$/d')
-  comm -23 <(echo "$want") <(echo "$got") | sed 's/^/commit /; s/$/: in neither an entry nor internal/'
-  comm -13 <(echo "$want") <(echo "$got") | sed 's/^/commit /; s/$/: not one of the commits in this release/'
-  while IFS= read -r text; do
-    issues=$(problems "$text")
-    [[ -z "$issues" ]] && continue
-    while IFS= read -r issue; do
-      printf 'entry "%s": %s\n' "$text" "$issue"
-    done <<< "$issues"
-  done < <(jq -r '.entries[].text' <<< "$draft")
-  return 0
-}
-
+# Prints VERSION's section from "group<TAB>entry" lines on stdin: the groups in order, each entry
+# once, and the placeholder only when there is nothing else.
 render() {
-  local draft="$1" version="$2" group
-  echo "## [$version] - $(date +%F)"
-  if [[ $(jq '.entries | length' <<< "$draft") -eq 0 ]]; then
-    printf '\n### Changed\n\n- Behind-the-scenes improvements, with nothing new to see.\n'
-    return
-  fi
+  local version="$1" lines group
+  lines=$(awk -F'\t' '!seen[$0]++')
+  printf '## [%s] - %s\n' "$version" "$(date +%F)"
+  grep -qv $'\t'"$NOTHING_NEW\$" <<< "$lines" && lines=$(grep -v $'\t'"$NOTHING_NEW\$" <<< "$lines")
+  [[ -n "$lines" ]] || lines="Changed"$'\t'"$NOTHING_NEW"
   for group in "${SECTIONS[@]}"; do
-    jq -e --arg g "$group" 'any(.entries[]; .group == $g)' <<< "$draft" > /dev/null || continue
+    grep -q "^$group"$'\t' <<< "$lines" || continue
     printf '\n### %s\n\n' "$group"
-    jq -r --arg g "$group" '.entries[] | select(.group == $g) | "- \(.text)"' <<< "$draft"
+    grep "^$group"$'\t' <<< "$lines" | cut -f2- | sed 's/^/- /'
   done
+}
+
+# A section as "group<TAB>entry" lines.
+entries() {
+  awk '/^### / { group = substr($0, 5); next } /^- / { print group "\t" substr($0, 3) }'
 }
 
 draft() {
   local tag="$1" file="$2" version="${1#v}"
   if [[ -s "$file" ]]; then
-    echo "Using the notes already drafted in $file."
+    echo "Using the notes already written in $file."
     check "$file" "$version"
     return
   fi
-  command -v claude > /dev/null || die "claude is required to draft the release notes."
-  local since
+  local since hash text group
   since=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD) || die "No earlier release tag."
-  local commits=()
-  local hash
-  while IFS= read -r hash; do commits+=("$hash"); done < <(app_commits "$since")
   mkdir -p "$(dirname "$file")"
-  if [[ ${#commits[@]} -eq 0 ]]; then
-    render '{"entries":[],"internal":[]}' "$version" > "$file"
-    return
-  fi
+  while IFS= read -r hash; do
+    text=$(paragraph "$(git show -s --format=%B "$hash")")
+    [[ -z "$text" ]] || is_none "$text" && continue
+    group=$(group_of "$text")
+    printf '%s\t%s\n' "${group:-Changed}" "${text#"${group:+$group: }"}"
+  done < <(app_commits "$since") | render "$version" > "$file"
+  check "$file" "$version"
+}
 
-  local guide context system draft="" problems_found="" attempt review
-  guide=$(cat "$STYLE")
-  context=$(describe "${commits[@]}")
-  system="You write the release notes for Patchwork, a desktop app for working with AI coding agents. \
-Its users read them in the app and on GitHub. Follow this style guide exactly.
-
-$guide"
-  for attempt in $(seq "$ATTEMPTS"); do
-    echo "Drafting the notes for $tag from ${#commits[@]} commits (attempt $attempt of $ATTEMPTS)…" >&2
-    draft=$(ask "$system" "$DRAFT_SCHEMA" << EOF
-Write the notes for Patchwork $version from the commits below, which are every commit since $since that changes the app.
-
-- Each commit has its author's "Changelog:" text for users, when they wrote one. Use it to see what the author meant, but check it against the diff and rewrite it to the style guide.
-- Merge commits that make up one change into one entry, describing the end result.
-- Put every commit in exactly one place: in the "commits" of the entries it contributes to (by its 12-character hash), or in "internal" with a short reason when users can't notice it. A commit whose author wrote "Changelog: none" is internal unless its diff plainly changes something users see.
-- Claim only what the diffs show.
-$([[ -n "$problems_found" ]] && printf '\nYour last draft had these problems. Fix all of them:\n%s\n\nYour last draft:\n%s\n' "$problems_found" "$draft")
-
-$context
-EOF
-    )
-    problems_found=$(mechanical "$draft" "${commits[@]}")
-    if [[ -z "$problems_found" ]]; then
-      echo "Checking the draft against the diffs…" >&2
-      review=$(ask "You check release notes before they reach Patchwork's paying users. Be strict but report only real problems.
-
-$guide" "$REVIEW_SCHEMA" << EOF
-Here are draft notes for Patchwork $version and the commits they come from. Report each real problem:
-
-- An entry claims something the diffs don't show, or gets a detail wrong.
-- An entry is vague: a user couldn't tell what changed or where.
-- An entry breaks the style guide, or is in the wrong group.
-- A commit listed as internal changes something users can see.
-- A user-visible change in the commits has no entry.
-
-Return an empty list when there are none.
-
-Draft:
-$(jq . <<< "$draft")
-
-$context
-EOF
-      )
-      problems_found=$(jq -r '.problems[] | "\(.about): \(.problem)"' <<< "$review")
-    fi
-    if [[ -z "$problems_found" ]]; then
-      render "$draft" "$version" > "$file"
-      return
-    fi
-    echo "The draft had problems:" >&2
-    sed 's/^/  - /' <<< "$problems_found" >&2
-  done
-  jq . <<< "$draft" > "$file.json"
-  die "No draft passed the checks in $ATTEMPTS attempts. The last one is in $file.json. Write the \
-section into $file yourself (see $STYLE) and run the release again."
+# The version of the newest release that published, from its GitHub release, which the Release
+# workflow creates only once every file is up. Nothing when it can't be told.
+published() {
+  local tag
+  tag=$(gh release view --json tagName -q .tagName 2> /dev/null) || return 0
+  echo "${tag#v}"
 }
 
 insert() {
-  local file="$1"
-  check "$file" "$2"
-  local header body
+  local file="$1" version="${2#v}" latest header superseded rest
+  check "$file" "$version"
+  latest=$(published)
   header=$(awk '/^## \[/ { exit } { print }' CHANGELOG.md)
-  body=$(awk 'found || /^## \[/ { found = 1; print }' CHANGELOG.md)
-  printf '%s\n\n%s\n\n%s\n' "$header" "$(cat "$file")" "$body" > CHANGELOG.md
+  # Sections above the newest published release are of tags whose build failed, so users never got
+  # them. Their entries go into this one, and they go.
+  if [[ -n "$latest" ]] && grep -q "^## \[$latest\]" CHANGELOG.md; then
+    superseded=$(awk -v head="## [$latest]" 'index($0, head) == 1 { exit } found || /^## \[/ { found = 1; print }' CHANGELOG.md)
+    rest=$(awk -v head="## [$latest]" 'found || index($0, head) == 1 { found = 1; print }' CHANGELOG.md)
+  else
+    superseded=""
+    rest=$(awk 'found || /^## \[/ { found = 1; print }' CHANGELOG.md)
+  fi
+  if [[ -n "$superseded" ]]; then
+    { entries < "$file"; entries <<< "$superseded"; } | render "$version" > "$file.merged"
+    mv "$file.merged" "$file"
+    check "$file" "$version"
+  fi
+  printf '%s\n\n%s\n\n%s\n' "$header" "$(cat "$file")" "$rest" > CHANGELOG.md
 }
 
 section() {

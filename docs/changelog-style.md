@@ -2,8 +2,8 @@
 
 `CHANGELOG.md` is for Patchwork's users. The app shows it in Settings → Updates, before and after
 an update, and it is the text of each GitHub release. `scripts/changelog.sh` checks every entry
-against the rules below, and `scripts/release.sh` gives this file to the model that drafts each
-release's notes.
+against the rules below. Each entry is a commit's `Changelog:` paragraph, word for word, so it is
+written for users when the commit is.
 
 ## Each entry
 
@@ -31,7 +31,8 @@ release's notes.
 
 ## Groups
 
-Each entry goes in one group, in this order:
+A paragraph names its group first, as in `Changelog: Fixed: …`. A release lists the groups in
+this order:
 
 | Group | For |
 | --- | --- |
@@ -41,8 +42,9 @@ Each entry goes in one group, in this order:
 | Removed | Something that is gone |
 | Security | A fix that protects the user's data or machine |
 
-## Merging
+## One change, several commits
 
 A release often has several commits for one change: the change, a follow-up, a fix for a bug the
-change itself introduced. They become one entry describing the end result. A fix for a bug that
-never reached a release is not a Fixed entry.
+change itself introduced. Nothing merges them, so give the change its entry once, describing the end
+result, and give the rest `Changelog: none`. A fix for a bug that never reached a release is not a
+Fixed entry.

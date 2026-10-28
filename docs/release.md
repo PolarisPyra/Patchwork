@@ -28,9 +28,11 @@ These files do all of it:
 | File | What it does |
 | --- | --- |
 | `scripts/release.sh` | Cuts the release on your machine, and does the build and publish steps in CI |
-| `.github/workflows/release.yml` | Sets up each runner's tools and calls `scripts/release.sh` |
-| `scripts/changelog.sh` | Checks commit messages, drafts and checks each release's notes, and reads and writes `CHANGELOG.md` |
-| `docs/changelog-style.md` | The rules for changelog entries, for people and for the model that drafts them |
+| `.github/workflows/release.yml` | Builds each platform with `scripts/release.sh`, and publishes a tag |
+| `.github/workflows/ci.yml` | Checks every push to `main` and every pull request |
+| `.github/actions/setup` | The runner setup both workflows share: Linux packages, Rust, pnpm, Node |
+| `scripts/changelog.sh` | Checks commit messages, writes each release's notes from them, and reads and writes `CHANGELOG.md` |
+| `docs/changelog-style.md` | The rules for changelog entries |
 
 `scripts/release.sh --help` lists its commands.
 
@@ -64,19 +66,19 @@ the groups Added, Changed, Fixed, Removed, and Security, and the rules in
 
 Notes are written in two steps.
 
-**1. At commit.** Every commit that changes the app has a paragraph for users in its message, or
-`Changelog: none` when users can't notice the change:
+**1. At commit.** Every commit that changes the app has a paragraph for users in its message,
+starting with its group, or `Changelog: none` when users can't notice the change:
 
 ```
 Use the custom spinner everywhere
 
-Changelog: Every loading indicator now uses the steady spinner from the thread list: plan steps,
+Changelog: Changed: Every loading indicator now uses the steady spinner from the thread list: plan steps,
 background tasks, the tasks badge, steps in a reply, plans loading, and the setup screens for
 agents and imports. The old one rotated and looked like it shook.
 ```
 
 The `commit-msg` hook in `scripts/hooks/` turns down a commit that changes the app without one,
-and one that breaks the style rules, so the author fixes it while the change is fresh. A commit
+one without a group, and one that breaks the style rules, so the author fixes it while the change is fresh. A commit
 that only touches `.github/`, `scripts/`, `docs/`, or `*.md` is internal and needs none.
 `pnpm install` turns the hook on (`git config core.hooksPath scripts/hooks`).
 
@@ -85,24 +87,21 @@ call. To push on purpose, set `PATCHWORK_PUSH=1` or pass `--no-verify`; a push f
 `scripts/release.sh` sets `PATCHWORK_PUSH=1` itself, so a release still pushes in one step once the
 user has agreed to it.
 
-**2. At release.** `scripts/release.sh` drafts the release's section with Claude (the `claude`
-CLI, signed in; `PATCHWORK_NOTES_MODEL` picks the model, Opus by default). Claude reads every app
-commit since the last tag, its `Changelog:` text, and its diff, then:
+**2. At release.** `scripts/release.sh` writes the release's section from the `Changelog:`
+paragraphs of the app commits since the last tag, each under its group, each entry once. A
+paragraph from before groups were required goes under Changed. A release with only internal
+changes says so in one line. The notes are exactly what the commits say, so write a feature's
+follow-up commits' paragraphs to read as one change, or as `Changelog: none` for a fix to a bug
+that never shipped.
 
-- merges commits that make up one change into one entry, and drops fixes for bugs that never
-  shipped;
-- accounts for every commit, in an entry or as internal with a reason.
+A tag whose build failed never reached users, yet its section is in `CHANGELOG.md`. The next
+release merges every such section, the ones above the newest published release, into its own and
+drops them, so its notes cover everything since the last version users have. The newest published
+release is the newest GitHub release, which the Release workflow creates only once every file is up.
 
-Before the draft is used, a script checks that every commit is accounted for and that no entry
-names a file, code, or a pixel size, and a second Claude pass checks each entry against the diffs
-for wrong claims, vague wording, and user-visible changes left out. A failed check sends the
-problems back for another draft, three times at most; then the release stops and keeps the last
-draft for you to fix by hand. A draft takes a minute or two.
-
-The draft waits in `.release-notes/<tag>.md` (ignored by git) until the release is pushed, so
-running the release again reuses it. To change the notes before releasing, edit or delete that
-file and run the release again. Once the draft passes its checks, the release goes ahead without
-asking.
+The notes wait in `.release-notes/<tag>.md` (ignored by git) until the release is pushed. To change
+them before releasing, edit that file and run the release again; it is used as it is, once it
+passes the style checks.
 
 **Fixing notes after a release.** `CHANGELOG.md` is the source. Edit the release's section, commit
 it, and run `scripts/release.sh notes 0.2.0` to publish it to the GitHub release, and to
@@ -117,22 +116,30 @@ From a clean `main` that is up to date with `origin/main`:
 pnpm release 0.2.0
 ```
 
-It needs `git`, `pnpm`, `cargo`, `gh` (signed in), `jq`, `curl`, and `claude` (signed in). The
-script:
+It needs `git`, `pnpm`, `cargo`, `gh` (signed in), `jq`, and `curl`. The script:
 
 1. Checks the version, that `main` is clean and up to date, that the tag is new, and that the repo
    has the four secrets the workflow needs (see [Secrets](#secrets)).
-2. Runs `pnpm typecheck`, `pnpm format:check`, `cargo clippy --workspace --all-targets -- -D warnings`,
-   and `cargo test --workspace`.
-3. Drafts and checks the release notes (see [Changelog](#changelog)) and prints them. Nothing is
-   written before they pass.
-4. Writes the version, adds the notes to the top of `CHANGELOG.md`, commits both as
-   `Release v0.2.0`, creates the annotated tag, and pushes `main` and the tag. It asks no questions.
+2. Runs the CI workflow's checks, `pnpm check` and `cargo test --workspace`, and stops if they
+   change a file, such as wire types that were not regenerated.
+3. Writes the release notes (see [Changelog](#changelog)), checks them, and prints them.
+4. Pushes commits not on `origin` yet, writes the version, adds the notes to the top of
+   `CHANGELOG.md`, commits both as `Release v0.2.0`, creates the annotated tag, and pushes `main` and
+   the tag. It asks no questions.
 5. Prints the link to the Release workflow's run and ends. The build carries on on GitHub.
 
 To follow the build, run `scripts/release.sh watch 0.2.0`. It waits for the run to end, stops with
 the failed jobs' errors if it fails, then checks that `latest.json` names the new version and
 prints the download links. Ctrl-C stops only the watching, not the build.
+
+## The CI workflow
+
+`.github/workflows/ci.yml` checks every push to `main` and every pull request, on the
+`ubuntu-22.04` runner the AppImage is built on: it builds the web app, runs `pnpm check` and
+`cargo test --workspace`, and fails if the generated wire types differ from the committed ones.
+These are the checks `scripts/release.sh` runs before a release, so a release starts from a commit
+that already passed them, and a Linux build problem shows on the push that caused it. Its Rust cache
+is saved only from `main`. A newer push to the same branch cancels an older run.
 
 ## The Release workflow
 
@@ -165,7 +172,8 @@ Every action is pinned to a commit, with the version it was in a comment, so a m
 can't change what runs. To update one, look up the commit of its new release and replace both.
 
 To check the build without releasing, run the workflow by hand from the Actions tab
-(**Run workflow**). It builds the current version on all three platforms and publishes nothing.
+(**Run workflow**). It builds all three platforms and publishes nothing, even when run on a tag:
+only a pushed tag uploads files or creates a release.
 
 ### Caches
 
@@ -193,8 +201,9 @@ A private repo gets limited Actions resources on the free plan, so the workflow 
 - **Minutes.** The free plan has 2,000 a month. Windows minutes count twice and macOS minutes ten
   times. Without caches, v0.10.16 took about 13 minutes on Linux, 17 on Windows, and 2 on macOS,
   so about 70 counted minutes. A change to the Rust dependencies costs one cache build of Linux and
-  Windows. Each job has a timeout (macOS 30 minutes, Linux and Windows 45, release 10), and a
-  second run for the same ref cancels the first.
+  Windows. Each job has a timeout (macOS 30 minutes, Linux and Windows 45, release 10). A second
+  run for the same ref waits for the first, so a release is never stopped halfway through
+  publishing.
 
 Check usage at github.com → Settings → Billing and plans.
 
@@ -289,7 +298,8 @@ On Linux, the AppImage runs after `chmod +x Patchwork_amd64.AppImage`. Windows u
 
 - **The workflow failed.** Read the errors the script printed, or `gh run view <id> --log-failed`.
   Fix the cause on `main` and release the next patch version. Never reuse, move, or delete a pushed
-  tag.
+  tag. The next release's notes take in the failed one's section (see [Changelog](#changelog)), so
+  nothing it said is lost. To try a fix to the build first, run the workflow by hand.
 - **A release went out broken.** Run `scripts/release.sh pull X.Y.Z` with `BUNNY_STORAGE_PASSWORD`
   and `BUNNY_API_KEY` set. It points `latest.json` back at the release before X.Y.Z, using the copy
   each release keeps in its own folder, so copies that haven't updated stop being offered it. Copies

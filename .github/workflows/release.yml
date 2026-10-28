@@ -1,14 +1,17 @@
 name: Release
 
 # Builds the Linux AppImage, the Windows installer, and the macOS (Apple silicon) disk image and app
-# bundle when a version tag (v0.1.0, v0.2.0, ...) is pushed, publishes them to
-# updates.patchworkeditor.com, and creates a GitHub release with the notes. scripts/release.sh does
-# the work. docs/release.md explains it, including how it keeps to a private repo's limits.
+# bundle for a version tag (v0.1.0, v0.2.0, ...), publishes them to updates.patchworkeditor.com,
+# and creates the GitHub release with the tag's notes. scripts/release.sh does the work, and
+# docs/release.md explains it.
+#
+# Run it by hand (Actions → Release → Run workflow) to build every platform without publishing
+# anything, to try a change to the build before tagging. Only a pushed tag publishes.
 #
 # A push to main that changes the Rust dependencies builds Linux and Windows without publishing,
 # only to save their dependency caches: a tag's run can restore caches saved on main, but not ones
-# saved by another tag. A release commit changes only the version in tauri.conf.json and the
-# package.json files, never a Cargo file, so pushing it to main with its tag starts only the tag's run.
+# saved by another tag, and a cold build costs about 70 of the private repo's counted minutes. A
+# release commit changes no Cargo file, so pushing it with its tag starts only the tag's run.
 #
 # Actions are pinned to commits, so a moved tag can't change what runs next to the secrets. The
 # comment after each names the version it was.
@@ -30,20 +33,20 @@ on:
 permissions:
   contents: read
 
-# A second run for the same ref would build and upload the same files again.
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
-  # Pinned, because the dependency caches are only reused by the same compiler. Changing it here
-  # rebuilds them on the next push to main.
+  # Pinned: a cache is only reused by the same compiler, and the CI workflow checks with this one.
+  # Raising it rebuilds the caches on the next push to main that changes a Cargo file.
   RUST_TOOLCHAIN: "1.99.0"
+  PUBLISH: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
 
 jobs:
   appimage:
-    # Build on the oldest Ubuntu runner still available so the AppImage links
-    # against an older glibc and runs on newer distributions too.
+    # Built on the oldest Ubuntu runner still available, so the AppImage links against an older
+    # glibc and runs on newer distributions too.
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     outputs:
@@ -53,15 +56,6 @@ jobs:
       APPIMAGE_EXTRACT_AND_RUN: 1
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-
-      # The runner's Azure apt mirror is sometimes throttled (55 MB once took 20 minutes), so
-      # drop it from the mirror list and use archive.ubuntu.com directly.
-      - name: Install Tauri Linux dependencies
-        run: |
-          sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
-          sudo apt-get update
-          sudo apt-get install -y -o Acquire::Retries=3 build-essential file libayatana-appindicator3-dev libfuse2 \
-            librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
 
       - uses: ./.github/actions/setup
         with:
@@ -77,7 +71,7 @@ jobs:
 
       - name: Upload
         id: upload
-        if: github.ref_type == 'tag'
+        if: env.PUBLISH == 'true'
         env:
           BUNNY_STORAGE_PASSWORD: ${{ secrets.BUNNY_STORAGE_PASSWORD }}
         run: scripts/release.sh ci-upload linux
@@ -122,7 +116,7 @@ jobs:
 
       - name: Upload
         id: upload
-        if: github.ref_type == 'tag'
+        if: env.PUBLISH == 'true'
         working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
         env:
           BUNNY_STORAGE_PASSWORD: ${{ secrets.BUNNY_STORAGE_PASSWORD }}
@@ -130,8 +124,8 @@ jobs:
 
   macos:
     # macos-14 runs on Apple silicon, so the build is native arm64. Its minutes count ten times
-    # against the private repo's allowance, so its timeout is the tightest, and it builds only for
-    # a release: its build is quick without a cache.
+    # against the private repo's allowance, so its timeout is the tightest, and it builds only for a
+    # release or a run by hand: its build is quick without a cache.
     runs-on: macos-14
     timeout-minutes: 30
     if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
@@ -149,7 +143,7 @@ jobs:
 
       - name: Upload
         id: upload
-        if: github.ref_type == 'tag'
+        if: env.PUBLISH == 'true'
         env:
           BUNNY_STORAGE_PASSWORD: ${{ secrets.BUNNY_STORAGE_PASSWORD }}
         run: scripts/release.sh ci-upload macos
@@ -159,7 +153,7 @@ jobs:
   # checks the signature against the key built into the app, and only then publishes latest.json.
   release:
     needs: [appimage, windows, macos]
-    if: github.ref_type == 'tag'
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

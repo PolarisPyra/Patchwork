@@ -3,12 +3,13 @@
 # (.github/workflows/release.yml). docs/release.md explains how it all fits together.
 #
 # On your machine:
-#   scripts/release.sh X.Y.Z            Cut a release, with no questions asked: check, draft and
-#                                       check the notes with Claude, set the version, add the
-#                                       notes to CHANGELOG.md, commit, tag, and push, then print
-#                                       the build's link and end. It pushes on purpose, so it turns
-#                                       off the pre-push hook that otherwise stops a push nobody
-#                                       asked for; run it only when a release was asked for.
+#   scripts/release.sh X.Y.Z            Cut a release, with no questions asked: check, write the
+#                                       notes from the commits' Changelog: paragraphs, set the
+#                                       version, add the notes to CHANGELOG.md, commit, tag, and
+#                                       push, then print the build's link and end. It pushes on
+#                                       purpose, so it turns off the pre-push hook that otherwise
+#                                       stops a push nobody asked for; run it only when a release
+#                                       was asked for.
 #   scripts/release.sh watch X.Y.Z      Follow X.Y.Z's build to the end, then check that
 #                                       latest.json names it.
 #   scripts/release.sh version X.Y.Z    Write a version into every file that names it.
@@ -56,8 +57,8 @@ check_version() {
 }
 
 # Writes the version into the package.json files and the Tauri config, which the app shows and the
-# installers use; the Rust crates read it from the Tauri config (apps/server/build.rs). A release
-# leaves Cargo.toml and Cargo.lock alone, so its push to main does not start a cache build.
+# installers use; the Rust crates read it from the Tauri config (apps/server/build.rs), so a release
+# leaves Cargo.toml and Cargo.lock alone.
 set_version() {
   local version="$1" file
   check_version "$version"
@@ -81,7 +82,7 @@ cut_release() {
 
   step "Checking the repo"
   local tool secret
-  for tool in git pnpm cargo gh jq curl claude; do
+  for tool in git pnpm cargo gh jq curl; do
     command -v "$tool" > /dev/null || die "$tool is required."
   done
   gh auth status > /dev/null 2>&1 || die "gh is not signed in. Run gh auth login."
@@ -99,13 +100,13 @@ cut_release() {
   echo "main is clean and up to date, and the workflow's secrets are set."
 
   step "Checking the web app and the Rust crates"
-  pnpm typecheck
-  pnpm format:check
-  cargo clippy --workspace --all-targets -- -D warnings
+  # The same checks as the CI workflow. They regenerate the wire types, which must already be committed.
+  pnpm check
   cargo test --workspace
+  [[ -z "$(git status --porcelain)" ]] || die "pnpm check changed files. Commit them, then release again."
 
   step "Release notes for $tag"
-  # Kept until the release is pushed, so running it again reuses them rather than drafting anew.
+  # Kept until the release is pushed, so an edit to it, or a second run, is used as it is.
   local notes=".release-notes/$tag.md"
   scripts/changelog.sh draft "$tag" "$notes"
   echo
@@ -114,14 +115,11 @@ cut_release() {
   scripts/changelog.sh check "$notes" "$version"
 
   step "Tagging $tag"
-  # Commits not on origin yet go up on their own first. GitHub matches the workflow's paths against
-  # every commit in a push, so one that changes a Cargo file would otherwise make the release's push
-  # to main start a run of its own. The release commit changes none, so its push starts only the
-  # tag's run. A pushed commit that does change a Cargo file starts its cache build under its own
-  # name, as any push of it would.
+  # This script exists to release, so its pushes are intended: it lifts the pre-push guard that stops
+  # a push nobody asked for, for these two commands only. Commits not on origin yet go up on their
+  # own first: GitHub matches the Release workflow's paths against every commit in a push, so one
+  # that changes a Cargo file would otherwise start a cache build beside the tag's run.
   if [[ -n "$(git rev-list origin/main..HEAD)" ]]; then
-    # This script exists to release, so its pushes are intended: it lifts the pre-push guard that
-    # stops a push nobody asked for, for these two commands only.
     PATCHWORK_PUSH=1 git push origin main
   fi
   set_version "$version"
@@ -131,7 +129,7 @@ cut_release() {
   git commit -m "Release $tag"
   git tag -a "$tag" -m "Patchwork $version"
   PATCHWORK_PUSH=1 git push origin main "$tag"
-  rm -f "$notes" "$notes.json"
+  rm -f "$notes"
 
   # The build runs on GitHub from here; `scripts/release.sh watch` follows it.
   local run=""
