@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.26] - 2026-10-27
+
+### Changed
+
+- An image you paste into the chat box now keeps the name it was copied with, such as a screenshot's file name, the same as when you drag it in. Before, every pasted image was called "Pasted image". On Wayland, this also covers images from apps like KDE's screenshot tool that suggest a file name when you copy.
+
 ## [0.10.25] - 2026-10-27
 
 ### Added
