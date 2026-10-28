@@ -507,6 +507,19 @@ fn clipboard_editor_data() -> Option<String> {
     clipboard::editor_data()
 }
 
+/// Saves the system clipboard's image as an attachment, for a paste the webview gave no file.
+/// Returns None when the clipboard holds no image.
+#[tauri::command]
+async fn paste_clipboard_image(server: Srv<'_>) -> Res<Option<Attachment>> {
+    let server = server.inner().clone();
+    blocking(move || {
+        clipboard::image()
+            .map(|(mime, bytes)| server.save_pasted_image_bytes(mime, &bytes))
+            .transpose()
+    })
+    .await?
+}
+
 /// Copies `text` when the webview's own clipboard refused it.
 #[tauri::command]
 async fn copy_text(text: String) -> Res<()> {
@@ -1014,6 +1027,7 @@ pub fn run() {
             save_pasted_image,
             save_pasted_text,
             clipboard_editor_data,
+            paste_clipboard_image,
             copy_text,
             allow_preview,
             cancel_turn,

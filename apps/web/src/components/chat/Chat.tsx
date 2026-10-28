@@ -471,9 +471,15 @@ export default function Chat({
     async function attachPasted(images: File[]) {
       const sentKey = keyRef.current;
       try {
-        const found = await Promise.all(
-          images.map(async (image) => api.savePastedImage(image.type, await base64Of(image))),
-        );
+        // The Linux webview gives no file for an image copied on its own, such as a screenshot,
+        // so the image is read from the system clipboard instead.
+        const found =
+          images.length > 0
+            ? await Promise.all(
+                images.map(async (image) => api.savePastedImage(image.type, await base64Of(image))),
+              )
+            : [await api.pasteClipboardImage()].filter((image) => image !== null);
+        if (found.length === 0) return;
         const caret = dropMentions.current?.(null);
         if (caret) caret(found.map((a) => mentionFor(a, null)));
         else setPending((prev) => ({ ...prev, [sentKey]: [...(prev[sentKey] ?? []), ...found] }));
@@ -494,7 +500,8 @@ export default function Chat({
       const images = Array.from(event.clipboardData?.files ?? []).filter((file) =>
         file.type.startsWith("image/"),
       );
-      if (images.length > 0) {
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      if (images.length > 0 || !text) {
         event.preventDefault();
         event.stopPropagation();
         void attachPasted(images);
@@ -502,7 +509,6 @@ export default function Chat({
       }
       // A long paste, such as a full log, is attached as a file the agent opens, rather than
       // filling the composer.
-      const text = event.clipboardData?.getData("text/plain") ?? "";
       const inComposer = event.target instanceof Element && event.target.closest(".ProseMirror");
       if (!inComposer || text.trim().length < PASTE_ATTACH_CHARS) return;
       event.preventDefault();

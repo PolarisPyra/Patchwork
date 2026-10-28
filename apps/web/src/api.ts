@@ -955,6 +955,8 @@ export const api = {
   /** Saves a pasted image; `data` is the file's bytes, base64-encoded. */
   savePastedImage: (mimeType: string, data: string) =>
     invoke<Attachment>("save_pasted_image", { mimeType, data }),
+  /** Saves the system clipboard's image to attach, or null when it holds none. */
+  pasteClipboardImage: () => invoke<Attachment | null>("paste_clipboard_image"),
   /** The clipboard copy's VS Code editor metadata (JSON), or null when it has none. */
   clipboardEditorData: () => invoke<string | null>("clipboard_editor_data"),
   /** Copies text through the system clipboard, for when the webview refuses to. */

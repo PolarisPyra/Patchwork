@@ -423,6 +423,14 @@ impl Server {
     /// attachment like a dropped image.
     pub fn save_pasted_image(&self, mime_type: &str, data: &str) -> Res<Attachment> {
         use base64::Engine;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(data)
+            .map_err(|e| format!("Pasted image is not valid base64: {e}"))?;
+        self.save_pasted_image_bytes(mime_type, &bytes)
+    }
+
+    /// Saves a pasted image's raw bytes as a file, and returns it as an attachment.
+    pub fn save_pasted_image_bytes(&self, mime_type: &str, bytes: &[u8]) -> Res<Attachment> {
         let ext = match mime_type {
             "image/png" => "png",
             "image/jpeg" => "jpg",
@@ -430,9 +438,6 @@ impl Server {
             "image/webp" => "webp",
             _ => return Err(format!("Can't attach a {mime_type} image")),
         };
-        let bytes = base64::engine::general_purpose::STANDARD
-            .decode(data)
-            .map_err(|e| format!("Pasted image is not valid base64: {e}"))?;
         std::fs::create_dir_all(&self.pasted_dir).map_err(|e| e.to_string())?;
         let path = self.pasted_dir.join(format!("{}.{ext}", new_id()));
         std::fs::write(&path, bytes).map_err(|e| e.to_string())?;

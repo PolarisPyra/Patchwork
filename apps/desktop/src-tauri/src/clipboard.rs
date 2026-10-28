@@ -26,6 +26,33 @@ pub fn editor_data() -> Option<String> {
     None
 }
 
+/// The clipboard's image as its MIME type and bytes, or None when it holds none. The webview on
+/// Linux gives a paste no file for an image copied on its own, such as a screenshot.
+#[cfg(target_os = "linux")]
+pub fn image() -> Option<(&'static str, Vec<u8>)> {
+    use std::io::Read;
+    use wl_clipboard_rs::paste::{ClipboardType, MimeType, Seat, get_contents, get_mime_types};
+
+    let types = get_mime_types(ClipboardType::Regular, Seat::Unspecified).ok()?;
+    let mime = ["image/png", "image/jpeg", "image/webp", "image/gif"]
+        .into_iter()
+        .find(|mime| types.contains(*mime))?;
+    let (mut pipe, _) = get_contents(
+        ClipboardType::Regular,
+        Seat::Unspecified,
+        MimeType::Specific(mime),
+    )
+    .ok()?;
+    let mut bytes = Vec::new();
+    pipe.read_to_end(&mut bytes).ok()?;
+    Some((mime, bytes))
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn image() -> Option<(&'static str, Vec<u8>)> {
+    None
+}
+
 /// Puts `text` on the system clipboard, for a copy the webview refused: its clipboard API wants a
 /// focused page and a fresh click, which a click that only brings the window forward is not. The
 /// copy is served from a background thread until something else is copied.
