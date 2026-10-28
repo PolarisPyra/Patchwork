@@ -494,9 +494,14 @@ pub fn fetch_models(query: ModelsQuery) -> Result<Vec<ApiModel>, String> {
     let list = body["data"]
         .as_array()
         .or_else(|| body["models"].as_array());
+    let Some(list) = list else {
+        return Err(format!(
+            "{base}/models returned no model list: {} Local servers such as LM Studio serve models under /v1; check the base URL.",
+            super::api::error_text(0, &body, &text)
+        ));
+    };
     let mut models: Vec<ApiModel> = list
-        .into_iter()
-        .flatten()
+        .iter()
         .filter_map(|m| {
             let id = m["id"].as_str().or_else(|| m["name"].as_str())?.to_string();
             Some(ApiModel { id, name: None })
