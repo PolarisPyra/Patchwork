@@ -1,8 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
+  ArrowClockwiseIcon,
+  CalendarBlankIcon,
+  ChatCircleIcon,
   ClockIcon,
   FolderSimpleIcon,
   MagnifyingGlassIcon,
+  PencilSimpleIcon,
   PlayIcon,
   PlusIcon,
   TrashIcon,
@@ -19,7 +23,7 @@ import {
 } from "~/api";
 import type { UpdateSettings } from "~/app/App";
 import { INPUT, chip } from "~/components/settings/McpServersPane";
-import { TokenRow, TokenSwitch } from "~/components/settings/SettingsDialog";
+import { TokenSwitch } from "~/components/settings/SettingsDialog";
 import { AGENT_KINDS, errorText } from "~/lib/util";
 
 /**
@@ -47,6 +51,8 @@ const DAYS: { day: Weekday; label: string }[] = [
 const SELECT =
   "h-7 rounded-[var(--radius-sm)] border border-border-strong bg-editor px-2 text-[length:var(--fs-sm)] text-fg";
 const TEXTAREA = `${INPUT} h-auto min-h-[70px] w-full resize-y py-1.5`;
+const RELATIVE_DAY = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+const DAY_MS = 86_400_000;
 
 /** What a schedule says in a list row, e.g. `Weekdays at 09:00`. */
 export function describeSchedule(task: ScheduledTask): string {
@@ -67,14 +73,22 @@ export function describeSchedule(task: ScheduledTask): string {
   }
 }
 
-/** When a task last and next runs, in the reader's own time. */
-function when(at: number | null): string {
+/** The local midnight that starts the day of a Unix-millisecond time. */
+function startOfDay(at: number): number {
+  const d = new Date(at);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+/** When a task last or next runs, in the reader's own time: `today 09:00`, `tomorrow 09:00`, `Tue 09:00`. */
+function whenLabel(at: number | null): string {
   if (at === null) return "not yet";
-  return new Date(at).toLocaleString(undefined, {
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const days = Math.round((startOfDay(at) - startOfDay(Date.now())) / DAY_MS);
+  const day =
+    Math.abs(days) <= 1
+      ? RELATIVE_DAY.format(days, "day")
+      : new Date(at).toLocaleDateString(undefined, { weekday: "short" });
+  const time = new Date(at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return `${day} ${time}`;
 }
 
 const OUTCOME: Record<ScheduledRun["outcome"], { verb: string; dot: string }> = {
@@ -87,25 +101,24 @@ const OUTCOME: Record<ScheduledRun["outcome"], { verb: string; dot: string }> = 
 function RunHistory({ runs }: { runs: ScheduledRun[] }) {
   const newest = runs[0];
   if (!newest) {
-    return <div className="text-[length:var(--fs-xs)] text-fg-subtle">Has not run yet</div>;
+    return <div>Has not run yet</div>;
   }
   const title = runs
     .map((r) =>
-      [when(r.at), OUTCOME[r.outcome].verb.toLowerCase(), r.detail].filter(Boolean).join(" · "),
+      [whenLabel(r.at), OUTCOME[r.outcome].verb.toLowerCase(), r.detail]
+        .filter(Boolean)
+        .join(" · "),
     )
     .join("\n");
   return (
-    <div
-      className="flex min-w-0 items-center gap-1.5 text-[length:var(--fs-xs)] text-fg-subtle"
-      title={title}
-    >
+    <div className="flex min-w-0 items-center gap-1.5" title={title}>
       <span className="flex flex-none items-center gap-0.5">
         {[...runs].reverse().map((r, i) => (
           <span key={i} className={`size-1.5 rounded-full ${OUTCOME[r.outcome].dot}`} />
         ))}
       </span>
       <span className="truncate">
-        {OUTCOME[newest.outcome].verb} {when(newest.at)} · {runs.length} recent{" "}
+        {OUTCOME[newest.outcome].verb} {whenLabel(newest.at)} · {runs.length} recent{" "}
         {runs.length === 1 ? "run" : "runs"}
       </span>
     </div>
@@ -177,7 +190,7 @@ export default function ScheduledPane({
 
   return (
     <>
-      <div className="flex items-center gap-1.5 pb-3">
+      <div className="flex items-center gap-2 pb-3">
         <button className="btn" onClick={() => setEditing(blank(defaultAgent))}>
           <PlusIcon size={13} />
           New task
@@ -185,62 +198,109 @@ export default function ScheduledPane({
         <span className="text-[length:var(--fs-sm)] text-fg-muted">
           Tasks run while Patchwork is open.
         </span>
+        <button
+          className="btn ml-auto"
+          onClick={() => run(async () => setTasks(await api.listScheduledTasks()))}
+        >
+          <ArrowClockwiseIcon size={13} />
+          Refresh
+        </button>
       </div>
 
       {tasks && tasks.length > 0 && (
-        <div className="divide-y divide-border overflow-hidden rounded-[var(--radius-md)] border border-border">
-          {tasks.map((task) => (
-            <div
-              key={task.id}
-              className={`flex min-w-0 items-center gap-2.5 px-3 py-2 ${task.enabled ? "" : "opacity-55"}`}
-            >
-              <ClockIcon size={16} className="flex-none text-fg-muted" />
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold">{task.name}</div>
-                <div className="truncate text-[length:var(--fs-sm)] text-fg-muted">
-                  {describeSchedule(task)} · next {when(task.nextRunAt)}
-                  {task.projectId
-                    ? ` · ${settings.projects.find((p) => p.id === task.projectId)?.name ?? "project"}`
-                    : " · chat"}
+        <div className="flex flex-col gap-2">
+          {tasks.map((task) => {
+            const place = task.projectId
+              ? (settings.projects.find((p) => p.id === task.projectId)?.name ?? "Project")
+              : "Scratch chat";
+            return (
+              <div
+                key={task.id}
+                className="flex min-w-0 items-center gap-3 rounded-[var(--radius-md)] border border-border bg-panel px-3 py-2.5"
+              >
+                <span
+                  className={`flex size-8 flex-none items-center justify-center rounded-full ${task.enabled ? "bg-accent-soft text-accent" : "bg-hover text-fg-subtle"}`}
+                >
+                  <ClockIcon size={16} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-semibold">{task.name}</span>
+                    {!task.enabled && (
+                      <span className="flex-none rounded-full bg-hover px-2 text-[length:var(--fs-xs)] text-fg-muted">
+                        Paused
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-[length:var(--fs-sm)] text-fg-muted">
+                    <span className="flex items-center gap-1">
+                      <CalendarBlankIcon size={12} />
+                      {describeSchedule(task)}
+                    </span>
+                    <span className="flex min-w-0 items-center gap-1">
+                      {task.projectId ? (
+                        <FolderSimpleIcon size={12} />
+                      ) : (
+                        <ChatCircleIcon size={12} />
+                      )}
+                      <span className="truncate">{place}</span>
+                    </span>
+                    <span>{AGENT_LABELS[task.agent]}</span>
+                  </div>
+                  <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-[length:var(--fs-xs)] text-fg-subtle">
+                    <RunHistory runs={task.recentRuns} />
+                    {task.enabled && (
+                      <span className="flex-none">Next {whenLabel(task.nextRunAt)}</span>
+                    )}
+                  </div>
                 </div>
-                <RunHistory runs={task.recentRuns} />
+                <div className="flex flex-none items-center gap-1.5">
+                  <button
+                    className="btn"
+                    title="Start this task now"
+                    onClick={() =>
+                      run(async () => {
+                        await api.runScheduledTask(task.id);
+                        setTasks(await api.listScheduledTasks());
+                      })
+                    }
+                  >
+                    <PlayIcon size={13} />
+                    Run
+                  </button>
+                  <button className="btn" onClick={() => setEditing(task)}>
+                    <PencilSimpleIcon size={13} />
+                    Edit
+                  </button>
+                  <TokenSwitch
+                    label={`${task.name} runs on its schedule`}
+                    on={task.enabled}
+                    onChange={(on) => run(() => toggle(task, on))}
+                  />
+                  <button
+                    className="btn-icon"
+                    title="Delete task"
+                    aria-label={`Delete ${task.name}`}
+                    onClick={() => run(() => remove(task))}
+                  >
+                    <TrashIcon size={14} />
+                  </button>
+                </div>
               </div>
-              <button
-                className="btn flex-none"
-                title="Start this task now"
-                onClick={() =>
-                  run(async () => {
-                    await api.runScheduledTask(task.id);
-                    setTasks(await api.listScheduledTasks());
-                  })
-                }
-              >
-                <PlayIcon size={13} />
-                Run
-              </button>
-              <button className="btn flex-none" onClick={() => setEditing(task)}>
-                Edit
-              </button>
-              <TokenSwitch
-                label={`${task.name} runs on its schedule`}
-                on={task.enabled}
-                onChange={(on) => run(() => toggle(task, on))}
-              />
-              <button
-                className="btn flex-none"
-                aria-label={`Delete ${task.name}`}
-                onClick={() => run(() => remove(task))}
-              >
-                <TrashIcon size={13} />
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
       {tasks && tasks.length === 0 && !editing && (
-        <div className="py-6 text-center text-fg-muted">
-          No scheduled tasks. Add one to have an agent start a task on its own.
+        <div className="flex flex-col items-center gap-2 rounded-[var(--radius-md)] border border-dashed border-border-strong py-8 text-center">
+          <span className="flex size-10 items-center justify-center rounded-full bg-accent-soft text-accent">
+            <ClockIcon size={20} />
+          </span>
+          <div className="font-semibold">No scheduled tasks yet</div>
+          <div className="text-[length:var(--fs-sm)] text-fg-muted">
+            Each run opens a new task that starts with your prompt.
+          </div>
         </div>
       )}
 
@@ -254,21 +314,25 @@ export default function ScheduledPane({
       )}
 
       {error && <div className="mt-2 text-[length:var(--fs-sm)] text-danger">{error}</div>}
-
-      <div className="mt-3">
-        <TokenRow
-          title="Scheduled tasks"
-          desc="A task starts in a new task of its own, with the prompt as its first message."
-        >
-          <button
-            className="btn"
-            onClick={() => run(async () => setTasks(await api.listScheduledTasks()))}
-          >
-            Refresh
-          </button>
-        </TokenRow>
-      </div>
     </>
+  );
+}
+
+/** A form field: a small label above its control. */
+function Field({
+  label,
+  className = "",
+  children,
+}: {
+  label: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={`flex min-w-0 flex-col gap-1 ${className}`}>
+      <span className="text-[length:var(--fs-xs)] font-medium text-fg-muted">{label}</span>
+      {children}
+    </div>
   );
 }
 
@@ -315,16 +379,167 @@ function TaskEditor({
   );
 
   return (
-    <div className="mt-3 rounded-[var(--radius-md)] border border-border-strong bg-panel p-3">
-      <div className="mb-2 flex items-center gap-2">
+    <div className="mt-3 flex flex-col gap-3 rounded-[var(--radius-md)] border border-border-strong bg-panel p-3.5">
+      <Field label="Name">
         <input
-          className={`${INPUT} w-56`}
-          placeholder="Name, such as Weekly report"
+          aria-label="Name"
+          className={INPUT}
+          placeholder="Weekly report"
           value={draft.name}
           spellCheck={false}
           onChange={(e) => patch({ name: e.target.value })}
         />
-        <label className="ml-auto flex items-center gap-1.5 text-[length:var(--fs-sm)] text-fg-muted">
+      </Field>
+      <Field label="Prompt">
+        <textarea
+          aria-label="Prompt"
+          className={TEXTAREA}
+          placeholder="The prompt the task starts with."
+          value={draft.prompt}
+          spellCheck
+          onChange={(e) => patch({ prompt: e.target.value })}
+        />
+      </Field>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="Repeats">
+          <select
+            aria-label="How often"
+            className={SELECT}
+            value={schedule.type}
+            onChange={(e) => setKind(e.target.value as ScheduledTask["schedule"]["type"])}
+          >
+            <option value="hourly">Every few hours</option>
+            <option value="daily">Every day</option>
+            <option value="weekdays">Weekdays</option>
+            <option value="weekly">Days of the week</option>
+          </select>
+        </Field>
+        {schedule.type === "hourly" ? (
+          <Field label="Every">
+            <span className="flex items-center gap-1.5 text-[length:var(--fs-sm)] text-fg-muted">
+              <input
+                aria-label="Hours between runs"
+                className={`${INPUT} w-14`}
+                type="number"
+                min={1}
+                max={168}
+                value={schedule.intervalHours}
+                onChange={(e) =>
+                  setSchedule({
+                    type: "hourly",
+                    intervalHours: Math.min(168, Math.max(1, Number(e.target.value) || 1)),
+                  })
+                }
+              />
+              hours
+            </span>
+          </Field>
+        ) : (
+          <Field label="At">
+            <input
+              aria-label="Time of day"
+              className={`${INPUT} w-24`}
+              type="time"
+              value={at}
+              onChange={(e) => {
+                const time = e.target.value || "09:00";
+                if (schedule.type === "daily") setSchedule({ type: "daily", time });
+                else if (schedule.type === "weekdays") setSchedule({ type: "weekdays", time });
+                else if (schedule.type === "weekly")
+                  setSchedule({ type: "weekly", days: schedule.days, time });
+              }}
+            />
+          </Field>
+        )}
+        {schedule.type === "weekly" && (
+          <Field label="On">
+            <div className="flex items-center gap-0.5">
+              {DAYS.map((day) => (
+                <button
+                  key={day.day}
+                  className={chip(schedule.days.includes(day.day))}
+                  aria-pressed={schedule.days.includes(day.day)}
+                  onClick={() => toggleDay(day.day)}
+                >
+                  {day.label}
+                </button>
+              ))}
+            </div>
+          </Field>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="Where" className="min-w-[200px] flex-1">
+          {settings.projects.length > 4 && (
+            <label className="relative flex items-center">
+              <MagnifyingGlassIcon
+                size={13}
+                className="pointer-events-none absolute left-2 text-fg-muted"
+              />
+              <input
+                aria-label="Find a project"
+                className={`${INPUT} pl-7`}
+                value={query}
+                placeholder="Find a project"
+                spellCheck={false}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </label>
+          )}
+          <select
+            aria-label="Project"
+            className={`${SELECT} w-full`}
+            value={draft.projectId ?? ""}
+            onChange={(e) => patch({ projectId: e.target.value || null })}
+          >
+            <option value="">A chat in a scratch folder</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Agent">
+          <select
+            aria-label="Agent"
+            className={SELECT}
+            value={draft.agent}
+            onChange={(e) => patch({ agent: e.target.value as AgentKind, model: null })}
+          >
+            {AGENT_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {AGENT_LABELS[kind]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Access">
+          <select
+            aria-label="Access mode"
+            className={SELECT}
+            value={draft.accessMode}
+            onChange={(e) => patch({ accessMode: e.target.value as AccessMode })}
+          >
+            {MODES.map((mode) => (
+              <option key={mode.mode} value={mode.mode}>
+                {mode.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+      {draft.projectId && (
+        <div className="-mt-1 flex items-center gap-1.5 text-[length:var(--fs-xs)] text-fg-subtle">
+          <FolderSimpleIcon size={12} />
+          {settings.projects.find((p) => p.id === draft.projectId)?.path}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 border-t border-border pt-3">
+        <label className="flex items-center gap-2 text-[length:var(--fs-sm)] text-fg-muted">
           Enabled
           <TokenSwitch
             label="Task is enabled"
@@ -332,145 +547,20 @@ function TaskEditor({
             onChange={(enabled) => patch({ enabled })}
           />
         </label>
-      </div>
-      <textarea
-        className={TEXTAREA}
-        placeholder="The prompt the task starts with."
-        value={draft.prompt}
-        spellCheck
-        onChange={(e) => patch({ prompt: e.target.value })}
-      />
-
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <select
-          aria-label="How often"
-          className={SELECT}
-          value={schedule.type}
-          onChange={(e) => setKind(e.target.value as ScheduledTask["schedule"]["type"])}
-        >
-          <option value="hourly">Every few hours</option>
-          <option value="daily">Every day</option>
-          <option value="weekdays">Weekdays</option>
-          <option value="weekly">Days of the week</option>
-        </select>
-        {schedule.type === "hourly" ? (
-          <label className="flex items-center gap-1.5 text-[length:var(--fs-sm)] text-fg-muted">
-            every
-            <input
-              aria-label="Hours between runs"
-              className={`${INPUT} w-14`}
-              type="number"
-              min={1}
-              max={168}
-              value={schedule.intervalHours}
-              onChange={(e) =>
-                setSchedule({
-                  type: "hourly",
-                  intervalHours: Math.min(168, Math.max(1, Number(e.target.value) || 1)),
-                })
-              }
-            />
-            hours
-          </label>
-        ) : (
-          <input
-            aria-label="Time of day"
-            className={`${INPUT} w-24`}
-            type="time"
-            value={at}
-            onChange={(e) => {
-              const time = e.target.value || "09:00";
-              if (schedule.type === "daily") setSchedule({ type: "daily", time });
-              else if (schedule.type === "weekdays") setSchedule({ type: "weekdays", time });
-              else if (schedule.type === "weekly")
-                setSchedule({ type: "weekly", days: schedule.days, time });
-            }}
-          />
-        )}
-        {schedule.type === "weekly" && (
-          <div className="flex items-center gap-0.5">
-            {DAYS.map((day) => (
-              <button
-                key={day.day}
-                className={chip(schedule.days.includes(day.day))}
-                aria-pressed={schedule.days.includes(day.day)}
-                onClick={() => toggleDay(day.day)}
-              >
-                {day.label}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <select
-          aria-label="Project"
-          className={`${SELECT} max-w-[220px]`}
-          value={draft.projectId ?? ""}
-          onChange={(e) => patch({ projectId: e.target.value || null })}
-        >
-          <option value="">A chat in a scratch folder</option>
-          {projects.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.name}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Agent"
-          className={SELECT}
-          value={draft.agent}
-          onChange={(e) => patch({ agent: e.target.value as AgentKind, model: null })}
-        >
-          {AGENT_KINDS.map((kind) => (
-            <option key={kind} value={kind}>
-              {AGENT_LABELS[kind]}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Access mode"
-          className={SELECT}
-          value={draft.accessMode}
-          onChange={(e) => patch({ accessMode: e.target.value as AccessMode })}
-        >
-          {MODES.map((mode) => (
-            <option key={mode.mode} value={mode.mode}>
-              {mode.label}
-            </option>
-          ))}
-        </select>
         <span className="ml-auto flex items-center gap-1.5">
           <button className="btn" onClick={onCancel}>
             Cancel
           </button>
-          <button className="btn btn-primary" disabled={!ready} onClick={() => onSave(draft)}>
+          <button
+            className="btn btn-primary"
+            disabled={!ready}
+            title={ready ? undefined : "Add a name and a prompt"}
+            onClick={() => onSave(draft)}
+          >
             Save task
           </button>
         </span>
       </div>
-      {settings.projects.length > 4 && (
-        <label className="relative mt-2 flex w-56 items-center">
-          <MagnifyingGlassIcon
-            size={13}
-            className="pointer-events-none absolute left-2 text-fg-muted"
-          />
-          <input
-            className={`${INPUT} pl-7`}
-            value={query}
-            placeholder="Find a project"
-            spellCheck={false}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </label>
-      )}
-      {draft.projectId && (
-        <div className="mt-1.5 flex items-center gap-1.5 text-[length:var(--fs-sm)] text-fg-subtle">
-          <FolderSimpleIcon size={12} />
-          {settings.projects.find((p) => p.id === draft.projectId)?.path}
-        </div>
-      )}
     </div>
   );
 }
