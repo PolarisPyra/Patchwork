@@ -10,6 +10,7 @@ use crate::types::AccessMode;
 use crate::types::AgentEvent;
 use crate::types::AgentKind;
 use crate::types::AgentStatus;
+use crate::types::ClaudeModel;
 use crate::types::GoalStatus;
 use crate::types::ModelOption;
 use crate::types::now_ms;
@@ -26,6 +27,7 @@ use super::file_touched;
 use super::GoalUpdate;
 use super::home_dir;
 use super::Image;
+use super::claude_cli;
 use super::model_manifest;
 use super::without_attachments;
 use super::one_line;
@@ -45,6 +47,14 @@ pub fn home() -> Option<PathBuf> {
     std::env::var_os("CLAUDE_CONFIG_DIR")
         .map(PathBuf::from)
         .or_else(|| home_dir().map(|h| h.join(".claude")))
+}
+
+/// Claude Code's settings file: `.claude.json` in `CLAUDE_CONFIG_DIR`, or in the home folder.
+pub fn settings_file() -> PathBuf {
+    match std::env::var_os("CLAUDE_CONFIG_DIR") {
+        Some(dir) => PathBuf::from(dir).join(".claude.json"),
+        None => home_dir().unwrap_or_default().join(".claude.json"),
+    }
 }
 
 pub fn auth(status: &mut AgentStatus) {
@@ -78,9 +88,42 @@ pub fn configured_model() -> Option<String> {
     Some(settings.get("model")?.as_str()?.to_owned())
 }
 
-/// Current Claude models, from the fetched model manifest.
+/// Current Claude models, from the fetched model manifest, each with the thinking levels the
+/// cached catalog says it takes. The manifest names the models; the catalog is the CLI's own
+/// record of what each one can do, so a model that cannot think gets no level.
 pub fn models() -> Vec<ModelOption> {
-    model_manifest::models("claude")
+    let catalog = claude_cli::models();
+    let mut models = model_manifest::models("claude");
+    for model in &mut models {
+        if let Some(id) = model.id.as_deref() {
+            model.efforts = efforts_in(&catalog, id);
+        }
+    }
+    models
+}
+
+/// The levels `id` takes, from the catalog. A catalog id matches exactly, or a dated snapshot of
+/// it: `claude-haiku-4-5` matches `claude-haiku-4-5-20251001`. Only a date counts as a snapshot,
+/// so `claude-opus-5` never takes the levels of `claude-opus-5-5`.
+fn efforts_in(catalog: &[ClaudeModel], id: &str) -> Option<Vec<String>> {
+    // A pinned context window, as in `claude-fable-5-1[1m]`, is not part of the catalog's id.
+    let id = id.split('[').next().unwrap_or(id);
+    let exact = catalog.iter().find(|model| model.id == id);
+    let model = exact.or_else(|| {
+        catalog.iter().find(|model| {
+            model
+                .id
+                .strip_prefix(id)
+                .and_then(|rest| rest.strip_prefix('-'))
+                .is_some_and(is_snapshot_date)
+        })
+    })?;
+    Some(model.efforts.clone())
+}
+
+/// A catalog id's `YYYYMMDD` snapshot date, which marks a dated copy of a model.
+fn is_snapshot_date(text: &str) -> bool {
+    text.len() >= 6 && text.chars().all(|c| c.is_ascii_digit())
 }
 
 /// The prompt is sent on stdin (`user_message`), so approvals can be answered there too.
@@ -1004,5 +1047,36 @@ mod tests {
             args.windows(2)
                 .any(|w| w == ["--permission-prompt-tool", "stdio"])
         );
+    }
+
+    #[test]
+    fn a_model_takes_the_levels_its_catalog_entry_has() {
+        let catalog = vec![
+            ClaudeModel {
+                id: "claude-opus-5-5".into(),
+                name: "Opus 5.5".into(),
+                context_window: Some(1_800_000),
+                efforts: vec!["low".into(), "medium".into(), "xhigh".into()],
+                fast_mode: true,
+            },
+            ClaudeModel {
+                id: "claude-haiku-4-5-20251001".into(),
+                name: "Haiku 4.5".into(),
+                context_window: Some(200_000),
+                efforts: Vec::new(),
+                fast_mode: false,
+            },
+        ];
+        assert_eq!(
+            efforts_in(&catalog, "claude-opus-5-5"),
+            Some(vec!["low".into(), "medium".into(), "xhigh".into()])
+        );
+        // A pinned context window is not part of the id.
+        assert!(efforts_in(&catalog, "claude-opus-5-5[1m]").is_some());
+        // A dated snapshot of a listed model matches it, and takes none when it has none.
+        assert_eq!(efforts_in(&catalog, "claude-haiku-4-5"), Some(Vec::new()));
+        // A later model does not take the levels of the one its id starts with.
+        assert_eq!(efforts_in(&catalog, "claude-opus-5"), None);
+        assert_eq!(efforts_in(&catalog, "claude-sonnet-4-6"), None);
     }
 }

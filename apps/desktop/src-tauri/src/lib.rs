@@ -254,6 +254,8 @@ pub fn run() {
             commands::plugins::open_plugins_folder,
             commands::codex::codex_info,
             commands::codex::codex_command,
+            commands::claude::claude_info,
+            commands::claude::claude_command,
             commands::computer::computer_screenshot,
             commands::computer::computer_action,
             commands::settings::default_permission_rules,

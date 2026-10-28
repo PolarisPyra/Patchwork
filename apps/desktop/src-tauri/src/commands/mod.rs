@@ -2,6 +2,7 @@
 //! Each group `use super::*;` for the shared imports and helpers below.
 
 pub mod app;
+pub mod claude;
 pub mod codex;
 pub mod computer;
 pub mod files;
@@ -19,7 +20,7 @@ use crate::{clipboard, logo, updates};
 use patchwork_server::types::{
     AgentKind, Project, Settings, AgentStatus, ModelOption, ShellChoices, AccessMode, Attachment,
     Message, Thread, Folder, FileChange, ProviderUsage, ImportSource, ImportScan, TurnTrees,
-    ScheduledTask, Plugin, CodexInfo,
+    ScheduledTask, Plugin, CodexInfo, ClaudeInfo,
 };
 use patchwork_server::workspace;
 use patchwork_server::{NewThread, Res, Server, orchestration, provider};

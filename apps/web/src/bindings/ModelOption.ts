@@ -11,4 +11,10 @@ defaultModel: string | null,
 /**
  * Superseded model, listed under the picker's "Legacy models" section.
  */
-isLegacy: boolean, };
+isLegacy: boolean, 
+/**
+ * The thinking levels this model takes, as its CLI reports them. `None` when the CLI does
+ * not say, so the picker offers the levels its agent shares; an empty list when the model
+ * takes none, so the picker offers no level for it.
+ */
+efforts: Array<string> | null, };

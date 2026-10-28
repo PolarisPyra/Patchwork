@@ -2,6 +2,8 @@
 //! their JSONL output. Each provider module knows one CLI.
 
 pub mod claude;
+pub mod claude_cli;
+pub mod cli_info;
 pub mod codex;
 pub mod codex_cli;
 pub mod antigravity;
@@ -434,6 +436,7 @@ pub fn list_models(kind: AgentKind) -> Vec<ModelOption> {
         label: "Default".into(),
         default_model: default_model.filter(|m| !m.trim().is_empty()),
         is_legacy: false,
+        efforts: None,
     }];
     out.extend(models);
     out

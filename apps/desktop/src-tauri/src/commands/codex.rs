@@ -12,9 +12,9 @@ pub(crate) async fn codex_info() -> Res<CodexInfo> {
 #[tauri::command]
 pub(crate) async fn codex_command(kind: String) -> Res<String> {
     let kind = match kind.as_str() {
-        "doctor" => patchwork_server::provider::codex_cli::InfoCommand::Doctor,
-        "mcp" => patchwork_server::provider::codex_cli::InfoCommand::McpList,
-        "plugins" => patchwork_server::provider::codex_cli::InfoCommand::PluginList,
+        "doctor" => patchwork_server::provider::cli_info::InfoCommand::Doctor,
+        "mcp" => patchwork_server::provider::cli_info::InfoCommand::McpList,
+        "plugins" => patchwork_server::provider::cli_info::InfoCommand::PluginList,
         other => return Err(format!("There is no Codex command named {other}")),
     };
     blocking(move || patchwork_server::provider::codex_cli::command(kind)).await?

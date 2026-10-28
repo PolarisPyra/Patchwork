@@ -74,7 +74,7 @@ struct Found {
 }
 
 pub fn list(projects: &[Project]) -> Vec<CliGroup> {
-    let claude = claude_file();
+    let claude = super::claude::settings_file();
     let codex = super::codex::home().unwrap_or_default().join("config.toml");
     let shared = mcp::shared_servers();
     [
@@ -137,14 +137,14 @@ pub fn enable(key: &str, projects: &[Project]) -> Result<(), String> {
 /// Whether `path` is a config file a server was read from, which the settings may open.
 pub fn is_config_file(path: &Path, projects: &[Project]) -> bool {
     path == mcp::path()
-        || path == claude_file()
+        || path == super::claude::settings_file()
         || path == super::codex::home().unwrap_or_default().join("config.toml")
         || all(projects).iter().any(|f| f.file == path)
 }
 
 fn all(projects: &[Project]) -> Vec<Found> {
     let codex = super::codex::home().unwrap_or_default().join("config.toml");
-    let mut found = claude_servers(&claude_file(), projects);
+    let mut found = claude_servers(&super::claude::settings_file(), projects);
     found.extend(codex_servers(&codex, projects));
     found
 }
@@ -249,14 +249,6 @@ fn env_var(name: &str) -> Option<String> {
     vars.entry(name.into())
         .or_insert_with(|| std::env::var(name).ok().or_else(|| super::shell_var(name)))
         .clone()
-}
-
-/// Claude Code's settings file: `.claude.json` in `CLAUDE_CONFIG_DIR`, or in the home folder.
-fn claude_file() -> PathBuf {
-    match std::env::var_os("CLAUDE_CONFIG_DIR") {
-        Some(dir) => PathBuf::from(dir).join(".claude.json"),
-        None => super::home_dir().unwrap_or_default().join(".claude.json"),
-    }
 }
 
 /// Claude Code's servers: its user servers, each project's local ones in `.claude.json`, and
@@ -455,7 +447,10 @@ pub fn overrides(agent: AgentKind, root: &str) -> Vec<String> {
         path: root.to_string(),
     };
     let found = match agent {
-        AgentKind::Claude => claude_servers(&claude_file(), std::slice::from_ref(&project)),
+        AgentKind::Claude => claude_servers(
+            &super::claude::settings_file(),
+            std::slice::from_ref(&project),
+        ),
         AgentKind::Codex => codex_servers(
             &super::codex::home().unwrap_or_default().join("config.toml"),
             std::slice::from_ref(&project),

@@ -68,6 +68,7 @@ pub fn models() -> Vec<ModelOption> {
             label: id.into(),
             default_model: None,
             is_legacy: false,
+            efforts: None,
         })
         .collect()
 }

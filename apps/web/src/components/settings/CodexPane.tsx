@@ -122,12 +122,9 @@ export default function CodexPane({
 
           {output && (
             <div className="mb-3 overflow-hidden rounded-[var(--radius-md)] border border-border">
-              <div className="flex items-center justify-between border-b border-border px-3 py-1 text-[length:var(--fs-xs)] text-fg-subtle">
+              <div className="flex items-center justify-between gap-2 border-b border-border py-1 pr-1 pl-3 text-[length:var(--fs-xs)] text-fg-subtle">
                 <span>{output.title}</span>
-                <button
-                  className="text-accent-text hover:underline"
-                  onClick={() => setOutput(null)}
-                >
+                <button className="btn" onClick={() => setOutput(null)}>
                   Close
                 </button>
               </div>

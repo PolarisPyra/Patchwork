@@ -26,6 +26,7 @@ use super::file_touched;
 use super::GoalUpdate;
 use super::home_dir;
 use super::is_goal_command;
+use super::codex_cli;
 use super::model_manifest;
 use super::one_line;
 use super::Parsed;
@@ -77,9 +78,20 @@ pub fn configured_model() -> Option<String> {
     )
 }
 
-/// Current Codex models, from the fetched model manifest.
+/// Current Codex models, from the fetched model manifest, each with the reasoning levels the
+/// CLI's own catalog gives it: `extra` and `ultra` are on newer models only.
 pub fn models() -> Vec<ModelOption> {
-    model_manifest::models("codex")
+    let catalog = codex_cli::models();
+    let mut models = model_manifest::models("codex");
+    for model in &mut models {
+        if let Some(id) = model.id.as_deref() {
+            model.efforts = catalog
+                .iter()
+                .find(|known| known.slug == id)
+                .map(|known| known.efforts.clone());
+        }
+    }
+    models
 }
 
 /// `(modified time, path)` of every rollout file under `dir`.

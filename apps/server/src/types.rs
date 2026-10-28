@@ -403,6 +403,10 @@ pub struct ModelOption {
     pub default_model: Option<String>,
     /// Superseded model, listed under the picker's "Legacy models" section.
     pub is_legacy: bool,
+    /// The thinking levels this model takes, as its CLI reports them. `None` when the CLI does
+    /// not say, so the picker offers the levels its agent shares; an empty list when the model
+    /// takes none, so the picker offers no level for it.
+    pub efforts: Option<Vec<String>>,
 }
 
 /// A slash command advertised by a provider CLI for this thread/workspace.
@@ -1319,4 +1323,40 @@ pub struct CodexInfo {
     pub version: String,
     pub features: Vec<CodexFeature>,
     pub models: Vec<CodexModel>,
+}
+
+/// A feature gate of the installed Claude Code, as the CLI last cached it in `.claude.json`.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeFeature {
+    /// The gate's name, such as `tengu_bridge_poll_interval_ms`.
+    pub name: String,
+    /// The cached value as one line of JSON, shortened when it is long.
+    pub value: String,
+    /// Present when the gate is a plain switch. A gate that carries a setting, such as a poll
+    /// interval or a variant name, has no on or off, so this is `None`.
+    pub enabled: Option<bool>,
+}
+
+/// A model in the catalog Claude Code cached for the terminal.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeModel {
+    pub id: String,
+    pub name: String,
+    pub context_window: Option<u64>,
+    pub efforts: Vec<String>,
+    /// Whether the model offers fast mode.
+    pub fast_mode: bool,
+}
+
+/// What the installed Claude Code offers: its path and version, the feature gates it has cached,
+/// and the models in its catalog.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeInfo {
+    pub path: String,
+    pub version: String,
+    pub features: Vec<ClaudeFeature>,
+    pub models: Vec<ClaudeModel>,
 }

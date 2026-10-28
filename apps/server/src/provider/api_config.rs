@@ -413,6 +413,7 @@ pub fn models() -> Vec<ModelOption> {
                 label: m.name.clone().unwrap_or_else(|| m.id.clone()),
                 default_model: None,
                 is_legacy: false,
+                efforts: None,
             })
         })
         .collect()

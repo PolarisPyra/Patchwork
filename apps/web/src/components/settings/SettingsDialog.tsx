@@ -80,6 +80,7 @@ import PermissionsPane, { type PermissionsFocus } from "~/components/settings/Pe
 import PluginsPane from "~/components/settings/PluginsPane";
 import ScheduledPane from "~/components/settings/ScheduledPane";
 import CodexPane from "~/components/settings/CodexPane";
+import ClaudePane from "~/components/settings/ClaudePane";
 
 type Section =
   | "appearance"
@@ -95,6 +96,7 @@ type Section =
   | "skills"
   | "hooks"
   | "scheduled"
+  | "claude"
   | "codex"
   | "custom-agents"
   | "projects"
@@ -122,6 +124,7 @@ const GROUPS: { label: string; sections: { id: Section; label: string; Icon: Ico
       { id: "custom-agents", label: "Agents", Icon: IdentificationBadgeIcon },
       { id: "skills", label: "Skills", Icon: BooksIcon },
       { id: "hooks", label: "Hooks", Icon: PuzzlePieceIcon },
+      { id: "claude", label: "Claude CLI", Icon: TerminalWindowIcon },
       { id: "codex", label: "Codex CLI", Icon: TerminalWindowIcon },
       { id: "permissions", label: "Permissions", Icon: ShieldCheckIcon },
       { id: "tokens", label: "AI Tokenomics", Icon: GaugeIcon },
@@ -225,6 +228,7 @@ export default memo(function SettingsDialog({
             {section === "terminal" && <TerminalPane {...paneProps} />}
             {section === "skills" && <SkillsPane {...paneProps} />}
             {section === "hooks" && <PluginsPane {...paneProps} />}
+            {section === "claude" && <ClaudePane {...paneProps} />}
             {section === "codex" && <CodexPane {...paneProps} />}
             {section === "scheduled" && <ScheduledPane {...paneProps} />}
             {section === "custom-agents" && <AgentsPane />}

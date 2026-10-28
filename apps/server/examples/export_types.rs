@@ -148,6 +148,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     names.push("CodexModel");
     patchwork_server::types::CodexInfo::export_all(&cfg)?;
     names.push("CodexInfo");
+    patchwork_server::types::ClaudeFeature::export_all(&cfg)?;
+    names.push("ClaudeFeature");
+    patchwork_server::types::ClaudeModel::export_all(&cfg)?;
+    names.push("ClaudeModel");
+    patchwork_server::types::ClaudeInfo::export_all(&cfg)?;
+    names.push("ClaudeInfo");
     patchwork_server::skills::Skill::export_all(&cfg)?;
     names.push("Skill");
     patchwork_server::provider::mcp_clis::CliGroup::export_all(&cfg)?;

@@ -1,5 +1,6 @@
+import { useMemo } from "react";
 import { LightbulbIcon, CaretDownIcon } from "@phosphor-icons/react";
-import type { AgentKind } from "~/api";
+import type { AgentKind, ModelOption } from "~/api";
 import Dropdown from "~/components/workspace/Dropdown";
 import { CHIP_CLASS } from "~/components/chat/ModelPicker";
 
@@ -9,21 +10,38 @@ const LABELS: Record<string, string> = {
   high: "High",
   xhigh: "Extra high",
   max: "Max",
+  ultra: "Ultra",
 };
 
+const label = (effort: string) =>
+  LABELS[effort] ?? effort.charAt(0).toUpperCase() + effort.slice(1);
+
 /**
- * The thinking levels each CLI accepts: `claude --effort` and `agy --effort` take all five;
- * Codex takes `effort` on each turn, and these are the levels its current models share.
+ * The thinking levels each CLI takes on every model it has. Used only for a model whose own
+ * levels the CLI does not report: `claude --effort` and `agy --effort` take all five, Codex takes
+ * `effort` on each turn, and the rest are the levels most providers share.
  */
 export const EFFORTS: Record<AgentKind, string[]> = {
   claude: ["low", "medium", "high", "xhigh", "max"],
   codex: ["low", "medium", "high", "xhigh"],
   antigravity: ["low", "medium", "high", "xhigh", "max"],
-  // OpenCode passes these as the model's variant; the levels most providers share.
   opencode: ["low", "medium", "high"],
   // Sent as `reasoning_effort`, which OpenAI-style reasoning models take.
   api: ["low", "medium", "high"],
 };
+
+/**
+ * The levels `model` takes, as its CLI reports them: `None` when the CLI does not say, so the
+ * agent's shared list is the best guess, and an empty list when the model takes none.
+ */
+export function modelEfforts(
+  agent: AgentKind,
+  model: string | null,
+  models: Partial<Record<AgentKind, ModelOption[]>>,
+): string[] | null {
+  if (!model) return null;
+  return models[agent]?.find((option) => option.id === model)?.efforts ?? null;
+}
 
 /** `effort` if `agent` accepts it, else null (the CLI's default). */
 export function effortFor(agent: AgentKind, effort: string | null): string | null {
@@ -53,15 +71,19 @@ function rememberEffort(agent: AgentKind, effort: string | null) {
 export default function EffortPicker({
   agent,
   effort,
+  levels,
   onPick,
 }: {
   agent: AgentKind;
   effort: string | null;
+  /** The current model's own levels, or null when its CLI does not report them. */
+  levels: string[] | null;
   onPick: (effort: string | null) => void;
 }) {
-  const current = effortFor(agent, effort);
-  const label = current ? LABELS[current] : "Default";
-  const options: (string | null)[] = [null, ...EFFORTS[agent]];
+  const options = useMemo(() => levels ?? EFFORTS[agent], [levels, agent]);
+  const current = effort && options.includes(effort) ? effort : null;
+  // A model that takes no level has nothing to pick, so the chip would only take up room.
+  if (options.length === 0) return null;
   return (
     <Dropdown
       up
@@ -70,18 +92,18 @@ export default function EffortPicker({
           className={CHIP_CLASS}
           aria-haspopup="menu"
           aria-expanded={open}
-          aria-label={`Thinking: ${label}`}
+          aria-label={`Thinking: ${current ? label(current) : "Default"}`}
           title="Thinking"
           onClick={toggle}
         >
           <LightbulbIcon size={16} />
-          <span>{label}</span>
+          <span>{current ? label(current) : "Default"}</span>
           <CaretDownIcon size={14} />
         </button>
       )}
     >
       {(close) =>
-        options.map((e) => (
+        [null, ...options].map((e) => (
           <button
             key={e ?? "default"}
             role="menuitemradio"
@@ -93,7 +115,7 @@ export default function EffortPicker({
               onPick(e);
             }}
           >
-            {e ? LABELS[e] : "Default"}
+            {e ? label(e) : "Default"}
           </button>
         ))
       }
