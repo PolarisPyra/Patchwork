@@ -6,6 +6,7 @@ import {
   BellIcon,
   BooksIcon,
   CaretDownIcon,
+  ChatCircleIcon,
   CaretRightIcon,
   DownloadSimpleIcon,
   FolderSimpleIcon,
@@ -67,6 +68,7 @@ import PermissionsPane, { type PermissionsFocus } from "~/components/settings/Pe
 
 type Section =
   | "appearance"
+  | "chat"
   | "agent"
   | "permissions"
   | "api"
@@ -88,6 +90,7 @@ const GROUPS: { label: string; sections: { id: Section; label: string; Icon: Ico
     label: "General",
     sections: [
       { id: "appearance", label: "Appearance", Icon: PaletteIcon },
+      { id: "chat", label: "Chats and threads", Icon: ChatCircleIcon },
       { id: "notifications", label: "Notifications", Icon: BellIcon },
       { id: "shortcuts", label: "Shortcuts", Icon: KeyboardIcon },
       { id: "updates", label: "Updates", Icon: ArrowCircleUpIcon },
@@ -187,6 +190,7 @@ export default function SettingsDialog({
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
             {section === "appearance" && <AppearancePane {...paneProps} />}
+            {section === "chat" && <ChatPane {...paneProps} />}
             {section === "agent" && <AgentPane {...paneProps} />}
             {section === "permissions" && <PermissionsPane {...paneProps} focus={focus ?? null} />}
             {section === "api" && <ApiProvidersPane updateSettings={updateSettings} />}
@@ -509,6 +513,18 @@ function TokensPane({ settings, updateSettings }: PaneProps) {
 }
 
 /** Which finished work raises a desktop notification while Patchwork is not focused. */
+function ChatPane({ settings, updateSettings }: PaneProps) {
+  return (
+    <TokenRow title="Click answers twice to send">
+      <TokenSwitch
+        label="Click answers twice to send"
+        on={settings.confirmAnswers}
+        onChange={(confirmAnswers) => void updateSettings((st) => ({ ...st, confirmAnswers }))}
+      />
+    </TokenRow>
+  );
+}
+
 function NotificationsPane({ settings, updateSettings }: PaneProps) {
   const notifications = settings.notifications;
   const update = (patch: Partial<NotificationSettings>) =>
@@ -650,11 +666,11 @@ function releaseNotes(section: string): string {
   return section.replace(/^## \[(.+?)\] - /, "## $1 · ");
 }
 
-/** Every release in CHANGELOG.md as it was when this copy was built, newest first: its version
- * and date, and the notes under its heading. */
+/** The newest three releases in CHANGELOG.md as it was when this copy was built, newest first:
+ * their version and date, and the notes under their heading. */
 const RELEASES = changelog
   .split(/\n(?=## \[)/)
-  .slice(1)
+  .slice(1, 4)
   .map((section) => {
     const [heading, ...rest] = section.trim().split("\n");
     const [, version = heading, date = ""] = /^## \[(.+?)\](?: - (.+))?/.exec(heading) ?? [];
@@ -889,13 +905,6 @@ function AgentPane({ settings, updateSettings }: PaneProps) {
           </div>
         </div>
       )}
-      <TokenRow title="Click answers twice to send">
-        <TokenSwitch
-          label="Click answers twice to send"
-          on={settings.confirmAnswers}
-          onChange={(confirmAnswers) => void updateSettings((st) => ({ ...st, confirmAnswers }))}
-        />
-      </TokenRow>
     </>
   );
 }
