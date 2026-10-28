@@ -165,6 +165,8 @@ impl Runner {
             Some((skill, rest)) => crate::skills::invocation(agent, &skill, rest),
             None => text,
         };
+        // And with the role of an agent it summons as "&name".
+        let text = server.agents.summon(text);
         let text = match context {
             Some(context) => format!("{context}{text}"),
             None => text,

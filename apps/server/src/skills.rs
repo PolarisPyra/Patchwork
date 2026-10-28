@@ -75,7 +75,7 @@ pub fn enabled(settings: &Settings) -> Vec<Skill> {
 
 /// `name` and `description` from the `---` block at the top of a `SKILL.md`. A value may be
 /// quoted, or folded onto the indented lines below its key.
-fn frontmatter(text: &str) -> (Option<String>, Option<String>) {
+pub(crate) fn frontmatter(text: &str) -> (Option<String>, Option<String>) {
     let Some(rest) = text.strip_prefix("---") else { return (None, None) };
     let block = rest.split("\n---").next().unwrap_or_default();
     let lines: Vec<&str> = block.lines().collect();

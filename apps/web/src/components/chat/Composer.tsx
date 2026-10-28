@@ -34,6 +34,7 @@ import {
   type MentionSuggestion,
 } from "~/components/chat/composerExtensions";
 import { MARKDOWN_COPY_ATTR } from "~/lib/markdownCopy";
+import { isAgent, useAgents } from "~/lib/agents";
 import FormatBar from "~/components/chat/FormatBar";
 import ModelPicker from "~/components/chat/ModelPicker";
 
@@ -107,7 +108,7 @@ export type DropMentions = (
   } | null,
 ) => ((mentions: MentionItem[]) => void) | null;
 
-/** The "/word" or "$word" the caret is at the end of, at the start of a line or after a space. */
+/** The "/word", "$word" or "&word" the caret is at the end of, at the start of a line or after a space. */
 interface CommandToken {
   text: string;
   from: number;
@@ -122,7 +123,7 @@ function commandToken(editor: Editor): CommandToken | null {
   if (!selection.empty || $from.parent.type.spec.code) return null;
   // Chips and mentions read as one character that ends the token.
   const before = $from.parent.textBetween(0, $from.parentOffset, undefined, "\ufffc");
-  const match = /(?:^|\s)([/$][^\s\ufffc]*)$/.exec(before);
+  const match = /(?:^|\s)([/$&][^\s\ufffc]*)$/.exec(before);
   if (!match) return null;
   const text = match[1];
   return {
@@ -352,16 +353,26 @@ function Composer({
     const picked = await open({ multiple: true, directory });
     if (picked) onAttachPaths(picked);
   }
-  // The slash menu lists commands for the "/word" or "$word" being typed, anywhere in the draft;
+  // The slash menu lists commands for the "/word", "$word" or "&word" being typed, anywhere in the draft;
   // Escape hides it until the draft changes again.
   const [menuClosed, setMenuClosed] = useState(false);
   const [dispatchMenuOpen, setDispatchMenuOpen] = useState(false);
   const [commandIndex, setCommandIndex] = useState(0);
   const [token, setToken] = useState<CommandToken | null>(null);
-  // Antigravity reads the message as a prompt, so there are no commands to offer.
-  // "/" lists commands and "$" lists skills.
-  const slash = agent !== "antigravity" && token ? token.text.toLowerCase() : null;
+  // Antigravity reads the message as a prompt, so there are no commands to offer, but an agent
+  // summoned with "&" goes with any message.
+  // "/" lists commands, "$" lists skills and "&" lists agents.
+  const slash =
+    token && (agent !== "antigravity" || token.text.startsWith("&"))
+      ? token.text.toLowerCase()
+      : null;
   const skillMenu = slash?.startsWith("$") ?? false;
+  const agentMenu = slash?.startsWith("&") ?? false;
+  const customAgents = useAgents().agents;
+  const agentCommands = customAgents.map((custom) => ({
+    name: `&${custom.name}`,
+    description: custom.description ?? "Agent",
+  }));
   // Skills are read again each time the menu opens, so ones just added to the folder show up.
   const [skills, setSkills] = useState<Skill[]>([]);
   // The editor's `$name ` rule reads the skills through this.
@@ -401,9 +412,9 @@ function Composer({
   const matches =
     slash === null
       ? []
-      : (skillMenu ? skillCommands : slashCommands)
+      : (skillMenu ? skillCommands : agentMenu ? agentCommands : slashCommands)
           .flatMap((c) => {
-            const score = commandScore(c.name, slash.slice(1));
+            const score = commandScore(c.name.toLowerCase(), slash.slice(1));
             return score === null ? [] : [{ ...c, score }];
           })
           .sort((a, b) => a.score - b.score);
@@ -514,6 +525,7 @@ function Composer({
       "Reply or describe the next change…",
       mentionSuggestion,
       (name) => skillsRef.current.some((skill) => skill.name === name),
+      isAgent,
     ),
     content: value,
     contentType: "markdown",
@@ -692,39 +704,32 @@ function Composer({
 
   function complete(name: string) {
     if (!editor || !token) return;
+    // A skill or an agent goes in as its chip.
+    const chip = name.startsWith("$")
+      ? "skillCommand"
+      : name.startsWith("&")
+        ? "agentCommand"
+        : null;
+    const picked = chip
+      ? [
+          { type: chip, attrs: { name: name.slice(1) } },
+          { type: "text", text: " " },
+        ]
+      : `${name} `;
     // Later in the draft, the pick replaces just the word typed. /goal is only offered as the
     // whole draft.
     if (!token.whole) {
-      editor
-        .chain()
-        .focus()
-        .insertContentAt(
-          { from: token.from, to: token.to },
-          name.startsWith("$")
-            ? [
-                { type: "skillCommand", attrs: { name: name.slice(1) } },
-                { type: "text", text: " " },
-              ]
-            : `${name} `,
-        )
-        .run();
+      editor.chain().focus().insertContentAt({ from: token.from, to: token.to }, picked).run();
       return;
     }
-    // A pick for a draft that is a bare "/word" or "$word" replaces the whole draft.
+    // A pick for a draft that is a bare "/word", "$word" or "&word" replaces the whole draft.
     editor
       .chain()
       .focus()
       .selectAll()
       .deleteSelection()
       .insertContent(
-        name === "/goal"
-          ? [{ type: "goalCommand" }, { type: "text", text: " " }]
-          : name.startsWith("$")
-            ? [
-                { type: "skillCommand", attrs: { name: name.slice(1) } },
-                { type: "text", text: " " },
-              ]
-            : `${name} `,
+        name === "/goal" ? [{ type: "goalCommand" }, { type: "text", text: " " }] : picked,
       )
       .run();
     changed.current(editor.getMarkdown());
@@ -864,12 +869,16 @@ function Composer({
       {menuOpen && (
         <div
           role="listbox"
-          aria-label={skillMenu ? "Skills" : "Slash commands"}
+          aria-label={skillMenu ? "Skills" : agentMenu ? "Agents" : "Slash commands"}
           className="absolute right-0 bottom-full left-0 mb-1.5 flex max-h-[min(50vh,32rem)] flex-col gap-px overflow-y-auto overscroll-contain rounded-[var(--radius)] border border-border bg-panel p-1 shadow-[var(--shadow-popup)]"
         >
           {matches.length === 0 && (
             <div className="px-2 py-1.5 text-[length:var(--fs-sm)] text-fg-muted">
-              {skillMenu ? "No matching skill." : "No matching command."}
+              {skillMenu
+                ? "No matching skill."
+                : agentMenu
+                  ? "No matching agent."
+                  : "No matching command."}
             </div>
           )}
           {matches.map((c) => (

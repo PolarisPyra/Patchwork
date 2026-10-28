@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useState, type ReactNode } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { RELEASES_URL, restartToUpdate } from "~/lib/updates";
+import { useAgents } from "~/lib/agents";
 import {
   ArrowCircleUpIcon,
   BellIcon,
@@ -11,6 +12,7 @@ import {
   DownloadSimpleIcon,
   FolderSimpleIcon,
   GaugeIcon,
+  IdentificationBadgeIcon,
   KeyboardIcon,
   MagnifyingGlassIcon,
   MinusIcon,
@@ -79,6 +81,7 @@ type Section =
   | "environment"
   | "terminal"
   | "skills"
+  | "custom-agents"
   | "projects"
   | "shortcuts"
   | "logging"
@@ -103,6 +106,7 @@ const GROUPS: { label: string; sections: { id: Section; label: string; Icon: Ico
       { id: "api", label: "API Providers", Icon: PlugsConnectedIcon },
       { id: "mcp", label: "MCP Servers", Icon: PlugIcon },
       { id: "skills", label: "Skills", Icon: BooksIcon },
+      { id: "custom-agents", label: "Custom agents", Icon: IdentificationBadgeIcon },
       { id: "permissions", label: "Permissions", Icon: ShieldCheckIcon },
       { id: "tokens", label: "AI Tokenomics", Icon: GaugeIcon },
     ],
@@ -204,6 +208,7 @@ export default memo(function SettingsDialog({
             {section === "environment" && <EnvironmentPane {...paneProps} />}
             {section === "terminal" && <TerminalPane {...paneProps} />}
             {section === "skills" && <SkillsPane {...paneProps} />}
+            {section === "custom-agents" && <AgentsPane />}
             {section === "projects" && <ProjectsPane {...paneProps} />}
             {section === "shortcuts" && <KeybindingsPane />}
             {section === "logging" && <LoggingPane {...paneProps} />}
@@ -1694,6 +1699,99 @@ function SkillsPane({ settings, updateSettings }: PaneProps) {
       <div className="mt-5 mb-1.5 font-semibold">Example</div>
       <pre className="m-0 overflow-x-auto rounded-[var(--radius-sm)] border border-border-strong bg-editor px-3 py-2.5 font-[family-name:var(--font-mono)] text-[length:var(--fs-xs)] leading-relaxed text-fg-muted">
         {SKILLS_EXAMPLE}
+      </pre>
+    </>
+  );
+}
+
+/** How the agents folder is laid out: one Markdown file per agent, named like the agent. */
+const AGENTS_EXAMPLE = `agents/
+├── dev-engineer.md
+└── doc-scout.md
+
+dev-engineer.md
+---
+description: Senior developer: plans, implements features and fixes with explicit risk control
+---
+You are DevEngineer. Plan before you change anything…`;
+
+/** The custom agents that "&name" summons, kept up to date as their folder changes. */
+function AgentsPane() {
+  const view = useAgents();
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+
+  const run = (action: Promise<void>) => {
+    setError(null);
+    action.catch((e) => setError(errorText(e)));
+  };
+  const q = query.trim().toLowerCase();
+  const shown = view.agents.filter(
+    (a) => !q || `${a.name} ${a.description ?? ""}`.toLowerCase().includes(q),
+  );
+
+  return (
+    <>
+      <div className="flex items-center gap-1.5 pb-3">
+        <label className="relative ml-auto w-52">
+          <MagnifyingGlassIcon
+            size={13}
+            className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-fg-muted"
+          />
+          <input
+            className={`${INPUT} pl-7`}
+            value={query}
+            placeholder="Search agents"
+            spellCheck={false}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
+      </div>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(196px,1fr))] gap-2">
+        {shown.map((agent) => (
+          <div
+            key={agent.path}
+            className="flex min-h-[124px] min-w-0 flex-col gap-2.5 rounded-[var(--radius-md)] border border-border p-3 text-fg"
+          >
+            <div className="flex w-full min-w-0 items-center gap-2.5">
+              <Badge name={agent.name} size={32} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-semibold">&amp;{agent.name}</div>
+                <div className="truncate font-mono text-[length:var(--fs-xs)] text-fg-muted">
+                  {agent.name}.md
+                </div>
+              </div>
+              <button className="btn flex-none" onClick={() => run(api.openAgent(agent.path))}>
+                Edit
+              </button>
+            </div>
+            <div className="line-clamp-3 flex-1 text-[length:var(--fs-sm)] text-fg-muted">
+              {agent.description}
+            </div>
+          </div>
+        ))}
+        {!q && (
+          <button
+            className="flex min-h-[124px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-dashed border-border-strong bg-transparent text-fg-muted hover:border-accent hover:text-fg"
+            onClick={() => run(api.openAgentsFolder())}
+          >
+            <FolderSimpleIcon size={20} />
+            <span className="text-[length:var(--fs-sm)]">Open folder</span>
+          </button>
+        )}
+      </div>
+      {q && shown.length === 0 && (
+        <div className="py-6 text-center text-fg-muted">Nothing matches “{query.trim()}”</div>
+      )}
+      {error && <div className="mt-2 text-[length:var(--fs-sm)] text-danger">{error}</div>}
+      <div className="mt-3">
+        <TokenRow title="Folder" desc={view.dir}>
+          {null}
+        </TokenRow>
+      </div>
+      <div className="mt-5 mb-1.5 font-semibold">Example</div>
+      <pre className="m-0 overflow-x-auto rounded-[var(--radius-sm)] border border-border-strong bg-editor px-3 py-2.5 font-[family-name:var(--font-mono)] text-[length:var(--fs-xs)] leading-relaxed text-fg-muted">
+        {AGENTS_EXAMPLE}
       </pre>
     </>
   );

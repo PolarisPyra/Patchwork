@@ -4,6 +4,7 @@
 /// The app's version, from `tauri.conf.json` (see build.rs).
 pub const VERSION: &str = env!("PATCHWORK_VERSION");
 
+pub mod agents;
 pub mod debug_log;
 pub mod import;
 pub mod orchestration;
@@ -79,6 +80,8 @@ pub struct Server {
     project_watch: std::sync::Mutex<Option<(String, watch::ProjectWatcher)>>,
     /// The watcher on the skills folder, while Settings shows the skills.
     skills_watch: std::sync::Mutex<Option<skills::Watcher>>,
+    /// The custom agents that `&name` summons.
+    pub agents: Arc<agents::Library>,
 }
 
 /// Trims a user-entered name; blank names are refused.
@@ -347,6 +350,7 @@ impl Server {
         provider::api_config::init(&config_dir);
         provider::mcp::init(&config_dir);
         skills::init(&config_dir);
+        let agents = agents::Library::open(&config_dir);
         std::thread::spawn(scope::prepare);
         let clis_dir = config_dir.join("clis");
         let logs = debug_log::session_dir(&config_dir);
@@ -367,6 +371,7 @@ impl Server {
             sink,
             project_watch: std::sync::Mutex::default(),
             skills_watch: std::sync::Mutex::default(),
+            agents,
         });
         let weak = Arc::downgrade(&server);
         provider::mcp::set_hook_handler(Box::new(move |request| match weak.upgrade() {
@@ -1072,13 +1077,14 @@ impl Server {
         if provider::is_goal_command(&text) {
             self.runner.retire_idle(&thread_id);
         }
-        // A message that names a skill as "$name" anywhere reaches the agent in the form it runs,
-        // as `start_turn` sends it too.
+        // A message that names a skill as "$name" or summons an agent as "&name" anywhere reaches
+        // the agent in the form it runs, as `start_turn` sends it too.
         let skills = skills::enabled(&self.store.settings());
         let steer_text = match (self.store.thread(&thread_id), skills::invoked(&text, &skills)) {
             (Some(thread), Some((skill, rest))) => skills::invocation(thread.agent, &skill, rest),
             _ => text.clone(),
         };
+        let steer_text = self.agents.summon(steer_text);
         // While a turn runs, the message steers it, or waits for it to end when the
         // agent cannot take it now.
         let delivery = if queue {

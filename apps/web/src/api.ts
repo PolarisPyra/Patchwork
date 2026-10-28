@@ -420,6 +420,20 @@ export interface SkillsView {
   skills: Skill[];
 }
 
+/** A custom agent in Patchwork's agents folder; "&name" in a message summons it. */
+export interface CustomAgent {
+  /** The file's name without `.md`. */
+  name: string;
+  description: string | null;
+  path: string;
+}
+
+export interface AgentsView {
+  /** The agents folder. */
+  dir: string;
+  agents: CustomAgent[];
+}
+
 /** How much an agent may do without asking. */
 export type AccessMode = "supervised" | "auto-accept-edits" | "auto" | "full-access";
 
@@ -864,6 +878,14 @@ export const api = {
   },
   unwatchSkills: () => invoke<void>("unwatch_skills"),
   openSkill: (path: string) => invoke<void>("open_skill", { path }),
+  /** The agents now, and on `onChange` after each change to them, until another watch. */
+  watchAgents: (onChange: (view: AgentsView) => void) => {
+    const channel = new Channel<AgentsView>();
+    channel.onmessage = onChange;
+    return invoke<AgentsView>("watch_agents", { onChange: channel });
+  },
+  openAgent: (path: string) => invoke<void>("open_agent", { path }),
+  openAgentsFolder: () => invoke<void>("open_agents_folder"),
   openLogsFolder: () => invoke<void>("open_logs_folder"),
   exportLogs: (path: string) => invoke<void>("export_logs", { path }),
   logChannels: () => invoke<string[]>("log_channels"),

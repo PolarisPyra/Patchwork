@@ -15,7 +15,12 @@ import { highlightBlock } from "~/components/canvas/highlight";
 import { SYNTAX_CLASSES } from "~/components/canvas/syntaxClasses";
 import { ACTION_CLASS, CopyButton } from "~/components/chat/CopyButton";
 import { CHOICES_LANG } from "~/components/chat/choices";
-import { GOAL_CLASS, MENTION_CLASS, SKILL_CLASS } from "~/components/chat/composerExtensions";
+import {
+  AGENT_CLASS,
+  GOAL_CLASS,
+  MENTION_CLASS,
+  SKILL_CLASS,
+} from "~/components/chat/composerExtensions";
 import { selectionMarkdown } from "~/lib/markdownCopy";
 
 /** Links open in the system browser only with one of these protocols; others are shown as text. */
@@ -140,7 +145,7 @@ export default memo(function Markdown({
   text: string;
   /** The user wrote the text, so an indented line is pasted text rather than a code block. */
   typed?: boolean;
-  /** Shows `/goal`, `$skill` and `@path` as the chips the composer showed for them. */
+  /** Shows `/goal`, `$skill`, `&agent` and `@path` as the chips the composer showed for them. */
   chips?: boolean;
 }) {
   // Each block parses on its own, so a streaming reply re-parses only its last block.
@@ -196,6 +201,9 @@ const REHYPE_PLUGINS = [rehypeTrimBreaks];
  * hyphens, so `$HOME` or `$5` stays text. */
 const SKILL_TOKEN = /(^|\s)(\$[a-z][a-z0-9]*(?:[-_:][a-z0-9]+)*)(?=[\s.,!?;:)]|$)/g;
 
+/** A summoned agent, `&name` after a space, as the composer writes it. */
+const AGENT_TOKEN = /(^|\s)(&[A-Za-z][A-Za-z0-9]*(?:[-_][A-Za-z0-9]+)*)(?=[\s.,!?;:)]|$)/g;
+
 /** A file mention, `@path` after a space, as the composer writes it; punctuation after it stays
  * text. Only a path with a slash or a dot counts, so `@name` stays text. */
 const MENTION_TOKEN = /(^|\s)(@\S*[^\s.,!?;:)])/g;
@@ -213,8 +221,8 @@ function chip(
   };
 }
 
-/** A text node cut into text and chips: `/goal` when the text starts with it, each `$skill`, and
- * each `@path`, which carries its path for the click that opens it. */
+/** A text node cut into text and chips: `/goal` when the text starts with it, each `$skill` and
+ * `&agent`, and each `@path`, which carries its path for the click that opens it. */
 function chipPieces(value: string, start: boolean): HastNode[] {
   const pieces: HastNode[] = [];
   let last = 0;
@@ -228,6 +236,10 @@ function chipPieces(value: string, start: boolean): HastNode[] {
     ...[...value.matchAll(SKILL_TOKEN)].map((match) => ({
       match,
       node: chip(match[2], SKILL_CLASS),
+    })),
+    ...[...value.matchAll(AGENT_TOKEN)].map((match) => ({
+      match,
+      node: chip(match[2], AGENT_CLASS),
     })),
     ...[...value.matchAll(MENTION_TOKEN)]
       .filter((match) => /[./]/.test(match[2].slice(1)))

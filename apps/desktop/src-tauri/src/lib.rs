@@ -112,6 +112,43 @@ fn open_skills_folder(app: AppHandle, server: Srv) -> Res<()> {
     open_folder(&app, &patchwork_server::skills::dir(&server.store.settings()))
 }
 
+#[derive(serde::Serialize)]
+struct AgentsView {
+    dir: String,
+    agents: std::sync::Arc<[patchwork_server::agents::Agent]>,
+}
+
+/// The custom agents and their folder now, and again on `on_change` after each change to them,
+/// until another watch takes its place.
+#[tauri::command]
+fn watch_agents(server: Srv, on_change: Channel<AgentsView>) -> AgentsView {
+    let dir = server.agents.dir().to_string_lossy().into_owned();
+    let sent = dir.clone();
+    server.agents.subscribe(move |agents| {
+        let _ = on_change.send(AgentsView { dir: sent.clone(), agents });
+    });
+    AgentsView { dir, agents: server.agents.list() }
+}
+
+/// Opens a custom agent's file in the user's editor.
+#[tauri::command]
+fn open_agent(server: Srv, path: String) -> Res<()> {
+    if !server.agents.list().iter().any(|a| a.path == path) {
+        return Err("That is not an agent".into());
+    }
+    let path = std::path::PathBuf::from(path);
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
+        return Err("That is not an agent".into());
+    };
+    workspace::open_in_editor(&dir.to_string_lossy(), &name.to_string_lossy())
+}
+
+/// Opens the agents folder in the file manager, creating it first.
+#[tauri::command]
+fn open_agents_folder(app: AppHandle, server: Srv) -> Res<()> {
+    open_folder(&app, server.agents.dir())
+}
+
 /// Opens the folder of the debug logs in the file manager, creating it first.
 #[tauri::command]
 fn open_logs_folder(app: AppHandle) -> Res<()> {
@@ -979,6 +1016,9 @@ pub fn run() {
             watch_skills,
             unwatch_skills,
             open_skill,
+            watch_agents,
+            open_agent,
+            open_agents_folder,
             open_logs_folder,
             log_channels,
             read_log,

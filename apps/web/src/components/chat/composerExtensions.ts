@@ -22,6 +22,8 @@ export const GOAL_CLASS =
   "rounded-[4px] bg-accent/30 px-1 font-[family-name:var(--font-mono)] text-[0.9em] leading-none text-fg [box-decoration-break:clone]";
 export const SKILL_CLASS =
   "rounded-[4px] bg-success/25 px-1 font-[family-name:var(--font-mono)] text-[0.9em] leading-none text-fg [box-decoration-break:clone]";
+export const AGENT_CLASS =
+  "rounded-[4px] bg-warning/25 px-1 font-[family-name:var(--font-mono)] text-[0.9em] leading-none text-fg [box-decoration-break:clone]";
 export const MENTION_CLASS = "rounded-[4px] bg-selected-muted px-1 text-accent-text";
 // The image chip has no line height of its own and is lowered a quarter em, so its middle is the
 // text's middle.
@@ -105,6 +107,55 @@ export const SkillCommand = Node.create<{ isSkill: (name: string) => boolean }>(
           if (!isSkill(match[1])) return null;
           // The match can start with the space before the `$`, which stays.
           const from = range.from + match[0].indexOf("$");
+          state.tr.replaceWith(from, range.to, [
+            type.create({ name: match[1] }),
+            state.schema.text(" "),
+          ]);
+        },
+      }),
+    ];
+  },
+});
+
+/**
+ * A custom agent picked from the `&` menu, or typed as `&name ` anywhere in the draft, sent as
+ * `&name`. An atom, like a skill.
+ */
+export const AgentCommand = Node.create<{ isAgent: (name: string) => boolean }>({
+  name: "agentCommand",
+  addOptions() {
+    return { isAgent: () => false };
+  },
+  group: "inline",
+  inline: true,
+  atom: true,
+  selectable: false,
+  addAttributes() {
+    return {
+      name: {
+        default: "",
+        parseHTML: (element) => element.getAttribute("data-agent-command") ?? "",
+        renderHTML: (attributes) => ({ "data-agent-command": attributes.name }),
+      },
+    };
+  },
+  parseHTML() {
+    return [{ tag: "span[data-agent-command]" }];
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    return ["span", mergeAttributes(HTMLAttributes, { class: AGENT_CLASS }), `&${node.attrs.name}`];
+  },
+  renderMarkdown: (node: { attrs?: { name?: string } }) => `&${node.attrs?.name ?? ""}`,
+  addInputRules() {
+    const type = this.type;
+    const isAgent = this.options.isAgent;
+    return [
+      new InputRule({
+        find: /(?:^|\s)&([A-Za-z][A-Za-z0-9]*(?:[-_][A-Za-z0-9]+)*)\s$/,
+        handler: ({ state, range, match }) => {
+          if (!isAgent(match[1])) return null;
+          // The match can start with the space before the `&`, which stays.
+          const from = range.from + match[0].indexOf("&");
           state.tr.replaceWith(from, range.to, [
             type.create({ name: match[1] }),
             state.schema.text(" "),
@@ -285,6 +336,7 @@ export function composerExtensions(
   placeholder: string,
   mentionSuggestion: MentionSuggestion,
   isSkill: (name: string) => boolean,
+  isAgent: (name: string) => boolean,
 ) {
   return [
     // Links keep their Markdown form; clicking one in a draft does not open it. Text dropped in
@@ -321,6 +373,7 @@ export function composerExtensions(
     Markdown,
     GoalCommand,
     SkillCommand.configure({ isSkill }),
+    AgentCommand.configure({ isAgent }),
     InlineImage,
     MarkdownLine,
     SelectAllText,
