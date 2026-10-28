@@ -5,9 +5,9 @@ Rules for coding agents working in the Rust code in this repo (`apps/server` and
 ## Scratch files
 
 - **NEVER** use `/tmp` or `$TMPDIR`, and never leave a working file there. `/tmp` is a tmpfs on this machine: everything written to it is held in RAM until the machine restarts. Unpacking two desktop apps there costs about 750 MB of memory for the rest of the session, and `cargo clean` does not get it back.
-- **MUST** keep scratch work on disk under `target/scratch/`, one folder per job, and delete the folder when the job is done. `/target` is already in `.gitignore`, it is on the same filesystem as the checkout, and `cargo clean` clears it.
-- This covers extractions, unpacked archives, screenshots and check output, throwaway clones, downloaded releases, and any path a tool asks to be handed. When a tool has a default that lands in `/tmp`, pass it an explicit path under `target/scratch/` instead.
-- It also holds when a skill says otherwise. A skill that names `$TMPDIR` or `/tmp` is out of date; this rule wins, so say so rather than following it.
+- **MUST** keep scratch work in `research/` at the repo root, one folder per job, and delete the folder when the job is done. `research/` is in `.gitignore`, so nothing in it is ever committed or pushed.
+- This covers extractions, unpacked archives, screenshots and check output, throwaway clones, downloaded releases, and any path a tool asks to be handed. When a tool has a default that lands in `/tmp`, pass an explicit path under `research/` instead.
+- It also holds when a skill says otherwise. A skill that names `$TMPDIR`, `/tmp`, or `target/scratch/` is out of date; this rule wins, so say so rather than following it.
 
 ## Error handling
 

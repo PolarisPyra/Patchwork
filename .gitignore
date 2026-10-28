@@ -4,3 +4,5 @@ dist
 apps/desktop/src-tauri/gen
 .env
 .release-notes
+# Scratch work: extractions, throwaway clones, screenshots, check output. See AGENTS.md.
+/research
