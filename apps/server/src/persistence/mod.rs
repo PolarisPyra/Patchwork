@@ -212,6 +212,7 @@ mod tests {
             last_run_at: None,
             next_run_at: None,
             created_at: 7,
+            recent_runs: Vec::new(),
         };
         let saved = store.save_scheduled_task(task).unwrap();
         assert!(!saved.id.is_empty(), "a new task is given an id");
@@ -226,9 +227,26 @@ mod tests {
         assert_eq!(tasks[0].schedule, saved.schedule);
         assert!(store.has_scheduled_task(&saved.id));
 
-        store.scheduled_task_ran(&saved.id, 99, Some(123)).unwrap();
+        store.scheduled_task_ran(&saved.id, 99, Some(123), Ok("thread")).unwrap();
         assert_eq!(store.scheduled_tasks()[0].last_run_at, Some(99));
         assert_eq!(store.scheduled_tasks()[0].next_run_at, Some(123));
+
+        // A skipped slot is dated by the slot it missed; history keeps the newest five.
+        store.scheduled_task_skipped(&saved.id, Some(456)).unwrap();
+        assert_eq!(store.scheduled_tasks()[0].next_run_at, Some(456));
+        for at in 200..205 {
+            store.scheduled_task_ran(&saved.id, at, Some(456), Err("no agent")).unwrap();
+        }
+        let runs = &store.scheduled_tasks()[0].recent_runs;
+        let ats: Vec<i64> = runs.iter().map(|run| run.at).collect();
+        assert_eq!(ats, [204, 203, 202, 201, 200]);
+        assert_eq!(runs[0].outcome, crate::types::RunOutcome::Failed);
+        assert_eq!(runs[0].detail.as_deref(), Some("no agent"));
+        store.scheduled_task_ran(&saved.id, 100, Some(456), Ok("thread")).unwrap();
+        store.scheduled_task_skipped(&saved.id, Some(789)).unwrap();
+        let runs = &store.scheduled_tasks()[0].recent_runs;
+        assert_eq!(runs[0].at, 456, "the skipped slot");
+        assert_eq!(runs[0].outcome, crate::types::RunOutcome::Skipped);
 
         store.remove_scheduled_task(&saved.id).unwrap();
         assert!(store.scheduled_tasks().is_empty());
@@ -255,6 +273,7 @@ mod tests {
             last_run_at: None,
             next_run_at: None,
             created_at: 0,
+            recent_runs: Vec::new(),
         };
         assert!(store.save_scheduled_task(task("", "09:00")).is_err());
         assert!(store.save_scheduled_task(task("n", "nine")).is_err());

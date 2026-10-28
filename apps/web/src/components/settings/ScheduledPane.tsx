@@ -12,6 +12,7 @@ import {
   api,
   type AgentKind,
   type AccessMode,
+  type ScheduledRun,
   type ScheduledTask,
   type Settings,
   type Weekday,
@@ -76,6 +77,41 @@ function when(at: number | null): string {
   });
 }
 
+const OUTCOME: Record<ScheduledRun["outcome"], { verb: string; dot: string }> = {
+  started: { verb: "Ran", dot: "bg-accent" },
+  failed: { verb: "Failed", dot: "bg-danger" },
+  skipped: { verb: "Skipped", dot: "bg-fg-subtle" },
+};
+
+/** A task's newest runs as dots, oldest to newest, then the newest one spelled out. */
+function RunHistory({ runs }: { runs: ScheduledRun[] }) {
+  const newest = runs[0];
+  if (!newest) {
+    return <div className="text-[length:var(--fs-xs)] text-fg-subtle">Has not run yet</div>;
+  }
+  const title = runs
+    .map((r) =>
+      [when(r.at), OUTCOME[r.outcome].verb.toLowerCase(), r.detail].filter(Boolean).join(" · "),
+    )
+    .join("\n");
+  return (
+    <div
+      className="flex min-w-0 items-center gap-1.5 text-[length:var(--fs-xs)] text-fg-subtle"
+      title={title}
+    >
+      <span className="flex flex-none items-center gap-0.5">
+        {[...runs].reverse().map((r, i) => (
+          <span key={i} className={`size-1.5 rounded-full ${OUTCOME[r.outcome].dot}`} />
+        ))}
+      </span>
+      <span className="truncate">
+        {OUTCOME[newest.outcome].verb} {when(newest.at)} · {runs.length} recent{" "}
+        {runs.length === 1 ? "run" : "runs"}
+      </span>
+    </div>
+  );
+}
+
 /** A blank task, with the settings a new one starts from. */
 function blank(agent: AgentKind): ScheduledTask {
   return {
@@ -91,6 +127,7 @@ function blank(agent: AgentKind): ScheduledTask {
     lastRunAt: null,
     nextRunAt: null,
     createdAt: Date.now(),
+    recentRuns: [],
   };
 }
 
@@ -166,11 +203,17 @@ export default function ScheduledPane({
                     ? ` · ${settings.projects.find((p) => p.id === task.projectId)?.name ?? "project"}`
                     : " · chat"}
                 </div>
+                <RunHistory runs={task.recentRuns} />
               </div>
               <button
                 className="btn flex-none"
                 title="Start this task now"
-                onClick={() => run(() => api.runScheduledTask(task.id))}
+                onClick={() =>
+                  run(async () => {
+                    await api.runScheduledTask(task.id);
+                    setTasks(await api.listScheduledTasks());
+                  })
+                }
               >
                 <PlayIcon size={13} />
                 Run

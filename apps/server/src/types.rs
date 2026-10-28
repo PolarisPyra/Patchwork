@@ -564,6 +564,29 @@ pub struct ScheduledTask {
     /// When it next starts, in Unix milliseconds.
     pub next_run_at: Option<i64>,
     pub created_at: i64,
+    /// The newest few runs, newest first.
+    #[serde(default)]
+    pub recent_runs: Vec<ScheduledRun>,
+}
+
+/// One time a scheduled task's slot came round.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduledRun {
+    /// When it started, or for a skipped run the slot it missed, in Unix milliseconds.
+    pub at: i64,
+    pub thread_id: Option<String>,
+    pub outcome: RunOutcome,
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RunOutcome {
+    Started,
+    Failed,
+    /// Its time went by more than a day ago, so it was not run late.
+    Skipped,
 }
 
 /// How often a scheduled task runs. The shapes Codex's own tasks use.

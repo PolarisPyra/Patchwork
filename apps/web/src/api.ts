@@ -80,7 +80,21 @@ export interface ScheduledTask {
   lastRunAt: number | null;
   nextRunAt: number | null;
   createdAt: number;
+  /** The newest few runs, newest first. */
+  recentRuns: ScheduledRun[];
 }
+
+/** One time a scheduled task's slot came round. */
+export interface ScheduledRun {
+  /** When it started, or for a skipped run the slot it missed. */
+  at: number;
+  threadId: string | null;
+  outcome: RunOutcome;
+  detail: string | null;
+}
+
+/** `skipped`: its time went by more than a day ago, so it was not run late. */
+export type RunOutcome = "started" | "failed" | "skipped";
 
 export type Weekday = "MO" | "TU" | "WE" | "TH" | "FR" | "SA" | "SU";
 

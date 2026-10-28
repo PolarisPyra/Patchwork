@@ -1,10 +1,18 @@
-//! The `scheduled_tasks` table: a prompt, its schedule, and when it last and next runs.
+//! The `scheduled_tasks` table: a prompt, its schedule, and when it last and next runs; and
+//! `scheduled_task_runs`, the newest few runs of each.
+
+use std::collections::HashMap;
 
 use rusqlite::{OptionalExtension, params};
 
 use super::codec::{dec, enc, err, json};
 use super::store::{Inner, Store};
-use crate::types::{AccessMode, AgentKind, Schedule, ScheduledTask, new_id};
+use crate::types::{
+    AccessMode, AgentKind, RunOutcome, Schedule, ScheduledRun, ScheduledTask, new_id, now_ms,
+};
+
+/// How many runs each task keeps.
+const RECENT_RUNS: i64 = 5;
 
 struct Row {
     id: String,
@@ -49,10 +57,12 @@ pub(super) fn load(inner: &Inner) -> crate::Res<Vec<ScheduledTask>> {
         })
         .map_err(err)?;
     let rows = rows.collect::<Result<Vec<_>, _>>().map_err(err)?;
+    let mut runs = recent_runs(inner)?;
     rows.into_iter()
         .map(|row| {
             let schedule: Schedule = serde_json::from_str(&row.schedule)
                 .map_err(|e| format!("Database error: scheduled task {}: {e}", row.id))?;
+            let recent_runs = runs.remove(&row.id).unwrap_or_default();
             Ok(ScheduledTask {
                 id: row.id,
                 name: row.name,
@@ -66,9 +76,69 @@ pub(super) fn load(inner: &Inner) -> crate::Res<Vec<ScheduledTask>> {
                 last_run_at: row.last_run_at,
                 next_run_at: row.next_run_at,
                 created_at: row.created_at,
+                recent_runs,
             })
         })
         .collect()
+}
+
+/// The newest runs of every task, newest first, by task id, in one query.
+fn recent_runs(inner: &Inner) -> crate::Res<HashMap<String, Vec<ScheduledRun>>> {
+    let mut stmt = inner
+        .conn
+        .prepare(
+            "SELECT task_id, started_at, thread_id, outcome, detail FROM (
+                 SELECT *, ROW_NUMBER() OVER (
+                     PARTITION BY task_id ORDER BY started_at DESC, id DESC
+                 ) AS n
+                 FROM scheduled_task_runs
+             )
+             WHERE n <= ?1
+             ORDER BY task_id, started_at DESC, id DESC",
+        )
+        .map_err(err)?;
+    let rows = stmt
+        .query_map([RECENT_RUNS], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                ScheduledRun {
+                    at: row.get(1)?,
+                    thread_id: row.get(2)?,
+                    outcome: dec(row.get::<_, String>(3)?)?,
+                    detail: row.get(4)?,
+                },
+            ))
+        })
+        .map_err(err)?;
+    let mut runs: HashMap<String, Vec<ScheduledRun>> = HashMap::new();
+    for row in rows {
+        let (task_id, run) = row.map_err(err)?;
+        runs.entry(task_id).or_default().push(run);
+    }
+    Ok(runs)
+}
+
+/// Adds a run to a task's history and drops all but its newest few.
+fn record_run(inner: &Inner, task_id: &str, run: &ScheduledRun) -> crate::Res<()> {
+    inner
+        .conn
+        .execute(
+            "INSERT INTO scheduled_task_runs (task_id, started_at, thread_id, outcome, detail)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![task_id, run.at, run.thread_id, enc(&run.outcome), run.detail],
+        )
+        .map_err(err)?;
+    inner
+        .conn
+        .execute(
+            "DELETE FROM scheduled_task_runs WHERE task_id = ?1 AND id NOT IN (
+                 SELECT id FROM scheduled_task_runs WHERE task_id = ?1
+                 ORDER BY started_at DESC, id DESC LIMIT ?2
+             )",
+            params![task_id, RECENT_RUNS],
+        )
+        .map_err(err)?;
+    Ok(())
 }
 
 fn save(inner: &Inner, task: &ScheduledTask) -> crate::Res<()> {
@@ -145,11 +215,22 @@ impl Store {
             .conn
             .execute("DELETE FROM scheduled_tasks WHERE id = ?1", [id])
             .map_err(err)?;
+        inner
+            .conn
+            .execute("DELETE FROM scheduled_task_runs WHERE task_id = ?1", [id])
+            .map_err(err)?;
         Ok(())
     }
 
-    /// Records that a task started at `at` and will next start at `next`.
-    pub fn scheduled_task_ran(&self, id: &str, at: i64, next: Option<i64>) -> crate::Res<()> {
+    /// Records that a task was started at `at`, and will next start at `next`. `started` is the
+    /// thread it started, or why it did not start one.
+    pub fn scheduled_task_ran(
+        &self,
+        id: &str,
+        at: i64,
+        next: Option<i64>,
+        started: Result<&str, &str>,
+    ) -> crate::Res<()> {
         let inner = self.lock();
         let changed = inner
             .conn
@@ -161,7 +242,51 @@ impl Store {
         if changed == 0 {
             return Err("The scheduled task no longer exists".into());
         }
-        Ok(())
+        let run = match started {
+            Ok(thread_id) => ScheduledRun {
+                at,
+                thread_id: Some(thread_id.to_string()),
+                outcome: RunOutcome::Started,
+                detail: None,
+            },
+            Err(why) => ScheduledRun {
+                at,
+                thread_id: None,
+                outcome: RunOutcome::Failed,
+                detail: Some(why.to_string()),
+            },
+        };
+        record_run(&inner, id, &run)
+    }
+
+    /// Records that a task's slot went by too long ago to run late, and moves it on to `next`.
+    /// The skipped run is dated by the slot it missed.
+    pub fn scheduled_task_skipped(&self, id: &str, next: Option<i64>) -> crate::Res<()> {
+        let inner = self.lock();
+        let missed: Option<i64> = inner
+            .conn
+            .query_row(
+                "SELECT next_run_at FROM scheduled_tasks WHERE id = ?1",
+                [id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(err)?
+            .ok_or("The scheduled task no longer exists")?;
+        inner
+            .conn
+            .execute(
+                "UPDATE scheduled_tasks SET next_run_at = ?2 WHERE id = ?1",
+                params![id, next],
+            )
+            .map_err(err)?;
+        let run = ScheduledRun {
+            at: missed.unwrap_or_else(|| now_ms() as i64),
+            thread_id: None,
+            outcome: RunOutcome::Skipped,
+            detail: Some("Its time went by more than a day ago".into()),
+        };
+        record_run(&inner, id, &run)
     }
 
     /// Whether the table has a task with this id.

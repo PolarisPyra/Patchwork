@@ -104,13 +104,35 @@ pub fn describe(schedule: &Schedule) -> String {
     }
 }
 
-/// Tasks that are due now: enabled, and with a next run at or before `now_ms`. A task with no
-/// next run yet gets one, so a newly saved task does not fire immediately.
-pub fn due(tasks: &[ScheduledTask], now_ms: i64) -> Vec<&ScheduledTask> {
-    tasks
-        .iter()
-        .filter(|task| task.enabled && task.next_run_at.is_some_and(|at| at <= now_ms))
-        .collect()
+/// How late a slot may still run: one missed while the app was closed or asleep runs when it
+/// comes back, unless it went by more than this long ago. A week-old "what changed today" is
+/// worth nothing.
+pub const CATCH_UP_WITHIN_MS: i64 = 24 * 60 * 60 * 1000;
+
+/// What to do with a task on a tick.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Action {
+    /// Its slot has come, recently enough to run.
+    Run,
+    /// Its slot went by longer ago than `CATCH_UP_WITHIN_MS`: move on to the next one.
+    Skip,
+    /// Not due, or switched off.
+    Wait,
+}
+
+/// What to do with `task` at `now_ms`. A task with no next run waits, so saving one does not
+/// fire it.
+pub fn action(task: &ScheduledTask, now_ms: i64) -> Action {
+    match task.next_run_at {
+        Some(at) if task.enabled && at <= now_ms => {
+            if now_ms - at <= CATCH_UP_WITHIN_MS {
+                Action::Run
+            } else {
+                Action::Skip
+            }
+        }
+        Some(_) | None => Action::Wait,
+    }
 }
 
 #[cfg(test)]
@@ -187,7 +209,7 @@ mod tests {
     }
 
     #[test]
-    fn due_only_lists_enabled_tasks_whose_time_has_come() {
+    fn a_task_runs_when_due_and_skips_a_slot_long_gone() {
         let task = |enabled: bool, next_run_at: Option<i64>| ScheduledTask {
             id: "t".into(),
             name: "n".into(),
@@ -203,18 +225,17 @@ mod tests {
             last_run_at: None,
             next_run_at,
             created_at: 0,
+            recent_runs: Vec::new(),
         };
-        let tasks = vec![
-            task(true, Some(10)),
-            task(false, Some(10)),
-            task(true, None),
-        ];
-        let now = 10;
-        let names: Vec<&str> = due(&tasks, now)
-            .iter()
-            .map(|task| task.name.as_str())
-            .collect();
-        assert_eq!(names, vec!["n"]);
+        let slot = 1_000;
+        assert_eq!(action(&task(true, Some(slot)), slot), Action::Run);
+        assert_eq!(action(&task(true, Some(slot)), slot - 1), Action::Wait);
+        assert_eq!(action(&task(false, Some(slot)), slot), Action::Wait);
+        assert_eq!(action(&task(true, None), slot), Action::Wait);
+        // Up to a day late still runs; later than that is skipped.
+        let day_late = slot + CATCH_UP_WITHIN_MS;
+        assert_eq!(action(&task(true, Some(slot)), day_late), Action::Run);
+        assert_eq!(action(&task(true, Some(slot)), day_late + 1), Action::Skip);
     }
 
     /// The JSON the web UI reads and writes, which is what the database holds too.
