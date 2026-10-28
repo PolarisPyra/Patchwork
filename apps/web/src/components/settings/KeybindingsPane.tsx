@@ -52,6 +52,8 @@ const FIXED: Record<ShortcutPage, { keys: string[]; action: string }[]> = {
 const PAGES = SHORTCUT_PAGES.filter(
   (p) => FIXED[p].length > 0 || COMMANDS.some((c) => c.page === p && !c.fixed),
 );
+const MODIFIERS = ["Shift", "AltGraph", "Control", "Alt", "Meta", "CapsLock"];
+
 /** The last tab: the characters that open the composer's menus. */
 const SIGILS_PAGE = "Sigils";
 type Page = ShortcutPage | typeof SIGILS_PAGE;
@@ -118,7 +120,8 @@ export default function KeybindingsPane() {
     function onKey(event: KeyboardEvent) {
       event.preventDefault();
       event.stopPropagation();
-      if (event.isComposing || ["Shift", "AltGraph"].includes(event.key)) return;
+      // A modifier on its own is part of typing the symbol, not the symbol.
+      if (event.isComposing || MODIFIERS.includes(event.key)) return;
       if (event.key === "Escape") {
         setRecordingSigil(null);
         return;
