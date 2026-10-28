@@ -187,7 +187,9 @@ export function selectionMarkdown(root: HTMLElement): { markdown: string; html: 
   const range = selection.getRangeAt(0);
   const common = range.commonAncestorContainer;
   const container = common instanceof HTMLElement ? common : common.parentElement;
-  if (!container || !root.contains(container) || container.closest("pre")) return null;
+  if (!container || !root.contains(container) || container.closest("pre, [data-code]")) {
+    return null;
+  }
   // The selection keeps the element it sits in, so a list item keeps its list and a cell its table.
   const wrapper = container.cloneNode(false) as HTMLElement;
   wrapper.append(range.cloneContents());
