@@ -8,10 +8,8 @@ name: Release
 # Run it by hand (Actions → Release → Run workflow) to build every platform without publishing
 # anything, to try a change to the build before tagging. Only a pushed tag publishes.
 #
-# A push to main that changes the Rust dependencies builds Linux and Windows without publishing,
-# only to save their dependency caches: a tag's run can restore caches saved on main, but not ones
-# saved by another tag, and a cold build costs about 70 of the private repo's counted minutes. A
-# release commit changes no Cargo file, so pushing it with its tag starts only the tag's run.
+# A run by hand on main also saves the dependency caches, which a tag's run can restore: a cold
+# build costs about 70 of the private repo's counted minutes. Pushes to main start no run.
 #
 # Actions are pinned to commits, so a moved tag can't change what runs next to the secrets. The
 # comment after each names the version it was.
@@ -20,14 +18,6 @@ on:
   push:
     tags:
       - "v*"
-    # GitHub ignores `paths` for tag pushes, so it only narrows the pushes to main.
-    branches:
-      - main
-    paths:
-      - Cargo.lock
-      - "**/Cargo.toml"
-      - .github/workflows/release.yml
-      - .github/actions/**
   workflow_dispatch:
 
 permissions:
@@ -39,7 +29,7 @@ concurrency:
 
 env:
   # Pinned: a cache is only reused by the same compiler, and the CI workflow checks with this one.
-  # Raising it rebuilds the caches on the next push to main that changes a Cargo file.
+  # Raising it rebuilds the caches on the next run by hand from main.
   RUST_TOOLCHAIN: "1.99.0"
   PUBLISH: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
 

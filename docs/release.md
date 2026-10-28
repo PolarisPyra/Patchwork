@@ -29,7 +29,7 @@ These files do all of it:
 | --- | --- |
 | `scripts/release.sh` | Cuts the release on your machine, and does the build and publish steps in CI |
 | `.github/workflows/release.yml` | Builds each platform with `scripts/release.sh`, and publishes a tag |
-| `.github/workflows/ci.yml` | Checks every push to `main` and every pull request |
+| `.github/workflows/ci.yml` | Checks every pull request, and runs by hand |
 | `.github/actions/setup` | The runner setup both workflows share: Linux packages, Rust, pnpm, Node |
 | `scripts/changelog.sh` | Checks commit messages, writes each release's notes from them, and reads and writes `CHANGELOG.md` |
 | `docs/changelog-style.md` | The rules for changelog entries |
@@ -133,17 +133,17 @@ prints the download links. Ctrl-C stops only the watching, not the build.
 
 ## The CI workflow
 
-`.github/workflows/ci.yml` checks every push to `main` and every pull request, on the
+`.github/workflows/ci.yml` checks every pull request, and runs when started by hand, on the
 `ubuntu-22.04` runner the AppImage is built on: it builds the web app, runs `pnpm check` and
 `cargo test --workspace`, and fails if the generated wire types differ from the committed ones.
-These are the checks `scripts/release.sh` runs before a release, so a release starts from a commit
-that already passed them, and a Linux build problem shows on the push that caused it. Its Rust cache
-is saved only from `main`. A newer push to the same branch cancels an older run.
+These are the checks `scripts/release.sh` runs before a release. Pushes to `main` start no run, so a
+plain push costs no Actions minutes. Its Rust cache is saved only from `main`. A newer run on the
+same branch cancels an older one.
 
 ## The Release workflow
 
-`.github/workflows/release.yml` runs on a `v*` tag, and on a push to `main` that changes
-the Rust dependencies (see [Caches](#caches)). Other pushes to `main` build nothing.
+`.github/workflows/release.yml` runs on a `v*` tag, and when started by hand (see
+[Caches](#caches)). Pushes to `main` build nothing.
 
 | Job | Runner | Commands | Publishes |
 | --- | --- | --- | --- |
@@ -179,11 +179,8 @@ only a pushed tag uploads files or creates a release.
 Most of each build is compiling the Rust dependencies. A tag's run can restore caches saved on
 `main`, but not ones saved by another tag, so the dependency caches are saved only on `main`:
 
-- A push to `main` that changes `Cargo.lock`, a `Cargo.toml`, or the workflow builds Linux and
-  Windows without publishing anything, and saves their caches. The release commit changes no Cargo
-  file, so its push to `main` starts no run; only its tag does. GitHub matches the paths against
-  every commit in a push, so the script pushes commits that are not on `origin` yet on their own
-  first; one of them that changes a Cargo file starts its cache build under its own name.
+- A run by hand on `main` builds Linux and Windows without publishing anything, and saves their
+  caches. Run it after a change to a Cargo file, before the next tag. Pushes to `main` start no run.
 - Tag runs restore those caches and save none.
 - The Rust toolchain is pinned (`RUST_TOOLCHAIN` in the workflow), because a cache is only reused by
   the same compiler. Raising it rebuilds the caches on that push.
