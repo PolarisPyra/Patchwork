@@ -41,6 +41,7 @@ import {
   SOURCE_LABELS,
   type AgentKind,
   type AgentStatus,
+  type CliKind,
   type ImportScan,
   type ImportSource,
   type LoggingSettings,
@@ -788,15 +789,15 @@ function MinutesStepper({
   );
 }
 
-/** Downloads and installs the Antigravity CLI into Patchwork's CLI folder, then re-checks it. */
-function AntigravityInstall({ onInstalled }: { onInstalled: () => void }) {
+/** Downloads and runs an agent CLI's official installer, then re-checks it. */
+function CliInstall({ kind, onInstalled }: { kind: CliKind; onInstalled: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const install = async () => {
     setBusy(true);
     setError(null);
     try {
-      await api.installAntigravity();
+      await api.installCli(kind);
       onInstalled();
     } catch (e) {
       setError(errorText(e));
@@ -885,8 +886,8 @@ function CliProviderRows({ settings, updateSettings }: PaneProps) {
               <div className="text-[length:var(--fs-sm)] text-fg-muted">{describeAgent(s)}</div>
             </div>
             <span className={`badge${s?.installed ? " badge-success" : ""}`}>{badge}</span>
-            {kind === "antigravity" && !s?.installed && s !== undefined && (
-              <AntigravityInstall onInstalled={refresh} />
+            {!s?.installed && s !== undefined && !path && (
+              <CliInstall kind={kind} onInstalled={refresh} />
             )}
             {path ? (
               <button className="btn" title={path} onClick={() => void setPath(kind, undefined)}>

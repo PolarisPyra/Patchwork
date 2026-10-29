@@ -83,8 +83,8 @@ pub struct Server {
     chats_dir: PathBuf,
     /// Images pasted into a chat, saved as files so they attach like dropped ones.
     pasted_dir: PathBuf,
-    /// Where Patchwork installs agent CLIs (`clis` under the config folder).
-    clis_dir: PathBuf,
+    /// Where an agent CLI's install script is saved while it runs.
+    installers_dir: PathBuf,
     sink: EventSink,
     /// The watcher on the active project, with that project's id.
     project_watch: std::sync::Mutex<Option<(String, watch::ProjectWatcher)>>,
@@ -516,7 +516,6 @@ impl Server {
         plugins::init(&config_dir);
         let agents = agents::Library::open(&config_dir);
         std::thread::spawn(scope::prepare);
-        let clis_dir = config_dir.join("clis");
         let logs = debug_log::session_dir(&config_dir);
         import::debug_log::LOG.init(logs.clone());
         debug_log::RENDERER.init(logs.clone());
@@ -530,7 +529,7 @@ impl Server {
             runner: Runner::default(),
             chats_dir: data_dir.join("chats"),
             pasted_dir: data_dir.join("pasted"),
-            clis_dir,
+            installers_dir: data_dir.join("installers"),
             sink,
             project_watch: std::sync::Mutex::default(),
             skills_watch: std::sync::Mutex::default(),
@@ -548,37 +547,61 @@ impl Server {
         (self.sink)(event);
     }
 
-    /// Whether the Antigravity CLI (`agy`) is installed in Patchwork's CLI folder.
-    pub fn antigravity_installed(&self) -> bool {
-        self.clis_dir.join(provider::antigravity::BINARY).is_file()
-    }
-
-    /// Downloads Antigravity's install script to a file, then runs it into Patchwork's CLI
-    /// folder. The script is saved first, so the file that runs is the one that was fetched.
-    /// Windows gets the PowerShell script, which installs `agy.exe` the same way.
-    pub fn install_antigravity(&self) -> Result<(), String> {
-        std::fs::create_dir_all(&self.clis_dir).map_err(|e| e.to_string())?;
-        let (name, runner): (&str, &[&str]) = if cfg!(windows) {
-            (
-                "install.ps1",
-                &[
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                ],
-            )
-        } else {
-            ("install.sh", &[])
+    /// Downloads `kind`'s official install script to a file, then runs it so it asks nothing. The
+    /// script is saved first, so the file that runs is the one that was fetched. Each CLI goes
+    /// where its installer puts it by default, which Patchwork already searches. Codex and
+    /// OpenCode are kept from editing the shell profile; Antigravity's script always adds its
+    /// folder to it, with no way to opt out. On Windows only the Antigravity CLI is set up, with
+    /// its PowerShell script.
+    pub fn install_cli(&self, kind: AgentKind) -> Result<(), String> {
+        let windows = cfg!(windows);
+        if windows && kind != AgentKind::Antigravity {
+            return Err(
+                "Setting up this CLI from Patchwork is for macOS and Linux for now.".into(),
+            );
+        }
+        let home = provider::home_dir().ok_or("Could not find the home folder")?;
+        let (url, shell, name, bin) = match kind {
+            AgentKind::Claude => (
+                "https://claude.ai/install.sh",
+                "bash",
+                "claude",
+                home.join(".local/bin/claude"),
+            ),
+            AgentKind::Codex => (
+                "https://chatgpt.com/codex/install.sh",
+                "sh",
+                "codex",
+                home.join(".local/bin/codex"),
+            ),
+            AgentKind::Antigravity if windows => (
+                "https://antigravity.google/cli/install.ps1",
+                "powershell",
+                "antigravity",
+                std::env::var_os("LOCALAPPDATA")
+                    .map(PathBuf::from)
+                    .unwrap_or_default()
+                    .join(r"agy\bin\agy.exe"),
+            ),
+            AgentKind::Antigravity => (
+                "https://antigravity.google/cli/install.sh",
+                "bash",
+                "antigravity",
+                home.join(".local/bin/agy"),
+            ),
+            AgentKind::OpenCode => (
+                "https://opencode.ai/install",
+                "bash",
+                "opencode",
+                home.join(".opencode/bin/opencode"),
+            ),
+            AgentKind::Api => return Err("API providers have no CLI to install".into()),
         };
-        let script = self.clis_dir.join(format!("install-antigravity-{name}"));
+        std::fs::create_dir_all(&self.installers_dir).map_err(|e| e.to_string())?;
+        let ext = if windows { "ps1" } else { "sh" };
+        let script = self.installers_dir.join(format!("install-{name}.{ext}"));
         let fetch = crate::host_command("curl")
-            .args([
-                "-fsSL",
-                &format!("https://antigravity.google/cli/{name}"),
-                "-o",
-            ])
+            .args(["-fsSL", url, "-o"])
             .arg(&script)
             .output()
             .map_err(|e| format!("Could not run curl: {e}"))?;
@@ -588,16 +611,39 @@ impl Server {
                 String::from_utf8_lossy(&fetch.stderr).trim()
             ));
         }
-        let shell = if cfg!(windows) { "powershell" } else { "bash" };
-        let run = crate::host_command(shell)
-            .args(runner)
-            .arg(&script)
-            .arg("--dir")
-            .arg(&self.clis_dir)
+        let mut cmd = crate::host_command(shell);
+        if windows {
+            cmd.args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+            ]);
+        }
+        cmd.arg(&script);
+        match kind {
+            AgentKind::Codex => {
+                // The installer adds its folder to the shell profile unless it is on PATH already.
+                let mut paths = vec![home.join(".local/bin")];
+                if let Some(existing) = std::env::var_os("PATH") {
+                    paths.extend(std::env::split_paths(&existing));
+                }
+                if let Ok(joined) = std::env::join_paths(paths) {
+                    cmd.env("PATH", joined);
+                }
+                cmd.env("CODEX_NON_INTERACTIVE", "1");
+            }
+            AgentKind::OpenCode => {
+                cmd.arg("--no-modify-path");
+            }
+            AgentKind::Claude | AgentKind::Antigravity | AgentKind::Api => {}
+        }
+        let run = cmd
             .output()
             .map_err(|e| format!("Could not run the installer: {e}"))?;
         let _ = std::fs::remove_file(&script);
-        if !run.status.success() || !self.antigravity_installed() {
+        if !run.status.success() || !bin.is_file() {
             return Err(format!(
                 "The install did not finish: {}",
                 String::from_utf8_lossy(&run.stderr).trim()

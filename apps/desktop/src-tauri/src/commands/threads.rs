@@ -43,14 +43,9 @@ pub(crate) fn list_files(server: Srv, project_id: String) -> Res<Vec<String>> {
 }
 
 #[tauri::command]
-pub(crate) fn antigravity_installed(server: Srv) -> bool {
-    server.antigravity_installed()
-}
-
-#[tauri::command]
-pub(crate) async fn install_antigravity(server: Srv<'_>) -> Res<()> {
+pub(crate) async fn install_cli(server: Srv<'_>, kind: AgentKind) -> Res<()> {
     let server = server.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || server.install_antigravity())
+    tauri::async_runtime::spawn_blocking(move || server.install_cli(kind))
         .await
         .map_err(|e| e.to_string())?
 }

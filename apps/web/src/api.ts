@@ -478,10 +478,8 @@ export const api = {
   listFolders: () => invoke<Folder[]>("list_folders"),
   /** Files a mention can refer to, relative to the project root. */
   listFiles: (projectId: string) => invoke<string[]>("list_files", { projectId }),
-  /** Whether the Antigravity CLI is installed in Patchwork's CLI folder. */
-  antigravityInstalled: () => invoke<boolean>("antigravity_installed"),
-  /** Downloads and installs the Antigravity CLI into Patchwork's CLI folder. */
-  installAntigravity: () => invoke<void>("install_antigravity"),
+  /** Downloads and runs an agent CLI's official installer. */
+  installCli: (kind: CliKind) => invoke<void>("install_cli", { kind }),
   /** Deletes a chat's messages and agent session; the chat stays, empty. */
   clearThread: (id: string) => invoke<void>("clear_thread", { id }),
   /** The user messages of a thread whose turn can be undone: the project was snapshotted before it. */
