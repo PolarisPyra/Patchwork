@@ -2,6 +2,7 @@
   "name": "patchwork-desktop",
   "private": true,
   "version": "26.1.0",
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "dev": "tauri dev",

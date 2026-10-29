@@ -2,6 +2,7 @@
 name = "patchwork-server"
 # The app's version is in apps/desktop/src-tauri/tauri.conf.json; releases leave this alone.
 version = "0.0.0"
+license = "AGPL-3.0-or-later"
 description = "Patchwork backend: providers, persistence, usage, and thread import"
 edition = "2024"
 rust-version = "1.90"

@@ -2,6 +2,8 @@ import { confirm } from "@tauri-apps/plugin-dialog";
 import { api } from "~/api";
 
 export const RELEASES_URL = "https://github.com/PolarisPyra/Patchwork-ADE/releases/latest";
+/** The license the app ships under, which its version pane links to. */
+export const LICENSE_URL = "https://www.gnu.org/licenses/agpl-3.0.html";
 
 /** Restarts into the installed update. Running agents stop for the restart, and carry on after
  * it, so the user confirms that first. */

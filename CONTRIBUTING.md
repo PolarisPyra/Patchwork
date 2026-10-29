@@ -35,6 +35,18 @@ Patchwork runs the agent CLIs as separate processes. If you change how one is st
 approved, update [Agent CLIs](docs/agent-clis.md) in the same pull request, since that page is the
 reference for those details.
 
+## Licensing of what you send
+
+Patchwork is [AGPL-3.0-or-later](LICENSE), and the project also sells commercial licenses to
+people who cannot use it under the AGPL. For that to keep working, the project has to be able to
+offer your contribution under both. So by opening a pull request you agree that:
+
+- your contribution is licensed to everyone under the AGPL-3.0-or-later, and
+- the maintainer may also license it under other terms, including a commercial license.
+
+If the change is substantial, or your employer owns the copyright in your work, say so in the pull
+request so a signed agreement can be sorted out before it is merged.
+
 ## Questions
 
 Open a discussion or an issue if something here is unclear.

@@ -4,7 +4,7 @@ import { api, onUpdateStatus, type UpdateState, type UpdateStatus } from "~/api"
 import { Markdown } from "~/features/chat";
 import { MinutesStepper, TokenRow } from "~/features/settings/components/controls";
 import type { PaneProps } from "~/features/settings/types";
-import { RELEASES_URL, restartToUpdate } from "~/lib/updates";
+import { LICENSE_URL, RELEASES_URL, restartToUpdate } from "~/lib/updates";
 import { errorText } from "~/lib/util";
 import changelog from "../../../../../../CHANGELOG.md?raw";
 
@@ -109,6 +109,18 @@ export default function UpdatesPane({ settings, updateSettings }: PaneProps) {
           <Markdown text={releaseNotes(status.notes)} />
         </div>
       )}
+      {/* The AGPL asks a program with a UI to show its copyright, warranty, and license. */}
+      <p className="m-0 pt-3 text-[length:var(--fs-sm)] text-fg-subtle">
+        Patchwork is free software under the{" "}
+        <button
+          type="button"
+          className="cursor-pointer border-none bg-transparent p-0 text-accent-text underline underline-offset-2 hover:text-accent-hover"
+          onClick={() => void api.openUrl(LICENSE_URL)}
+        >
+          GNU AGPL v3.0 or later
+        </button>
+        . © 2026 PolarisPyra. No warranty.
+      </p>
       <ReleaseList />
     </>
   );
