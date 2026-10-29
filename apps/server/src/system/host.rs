@@ -1,5 +1,8 @@
 //! Programs on the user's system: the command and environment they run with.
 
+#[cfg(windows)]
+use std::path::PathBuf;
+
 /// A command for a program on the user's system. The AppImage's launcher points the library,
 /// Python, GTK and data paths into the AppImage for Patchwork itself; agents, git, and the other
 /// programs Patchwork starts get the user's own paths back. A copy restarted into an update

@@ -1,6 +1,7 @@
 //! Asking an agent CLI about itself: running it briefly with a time limit, and reading its version, sign-in and models.
 
 use std::io::Read;
+#[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};

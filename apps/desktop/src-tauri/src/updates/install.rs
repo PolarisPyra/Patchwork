@@ -8,8 +8,6 @@ use std::sync::atomic::Ordering;
 use std::sync::PoisonError;
 
 use patchwork_server::Res;
-#[cfg(windows)]
-use tauri::AppHandle;
 
 use super::Updates;
 

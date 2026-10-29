@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::ffi::OsString;
+#[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
