@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.39] - 2026-10-28
+
+### Fixed
+
+- On Windows, chats and agents no longer open a stream of command prompt windows, Open in editor finds VS Code, VS Code Insiders, and Cursor, and the model picker lists every model instead of only Default. Settings → Providers notices an agent CLI installed or removed while Patchwork is open, Settings → Environment offers Git Bash, PowerShell, and cmd for the commands agents run, and Stop ends an agent along with everything it started. Permission rules now apply to Codex and Antigravity on Windows, and the Antigravity CLI can be downloaded from Settings → Providers there too.
+
 ## [0.10.38] - 2026-10-28
 
 ### Added
