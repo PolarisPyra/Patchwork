@@ -9,6 +9,7 @@ import {
   type ClipboardEvent,
   type ReactElement,
   type ReactNode,
+  type Ref,
 } from "react";
 import ReactMarkdown, { type Components, type Options } from "react-markdown";
 import rehypeKatex from "rehype-katex";
@@ -154,6 +155,7 @@ export default memo(function Markdown({
   chips = false,
   streamed = false,
   animate = true,
+  containerRef,
 }: {
   text: string;
   /** The user wrote the text, so an indented line is pasted text rather than a code block. */
@@ -164,6 +166,8 @@ export default memo(function Markdown({
   streamed?: boolean;
   /** The words this render adds fade in; false shows them at once, for a step that is a burst. */
   animate?: boolean;
+  /** The block's own element, for a caller that has to measure the text it grows. */
+  containerRef?: Ref<HTMLDivElement>;
 }) {
   // Where the last render ended, so only the words past it fade: the whole text is not re-shown,
   // and a row the chat list remounts mid-reply does not replay the fade for words already read.
@@ -176,6 +180,7 @@ export default memo(function Markdown({
   // Each block parses on its own, so a streaming reply re-parses only its last block.
   return (
     <div
+      ref={containerRef}
       className="md-blocks min-w-0 leading-[1.6] [word-break:break-word] selectable [&>:last-child]:mb-0 [&_p]:mt-0 [&_p]:mb-2 [&_.katex-display]:my-2 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex-display]:py-1"
       onCopy={copyMarkdown}
     >
