@@ -38,6 +38,20 @@ impl BuiltinHook {
         }
     }
 
+    /// The tools the hook is for when its plugin names none, as a matcher.
+    pub fn matcher(self) -> &'static str {
+        match self {
+            BuiltinHook::BoundedWaits => crate::provider::hooks::SHELL_TOOLS,
+        }
+    }
+
+    /// What the hook does, as Settings → Hooks shows it.
+    pub fn description(self) -> &'static str {
+        match self {
+            BuiltinHook::BoundedWaits => "Refuses waits with no time limit",
+        }
+    }
+
     /// Why the call `input` describes is refused, or None to let it run. `input` is the call as
     /// the agent gives it to its hooks.
     pub fn check(self, input: &Value) -> Option<String> {

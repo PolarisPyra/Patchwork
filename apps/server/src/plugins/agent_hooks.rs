@@ -60,7 +60,9 @@ pub fn agent_hooks(settings: &Settings) -> Vec<AgentHook> {
                     command,
                     timeout_secs,
                 } => (HookAction::Command { command }, timeout_secs),
-                PluginHookHandler::Builtin { name, timeout_secs } => {
+                PluginHookHandler::Builtin {
+                    name, timeout_secs, ..
+                } => {
                     let Some(builtin) = BuiltinHook::from_name(&name) else {
                         log::warn!("plugin hook {}: no built-in hook {name}", hook.event.name());
                         return None;

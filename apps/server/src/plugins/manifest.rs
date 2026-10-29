@@ -2,7 +2,9 @@
 
 use std::path::Path;
 use serde_json::Value;
+use super::builtin::BuiltinHook;
 use super::{HookEvent, Plugin, PluginApp, PluginHook, PluginHookHandler};
+use crate::provider::AgentKind;
 
 /// Where `plugin.json` sits inside a bundle: Patchwork's own place, then Codex's.
 const MANIFESTS: [&str; 2] = [".patchwork-plugin/plugin.json", ".codex-plugin/plugin.json"];
@@ -93,7 +95,10 @@ pub(super) fn hooks(events: &Value) -> Vec<PluginHook> {
                         .filter_map(handler)
                         .map(move |handler| PluginHook {
                             event,
-                            matcher: matcher.clone(),
+                            matcher: matcher.clone().or_else(|| {
+                                builtin(&handler).map(|hook| hook.matcher().to_string())
+                            }),
+                            run_by: run_by(event, &handler),
                             handler,
                         })
                 })
@@ -101,6 +106,37 @@ pub(super) fn hooks(events: &Value) -> Vec<PluginHook> {
         .collect();
     hooks.sort_by_key(|hook| hook.event);
     hooks
+}
+
+/// The built-in hook a handler names, when this version carries it.
+fn builtin(handler: &PluginHookHandler) -> Option<BuiltinHook> {
+    match handler {
+        PluginHookHandler::Builtin { name, .. } => BuiltinHook::from_name(name),
+        _ => None,
+    }
+}
+
+/// The agents whose turns run a hook. Patchwork runs a command on a turn event itself, for every
+/// agent; the rest run in the agents that run their event, and only a command or a built-in this
+/// version carries runs at all.
+fn run_by(event: HookEvent, handler: &PluginHookHandler) -> Vec<AgentKind> {
+    let runs = match handler {
+        PluginHookHandler::Command { .. } => true,
+        PluginHookHandler::Builtin { .. } => {
+            !event.runs_in_patchwork() && builtin(handler).is_some()
+        }
+        PluginHookHandler::McpTool { .. }
+        | PluginHookHandler::Prompt
+        | PluginHookHandler::Agent
+        | PluginHookHandler::Unsupported { .. } => false,
+    };
+    if !runs {
+        return Vec::new();
+    }
+    AgentKind::ALL
+        .into_iter()
+        .filter(|&agent| event.runs_in_patchwork() || crate::provider::hooks::runs(agent, event))
+        .collect()
 }
 
 /// One handler, by its `type`. A command without its command line is skipped.
@@ -112,10 +148,14 @@ pub(super) fn handler(value: &Value) -> Option<PluginHookHandler> {
             command: field("command").filter(|command| !command.trim().is_empty())?,
             timeout_secs: timeout(value),
         },
-        "builtin" => PluginHookHandler::Builtin {
-            name: field("name").filter(|name| !name.trim().is_empty())?,
-            timeout_secs: timeout(value),
-        },
+        "builtin" => {
+            let name = field("name").filter(|name| !name.trim().is_empty())?;
+            PluginHookHandler::Builtin {
+                description: BuiltinHook::from_name(&name).map(|hook| hook.description().into()),
+                name,
+                timeout_secs: timeout(value),
+            }
+        }
         "mcptool" => PluginHookHandler::McpTool {
             server: field("server").unwrap_or_default(),
             tool: field("tool").unwrap_or_default(),

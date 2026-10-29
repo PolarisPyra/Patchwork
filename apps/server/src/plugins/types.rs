@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::provider::AgentKind;
+
 /// A plugin bundle: a folder with a `plugin.json`, the hooks it runs, and the apps it names.
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
@@ -28,6 +30,8 @@ pub struct PluginHook {
     /// The tools a tool event is limited to, as a regular expression over the tool's name.
     pub matcher: Option<String>,
     pub handler: PluginHookHandler,
+    /// The agents whose turns run it. Empty when none does.
+    pub run_by: Vec<AgentKind>,
 }
 
 /// An event a hook runs on, in the order a turn meets them. A manifest's keys match these whatever
@@ -66,6 +70,8 @@ pub enum PluginHookHandler {
     /// A check Patchwork carries itself, by name, such as `boundedWaits`.
     Builtin {
         name: String,
+        /// What it does, or None for a name this version does not carry.
+        description: Option<String>,
         timeout_secs: u64,
     },
     McpTool {

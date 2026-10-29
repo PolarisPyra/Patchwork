@@ -3,4 +3,8 @@
 /**
  * What a hook does. `Command` and `Builtin` run; the rest are listed so the user sees them.
  */
-export type PluginHookHandler = { "type": "command", command: string, timeoutSecs: number, } | { "type": "builtin", name: string, timeoutSecs: number, } | { "type": "mcpTool", server: string, tool: string, } | { "type": "prompt" } | { "type": "agent" } | { "type": "unsupported", kind: string, };
+export type PluginHookHandler = { "type": "command", command: string, timeoutSecs: number, } | { "type": "builtin", name: string, 
+/**
+ * What it does, or None for a name this version does not carry.
+ */
+description: string | null, timeoutSecs: number, } | { "type": "mcpTool", server: string, tool: string, } | { "type": "prompt" } | { "type": "agent" } | { "type": "unsupported", kind: string, };

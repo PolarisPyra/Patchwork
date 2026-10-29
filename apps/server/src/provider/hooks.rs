@@ -89,6 +89,10 @@ pub fn hooks_json(hooks: &[AgentHook], agent: AgentKind) -> Value {
     json!({ "hooks": by_event })
 }
 
+/// The shell tool as each agent names it, as a matcher: Claude Code and Codex `Bash`, Patchwork's
+/// own agent `bash`, and Antigravity the rest.
+pub const SHELL_TOOLS: &str = "Bash|bash|run_command|execute_command|shell";
+
 /// The shell command a tool call runs, as each agent gives it to its hooks: Claude Code, Codex and
 /// Patchwork's own agent in `tool_input.command` (Codex at times as its words), and Antigravity in
 /// `toolCall.args`. None for a call that runs no command.

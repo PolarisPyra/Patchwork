@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
-import { FolderSimpleIcon, PuzzlePieceIcon } from "@phosphor-icons/react";
-import { api, type Plugin, type PluginHookHandler, type Settings } from "~/api";
+import { CaretRightIcon, FolderSimpleIcon, PuzzlePieceIcon } from "@phosphor-icons/react";
+import {
+  AGENT_LABELS,
+  api,
+  type Plugin,
+  type PluginHook,
+  type PluginHookHandler,
+  type Settings,
+} from "~/api";
 import type { UpdateSettings } from "~/api";
 import { TokenRow, TokenSwitch } from "~/features/settings/components/controls";
-import { errorText } from "~/lib/util";
+import { AGENT_KINDS, errorText } from "~/lib/util";
 
 /**
  * Settings → Hooks: plugin bundles of hooks that run on turn events and the apps they ask for. A bundle
@@ -52,7 +59,9 @@ export default function PluginsPane({
     <>
       <div className="flex items-center gap-1.5 pb-3">
         <span className="text-[length:var(--fs-sm)] text-fg-muted">
-          {plugins === null ? "Reading plugins…" : `${on} on · ${hooks} hooks`}
+          {plugins === null
+            ? "Reading plugins…"
+            : `${on} on · ${hooks} ${hooks === 1 ? "hook" : "hooks"}`}
         </span>
         <button
           className="btn ml-auto flex-none"
@@ -90,23 +99,9 @@ export default function PluginsPane({
                     </div>
                   )}
                   {plugin.hooks.length > 0 && (
-                    <div className="mt-1.5 flex flex-col gap-0.5">
+                    <div className="mt-2 flex flex-col divide-y divide-border rounded-[var(--radius-sm)] border border-border">
                       {plugin.hooks.map((hook, i) => (
-                        <div
-                          key={i}
-                          className="flex min-w-0 items-baseline gap-1.5 text-[length:var(--fs-xs)]"
-                        >
-                          <span className="flex-none text-fg">
-                            {hook.matcher ? `${hook.event}(${hook.matcher})` : hook.event}
-                          </span>
-                          <span className="flex-none text-fg-subtle">·</span>
-                          <code
-                            className="truncate text-fg-muted"
-                            title={handlerText(hook.handler)}
-                          >
-                            {handlerText(hook.handler)}
-                          </code>
-                        </div>
+                        <HookRow key={i} hook={hook} />
                       ))}
                     </div>
                   )}
@@ -158,19 +153,138 @@ export default function PluginsPane({
   );
 }
 
-/** A hook's handler as one line: the command it runs, or what it would do. */
-function handlerText(handler: PluginHookHandler): string {
+/** One hook: when it runs and what it does, opening to the event, matcher, and handler as written. */
+function HookRow({ hook }: { hook: PluginHook }) {
+  const [open, setOpen] = useState(false);
+  const shell = isShell(hook.matcher);
+  const skipped = AGENT_KINDS.filter((agent) => !hook.runBy.includes(agent));
+  const { handler } = hook;
+  return (
+    <div className="text-[length:var(--fs-xs)]">
+      <button
+        className="flex w-full min-w-0 cursor-pointer flex-col gap-1 border-none bg-transparent px-2.5 py-2 text-left hover:bg-selected-muted"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <div className="flex w-full min-w-0 items-center gap-1.5">
+          <span className="font-semibold text-fg">{whenText(hook.event, shell)}</span>
+          {hook.matcher && !shell && (
+            <code className="truncate rounded-[var(--radius-sm)] bg-selected-muted px-1.5 py-0.5 text-fg-muted">
+              {hook.matcher}
+            </code>
+          )}
+          {skipped.length > 0 && (
+            <span className="ml-auto flex-none text-fg-subtle">
+              {hook.runBy.length === 0
+                ? "Not run"
+                : `Not run by ${skipped.map((agent) => AGENT_LABELS[agent]).join(", ")}`}
+            </span>
+          )}
+          <CaretRightIcon
+            size={12}
+            className={`flex-none text-fg-subtle ${skipped.length > 0 ? "" : "ml-auto"} ${open ? "rotate-90" : ""}`}
+          />
+        </div>
+        {handler.type === "command" ? (
+          <code className="w-full truncate text-fg-muted">{handler.command}</code>
+        ) : (
+          <span className="text-fg-muted">{handlerText(handler)}</span>
+        )}
+      </button>
+      {open && (
+        <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 px-2.5 pb-2.5 text-fg-muted">
+          <dt className="text-fg-subtle">Event</dt>
+          <dd className="m-0">
+            <code>{hook.event}</code>
+          </dd>
+          {hook.matcher && (
+            <>
+              <dt className="text-fg-subtle">Tools</dt>
+              <dd className="m-0 break-all">
+                <code>{hook.matcher}</code>
+              </dd>
+            </>
+          )}
+          {handler.type === "command" && (
+            <>
+              <dt className="text-fg-subtle">Command</dt>
+              <dd className="m-0">
+                <pre className="m-0 whitespace-pre-wrap break-all rounded-[var(--radius-sm)] bg-selected-muted px-2 py-1.5 font-mono text-fg select-text">
+                  {handler.command}
+                </pre>
+              </dd>
+            </>
+          )}
+          {handler.type === "builtin" && (
+            <>
+              <dt className="text-fg-subtle">Built-in</dt>
+              <dd className="m-0">
+                <code>{handler.name}</code>
+              </dd>
+            </>
+          )}
+          {(handler.type === "command" || handler.type === "builtin") && (
+            <>
+              <dt className="text-fg-subtle">Timeout</dt>
+              <dd className="m-0">{handler.timeoutSecs}s</dd>
+            </>
+          )}
+        </dl>
+      )}
+    </div>
+  );
+}
+
+/** The shell tool's name in each agent, as `provider::hooks::SHELL_TOOLS` lists them. */
+const SHELL_TOOLS = new Set(["Bash", "bash", "run_command", "execute_command", "shell"]);
+
+/** Whether a matcher names only shell tools. */
+function isShell(matcher: string | null): boolean {
+  return matcher !== null && matcher.split("|").every((tool) => SHELL_TOOLS.has(tool));
+}
+
+/** When a hook runs, in words. */
+function whenText(event: PluginHook["event"], shell: boolean): string {
+  const calls = shell ? "shell commands" : "tool calls";
+  switch (event) {
+    case "userPromptSubmit":
+      return "When a prompt is sent";
+    case "sessionStart":
+      return "When a session starts";
+    case "preToolUse":
+      return `Before ${calls}`;
+    case "permissionRequest":
+      return shell ? "When a shell command asks permission" : "When a tool asks permission";
+    case "postToolUse":
+      return `After ${calls}`;
+    case "preCompact":
+      return "Before compacting";
+    case "postCompact":
+      return "After compacting";
+    case "subagentStart":
+      return "When a subagent starts";
+    case "subagentStop":
+      return "When a subagent stops";
+    case "stop":
+      return "After each turn";
+    case "interrupt":
+      return "When a turn is interrupted";
+    case "sessionEnd":
+      return "When a session ends";
+  }
+}
+
+/** What a hook that runs no command does, in words. */
+function handlerText(handler: Exclude<PluginHookHandler, { type: "command" }>): string {
   switch (handler.type) {
-    case "command":
-      return handler.command;
     case "builtin":
-      return `built-in: ${handler.name}`;
+      return handler.description ?? `Unknown built-in: ${handler.name}`;
     case "mcpTool":
       return `${handler.server} → ${handler.tool}`;
     case "prompt":
     case "agent":
-      return `${handler.type}, not run yet`;
+      return `A ${handler.type} hook`;
     case "unsupported":
-      return handler.kind;
+      return `A ${handler.kind} hook`;
   }
 }

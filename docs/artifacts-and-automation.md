@@ -80,7 +80,11 @@ Each agent gets the payload and tool names it uses itself:
 A `builtin` handler, `{ "type": "builtin", "name": "boundedWaits" }`, is a check Patchwork carries
 itself (`apps/server/src/plugins/builtin/`). An agent CLI runs it as `patchwork --hook <name>
 <agent>`, which reads the call in that agent's format and answers in it; Patchwork's own agent runs it
-in-process. A name this version does not carry is logged and skipped.
+in-process. A name this version does not carry is logged and skipped. A built-in in a group with no
+`matcher` gets the tools it is for, so `boundedWaits` needs none: it covers each agent's shell tool.
+
+Settings → Hooks lists each hook by when it runs and what it does, and names the agents whose turns
+skip it, such as OpenCode for a tool hook.
 
 - `boundedWaits` refuses a shell command that polls in a loop (`until` or `while` with a `sleep` in
   it) with no `timeout`, and one that polls for a word cargo prints in colour (`Running`,
