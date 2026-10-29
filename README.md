@@ -1,128 +1,122 @@
-<a href="https://github.com/PolarisPyra/Patchwork-ADE/releases/latest"><img align="right" src="https://img.shields.io/github/v/release/PolarisPyra/Patchwork-ADE?label=version" alt="Latest version"></a>
-
 # Patchwork
 
-Patchwork is a desktop workspace for coding agents. It runs Claude Code, Codex, Antigravity, and
-OpenCode through the CLIs already installed on your machine, and any OpenAI-compatible API, such as
-DeepSeek, with your own key. Projects, tasks, and chats share one sidebar, and every change an agent
-makes is reviewed in the app before you keep it.
+**A desktop workspace for coding agents.** Run Claude Code, Codex, Antigravity, OpenCode, or any
+OpenAI-compatible model from one place — then review every change before you keep it.
 
 <table>
   <tr>
-    <td><img src="docs/screenshots/grid-1.png" alt="A /goal running in a chat, with the goal shown above the input" width="420"></td>
-    <td><img src="docs/screenshots/grid-2.png" alt="A stopped turn with its token usage and the goal cleared" width="420"></td>
+    <td><img src="docs/screenshots/grid-1.png" alt="A finished reply with a shell command, a table of download names, and its Copy, Retry, and Fork actions" width="420"></td>
+    <td><img src="docs/screenshots/grid-2.png" alt="A new task in an empty project, showing the prompt box and its suggestions" width="420"></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/grid-3.png" alt="The Appearance settings with Light, Dark, and System themes" width="420"></td>
-    <td><img src="docs/screenshots/grid-4.png" alt="The sidebar and an idle chat after the goal was cleared" width="420"></td>
+    <td><img src="docs/screenshots/grid-3.png" alt="Settings on Appearance, with the Light, Dark, and System theme toggle and a grid of app icons" width="420"></td>
+    <td><img src="docs/screenshots/grid-4.png" alt="The Usage panel open over the sidebar, showing the 5-hour session and weekly limits" width="420"></td>
   </tr>
 </table>
 
-## Features
+Coding agents are good at writing code and bad at staying out of your way. Patchwork gives them a
+shared home: one sidebar for projects, tasks, and chats, one canvas to read their work, and one
+place to decide what survives. It does not replace the CLIs you already trust — it drives them.
 
-- **Every agent, one interface.** Claude Code, Codex, Antigravity, OpenCode, and API models share
-  the same chat, plan, and diff views.
-- **Bring your own API key.** Add DeepSeek, or any OpenAI-compatible endpoint, under
-  **Settings → Providers**. Keys are kept in the system keychain. Patchwork's built-in agent
-  reads, searches, and edits files, runs commands, and asks before acting, following the task's
-  access mode.
-- **Review before you keep it.** Each task's canvas shows its Plan, Code, and Diff views. Stage the
-  files you want with `git add`, or reject a file to restore it.
-- **Access modes per task.** Choose supervised, auto-accept edits, auto, or full access. Approval
-  requests appear in the chat.
-- **Goals and steering.** Set a `/goal` for the agent to work toward, or send a message during a
-  running turn to steer it. Supported by Claude Code, Codex, and OpenCode 2.x.
-- **Projects and chats.** Projects group their tasks. Standalone chats sit at the top of the
-  sidebar and run in a scratch folder that is deleted with the chat.
-- **Subscription usage.** The **Usage** button at the bottom of the sidebar shows each provider's
-  limits.
-- **Import existing work.** Bring in conversations from Claude Code, Codex, the Gemini CLI
-  (Antigravity chats), and [T3 Code](https://github.com/pingdotgg/t3code). Each one becomes a task
-  in its project, and follow-ups resume the original session.
-- **Artifacts in the chat.** A reply that contains a Mermaid diagram or an HTML or SVG artifact is
-  drawn where it is, whichever agent wrote it. A toggle shows the source, and the artifact runs in a
-  sandboxed frame that cannot reach the rest of the app.
-- **Scheduled tasks.** Under **Settings → Scheduled**, a prompt can start a task every few hours,
-  every day, on weekdays, or on the days you pick. It runs in a project you choose, or in a chat,
-  while Patchwork is open.
-- **Plugins.** Under **Settings → Plugins**, a bundle is a folder with a `plugin.json`, its skills,
-  and the MCP servers it adds. Two starter skills ship with the app, and a Codex plugin bundle works
-  as it is.
-- **The Codex CLI, read from itself.** **Settings → Codex CLI** lists the installed Codex's version,
-  its feature flags, and its model catalog, with its own health check, MCP servers, and plugins.
-- **Computer use.** An optional screen tool for Patchwork's own agent: it can take a screenshot and
-  click, type, press keys, and scroll. It is off until you turn it on under
-  **Settings → Permissions**, and each use asks first unless a rule allows the screen.
+## Why Patchwork
 
-## Installation
+- **One interface for every agent.** Claude Code, Codex, Antigravity, OpenCode, and API models share
+  the same chat, plan, and code views. Switch agents without switching apps.
+- **Nothing lands until you say so.** Each task has a canvas of its Plan, Code, and Diff views.
+  Stage the files you want with `git add`, and reject a file to restore it.
+- **You decide how much rope.** Supervised, auto-accept edits, auto, or full access, chosen per
+  task. Approval requests arrive in the chat, where the work is.
+- **Goals and steering.** Give the agent a `/goal` to work toward, or send a message mid-turn to
+  steer it. Turn an afternoon of babysitting into one instruction and one review.
+- **Bring your own key.** Add DeepSeek or any OpenAI-compatible endpoint under
+  **Settings → Providers**. Keys live in your system keychain, not in the app's database.
+- **It reads what your agent already wrote.** Import past conversations from Claude Code, Codex, the
+  Gemini CLI, or [T3 Code](https://github.com/pingdotgg/t3code) — each becomes a task whose
+  follow-ups resume the original session.
+- **Artifacts, drawn in place.** A Mermaid diagram, an HTML mock, or an SVG chart in a reply renders
+  in the chat, in a sandboxed frame that cannot reach the rest of the app.
+- **Runs on your machine.** No account, no proxy, no telemetry server. Requests go from your
+  computer to your provider.
 
-Patchwork supports Linux, macOS, and Windows. Each release includes an AppImage for Linux, an
-installer for Windows, and a disk image for macOS on Apple silicon. To build from source, see
-[Development](docs/development.md).
+It also handles the long tail: scheduled tasks, plugin bundles with skills and MCP servers, a
+subscription **Usage** view, and an optional screen tool that asks before it clicks anything.
+
+## Download
+
+| Platform | Download |
+| --- | --- |
+| Linux | [`Patchwork_amd64.AppImage`](https://github.com/PolarisPyra/Patchwork-ADE/releases/latest/download/Patchwork_amd64.AppImage) |
+| Windows | [`Patchwork_x64-setup.exe`](https://github.com/PolarisPyra/Patchwork-ADE/releases/latest/download/Patchwork_x64-setup.exe) |
+| macOS (Apple silicon) | [`Patchwork_aarch64.dmg`](https://github.com/PolarisPyra/Patchwork-ADE/releases/latest/download/Patchwork_aarch64.dmg) |
+
+Those links always serve the newest release. On Linux, make the AppImage executable and run it:
+
+```sh
+chmod +x Patchwork_amd64.AppImage
+./Patchwork_amd64.AppImage
+```
+
+Once installed, Patchwork updates itself and verifies each update's signature before installing it.
+To build from source, see [Development](docs/development.md).
 
 ## Requirements
 
-Install at least one agent CLI and sign in to it with the CLI's own login command, or add an API
-provider in **Settings → Providers**. Patchwork detects which CLIs are installed and uses them
-as they are.
+Patchwork drives the agent CLIs you already have. Install at least one and sign in with its own
+login command — Patchwork detects it and uses it as it is:
 
 - [Claude Code](https://docs.claude.com/en/docs/claude-code) (`claude`)
 - [Codex](https://github.com/openai/codex) (`codex`)
 - [Antigravity](https://antigravity.google/) (`agy`)
 - [OpenCode](https://opencode.ai/) (`opencode`)
 
+No CLI? Add an API provider under **Settings → Providers** and use Patchwork's built-in agent
+instead, which reads, searches, edits, and runs commands itself.
+
 ## Getting started
 
 1. Open Patchwork and add a project folder.
-2. Click the **+** button in the project to start a task, then pick an agent and an access mode.
-3. When the agent finishes, review the changes in the canvas. Stage the files you want and reject
-   the rest.
+2. Click **+** in the project to start a task, then pick an agent and an access mode.
+3. When the agent finishes, review the changes in the canvas. Stage what you want, reject the rest.
 
-To try an agent without a project, start a chat from the top of the sidebar.
+To try an agent without a project, start a chat from the top of the sidebar. It runs in a scratch
+folder that is deleted with the chat.
 
 ## Your data
 
-- Patchwork stores its state in a SQLite database at `~/.config/patchwork/patchwork.db`.
-- Tasks run directly in their project folder. Chats run in a scratch folder under the app's data
-  directory, which is deleted with the chat.
+- State lives in SQLite at `~/.config/patchwork/patchwork.db`.
+- Tasks run directly in your project folder. Chats run in a scratch folder, deleted with the chat.
 - The agent CLIs do the work and talk to their own services. Patchwork reads the files they save,
-  such as session transcripts, to show history and usage. [Agent CLIs](docs/agent-clis.md) lists
+  such as session transcripts, to show history and usage — [Agent CLIs](docs/agent-clis.md) lists
   every file and command it touches.
-- API providers are listed in `~/.config/patchwork/api-providers.json`, which holds no keys. Each
-  key, and the values of any custom headers, is stored in the system keychain (macOS Keychain,
-  Windows Credential Manager, or the Secret Service on Linux). On a system without one, they go to
-  `api-keys.json` in the same folder, readable only by you. A provider can also read its key from
-  an environment variable. Base URLs must use `https://`, except for a server on your machine or
-  local network. API
-  conversations are saved under `~/.config/patchwork/api-sessions/`, and requests go straight from
-  your machine to the provider.
+- API keys, and the values of any custom headers, are kept in the system keychain (macOS Keychain,
+  Windows Credential Manager, or the Secret Service on Linux). On a system without one, they go to a
+  file only you can read. A provider can also read its key from an environment variable. Requests go
+  straight from your machine to the provider.
 
 ## Documentation
 
-- [Development](docs/development.md): build, run, and test Patchwork
+Building or changing Patchwork:
+
+- [Development](docs/development.md): build, run, and test
 - [Architecture](docs/architecture.md): repo layout and the data model
 - [Agent CLIs](docs/agent-clis.md): how each agent is detected, run, and imported
-- [Releasing](docs/release.md): versions, the changelog, the release workflow, and the update server
 - [All docs](docs/README.md)
-
-Other project files:
-
-- [CONTRIBUTING.md](CONTRIBUTING.md): how to send a bug report, fix, or guide
-- [CHANGELOG.md](CHANGELOG.md): release history, generated from commit subjects
-- [AGENTS.md](AGENTS.md): instructions for coding agents working in the repo
-- [CLAUDE.md](CLAUDE.md): project rules for Claude Code
-
-## Releasing
-
-Releases are numbered by the calendar, `YY.N.P` (year, release number in that year, patch). Run
-`pnpm release bump` for the year's next release (`26.1.0` → `26.2.0`), `pnpm release bump patch`
-for a fix to the last one (`26.2.0` → `26.2.1`), or `pnpm release 26.3.0` for an exact version.
-[Releasing](docs/release.md) covers the rest.
 
 ## Contributing
 
-Bug reports, fixes, and guides are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md).
+Bug reports, fixes, and guides are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), and see
+[CHANGELOG.md](CHANGELOG.md) for what changed in each release.
 
 ## License
 
-Patchwork is released under the [MIT License](LICENSE).
+Patchwork is free software under the [GNU Affero General Public License, version 3 or
+later](LICENSE) (AGPL-3.0-or-later), with no warranty.
+
+The AGPL lets you use, study, change, and share Patchwork, provided that anything you distribute, or
+run as a network service, is offered under the same license with its source. If that does not suit
+you — closed-source integration, or a product you cannot publish under the AGPL — a **commercial
+license** is available instead; open an issue titled "Commercial license". That dual licensing is
+how the project is funded.
+
+The license covers the code. The Patchwork name and logo are not licensed with it, so a fork needs
+its own name.
