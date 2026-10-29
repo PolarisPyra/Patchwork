@@ -159,13 +159,16 @@ pub fn invocation(agent: AgentKind, skill: &Skill, rest: &str) -> String {
 /// Claude loads the skills as this plugin's, so they show up as `patchwork:<name>`.
 const PLUGIN: &str = "patchwork";
 
+/// The plugin folder in the config folder, named for what it holds: links to the enabled skills.
+const ENABLED: &str = "skills-enabled";
+
 /// A plugin folder for Claude's `--plugin-dir`, whose `skills` folder links to each enabled
 /// skill. Claude only finds skills in a plugin's own `skills` folder, the skills folder can be
 /// anywhere, and switched-off skills must stay out, so the links are brought up to date on
 /// every launch. Codex and OpenCode load the same links.
 #[cfg(unix)]
 pub fn claude_plugin(settings: &Settings) -> Option<PathBuf> {
-    let plugin = CONFIG_DIR.get()?.join("claude-plugin");
+    let plugin = CONFIG_DIR.get()?.join(ENABLED);
     let manifest = plugin.join(".claude-plugin");
     std::fs::create_dir_all(&manifest).ok()?;
     let json = format!("{{\"name\":\"{PLUGIN}\"}}\n");
@@ -228,7 +231,7 @@ const AGENT_SKILLS: [&str; 8] = [
 /// folder, the links to its enabled skills, and the agents' own skills folders.
 pub fn folders(settings: &Settings) -> Vec<PathBuf> {
     let mut out = vec![dir(settings)];
-    out.extend(CONFIG_DIR.get().map(|config| config.join("claude-plugin")));
+    out.extend(CONFIG_DIR.get().map(|config| config.join(ENABLED)));
     if let Some(home) = crate::provider::home_dir() {
         out.extend(AGENT_SKILLS.iter().map(|folder| home.join(folder)));
     }

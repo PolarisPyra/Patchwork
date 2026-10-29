@@ -302,14 +302,15 @@ impl Agent {
     }
 }
 
-/// Writes `content` to `name` in a folder of the config folder that `cli` reads at launch for
-/// the project at `root`, unless the file holds it already, and returns the file's path.
+/// Writes `content` to `name` in `agents-for-<cli>` in the config folder, which `cli` reads at
+/// launch for the project at `root`, unless the file holds it already, and returns the file's
+/// path.
 pub fn launch_file(cli: &str, root: &str, name: &str, content: &str) -> std::io::Result<PathBuf> {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     root.hash(&mut hasher);
     let dir = crate::skills::config_dir()
         .ok_or_else(|| std::io::Error::other("no config folder"))?
-        .join(format!("{cli}-agents"))
+        .join(format!("agents-for-{cli}"))
         .join(format!("{:016x}", hasher.finish()));
     std::fs::create_dir_all(&dir)?;
     let file = dir.join(name);
