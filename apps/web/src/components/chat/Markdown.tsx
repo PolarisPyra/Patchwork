@@ -1,5 +1,7 @@
 import {
   Children,
+  cloneElement,
+  isValidElement,
   memo,
   useEffect,
   useRef,
@@ -151,6 +153,7 @@ export default memo(function Markdown({
   typed = false,
   chips = false,
   streamed = false,
+  animate = true,
 }: {
   text: string;
   /** The user wrote the text, so an indented line is pasted text rather than a code block. */
@@ -159,6 +162,8 @@ export default memo(function Markdown({
   chips?: boolean;
   /** The text is still arriving, so words it has just gained fade in. */
   streamed?: boolean;
+  /** The words this render adds fade in; false shows them at once, for a step that is a burst. */
+  animate?: boolean;
 }) {
   // Where the last render ended, so only the words past it fade: the whole text is not re-shown,
   // and a row the chat list remounts mid-reply does not replay the fade for words already read.
@@ -182,6 +187,7 @@ export default memo(function Markdown({
           chips={chips}
           // Only the last block grows while a reply streams; the ones before it are settled.
           animateFrom={i === blocks.length - 1 ? Math.max(0, from - block.at) : block.text.length}
+          animate={animate}
         />
       ))}
     </div>
@@ -379,13 +385,18 @@ function unwrapped(node: HastNode): boolean {
  * not fade a second time. `from` counts the block's text as written, which is a few characters
  * longer than what renders once emphasis markers are gone, so the boundary can land a word early;
  * that is not visible.
+ *
+ * It also collects the block's rendered text and whether it wrapped anything, which the block uses
+ * for the copy a screen reader reads instead of the animated one.
  */
 function rehypeWordFade(from: number) {
-  return () => (tree: HastNode) => {
+  const state: WordFadeState = { wrapped: false, plain: "" };
+  const plugin = () => (tree: HastNode) => {
     let offset = 0;
     /** One text node's worth of prose, each word in its own span. */
     const words = (value: string): HastNode[] => {
       const out: HastNode[] = [];
+      state.plain += value;
       for (const piece of value.split(/(\s+)/)) {
         if (!piece) continue;
         const animate = offset >= from;
@@ -395,6 +406,7 @@ function rehypeWordFade(from: number) {
           out.push({ type: "text", value: piece });
           continue;
         }
+        if (animate) state.wrapped = true;
         out.push({
           type: "element",
           tagName: "span",
@@ -412,6 +424,7 @@ function rehypeWordFade(from: number) {
         if (child.type === "text") return words(child.value ?? "");
         if (unwrapped(child)) {
           offset += textLength(child);
+          state.plain += plainText(child);
           return [child];
         }
         walk(child);
@@ -420,6 +433,25 @@ function rehypeWordFade(from: number) {
     };
     walk(tree);
   };
+  return { plugin, state };
+}
+
+/** What a block's word fade wrapped, and the text it rendered, for the screen-reader copy. */
+interface WordFadeState {
+  /** A word was wrapped and will animate. */
+  wrapped: boolean;
+  /** The block's text as it renders, without the Markdown around it. */
+  plain: string;
+}
+
+/** The text a node renders, as a screen reader would read it out. */
+function plainText(node: HastNode): string {
+  if (node.type === "text") return node.value ?? "";
+  const tex = node.properties?.dataTex;
+  if (tex !== undefined) return String(tex);
+  // A drawing or a formula's MathML carries its own text in glyph order, which reads as nonsense.
+  if (node.tagName === "svg" || node.tagName === "math") return "";
+  return (node.children ?? []).map(plainText).join("");
 }
 
 /** Blocks whose rendered output is kept, most recently used last. */
@@ -434,13 +466,15 @@ function parseBlock(
   typed: boolean,
   chips: boolean,
   animateFrom: number,
+  animate: boolean,
 ): ReactElement {
   // A block that is still growing is parsed every time it grows, and each of those drafts differs,
   // so it is not kept: the cache would hold every step of the reply.
-  const animated = animateFrom < text.length && text.length <= ANIMATED_LIMIT;
+  const animated = animate && animateFrom < text.length && text.length <= ANIMATED_LIMIT;
   // Typed text and text with chips parse differently, so each is cached under its own key.
   const key = `${chips ? "chips:" : ""}${typed ? "typed:" : ""}${text}`;
   let element = animated ? undefined : parsed.get(key);
+  const fade = animated ? rehypeWordFade(animateFrom) : null;
   if (element) {
     parsed.delete(key);
   } else {
@@ -450,18 +484,36 @@ function parseBlock(
       remarkPlugins: typed ? TYPED_REMARK_PLUGINS : REMARK_PLUGINS,
       rehypePlugins: [
         ...(chips ? CHIP_REHYPE_PLUGINS : REHYPE_PLUGINS),
-        ...(animated ? [rehypeWordFade(animateFrom)] : []),
+        ...(fade ? [fade.plugin] : []),
       ],
       components,
       skipHtml: true,
     });
-    if (animated) return element;
-    if (lastParsed && key.startsWith(lastParsed)) parsed.delete(lastParsed);
-    if (parsed.size >= PARSED_LIMIT) parsed.delete(parsed.keys().next().value!);
-    lastParsed = key;
+    if (!animated) {
+      if (lastParsed && key.startsWith(lastParsed)) parsed.delete(lastParsed);
+      if (parsed.size >= PARSED_LIMIT) parsed.delete(parsed.keys().next().value!);
+      lastParsed = key;
+      parsed.set(key, element);
+      return element;
+    }
   }
-  parsed.set(key, element);
-  return element;
+  // Words fading in one at a time are drawn for the eye: a screen reader gets the block's text
+  // once, whole, and the animated copy is hidden from it, so it is not read a word at a time.
+  // react-markdown hands back a fragment, so the attribute goes on each node it holds, which
+  // leaves the elements the block rendered — and the margin rules that reach for them — as they are.
+  if (!fade?.state.wrapped) return element;
+  return (
+    <>
+      <span className="sr-only">{fade.state.plain}</span>
+      {Children.map((element as ReactElement<{ children?: ReactNode }>).props.children, (child) =>
+        isValidElement(child)
+          ? cloneElement(child as ReactElement<{ "aria-hidden"?: boolean }>, {
+              "aria-hidden": true,
+            })
+          : child,
+      )}
+    </>
+  );
 }
 
 const MarkdownBlock = memo(function MarkdownBlock({
@@ -469,14 +521,17 @@ const MarkdownBlock = memo(function MarkdownBlock({
   typed,
   chips,
   animateFrom,
+  animate,
 }: {
   text: string;
   typed: boolean;
   chips: boolean;
   /** Characters of the block that were on screen before this render; words after them fade in. */
   animateFrom: number;
+  /** The words past `animateFrom` fade in; false shows them at once. */
+  animate: boolean;
 }) {
-  return parseBlock(text, typed, chips, animateFrom);
+  return parseBlock(text, typed, chips, animateFrom, animate);
 });
 
 /** An opening or closing code fence: its marker, then the rest of the line. */

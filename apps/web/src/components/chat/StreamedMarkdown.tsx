@@ -20,5 +20,11 @@ export default function StreamedMarkdown({
   const arrived = useDeferredValue(text);
   // The reveal keeps draining after the turn ends, so the words still to appear fade in too.
   const shown = useSmoothText(streaming ? arrived : text, streaming);
-  return <Markdown text={shown} streamed={streaming || shown !== (streaming ? arrived : text)} />;
+  return (
+    <Markdown
+      text={shown.text}
+      streamed={streaming || shown.text !== (streaming ? arrived : text)}
+      animate={shown.fade}
+    />
+  );
 }

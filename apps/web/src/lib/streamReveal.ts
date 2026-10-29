@@ -3,9 +3,12 @@
  *
  * A model does not stream smoothly: deltas land a few times a second, each a few words long, so
  * text painted as it arrives moves in bursts. The reply is revealed at a steady rate instead, a
- * word edge at a time, chasing the arrived text but staying a beat behind it. The numbers below
- * are the ones Claude's web app uses: 22 characters a step, aiming to trail the arrived text by
- * about 550ms, with the wait between steps kept between 25ms and 150ms.
+ * word edge at a time, chasing the arrived text but staying a beat behind it.
+ *
+ * Three rules are taken from claude.ai's own reveal scheduler, a per-message object in its web
+ * bundle: a step never ends inside a word, a step that carries a burst is shown without the
+ * per-word fade, and no reveal may schedule itself past a hard horizon. Its horizon is 600ms and
+ * its chunks cap at 48 characters, which is where those two numbers come from.
  */
 
 /** The least text revealed in one step, in characters. */
@@ -15,11 +18,32 @@ export const TARGET_LAG_MS = 550;
 /** The shortest and longest wait between two steps. */
 export const MIN_STEP_MS = 25;
 export const MAX_STEP_MS = 150;
+/**
+ * The furthest ahead a step may be scheduled. A backlog is always cleared inside this, by taking
+ * bigger steps, so a slow connection cannot leave the reveal falling further and further behind.
+ */
+export const REVEAL_HORIZON_MS = 600;
 /** A word starts its fade after its offset in the step, up to a cap. */
 export const WORD_DELAY_PER_CHAR_MS = 2.5;
 export const WORD_DELAY_MAX_MS = 150;
+/**
+ * A step that reveals more characters than this is a burst rather than a step, and is shown
+ * without the per-word fade: fading a dozen words one after another reads as a smear instead of
+ * text arriving. It is the size of claude.ai's cross-pass chunk, past which it stops staggering
+ * words and lets the text land.
+ */
+export const WORD_FADE_MAX_CHARS = 48;
 /** Past this, a block is revealed without the word fade; the wrappers cost more than they show. */
 export const ANIMATED_LIMIT = 20_000;
+/**
+ * Text arriving faster than this, in characters per millisecond (1600 characters a second), is
+ * shown as it lands: a fade cannot be staged over text that is already being replaced.
+ */
+export const FAST_ARRIVAL_CHARS_PER_MS = 1.6;
+/** How often the arrival rate is sampled, in milliseconds. */
+export const SPEED_WINDOW_MS = 100;
+/** How long a fast sample keeps the fast path on after text stops arriving quickly. */
+export const FAST_HOLD_MS = 400;
 
 /** How much to reveal next, and how long to wait before revealing it. */
 export interface RevealStep {
@@ -31,7 +55,8 @@ export interface RevealStep {
 
 /**
  * The next step for a reply that is `backlog` characters ahead of what is shown. A larger backlog
- * means bigger and quicker steps, so the reveal catches up rather than falling further behind.
+ * means bigger and quicker steps, so the reveal catches up rather than falling further behind, and
+ * the steps are made bigger again if the backlog would not clear within the horizon.
  */
 export function revealStep(backlog: number): RevealStep {
   const ahead = Math.max(0, backlog);
@@ -40,7 +65,11 @@ export function revealStep(backlog: number): RevealStep {
     MAX_STEP_MS,
     Math.max(MIN_STEP_MS, (TARGET_LAG_MS * STEP_CHARS) / Math.max(1, ahead)),
   );
-  return { chars, delay };
+  const steps = Math.ceil(ahead / chars);
+  if (steps * delay <= REVEAL_HORIZON_MS) return { chars, delay };
+  // More steps than the horizon allows at this delay: take fewer, larger ones instead.
+  const fits = Math.max(1, Math.floor(REVEAL_HORIZON_MS / delay));
+  return { chars: Math.max(chars, Math.ceil(ahead / fits)), delay };
 }
 
 /** A space, or the end of a line. */
@@ -59,8 +88,9 @@ function unspaced(char: string): boolean {
 /**
  * The index to reveal to, from `shown`, at least `chars` further on: the step finishes the word it
  * landed in and takes the space after it, so a word is never shown half-written. A word longer than
- * four steps, such as a pasted blob, is cut rather than revealed all at once, and a surrogate pair
- * is never split.
+ * four steps, such as a pasted blob, is cut rather than revealed all at once — the horizon applies
+ * to prose, and a blob with no break in it would otherwise hold the reveal until it ends. A
+ * surrogate pair is never split.
  */
 export function revealEnd(text: string, shown: number, chars: number): number {
   const wanted = Math.min(text.length, shown + chars);
@@ -88,4 +118,41 @@ export function revealEnd(text: string, shown: number, chars: number): number {
 /** The fade delay for a word at `offset` characters into a step, in milliseconds. */
 export function wordDelay(offset: number): number {
   return Math.min(Math.max(0, offset) * WORD_DELAY_PER_CHAR_MS, WORD_DELAY_MAX_MS);
+}
+
+/** How fast the text is arriving, from samples taken as it grows. */
+export interface Arrival {
+  /** When `length` was sampled, in milliseconds on the same clock as `noteArrival`. */
+  at: number;
+  /** The text length at that sample. */
+  length: number;
+  /** When a sample last came in faster than `FAST_ARRIVAL_CHARS_PER_MS`; `-Infinity` if never. */
+  fastAt: number;
+  /** The text is arriving faster than a fade can be staged over it. */
+  tooFast: boolean;
+}
+
+/** The first sample for text that is already `length` characters long. */
+export function arrivalStart(length: number, now: number): Arrival {
+  return { at: now, length, fastAt: -Infinity, tooFast: false };
+}
+
+/**
+ * The arrival state after `length` characters of text have arrived at `now`. The rate is taken
+ * over windows of at least `SPEED_WINDOW_MS`, so a burst of small deltas reads as one fast sample
+ * rather than as several slow ones, and a fast sample keeps the fast path on for `FAST_HOLD_MS`
+ * after the last one so the fade does not flip on and off between bursts.
+ */
+export function noteArrival(previous: Arrival, length: number, now: number): Arrival {
+  if (now - previous.at < SPEED_WINDOW_MS) return previous;
+  const added = length - previous.length;
+  if (added / (now - previous.at) > FAST_ARRIVAL_CHARS_PER_MS) {
+    return { at: now, length, fastAt: now, tooFast: true };
+  }
+  return {
+    at: now,
+    length,
+    fastAt: previous.fastAt,
+    tooFast: previous.tooFast && now - previous.fastAt < FAST_HOLD_MS,
+  };
 }
