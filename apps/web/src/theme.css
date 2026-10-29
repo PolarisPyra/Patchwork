@@ -432,37 +432,32 @@
   }
 }
 
-/* The label of something still running breathes between muted and full text. A plain opacity
-   change repaints only the label; the gradient sweep this replaces cost several times more. */
-.tool-shine {
-  animation: tool-shine 1.6s steps(8) infinite alternate;
-}
-@keyframes tool-shine {
-  from {
-    opacity: 0.55;
-  }
-  to {
-    opacity: 1;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .tool-shine {
-    animation: none;
-  }
-}
+/* A block that has just arrived in a reply settles into place. This is claude.ai's own keyframe and
+   timing, step for step: for the first 30% of the 430ms (129ms) the block moves into place while it
+   is still at zero opacity and still blurred, then it fades in and un-blurs with ease-out. The
+   per-step timing functions live in the keyframes, so the animation itself just says `backwards`,
+   and reduced motion swaps the keyframes rather than the declaration. Only the block still
+   arriving carries the class, so scrolling back does not replay it.
 
-/* A block that has just arrived in a reply settles into place, as Claude's timeline blocks do: it
-   fades, un-blurs and rises the last few pixels. Claude spends the first ~130ms of its 430ms at
-   zero opacity, which reads as a stutter on a row this small, so the fade starts at once. Only the
-   block still arriving carries the class, so scrolling back does not replay it. */
+   Blocks of text only: it blurs and scales its whole subtree, which is right for prose appearing
+   as one thing and wrong for a row with an icon in it, so those rows fade their label instead. */
 .timeline-enter {
-  animation: timeline-enter 430ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: timeline-enter 430ms backwards;
+  /* A row scales up from its own left edge, not from its middle, so it does not drift sideways. */
+  transform-origin: var(--timeline-enter-origin-x, left) center;
 }
 @keyframes timeline-enter {
-  from {
+  0% {
     opacity: 0;
     filter: blur(4px);
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
     transform: translateY(5px) scale(0.9);
+  }
+  30% {
+    opacity: 0;
+    filter: blur(4px);
+    animation-timing-function: ease-out;
+    transform: none;
   }
   to {
     opacity: 1;
@@ -470,16 +465,41 @@
     transform: none;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .timeline-enter {
-    animation: timeline-fade-in 430ms ease-out backwards;
+
+/* An expandable part of a row — the details under a tool call, the steps in a fold, the list of
+   subagents — opens by growing its row height from 0fr to 1fr, so the rows below slide down with
+   it instead of jumping. */
+.timeline-expand {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+.timeline-expand > * {
+  align-self: start;
+  min-width: 0;
+  min-height: 0;
+}
+.timeline-expand-enter {
+  animation: 200ms cubic-bezier(0.19, 1, 0.22, 1) timeline-expand;
+}
+@keyframes timeline-expand {
+  0% {
+    opacity: 0;
+    grid-template-rows: 0fr;
+  }
+  to {
+    opacity: 1;
+    grid-template-rows: 1fr;
   }
 }
 
-/* A status line — "Thinking", a retry, a goal check — fades in rather than popping into the row
-   it shares with the reply, so the row does not jump when the label changes. */
+/* A status line — "Thinking", a retry, a tool row's label — fades in rather than popping into the
+   row it shares with the reply, so the row does not jump when the label changes.
+
+   It goes on the text, never on the row: a row can hold an icon, and an icon that fades, blurs or
+   scales reads as a smudge instead of as something arriving. Rows put this on their label span
+   (see RowLabel in TurnTimeline.tsx) and paint the icon at once. */
 .timeline-status-enter {
-  animation: timeline-fade-in 250ms ease-in-out backwards;
+  animation: 250ms ease-in-out timeline-fade-in;
 }
 @keyframes timeline-fade-in {
   from {
@@ -490,8 +510,18 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .timeline-status-enter {
+  .timeline-status-enter,
+  .timeline-expand-enter {
     animation: none;
+  }
+  /* The block still settles, but as a plain fade: claude.ai redefines the keyframes the same way. */
+  @keyframes timeline-enter {
+    0% {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 }
 
