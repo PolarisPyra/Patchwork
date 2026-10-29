@@ -5,12 +5,12 @@ OpenAI-compatible model from one place — then review every change before you k
 
 <table>
   <tr>
-    <td><img src="docs/screenshots/grid-1.png" alt="A finished reply with a shell command, a table of download names, and its Copy, Retry, and Fork actions" width="420"></td>
-    <td><img src="docs/screenshots/grid-2.png" alt="A new task in an empty project, showing the prompt box and its suggestions" width="420"></td>
+    <td><img src="docs/screenshots/grid-1.png" alt="A task in progress: the agent reads a file, searches for a table, edits a page, and runs the tests, then explains the change" width="420"></td>
+    <td><img src="docs/screenshots/grid-2.png" alt="A new task in a project, with the prompt box and a few suggestions for getting started" width="420"></td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/grid-3.png" alt="Settings on Appearance, with the Light, Dark, and System theme toggle and a grid of app icons" width="420"></td>
-    <td><img src="docs/screenshots/grid-4.png" alt="The Usage panel open over the sidebar, showing the 5-hour session and weekly limits" width="420"></td>
+    <td><img src="docs/screenshots/grid-4.png" alt="A finished task listing the three files it changed, with the Usage panel open showing the 5-hour session and weekly limits" width="420"></td>
   </tr>
 </table>
 
