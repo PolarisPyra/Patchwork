@@ -244,9 +244,10 @@ file_sha256() {
   (sha256sum "$1" 2> /dev/null || shasum -a 256 "$1") | cut -d' ' -f1
 }
 
-# The key the app checks updates against, as built into it.
+# The key the app checks updates against, as built into it. It lives with the release code.
 app_signing_key() {
-  sed -n 's/^const SIGNING_KEY: &str = "\(.*\)";$/\1/p' apps/desktop/src-tauri/src/updates.rs
+  sed -n 's/^const SIGNING_KEY: &str = "\(.*\)";$/\1/p' \
+    apps/desktop/src-tauri/src/updates/release.rs
 }
 
 # The Tauri CLI version the lockfile pins, for signing without installing the project.
@@ -261,7 +262,7 @@ ci_release() {
   [[ -n "${BUNNY_API_KEY:-}" ]] || die "BUNNY_API_KEY is not set."
   [[ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]] || die "TAURI_SIGNING_PRIVATE_KEY is not set."
   key=$(app_signing_key)
-  [[ -n "$key" ]] || die "Could not read SIGNING_KEY from apps/desktop/src-tauri/src/updates.rs."
+  [[ -n "$key" ]] || die "Could not read SIGNING_KEY from apps/desktop/src-tauri/src/updates/release.rs."
   cli=$(tauri_cli_version)
   [[ -n "$cli" ]] || die "Could not read the @tauri-apps/cli version from pnpm-lock.yaml."
   mkdir -p "$dir"
