@@ -3,6 +3,13 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.11.1] - 2026-10-29
+
+### Fixed
+
+- Permission rules now apply as you change them. A rule you add, switch off, or edit decides an agent's next call straight away in every access mode, and a request already waiting is answered by the rule you just saved. Until now a running agent kept the rules it started with, and in full access a refusal could be missed altogether.
+- A message you send while an agent is still working now leaves one working reply, not two: the reply your message interrupted is marked finished as the agent turns to what you said.
+
 ## [0.11.0] - 2026-10-28
 
 ### Changed
