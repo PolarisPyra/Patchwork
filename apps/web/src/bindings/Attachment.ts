@@ -4,11 +4,11 @@ import type { AttachmentKind } from "./AttachmentKind";
 /**
  * Something dropped into the composer, sent to the agent with the message.
  */
-export type Attachment = { kind: AttachmentKind, 
+export type Attachment = { kind: AttachmentKind,
 /**
  * Absolute path on disk.
  */
-path: string, 
+path: string,
 /**
  * Last path component, for display.
  */

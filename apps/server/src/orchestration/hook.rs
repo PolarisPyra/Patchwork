@@ -1,5 +1,5 @@
 //! Answers the permission hooks Codex and Antigravity run before a tool call (see
-//! `provider::hook`): a deny rule refuses the call, and an ask rule holds it until the user
+//! `permissions::hook`): a deny rule refuses the call, and an ask rule holds it until the user
 //! answers in the transcript, like any approval.
 
 use std::collections::HashMap;
@@ -15,7 +15,9 @@ use super::turn::PendingApproval;
 use super::{Runner, publish, unasked};
 use crate::Server;
 use crate::permissions::{self, Target, Unasked};
-use crate::types::{AccessMode, AgentEvent, Approval, ApprovalStatus, Role, new_id};
+use crate::orchestration::AgentEvent;
+use crate::system::new_id;
+use crate::threads::{AccessMode, Approval, ApprovalStatus, Role};
 
 impl Runner {
     /// The answer to a hook's `request` (its thread, root, title, detail, kind, and resources):
@@ -25,8 +27,9 @@ impl Runner {
         let refused = |reason: &str| json!({"deny": reason});
         let text = |key: &str| request[key].as_str().unwrap_or_default().to_string();
         let (thread_id, root) = (text("thread"), text("root"));
+        // A request whose kind this version cannot read is refused rather than let past the rules.
         let Ok(kind) = serde_json::from_value(request["kind"].clone()) else {
-            return json!({"deny": null});
+            return refused("Patchwork could not read this call to check it against its rules");
         };
         let resources = request["resources"]
             .as_array()

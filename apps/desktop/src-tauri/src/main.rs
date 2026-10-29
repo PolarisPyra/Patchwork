@@ -4,20 +4,24 @@
 fn main() {
     // An OpenCode turn starts this binary as its bridge to `opencode serve`, without the app.
     if std::env::args().nth(1).as_deref()
-        == Some(patchwork_server::provider::opencode_bridge::BRIDGE_ARG)
+        == Some(patchwork_server::provider::opencode::bridge::BRIDGE_ARG)
     {
-        std::process::exit(patchwork_server::provider::opencode_bridge::run());
+        std::process::exit(patchwork_server::provider::opencode::bridge::run());
     }
     // An API provider's turn starts this binary as Patchwork's own agent, without the app.
     if std::env::args().nth(1).as_deref()
-        == Some(patchwork_server::provider::api_bridge::BRIDGE_ARG)
+        == Some(patchwork_server::provider::api::bridge::BRIDGE_ARG)
     {
-        std::process::exit(patchwork_server::provider::api_bridge::run());
+        std::process::exit(patchwork_server::provider::api::bridge::run());
     }
     // Codex and Antigravity start this binary as a hook that checks a tool call against the
     // permission rules.
-    if std::env::args().nth(1).as_deref() == Some(patchwork_server::provider::hook::HOOK_ARG) {
-        std::process::exit(patchwork_server::provider::hook::run());
+    if std::env::args().nth(1).as_deref() == Some(patchwork_server::permissions::hook::HOOK_ARG) {
+        std::process::exit(patchwork_server::permissions::hook::run());
+    }
+    // An agent starts this binary as a plugin's built-in hook, such as `boundedWaits`.
+    if std::env::args().nth(1).as_deref() == Some(patchwork_server::plugins::builtin::HOOK_ARG) {
+        std::process::exit(patchwork_server::plugins::builtin::run());
     }
     // Claude Code and Codex start this binary as a relay to an MCP server Patchwork runs.
     if std::env::args().nth(1).as_deref() == Some(patchwork_server::provider::mcp::PROXY_ARG) {

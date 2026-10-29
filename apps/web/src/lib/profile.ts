@@ -39,7 +39,8 @@ function report(): void {
   const [navigation] = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[];
   console.table(measures);
   console.table(marks);
-  if (navigation) console.log("DOMContentLoaded at", Math.round(navigation.domContentLoadedEventEnd), "ms");
+  if (navigation)
+    console.log("DOMContentLoaded at", Math.round(navigation.domContentLoadedEventEnd), "ms");
 }
 
 declare global {

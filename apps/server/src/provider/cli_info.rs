@@ -42,7 +42,7 @@ const MAX_OUTPUT: usize = 60_000;
 /// before reading anything would hang on exactly the commands worth reading: the model catalog is
 /// nearly 700 KB.
 pub fn run(binary: &Path, args: &[&str]) -> Result<String, String> {
-    let mut child = crate::host_command(binary)
+    let mut child = crate::system::host_command(binary)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

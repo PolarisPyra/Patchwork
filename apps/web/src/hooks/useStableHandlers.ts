@@ -22,3 +22,20 @@ export function useStableHandlers<T extends Record<string, (...args: never[]) =>
   );
   return stable;
 }
+
+/**
+ * One stable callback, for a handler passed on its own rather than as a set: the same identity for
+ * the life of the component, always calling the latest render's `fn`.
+ */
+export function useStableCallback<A extends unknown[], R>(
+  fn: (...args: A) => R,
+): (...args: A) => R {
+  const latest = useRef(fn);
+  latest.current = fn;
+  const [stable] = useState(
+    () =>
+      (...args: A): R =>
+        latest.current(...args),
+  );
+  return stable;
+}

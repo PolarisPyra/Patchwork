@@ -46,6 +46,6 @@ mod wayland {
         }
         // SAFETY: `wl_display` is live, and nothing else reads its connection while the main thread
         // runs this.
-        unsafe { patchwork_server::launch::wayland_token(wl_display) }
+        unsafe { patchwork_server::system::launch::wayland_token(wl_display) }
     }
 }

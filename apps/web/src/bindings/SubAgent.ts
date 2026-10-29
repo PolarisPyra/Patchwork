@@ -3,19 +3,19 @@
 /**
  * A subagent an agent started, e.g. with Claude Code's Task tool.
  */
-export type SubAgent = { 
+export type SubAgent = {
 /**
  * The subagent type, e.g. "general-purpose" or "Explore".
  */
-kind: string, 
+kind: string,
 /**
  * What the subagent was asked to do.
  */
-description: string, 
+description: string,
 /**
  * Model the agent chose for it; None means it inherits the parent's.
  */
-model: string | null, 
+model: string | null,
 /**
  * The instructions it was given.
  */

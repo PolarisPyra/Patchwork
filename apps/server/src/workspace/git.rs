@@ -8,11 +8,11 @@ use std::sync::{LazyLock, Mutex, PoisonError};
 use std::time::SystemTime;
 
 use super::fs::resolve_inside;
-use crate::types::FileChange;
+use crate::workspace::FileChange;
 
 /// Runs `git <args>` in `root` and returns its raw output.
 fn git_raw(root: &str, args: &[&str]) -> Result<Output, Error> {
-    crate::host_command("git")
+    crate::system::host_command("git")
         .args(args)
         .current_dir(root)
         // Reads such as `git status` would otherwise rewrite the index, which the project

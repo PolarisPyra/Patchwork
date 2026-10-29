@@ -3,31 +3,31 @@ import type { ApiModel } from "./ApiModel";
 import type { Header } from "./Header";
 import type { KeyStore } from "./KeyStore";
 
-export type ApiProvider = { 
+export type ApiProvider = {
 /**
  * A slug, the part of a model id before its `/`.
  */
-id: string, name: string, 
+id: string, name: string,
 /**
  * The preset it was made from (`deepseek`, `openai`, ... or `custom`); picks its logo.
  */
-preset: string, 
+preset: string,
 /**
  * The OpenAI-compatible base URL, e.g. `https://api.deepseek.com`.
  */
-baseUrl: string, enabled: boolean, models: Array<ApiModel>, 
+baseUrl: string, enabled: boolean, models: Array<ApiModel>,
 /**
  * Extra request headers, sent with every request.
  */
-headers: Array<Header>, 
+headers: Array<Header>,
 /**
  * Reads the key from this environment variable instead of a stored key.
  */
-keyEnv: string | null, 
+keyEnv: string | null,
 /**
  * Where the stored key is; set by Patchwork, never by the UI.
  */
-keyStore: KeyStore | null, 
+keyStore: KeyStore | null,
 /**
  * A logo chosen for it, as an image `data:` URL; replaces the preset's.
  */

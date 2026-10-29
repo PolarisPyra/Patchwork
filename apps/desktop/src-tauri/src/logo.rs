@@ -219,7 +219,7 @@ mod launcher {
     /// Rebuild KDE's application cache, which the taskbar reads the launcher icon from. The
     /// desktop otherwise rebuilds it on its own schedule. Desktops without the tool skip it.
     fn refresh_cache() {
-        let _ = patchwork_server::host_command("kbuildsycoca6").output();
+        let _ = patchwork_server::system::host_command("kbuildsycoca6").output();
     }
 
     /// Unmap and map the window, which the window manager and taskbar treat as a new window and

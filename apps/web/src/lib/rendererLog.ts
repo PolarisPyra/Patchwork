@@ -6,7 +6,14 @@ import { api, type LogLevel } from "~/api";
  * crosses to the backend.
  */
 
-const RANK: Record<LogLevel, number> = { off: 0, error: 1, warning: 2, info: 3, debug: 4, trace: 5 };
+const RANK: Record<LogLevel, number> = {
+  off: 0,
+  error: 1,
+  warning: 2,
+  info: 3,
+  debug: 4,
+  trace: 5,
+};
 let level: LogLevel = "info";
 
 /** Follows Settings → Logging. */

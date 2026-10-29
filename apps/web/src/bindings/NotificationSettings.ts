@@ -3,11 +3,11 @@
 /**
  * Desktop notifications shown while Patchwork is not the focused window.
  */
-export type NotificationSettings = { 
+export type NotificationSettings = {
 /**
  * When a task's goal is met.
  */
-goalComplete: boolean, 
+goalComplete: boolean,
 /**
  * When an agent finishes replying in a task that is not pursuing a goal.
  */

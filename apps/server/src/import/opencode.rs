@@ -9,11 +9,12 @@ use rusqlite::{Connection, OpenFlags, params};
 use serde_json::Value;
 
 use super::{Session, SessionMessage, debug_log::ilog, push_merged};
-use crate::provider;
-use crate::types::{AgentKind, Role};
+use crate::provider::AgentKind;
+use crate::threads::Role;
 
 pub fn sessions(agent: AgentKind) -> Vec<Session> {
-    let Some(path) = provider::home_dir().map(|h| h.join(".local/share/opencode/opencode.db"))
+    let Some(path) =
+        crate::system::fs::home_dir().map(|h| h.join(".local/share/opencode/opencode.db"))
     else {
         ilog!("OpenCode: no home folder");
         return vec![];

@@ -5,11 +5,11 @@ import type { ScopeRules } from "./ScopeRules";
  * What agents may do without asking: for every project and chat, for chats without a project,
  * and for each project.
  */
-export type PermissionSettings = { everywhere: ScopeRules, chats: ScopeRules, 
+export type PermissionSettings = { everywhere: ScopeRules, chats: ScopeRules,
 /**
  * By project id.
  */
-projects: { [key in string]: ScopeRules }, 
+projects: { [key in string]: ScopeRules },
 /**
  * Set once the starting rules were added, so deleting one does not bring it back.
  */

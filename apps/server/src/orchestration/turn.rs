@@ -1,4 +1,9 @@
 //! One running turn: its shared state, and the spawn that starts it.
+mod end;
+
+pub(super) use end::{TurnEnd, finish, plugin_hooks, record_turn};
+use end::{background_id, log_cli_version};
+
 use std::collections::HashMap;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
@@ -13,29 +18,27 @@ use std::time::Instant;
 use serde_json::Value;
 
 use super::attribution::{self, Attribution, Reach, SharedAttribution};
+use crate::plugins::HookEvent;
 use crate::permissions::Target;
 use crate::provider::TurnSpec;
 use crate::provider;
-use crate::scope;
+use crate::system::scope;
 use crate::Server;
-use crate::types::AccessMode;
-use crate::types::AgentEvent;
-use crate::types::AgentKind;
-use crate::types::Attachment;
-use crate::types::Goal;
-use crate::types::GoalStatus;
-use crate::types::Message;
-use crate::types::MessageStatus;
-use crate::types::new_id;
-use crate::types::now_ms;
-use crate::types::Role;
-use crate::debug_log::{AGENTS, Data, Source};
-use crate::types::LogLevel;
+use crate::threads::AccessMode;
+use crate::orchestration::AgentEvent;
+use crate::provider::AgentKind;
+use crate::threads::Attachment;
+use crate::threads::Goal;
+use crate::threads::GoalStatus;
+use crate::threads::Message;
+use crate::threads::MessageStatus;
+use crate::system::new_id;
+use crate::system::now_ms;
+use crate::threads::Role;
+use crate::logging::{AGENTS, Data, Source};
+use crate::settings::LogLevel;
 use crate::workspace;
-use super::FollowUpInput;
 use super::checkpoint;
-use super::claude;
-use super::codex;
 use super::ingest::ingest;
 use super::process::AgentStdin;
 use super::process::Interrupts;
@@ -186,7 +189,8 @@ impl Runner {
         };
         // Codex takes its instructions in the turn's input; Claude takes them as launch arguments.
         let instructions = match agent {
-            AgentKind::Codex => codex::developer_instructions(&settings),
+            AgentKind::Codex => Some(super::agent_instructions(&settings, AgentKind::Codex))
+                .filter(|text| !text.is_empty()),
             // Patchwork's own agent has no skill loader, so it is told where the skills are.
             AgentKind::Api => {
                 let shell =
@@ -205,6 +209,7 @@ impl Runner {
         }
         .map(|cli| cli.join("skills").to_string_lossy().into_owned());
         let guarded = crate::permissions::guarded(&settings.permissions, project_id.as_deref());
+        let hooks = crate::plugins::agent_hooks(&settings);
         // The custom agents, for the CLIs that can start them as subagents.
         let agents = match agent {
             AgentKind::Claude | AgentKind::Codex | AgentKind::OpenCode => {
@@ -228,24 +233,36 @@ impl Runner {
             skills_dir: skills_dir.as_deref(),
             guarded: &guarded,
             agents: &agents,
+            hooks: &hooks,
         };
 
         // Agents often edit files through the shell, so changes are also found by
         // comparing git state before and after the turn.
         let attribution = Attribution::shared(workspace::git_changes(&root).unwrap_or_default());
-        plugin_hooks(server, "userPromptSubmit", &thread_id, &root, agent, None);
+        plugin_hooks(
+            server,
+            HookEvent::UserPromptSubmit,
+            &thread_id,
+            &root,
+            agent,
+            None,
+        );
         if let Some(message_id) = &checkpoint {
             checkpoint::capture(&root, &thread_id, message_id);
         }
         let mut args = provider::turn_args(agent, &spec);
         if agent == AgentKind::Claude {
-            args.extend(claude::launch_args(&settings));
-            args.extend(claude::permission_args(&guarded, &root));
-            args.extend(claude::agents_args(&agents, &root));
+            args.extend(crate::provider::claude::launch::launch_args(
+                &settings, &hooks,
+            ));
+            args.extend(crate::provider::claude::launch::permission_args());
+            args.extend(crate::provider::claude::launch::agents_args(&agents, &root));
         }
         let input = provider::turn_input(agent, &spec);
         let (mut cmd, scope) = scope::scoped(provider::turn_command(agent)?);
-        if let Some(shell) = crate::effective_shell(server.store.settings().shell.as_deref()) {
+        if let Some(shell) =
+            crate::system::effective_shell(server.store.settings().shell.as_deref())
+        {
             // Claude Code on Windows runs its commands in Git Bash, and refuses to start when it
             // cannot find it on PATH.
             if cfg!(windows) && agent == AgentKind::Claude && shell.ends_with("bash.exe") {
@@ -254,11 +271,11 @@ impl Runner {
             cmd.env("SHELL", shell);
         }
         if agent == AgentKind::Claude {
-            cmd.envs(claude::launch_env(&settings));
+            cmd.envs(crate::provider::claude::launch::launch_env(&settings));
         }
         cmd.args(&args)
             .envs(provider::turn_env(agent, &spec))
-            .envs(provider::hook::env(agent, &thread_id, &root))
+            .envs(crate::permissions::hook::env(agent, &thread_id, &root))
             .current_dir(&root)
             .stdin(if input.is_empty() {
                 Stdio::null()
@@ -366,6 +383,7 @@ impl Runner {
             skills_dir,
             guarded,
             agents,
+            hooks,
         };
         self.turns
             .lock()
@@ -507,6 +525,8 @@ pub(super) struct Turn {
     pub(super) guarded: Vec<crate::permissions::Guarded>,
     /// What `spec` passes as `TurnSpec::agents`.
     pub(super) agents: Vec<crate::agents::Agent>,
+    /// What `spec` passes as `TurnSpec::hooks`.
+    pub(super) hooks: Vec<crate::plugins::AgentHook>,
 }
 
 impl Turn {
@@ -583,6 +603,7 @@ impl Turn {
             skills_dir: self.skills_dir.as_deref(),
             guarded: &self.guarded,
             agents: &self.agents,
+            hooks: &self.hooks,
         }
     }
 }
@@ -611,287 +632,4 @@ pub(super) fn assistant_message() -> Message {
         usage: None,
         turn: None,
     }
-}
-
-/// Ends a turn whose agent has exited: forgets it, completes each of its messages, then starts
-/// the turn that drops its goal or answers the steering messages it never took. When the agent lost
-/// the session the turn resumed (`session_lost`), the turn runs again in a new session instead,
-/// given the conversation so far as a transcript.
-/// How an agent's turn ended, as `finish` needs to record it.
-pub(super) struct TurnEnd {
-    pub(super) status: MessageStatus,
-    pub(super) error: Option<String>,
-    pub(super) cancelled: bool,
-    pub(super) clear_in_agent: Option<&'static str>,
-    pub(super) session_lost: bool,
-}
-
-/// Pairs the turn's replies with the project's snapshots from before and after the turn, so their
-/// changed files keep showing what the turn did once the changes are committed or edited again.
-pub(super) fn record_turn(turn: &Turn, replies: &[String]) {
-    let Some(first) = replies.first() else { return };
-    let Some(thread) = turn.server.store.thread(&turn.thread_id) else {
-        return;
-    };
-    if thread.project_id.is_none() {
-        return;
-    }
-    // The snapshot before the turn belongs to the user message the first reply answers.
-    let Some(at) = thread.messages.iter().position(|m| &m.id == first) else {
-        return;
-    };
-    let Some(asked) = thread.messages[..at]
-        .iter()
-        .rev()
-        .find(|m| m.role == Role::User)
-    else {
-        return;
-    };
-    if let Some(trees) = checkpoint::record_end(&turn.root, &turn.thread_id, &asked.id, replies) {
-        for id in replies {
-            turn.publish(AgentEvent::TurnRecorded {
-                message_id: id.clone(),
-                turn: trees.clone(),
-            });
-        }
-    }
-}
-
-pub(super) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
-    let TurnEnd {
-        status,
-        error,
-        cancelled,
-        clear_in_agent,
-        session_lost,
-    } = end;
-    // Forget the turn before announcing it. Queued messages remain persisted in the
-    // thread until the user explicitly resumes them; unanswered steers were already
-    // delivered to the agent and continue automatically if needed.
-    let unanswered = {
-        let mut turns = turn
-            .server
-            .runner
-            .turns
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        // A retired idle turn may already have been replaced by a new one.
-        if turns
-            .get(&turn.thread_id)
-            .is_some_and(|t| Arc::ptr_eq(&t.exited, &turn.exited))
-        {
-            turns.remove(&turn.thread_id);
-        }
-        // Queued messages stay in the thread as queued until the turn has finished.
-        // Steering messages the agent never answered continue automatically unless
-        // the turn was stopped; messages sent after Stop still start the next turn.
-        let unanswered = turn
-            .steers
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .drain(..)
-            .collect::<Vec<_>>();
-        let queued =
-            std::mem::take(&mut *turn.queue.lock().unwrap_or_else(PoisonError::into_inner));
-        let mut handed_over = turn
-            .server
-            .runner
-            .handed_over
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        queued.iter().for_each(|message| {
-            handed_over.remove(&message.message_id);
-        });
-        if cancelled { Vec::new() } else { unanswered }
-    };
-    if session_lost && unanswered.is_empty() {
-        let server = &turn.server;
-        let reset = server.store.update_thread(&turn.thread_id, |t| {
-            t.session_id = None;
-            t.context_pending = true;
-        });
-        if let Err(e) = reset {
-            log::warn!("failed to drop a lost session: {e}");
-        } else {
-            turn.publish(AgentEvent::MessageRemoved {
-                message_id: turn.message_id.clone(),
-            });
-            let (thread_id, text) = (turn.thread_id.clone(), turn.text.clone());
-            let (attachments, images) = (turn.attachments.clone(), turn.images.clone());
-            let started = server.runner.start_turn(
-                server,
-                TurnRequest {
-                    thread_id,
-                    text,
-                    attachments,
-                    images,
-                },
-            );
-            match started {
-                Ok(()) => return,
-                Err(e) => log::warn!("failed to rerun the turn in a new session: {e}"),
-            }
-        }
-    }
-    record_turn(&turn, segments);
-    // Earlier messages of the turn were answered in full before a steer moved it on. None are
-    // left when the agent went idle after its last reply, which was completed then.
-    if let Some((last, earlier)) = segments.split_last() {
-        earlier.iter().for_each(|id| {
-            turn.publish(AgentEvent::TurnCompleted {
-                message_id: id.clone(),
-                status: MessageStatus::Complete,
-                error: None,
-            });
-        });
-        turn.publish(AgentEvent::TurnCompleted {
-            message_id: last.clone(),
-            status,
-            error,
-        });
-    }
-    // On a thread of its own, so a slow hook does not hold up the next turn.
-    {
-        let (server, thread_id, root) = (
-            turn.server.clone(),
-            turn.thread_id.clone(),
-            turn.root.clone(),
-        );
-        let (agent, ended) = (turn.agent, if cancelled { "interrupt" } else { "stop" });
-        std::thread::spawn(move || {
-            for event in [ended, "sessionEnd"] {
-                plugin_hooks(&server, event, &thread_id, &root, agent, Some(status));
-            }
-        });
-    }
-
-    // The agent drops the goal in a turn of its own; unanswered steers wait for that
-    // system turn instead, and queued messages for the end of it.
-    if let Some(command) = clear_in_agent {
-        let server = &turn.server;
-        match server.send_message(turn.thread_id.clone(), command.into(), vec![], false) {
-            Ok(_) => {
-                let runner = &server.runner;
-                unanswered.iter().for_each(|f| {
-                    let _ = runner.enqueue(
-                        &turn.thread_id,
-                        FollowUpInput {
-                            message_id: &f.message_id,
-                            text: &f.text,
-                            attachments: &f.attachments,
-                            images: &f.images,
-                        },
-                    );
-                });
-                return;
-            }
-            Err(e) => log::warn!("failed to clear the goal in the agent's session: {e}"),
-        }
-    }
-    // Unanswered steers have already been delivered, so clear their pending UI state
-    // before continuing them in a new turn.
-    unanswered.iter().for_each(|f| {
-        publish(
-            &turn.server,
-            &turn.thread_id,
-            AgentEvent::MessageQueued {
-                message_id: f.message_id.clone(),
-                queued: false,
-            },
-        );
-    });
-    if !unanswered.is_empty() {
-        let text = unanswered
-            .iter()
-            .map(|f| f.text.as_str())
-            .collect::<Vec<_>>()
-            .join("\n\n");
-        let (attachments, images) = unanswered
-            .into_iter()
-            .map(|f| (f.attachments, f.images))
-            .fold((vec![], vec![]), |(mut a, mut i), (fa, fi)| {
-                a.extend(fa);
-                i.extend(fi);
-                (a, i)
-            });
-        let server = &turn.server;
-        if let Err(e) = server.runner.start_turn(
-            server,
-            TurnRequest {
-                thread_id: turn.thread_id.clone(),
-                text,
-                attachments,
-                images,
-            },
-        ) {
-            log::warn!("failed to start the turn for queued messages: {e}");
-        }
-    } else if !cancelled && status == MessageStatus::Complete {
-        // Queued messages go once the turn has finished; after Stop or an error they wait for
-        // the user to send them.
-        turn.server.send_queued_later(&turn.thread_id);
-    }
-}
-
-/// Runs the enabled plugins' hooks for `event` and logs the ones that failed.
-pub(super) fn plugin_hooks(
-    server: &Server,
-    event: &str,
-    thread_id: &str,
-    root: &str,
-    agent: AgentKind,
-    status: Option<MessageStatus>,
-) {
-    let name = |value: serde_json::Result<Value>| {
-        value
-            .ok()
-            .and_then(|v| v.as_str().map(str::to_string))
-            .unwrap_or_default()
-    };
-    let agent = name(serde_json::to_value(agent));
-    let status = status.map(|status| name(serde_json::to_value(status)));
-    let context = crate::plugins::HookContext {
-        event,
-        thread_id,
-        root,
-        agent: &agent,
-        status: status.as_deref(),
-    };
-    for failure in crate::plugins::run_hooks(&server.store.settings(), &context) {
-        log::warn!("plugin hook {event} {failure}");
-    }
-}
-
-/// A background command's window, apart from its call's, which has the same id.
-fn background_id(tool_id: &str) -> String {
-    format!("background:{tool_id}")
-}
-
-/// Logs the agent's CLI version once per run of the app. A thread asks, since running the CLI
-/// takes a moment the turn should not wait for.
-fn log_cli_version(agent: AgentKind) {
-    static LOGGED: Mutex<Vec<AgentKind>> = Mutex::new(Vec::new());
-    if agent == AgentKind::Api {
-        return;
-    }
-    {
-        let mut logged = LOGGED.lock().unwrap_or_else(PoisonError::into_inner);
-        if logged.contains(&agent) {
-            return;
-        }
-        logged.push(agent);
-    }
-    std::thread::spawn(move || {
-        let version = provider::cli_version(agent).unwrap_or_else(|| "unknown".into());
-        let source = Source {
-            agent: Some(agent),
-            ..Source::default()
-        };
-        AGENTS.write(
-            LogLevel::Info,
-            "cli",
-            &source,
-            Data::Text(format!("{agent:?} {version}")),
-        );
-    });
 }

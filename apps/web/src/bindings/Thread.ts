@@ -6,53 +6,53 @@ import type { Message } from "./Message";
 import type { ProviderSlashCommand } from "./ProviderSlashCommand";
 import type { ThreadParent } from "./ThreadParent";
 
-export type Thread = { id: string, 
+export type Thread = { id: string,
 /**
  * None for a chat without a project; it runs in a private scratch folder.
  */
-projectId: string | null, title: string, agent: AgentKind, model: string | null, accessMode: AccessMode, 
+projectId: string | null, title: string, agent: AgentKind, model: string | null, accessMode: AccessMode,
 /**
  * Reasoning effort passed to the agent, e.g. "high"; None leaves the CLI's default.
  */
-effort: string | null, 
+effort: string | null,
 /**
  * Claude session_id / Codex thread_id used to resume the conversation.
  */
-sessionId: string | null, createdAt: number, messages: Array<Message>, 
+sessionId: string | null, createdAt: number, messages: Array<Message>,
 /**
  * The `/goal` the agent is working toward, as the agent last reported it.
  */
-goal: Goal | null, 
+goal: Goal | null,
 /**
  * The folder this task is in; None for the project's top level.
  */
-folderId: string | null, 
+folderId: string | null,
 /**
  * When the thread was archived; None while it is in the task list.
  */
-archivedAt: number | null, 
+archivedAt: number | null,
 /**
  * Set on a subagent's thread: the thread and call that started it. Such a thread is
  * read-only and not listed in the sidebar.
  */
-parent: ThreadParent | null, 
+parent: ThreadParent | null,
 /**
  * Turns run in plan mode: the agent plans and proposes, without changing files.
  */
-planMode: boolean, 
+planMode: boolean,
 /**
  * Provider-native commands discovered from the CLI's initialization frame.
  */
-slashCommands: Array<ProviderSlashCommand>, 
+slashCommands: Array<ProviderSlashCommand>,
 /**
  * The OpenCode session this thread was imported from, so a re-import does not add it again.
  */
-importedFrom: string | null, 
+importedFrom: string | null,
 /**
  * An imported chat whose transcript the next turn sends as context, since no agent session
  * holds it yet. Cleared once a turn has started.
  */
-contextPending: boolean, 
+contextPending: boolean,
 /**
  * The primary custom agent the chat is in the role of (see `agents`).
  */

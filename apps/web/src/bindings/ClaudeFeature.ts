@@ -3,15 +3,15 @@
 /**
  * A feature gate of the installed Claude Code, as the CLI last cached it in `.claude.json`.
  */
-export type ClaudeFeature = { 
+export type ClaudeFeature = {
 /**
  * The gate's name, such as `tengu_bridge_poll_interval_ms`.
  */
-name: string, 
+name: string,
 /**
  * The cached value as one line of JSON, shortened when it is long.
  */
-value: string, 
+value: string,
 /**
  * Present when the gate is a plain switch. A gate that carries a setting, such as a poll
  * interval or a variant name, has no on or off, so this is `None`.

@@ -4,11 +4,11 @@ import type { FileChange } from "./FileChange";
 /**
  * A settled burst of file changes in the watched project, with git's state after it.
  */
-export type ProjectChanged = { projectId: string, 
+export type ProjectChanged = { projectId: string,
 /**
  * Project-relative paths the burst touched; `.git/...` for commits, staging and checkouts.
  */
-paths: Array<string>, branch: string | null, 
+paths: Array<string>, branch: string | null,
 /**
  * None when `git status` failed, so the last good list stays.
  */

@@ -3,7 +3,7 @@
 /**
  * Why a safety classifier blocked a reply, as the agent reports it.
  */
-export type Refusal = { 
+export type Refusal = {
 /**
  * The policy area, such as `cyber`; None when the agent names none.
  */

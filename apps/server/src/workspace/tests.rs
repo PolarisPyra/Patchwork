@@ -2,7 +2,7 @@ use std::path::Path;
 
 use super::git::git;
 use super::*;
-use crate::types::new_id;
+use crate::system::new_id;
 
 /// Creates a repo under the temp dir with one committed file, `a.txt`.
 fn temp_repo() -> String {

@@ -59,14 +59,6 @@ Rules for coding agents working in the Rust code in this repo (`apps/server` and
 - Use `enumerate()` instead of manual counter variables.
 - Prefer `if let` and `while let` for single-pattern matching.
 
-## Benchmarks
-
-- **NEVER** run benchmarks in parallel, as the benchmarks will compete for resources and the results will be invalid.
-- **NEVER** game the benchmarks. Do not manipulate the benchmarks themselves to satisfy any required performance constraints.
-- **NEVER** run benchmarks with `target-cpu=native` or any other `RUSTFLAGS`.
-- If benchmarking against another crate or library, ensure the benchmarks are apples-to-apples comparisons.
-- Ensure benchmark tests are independent. If the tests are dependent due to a feature (e.g. caching), ensure the feature is disabled.
-
 ## Performance
 
 When writing or reviewing code that handles a lot of data, I/O, or work per request, check each point below. Fix what is cheap and clear, and name the trade-off for the rest.

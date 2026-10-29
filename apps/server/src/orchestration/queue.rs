@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use std::sync::PoisonError;
 
 use crate::provider;
-use crate::types::Attachment;
+use crate::threads::Attachment;
 use super::process::write_to;
 use super::Runner;
 

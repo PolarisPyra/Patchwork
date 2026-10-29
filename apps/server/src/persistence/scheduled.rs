@@ -7,9 +7,10 @@ use rusqlite::{OptionalExtension, params};
 
 use super::codec::{dec, enc, err, json};
 use super::store::{Inner, Store};
-use crate::types::{
-    AccessMode, AgentKind, RunOutcome, Schedule, ScheduledRun, ScheduledTask, new_id, now_ms,
-};
+use crate::provider::AgentKind;
+use crate::scheduled::{RunOutcome, Schedule, ScheduledRun, ScheduledTask};
+use crate::system::{new_id, now_ms};
+use crate::threads::AccessMode;
 
 /// How many runs each task keeps.
 const RECENT_RUNS: i64 = 5;

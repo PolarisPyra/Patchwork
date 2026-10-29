@@ -3,7 +3,7 @@ import type { Effect } from "./Effect";
 import type { PermissionKind } from "./PermissionKind";
 import type { PermissionRule } from "./PermissionRule";
 
-export type ScopeRules = { 
+export type ScopeRules = {
 /**
  * What each kind of request gets when no rule matches it; a missing kind inherits.
  */

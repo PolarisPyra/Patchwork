@@ -5,7 +5,7 @@ them changes how a turn is run.
 
 ## Artifacts
 
-`apps/web/src/components/chat/Artifact.tsx` draws two kinds of fence in a reply:
+`apps/web/src/features/chat/components/Artifact.tsx` draws two kinds of fence in a reply:
 
 | Language | What happens |
 | --- | --- |
@@ -19,7 +19,7 @@ height arrives as a message from the artifact.
 
 ## Scheduled tasks
 
-`apps/server/src/scheduled.rs` works out the next run from the shape of a schedule and the local
+`apps/server/src/scheduled/mod.rs` works out the next run from the shape of a schedule and the local
 clock; there is no cron parser. The shapes are Codex's own: every few hours, every day, weekdays,
 or named days.
 
@@ -46,7 +46,7 @@ plugins/patchwork/
 └── hooks.json    { "hooks": { "stop": [ { "hooks": [ { "type": "command", "command": "…" } ] } ] } }
 ```
 
-`apps/server/src/plugins.rs` reads the manifest from `.patchwork-plugin/plugin.json`,
+`apps/server/src/plugins/` reads the manifest from `.patchwork-plugin/plugin.json`,
 `.codex-plugin/plugin.json`, or a plain `plugin.json`, so a Codex bundle works as it is. `hooks`
 and `apps` are each either inline (`{ "hooks": { … } }`, `{ "apps": { … } }`) or a path, relative to
 the bundle folder, to a file holding that. Each part is read on its own: one this version cannot
@@ -54,19 +54,48 @@ read is left empty, and the rest of the bundle still loads.
 
 Hook events match whatever their case: `userPromptSubmit`, `sessionStart`, `preToolUse`,
 `permissionRequest`, `postToolUse`, `preCompact`, `postCompact`, `subagentStart`,
-`subagentStop`, `stop`, `interrupt`, `sessionEnd`. Only `command` handlers run, and so far only on
-`userPromptSubmit` (before a turn starts) and `stop` or `interrupt` then `sessionEnd` (after it
-ends). A command runs in the user's shell in the turn's project folder, with `PATCHWORK_EVENT`,
-`PATCHWORK_THREAD`, `PATCHWORK_CWD`, `PATCHWORK_AGENT` and `PATCHWORK_STATUS` set, and is stopped
-at its `timeoutSec` (default 60, 1 to 600). A failed hook is logged and never stops the turn.
+`subagentStop`, `stop`, `interrupt`, `sessionEnd`. `command` and `builtin` handlers run. A group's
+`matcher` limits a tool event to the tools whose whole name it matches as a regular expression
+(`Bash`, `Edit|Write`); none, or `*`, is every tool.
+
+Patchwork runs the turn events itself, for every agent: `userPromptSubmit` before a turn starts,
+and `stop` or `interrupt` then `sessionEnd` after it ends. Such a command runs in the user's shell
+in the turn's project folder, with `PATCHWORK_EVENT`, `PATCHWORK_THREAD`, `PATCHWORK_CWD`,
+`PATCHWORK_AGENT` and `PATCHWORK_STATUS` set, and is stopped at its `timeoutSec` (default 60, 1 to
+600). A failed hook is logged and never stops the turn.
+
+The other events happen inside the agent, so the agent runs them on its own hooks, with the event
+as JSON on stdin; a `preToolUse` hook refuses a call with exit code 2 and its reason on stderr, or
+with `{"hookSpecificOutput": {"permissionDecision": "deny", "permissionDecisionReason": "…"}}`.
+Each agent gets the payload and tool names it uses itself:
+
+| Agent | Events | How |
+| --- | --- | --- |
+| Claude Code | every one | `hooks/hooks.json` in the plugin folder Patchwork passes with `--plugin-dir` |
+| Codex | every one | `-c hooks.<Event>` overrides, trusted by hash, beside Patchwork's permission hook |
+| Antigravity | `sessionStart`, `preToolUse`, `postToolUse` | the `.agents/hooks.json` it loads from a folder added with `--add-dir` |
+| API providers | `preToolUse`, `postToolUse` | Patchwork's own agent runs them around each call, with Claude Code's payload |
+| OpenCode | none | it has no hooks of this kind |
+
+A `builtin` handler, `{ "type": "builtin", "name": "boundedWaits" }`, is a check Patchwork carries
+itself (`apps/server/src/plugins/builtin/`). An agent CLI runs it as `patchwork --hook <name>
+<agent>`, which reads the call in that agent's format and answers in it; Patchwork's own agent runs it
+in-process. A name this version does not carry is logged and skipped.
+
+- `boundedWaits` refuses a shell command that polls in a loop (`until` or `while` with a `sleep` in
+  it) with no `timeout`, and one that polls for a word cargo prints in colour (`Running`,
+  `Compiling`, `Finished`, `Building`). It reads the command as the shell does, so only what runs
+  counts: a loop quoted as data, in `printf`, `echo`, `jq`, `grep`, a commit message, or a heredoc
+  written to a file, is not a loop. The scripts `sh -c` and its kin, `eval`, `$(…)`, and a shell's
+  heredoc run are read too, and one that `timeout` runs has its limit.
 
 ## Computer use
 
-`apps/server/src/computer.rs` gives Patchwork's own agent a screenshot and the pointer and keyboard
+`apps/server/src/computer/mod.rs` gives Patchwork's own agent a screenshot and the pointer and keyboard
 under it. It is off until Settings → Permissions turns it on; `set_enabled` mirrors the setting so
 the tool list and the approval rules can ask without a database read.
 
-- `apps/server/src/screen.rs` captures the primary monitor. On Windows and macOS that is `xcap`.
+- `apps/server/src/computer/screen.rs` captures the primary monitor. On Windows and macOS that is `xcap`.
   On Linux it is the desktop portal under Wayland, cut to the primary monitor that XWayland
   reports, and the root window under X11. It uses `zbus` and `x11rb`, which the app already builds
   for notifications and the clipboard. `xcap` is not used on Linux, since it would also build

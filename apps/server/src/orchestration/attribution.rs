@@ -15,7 +15,10 @@ use std::time::{Duration, Instant};
 
 use super::publish;
 use crate::Server;
-use crate::types::{AgentEvent, FileChange, MessageStatus, Role, ToolCall, now_ms};
+use crate::orchestration::AgentEvent;
+use crate::system::now_ms;
+use crate::threads::{MessageStatus, Role, ToolCall};
+use crate::workspace::FileChange;
 use crate::watch::Change;
 
 /// How long after a tool call returns its writes may still arrive: FSEvents reports late.

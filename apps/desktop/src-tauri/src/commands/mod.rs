@@ -1,29 +1,40 @@
 //! The Tauri commands the webview calls, grouped by domain. `lib.rs` registers each one.
 //! Each group `use super::*;` for the shared imports and helpers below.
 
+pub mod agents;
 pub mod app;
-pub mod claude;
-pub mod codex;
+pub mod attachments;
 pub mod computer;
 pub mod files;
+pub mod git;
+pub mod imports;
+pub mod logs;
 pub mod mcp;
-pub mod plugins;
-pub mod providers;
+pub mod models;
+pub mod projects;
 pub mod scheduled;
 pub mod settings;
+pub mod skills;
 pub mod threads;
+pub mod turns;
+pub mod usage;
 
 use std::sync::Arc;
 
 use crate::{activation, clipboard, logo, updates};
 
-use patchwork_server::types::{
-    AgentKind, Project, Settings, AgentStatus, ModelOption, ShellChoices, AccessMode, Attachment,
-    Message, Thread, Folder, FileChange, ProviderUsage, ImportSource, ImportScan, TurnTrees,
-    ScheduledTask, Plugin, CodexInfo, ClaudeInfo,
-};
+use patchwork_server::import::{ImportSource, ImportScan};
+use patchwork_server::plugins::Plugin;
+use patchwork_server::projects::{Project, Folder};
+use patchwork_server::provider::{AgentKind, AgentStatus, ModelOption, CodexInfo, ClaudeInfo};
+use patchwork_server::scheduled::ScheduledTask;
+use patchwork_server::settings::{Settings, ShellChoices};
+use patchwork_server::threads::{AccessMode, Attachment, Message, Thread, TurnTrees};
+use patchwork_server::usage::ProviderUsage;
+use patchwork_server::workspace::FileChange;
 use patchwork_server::workspace;
-use patchwork_server::{NewThread, Res, Server, orchestration, provider};
+use patchwork_server::{Res, Server, orchestration, provider};
+use patchwork_server::threads::NewThread;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -47,7 +58,7 @@ async fn open_in_viewer(app: &AppHandle, path: &std::path::Path) -> Res<()> {
     let token = activation::token(app).await;
     #[cfg(target_os = "linux")]
     {
-        patchwork_server::launch::xdg_open(path.as_os_str(), token.as_deref())
+        patchwork_server::system::launch::xdg_open(path.as_os_str(), token.as_deref())
             .map_err(|e| format!("Could not open {}: {e}", path.display()))
     }
     #[cfg(not(target_os = "linux"))]
@@ -64,7 +75,7 @@ async fn open_in_viewer(app: &AppHandle, path: &std::path::Path) -> Res<()> {
 fn reveal_in_file_manager(app: &AppHandle, path: &std::path::Path, token: Option<&str>) -> Res<()> {
     #[cfg(target_os = "linux")]
     {
-        patchwork_server::launch::reveal(path, token).map_err(String::from)
+        patchwork_server::system::launch::reveal(path, token).map_err(String::from)
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -81,9 +92,4 @@ async fn edit_file(app: &AppHandle, dir: String, name: String) -> Res<()> {
     blocking(move || workspace::open_in_editor(&dir, &name, token.as_deref()))
         .await?
         .map_err(String::from)
-}
-
-#[tauri::command]
-pub(crate) fn list_models(kind: AgentKind) -> Vec<ModelOption> {
-    provider::list_models(kind)
 }

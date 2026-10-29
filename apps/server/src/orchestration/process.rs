@@ -14,8 +14,9 @@ use std::sync::Mutex;
 use std::sync::PoisonError;
 use std::time::Duration;
 
-use crate::debug_log::{AGENTS, Data, Source};
-use crate::types::{AgentKind, LogLevel};
+use crate::logging::{AGENTS, Data, Source};
+use crate::provider::AgentKind;
+use crate::settings::LogLevel;
 use crate::workspace;
 use super::queue::Steers;
 

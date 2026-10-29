@@ -1,0 +1,385 @@
+//! Sending messages and running turns: naming the thread, approvals, stopping.
+
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use crate::orchestration::{ApprovalDecision, Delivery, FollowUpInput, TurnRequest};
+
+use crate::orchestration::{AgentEventEnvelope, AgentEvent};
+use crate::provider::AgentKind;
+use crate::system::{now_ms, new_id};
+use crate::threads::{Role, MessageStatus, StepStatus, Attachment, Message, GoalStatus};
+use crate::{orchestration, provider, skills};
+use crate::threads::title;
+use crate::threads::{title_from, without_leading_attachments};
+use crate::Server;
+
+/// A message the user sent, complete from the start.
+fn user_message(text: &str, attachments: Vec<Attachment>) -> Message {
+    Message {
+        id: new_id(),
+        role: Role::User,
+        text: text.into(),
+        created_at: now_ms(),
+        status: MessageStatus::Complete,
+        tools: vec![],
+        plan: vec![],
+        files: vec![],
+        error: None,
+        approvals: vec![],
+        attachments,
+        steer: false,
+        queued: false,
+        background: Vec::new(),
+        cut_off: false,
+        refusal: None,
+        parts: Vec::new(),
+        finished_at: None,
+        usage: None,
+        turn: None,
+    }
+}
+
+impl Server {
+    /// Stops every running agent; for quitting the app.
+    /// How many threads have an agent replying now.
+    pub fn running_turns(&self) -> usize {
+        self.runner.running().len()
+    }
+
+    pub fn stop_agents(&self) {
+        self.runner.stop_all();
+    }
+
+    /// Replaces the `placeholder` title with one a model writes from `text`, in the background,
+    /// unless the thread has been renamed meanwhile. With titles switched off in Settings, a
+    /// slash command, or a message the model gives no title for, the first line names it. A
+    /// message that is only attachments stays blank.
+    fn name_thread(
+        self: &Arc<Self>,
+        thread_id: &str,
+        text: &str,
+        placeholder: String,
+        agent: AgentKind,
+        model: Option<String>,
+    ) {
+        let server = Arc::downgrade(self);
+        let thread_id = thread_id.to_string();
+        let text = text.to_string();
+        let enabled = self.store.settings().tokens.generate_titles;
+        std::thread::spawn(move || {
+            let first_line = title_from(&text);
+            let generated = if !enabled || first_line.starts_with('/') || text.trim().is_empty() {
+                None
+            } else {
+                title::generate(&text, agent, model.as_deref())
+            };
+            let generated = generated.unwrap_or(first_line);
+            let Some(server) = server.upgrade() else {
+                return;
+            };
+            let mut renamed = false;
+            let _ = server.store.update_thread(&thread_id, |t| {
+                if t.title == placeholder {
+                    t.title = generated.clone();
+                    renamed = true;
+                }
+            });
+            if renamed {
+                server.emit(AgentEventEnvelope {
+                    thread_id,
+                    event: AgentEvent::TitleUpdated { title: generated },
+                });
+            }
+        });
+    }
+
+    /// Appends the user message, then starts the agent turn in the background.
+    /// Returns the stored user message; assistant output arrives via the event sink.
+    pub fn send_message(
+        self: &Arc<Self>,
+        thread_id: String,
+        text: String,
+        attachments: Vec<Attachment>,
+        queue: bool,
+    ) -> Result<Message, String> {
+        let images = provider::load_images(&attachments)?;
+        if let Some(command) = provider::goal_command(&text) {
+            if self.runner.is_running(&thread_id) {
+                return Err(
+                    "A /goal command runs as a turn of its own; send it once this turn ends".into(),
+                );
+            }
+            let agent = self.store.thread(&thread_id).map(|t| t.agent);
+            if agent == Some(AgentKind::OpenCode) {
+                return Err(
+                    "OpenCode has no /goal command. Describe the task in a message instead.".into(),
+                );
+            }
+            if agent == Some(AgentKind::Api) {
+                return Err(
+                    "API providers have no /goal command. Describe the task in a message instead."
+                        .into(),
+                );
+            }
+            if agent == Some(AgentKind::Antigravity) {
+                if provider::antigravity::antigravity_bin().is_none() {
+                    return Err("/goal needs the Antigravity CLI. Install it in Settings.".into());
+                }
+                // Antigravity's /goal only sets a goal, so any other word would become one.
+                if !matches!(command, provider::GoalCommand::Set(_)) {
+                    return Err("Antigravity's /goal only sets a goal: /goal <objective>. Clear a goal from the goal banner.".into());
+                }
+            }
+            // Claude would take either word as a new goal it can never meet, and loop on it.
+            let word = match command {
+                provider::GoalCommand::Pause => Some("pause"),
+                provider::GoalCommand::Resume => Some("resume"),
+                _ => None,
+            };
+            if agent == Some(AgentKind::Claude)
+                && let Some(word) = word
+            {
+                return Err(format!(
+                    "Claude has no /goal {word}. Send a message to carry on with the goal, or /goal clear to drop it."
+                ));
+            }
+            if matches!(
+                command,
+                provider::GoalCommand::Set(_) | provider::GoalCommand::Resume
+            ) {
+                // Only an explicit new goal or resume request can reopen a dismissed goal.
+                // A provider restating cached goal state must not erase the dismissal.
+                orchestration::goal::clear_dismissal(&self.store, &thread_id)?;
+            }
+        }
+        // Checked before the message is stored, so a refused message leaves no trace.
+        let mut msg = user_message(&text, attachments.clone());
+        // Stored before the agent sees it, so its answer is stored after it.
+        let m = msg.clone();
+        let mut session_id = None;
+        let mut subagents = Vec::new();
+        let mut first_title = None;
+        self.store.update_thread(&thread_id, |t| {
+            if t.messages.is_empty() {
+                first_title = Some((
+                    t.title.clone(),
+                    t.agent,
+                    t.model.clone(),
+                    t.project_id.clone(),
+                ));
+            }
+            // Subagents of the running turn still working, which a steer must not cut off.
+            subagents = t
+                .messages
+                .iter()
+                .flat_map(|m| &m.tools)
+                .filter(|c| {
+                    c.subagent.is_some() && c.parent.is_none() && c.status == StepStatus::Running
+                })
+                .map(|c| c.id.clone())
+                .collect();
+            t.messages.push(m);
+            session_id = t.session_id.clone();
+        })?;
+        if let Some((placeholder, agent, model, project_id)) = first_title {
+            let root = project_id.and_then(|id| {
+                self.store
+                    .settings()
+                    .projects
+                    .into_iter()
+                    .find(|p| p.id == id)
+                    .map(|p| PathBuf::from(p.path))
+            });
+            // Files the message opens with, by attachment or by a name in the project, name nothing.
+            let subject = without_leading_attachments(&text, |word| {
+                attachments.iter().any(|a| a.name == word)
+                    || root.as_ref().is_some_and(|root| root.join(word).is_file())
+            });
+            self.name_thread(&thread_id, subject, placeholder, agent, model);
+        }
+        // A goal that has ended is over: the next message starts unrelated work, so its banner
+        // goes. The agent has already dropped the goal, or `settle` told it to with a /goal
+        // command, which is why those leave the banner alone.
+        if !provider::is_goal_command(&text)
+            && let Some(goal) = self.store.thread(&thread_id).and_then(|t| t.goal)
+            && matches!(goal.status, GoalStatus::Complete | GoalStatus::Blocked)
+        {
+            self.store
+                .dismiss_goal(&thread_id, &orchestration::goal::signature(&goal))?;
+            orchestration::publish(self, &thread_id, AgentEvent::GoalUpdated { goal: None });
+        }
+        self.switch_to_agent_model(&thread_id, &text);
+        // A /goal runs as a turn of its own, not in an idle agent's process.
+        if provider::is_goal_command(&text) {
+            self.runner.retire_idle(&thread_id);
+        }
+        // A message that names a skill as "$name" or summons an agent as "&name" anywhere reaches
+        // the agent in the form it runs, as `start_turn` sends it too. Only a steer sends it
+        // from here, since summoning can change the chat's agent.
+        let mut switched = None;
+        let mut steer_text = || {
+            let skills = skills::enabled(&self.store.settings());
+            let agent = self.store.with_threads(|threads| {
+                threads.iter().find(|t| t.id == thread_id).map(|t| t.agent)
+            });
+            let text = match (agent, skills::invoked(&text, &skills)) {
+                (Some(agent), Some((skill, rest))) => skills::invocation(agent, &skill, rest),
+                _ => text.clone(),
+            };
+            let (text, role) = self.summon_agents(&thread_id, text, false);
+            switched = Some(role);
+            text
+        };
+        // While a turn runs, the message steers it, or waits for it to end when the
+        // agent cannot take it now.
+        let delivery = if queue {
+            match self.runner.enqueue(
+                &thread_id,
+                FollowUpInput {
+                    message_id: &msg.id,
+                    text: &text,
+                    attachments: &attachments,
+                    images: &images,
+                },
+            ) {
+                Ok(true) => Delivery::Queued,
+                Ok(false) => self.runner.steer(
+                    &thread_id,
+                    FollowUpInput {
+                        message_id: &msg.id,
+                        text: &steer_text(),
+                        attachments: &attachments,
+                        images: &images,
+                    },
+                    session_id.as_deref(),
+                    &subagents,
+                ),
+                Err(error) => {
+                    self.store.update_thread(&thread_id, |t| {
+                        t.messages.retain(|queued| queued.id != msg.id);
+                    })?;
+                    return Err(error);
+                }
+            }
+        } else {
+            self.runner.steer(
+                &thread_id,
+                FollowUpInput {
+                    message_id: &msg.id,
+                    text: &steer_text(),
+                    attachments: &attachments,
+                    images: &images,
+                },
+                session_id.as_deref(),
+                &subagents,
+            )
+        };
+        // A message that did not reach the running turn starts one, which summons again.
+        if !matches!(delivery, Delivery::NotRunning)
+            && let Some(switched) = switched
+        {
+            self.told_role(&thread_id, switched);
+        }
+        match delivery {
+            Delivery::Steered => {
+                msg.steer = true;
+                self.store.update_thread(&thread_id, |t| {
+                    if let Some(m) = t.messages.iter_mut().find(|m| m.id == msg.id) {
+                        m.steer = true;
+                    }
+                })?;
+            }
+            Delivery::Queued => {
+                // Read under the store's lock: a turn that ends meanwhile has already taken the
+                // message from its queue, and then its own unflagging comes after this write.
+                self.store.update_thread(&thread_id, |t| {
+                    if let Some(m) = t.messages.iter_mut().find(|m| m.id == msg.id) {
+                        m.queued = self.runner.is_queued(&thread_id, &m.id);
+                        msg.queued = m.queued;
+                    }
+                })?;
+            }
+            Delivery::Resumed => self.capture_checkpoint(&thread_id, &msg.id),
+            Delivery::NotRunning => {
+                // The app adds a message it sent once this returns, but not one the server sends
+                // itself (a goal clear), so the chat learns of it before the reply starts.
+                self.emit(AgentEventEnvelope {
+                    thread_id: thread_id.clone(),
+                    event: AgentEvent::MessageStarted {
+                        message: msg.clone(),
+                    },
+                });
+                self.runner.start_turn(
+                    self,
+                    TurnRequest {
+                        thread_id,
+                        text,
+                        attachments,
+                        images,
+                    },
+                )?
+            }
+        }
+        Ok(msg)
+    }
+
+    /// Stops the running turn by interrupting the agent, so its session records the stop and an
+    /// agent that can stays up for the next message. Codex is first told to pause the goal it is
+    /// pursuing, so it does not carry on with it later.
+    pub fn cancel_turn(&self, thread_id: &str) {
+        self.stop_turn(thread_id, true);
+    }
+
+    /// Stops the running turn as `cancel_turn` does; without `interrupt`, the agent process ends
+    /// with it.
+    pub(crate) fn stop_turn(&self, thread_id: &str, interrupt: bool) {
+        let thread = self.store.thread(thread_id);
+        let session_id = thread.as_ref().and_then(|t| t.session_id.clone());
+        let pause = thread.and_then(|t| {
+            let active = t.goal.is_some_and(|g| g.status == GoalStatus::Active);
+            provider::goal_pause(t.agent, t.session_id.as_deref()?).filter(|_| active)
+        });
+        let dropped = if interrupt {
+            self.runner
+                .interrupt(thread_id, session_id.as_deref(), pause)
+        } else {
+            self.runner.cancel(thread_id, pause)
+        };
+        dropped.into_iter().for_each(|message_id| {
+            orchestration::publish(
+                self,
+                thread_id,
+                AgentEvent::MessageQueued {
+                    message_id,
+                    queued: false,
+                },
+            );
+        });
+    }
+
+    pub fn stop_subagent(&self, thread_id: &str, tool_id: &str) -> Result<(), String> {
+        self.runner.stop_subagent(thread_id, tool_id)
+    }
+
+    /// Answers a pending approval in the thread's running turn.
+    pub fn respond_approval(
+        self: &Arc<Self>,
+        thread_id: &str,
+        approval_id: &str,
+        allow: bool,
+        answers: std::collections::HashMap<String, Vec<String>>,
+        rule: Option<crate::permissions::RuleRef>,
+    ) -> Result<(), String> {
+        self.runner.respond(
+            self,
+            thread_id,
+            ApprovalDecision {
+                approval_id,
+                allow,
+                answers,
+                rule,
+            },
+        )
+    }
+}

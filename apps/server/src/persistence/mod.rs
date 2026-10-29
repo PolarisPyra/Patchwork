@@ -25,7 +25,9 @@ mod tests {
 
     use super::connection::DB_FILE;
     use super::*;
-    use crate::types::{AgentKind, Message, MessageStatus, Role, Thread, new_id};
+    use crate::provider::AgentKind;
+    use crate::system::new_id;
+    use crate::threads::{Message, MessageStatus, Role, Thread};
 
     fn temp_dir() -> PathBuf {
         let dir = std::env::temp_dir().join(new_id());
@@ -66,7 +68,7 @@ mod tests {
             agent: AgentKind::Antigravity,
             model: Some("pro".into()),
             session_id: Some("s".into()),
-            access_mode: crate::types::AccessMode::Supervised,
+            access_mode: crate::threads::AccessMode::Supervised,
             created_at: 2,
             messages,
             goal: None,
@@ -139,7 +141,7 @@ mod tests {
         store
             .update_thread(&t.id, |t| {
                 t.title = "renamed".into();
-                t.slash_commands = vec![crate::types::ProviderSlashCommand {
+                t.slash_commands = vec![crate::provider::ProviderSlashCommand {
                     name: "review".into(),
                     description: Some("Review the current changes".into()),
                 }];
@@ -198,7 +200,7 @@ mod tests {
 
     #[test]
     fn scheduled_tasks_survive_reopen() {
-        use crate::types::{Schedule, ScheduledTask, Weekday};
+        use crate::scheduled::{Schedule, ScheduledTask, Weekday};
 
         let dir = temp_dir();
         let store = Store::open(dir.clone()).unwrap();
@@ -213,7 +215,7 @@ mod tests {
             project_id: Some("p".into()),
             agent: AgentKind::Codex,
             model: None,
-            access_mode: crate::types::AccessMode::Auto,
+            access_mode: crate::threads::AccessMode::Auto,
             enabled: true,
             last_run_at: None,
             next_run_at: None,
@@ -250,7 +252,7 @@ mod tests {
         let runs = &store.scheduled_tasks()[0].recent_runs;
         let ats: Vec<i64> = runs.iter().map(|run| run.at).collect();
         assert_eq!(ats, [204, 203, 202, 201, 200]);
-        assert_eq!(runs[0].outcome, crate::types::RunOutcome::Failed);
+        assert_eq!(runs[0].outcome, crate::scheduled::RunOutcome::Failed);
         assert_eq!(runs[0].detail.as_deref(), Some("no agent"));
         store
             .scheduled_task_ran(&saved.id, 100, Some(456), Ok("thread"))
@@ -258,7 +260,7 @@ mod tests {
         store.scheduled_task_skipped(&saved.id, Some(789)).unwrap();
         let runs = &store.scheduled_tasks()[0].recent_runs;
         assert_eq!(runs[0].at, 456, "the skipped slot");
-        assert_eq!(runs[0].outcome, crate::types::RunOutcome::Skipped);
+        assert_eq!(runs[0].outcome, crate::scheduled::RunOutcome::Skipped);
 
         store.remove_scheduled_task(&saved.id).unwrap();
         assert!(store.scheduled_tasks().is_empty());
@@ -268,7 +270,7 @@ mod tests {
 
     #[test]
     fn a_task_without_a_name_or_a_time_is_refused() {
-        use crate::types::{Schedule, ScheduledTask};
+        use crate::scheduled::{Schedule, ScheduledTask};
 
         let dir = temp_dir();
         let store = Store::open(dir.clone()).unwrap();
@@ -280,7 +282,7 @@ mod tests {
             project_id: None,
             agent: AgentKind::Claude,
             model: None,
-            access_mode: crate::types::AccessMode::Supervised,
+            access_mode: crate::threads::AccessMode::Supervised,
             enabled: true,
             last_run_at: None,
             next_run_at: None,

@@ -4,11 +4,11 @@ import type { QuestionOption } from "./QuestionOption";
 /**
  * A question the agent asks the user, with the answers it offers.
  */
-export type Question = { 
+export type Question = {
 /**
  * The key its answer goes back under.
  */
-id: string, 
+id: string,
 /**
  * A short label, such as "Library".
  */

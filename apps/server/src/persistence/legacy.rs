@@ -10,7 +10,8 @@ use super::codec::err;
 use super::connection::DB_FILE;
 use super::settings::save_settings;
 use super::threads::{save_message, save_thread_row};
-use crate::types::{Settings, Thread};
+use crate::settings::Settings;
+use crate::threads::Thread;
 
 /// Moves the database and legacy JSON files from `old` into `new`, once:
 /// only when `new` has no database yet. Earlier builds kept them in the

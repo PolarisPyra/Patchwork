@@ -3,6 +3,10 @@
 //! Split by concern: `fs` for project folders, `git` for repository state, `media` for how a
 //! reply's files are shown, and `process` for signals and the editor. Callers use these re-exports.
 
+mod types;
+
+pub use types::{FileChange, ProjectChanged};
+
 mod fs;
 mod git;
 mod media;

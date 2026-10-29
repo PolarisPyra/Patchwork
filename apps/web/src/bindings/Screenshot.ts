@@ -3,15 +3,15 @@
 /**
  * A screenshot, as a data URL the webview can show, and the screen's size.
  */
-export type Screenshot = { 
+export type Screenshot = {
 /**
  * `data:image/png;base64,…`
  */
-dataUrl: string, 
+dataUrl: string,
 /**
  * The size of the picture, in the screen's own pixels.
  */
-width: number, height: number, 
+width: number, height: number,
 /**
  * The size of the screen in the coordinates the pointer moves in. The same as the picture's,
  * except on a scaled Wayland desktop, where the portal's picture has the device pixels.

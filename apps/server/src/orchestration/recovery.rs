@@ -2,8 +2,8 @@
 //! that were cut off end with an error, and goals are dismissed or paused.
 
 use crate::persistence::Store;
-use crate::types::GoalStatus;
-use crate::types::MessageStatus;
+use crate::threads::GoalStatus;
+use crate::threads::MessageStatus;
 use super::goal;
 
 /// Finished goals remain visible for the session in which they ended. A new app session

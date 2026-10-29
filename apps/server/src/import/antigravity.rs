@@ -9,8 +9,9 @@ use serde_json::Value;
 
 use super::{Session, SessionMessage, debug_log::ilog, push_merged};
 use crate::provider;
-use crate::time::parse_rfc3339_ms;
-use crate::types::{AgentKind, Role};
+use crate::system::time::parse_rfc3339_ms;
+use crate::provider::AgentKind;
+use crate::threads::Role;
 
 pub fn sessions() -> Vec<Session> {
     let Some(home) = provider::antigravity::home() else {

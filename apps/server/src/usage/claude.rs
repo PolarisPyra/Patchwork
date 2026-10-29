@@ -7,8 +7,9 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 
 use crate::provider;
-use crate::time::parse_rfc3339_ms;
-use crate::types::{UsageWindow, ProviderUsage, now_ms};
+use crate::system::time::parse_rfc3339_ms;
+use crate::system::now_ms;
+use crate::usage::{UsageWindow, ProviderUsage};
 use super::{Failure, RATE_LIMIT_BACKOFF};
 
 const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
@@ -32,7 +33,7 @@ fn credentials() -> Option<Value> {
     let file = provider::claude::home()
         .and_then(|h| std::fs::read_to_string(h.join(".credentials.json")).ok());
     let raw = file.or_else(|| {
-        let out = crate::host_command("security")
+        let out = crate::system::host_command("security")
             .args([
                 "find-generic-password",
                 "-s",

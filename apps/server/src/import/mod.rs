@@ -2,6 +2,11 @@
 //! outside Patchwork shows up as threads. Each imported thread keeps the CLI's
 //! session id, so follow-up messages resume the original conversation.
 
+mod ops;
+mod types;
+
+pub use types::{ImportScan, ImportSource};
+
 mod antigravity;
 mod claude;
 mod codex;
@@ -11,9 +16,10 @@ mod t3;
 
 use std::path::Path;
 
-use crate::provider;
 use debug_log::ilog;
-use crate::types::{AgentKind, Role, MessageStatus, AccessMode, Message, Thread, ImportSource, new_id};
+use crate::provider::AgentKind;
+use crate::system::new_id;
+use crate::threads::{Role, MessageStatus, AccessMode, Message, Thread};
 
 /// The longest transcript sent to an agent as context. The newest messages are kept.
 const MAX_CONTEXT_BYTES: usize = 200_000;
@@ -109,7 +115,8 @@ fn push_merged(messages: &mut Vec<SessionMessage>, role: Role, text: String, at:
 /// or is one of T3 Code's chat scratch folders (`~/.t3/scratch`).
 pub fn is_chat_folder(cwd: &Path) -> bool {
     !cwd.is_dir()
-        || provider::home_dir().is_some_and(|home| cwd.starts_with(home.join(".t3/scratch")))
+        || crate::system::fs::home_dir()
+            .is_some_and(|home| cwd.starts_with(home.join(".t3/scratch")))
 }
 
 /// Converts an imported session into a stored thread.
@@ -122,7 +129,12 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
                 .messages
                 .iter()
                 .find(|m| m.role == Role::User)
-                .map(|m| crate::title_from(crate::without_leading_attachments(&m.text, |_| false)))
+                .map(|m| {
+                    crate::threads::title_from(crate::threads::without_leading_attachments(
+                        &m.text,
+                        |_| false,
+                    ))
+                })
         })
         .unwrap_or_else(|| "Imported conversation".into());
     // An imported transcript has no agent session to resume; its first turn sends the transcript.

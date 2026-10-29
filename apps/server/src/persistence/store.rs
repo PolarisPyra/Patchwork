@@ -12,7 +12,9 @@ use super::codec::{enc, err};
 use super::connection;
 use super::settings::{load_settings, save_settings};
 use super::threads::{load_folders, load_threads, save_message, save_thread_row};
-use crate::types::{Folder, MessageStatus, Settings, Thread};
+use crate::projects::Folder;
+use crate::settings::Settings;
+use crate::threads::{MessageStatus, Thread};
 
 pub struct Store {
     inner: Mutex<Inner>,
@@ -48,9 +50,9 @@ impl Store {
             if let Some(goal) = t
                 .goal
                 .as_mut()
-                .filter(|g| g.status == crate::types::GoalStatus::Active)
+                .filter(|g| g.status == crate::threads::GoalStatus::Active)
             {
-                goal.status = crate::types::GoalStatus::Paused;
+                goal.status = crate::threads::GoalStatus::Paused;
                 save_thread_row(&tx, t).map_err(err)?;
             }
         }
@@ -101,7 +103,7 @@ impl Store {
     }
 
     /// `(agent, session_id)` of every thread that has a session, for de-duplicating imports.
-    pub fn session_keys(&self) -> Vec<(crate::types::AgentKind, String)> {
+    pub fn session_keys(&self) -> Vec<(crate::provider::AgentKind, String)> {
         self.lock()
             .threads
             .iter()

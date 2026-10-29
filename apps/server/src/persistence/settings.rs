@@ -2,8 +2,8 @@
 
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
-use super::codec::{from_json, json};
-use crate::types::Settings;
+use super::codec::json;
+use crate::settings::Settings;
 
 pub(super) fn save_settings(tx: &Transaction, settings: &Settings) -> rusqlite::Result<()> {
     // Projects live in their own table.
@@ -27,13 +27,27 @@ pub(super) fn save_settings(tx: &Transaction, settings: &Settings) -> rusqlite::
 }
 
 pub(super) fn load_settings(conn: &Connection) -> rusqlite::Result<Settings> {
-    let mut settings: Settings = conn
+    let stored: Option<String> = conn
         .query_row("SELECT json FROM settings WHERE id = 1", [], |r| r.get(0))
-        .optional()?
-        .map(from_json)
-        .unwrap_or_default();
+        .optional()?;
+    let mut settings: Settings = match stored {
+        None => Settings::default(),
+        Some(text) => match serde_json::from_str(&text) {
+            Ok(settings) => settings,
+            // Kept apart, so saving the defaults cannot lose what the settings held.
+            Err(e) => {
+                log::warn!("the saved settings are not valid JSON ({e}); starting from defaults");
+                conn.execute(
+                    "INSERT INTO app_state (key, value) VALUES ('unreadable_settings', ?1)
+                     ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    [&text],
+                )?;
+                Settings::default()
+            }
+        },
+    };
     if settings.import_log_disabled {
-        settings.logging.imports = crate::types::LogLevel::Off;
+        settings.logging.imports = crate::settings::LogLevel::Off;
     }
     crate::permissions::seed(&mut settings.permissions);
     // Claude compacted only near the model's full window by default, far past where it gets costly.
@@ -47,7 +61,7 @@ pub(super) fn load_settings(conn: &Connection) -> rusqlite::Result<Settings> {
     let mut stmt = conn.prepare("SELECT id, name, path FROM projects ORDER BY position")?;
     settings.projects = stmt
         .query_map([], |r| {
-            Ok(crate::types::Project {
+            Ok(crate::projects::Project {
                 id: r.get(0)?,
                 name: r.get(1)?,
                 path: r.get(2)?,

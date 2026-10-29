@@ -8,12 +8,13 @@ use rusqlite::{Connection, OpenFlags, params};
 use serde_json::Value;
 
 use super::{Session, SessionMessage, debug_log::ilog, push_merged};
-use crate::provider;
-use crate::time::parse_rfc3339_ms;
-use crate::types::{AgentKind, Role};
+use crate::system::time::parse_rfc3339_ms;
+use crate::provider::AgentKind;
+use crate::threads::Role;
 
 pub fn sessions() -> Vec<Session> {
-    let Some(path) = provider::home_dir().map(|h| h.join(".t3/userdata/statev2.sqlite")) else {
+    let Some(path) = crate::system::fs::home_dir().map(|h| h.join(".t3/userdata/statev2.sqlite"))
+    else {
         ilog!("T3: no home folder");
         return vec![];
     };

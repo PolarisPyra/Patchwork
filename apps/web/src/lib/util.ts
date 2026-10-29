@@ -48,6 +48,29 @@ export function dirName(path: string): string {
   return i === -1 ? "" : path.slice(0, i);
 }
 
+/** A path under the person's home folder, written from `~` so it fits in a settings row. */
+export function tildify(path: string): string {
+  return path.replace(/^(\/home\/[^/]+|\/Users\/[^/]+|[A-Za-z]:\\Users\\[^\\]+)/, "~");
+}
+
+/** Compact duration for a row: "42s", "3m", "1.5h", "12h". */
+export function compactElapsed(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = s / 3600;
+  return h < 10 ? `${Number(h.toFixed(1))}h` : `${Math.floor(h)}h`;
+}
+
+/** Full duration for a details card or a status line: "42s", "3m 05s", "2h 14m". */
+export function fullElapsed(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
+  return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`;
+}
+
 const LANGUAGES: Record<string, string> = {
   ts: "TypeScript",
   tsx: "TypeScript JSX",

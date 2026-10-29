@@ -1,7 +1,7 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { api, type Project } from "~/api";
-import type { UpdateSettings } from "~/app/App";
-import { getCollapsed, setCollapsed } from "~/components/sidebar/collapsedState";
+import type { UpdateSettings } from "~/api";
+import { getCollapsed, setCollapsed } from "~/lib/collapsedState";
 
 /** Re-reads the project list from the backend; never overwrites it with stale local copies. */
 export async function syncProjects(updateSettings: UpdateSettings): Promise<void> {

@@ -4,6 +4,10 @@
 //! cached: reopening the usage popup reuses them, refreshing is throttled, and
 //! a 429 backs off while the last good numbers stay visible.
 
+mod types;
+
+pub use types::{ProviderUsage, UsageWindow};
+
 pub mod claude;
 mod codex;
 mod antigravity;
@@ -12,7 +16,8 @@ use std::collections::HashMap;
 use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
-use crate::types::{AgentKind, UsageWindow, ProviderUsage, now_ms};
+use crate::provider::AgentKind;
+use crate::system::now_ms;
 
 /// How long fetched usage is reused before it is fetched again.
 const FRESH_FOR: Duration = Duration::from_secs(5 * 60);

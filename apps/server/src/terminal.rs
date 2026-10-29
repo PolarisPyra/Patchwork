@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::types::{DetectLocale, Settings};
+use crate::settings::{DetectLocale, Settings};
 
 /// A shell to start.
 pub struct Launch {
@@ -44,7 +44,7 @@ pub fn launch(settings: &Settings, workspace: Option<&Path>) -> Launch {
     let shell = if cfg!(windows) && chosen.is_none() {
         None
     } else {
-        crate::effective_shell(chosen)
+        crate::system::effective_shell(chosen)
     };
     let shell = shell.unwrap_or_else(|| {
         if cfg!(windows) {
@@ -62,7 +62,7 @@ pub fn launch(settings: &Settings, workspace: Option<&Path>) -> Launch {
     });
 
     // The process's environment, or the minimal one.
-    let mut env: BTreeMap<String, String> = crate::host_env()
+    let mut env: BTreeMap<String, String> = crate::system::host_env()
         .into_iter()
         .filter_map(|(key, value)| Some((key.into_string().ok()?, value.into_string().ok()?)))
         .filter(|(key, _)| {
@@ -114,7 +114,7 @@ pub fn launch(settings: &Settings, workspace: Option<&Path>) -> Launch {
         env.insert("LANG".into(), format!("{language}.UTF-8"));
     }
 
-    let home = crate::provider::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+    let home = crate::system::fs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
     let base = workspace
         .map(Path::to_path_buf)
         .unwrap_or_else(|| home.clone());

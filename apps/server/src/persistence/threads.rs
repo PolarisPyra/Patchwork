@@ -3,7 +3,8 @@
 use rusqlite::{Connection, Transaction, params};
 
 use super::codec::{dec, enc, from_json, json};
-use crate::types::{Folder, Message, Thread};
+use crate::projects::Folder;
+use crate::threads::{Message, Thread};
 
 pub(super) fn save_thread_row(tx: &Transaction, t: &Thread) -> rusqlite::Result<()> {
     tx.execute(

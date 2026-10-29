@@ -3,11 +3,11 @@
 /**
  * What the Output panel reads of a log.
  */
-export type LogChunk = { text: string, 
+export type LogChunk = { text: string,
 /**
  * Where to read from next.
  */
-offset: number, 
+offset: number,
 /**
  * The log started over (it filled up and moved aside), so the panel clears it first.
  */

@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::Stdio;
 
 #[cfg(target_os = "linux")]
-use crate::types::new_id;
+use crate::system::new_id;
 
 /// Sends `signal` to the process group led by `pid`. Agent children are spawned
 /// as group leaders, so this also reaches their own subprocesses.
@@ -21,7 +21,7 @@ pub fn signal_process_group(pid: u32, signal: i32) {
 /// run under `cmd.exe`, so killing the shim alone would leave the agent running.
 #[cfg(not(unix))]
 pub fn signal_process_group(pid: u32, _signal: i32) {
-    let _ = crate::host_command("taskkill")
+    let _ = crate::system::host_command("taskkill")
         .args(["/T", "/F", "/PID"])
         .arg(pid.to_string())
         .stdin(Stdio::null())
@@ -53,8 +53,8 @@ pub fn open_in_editor(root: &str, rel: &str, token: Option<&str>) -> Result<(), 
         let Some(bin) = editor_program(program) else {
             continue;
         };
-        let mut cmd = crate::host_command(bin);
-        crate::launch::pass_token(&mut cmd, token);
+        let mut cmd = crate::system::host_command(bin);
+        crate::system::launch::pass_token(&mut cmd, token);
         let spawned = cmd
             .arg(&path)
             .stdin(Stdio::null())
@@ -79,7 +79,7 @@ pub fn open_in_editor(root: &str, rel: &str, token: Option<&str>) -> Result<(), 
 /// they install.
 fn editor_program(program: &str) -> Option<std::path::PathBuf> {
     let cwd = std::env::current_dir().unwrap_or_default();
-    if let Ok(found) = which::which_in(program, crate::path_var(), cwd) {
+    if let Ok(found) = which::which_in(program, crate::system::path_var(), cwd) {
         return Some(found);
     }
     if !cfg!(windows) {
@@ -149,7 +149,7 @@ workspace.windowAdded.connect(watch);
         return;
     }
     let kwin = |method: &str, args: &[&str]| {
-        crate::host_command("gdbus")
+        crate::system::host_command("gdbus")
             .args([
                 "call",
                 "--session",

@@ -5,24 +5,26 @@
 The repo is split into `apps/web`, `apps/server`, and `apps/desktop`:
 
 - `apps/server` — the backend, a Rust crate with no Tauri dependency
-  - `src/lib.rs` — `Server`, the operations the UI calls
-  - `src/provider/` — one module per agent CLI: detection, models, turn arguments, JSONL parsing
-  - `src/orchestration/` — runs turns: spawns agent CLIs, turns their output into agent events, handles steering, queues, subagents, goals, per-turn file checkpoints (`checkpoint.rs`), which files each reply changed (`attribution.rs`), and continuing turns cut off by a restart (`recovery.rs`); `claude.rs` and `codex.rs` hold the instructions each agent is launched with
+  - `src/lib.rs` — the module list, `Server`, and how it opens. Every other folder is one domain, holding its wire types (`types.rs`, re-exported from the folder), its `impl Server` operations (`ops.rs` where it has them), and its logic:
+  - `src/threads/` — threads and their messages; `src/projects/` — projects and their folders; `src/settings/` — the settings
+  - `src/provider/` — one module per agent CLI (`claude/`, `codex/`, `antigravity.rs`, `opencode/`, `api/`), finding and probing them (`locate.rs`, `probe.rs`), what a turn sends them (`turn.rs`) and reads back (`parsed.rs`), and handing each one its hooks (`hooks.rs`)
+  - `src/orchestration/` — runs turns: spawns agent CLIs, turns their output into agent events, handles steering, queues, subagents, goals, per-turn file checkpoints (`checkpoint.rs`), which files each reply changed (`attribution.rs`), and continuing turns cut off by a restart (`recovery.rs`)
+  - `src/permissions/` — the rules Patchwork answers approvals by, and the permission hook Codex and Antigravity run
+  - `src/plugins/` — plugin bundles and their hooks, with the built-in hooks Patchwork carries (`builtin/`)
   - `src/persistence/` — SQLite store and schema migrations
   - `src/import/` — reads each CLI's saved sessions for importing
   - `src/usage/` — subscription usage limits per provider
-  - `src/scheduled.rs` — the next run of a scheduled task, from its shape and the local clock
-  - `src/plugins.rs` — plugin bundles: their manifests, skills, and MCP servers, and the starter one the app ships
-  - `src/computer.rs` — a screenshot, and the pointer and keyboard under it
-  - `src/workspace.rs` — git and file access
-  - `src/watch/` — watches the open project for file changes (see [File changes](#file-changes))
-  - `src/types.rs` — data contract shared with the UI
+  - `src/scheduled/` — scheduled tasks and the next run of each, from its shape and the local clock
+  - `src/computer/` — a screenshot, and the pointer and keyboard under it
+  - `src/workspace/` — git and file access; `src/watch/` — watches the open project for file changes (see [File changes](#file-changes))
+  - `src/system/` — the user's machine: the programs Patchwork starts and their environment, login shells, paths, opening files on the desktop
+  - `src/logging/` — the debug logs
 - `apps/desktop/src-tauri` — the Tauri shell: exposes `Server` as commands and forwards events
 - `apps/web` — the React UI (`~/` imports resolve to `apps/web/src`)
-  - `src/app/` — app root; `src/api.ts` — typed bridge mirroring `apps/server/src/types.rs`
-  - `src/components/{chat,sidebar,usage,settings,onboarding,canvas,workspace}/` — UI
-  - `src/components/chat/Artifact.tsx` — Mermaid diagrams and sandboxed HTML/SVG artifacts in a reply
-  - `src/hooks/`, `src/lib/` — state and helpers; `src/theme.css` — design tokens
+  - `src/app/` — app root; `src/api/` — typed bridge to the backend, one area per file
+  - `src/features/{chat,sidebar,usage,updates,settings,onboarding,canvas,panel,workspace}/` — UI, one folder per feature
+  - `src/features/chat/components/Artifact.tsx` — Mermaid diagrams and sandboxed HTML/SVG artifacts in a reply
+  - `src/components/`, `src/hooks/`, `src/lib/` — what two or more features share; `src/theme.css` — design tokens
 
 ## Data model
 
@@ -45,7 +47,7 @@ Where a thread runs:
 
 Sidebar order is the `position` column. A new thread gets `-created_at`, so the newest is first until it is dragged. Dropping rows calls `reorder_threads`, which numbers that list `0..n`.
 
-Schema changes go in as a new entry appended to `MIGRATIONS` in `apps/server/src/persistence/migrations.rs`. Never edit one that has shipped.
+Schema changes go in as a new entry appended to `MIGRATIONS` in `apps/server/src/persistence/migrations/mod.rs`. Never edit one that has shipped.
 
 ## File changes
 

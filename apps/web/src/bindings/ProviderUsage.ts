@@ -5,15 +5,15 @@ import type { UsageWindow } from "./UsageWindow";
 /**
  * Subscription usage limits for one agent, as reported by its provider.
  */
-export type ProviderUsage = { kind: AgentKind, 
+export type ProviderUsage = { kind: AgentKind,
 /**
  * e.g. "max", "plus".
  */
-plan: string | null, windows: Array<UsageWindow>, 
+plan: string | null, windows: Array<UsageWindow>,
 /**
  * Why no windows are shown, e.g. "Not signed in".
  */
-error: string | null, 
+error: string | null,
 /**
  * When the provider last reported these numbers (epoch ms).
  */

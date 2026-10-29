@@ -72,7 +72,7 @@ pub async fn terminal_spawn(
 
 fn spawn(
     app: AppHandle,
-    settings: &patchwork_server::types::Settings,
+    settings: &patchwork_server::settings::Settings,
     open: Arc<Mutex<HashMap<u32, Shell>>>,
     id: u32,
     cwd: Option<String>,

@@ -6,7 +6,8 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use super::git::git;
-use crate::types::{Project, new_id};
+use crate::projects::Project;
+use crate::system::new_id;
 
 /// Largest file `read_file` returns.
 const MAX_READ_BYTES: u64 = 2 * 1024 * 1024;

@@ -3,11 +3,11 @@
 /**
  * One rate-limit window, e.g. the 5-hour session limit.
  */
-export type UsageWindow = { label: string, 
+export type UsageWindow = { label: string,
 /**
  * 0–100.
  */
-usedPercent: number, 
+usedPercent: number,
 /**
  * Unix epoch milliseconds.
  */

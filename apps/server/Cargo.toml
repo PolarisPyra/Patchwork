@@ -54,10 +54,3 @@ url = "2"
 # Activation tokens from the Wayland compositor, so the windows a program opens come forward.
 wayland-client = { version = "0.31", features = ["system"] }
 wayland-protocols = { version = "0.32", features = ["client", "staging"] }
-
-[dev-dependencies]
-criterion = "0.8.2"
-
-[[bench]]
-name = "stream"
-harness = false

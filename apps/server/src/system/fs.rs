@@ -1,0 +1,77 @@
+//! Paths on the user's machine: the home folder, resolving a path the user or an agent typed, and
+//! writing a private file.
+
+use std::path::{Component, Path, PathBuf};
+
+pub fn home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+}
+
+/// `path` resolved against the root, with `.` and `..` folded away.
+pub fn resolve(root: &Path, path: &str) -> PathBuf {
+    let path = path.trim();
+    let expanded = match path.strip_prefix("~/") {
+        Some(rest) => home_dir().unwrap_or_default().join(rest),
+        None => PathBuf::from(path),
+    };
+    let joined = if expanded.is_absolute() {
+        expanded
+    } else {
+        root.join(expanded)
+    };
+    let mut out = PathBuf::new();
+    for part in joined.components() {
+        match part {
+            Component::ParentDir => {
+                out.pop();
+            }
+            Component::CurDir => {}
+            other => out.push(other),
+        }
+    }
+    out
+}
+
+/// Writes `text` through a temporary file, readable only by the user.
+pub fn write_private(path: &Path, text: &str) -> Result<(), String> {
+    use std::io::Write;
+    let dir = path.parent().ok_or("No config folder")?;
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let tmp = path.with_extension("json.tmp");
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    let mut file = options.open(&tmp).map_err(|e| e.to_string())?;
+    file.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+    file.sync_all().map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, path).map_err(|e| e.to_string())
+}
+
+/// The JSON file at `path`, or the default when there is none. A file that does not parse is kept
+/// as `<name>.bad` before the default is used, so the next save cannot lose what it held.
+pub fn read_json_or_default<T: serde::de::DeserializeOwned + Default>(path: &Path) -> T {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return T::default();
+    };
+    match serde_json::from_str(&text) {
+        Ok(value) => value,
+        Err(e) => {
+            let mut bad = path.as_os_str().to_owned();
+            bad.push(".bad");
+            let kept = std::fs::copy(path, &bad).is_ok();
+            log::warn!(
+                "{} is not valid JSON ({e}){}",
+                path.display(),
+                if kept {
+                    "; a copy was kept beside it as .bad"
+                } else {
+                    ""
+                }
+            );
+            T::default()
+        }
+    }
+}

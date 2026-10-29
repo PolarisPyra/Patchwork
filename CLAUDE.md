@@ -9,6 +9,25 @@ Tauri desktop app: React frontend, Rust backend. Run everything from the repo ro
   - `apps/web` (`patchwork-web`): frontend.
 - Cargo workspace: `apps/server` (providers, persistence, usage, thread import) and `apps/desktop/src-tauri`.
 
+### `apps/web/src`
+
+- `features/<feature>/` is one piece of UI (`chat`, `sidebar`, `settings`, `canvas`, `panel`, `workspace`, …). Its entry component sits at the root (`features/chat/Chat.tsx`), with `components/`, `hooks/`, `lib/` (pure, React-free) and `types.ts` beside it as needed.
+- A sub-feature takes the same shape one level down: `features/chat/{composer,transcript,turn,lineage}/`.
+- `components/`, `hooks/` and `lib/` at the top hold only what two or more features use: building blocks such as `Spinner`, `Dropdown`, `ProviderLogos`, and shared state and helpers. They never import from `features/`.
+- New code goes in the feature that uses it. Move it up to the top level once a second feature needs it, and down into the feature when only one is left.
+- Split a large component into a sub-feature folder, not into loose files beside it.
+- Import with the `~/` alias, not relative paths. A web worker is the exception: keep it beside the module that loads it with `new URL("./x.worker.ts", import.meta.url)`.
+- `api/` is the bridge to the backend, one module per area (`threads`, `turns`, `projects`, `mcp`, …) with its commands, events and UI-side shapes. Add a command to its area's `xxxApi` object; `api/index.ts` joins them into `api`, so callers keep importing from `~/api`.
+- One feature uses another only through its entry component or its `index.ts` (`~/features/sidebar`, `~/features/chat`), never its `components/`, `hooks/` or `lib/`. A piece two features need moves up to the top-level folders instead.
+
+### `apps/server/src`
+
+- Folders are domains, not layers. `lib.rs` holds only the module list, `Server`, and `Server::open`; every other folder is one domain (`threads`, `projects`, `settings`, `permissions`, `plugins`, `scheduled`, `provider`, `orchestration`, …) and holds its wire types (`types.rs`, re-exported from the folder, so a type is `crate::threads::Thread`), its `impl Server` operations (`ops.rs`), and its logic. There is no `types/` or `server/` folder. A helper another domain calls is `pub(crate)`.
+- Machine-level helpers that no domain owns live in `system/`: the command and environment programs run with, login shells, the home folder and path resolution, opening files on the desktop.
+- A domain's files may reach down to `system/`, `logging/` and other domains' types, never up into `orchestration/` or a `Server` operation; `persistence/` stores what it is given and decides nothing.
+- An area that exists on more than one side keeps the same name on each: `threads/`, `src-tauri/src/commands/threads.rs`, `api/threads.ts`.
+- A large module becomes a folder of the same name with one file per concern, and its `mod.rs` re-exports the public items, so callers keep their paths: `provider/claude/{config,input,parse,launch,cli}.rs`, `provider/api/{bridge,config,tools}`, `plugins/{manifest,agent_hooks,turn_hooks,builtin}`.
+
 ## Commands
 
 | Task | Command |
@@ -17,34 +36,31 @@ Tauri desktop app: React frontend, Rust backend. Run everything from the repo ro
 | All static checks | `pnpm check` (regenerates the types, then typecheck, format, rustfmt, clippy) |
 | Wire types | `pnpm types` writes `apps/web/src/bindings` from the Rust types in `apps/server` |
 | Web typecheck | `pnpm typecheck` |
-| Format TSX | `pnpm format` / `pnpm format:check` (only `apps/**/*.tsx`) |
+| Format TS and TSX | `pnpm format` / `pnpm format:check` (`apps/**/*.{ts,tsx}`, not the generated `bindings/`) |
 | Rust format | `cargo fmt --all` / `cargo fmt --all -- --check` |
 | Rust lint | `cargo clippy --workspace --all-targets -- -D warnings` |
 | Rust tests | `cargo test --workspace` |
-| Rust bench | `cargo bench -p patchwork-server` |
-| Flamegraph | `cargo flamegraph -p patchwork-server --bench stream -- --bench <filter>` |
 
-- For backend perf, use the Criterion benches in `apps/server/benches/`, adding one for a new hot path. No one-off scripts.
 - `pnpm exec tauri` from the root fails. Use `pnpm tauri`.
 
 ## Verify
 
-- Web changes: run `pnpm typecheck`. For TSX changes, run `pnpm format` and then `pnpm format:check`.
+- Web changes: run `pnpm typecheck`. For TS and TSX changes, run `pnpm format` and then `pnpm format:check`.
 - Rust changes: run `cargo fmt --all`, then clippy with `-D warnings` (no warnings left behind), then `cargo test --workspace`.
 - Report the output of any check that fails.
 
 ## Rust and Tauri
 
 - Keep logic in `apps/server`. `src-tauri` is thin glue that only wires up commands, windows, and state.
-- No `unwrap()`/`expect()` in app code: return errors instead. Tests and benches are the exception.
+- No `unwrap()`/`expect()` in app code: return errors instead. Tests are the exception.
 - Use the project's logger, not `println!`/`eprintln!`.
-- New `#[tauri::command]`: register it in `generate_handler!` and add its permission in `capabilities/`. Do both, or it fails at runtime.
+- New `#[tauri::command]`: put it in the `commands/` module for its area, register it in `generate_handler!`, and add its permission in `capabilities/`. Do all three, or it fails at runtime.
 - Commands return `Result<T, E>` where `E` serializes to a readable message. Never panic in a command.
 - Make commands `async`, and move heavy or blocking work to `spawn_blocking`. Never block the main thread.
 - JS `invoke()` takes camelCase arguments, which Tauri maps to snake_case in Rust. Keep it that way, and don't add renames to fight it.
 - Stream output to the frontend with `tauri::ipc::Channel`, not global events.
 - Keep capabilities minimal. Never widen a permission or use a wildcard just to make something work.
-- Wire types the frontend reads come from `apps/server` through `pnpm types`, so change the Rust type and run `pnpm types`. Give a new public serde type `TS` and add it to `apps/server/examples/export_types.rs`. The frontend-only fields of a message or thread are added in `apps/web/src/api.ts`.
+- Wire types the frontend reads come from `apps/server` through `pnpm types`, so change the Rust type and run `pnpm types`. Give a new public serde type `#[derive(TS)]` and `#[ts(export)]`: ts-rs writes one file per marked type (`cargo test` does too, so the files stay current), and `api/types.ts` imports it from `~/bindings/<Name>`. A hook check Patchwork carries itself is a `BuiltinHook` in `plugins/builtin/`, which a plugin names as `{ "type": "builtin", "name": … }`; it never matches on a command's raw text, it reads it with `plugins/builtin/shell.rs`. The frontend-only fields of a message or thread are added in `apps/web/src/api/types.ts`.
 
 ## Dev session
 

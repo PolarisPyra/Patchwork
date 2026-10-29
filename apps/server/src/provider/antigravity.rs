@@ -4,14 +4,14 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
-use crate::types::AccessMode;
-use crate::types::AgentKind;
-use crate::types::AgentStatus;
-use crate::types::ModelOption;
+use crate::threads::AccessMode;
+use crate::provider::AgentKind;
+use crate::provider::AgentStatus;
+use crate::provider::ModelOption;
 use super::find_binary;
 use super::GoalUpdate;
-use super::home_dir;
-use super::is_goal_command;
+use crate::system::fs::home_dir;
+use super::goal_argument;
 use super::located_or;
 use super::model_manifest;
 use super::Parsed;
@@ -68,10 +68,9 @@ pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
         AccessMode::Auto => args.push("--mode=auto".into()),
         AccessMode::Supervised => {}
     }
-    // Patchwork's permission hook runs before each tool call when the rules guard any.
-    if !spec.guarded.is_empty()
-        && let Some(dir) = super::hook::antigravity_dir()
-    {
+    // Patchwork's permission hook runs before each tool call when the rules guard any, and the
+    // plugins' hooks on the events Antigravity has.
+    if let Some(dir) = crate::provider::hooks::antigravity_dir(spec) {
         args.push(format!("--add-dir={}", dir.display()));
     }
     if let Some(id) = spec.session_id {
@@ -156,8 +155,5 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
 
 /// The objective of a `/goal <objective>` message.
 fn goal_objective<'a>(spec: &TurnSpec<'a>) -> Option<&'a str> {
-    if !is_goal_command(spec.text) {
-        return None;
-    }
-    Some(spec.text.trim()["/goal".len()..].trim()).filter(|o| !o.is_empty())
+    goal_argument(spec.text).filter(|o| !o.is_empty())
 }

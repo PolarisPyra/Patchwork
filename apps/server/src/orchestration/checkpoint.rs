@@ -12,8 +12,8 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use crate::Server;
-use crate::types::new_id;
-use crate::types::{Thread, TurnTrees};
+use crate::system::new_id;
+use crate::threads::{Thread, TurnTrees};
 
 const REFS: &str = "refs/patchwork/checkpoints";
 /// Snapshots from the end of a turn, one ref per reply the turn wrote.
@@ -38,7 +38,7 @@ fn run(
     args: &[&str],
     input: Option<&[u8]>,
 ) -> Result<Output, String> {
-    let mut cmd = crate::host_command("git");
+    let mut cmd = crate::system::host_command("git");
     cmd.args(args)
         .current_dir(root)
         .env("GIT_LITERAL_PATHSPECS", "1")
@@ -141,6 +141,7 @@ pub(super) fn record_end(
 
 /// Where a file a turn changed stands now.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub enum TurnFileState {
     /// Still differs from the last commit.
@@ -157,6 +158,7 @@ pub enum TurnFileState {
 
 /// A file a turn changed: lines added and removed by the turn, and where it stands now.
 #[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnFile {
     pub path: String,

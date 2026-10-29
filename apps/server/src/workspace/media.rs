@@ -17,6 +17,7 @@ const MAX_MEDIA_PATHS: usize = 50;
 
 /// How a file a reply produced is shown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub enum PreviewKind {
     /// A thumbnail, for an image a webview draws within `MAX_PREVIEW_BYTES`.
@@ -30,6 +31,7 @@ pub enum PreviewKind {
 /// What a file a reply touched looks like now. `size` is 0 for a file that is gone. `absolute` is
 /// the same file by its full path, which the webview needs to load it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
 pub struct FileMedia {
     pub path: String,
     pub absolute: String,

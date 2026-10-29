@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-use crate::types::ModelOption;
+use crate::provider::ModelOption;
 
 const MANIFEST_URL: &str = "https://api.github.com/repos/PolarisPyra/patchwork/contents/apps/server/src/provider/model-manifest.json";
 const TOKEN_VAR: &str = "PATCHWORK_MANIFEST_TOKEN";

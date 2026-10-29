@@ -3,9 +3,13 @@
 //! approvals can be answered. `Runner` is the entry point; the other modules each cover one part
 //! of a turn, and `claude` and `codex` hold the instructions each agent is launched with.
 
+mod events;
+mod queue_ops;
+mod send;
+
+pub use events::{AgentEvent, AgentEventEnvelope};
+
 pub mod checkpoint;
-pub mod claude;
-pub mod codex;
 mod attribution;
 mod background;
 mod ingest;
@@ -43,9 +47,11 @@ use turn::RunningTurn;
 pub(crate) use stream::publish;
 use crate::permissions::{self, Decision, Target};
 use crate::provider;
-use crate::scope;
+use crate::system::scope;
 use crate::Server;
-use crate::types::{AgentKind, Settings, AgentEvent, RuleRef};
+use crate::permissions::RuleRef;
+use crate::provider::AgentKind;
+use crate::settings::Settings;
 use crate::workspace;
 
 /// What the permission rules answer to `target` in the thread, or None to ask the user.
@@ -95,7 +101,7 @@ pub fn is_upkeep(text: &str) -> bool {
 /// What an agent that takes instructions at launch is told: to keep its task list with its own
 /// tool, so the Tasks badge fills in, then which shells are installed and which one runs its
 /// commands.
-fn agent_instructions(settings: &Settings, agent: AgentKind) -> String {
+pub(crate) fn agent_instructions(settings: &Settings, agent: AgentKind) -> String {
     [
         checklist_instructions(agent),
         Some(shell_instructions(settings)),
@@ -126,7 +132,7 @@ fn checklist_instructions(agent: AgentKind) -> Option<String> {
 /// Which shells are installed and which one runs the agent's commands.
 fn shell_instructions(settings: &Settings) -> String {
     let mut prompt = String::new();
-    let installed = crate::available_shells();
+    let installed = crate::system::available_shells();
     if !installed.is_empty() {
         prompt.push_str(&format!(
             "Shells on this machine: {}.",
@@ -134,7 +140,7 @@ fn shell_instructions(settings: &Settings) -> String {
         ));
     }
     let chosen = settings.shell.as_deref();
-    if let Some(shell) = crate::effective_shell(chosen) {
+    if let Some(shell) = crate::system::effective_shell(chosen) {
         if chosen == Some(shell.as_str()) {
             prompt.push_str(&format!(
                 " The user chose {shell} for shell commands; run them in it and write them for it."

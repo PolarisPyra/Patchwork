@@ -1,5 +1,5 @@
 import type { Message, Thread, TokenUsage } from "~/api";
-import { isCompactCommand } from "~/components/chat/composerActions";
+import { isCompactCommand } from "~/lib/composerActions";
 
 /** Claude's prompt cache lasts an hour; a thread idle longer has lost it. */
 export const COLD_AFTER_MS = 60 * 60 * 1000;

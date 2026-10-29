@@ -12,16 +12,17 @@ use std::thread::JoinHandle;
 
 use serde_json::Value;
 
+use crate::plugins::HookEvent;
 use crate::provider::GoalUpdate;
 use crate::permissions;
 use crate::provider::Parsed;
 use crate::provider::TaskEvent;
 use crate::provider;
-use crate::scope;
-use crate::types::AgentEvent;
-use crate::types::AgentKind;
-use crate::types::Approval;
-use crate::types::ApprovalStatus;
+use crate::system::scope;
+use crate::orchestration::AgentEvent;
+use crate::provider::AgentKind;
+use crate::threads::Approval;
+use crate::threads::ApprovalStatus;
 
 /// What kind of output a line is, as its `type` (or JSON-RPC `method`) and any `subtype`.
 fn line_kind(value: &Value) -> String {
@@ -49,13 +50,13 @@ fn publish_child(turn: &Turn, child: &mut SubagentThread, events: Vec<AgentEvent
 }
 
 #[cfg(test)]
-use crate::types::FileChange;
-use crate::types::Goal;
-use crate::types::GoalStatus;
-use crate::types::MessageStatus;
-use crate::types::new_id;
-use crate::debug_log::{AGENTS, Data, Source};
-use crate::types::LogLevel;
+use crate::workspace::FileChange;
+use crate::threads::Goal;
+use crate::threads::GoalStatus;
+use crate::threads::MessageStatus;
+use crate::system::new_id;
+use crate::logging::{AGENTS, Data, Source};
+use crate::settings::LogLevel;
 use crate::workspace;
 
 use super::attribution;
@@ -83,6 +84,21 @@ use super::unasked;
 use super::usage::message_usage;
 use super::usage::record_request;
 use super::usage::Request;
+
+/// Completes the replies a steer moved the turn on from, and counts them in `completed`, which is
+/// how many of `segments` are done. Left streaming, the reply before the steer keeps its own
+/// "Working" line while the answer to the steer has another, so the chat shows two turns running
+/// at once. The end of the turn skips the replies counted here.
+fn close_steered_segment(turn: &Turn, segments: &[String], completed: &mut usize) {
+    for id in &segments[*completed..] {
+        turn.publish(AgentEvent::TurnCompleted {
+            message_id: id.clone(),
+            status: MessageStatus::Complete,
+            error: None,
+        });
+    }
+    *completed = segments.len();
+}
 
 /// Reads the agent's stdout until it closes, then records the final status.
 pub(super) fn ingest(
@@ -221,7 +237,7 @@ pub(super) fn ingest(
                     reply,
                     target,
                 } => {
-                    let asks = turn.mode != crate::types::AccessMode::FullAccess;
+                    let asks = turn.mode != crate::threads::AccessMode::FullAccess;
                     if unasked(&turn.server, &turn.thread_id, &turn.root, &target, asks)
                         == permissions::Unasked::Run
                     {
@@ -375,6 +391,7 @@ pub(super) fn ingest(
                             .lock()
                             .unwrap_or_else(PoisonError::into_inner)
                             .clear();
+                        close_steered_segment(&turn, &segments, &mut completed);
                         turn.next_segment(&mut unsaved);
                         segments.push(turn.message_id.clone());
                         (has_text, last_was_text) = (false, false);
@@ -423,6 +440,8 @@ pub(super) fn ingest(
                         .unwrap_or_else(PoisonError::into_inner)
                         .pop_front();
                     if !steer_reply_empty {
+                        // The reply the steer arrived during is over; the turn goes on below it.
+                        close_steered_segment(&turn, &segments, &mut completed);
                         turn.next_segment(&mut unsaved);
                         segments.push(turn.message_id.clone());
                         (has_text, last_was_text) = (false, false);
@@ -872,7 +891,14 @@ fn go_idle(
         );
         std::thread::spawn(move || {
             let status = Some(MessageStatus::Cancelled);
-            plugin_hooks(&server, "interrupt", &thread_id, &root, agent, status);
+            plugin_hooks(
+                &server,
+                HookEvent::Interrupt,
+                &thread_id,
+                &root,
+                agent,
+                status,
+            );
         });
         // The agent takes the next message again.
         turn.cancelled.store(false, Ordering::SeqCst);
@@ -886,7 +912,7 @@ fn go_idle(
 #[cfg(test)]
 mod tests {
     use std::io::BufRead;
-    use crate::types::AccessMode;
+    use crate::threads::AccessMode;
     use std::sync::Mutex;
     use crate::orchestration::process::AgentStdin;
     use crate::orchestration::process::Stdin;
@@ -922,7 +948,7 @@ mod tests {
         let root = std::env::temp_dir().join(new_id());
         std::fs::create_dir_all(&root).unwrap();
         let root_str = root.to_str().unwrap();
-        let ok = crate::host_command("git")
+        let ok = crate::system::host_command("git")
             .args(["init", "-q"])
             .current_dir(&root)
             .status()
@@ -944,6 +970,7 @@ mod tests {
             skills_dir: None,
             guarded: &[],
             agents: &[],
+            hooks: &[],
         };
         let baseline = workspace::git_changes(root_str).unwrap();
         let input = provider::turn_input(agent, &spec);

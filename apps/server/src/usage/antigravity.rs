@@ -3,8 +3,9 @@
 use serde_json::Value;
 
 use crate::provider::probe_until;
-use crate::time::parse_rfc3339_ms;
-use crate::types::{AgentKind, UsageWindow, ProviderUsage};
+use crate::system::time::parse_rfc3339_ms;
+use crate::provider::AgentKind;
+use crate::usage::{UsageWindow, ProviderUsage};
 
 pub fn usage(mut out: ProviderUsage) -> Result<ProviderUsage, String> {
     // The CLI prints one JSON object and then keeps running, so stop once that object is complete.

@@ -10,9 +10,9 @@ use std::collections::HashMap;
 
 use crate::provider::TaskEvent;
 use crate::provider::claude::SHELL_TASK;
-use crate::types::AgentEvent;
-use crate::types::BackgroundTask;
-use crate::types::TaskStatus;
+use crate::orchestration::AgentEvent;
+use crate::threads::BackgroundTask;
+use crate::threads::TaskStatus;
 
 /// One task the turn has seen. An ended task stays, because the agent may report its end twice.
 #[derive(Debug)]
@@ -374,7 +374,7 @@ mod tests {
     use crate::provider::claude;
     use crate::provider::codex;
     use crate::provider::codex::fixtures as codex_fixtures;
-    use crate::types::AccessMode;
+    use crate::threads::AccessMode;
     use crate::provider::claude::fixtures::AGENT_LAUNCHED;
     use crate::provider::claude::fixtures::AGENT_NOTIFIED;
     use crate::provider::claude::fixtures::AGENT_STARTED;
@@ -608,6 +608,7 @@ mod tests {
             skills_dir: None,
             guarded: &[],
             agents: &[],
+            hooks: &[],
         };
         let mut background = Background::default();
         let mut events = Vec::new();
