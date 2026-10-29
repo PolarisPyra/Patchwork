@@ -3,6 +3,17 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.11.0] - 2026-10-28
+
+### Changed
+
+- When a lot of a reply arrives at once it now appears in one go instead of fading in word by word, so a fast answer no longer trails behind. A screen reader reads the reply as whole text, not one fading word at a time.
+- A reply's status line now stays at the top of it, saying what is happening while it works and what it took once it is done, and it says how many steps were folded away. Icons beside running work stay still, details grow open instead of appearing, and a finished thought says how long it took instead of showing a line of its own text.
+
+### Fixed
+
+- Claude now finds your skills on Windows too, where they used to be missing. Every agent is also given exactly the skills you have switched on, so a skill you turn off stops being offered straight away.
+
 ## [0.10.40] - 2026-10-28
 
 ### Added
