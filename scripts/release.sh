@@ -3,18 +3,30 @@
 # (.github/workflows/release.yml). docs/release.md explains how it all fits together.
 #
 # On your machine:
-#   scripts/release.sh X.Y.Z            Cut a release, with no questions asked: check, write the
+#   scripts/release.sh YY.N.P           Cut a release, with no questions asked: check, write the
 #                                       notes from the commits' Changelog: paragraphs, set the
 #                                       version, add the notes to CHANGELOG.md, commit, tag, and
 #                                       push, then print the build's link and end. Run it only
 #                                       when a release was asked for.
-#   scripts/release.sh watch X.Y.Z      Follow X.Y.Z's build to the end, then check that
+#   scripts/release.sh bump [release|patch]
+#                                       Cut the next release without working the number out, from
+#                                       the newest tag. Versions are CalVer, YY.N.P: `bump` is this
+#                                       year's next release, so it counts the release number up and
+#                                       starts at patch 0 (26.1.3 -> 26.2.0), and a new year starts
+#                                       at 1 (26.3.0 -> 27.1.0); `bump patch` fixes the release it
+#                                       follows (26.2.0 -> 26.2.1). `bump` with no level is the
+#                                       default, and `scripts/release.sh release` and `patch` on
+#                                       their own do the same as the matching form.
+#   scripts/release.sh next [release|patch]
+#                                       Print the version that bump gives, and change nothing.
+#   scripts/release.sh watch YY.N.P     Follow YY.N.P's build to the end, then check that
 #                                       latest.json names it.
-#   scripts/release.sh version X.Y.Z    Write a version into every file that names it.
-#   scripts/release.sh notes X.Y.Z      Publish X.Y.Z's section of CHANGELOG.md again, after a
-#                                       fix: to its GitHub release, and to latest.json when X.Y.Z
+#   scripts/release.sh version YY.N.P   Write a version into every file that names it. A bump
+#                                       level works here too.
+#   scripts/release.sh notes YY.N.P     Publish YY.N.P's section of CHANGELOG.md again, after a
+#                                       fix: to its GitHub release, and to latest.json when YY.N.P
 #                                       is the latest release and the Bunny keys are set.
-#   scripts/release.sh pull X.Y.Z       Withdraw X.Y.Z when it went wrong: point latest.json back
+#   scripts/release.sh pull YY.N.P      Withdraw YY.N.P when it went wrong: point latest.json back
 #                                       at the release before it. Needs the Bunny keys.
 #
 # In the Release workflow:
@@ -50,15 +62,86 @@ step() {
 usage() {
   sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed '$d' | sed 's/^# \{0,1\}//'
 }
+# A version is CalVer, YY.N.P: the two-digit year, the release number within that year, and the
+# patch. The year is two digits and the release number has no leading zero, which tells a CalVer
+# version apart from the old MAJOR.MINOR.PATCH scheme (`0.11.3` has a one-digit first part).
+is_release_version() {
+  [[ "$1" =~ ^[0-9]{2}\.[1-9][0-9]*\.[0-9]+$ ]]
+}
+
 check_version() {
-  [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "Not a version: $1 (expected X.Y.Z, for example 0.2.0)."
+  is_release_version "$1" \
+    || die "Not a version: $1 (expected YY.N.P, for example $(date +%y).1.0)."
+}
+
+# The newest release, from the tags. A release follows the latest tag, so the next version comes
+# from there rather than from the version files, which a release writes to match it.
+latest_version() {
+  local tag
+  tag=$(git tag -l 'v[0-9]*' --sort=-v:refname | head -n 1)
+  [[ -n "$tag" ]] || die "This repo has no release tag to count from."
+  echo "${tag#v}"
+}
+
+# Prints the version the given bump gives the latest release: a release counts the release number
+# up and starts the patch again at 0, and a patch fixes the release before it. Until the first
+# CalVer release exists, the newest tag is from the old scheme, which has no release to count from
+# or to fix, so both give this year's first release.
+next_version() {
+  local level="${1:-release}" current year count patch
+  case "$level" in
+    release | patch | minor | major) ;;
+    *) die "Not a bump level: $level (expected release or patch)." ;;
+  esac
+  current=$(latest_version)
+  year=$(date +%y)
+  # minor and major are the levels of the scheme this replaced: CalVer has neither.
+  if ! is_release_version "$current"; then
+    case "$level" in
+      release | patch) echo "$year.1.0" ;;
+      *) die "CalVer has no $level: \`bump\` is the next release of the year, and \`bump patch\` fixes the last one." ;;
+    esac
+    return
+  fi
+  IFS=. read -r _ count patch <<< "$current"
+  case "$level" in
+    release)
+      if ((10#${current%%.*} > 10#$year)); then
+        die "The newest release, $current, is from a later year than this machine's clock ($year)."
+      elif ((10#${current%%.*} < 10#$year)); then
+        echo "$year.1.0"
+      else
+        echo "$year.$((10#$count + 1)).0"
+      fi
+      ;;
+    patch) echo "${current%.*}.$((10#$patch + 1))" ;;
+    *) die "CalVer has no $level: \`bump\` is the next release of the year, and \`bump patch\` fixes the last one." ;;
+  esac
+}
+
+# The version to release: a bump level counted from the latest tag, or the YY.N.P given. A leading
+# `v` is accepted, as in the tags themselves.
+resolve_version() {
+  local version="${1:-}"
+  [[ -n "$version" ]] || die "Usage: scripts/release.sh [bump] [release|patch] | YY.N.P"
+  version="${version#v}"
+  case "$version" in
+    # minor and major are the levels of the scheme this replaced; next_version explains that CalVer
+    # has neither.
+    release | patch | minor | major) next_version "$version" ;;
+    *)
+      check_version "$version"
+      echo "$version"
+      ;;
+  esac
 }
 
 # Writes the version into the package.json files and the Tauri config, which the app shows and the
 # installers use; the Rust crates read it from the Tauri config (apps/server/build.rs), so a release
 # leaves Cargo.toml and Cargo.lock alone.
 set_version() {
-  local version="$1" file
+  local version file
+  version="${1#v}"
   check_version "$version"
   for file in package.json apps/web/package.json apps/desktop/package.json \
     apps/desktop/src-tauri/tauri.conf.json; do
@@ -74,9 +157,13 @@ set_version() {
 }
 
 cut_release() {
-  local version="${1#v}"
+  local asked="${1:-release}" version previous
+  version=$(resolve_version "$asked")
   check_version "$version"
+  previous=$(latest_version)
+  [[ "$version" != "$previous" ]] || die "v$version is already the latest release; nothing to cut."
   local tag="v$version"
+  echo "Cutting $tag, up from v$previous."
 
   step "Checking the repo"
   local tool secret
@@ -191,7 +278,7 @@ platform_files() {
 ci_build() {
   local platform="${1:-}" files=() file
   platform_files "$platform"
-  # A tag pushed without `scripts/release.sh X.Y.Z` still builds with its own version.
+  # A tag pushed without `scripts/release.sh` still builds with its own version.
   if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then set_version "${GITHUB_REF_NAME#v}"; fi
   case "$platform" in
     linux)
@@ -364,7 +451,12 @@ republish_notes() {
 }
 
 case "${1:-}" in
-  version) set_version "${2:-}" ;;
+  bump) cut_release "${2:-release}" ;;
+  next) resolve_version "${2:-release}" ;;
+  version)
+    requested=$(resolve_version "${2:-}") || exit 1
+    set_version "$requested"
+    ;;
   notes) republish_notes "${2:-}" ;;
   pull) pull_release "${2:-}" ;;
   watch) watch_release "${2:-}" ;;
@@ -373,5 +465,6 @@ case "${1:-}" in
   ci-release) ci_release ;;
   -h | --help) usage ;;
   "") usage >&2 && exit 1 ;;
+  # A YY.N.P, or a bump level: `scripts/release.sh release` and `patch` cut that bump.
   *) cut_release "$1" ;;
 esac

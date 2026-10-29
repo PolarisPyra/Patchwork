@@ -79,6 +79,7 @@ When writing or reviewing code that handles a lot of data, I/O, or work per requ
 - Read-only git is fine and expected, because the work needs it: `git status`, `git diff`, `git log`, `git show`, `git ls-files`, `git check-ignore`.
 - When the work is done, **stop and summarize**: what changed, what you proved, and anything left undone. Leave the changes in the working tree. Do not stage them, do not commit them, do not push them. This is the default when nobody asked; an explicit "push" is an ask that covers the whole job, committing what is there and pushing it.
 - The same goes for anything that publishes: `scripts/release.sh`, a version bump that ends in a tag, and `gh release`. Those commit and push, so they need an explicit request too. Read [docs/release.md](docs/release.md) before any of them, once the user has asked.
+- "Push to git bump ver", "push to git bump version", "bump version" and "bump ver" are that request: run `scripts/release.sh bump` for the year's next release, since versions are CalVer `YY.N.P` (26.1.3 → 26.2.0, and 26.3.0 → 27.1.0 in a new year). Use `scripts/release.sh bump patch` for a fix to the last release (26.2.0 → 26.2.1); the scheme has no minor or major level. The script counts from the newest tag, so never compute the version by hand.
 - This overrides every skill that says otherwise, including `fullsend`. "Full send" grants autonomy over the work and over testing, not over git: do the work, prove it, summarize, and stop.
 
 ## Release and build setup for a Tauri project

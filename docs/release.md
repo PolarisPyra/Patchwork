@@ -7,12 +7,12 @@ For local builds, see [Development](development.md).
 ## Overview
 
 ```
-pnpm release 0.2.0                      your machine: checks, notes, version, CHANGELOG.md, commit, tag, push
+pnpm release bump                       your machine: checks, notes, version, CHANGELOG.md, commit, tag, push
         │
         ▼
-Release workflow (GitHub Actions)       on the v0.2.0 tag
+Release workflow (GitHub Actions)       on the v26.1.0 tag
   ├─ appimage  ─┐
-  ├─ windows   ─┼─ build (no secrets), upload → updates.patchworkeditor.com/v0.2.0/<file>
+  ├─ windows   ─┼─ build (no secrets), upload → updates.patchworkeditor.com/v26.1.0/<file>
   ├─ macos     ─┘
   └─ release      fetch back, check, sign, check signature → latest.json, GitHub release with notes
         │
@@ -38,23 +38,39 @@ These files do all of it:
 
 ## Versions
 
-Versions are `MAJOR.MINOR.PATCH` with no leading zeros and no suffixes; the script only accepts
-`X.Y.Z`. Read the current one with `git describe --tags --abbrev=0`, then raise one part by one:
+Versions are CalVer, `YY.N.P`: the two-digit year, the release number within that year, and the
+patch. Nobody works the next one out by hand: the release commands take a bump level and count it
+from the newest tag, so the number is always the one after the last release.
 
-- **Patch** by default, for every release: `0.8.0` → `0.8.1`.
-- **Minor** for a major update, resetting the patch: `0.8.1` → `0.9.0`.
-- **Major** only when asked for.
+- **Release**: `pnpm release bump` cuts the year's next release, counting the release number up and
+  starting again at patch 0 (`26.1.3` → `26.2.0`). A new year starts at 1 (`26.3.0` → `27.1.0`).
+- **Patch**: `pnpm release bump patch` fixes the release it follows, keeping that release's year
+  and number (`26.2.0` → `26.2.1`). A patch after the year has turned over still patches the
+  release before it, so `25.4.0` → `25.4.1`.
 
-Hotfixes are ordinary patch releases: a hotfix after `0.4.9` is `0.4.10`, not `0.4.91`. Each part
-is compared as a whole number, so `0.4.91` would sort above every release from `0.4.10` to `0.4.90`
-and break update ordering.
+A release's tag is `v` and the whole version, such as `v26.2.0`. An explicit version, as in
+`pnpm release 26.3.0`, cuts exactly that one. `scripts/release.sh next` and `next patch` print what
+a bump gives and change nothing.
+
+There is no minor or major level: the year and the release number carry what those used to say.
+Passing `minor` or `major` stops with a message saying so.
+
+The release number counts releases, not fixes: a fix goes in the patch, so it never uses up a
+release number. Each part is compared as a whole number, so `26.1.0` sorts below `26.2.0`, and
+`26.2.10` sorts above `26.2.9`, which keeps update ordering right.
+
+Three parts are also what the tools read. `tauri-codegen` parses `tauri.conf.json` with
+`semver::Version` and stops the build on anything else, and the updater compares a release's tag
+against the running version with `semver`, so a two-part tag would read as no version at all and no
+copy would ever be offered it. A version from the old scheme, `0.11.3`, sorts below every CalVer
+release, so the first `26.x` release reaches every installed copy.
 
 The repo's version always matches the latest tag. The script writes it into `package.json`,
 `apps/web/package.json`, `apps/desktop/package.json`, and `apps/desktop/src-tauri/tauri.conf.json`.
 The Rust crates read it from `tauri.conf.json` when they build (`apps/server/build.rs`); their own
 versions stay at `0.0.0`, so a release never changes a Cargo file. The app shows it next to the
 project name in the top left corner. To fix a mismatch, run
-`scripts/release.sh version X.Y.Z`.
+`scripts/release.sh version 26.1.0`.
 
 ## Changelog
 
@@ -103,7 +119,7 @@ them before releasing, edit that file and run the release again; it is used as i
 passes the style checks.
 
 **Fixing notes after a release.** `CHANGELOG.md` is the source. Edit the release's section, commit
-it, and run `scripts/release.sh notes 0.2.0` to publish it to the GitHub release, and to
+it, and run `scripts/release.sh notes 26.1.0` to publish it to the GitHub release, and to
 `latest.json` when it is the latest release and `BUNNY_STORAGE_PASSWORD` and `BUNNY_API_KEY` are
 set. Copies already installed show the fix once they update past it.
 
@@ -112,7 +128,9 @@ set. Copies already installed show the fix once they update past it.
 From a clean `main` that is up to date with `origin/main`:
 
 ```sh
-pnpm release 0.2.0
+pnpm release bump          # the year's next release, 26.1.0 -> 26.2.0
+pnpm release bump patch    # a fix to the last release, 26.2.0 -> 26.2.1
+pnpm release 26.3.0        # exactly this version
 ```
 
 It needs `git`, `pnpm`, `cargo`, `gh` (signed in), `jq`, and `curl`. The script:
@@ -123,11 +141,11 @@ It needs `git`, `pnpm`, `cargo`, `gh` (signed in), `jq`, and `curl`. The script:
    change a file, such as wire types that were not regenerated.
 3. Writes the release notes (see [Changelog](#changelog)), checks them, and prints them.
 4. Pushes commits not on `origin` yet, writes the version, adds the notes to the top of
-   `CHANGELOG.md`, commits both as `Release v0.2.0`, creates the annotated tag, and pushes `main` and
+   `CHANGELOG.md`, commits both as `Release v26.1.0`, creates the annotated tag, and pushes `main` and
    the tag. It asks no questions.
 5. Prints the link to the Release workflow's run and ends. The build carries on on GitHub.
 
-To follow the build, run `scripts/release.sh watch 0.2.0`. It waits for the run to end, stops with
+To follow the build, run `scripts/release.sh watch 26.1.0`. It waits for the run to end, stops with
 the failed jobs' errors if it fails, then checks that `latest.json` names the new version and
 prints the download links. Ctrl-C stops only the watching, not the build.
 
@@ -164,7 +182,7 @@ pins, and checks the signature with `minisign` against the key built into the ap
 `updates.rs`), the way the updater will. Any mismatch stops the release before `latest.json`
 changes, so installed copies are never offered a file that won't install. It then uploads
 `latest.json` to `<tag>/latest.json` and to `latest.json` (last, so it never names a file that
-isn't there yet), purges Bunny's cached copy, and creates a GitHub release named `Patchwork v0.2.0`.
+isn't there yet), purges Bunny's cached copy, and creates a GitHub release named `Patchwork v26.1.0`.
 Both carry the tag's section of `CHANGELOG.md`.
 
 Every action is pinned to a commit, with the version it was in a comment, so a moved tag upstream
@@ -209,10 +227,10 @@ Release files are served from `https://updates.patchworkeditor.com`:
 
 ```
 /latest.json                              the newest release; the only file that changes
-/v0.2.0/Patchwork_amd64.AppImage          one folder per tag, never overwritten
-/v0.2.0/Patchwork_0.2.0_x64-setup.exe
-/v0.2.0/Patchwork_0.2.0_aarch64.dmg
-/v0.2.0/Patchwork.app.tar.gz
+/v26.1.0/Patchwork_amd64.AppImage         one folder per tag, never overwritten
+/v26.1.0/Patchwork_26.1.0_x64-setup.exe
+/v26.1.0/Patchwork_26.1.0_aarch64.dmg
+/v26.1.0/Patchwork.app.tar.gz
 ```
 
 `latest.json` has the shape of GitHub's release API, plus each file's signature. `body` is the
@@ -220,12 +238,12 @@ release's section of `CHANGELOG.md`:
 
 ```json
 {
-  "tag_name": "v0.2.0",
-  "body": "## [0.2.0] - 2026-01-02\n\n### Added\n\n- …",
+  "tag_name": "v26.1.0",
+  "body": "## [26.1.0] - 2026-01-02\n\n### Added\n\n- …",
   "assets": [
     {
       "name": "Patchwork_amd64.AppImage",
-      "browser_download_url": "https://updates.patchworkeditor.com/v0.2.0/Patchwork_amd64.AppImage",
+      "browser_download_url": "https://updates.patchworkeditor.com/v26.1.0/Patchwork_amd64.AppImage",
       "digest": "sha256:…",
       "signature": "untrusted comment: signature from tauri secret key\n…"
     }
@@ -283,7 +301,7 @@ again, so keep a copy outside GitHub. Changing it means every copy needs a manua
 Every release's files stay on the server, so send a link:
 
 ```
-https://updates.patchworkeditor.com/v0.2.0/Patchwork_amd64.AppImage
+https://updates.patchworkeditor.com/v26.1.0/Patchwork_amd64.AppImage
 ```
 
 On Linux, the AppImage runs after `chmod +x Patchwork_amd64.AppImage`. Windows uses the
@@ -296,8 +314,8 @@ On Linux, the AppImage runs after `chmod +x Patchwork_amd64.AppImage`. Windows u
   Fix the cause on `main` and release the next patch version. Never reuse, move, or delete a pushed
   tag. The next release's notes take in the failed one's section (see [Changelog](#changelog)), so
   nothing it said is lost. To try a fix to the build first, run the workflow by hand.
-- **A release went out broken.** Run `scripts/release.sh pull X.Y.Z` with `BUNNY_STORAGE_PASSWORD`
-  and `BUNNY_API_KEY` set. It points `latest.json` back at the release before X.Y.Z, using the copy
+- **A release went out broken.** Run `scripts/release.sh pull YY.N.P` with `BUNNY_STORAGE_PASSWORD`
+  and `BUNNY_API_KEY` set. It points `latest.json` back at the release before YY.N.P, using the copy
   each release keeps in its own folder, so copies that haven't updated stop being offered it. Copies
   already on it keep it until the fix ships as the next patch. Releases before v0.10.18 have no
   copy, so they can't be gone back to.
@@ -315,7 +333,7 @@ On Linux, the AppImage runs after `chmod +x Patchwork_amd64.AppImage`. Windows u
 - Releases add their notes to `CHANGELOG.md`; edit it only to fix published notes, then run
   `scripts/release.sh notes <version>`.
 - Don't change version numbers by hand.
-- Tags start with `v` followed by a digit, such as `v0.2.0`, because the scripts and the workflow
+- Tags start with `v` followed by a digit, such as `v26.1.0`, because the scripts and the workflow
   match that pattern.
 - Never reuse, move, or delete a pushed tag. A broken release is followed by the next patch.
 
@@ -323,11 +341,20 @@ On Linux, the AppImage runs after `chmod +x Patchwork_amd64.AppImage`. Windows u
 
 - Push only when the user asks. A push to `main` builds only when it changes the Rust
   dependencies or the workflow.
-- Cut a release only when the user asks, with `scripts/release.sh <version>` in the foreground. It
-  asks nothing and ends once the tag is pushed and the run's link is printed. Run `watch` only when
-  the user asks to follow the build.
-- If the user asks for a version like `0.4.91` after `0.4.9`, explain the ordering problem above
-  and confirm before tagging.
+- Cut a release only when the user asks, with `scripts/release.sh <version>` or
+  `scripts/release.sh bump [release|patch]` in the foreground. It asks nothing and ends once the
+  tag is pushed and the run's link is printed. Run `watch` only when the user asks to follow the
+  build.
+- "Push to git bump ver", "push to git bump version", "bump version" and "bump ver" all mean cut
+  the year's next release now, so run `scripts/release.sh bump` and never compute the version by
+  hand: it counts the release number up from the newest tag (26.1.3 → 26.2.0), and starts at 1 in
+  a new year (26.3.0 → 27.1.0). "Bump ver patch" is `scripts/release.sh bump patch`, a fix to the
+  release before it (26.2.0 → 26.2.1). The scheme has no minor or major level, so the script
+  stops with a message if one is passed. Those phrasings are the user asking, so the script
+  committing, tagging, and pushing is covered.
+- A version is `YY.N.P`, always with all three parts and the current year: `26.2.0`, `26.2.1`.
+  Don't drop the patch part (`26.2`) and don't use a version from the old scheme: Tauri and the
+  updater both read a version as SemVer and turn `26.2` down.
 - **Discord changelog**: every time the version is bumped and pushed, write Discord release notes
   and end the reply with them in one fenced `markdown` code block, so the formatting survives
   copying. They come in addition to `CHANGELOG.md`, not instead of it. Write them from the

@@ -1,7 +1,7 @@
 name: Release
 
 # Builds the Linux AppImage, the Windows installer, and the macOS (Apple silicon) disk image and app
-# bundle for a version tag (v0.1.0, v0.2.0, ...), publishes them to updates.patchworkeditor.com,
+# bundle for a version tag (v26.1.0, v26.2.0, ...), publishes them to updates.patchworkeditor.com,
 # and creates the GitHub release with the tag's notes. scripts/release.sh does the work, and
 # docs/release.md explains it.
 #

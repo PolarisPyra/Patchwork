@@ -114,7 +114,10 @@ Other project files:
 
 ## Releasing
 
-Run `pnpm release 0.4.9` with the new version. [Releasing](docs/release.md) covers the rest.
+Releases are numbered by the calendar, `YY.N.P` (year, release number in that year, patch). Run
+`pnpm release bump` for the year's next release (`26.1.0` → `26.2.0`), `pnpm release bump patch`
+for a fix to the last one (`26.2.0` → `26.2.1`), or `pnpm release 26.3.0` for an exact version.
+[Releasing](docs/release.md) covers the rest.
 
 ## Contributing
 
