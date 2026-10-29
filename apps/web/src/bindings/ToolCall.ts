@@ -2,31 +2,31 @@
 import type { StepStatus } from "./StepStatus";
 import type { SubAgent } from "./SubAgent";
 
-export type ToolCall = { id: string,
+export type ToolCall = { id: string, 
 /**
  * e.g. "Bash", "Edit", "command_execution"
  */
-name: string,
+name: string, 
 /**
  * Short single-line description, e.g. the command or file path.
  */
-summary: string, status: StepStatus,
+summary: string, status: StepStatus, 
 /**
  * Set when the call started a subagent.
  */
-subagent: SubAgent | null,
+subagent: SubAgent | null, 
 /**
  * The subagent call (its `id`) this call ran inside, if any.
  */
-parent: string | null,
+parent: string | null, 
 /**
  * When the call started and ended, in Unix epoch milliseconds.
  */
-startedAt: number | null, endedAt: number | null,
+startedAt: number | null, endedAt: number | null, 
 /**
  * What the call returned, cut to its first `MAX_TOOL_OUTPUT` bytes.
  */
-output?: string | null,
+output?: string | null, 
 /**
  * The thread holding the subagent's own transcript, for a call that started one.
  */

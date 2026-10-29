@@ -7,19 +7,19 @@ import type { ScheduledRun } from "./ScheduledRun";
 /**
  * A scheduled task: a prompt that starts a task at a fixed time.
  */
-export type ScheduledTask = { id: string, name: string, prompt: string, schedule: Schedule,
+export type ScheduledTask = { id: string, name: string, prompt: string, schedule: Schedule, 
 /**
  * The project to run in; None starts a chat in a scratch folder.
  */
-projectId: string | null, agent: AgentKind, model: string | null, accessMode: AccessMode, enabled: boolean,
+projectId: string | null, agent: AgentKind, model: string | null, accessMode: AccessMode, enabled: boolean, 
 /**
  * When the task last started, in Unix milliseconds.
  */
-lastRunAt: number | null,
+lastRunAt: number | null, 
 /**
  * When it next starts, in Unix milliseconds.
  */
-nextRunAt: number | null, createdAt: number,
+nextRunAt: number | null, createdAt: number, 
 /**
  * The newest few runs, newest first.
  */

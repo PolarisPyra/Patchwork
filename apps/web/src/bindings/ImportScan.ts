@@ -4,15 +4,15 @@ import type { ImportSource } from "./ImportSource";
 /**
  * Conversations a source has saved on disk that can be imported.
  */
-export type ImportScan = { kind: ImportSource,
+export type ImportScan = { kind: ImportSource, 
 /**
  * Sessions found on disk.
  */
-found: number,
+found: number, 
 /**
  * Sessions not yet in Patchwork.
  */
-new: number,
+new: number, 
 /**
  * Helper runs inside other conversations; not offered for import.
  */

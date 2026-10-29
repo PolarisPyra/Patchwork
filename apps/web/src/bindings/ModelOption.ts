@@ -3,15 +3,15 @@
 /**
  * A model the user can pick for an agent. `id: None` is the CLI's own default.
  */
-export type ModelOption = { id: string | null, label: string,
+export type ModelOption = { id: string | null, label: string, 
 /**
  * Configured CLI default; not a claim about a resumed session's runtime model.
  */
-defaultModel: string | null,
+defaultModel: string | null, 
 /**
  * Superseded model, listed under the picker's "Legacy models" section.
  */
-isLegacy: boolean,
+isLegacy: boolean, 
 /**
  * The thinking levels this model takes, as its CLI reports them. `None` when the CLI does
  * not say, so the picker offers the levels its agent shares; an empty list when the model

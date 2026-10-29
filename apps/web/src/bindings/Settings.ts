@@ -10,56 +10,56 @@ import type { Theme } from "./Theme";
 import type { TokenSettings } from "./TokenSettings";
 import type { UpdateSettings } from "./UpdateSettings";
 
-export type Settings = { onboarded: boolean, theme: Theme,
+export type Settings = { onboarded: boolean, theme: Theme, 
 /**
  * Connected agents; the first is the default for new tasks.
  */
-agents: Array<AgentKind>,
+agents: Array<AgentKind>, 
 /**
  * Legacy single-agent setting, migrated into `agents` on load.
  */
-agent: AgentKind | null,
+agent: AgentKind | null, 
 /**
  * Agent CLIs the user located by hand, used instead of searching for them.
  */
-agentPaths: { [key in AgentKind]?: string }, integrations: Integrations, projects: Array<Project>, activeProjectId: string | null, tokens: TokenSettings,
+agentPaths: { [key in AgentKind]?: string }, integrations: Integrations, projects: Array<Project>, activeProjectId: string | null, tokens: TokenSettings, 
 /**
  * Model, `provider/model`, that reads the images of a message on Patchwork's own agent.
  * None sends images to the main model.
  */
-visionModel: string | null,
+visionModel: string | null, 
 /**
  * Shell that agents run commands in. None follows the SHELL environment variable.
  */
-shell: string | null,
+shell: string | null, 
 /**
  * Folder of the skills every agent loads. None uses `skills` in the config folder.
  */
-skillsDir: string | null,
+skillsDir: string | null, 
 /**
  * Skills switched off in Settings, by name.
  */
-disabledSkills: Array<string>, notifications: NotificationSettings, updates: UpdateSettings,
+disabledSkills: Array<string>, notifications: NotificationSettings, updates: UpdateSettings, 
 /**
  * Id of the app icon color way in `assets/logos/manifest.json`. None uses the manifest default.
  */
-logo: string | null,
+logo: string | null, 
 /**
  * Legacy switch for the import log, migrated into `logging` on load.
  */
-importLogDisabled: boolean, logging: LoggingSettings, terminal: TerminalSettings, permissions: PermissionSettings,
+importLogDisabled: boolean, logging: LoggingSettings, terminal: TerminalSettings, permissions: PermissionSettings, 
 /**
  * Answering an agent's question takes a second click on the picked answer.
  */
-confirmAnswers: boolean,
+confirmAnswers: boolean, 
 /**
  * Folder of plugin bundles. None uses `plugins` in the config folder.
  */
-pluginsDir: string | null,
+pluginsDir: string | null, 
 /**
  * Plugins switched off in Settings, by folder name.
  */
-disabledPlugins: Array<string>,
+disabledPlugins: Array<string>, 
 /**
  * Whether the agent may look at the screen and drive the pointer and keyboard.
  */

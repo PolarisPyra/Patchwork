@@ -7,36 +7,36 @@ import type { RightClickBehavior } from "./RightClickBehavior";
  * The integrated terminal, as VS Code's `terminal.integrated.*` settings set it up, with its
  * defaults. The shell is `shell`, shared with the agents.
  */
-export type TerminalSettings = {
+export type TerminalSettings = { 
 /**
  * Arguments for the shell. None is `-l` on macOS, none elsewhere.
  */
-shellArgs: Array<string> | null,
+shellArgs: Array<string> | null, 
 /**
  * Variables added to the shell's environment; null removes one. Values may use
  * `${env:NAME}` and `${workspaceFolder}`.
  */
-env: { [key in string]: string | null },
+env: { [key in string]: string | null }, 
 /**
  * Whether the shell starts from Patchwork's environment, rather than a minimal one.
  */
-inheritEnv: boolean,
+inheritEnv: boolean, 
 /**
  * The folder shells start in; None is the project's. May use `${workspaceFolder}`.
  */
-cwd: string | null,
+cwd: string | null, 
 /**
  * Whether `LANG` is set to a UTF-8 locale: `auto` when it is missing or not UTF-8.
  */
-detectLocale: DetectLocale,
+detectLocale: DetectLocale, 
 /**
  * None uses the app's monospace font.
  */
-fontFamily: string | null, fontSize: number, lineHeight: number, letterSpacing: number, fontWeight: string, fontWeightBold: string, cursorStyle: CursorStyle, cursorBlinking: boolean,
+fontFamily: string | null, fontSize: number, lineHeight: number, letterSpacing: number, fontWeight: string, fontWeightBold: string, cursorStyle: CursorStyle, cursorBlinking: boolean, 
 /**
  * The cursor's width when `cursor_style` is `line`.
  */
-cursorWidth: number, scrollback: number, copyOnSelection: boolean, rightClickBehavior: RightClickBehavior, altClickMovesCursor: boolean, macOptionIsMeta: boolean, drawBoldTextInBrightColors: boolean, minimumContrastRatio: number, smoothScrolling: boolean, mouseWheelScrollSensitivity: number,
+cursorWidth: number, scrollback: number, copyOnSelection: boolean, rightClickBehavior: RightClickBehavior, altClickMovesCursor: boolean, macOptionIsMeta: boolean, drawBoldTextInBrightColors: boolean, minimumContrastRatio: number, smoothScrolling: boolean, mouseWheelScrollSensitivity: number, 
 /**
  * The scroll multiplier while Alt is held.
  */

@@ -3,7 +3,7 @@
 /**
  * A model in the catalog Claude Code cached for the terminal.
  */
-export type ClaudeModel = { id: string, name: string, contextWindow: number | null, efforts: Array<string>,
+export type ClaudeModel = { id: string, name: string, contextWindow: number | null, efforts: Array<string>, 
 /**
  * Whether the model offers fast mode.
  */

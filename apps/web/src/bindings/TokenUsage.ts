@@ -3,11 +3,11 @@
 /**
  * Tokens a reply used, summed over the model requests it made.
  */
-export type TokenUsage = {
+export type TokenUsage = { 
 /**
  * Input that was neither read from nor written to the prompt cache.
  */
-input: number, cacheRead: number, cacheWrite: number, output: number,
+input: number, cacheRead: number, cacheWrite: number, output: number, 
 /**
  * Size of the prompt of the agent's last request: the context it is working in.
  */

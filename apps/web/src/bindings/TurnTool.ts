@@ -4,7 +4,7 @@ import type { JsonValue } from "./serde_json/JsonValue";
 /**
  * A tool as an API turn offers it to the model.
  */
-export type TurnTool = {
+export type TurnTool = { 
 /**
  * `mcp__server__tool`, cut to what endpoints accept.
  */

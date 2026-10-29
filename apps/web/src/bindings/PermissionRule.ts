@@ -2,7 +2,7 @@
 import type { Effect } from "./Effect";
 import type { PermissionKind } from "./PermissionKind";
 
-export type PermissionRule = { id: string, kind: PermissionKind,
+export type PermissionRule = { id: string, kind: PermissionKind, 
 /**
  * A folder, a command's leading words, a web host, or an MCP server; `*` is anything, and
  * `.` is the thread's own folder.

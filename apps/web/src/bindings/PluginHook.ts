@@ -5,7 +5,7 @@ import type { PluginHookHandler } from "./PluginHookHandler";
 /**
  * One handler a plugin runs on an event, such as `stop` or `preToolUse`.
  */
-export type PluginHook = { event: HookEvent,
+export type PluginHook = { event: HookEvent, 
 /**
  * The tools a tool event is limited to, as a regular expression over the tool's name.
  */

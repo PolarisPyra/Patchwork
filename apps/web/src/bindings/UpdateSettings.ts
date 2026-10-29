@@ -3,7 +3,7 @@
 /**
  * How Patchwork keeps itself up to date.
  */
-export type UpdateSettings = {
+export type UpdateSettings = { 
 /**
  * Minutes between checks for a new release: 10 to 60, in steps of 10.
  */

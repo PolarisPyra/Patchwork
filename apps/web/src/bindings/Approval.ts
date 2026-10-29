@@ -7,35 +7,35 @@ import type { RuleRef } from "./RuleRef";
 /**
  * An action the agent asked permission for during a turn.
  */
-export type Approval = { id: string,
+export type Approval = { id: string, 
 /**
  * e.g. "Run command", "Edit files", "Use WebFetch".
  */
-title: string,
+title: string, 
 /**
  * The command, paths, or other detail being approved.
  */
-detail: string, status: ApprovalStatus,
+detail: string, status: ApprovalStatus, 
 /**
  * What the agent asks the user, when it asks rather than wanting permission.
  */
-questions?: Array<Question>,
+questions?: Array<Question>, 
 /**
  * The user's answers, by question id.
  */
-answers?: { [key in string]: Array<string> },
+answers?: { [key in string]: Array<string> }, 
 /**
  * What kind of request it is, when a permission rule can answer it.
  */
-kind?: PermissionKind | null,
+kind?: PermissionKind | null, 
 /**
  * The patterns "Always allow" saves; empty when a rule could not safely cover it.
  */
-suggestions?: Array<string>,
+suggestions?: Array<string>, 
 /**
  * The rule that answered it, or that the user saved when answering it.
  */
-rule?: RuleRef | null,
+rule?: RuleRef | null, 
 /**
  * Answered by a rule, without asking.
  */

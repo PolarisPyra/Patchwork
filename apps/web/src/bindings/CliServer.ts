@@ -5,29 +5,29 @@ import type { ToolInfo } from "./ToolInfo";
  * A server as the settings show it. Environment and header values stay out, since they may
  * hold secrets; only their names are shown.
  */
-export type CliServer = {
+export type CliServer = { 
 /**
  * Its identity (see `mcp::identity`), which names it for a refresh, and puts it on the
  * same card as Patchwork's or the other CLI's copy of it.
  */
-key: string, name: string,
+key: string, name: string, 
 /**
  * `user`, `project`, or `local` (Claude Code's own setting for one project).
  */
-scope: string,
+scope: string, 
 /**
  * The Patchwork project a project or local server belongs to.
  */
-project: string | null,
+project: string | null, 
 /**
  * The file it is defined in.
  */
-file: string, command: string | null, args: Array<string>, url: string | null, env: Array<string>,
+file: string, command: string | null, args: Array<string>, url: string | null, env: Array<string>, 
 /**
  * `off`, `unapproved` (a project's server the CLI has not approved), `listing`, `ready`,
  * `signin` (the server wants the CLI's own sign-in), or `error`.
  */
-status: string,
+status: string, 
 /**
  * Its turns in Patchwork use Patchwork's copy of it, through the relay.
  */

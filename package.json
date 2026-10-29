@@ -14,7 +14,7 @@
     "tauri": "pnpm --filter patchwork-desktop tauri",
     "format": "prettier --write --log-level warn \"apps/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"apps/**/*.{ts,tsx}\"",
-    "types": "cargo test --no-run -q -p patchwork-server && rm -rf apps/web/src/bindings && cargo test -q -p patchwork-server export_bindings && node -e 'const fs=require(\"node:fs\"); const dir=\"apps/web/src/bindings\"; for(const file of fs.readdirSync(dir).filter((name)=>name.endsWith(\".ts\"))){const path=dir+\"/\"+file; fs.writeFileSync(path,fs.readFileSync(path,\"utf8\").replace(/[ \\t]+$/gm,\"\"));}' && prettier --write \"apps/web/src/bindings/*.ts\"",
+    "types": "cargo test --no-run -q -p patchwork-server && rm -rf apps/web/src/bindings && cargo test -q -p patchwork-server export_bindings",
     "check": "pnpm types && pnpm typecheck && pnpm format:check && cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings"
   },
   "devDependencies": {

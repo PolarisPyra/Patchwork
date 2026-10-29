@@ -4,19 +4,19 @@ import type { LogLevel } from "./LogLevel";
 /**
  * How much each log in `logs/<launch>/` records, as VS Code sets each of its logs.
  */
-export type LoggingSettings = {
+export type LoggingSettings = { 
 /**
  * `main.log`: Patchwork's own messages.
  */
-app: LogLevel,
+app: LogLevel, 
 /**
  * `window/renderer.log`: the window's errors and warnings.
  */
-window: LogLevel,
+window: LogLevel, 
 /**
  * `agents/<agent>.log`: each agent's processes and their traffic.
  */
-agents: LogLevel,
+agents: LogLevel, 
 /**
  * `imports.log`: each scan and import of saved conversations.
  */

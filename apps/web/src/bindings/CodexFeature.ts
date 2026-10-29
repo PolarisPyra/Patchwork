@@ -3,7 +3,7 @@
 /**
  * A feature flag of the installed Codex CLI, from `codex features list`.
  */
-export type CodexFeature = { name: string,
+export type CodexFeature = { name: string, 
 /**
  * `stable`, `beta`, `under development`, `deprecated`, or `removed`.
  */

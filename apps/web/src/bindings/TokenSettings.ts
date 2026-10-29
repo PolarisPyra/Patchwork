@@ -4,33 +4,33 @@ import type { AgentKind } from "./AgentKind";
 /**
  * Settings that trade a little convenience for fewer tokens spent.
  */
-export type TokenSettings = {
+export type TokenSettings = { 
 /**
  * Shows the token counts under each finished reply.
  */
-showUsage: boolean,
+showUsage: boolean, 
 /**
  * A context above this is flagged, and a cold task this large is asked about first.
  */
-warnAbove: number,
+warnAbove: number, 
 /**
  * Asks before a large task whose prompt cache has expired is resumed.
  */
-askBeforeResume: boolean,
+askBeforeResume: boolean, 
 /**
  * The context size at which Claude compacts mid-task. 0 leaves Claude's own, near the
  * model's full window.
  */
-claudeCompactWindow: number,
+claudeCompactWindow: number, 
 /**
  * Set once the 200k default for `claude_compact_window` replaced the old default, 0, so
  * choosing 0 again sticks.
  */
-compactWindowDefaulted: boolean,
+compactWindowDefaulted: boolean, 
 /**
  * Model for new tasks, per agent. A missing agent uses the CLI's own default.
  */
-defaultModels: { [key in AgentKind]?: string },
+defaultModels: { [key in AgentKind]?: string }, 
 /**
  * Names a new chat or task with a title its provider writes from the first message,
  * rather than that message's first line.

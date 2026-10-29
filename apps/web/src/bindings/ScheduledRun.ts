@@ -4,7 +4,7 @@ import type { RunOutcome } from "./RunOutcome";
 /**
  * One time a scheduled task's slot came round.
  */
-export type ScheduledRun = {
+export type ScheduledRun = { 
 /**
  * When it started, or for a skipped run the slot it missed, in Unix milliseconds.
  */

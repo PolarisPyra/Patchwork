@@ -4,15 +4,15 @@ import type { GoalStatus } from "./GoalStatus";
 /**
  * A condition the agent keeps working toward until it is met (`/goal`).
  */
-export type Goal = { objective: string, status: GoalStatus,
+export type Goal = { objective: string, status: GoalStatus, 
 /**
  * Unix epoch milliseconds.
  */
-startedAt: number,
+startedAt: number, 
 /**
  * Evaluator checks that came back unmet (Claude).
  */
-checks: number | null,
+checks: number | null, 
 /**
  * What the agent reports having spent on the goal (Codex).
  */

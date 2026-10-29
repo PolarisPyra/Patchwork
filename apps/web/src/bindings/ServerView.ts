@@ -4,19 +4,19 @@ import type { ToolInfo } from "./ToolInfo";
 /**
  * A server as the settings show it, without its environment and header values.
  */
-export type ServerView = { name: string,
+export type ServerView = { name: string, 
 /**
  * `off`, `starting`, `ready`, or `error`.
  */
-status: string, tools: Array<ToolInfo>, error: string | null,
+status: string, tools: Array<ToolInfo>, error: string | null, 
 /**
  * See `identity`.
  */
-identity: string, command?: string | null, args?: Array<string>, env?: { [key in string]: string }, url?: string | null, headers?: { [key in string]: string }, disabled?: boolean,
+identity: string, command?: string | null, args?: Array<string>, env?: { [key in string]: string }, url?: string | null, headers?: { [key in string]: string }, disabled?: boolean, 
 /**
  * Tools left out of API turns, by name.
  */
-disabledTools?: Array<string>,
+disabledTools?: Array<string>, 
 /**
  * Claude Code and Codex turns use Patchwork's copy instead of starting their own, for a
  * server that cannot run twice.

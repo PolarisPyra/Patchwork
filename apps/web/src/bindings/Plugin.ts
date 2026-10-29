@@ -5,7 +5,7 @@ import type { PluginHook } from "./PluginHook";
 /**
  * A plugin bundle: a folder with a `plugin.json`, the hooks it runs, and the apps it names.
  */
-export type Plugin = {
+export type Plugin = { 
 /**
  * The folder name, and what `disabled_plugins` records.
  */

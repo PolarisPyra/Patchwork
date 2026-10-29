@@ -11,56 +11,56 @@ import type { TokenUsage } from "./TokenUsage";
 import type { ToolCall } from "./ToolCall";
 import type { TurnTrees } from "./TurnTrees";
 
-export type Message = { id: string,
+export type Message = { id: string, 
 /**
  * Who spoke: the person, or the agent that answered (see `Role`).
  */
-role: Role, text: string,
+role: Role, text: string, 
 /**
  * Unix epoch milliseconds.
  */
-createdAt: number, status: MessageStatus, tools: Array<ToolCall>, plan: Array<PlanStep>,
+createdAt: number, status: MessageStatus, tools: Array<ToolCall>, plan: Array<PlanStep>, 
 /**
  * Project-relative paths the agent edited during this message.
  */
-files: Array<string>, error: string | null, approvals: Array<Approval>,
+files: Array<string>, error: string | null, approvals: Array<Approval>, 
 /**
  * Files, folders, and images the user dropped into the message.
  */
-attachments: Array<Attachment>,
+attachments: Array<Attachment>, 
 /**
  * Sent while a turn was running, to steer that turn rather than start one.
  */
-steer: boolean,
+steer: boolean, 
 /**
  * Sent while a turn was running and still waiting for it to end; then it starts the next turn.
  */
-queued: boolean,
+queued: boolean, 
 /**
  * Background shell commands still running after the reply ended; they keep the turn going.
  */
-background: Array<BackgroundTask>,
+background: Array<BackgroundTask>, 
 /**
  * Cut short by a steering message; the agent answered it in the next reply.
  */
-cutOff: boolean,
+cutOff: boolean, 
 /**
  * A safety classifier blocked part of the reply; the agent's stated reason.
  */
-refusal: Refusal | null,
+refusal: Refusal | null, 
 /**
  * The reply's text, reasoning, and tool calls in the order they happened. Replies saved
  * before this was kept have none.
  */
-parts: Array<Part>,
+parts: Array<Part>, 
 /**
  * When the reply finished (ms since epoch); None while it runs.
  */
-finishedAt: number | null,
+finishedAt: number | null, 
 /**
  * Tokens the reply has used; None for agents that do not report usage.
  */
-usage: TokenUsage | null,
+usage: TokenUsage | null, 
 /**
  * The project before and after the turn that wrote the reply, so its changes can be shown
  * after they are committed or edited again. None outside git projects and for older replies.

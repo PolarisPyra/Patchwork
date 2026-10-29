@@ -13,15 +13,15 @@ import type { TokenUsage } from "./TokenUsage";
 import type { ToolCall } from "./ToolCall";
 import type { TurnTrees } from "./TurnTrees";
 
-export type AgentEvent = { "type": "messageStarted", message: Message, } | { "type": "textDelta", messageId: string, text: string, } | { "type": "thinking", messageId: string, text: string, startedAt?: number | null, endedAt?: number | null, } | { "type": "toolStarted", messageId: string, tool: ToolCall, } | { "type": "toolFinished", messageId: string, toolId: string, isError: boolean, output?: string | null, } | { "type": "planUpdated", messageId: string, steps: Array<PlanStep>, } | { "type": "fileTouched", messageId: string, path: string, } | { "type": "approvalRequested", messageId: string, approval: Approval, } | { "type": "approvalResolved", messageId: string, approvalId: string, allowed: boolean,
+export type AgentEvent = { "type": "messageStarted", message: Message, } | { "type": "textDelta", messageId: string, text: string, } | { "type": "thinking", messageId: string, text: string, startedAt?: number | null, endedAt?: number | null, } | { "type": "toolStarted", messageId: string, tool: ToolCall, } | { "type": "toolFinished", messageId: string, toolId: string, isError: boolean, output?: string | null, } | { "type": "planUpdated", messageId: string, steps: Array<PlanStep>, } | { "type": "fileTouched", messageId: string, path: string, } | { "type": "approvalRequested", messageId: string, approval: Approval, } | { "type": "approvalResolved", messageId: string, approvalId: string, allowed: boolean, 
 /**
  * The user's answers to the agent's questions, by question id.
  */
-answers?: { [key in string]: Array<string> },
+answers?: { [key in string]: Array<string> }, 
 /**
  * The rule that answered it, or that the user saved when answering it.
  */
-rule?: RuleRef | null,
+rule?: RuleRef | null, 
 /**
  * Answered by a rule, without asking.
  */
