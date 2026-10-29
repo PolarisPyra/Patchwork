@@ -3,6 +3,21 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [0.10.40] - 2026-10-28
+
+### Added
+
+- Settings → Providers now has a Download button for Claude Code, Codex and the OpenCode CLI, like the one the Antigravity CLI had. Each runs the agent's official installer and puts it where that installer normally does, and the Antigravity CLI now installs there too instead of in a folder of Patchwork's own. On Windows, only the Antigravity CLI can be downloaded this way for now.
+
+### Changed
+
+- The folders Patchwork builds from your agents and your enabled skills, in its config folder, now have names that say what they hold and sit next to the folders they come from.
+- A reply now appears a word at a time at a steady pace while it streams, with each new word fading in, instead of jumping forward in chunks, and each new step in a reply settles into place rather than popping in. Turning on reduced motion in your system settings switches this off.
+
+### Fixed
+
+- A background task Claude started, such as a command it left running, no longer stays listed as running in the chat after it has finished when Claude's report of its end goes missing.
+
 ## [0.10.39] - 2026-10-28
 
 ### Fixed
