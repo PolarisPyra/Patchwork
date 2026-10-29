@@ -44,18 +44,21 @@ function Assert-Tools {
   }
 }
 
-function Build-Installer([string]$Version) {
+function Build-Installer {
   Assert-Tools
   Invoke-Checked pnpm @('install', '--frozen-lockfile')
   Invoke-Checked pnpm @('--filter', 'patchwork-desktop', 'exec', 'tauri', 'build', '--bundles', 'nsis')
-  $built = Join-Path $repoRoot "target\release\bundle\nsis\Patchwork_${Version}_x64-setup.exe"
-  if (-not (Test-Path $built)) { Die "Expected $built after the build." }
-  $built
+  # Tauri names the installer after the version. Take the one it produced, whatever the version, so
+  # this keeps working without knowing it.
+  $built = Get-ChildItem (Join-Path $repoRoot 'target\release\bundle\nsis') -Filter '*-setup.exe' |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+  if (-not $built) { Die 'No installer found after the build.' }
+  $built.FullName
 }
 
 function Install-App {
   $version = (Get-Content -Raw apps\desktop\src-tauri\tauri.conf.json | ConvertFrom-Json).version
-  $installer = Build-Installer $version
+  $installer = Build-Installer
   # The installer replaces the app's files, which Windows keeps locked while it runs.
   if (Get-Process -Name Patchwork -ErrorAction SilentlyContinue) {
     Die "Patchwork is running. Quit it, then run the install again; the installer is at $installer."

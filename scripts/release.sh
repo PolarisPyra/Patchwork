@@ -46,6 +46,10 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
+# The one place that takes the version out of a bundle's name, shared with scripts/build.sh.
+# shellcheck source=scripts/bundle-names.sh
+source "$repo_root/scripts/bundle-names.sh"
+
 PUBLIC=https://updates.patchworkeditor.com
 STORAGE=https://ny.storage.bunnycdn.com/patchwork-releases
 WORKFLOW=release.yml
@@ -265,32 +269,39 @@ tauri_build() {
   pnpm --filter patchwork-desktop exec tauri build --bundles "$1"
 }
 
-# Sets `files` to the files a platform's build publishes.
-platform_files() {
+# Dies unless the argument names a platform, before anything is built or uploaded.
+check_platform() {
   case "$1" in
-    linux) files=(target/release/bundle/appimage/Patchwork_amd64.AppImage) ;;
-    windows) files=(target/release/bundle/nsis/*-setup.exe) ;;
-    macos) files=(target/release/bundle/dmg/*.dmg target/release/bundle/macos/Patchwork.app.tar.gz) ;;
+    linux | windows | macos) ;;
     *) die "Usage: scripts/release.sh ci-build|ci-upload linux|windows|macos" ;;
   esac
 }
 
+# Sets `files` to the files a platform's build publishes. Each is found by pattern and the newest
+# match wins, since the build and the upload are separate steps: ci_build runs before the version is
+# out of the name and ci_upload after, so the same function has to find either name.
+platform_files() {
+  case "$1" in
+    linux) files=($(ls -t target/release/bundle/appimage/*.AppImage 2> /dev/null | head -n 1 || true)) ;;
+    windows) files=($(ls -t target/release/bundle/nsis/*-setup.exe 2> /dev/null | head -n 1 || true)) ;;
+    macos)
+      # The disk image is for new installs; the updater downloads the app tarball.
+      files=($(ls -t target/release/bundle/dmg/*.dmg 2> /dev/null | head -n 1 || true)
+        target/release/bundle/macos/Patchwork.app.tar.gz)
+      ;;
+    *) die "Usage: scripts/release.sh ci-build|ci-upload linux|windows|macos" ;;
+  esac
+  (( ${#files[@]} )) || die "The $1 build has no files: nothing was built yet."
+  [[ -f "${files[0]}" ]] || die "The $1 build has no file at ${files[0]}."
+}
+
 ci_build() {
-  local platform="${1:-}" files=() file
-  platform_files "$platform"
+  local platform="${1:-}" files=() file version stable was i dir
+  check_platform "$platform"
   # A tag pushed without `scripts/release.sh` still builds with its own version.
   if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then set_version "${GITHUB_REF_NAME#v}"; fi
   case "$platform" in
-    linux)
-      tauri_build appimage
-      # Tauri names the file after the version. The release keeps one name across versions,
-      # which the updater looks for.
-      local version built
-      version=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
-      built="target/release/bundle/appimage/Patchwork_${version}_amd64.AppImage"
-      [[ -f "$built" ]] || die "Expected $built after the build."
-      mv -f "$built" target/release/bundle/appimage/Patchwork_amd64.AppImage
-      ;;
+    linux) tauri_build appimage ;;
     windows) tauri_build nsis ;;
     macos)
       # The disk image is for new installs; the updater downloads Patchwork.app.tar.gz and unpacks
@@ -301,6 +312,18 @@ ci_build() {
       ;;
   esac
   platform_files "$platform"
+  # Tauri names each bundle after its version. The version comes out of it here, before anything is
+  # uploaded or signed, so every release publishes the same file names.
+  version=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
+  for i in "${!files[@]}"; do
+    dir=$(dirname "${files[$i]}")
+    was=$(basename "${files[$i]}")
+    stable=$(stable_bundle_name "${files[$i]}" "$version")
+    [[ "$stable" != "$was" ]] || continue
+    mv -f "${files[$i]}" "$dir/$stable"
+    files[i]="$dir/$stable"
+    echo "Named $was as $stable."
+  done
   for file in "${files[@]}"; do
     [[ -f "$file" ]] || die "Expected $file after the build."
   done
@@ -391,8 +414,16 @@ ci_release() {
   curl -fsS -X POST -H "AccessKey: $BUNNY_API_KEY" "https://api.bunny.net/purge?url=$PUBLIC/latest.json"
   echo "Published $PUBLIC/latest.json"
 
-  # The installers stay on the update server; the GitHub release keeps the tag's notes.
-  gh release create "$tag" --title "Patchwork $tag" --notes-file RELEASE_NOTES.md
+  # The installers are attached to the release as well as published to the update server, under the
+  # same names the server uses. GitHub serves the newest release's copy of an asset at
+  # /releases/latest/download/<name>, so with these names every release answers the same download
+  # links and the README can point at them without naming a tag.
+  local files_to_upload=()
+  while IFS= read -r asset; do
+    files_to_upload+=("$dir/$(jq -r .name <<< "$asset")")
+  done < <(jq -c '.[]' <<< "$built")
+  gh release create "$tag" --title "Patchwork $tag" --notes-file RELEASE_NOTES.md \
+    "${files_to_upload[@]}"
 }
 
 # Withdraws a release that went wrong: latest.json goes back to the release before it, so copies

@@ -20,8 +20,11 @@ Release workflow (GitHub Actions)       on the v26.1.0 tag
 Installed copies (0.10.10 and newer)    read latest.json, download, check SHA-256 and signature, install
 ```
 
-The repo is private. The installers are not attached to GitHub releases; they live only on the
-update server.
+The repo is public. Each release carries two copies of every installer: one on the update server,
+which the app's updater reads, and one attached to the release on GitHub. The GitHub copy is what
+the README's download links use, through
+`github.com/PolarisPyra/Patchwork-ADE/releases/latest/download/<name>`, which needed the names to
+stop carrying a version (see [Versions](#versions) and `scripts/bundle-names.sh`).
 
 These files do all of it:
 
@@ -38,9 +41,24 @@ These files do all of it:
 
 ## Versions
 
-Versions are CalVer, `YY.N.P`: the two-digit year, the release number within that year, and the
-patch. Nobody works the next one out by hand: the release commands take a bump level and count it
-from the newest tag, so the number is always the one after the last release.
+Versions are CalVer, `YY.N.P`: the two-digit calendar year, the release number within that year, and
+the patch. So `26.` is 2026, `27.` is 2027, and the year rolls over on its own — `26.3.0` → `27.1.0`
+on the first release of 2027. Nobody works the next one out by hand: the release commands take a
+bump level and count it from the newest tag, so the number is always the one after the last release.
+
+The three parts are read as a calendar date, not as a growth counter. This is the one thing to keep
+straight when a number looks odd, so it is spelled out:
+
+| Part | Meaning | Starts at | Stands in for |
+| --- | --- | --- | --- |
+| `YY` | The two-digit calendar year of the release. `26` is 2026. | The clock | SemVer's major: it takes the place of the number bumped once a year |
+| `N` | Which release of that year this is, counting releases and not fixes. | `1` | SemVer's minor: the feature number |
+| `P` | Which patch on that release, for fixes to it. | `0` | SemVer's patch: the bugfix number |
+
+So in `26.2.1` you can read off "2026, the second release that year, its first patch". The mapping
+in the last column is by role only: it explains why there is no `major` or `minor` command, not that
+the numbers move the same way. `YY` does not count up from a number someone chose — it comes from the
+calendar, so it stays put all year and only moves when January does.
 
 - **Release**: `pnpm release bump` cuts the year's next release, counting the release number up and
   starting again at patch 0 (`26.1.3` → `26.2.0`). A new year starts at 1 (`26.3.0` → `27.1.0`).
@@ -166,9 +184,9 @@ same branch cancels an older one.
 | Job | Runner | Commands | Publishes |
 | --- | --- | --- | --- |
 | appimage | `ubuntu-22.04` (older glibc, so the AppImage runs on newer distributions) | `ci-build linux`, `ci-upload linux` | `Patchwork_amd64.AppImage` |
-| windows | `windows-2025`, building on a Dev Drive | `ci-build windows`, `ci-upload windows` | `Patchwork_<version>_x64-setup.exe` |
-| macos | `macos-14` (Apple silicon) | `ci-build macos`, `ci-upload macos` | `Patchwork_<version>_aarch64.dmg`, `Patchwork.app.tar.gz` |
-| release | `ubuntu-latest`, after the three above | `ci-release` | `latest.json`, the GitHub release |
+| windows | `windows-2025`, building on a Dev Drive | `ci-build windows`, `ci-upload windows` | `Patchwork_x64-setup.exe` |
+| macos | `macos-14` (Apple silicon) | `ci-build macos`, `ci-upload macos` | `Patchwork_aarch64.dmg`, `Patchwork.app.tar.gz` |
+| release | `ubuntu-latest`, after the three above | `ci-release` | `latest.json`, the GitHub release and its installers |
 
 Each build job sets the tag's version first, so a tag pushed without the script still builds with
 its own version. It builds with no secrets in its environment, then a separate step uploads the
@@ -204,12 +222,13 @@ Most of each build is compiling the Rust dependencies. A tag's run can restore c
   the same compiler. Raising it rebuilds the caches on that push.
 - macOS has no cache. Its build is short, and its minutes count ten times.
 
-### Private-repo limits
+### Actions limits
 
-A private repo gets limited Actions resources on the free plan, so the workflow stays inside them:
+The workflow is built to stay inside the free plan's Actions limits, whichever plan the repo is on:
 
-- **No artifacts.** Builds upload straight to Bunny. Artifact storage is counted across the
-  billing month, so deleted artifacts keep counting until it resets.
+- **No artifacts.** Builds upload straight to Bunny, so the installers live on the update server
+  only. Artifact storage is counted across the billing month, so deleted artifacts keep counting
+  until it resets.
 - **Caches only from `main`.** See [Caches](#caches). The repo's cache storage is 10 GB; the Linux
   and Windows dependency caches fit in it, and older ones are evicted on their own.
 - **Minutes.** The free plan has 2,000 a month. Windows minutes count twice and macOS minutes ten
@@ -228,10 +247,16 @@ Release files are served from `https://updates.patchworkeditor.com`:
 ```
 /latest.json                              the newest release; the only file that changes
 /v26.1.0/Patchwork_amd64.AppImage         one folder per tag, never overwritten
-/v26.1.0/Patchwork_26.1.0_x64-setup.exe
-/v26.1.0/Patchwork_26.1.0_aarch64.dmg
+/v26.1.0/Patchwork_x64-setup.exe
+/v26.1.0/Patchwork_aarch64.dmg
 /v26.1.0/Patchwork.app.tar.gz
 ```
+
+The file names are the same in every tag's folder. Tauri names each bundle after the version it
+built, and `ci-build` takes the version out of the name before anything is uploaded or signed
+(`scripts/bundle-names.sh`), so a file keeps one name from release to release. The updater does not
+read the name for a version: it picks its file by suffix, so it finds its download either way. The
+folder is still the tag, which is what keeps an old release downloadable as it was.
 
 `latest.json` has the shape of GitHub's release API, plus each file's signature. `body` is the
 release's section of `CHANGELOG.md`:
@@ -261,8 +286,8 @@ against the public key built into the app, so a changed file on the server, or a
 `latest.json`, can't install anything the signing key didn't sign. Dev builds and copies not
 installed from a release report new versions but don't install them.
 
-Patchwork 0.10.9 and older checked GitHub's API instead, which a private repo blocks. Those copies
-need a one-time manual download of 0.10.10 or newer.
+Patchwork 0.10.9 and older checked GitHub's API instead, which the repo being private at the time
+blocked. Those copies need a one-time manual download of 0.10.10 or newer.
 
 ### Bunny setup
 
@@ -305,7 +330,8 @@ https://updates.patchworkeditor.com/v26.1.0/Patchwork_amd64.AppImage
 ```
 
 On Linux, the AppImage runs after `chmod +x Patchwork_amd64.AppImage`. Windows uses the
-`-setup.exe`, macOS the `.dmg`. The release script prints the links for the release it cut, and
+`-setup.exe`, macOS the `.dmg`. Only the tag in that link changes from one release to the next; the
+file name stays the same. The release script prints the links for the release it cut, and
 `latest.json` always lists the newest ones.
 
 ## When a release goes wrong

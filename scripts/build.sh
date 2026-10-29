@@ -9,6 +9,10 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
+# The one place that takes the version out of a bundle's name, shared with scripts/release.sh.
+# shellcheck source=scripts/bundle-names.sh
+source "$repo_root/scripts/bundle-names.sh"
+
 die() {
   echo "$*" >&2
   exit 1
@@ -33,13 +37,19 @@ require_tools() {
   done
 }
 
+# The AppImage the build produced, as install_app installs it.
+appimage=""
+
 build_appimage() {
   require_tools
   pnpm --filter patchwork-desktop exec tauri build --bundles appimage
-  # Tauri names the file after the version. Rename it so the install step finds it.
-  local built="target/release/bundle/appimage/Patchwork_${version}_amd64.AppImage"
-  [[ -f "$built" ]] || die "Expected $built after the build."
-  mv -f "$built" target/release/bundle/appimage/Patchwork_amd64.AppImage
+  # Tauri names the file after the version. Rename it to the name every release publishes, so the
+  # AppImage installed here is the one the update server serves, under that one name.
+  local built
+  built=$(ls -t target/release/bundle/appimage/*.AppImage 2> /dev/null | head -n 1 || true)
+  [[ -n "$built" ]] || die "No AppImage found after the build."
+  appimage="target/release/bundle/appimage/$(stable_bundle_name "$built" "$version")"
+  mv -f "$built" "$appimage"
 }
 
 install_app() {
@@ -53,7 +63,7 @@ install_app() {
   build_appimage
   # Moved into place rather than written over, so a running Patchwork keeps its file and the new
   # version starts the next time it opens.
-  install -Dm755 target/release/bundle/appimage/Patchwork_amd64.AppImage "$bin_path.new"
+  install -Dm755 "$appimage" "$bin_path.new"
   mv -f "$bin_path.new" "$bin_path"
   echo "AppImage: $bin_path"
 
