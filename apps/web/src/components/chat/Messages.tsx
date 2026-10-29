@@ -176,7 +176,7 @@ export default function Messages({
       {!atEnd && (
         <button
           type="button"
-          className="absolute bottom-3 left-1/2 grid h-8 w-8 -translate-x-1/2 cursor-pointer place-items-center rounded-full border border-border bg-panel text-fg shadow-[var(--shadow-popup)] hover:bg-hover"
+          className="timeline-status-enter absolute bottom-3 left-1/2 grid h-8 w-8 -translate-x-1/2 cursor-pointer place-items-center rounded-full border border-border bg-panel text-fg shadow-[var(--shadow-popup)] hover:bg-hover"
           aria-label="Jump to latest message"
           onClick={() => void listRef.current?.scrollToEnd({ animated: true })}
         >

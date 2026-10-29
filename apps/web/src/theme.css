@@ -451,6 +451,81 @@
   }
 }
 
+/* A block that has just arrived in a reply settles into place, as Claude's timeline blocks do: it
+   fades, un-blurs and rises the last few pixels. Claude spends the first ~130ms of its 430ms at
+   zero opacity, which reads as a stutter on a row this small, so the fade starts at once. Only the
+   block still arriving carries the class, so scrolling back does not replay it. */
+.timeline-enter {
+  animation: timeline-enter 430ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+@keyframes timeline-enter {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    transform: translateY(5px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .timeline-enter {
+    animation: timeline-fade-in 430ms ease-out backwards;
+  }
+}
+
+/* A status line — "Thinking", a retry, a goal check — fades in rather than popping into the row
+   it shares with the reply, so the row does not jump when the label changes. */
+.timeline-status-enter {
+  animation: timeline-fade-in 250ms ease-in-out backwards;
+}
+@keyframes timeline-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .timeline-status-enter {
+    animation: none;
+  }
+}
+
+/* A reply's words as they arrive: each word past the last one on screen fades in where it lands,
+   rather than the whole block re-painting when a delta comes in. The delay is set per word by
+   Markdown.tsx, which spaces a step's words out over a few tens of milliseconds. */
+.stream-word-in {
+  animation: stream-word-fade 100ms linear backwards;
+}
+@keyframes stream-word-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stream-word-in {
+    animation: none;
+  }
+}
+
+/* Each block of a reply is its own layout and paint context, so a word fading in at the end of a
+   long reply repaints that block instead of the whole message. Tables and diagrams keep their own
+   containment: a table would lose its column sizing, and math and mermaid draw outside their box. */
+.md-blocks > * {
+  contain: layout;
+}
+.md-blocks > table,
+.md-blocks > :is(.katex-display, .math-display, [data-artifact], [data-mermaid]) {
+  contain: none;
+}
+
 /* Composer strips share one short height transition for mounting, collapsing, and dismissing.
    The clipped grid child keeps the composer anchored while the strip's space changes. */
 .composer-strip-presence,

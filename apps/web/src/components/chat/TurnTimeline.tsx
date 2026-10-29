@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   ArrowClockwiseIcon,
   BooksIcon,
@@ -27,6 +27,7 @@ import ProviderLogos from "~/components/ProviderLogos";
 // so swapping it in moved the messages.
 import { isGoalClearedReply } from "~/components/chat/goalPresentation";
 import Markdown from "~/components/chat/Markdown";
+import StreamedMarkdown from "~/components/chat/StreamedMarkdown";
 
 /** What a tool call does, which picks its icon, its verb, and how a group of calls is summed up. */
 type Action = "edit" | "command" | "read" | "search" | "web" | "agent" | "skill" | "other";
@@ -284,8 +285,10 @@ export default function TurnTimeline({
         )
       : steps;
   const last = steps.at(-1);
-  // Text still streaming in may skip renders in favor of input and scrolling.
-  const tail = useDeferredValue(last?.kind === "text" ? last.text : "");
+  // The block still arriving settles into place; the ones before it are already read, so a chat
+  // list that remounts them while scrolling does not replay their entrance.
+  const arriving = streaming ? shown.at(-1) : undefined;
+  const stepClass = (step: Step) => `px-1 py-0.5 pb-2${step === arriving ? " timeline-enter" : ""}`;
   const idle =
     streaming && (last === undefined || (last.kind === "work" && !last.entries.some(entryActive)));
   // A reply that only reports a cleared goal did no work, so it shows as a status, not a turn.
@@ -312,15 +315,19 @@ export default function TurnTimeline({
       )}
       {shown.map((step) =>
         step.kind === "text" ? (
-          <div key={`t${step.index}`} className="px-1 py-0.5 pb-2">
+          <div key={`t${step.index}`} className={stepClass(step)}>
             {goalCleared ? (
               <GoalClearedNotice text={step.text} live={streaming && !clearsGoal} />
             ) : (
-              <Markdown text={step === last && tail ? tail : step.text} />
+              // The text still arriving is revealed at a steady rate, a word at a time.
+              <StreamedMarkdown
+                text={step.text}
+                streaming={streaming && step === last && !goalCleared}
+              />
             )}
           </div>
         ) : step.kind === "plan" ? (
-          <div key={`p${step.index}`} className="px-1 py-0.5 pb-2">
+          <div key={`p${step.index}`} className={stepClass(step)}>
             <ProposedPlanCard markdown={step.text} />
           </div>
         ) : step.kind === "approvals" ? (
@@ -392,7 +399,7 @@ function WorkingRow({ since }: { since: number }) {
   const now = useNow(true);
   return (
     <div className="mb-1.5 border-b border-border pt-1 pb-2">
-      <div className="flex h-6 items-center px-1 text-[length:var(--fs-md)] text-fg-muted tabular-nums">
+      <div className="timeline-status-enter flex h-6 items-center px-1 text-[length:var(--fs-md)] text-fg-muted tabular-nums">
         Working for {fullElapsed(Math.max(0, now - since))}
       </div>
     </div>
@@ -468,10 +475,11 @@ function WorkGroup({
   onOpenFile?: (path: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const lastEntry = entries.at(-1);
   if (entries.length === 1) {
     return (
       <div className="pb-2">
-        <EntryRow entry={entries[0]} live={live} onOpenFile={onOpenFile} />
+        <EntryRow entry={entries[0]} live={live} entering={live} onOpenFile={onOpenFile} />
       </div>
     );
   }
@@ -505,7 +513,13 @@ function WorkGroup({
       {open && (
         <div className="flex flex-col">
           {entries.map((entry) => (
-            <EntryRow key={workKey(entry)} entry={entry} live={live} onOpenFile={onOpenFile} />
+            <EntryRow
+              key={workKey(entry)}
+              entry={entry}
+              live={live}
+              entering={live && entry === lastEntry}
+              onOpenFile={onOpenFile}
+            />
           ))}
         </div>
       )}
@@ -546,19 +560,23 @@ function editedFile(entry: Entry): string | null {
 function EntryRow({
   entry,
   live,
+  entering = false,
   onOpenFile,
 }: {
   entry: Entry;
   live: boolean;
+  /** The row has just arrived in a running reply, so it settles into place. */
+  entering?: boolean;
   onOpenFile?: (path: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const active = live && entryActive(entry);
   const Caret = open ? CaretDownIcon : CaretRightIcon;
   const file = onOpenFile ? editedFile(entry) : null;
+  const className = `min-w-0${entering ? " timeline-enter" : ""}`;
   if (file !== null && onOpenFile) {
     return (
-      <div className="min-w-0">
+      <div className={className}>
         <button type="button" title={file} onClick={() => onOpenFile(file)} className={ROW_CLASS}>
           <RowIcon>{entryIcon(entry)}</RowIcon>
           <span
@@ -575,7 +593,7 @@ function EntryRow({
     );
   }
   return (
-    <div className="min-w-0">
+    <div className={className}>
       <button
         type="button"
         aria-expanded={open}
@@ -619,7 +637,7 @@ function EntryDetails({ entry }: { entry: Entry }) {
 /** A row for work going on now, its label shimmering. */
 function LiveRow({ icon, label }: { icon: ReactNode; label: string }) {
   return (
-    <div className="flex min-h-6 min-w-0 items-center gap-1.5 px-0.5 py-0.5 text-[length:var(--fs-md)] text-fg-muted">
+    <div className="timeline-status-enter flex min-h-6 min-w-0 items-center gap-1.5 px-0.5 py-0.5 text-[length:var(--fs-md)] text-fg-muted">
       <RowIcon>{icon}</RowIcon>
       <span className="tool-shine min-w-0 truncate">{label}</span>
     </div>

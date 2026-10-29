@@ -2,6 +2,7 @@ import {
   Children,
   memo,
   useEffect,
+  useRef,
   useState,
   type ClipboardEvent,
   type ReactElement,
@@ -26,6 +27,7 @@ import {
   SKILL_CLASS,
 } from "~/components/chat/composerExtensions";
 import { selectionMarkdown } from "~/lib/markdownCopy";
+import { ANIMATED_LIMIT, wordDelay } from "~/lib/streamReveal";
 
 /** Links open in the system browser only with one of these protocols; others are shown as text. */
 const SAFE_LINK = /^(https?:|mailto:)/i;
@@ -148,21 +150,39 @@ export default memo(function Markdown({
   text,
   typed = false,
   chips = false,
+  streamed = false,
 }: {
   text: string;
   /** The user wrote the text, so an indented line is pasted text rather than a code block. */
   typed?: boolean;
   /** Shows `/goal`, `$skill`, `&agent` and `@path` as the chips the composer showed for them. */
   chips?: boolean;
+  /** The text is still arriving, so words it has just gained fade in. */
+  streamed?: boolean;
 }) {
+  // Where the last render ended, so only the words past it fade: the whole text is not re-shown,
+  // and a row the chat list remounts mid-reply does not replay the fade for words already read.
+  const revealed = useRef(-1);
+  useEffect(() => {
+    revealed.current = streamed ? text.length : 0;
+  });
+  const from = !streamed || revealed.current < 0 ? text.length : revealed.current;
+  const blocks = splitBlocks(text);
   // Each block parses on its own, so a streaming reply re-parses only its last block.
   return (
     <div
-      className="min-w-0 leading-[1.6] [word-break:break-word] selectable [&>:last-child]:mb-0 [&_p]:mt-0 [&_p]:mb-2 [&_.katex-display]:my-2 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex-display]:py-1"
+      className="md-blocks min-w-0 leading-[1.6] [word-break:break-word] selectable [&>:last-child]:mb-0 [&_p]:mt-0 [&_p]:mb-2 [&_.katex-display]:my-2 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex-display]:py-1"
       onCopy={copyMarkdown}
     >
-      {splitBlocks(text).map((block, i) => (
-        <MarkdownBlock key={i} text={block} typed={typed} chips={chips} />
+      {blocks.map((block, i) => (
+        <MarkdownBlock
+          key={i}
+          text={block.text}
+          typed={typed}
+          chips={chips}
+          // Only the last block grows while a reply streams; the ones before it are settled.
+          animateFrom={i === blocks.length - 1 ? Math.max(0, from - block.at) : block.text.length}
+        />
       ))}
     </div>
   );
@@ -332,6 +352,76 @@ function rehypeChips() {
   };
 }
 const CHIP_REHYPE_PLUGINS = [rehypeTrimBreaks, rehypeChips];
+
+/** Elements whose text arrives whole, so a word inside one is never wrapped or faded. */
+const UNWRAPPED = new Set(["code", "pre", "a", "kbd", "samp", "button", "input", "svg", "math"]);
+
+/** The characters an element renders as text, which is what a word's offset counts. */
+function textLength(node: HastNode): number {
+  if (node.type === "text") return (node.value ?? "").length;
+  return (node.children ?? []).reduce((total, child) => total + textLength(child), 0);
+}
+
+/** A formula, or any other element whose text must be left as it is. */
+function unwrapped(node: HastNode): boolean {
+  if (node.type !== "element") return false;
+  if (UNWRAPPED.has(node.tagName ?? "")) return true;
+  if (node.properties?.dataTex !== undefined) return true;
+  const classes = node.properties?.className;
+  return Array.isArray(classes) && classes.includes("katex");
+}
+
+/**
+ * Wraps each word of prose in a span, so a word that has just been revealed can fade in.
+ *
+ * Words before `from` characters into the block are wrapped too, so the elements keep their place
+ * from one render to the next, but only the ones after it animate: a word already on screen must
+ * not fade a second time. `from` counts the block's text as written, which is a few characters
+ * longer than what renders once emphasis markers are gone, so the boundary can land a word early;
+ * that is not visible.
+ */
+function rehypeWordFade(from: number) {
+  return () => (tree: HastNode) => {
+    let offset = 0;
+    /** One text node's worth of prose, each word in its own span. */
+    const words = (value: string): HastNode[] => {
+      const out: HastNode[] = [];
+      for (const piece of value.split(/(\s+)/)) {
+        if (!piece) continue;
+        const animate = offset >= from;
+        const delay = wordDelay(offset - from);
+        offset += piece.length;
+        if (!piece.trim()) {
+          out.push({ type: "text", value: piece });
+          continue;
+        }
+        out.push({
+          type: "element",
+          tagName: "span",
+          properties: animate
+            ? { className: ["stream-word", "stream-word-in"], style: `animation-delay:${delay}ms` }
+            : { className: ["stream-word"] },
+          children: [{ type: "text", value: piece }],
+        });
+      }
+      return out;
+    };
+    const walk = (node: HastNode): void => {
+      if (!node.children) return;
+      node.children = node.children.flatMap((child) => {
+        if (child.type === "text") return words(child.value ?? "");
+        if (unwrapped(child)) {
+          offset += textLength(child);
+          return [child];
+        }
+        walk(child);
+        return [child];
+      });
+    };
+    walk(tree);
+  };
+}
+
 /** Blocks whose rendered output is kept, most recently used last. */
 const PARSED_LIMIT = 1000;
 const parsed = new Map<string, ReactElement>();
@@ -339,10 +429,18 @@ const parsed = new Map<string, ReactElement>();
 let lastParsed = "";
 
 /** A block's rendered output, kept so a row the chat list remounts while scrolling is not parsed again. */
-function parseBlock(text: string, typed: boolean, chips: boolean): ReactElement {
+function parseBlock(
+  text: string,
+  typed: boolean,
+  chips: boolean,
+  animateFrom: number,
+): ReactElement {
+  // A block that is still growing is parsed every time it grows, and each of those drafts differs,
+  // so it is not kept: the cache would hold every step of the reply.
+  const animated = animateFrom < text.length && text.length <= ANIMATED_LIMIT;
   // Typed text and text with chips parse differently, so each is cached under its own key.
   const key = `${chips ? "chips:" : ""}${typed ? "typed:" : ""}${text}`;
-  let element = parsed.get(key);
+  let element = animated ? undefined : parsed.get(key);
   if (element) {
     parsed.delete(key);
   } else {
@@ -350,10 +448,14 @@ function parseBlock(text: string, typed: boolean, chips: boolean): ReactElement 
     element = ReactMarkdown({
       children: text,
       remarkPlugins: typed ? TYPED_REMARK_PLUGINS : REMARK_PLUGINS,
-      rehypePlugins: chips ? CHIP_REHYPE_PLUGINS : REHYPE_PLUGINS,
+      rehypePlugins: [
+        ...(chips ? CHIP_REHYPE_PLUGINS : REHYPE_PLUGINS),
+        ...(animated ? [rehypeWordFade(animateFrom)] : []),
+      ],
       components,
       skipHtml: true,
     });
+    if (animated) return element;
     if (lastParsed && key.startsWith(lastParsed)) parsed.delete(lastParsed);
     if (parsed.size >= PARSED_LIMIT) parsed.delete(parsed.keys().next().value!);
     lastParsed = key;
@@ -366,12 +468,15 @@ const MarkdownBlock = memo(function MarkdownBlock({
   text,
   typed,
   chips,
+  animateFrom,
 }: {
   text: string;
   typed: boolean;
   chips: boolean;
+  /** Characters of the block that were on screen before this render; words after them fade in. */
+  animateFrom: number;
 }) {
-  return parseBlock(text, typed, chips);
+  return parseBlock(text, typed, chips, animateFrom);
 });
 
 /** An opening or closing code fence: its marker, then the rest of the line. */
@@ -382,13 +487,21 @@ const DEFINITION = /^ {0,3}\[[^\]\n]+\]:/m;
  * not indented, and not a list item or quote, which would merge with a list or quote above. */
 const BLOCK_START = /^(?![-*+>]|\d{1,9}[.)])\S/;
 
+/** A block of Markdown, and where it starts in the text it was cut from. */
+interface Block {
+  text: string;
+  /** Its offset in the source text, which places the words that have just arrived. */
+  at: number;
+}
+
 /** Cuts Markdown into pieces that render the same parsed apart as together: at blank lines outside
  * code fences, before a line that `BLOCK_START` allows. Text with definitions stays whole. */
-function splitBlocks(text: string): string[] {
-  if (DEFINITION.test(text)) return [text];
+function splitBlocks(text: string): Block[] {
+  if (DEFINITION.test(text)) return [{ text, at: 0 }];
   const lines = text.split("\n");
-  const blocks: string[] = [];
+  const blocks: Block[] = [];
   let start = 0;
+  let at = 0;
   let fence: string | null = null;
   for (let i = 0; i < lines.length; i++) {
     const marker = FENCE.exec(lines[i]);
@@ -407,11 +520,13 @@ function splitBlocks(text: string): string[] {
       i + 1 < lines.length &&
       BLOCK_START.test(lines[i + 1])
     ) {
-      blocks.push(lines.slice(start, i).join("\n"));
+      blocks.push({ text: lines.slice(start, i).join("\n"), at });
+      // The blank line that ends the block is dropped, so the next block starts past it.
+      at += lines.slice(start, i + 1).join("\n").length + 1;
       start = i + 1;
     }
   }
-  blocks.push(lines.slice(start).join("\n"));
+  blocks.push({ text: lines.slice(start).join("\n"), at });
   return blocks;
 }
 
