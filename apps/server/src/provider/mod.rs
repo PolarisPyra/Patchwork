@@ -848,6 +848,10 @@ pub enum TaskEvent {
         summary: Option<String>,
         output: Option<String>,
     },
+    /// Every task the agent still has running, by its id. This is the agent's level signal, sent
+    /// whenever the set changes rather than once per task: a task missing from it has ended, even
+    /// if the report of its end never arrived. Claude sends it; the others report only edges.
+    Level { live: Vec<String> },
 }
 
 /// What one JSONL line means for the turn.
@@ -859,7 +863,8 @@ pub enum Parsed {
     Event(AgentEvent),
     SessionId(String),
     SlashCommands(Vec<ProviderSlashCommand>),
-    /// A task the agent reports on: started, moved to the background, progressing, or ended.
+    /// A task the agent reports on: started, moved to the background, progressing, ended, or the
+    /// set of those still running.
     Task(TaskEvent),
     /// Subscription usage the agent reported along the way.
     Usage(Vec<UsageWindow>),

@@ -2,9 +2,10 @@
 //! open, and which of them are listed under the message they started in.
 //!
 //! Claude reports each task in the stream, and the CLI reports its end by itself, so a task it
-//! reports holds stdin open until it ends. Codex reports a command or subagent only through the
-//! call that started it. One still open when its turn completes is listed, but Codex never reports
-//! it ending, so it holds nothing and the turn ends with it.
+//! reports holds stdin open until it ends. Claude also sends the full set of tasks still running
+//! whenever it changes, which ends a task whose own end never reached us. Codex reports a command
+//! or subagent only through the call that started it. One still open when its turn completes is
+//! listed, but Codex never reports it ending, so it holds nothing and the turn ends with it.
 use std::collections::HashMap;
 
 use crate::provider::TaskEvent;
@@ -64,6 +65,7 @@ impl Background {
                 summary,
                 output,
             } => self.ended(&task_id, status, summary, output),
+            TaskEvent::Level { live } => self.level(&live),
         }
     }
 
@@ -153,23 +155,51 @@ impl Background {
             .map(|(id, e)| (e.order, id.clone()))
             .collect();
         open.sort_unstable();
+        open.iter()
+            .flat_map(|(_, tool_id)| self.finish(tool_id, TaskStatus::Stopped))
+            .collect()
+    }
+
+    /// Ends every task the agent's level leaves out. The agent sends the full set of live tasks
+    /// whenever it changes, so a task it no longer names has ended, whether or not its own end
+    /// was reported; without this, a lost end leaves the task listed as running for good. A task
+    /// the level names before the agent has reported it starting is left for that report, which
+    /// is what lists it.
+    fn level(&mut self, live: &[String]) -> Vec<AgentEvent> {
+        let gone: Vec<String> = self
+            .tasks
+            .iter()
+            .filter(|(_, e)| !e.ended)
+            .filter(|(_, e)| e.task.task_id.as_ref().is_some_and(|id| !live.contains(id)))
+            .map(|(tool_id, _)| tool_id.clone())
+            .collect();
+        gone.iter()
+            .flat_map(|tool_id| self.finish(tool_id, TaskStatus::Stopped))
+            .collect()
+    }
+
+    /// Ends one open task as `status`, giving up the call it held. Returns what to publish: the
+    /// end of its listing, then its held call shown finished.
+    fn finish(&mut self, tool_id: &str, status: TaskStatus) -> Vec<AgentEvent> {
+        let Some(entry) = self.tasks.get_mut(tool_id) else {
+            return Vec::new();
+        };
+        if entry.ended {
+            return Vec::new();
+        }
+        entry.ended = true;
+        entry.task.status = status;
+        let call = entry.call.take();
         let mut events = Vec::new();
-        for (_, tool_id) in open {
-            let Some(entry) = self.tasks.get_mut(&tool_id) else {
-                continue;
-            };
-            entry.ended = true;
-            entry.task.status = TaskStatus::Stopped;
-            let call = entry.call.take();
-            if let Some(message_id) = entry.shown.clone() {
-                events.push(AgentEvent::BackgroundTaskEnded {
-                    message_id,
-                    task: entry.task.clone(),
-                });
-            }
-            if let Some((message_id, _)) = call {
-                events.push(finished_call(message_id, tool_id, true));
-            }
+        if let Some(message_id) = entry.shown.clone() {
+            events.push(AgentEvent::BackgroundTaskEnded {
+                message_id,
+                task: entry.task.clone(),
+            });
+        }
+        if let Some((message_id, call_failed)) = call {
+            let failed = status != TaskStatus::Done || call_failed;
+            events.push(finished_call(message_id, tool_id.into(), failed));
         }
         events
     }
@@ -349,6 +379,9 @@ mod tests {
     use crate::provider::claude::fixtures::AGENT_NOTIFIED;
     use crate::provider::claude::fixtures::AGENT_STARTED;
     use crate::provider::claude::fixtures::AGENT_UPDATED;
+    use crate::provider::claude::fixtures::BG_SHELL_LEVEL;
+    use crate::provider::claude::fixtures::BG_SHELL_LEVEL_EMPTY;
+    use crate::provider::claude::fixtures::BG_SHELL_LEVEL_STARTED;
     use crate::provider::claude::fixtures::BG_SHELL_NOTIFIED;
     use crate::provider::claude::fixtures::BG_SHELL_STARTED;
     use crate::provider::claude::fixtures::BG_SHELL_UPDATED;
@@ -501,6 +534,44 @@ mod tests {
                 AgentEvent::ToolFinished { tool_id, is_error: false, .. },
             ] if tool_id == "toolu_01GQWb3a5rvJrVhxJtrPz2BN"
         ));
+    }
+
+    #[test]
+    fn a_task_the_level_drops_ends_even_when_its_own_end_never_arrived() {
+        // The captured level, its start line, and the level that drops it. The task's own end
+        // (its status patch and its notification) is left out, as it is when one is lost: the
+        // level is the only report that still says the task is over.
+        let mut background = Background::default();
+        let lines = replay(
+            &mut background,
+            &[BG_SHELL_LEVEL, BG_SHELL_LEVEL_STARTED, BG_SHELL_LEVEL_EMPTY],
+        );
+        // The first level names the task before its start line, so it lists nothing.
+        assert!(lines[0].0.is_empty());
+        assert!(matches!(
+            lines[1].0.as_slice(),
+            [AgentEvent::BackgroundTaskStarted { task, .. }]
+                if task.task_id.as_deref() == Some("bad1lsfze")
+        ));
+        assert!(matches!(
+            lines[2].0.as_slice(),
+            [AgentEvent::BackgroundTaskEnded { task, .. }] if task.status == TaskStatus::Stopped
+        ));
+        // The task no longer holds the turn's stdin open, so the turn can end.
+        assert!(!lines[2].1);
+        assert!(!background.any_listed_live());
+    }
+
+    #[test]
+    fn a_level_that_still_names_the_task_leaves_it_running() {
+        let mut background = Background::default();
+        let events = replay(&mut background, &[BG_SHELL_LEVEL_STARTED, BG_SHELL_LEVEL]);
+        assert!(matches!(
+            events[0].0.as_slice(),
+            [AgentEvent::BackgroundTaskStarted { .. }]
+        ));
+        assert!(events[1].0.is_empty());
+        assert!(background.keeps_stdin_open() && background.any_listed_live());
     }
 
     #[test]

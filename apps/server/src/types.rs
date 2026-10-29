@@ -535,7 +535,8 @@ pub enum TaskStatus {
     Waiting,
     Done,
     Failed,
-    /// Stopped by the user, or ended with the process that ran it.
+    /// Stopped by the user, ended with the process that ran it, or dropped from the tasks the
+    /// agent still reports running.
     #[default]
     Stopped,
 }

@@ -622,6 +622,20 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
                 }));
             }
         }
+        // The full set of live tasks, which the CLI sends whenever it changes with REPLACE
+        // semantics. It is the only report that survives a lost end, so a task it leaves out has
+        // ended. An entry with no string id, or one marked ambient, is not a task the strip shows.
+        Some("system") if v["subtype"] == "background_tasks_changed" => {
+            let live = v["tasks"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|task| task["ambient"] != true)
+                .filter_map(|task| task["task_id"].as_str())
+                .map(String::from)
+                .collect();
+            out.push(Parsed::Task(TaskEvent::Level { live }));
+        }
         Some("system") if v["subtype"] == "api_retry" && parent.is_none() => {
             let reason = if let Some(ms) = v["no_response"]["waited_ms"].as_u64() {
                 format!("no response for {}s", ms / 1000)
@@ -949,12 +963,20 @@ pub(crate) mod fixtures {
     pub const PROMOTED_ENDED: &str = r#"{"type":"system","subtype":"task_updated","task_id":"ba28p82m4","run_id":"0mvso3an8-e7937c61","patch":{"status":"completed","end_time":1793225502117},"uuid":"45b55761-b304-4b7e-80ae-f3c7a874ff90","session_id":"b9bacc24-0d88-4c7d-a678-d532362bc092"}"#;
     pub const PROMOTED_NOTIFIED: &str = r#"{"type":"system","subtype":"task_notification","task_id":"ba28p82m4","run_id":"0mvso3an8-e7937c61","tool_use_id":"toolu_015w8zbEatreDdpozAygHZzs","status":"completed","output_file":"/home/polaris/Projects/PatchworkADE/research/claude-capture/tmp/claude-1000/-home-polaris-Projects-PatchworkADE-research-claude-capture/b9bacc24-0d88-4c7d-a678-d532362bc092/tasks/ba28p82m4.output","summary":"Background command \"node -e \"setTimeout(() => console.log(\\\"fg-done\\\"), 125000)\"\" completed (exit code 0)","uuid":"8eaaeb7f-2cb4-4ab4-9245-47379b5e8f61","session_id":"b9bacc24-0d88-4c7d-a678-d532362bc092"}"#;
     pub const PROMOTED_RESULT: &str = r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_015w8zbEatreDdpozAygHZzs","content":"Command did not complete within its 120s timeout and was moved to the background (ID: ba28p82m4)."}]},"parent_tool_use_id":null}"#;
+    // Captured from Claude Code 2.1.310 for a background command: the level signal joins the task
+    // before its own start line, and drops it after the end lines. The CLI sends the level
+    // whenever the set of live tasks changes, so it is also sent for a task whose end line is lost.
+    pub const BG_SHELL_LEVEL: &str = r#"{"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"bad1lsfze","run_id":"0mvsvvtva-f5c9405c","task_type":"local_bash","description":"Run sleep 4 in the background"}],"uuid":"cd68add3-6bbd-46c5-88db-3e94d095aca5","session_id":"a0a1cc63-46a0-4b3b-a654-2404b1179d93"}"#;
+    pub const BG_SHELL_LEVEL_STARTED: &str = r#"{"type":"system","subtype":"task_started","task_id":"bad1lsfze","run_id":"0mvsvvtva-f5c9405c","tool_use_id":"toolu_01MNY4r6LKPHXpL4HiGR2xUy","description":"Run sleep 4 in the background","is_backgrounded":true,"task_type":"local_bash","uuid":"e60c84ae-357c-497d-a7b0-db2e10014829","session_id":"a0a1cc63-46a0-4b3b-a654-2404b1179d93"}"#;
+    pub const BG_SHELL_LEVEL_EMPTY: &str = r#"{"type":"system","subtype":"background_tasks_changed","tasks":[],"uuid":"94b187f3-d096-4142-95a3-be20d1f25296","session_id":"a0a1cc63-46a0-4b3b-a654-2404b1179d93"}"#;
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use super::fixtures::AGENT_PROGRESS;
+    use super::fixtures::BG_SHELL_LEVEL;
+    use super::fixtures::BG_SHELL_LEVEL_EMPTY;
     use super::fixtures::BG_SHELL_NOTIFIED;
     use super::fixtures::BG_SHELL_STARTED;
     use super::fixtures::BG_SHELL_UPDATED;
@@ -1309,6 +1331,21 @@ mod tests {
                 output: Some(_),
                 ..
             })]
+        ));
+    }
+
+    #[test]
+    fn the_level_of_live_tasks_is_read_as_the_ids_it_names() {
+        let out = parsed(BG_SHELL_LEVEL);
+        assert!(matches!(
+            out.as_slice(),
+            [Parsed::Task(TaskEvent::Level { live })]
+                if live.as_slice() == ["bad1lsfze".to_string()]
+        ));
+        let out = parsed(BG_SHELL_LEVEL_EMPTY);
+        assert!(matches!(
+            out.as_slice(),
+            [Parsed::Task(TaskEvent::Level { live })] if live.is_empty()
         ));
     }
 
