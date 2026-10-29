@@ -446,10 +446,10 @@ function Composer({
     // Patchwork does not run /goal in OpenCode.
     ...SLASH_COMMANDS.filter((command) => agent !== "opencode" || command.name !== "/goal"),
     ...providerSlashCommands
-      // Claude lists Patchwork's skills again as the "patchwork" plugin's; they are under "$".
+      // Claude lists Patchwork's skills again as the "claude" plugin's; they are under "$".
       .filter((command) => {
         const name = command.name.replace(/^\//, "");
-        return !builtInNames.has(name) && !name.startsWith("patchwork:");
+        return !builtInNames.has(name) && !name.startsWith("claude:");
       })
       .map((command) => ({
         name: command.name.startsWith("/") ? command.name : `/${command.name}`,

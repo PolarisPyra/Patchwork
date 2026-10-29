@@ -8,13 +8,13 @@ use crate::provider::api_tools::resolve;
 use crate::types::{AgentKind, PermissionKind, Settings};
 
 /// Arguments that append the checklist and shell instructions to Claude's system prompt, and load
-/// Patchwork's skills as a plugin.
+/// Patchwork's skills from the `claude` folder as a plugin.
 pub fn launch_args(settings: &Settings) -> Vec<String> {
     let mut args = vec![
         "--append-system-prompt".to_string(),
         super::agent_instructions(settings, AgentKind::Claude),
     ];
-    if let Some(plugin) = crate::skills::claude_plugin(settings) {
+    if let Some(plugin) = crate::skills::sync(settings, "claude") {
         args.extend([
             "--plugin-dir".to_string(),
             plugin.to_string_lossy().into_owned(),

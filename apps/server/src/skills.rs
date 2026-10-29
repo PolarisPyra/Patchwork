@@ -12,10 +12,14 @@ use crate::types::{AgentKind, Settings};
 
 static CONFIG_DIR: OnceLock<PathBuf> = OnceLock::new();
 
-/// Remembers the config folder and creates the default skills folder in it.
+/// Remembers the config folder, creates the default skills folder in it, and removes the folders
+/// an older version built for the CLIs.
 pub fn init(config_dir: &Path) {
     let _ = CONFIG_DIR.set(config_dir.to_path_buf());
     let _ = std::fs::create_dir_all(default_dir());
+    for old in ["skills-enabled", "agents-for-claude", "agents-for-codex"] {
+        let _ = std::fs::remove_dir_all(config_dir.join(old));
+    }
 }
 
 /// The config folder, once `init` has run.
@@ -138,7 +142,7 @@ pub fn invoked<'a>(text: &'a str, skills: &[Skill]) -> Option<(Skill, &'a str)> 
 }
 
 /// The message as the agent should get it when it invokes `skill`: Claude runs the skill as a
-/// command of the `patchwork` plugin, Codex reads a `$name` mention, and the rest are told
+/// command of the `claude` plugin, Codex reads a `$name` mention, and the rest are told
 /// which `SKILL.md` to follow.
 pub fn invocation(agent: AgentKind, skill: &Skill, rest: &str) -> String {
     let text = match agent {
@@ -156,35 +160,24 @@ pub fn invocation(agent: AgentKind, skill: &Skill, rest: &str) -> String {
     text.trim_end().to_string()
 }
 
-/// Claude loads the skills as this plugin's, so they show up as `patchwork:<name>`.
-const PLUGIN: &str = "patchwork";
+/// Claude loads the skills as the plugin in `<config>/claude`, which takes its name from that
+/// folder, so they show up as `claude:<name>`.
+const PLUGIN: &str = "claude";
 
-/// The plugin folder in the config folder, named for what it holds: links to the enabled skills.
-const ENABLED: &str = "skills-enabled";
+/// The folder a CLI loads its skills and agents from: `<config>/<cli>`, holding `skills` and
+/// `agents`.
+pub(crate) fn cli_dir(cli: &str) -> Option<PathBuf> {
+    CONFIG_DIR.get().map(|config| config.join(cli))
+}
 
-/// A plugin folder for Claude's `--plugin-dir`, whose `skills` folder links to each enabled
-/// skill. Claude only finds skills in a plugin's own `skills` folder, the skills folder can be
-/// anywhere, and switched-off skills must stay out, so the links are brought up to date on
-/// every launch. Codex and OpenCode load the same links.
-#[cfg(unix)]
-pub fn claude_plugin(settings: &Settings) -> Option<PathBuf> {
-    let plugin = CONFIG_DIR.get()?.join(ENABLED);
-    let manifest = plugin.join(".claude-plugin");
-    std::fs::create_dir_all(&manifest).ok()?;
-    let json = format!("{{\"name\":\"{PLUGIN}\"}}\n");
-    if std::fs::read_to_string(manifest.join("plugin.json"))
-        .ok()
-        .as_deref()
-        != Some(json.as_str())
-    {
-        std::fs::write(manifest.join("plugin.json"), json).ok()?;
-    }
-    let links = plugin.join("skills");
-    // It used to be one link to the whole skills folder.
-    if links.is_symlink() {
-        let _ = std::fs::remove_file(&links);
-    }
-    std::fs::create_dir_all(&links).ok()?;
+/// Makes the `skills` folder in a CLI's folder hold a copy of each enabled skill and nothing
+/// else, and returns the CLI's folder. The copies are brought up to date on every launch, so
+/// switched-off skills stay out. They are copies rather than links, since Windows needs a
+/// privilege to make links.
+pub fn sync(settings: &Settings, cli: &str) -> Option<PathBuf> {
+    let root = cli_dir(cli)?;
+    let skills = root.join("skills");
+    std::fs::create_dir_all(&skills).ok()?;
     let wanted: Vec<(std::ffi::OsString, PathBuf)> = enabled(settings)
         .iter()
         .filter_map(|skill| {
@@ -192,27 +185,54 @@ pub fn claude_plugin(settings: &Settings) -> Option<PathBuf> {
             Some((folder.file_name()?.to_owned(), folder.to_path_buf()))
         })
         .collect();
-    for entry in std::fs::read_dir(&links).ok()?.filter_map(Result::ok) {
-        let target = std::fs::read_link(entry.path()).ok();
-        if !wanted
-            .iter()
-            .any(|(name, folder)| *name == entry.file_name() && target.as_ref() == Some(folder))
-        {
-            let _ = std::fs::remove_file(entry.path());
+    for entry in std::fs::read_dir(&skills).ok()?.filter_map(Result::ok) {
+        if !wanted.iter().any(|(name, _)| *name == entry.file_name()) {
+            remove_path(&entry.path());
         }
     }
     for (name, folder) in &wanted {
-        let link = links.join(name);
-        if !link.is_symlink() {
-            let _ = std::os::unix::fs::symlink(folder, link);
+        if let Err(e) = mirror(folder, &skills.join(name)) {
+            log::warn!(
+                "failed to copy the {} skill for {cli}: {e}",
+                name.to_string_lossy()
+            );
         }
     }
-    Some(plugin)
+    Some(root)
 }
 
-#[cfg(not(unix))]
-pub fn claude_plugin(_settings: &Settings) -> Option<PathBuf> {
-    None
+/// Makes `to` a copy of the folder `from`: files that differ are rewritten, and files `from` no
+/// longer has are removed.
+fn mirror(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let source = entry.path();
+        let target = to.join(entry.file_name());
+        if source.is_dir() {
+            mirror(&source, &target)?;
+            continue;
+        }
+        let bytes = std::fs::read(&source)?;
+        if std::fs::read(&target).ok().as_deref() != Some(bytes.as_slice()) {
+            // Written whole and then moved in, so a turn starting at the same time never reads half.
+            let part = to.join(format!("{}.part", uuid::Uuid::new_v4().simple()));
+            std::fs::write(&part, bytes)?;
+            std::fs::rename(&part, &target)?;
+        }
+    }
+    for entry in std::fs::read_dir(to)? {
+        let entry = entry?;
+        if !from.join(entry.file_name()).exists() {
+            remove_path(&entry.path());
+        }
+    }
+    Ok(())
+}
+
+/// Removes a file or a folder with everything in it, without following links inside it.
+fn remove_path(path: &Path) {
+    let _ = std::fs::remove_dir_all(path).or_else(|_| std::fs::remove_file(path));
 }
 
 /// The agents' own skills folders under the home folder.
@@ -228,22 +248,18 @@ const AGENT_SKILLS: [&str; 8] = [
 ];
 
 /// Every folder agents read skills from, which they may read without asking: Patchwork's skills
-/// folder, the links to its enabled skills, and the agents' own skills folders.
+/// folder, each CLI's copies of the enabled skills, and the agents' own skills folders.
 pub fn folders(settings: &Settings) -> Vec<PathBuf> {
     let mut out = vec![dir(settings)];
-    out.extend(CONFIG_DIR.get().map(|config| config.join(ENABLED)));
+    out.extend(
+        ["claude", "codex", "opencode"]
+            .iter()
+            .filter_map(|cli| Some(cli_dir(cli)?.join("skills"))),
+    );
     if let Some(home) = crate::provider::home_dir() {
         out.extend(AGENT_SKILLS.iter().map(|folder| home.join(folder)));
     }
     out
-}
-
-/// The folder agents load skills from: the links to the enabled skills, or the skills folder
-/// itself where there are no links.
-pub fn loaded_dir(settings: &Settings) -> PathBuf {
-    claude_plugin(settings)
-        .map(|plugin| plugin.join("skills"))
-        .unwrap_or_else(|| dir(settings))
 }
 
 /// Watches the skills folder until dropped.

@@ -197,11 +197,13 @@ impl Runner {
             }
             AgentKind::Claude | AgentKind::Antigravity | AgentKind::OpenCode => None,
         };
-        let skills_dir = Some(
-            crate::skills::loaded_dir(&settings)
-                .to_string_lossy()
-                .into_owned(),
-        );
+        // Codex and OpenCode load skills from a folder of their own; Claude's comes with its launch.
+        let skills_dir = match agent {
+            AgentKind::Codex => crate::skills::sync(&settings, "codex"),
+            AgentKind::OpenCode => crate::skills::sync(&settings, "opencode"),
+            AgentKind::Claude | AgentKind::Antigravity | AgentKind::Api => None,
+        }
+        .map(|cli| cli.join("skills").to_string_lossy().into_owned());
         let guarded = crate::permissions::guarded(&settings.permissions, project_id.as_deref());
         // The custom agents, for the CLIs that can start them as subagents.
         let agents = match agent {
