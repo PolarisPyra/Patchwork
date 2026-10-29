@@ -2,8 +2,11 @@
 //! a file in the file manager. On Wayland a window a program opens is only raised if the request
 //! carries an activation token from the compositor, so these pass one on when there is one.
 
+#[cfg(target_os = "linux")]
 use crate::Error;
-use std::process::{Command, Stdio};
+use std::process::Command;
+#[cfg(target_os = "linux")]
+use std::process::Stdio;
 
 /// Passes `token` to a program the app starts. The desktop reads it from `XDG_ACTIVATION_TOKEN`,
 /// and does not raise the window the program opens without it.

@@ -40,6 +40,17 @@ fn command(agent: &str) -> Option<String> {
     Some(format!("'{quoted}' {HOOK_ARG} {agent}"))
 }
 
+/// The hook command for Codex. On Windows Codex runs hooks in PowerShell, which reads a quoted
+/// path as a string rather than a program unless `&` calls it.
+fn codex_command() -> Option<String> {
+    if !cfg!(windows) {
+        return command("codex");
+    }
+    let exe = std::env::current_exe().ok()?;
+    let quoted = exe.to_string_lossy().replace('\'', "''");
+    Some(format!("& '{quoted}' {HOOK_ARG} codex"))
+}
+
 /// `-c` overrides that run the hook before Codex's tools the rules guard: the shell, file
 /// patches, and MCP tools. Codex only runs a hook it trusts, so the hook's hash is trusted too.
 pub fn codex_args(spec: &TurnSpec) -> Vec<String> {
@@ -56,7 +67,7 @@ pub fn codex_args(spec: &TurnSpec) -> Vec<String> {
     if tools.is_empty() || super::mcp::relay_file().is_none() {
         return Vec::new();
     }
-    let Some(command) = command("codex") else {
+    let Some(command) = codex_command() else {
         return Vec::new();
     };
     // The user may take a while to answer a request the hook holds.
@@ -145,6 +156,19 @@ fn list_codex_hook(hooks: &str, root: &str) -> Option<(String, String)> {
         .and_then(|h| Some((h["key"].as_str()?.into(), h["currentHash"].as_str()?.into())))
 }
 
+/// The hook command for Antigravity. `exec` is for a POSIX shell; on Windows, where the shell
+/// may be cmd, PowerShell, or Git Bash, a path with forward slashes and no spaces runs in each.
+fn antigravity_command() -> Option<String> {
+    if cfg!(windows) {
+        let exe = std::env::current_exe().ok()?;
+        let path = exe.to_string_lossy().replace('\\', "/");
+        if !path.contains(' ') {
+            return Some(format!("{path} {HOOK_ARG} antigravity"));
+        }
+    }
+    Some(format!("exec {}", command("antigravity")?))
+}
+
 /// Writes the hooks file Antigravity loads from a folder added with `--add-dir`, and returns
 /// that folder. The file stays the same, so it is written once.
 pub fn antigravity_dir() -> Option<std::path::PathBuf> {
@@ -152,7 +176,7 @@ pub fn antigravity_dir() -> Option<std::path::PathBuf> {
     let dir = relay.parent()?.join("antigravity-hook");
     let hooks = json!({"hooks": {"PreToolUse": [{
         "matcher": "*",
-        "hooks": [{"type": "command", "command": format!("exec {}", command("antigravity")?), "timeout": 86400}],
+        "hooks": [{"type": "command", "command": antigravity_command()?, "timeout": 86400}],
     }]}});
     let file = dir.join(".agents").join("hooks.json");
     let text = serde_json::to_string_pretty(&hooks).ok()?;

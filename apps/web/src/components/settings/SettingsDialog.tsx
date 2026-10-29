@@ -836,20 +836,29 @@ function CliProviderRows({ settings, updateSettings }: PaneProps) {
     if (typeof path === "string") await setPath(kind, path);
   };
 
+  // Shows the last reading at once, then reads each agent again, and again whenever the window
+  // comes back, so a CLI installed or removed meanwhile shows without restarting.
   useEffect(() => {
     let cancelled = false;
-    for (const kind of CLI_KINDS) {
-      api.detectAgent(kind).then(
-        (s) => {
-          if (!cancelled) setStatus((prev) => ({ ...prev, [kind]: s }));
-        },
-        () => {
-          if (!cancelled) setStatus((prev) => ({ ...prev, [kind]: null }));
-        },
-      );
-    }
+    const detect = (force: boolean) => {
+      for (const kind of CLI_KINDS) {
+        api.detectAgent(kind, force).then(
+          (s) => {
+            if (!cancelled) setStatus((prev) => ({ ...prev, [kind]: s }));
+          },
+          () => {
+            if (!cancelled) setStatus((prev) => ({ ...prev, [kind]: null }));
+          },
+        );
+      }
+    };
+    detect(false);
+    detect(true);
+    const onFocus = () => detect(true);
+    window.addEventListener("focus", onFocus);
     return () => {
       cancelled = true;
+      window.removeEventListener("focus", onFocus);
     };
   }, []);
 
@@ -1536,9 +1545,10 @@ function EnvEditor({
   );
 }
 
-const basename = (path: string) => path.split("/").pop() ?? path;
+const basename = (path: string) => path.split(/[\\/]/).pop() ?? path;
 
-/** How the agents' shell is chosen. Shells come from /etc/shells; a saved shell that is no
+/** How the agents' shell is chosen. Shells come from /etc/shells, or on Windows the installed Git
+ * Bash, PowerShell, and cmd; a saved shell that is no
  * longer listed stays in the menu so the choice is still visible. */
 function EnvironmentPane({ settings, updateSettings }: PaneProps) {
   const [choices, setChoices] = useState<ShellChoices>({ shells: [], default: null });

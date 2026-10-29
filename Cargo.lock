@@ -3789,6 +3789,7 @@ dependencies = [
  "wayland-client",
  "wayland-protocols",
  "which",
+ "winreg 0.56.0",
  "x11rb",
  "xcap",
  "zbus 5.19.0",

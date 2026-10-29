@@ -275,7 +275,9 @@ fn run_command(
         .env("PATCHWORK_AGENT", context.agent)
         .env("PATCHWORK_STATUS", context.status.unwrap_or_default());
     let timeout = Duration::from_secs(timeout_secs);
-    let probe = crate::provider::run_probe(cmd, &["-c", command], timeout, |_| false)
+    let args = crate::shell_args(shell, command);
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let probe = crate::provider::run_probe(cmd, &args, timeout, |_| false)
         .ok_or_else(|| format!("did not start, or ran past {timeout_secs}s and was stopped"))?;
     let stdout = probe.stdout.trim();
     if !stdout.is_empty() {

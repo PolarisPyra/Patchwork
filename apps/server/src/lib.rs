@@ -107,13 +107,119 @@ const COLLAPSED_KEY: &str = "collapsed_sections";
 /// are removed, not only the ones in `APPDIR`.
 pub fn host_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
     let mut cmd = std::process::Command::new(program);
+    hide_console(&mut cmd);
     for (key, value) in host_env_changes() {
         match value {
             Some(value) => cmd.env(key, value),
             None => cmd.env_remove(key),
         };
     }
+    #[cfg(windows)]
+    if let Some(path) = path_var() {
+        cmd.env("PATH", path);
+    }
     cmd
+}
+
+/// The PATH to find programs on. On Windows that is the PATH as the system now has it, read from
+/// the registry ahead of the one Patchwork started with: installers write the registry, and a
+/// running app never sees it change, so a CLI installed after Patchwork opened would not be found
+/// until it restarted. Read at most every few seconds.
+pub fn path_var() -> Option<std::ffi::OsString> {
+    #[cfg(windows)]
+    {
+        use std::sync::Mutex;
+        use std::time::{Duration, Instant};
+        static CACHE: Mutex<Option<(Instant, Option<std::ffi::OsString>)>> = Mutex::new(None);
+        let mut cache = CACHE
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some((at, path)) = cache.as_ref()
+            && at.elapsed() < Duration::from_secs(3)
+        {
+            return path.clone();
+        }
+        let path = windows_path();
+        *cache = Some((Instant::now(), path.clone()));
+        path
+    }
+    #[cfg(not(windows))]
+    std::env::var_os("PATH")
+}
+
+/// Starts a console program on Windows with a console of its own that has no window. Patchwork
+/// has no console, so without this every program it starts, and every program an agent starts
+/// in turn, opens a console window. Their children share the hidden console.
+pub fn hide_console(cmd: &mut std::process::Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    let _ = cmd;
+}
+
+/// The system's PATH, then the user's, from the registry, then the one Patchwork started with.
+#[cfg(windows)]
+fn windows_path() -> Option<std::ffi::OsString> {
+    use winreg::RegKey;
+    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
+    let read = |root, key: &str| {
+        let value: String = RegKey::predef(root)
+            .open_subkey(key)
+            .ok()?
+            .get_value("Path")
+            .ok()?;
+        Some(expand_windows_vars(&value))
+    };
+    let mut paths: Vec<PathBuf> = Vec::new();
+    for value in [
+        read(
+            HKEY_LOCAL_MACHINE,
+            r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+        ),
+        read(HKEY_CURRENT_USER, "Environment"),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        paths.extend(std::env::split_paths(&value));
+    }
+    if let Some(existing) = std::env::var_os("PATH") {
+        paths.extend(std::env::split_paths(&existing));
+    }
+    let mut seen = std::collections::HashSet::new();
+    paths.retain(|p| !p.as_os_str().is_empty() && seen.insert(p.to_string_lossy().to_lowercase()));
+    std::env::join_paths(paths).ok()
+}
+
+/// `%NAME%` references in a registry value, replaced with the variables' values.
+#[cfg(windows)]
+fn expand_windows_vars(value: &str) -> String {
+    let mut out = String::new();
+    let mut rest = value;
+    while let Some(start) = rest.find('%') {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 1..];
+        match after.find('%') {
+            Some(end) => {
+                let name = &after[..end];
+                match std::env::var(name) {
+                    Ok(v) if !name.is_empty() => out.push_str(&v),
+                    _ => out.push_str(&rest[start..start + end + 2]),
+                }
+                rest = &after[end + 1..];
+            }
+            None => {
+                out.push_str(&rest[start..]);
+                rest = "";
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Patchwork's environment as `host_command` passes it on, without the AppImage's paths.
@@ -214,8 +320,11 @@ const NOT_AGENT_SHELLS: [&str; 2] = ["git-shell", "systemd-home-fallback-shell"]
 
 /// Shells from /etc/shells that are installed, for the shell choice in settings. Entries that
 /// resolve to the same binary (such as /bin/zsh and /usr/bin/zsh) are listed once, under the
-/// real path when /etc/shells has it. Windows has no such file, so agents use their default there.
+/// real path when /etc/shells has it. Windows has no such file, so its shells are looked for.
 pub fn available_shells() -> Vec<String> {
+    if cfg!(windows) {
+        return windows_shells();
+    }
     let listed: Vec<(String, PathBuf)> = std::fs::read_to_string("/etc/shells")
         .unwrap_or_default()
         .lines()
@@ -280,15 +389,71 @@ pub fn login_shell() -> Option<String> {
     None
 }
 
+/// The shells installed on Windows, best for agents first: Git Bash, since models write commands
+/// for a POSIX shell, then PowerShell and cmd. The `bash.exe` in System32 is WSL's, which runs in
+/// another system, so Git's is found from `git` or where Git installs.
+fn windows_shells() -> Vec<String> {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let find = |name: &str| which::which_in(name, path_var(), &cwd).ok();
+    let mut git_bash: Vec<PathBuf> = find("git")
+        .and_then(|git| Some(git.parent()?.parent()?.join("bin").join("bash.exe")))
+        .into_iter()
+        .collect();
+    for var in ["ProgramFiles", "LOCALAPPDATA"] {
+        if let Some(dir) = std::env::var_os(var) {
+            let programs = if var == "LOCALAPPDATA" {
+                "Programs"
+            } else {
+                ""
+            };
+            git_bash.push(PathBuf::from(dir).join(programs).join(r"Git\bin\bash.exe"));
+        }
+    }
+    let shells = [
+        git_bash.into_iter().find(|p| p.is_file()),
+        find("pwsh"),
+        find("powershell"),
+        std::env::var_os("ComSpec")
+            .map(PathBuf::from)
+            .or_else(|| find("cmd")),
+    ];
+    shells
+        .into_iter()
+        .flatten()
+        .filter(|p| p.is_file())
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect()
+}
+
 /// The shell agents run commands in: the user's choice in Settings if it is still installed,
-/// otherwise the login shell, otherwise the SHELL environment variable. None when nothing is known.
+/// otherwise the login shell, otherwise the SHELL environment variable. On Windows, which has no
+/// login shell, the best installed one comes before SHELL, which Git Bash sets to a path only it
+/// can read. None when nothing is known.
 pub fn effective_shell(chosen: Option<&str>) -> Option<String> {
     let installed = available_shells();
+    let windows_default = cfg!(windows).then(|| installed.first().cloned()).flatten();
     chosen
         .filter(|shell| installed.iter().any(|s| s == shell))
         .map(str::to_string)
         .or_else(login_shell)
+        .or(windows_default)
         .or_else(|| std::env::var("SHELL").ok().filter(|s| !s.is_empty()))
+}
+
+/// The arguments that make `shell` run `command` and exit.
+pub fn shell_args(shell: &str, command: &str) -> Vec<String> {
+    let name = Path::new(shell)
+        .file_stem()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    match name.as_str() {
+        "cmd" => vec!["/C".into(), command.into()],
+        "powershell" | "pwsh" => ["-NoProfile", "-NonInteractive", "-Command", command]
+            .map(String::from)
+            .into(),
+        _ => vec!["-c".into(), command.into()],
+    }
 }
 
 /// `thread` with only its last message and those still streaming, queued, or waiting on an
@@ -385,22 +550,35 @@ impl Server {
 
     /// Whether the Antigravity CLI (`agy`) is installed in Patchwork's CLI folder.
     pub fn antigravity_installed(&self) -> bool {
-        self.clis_dir.join("agy").is_file()
+        self.clis_dir.join(provider::antigravity::BINARY).is_file()
     }
 
     /// Downloads Antigravity's install script to a file, then runs it into Patchwork's CLI
     /// folder. The script is saved first, so the file that runs is the one that was fetched.
+    /// Windows gets the PowerShell script, which installs `agy.exe` the same way.
     pub fn install_antigravity(&self) -> Result<(), String> {
-        if cfg!(windows) {
-            return Err(
-                "Setting up the Antigravity CLI from Patchwork is for macOS and Linux for now."
-                    .into(),
-            );
-        }
         std::fs::create_dir_all(&self.clis_dir).map_err(|e| e.to_string())?;
-        let script = self.clis_dir.join("install-antigravity.sh");
+        let (name, runner): (&str, &[&str]) = if cfg!(windows) {
+            (
+                "install.ps1",
+                &[
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                ],
+            )
+        } else {
+            ("install.sh", &[])
+        };
+        let script = self.clis_dir.join(format!("install-antigravity-{name}"));
         let fetch = crate::host_command("curl")
-            .args(["-fsSL", "https://antigravity.google/cli/install.sh", "-o"])
+            .args([
+                "-fsSL",
+                &format!("https://antigravity.google/cli/{name}"),
+                "-o",
+            ])
             .arg(&script)
             .output()
             .map_err(|e| format!("Could not run curl: {e}"))?;
@@ -410,7 +588,9 @@ impl Server {
                 String::from_utf8_lossy(&fetch.stderr).trim()
             ));
         }
-        let run = crate::host_command("bash")
+        let shell = if cfg!(windows) { "powershell" } else { "bash" };
+        let run = crate::host_command(shell)
+            .args(runner)
             .arg(&script)
             .arg("--dir")
             .arg(&self.clis_dir)

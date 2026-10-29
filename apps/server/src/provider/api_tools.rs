@@ -734,22 +734,15 @@ fn grep(
 
 fn bash(command: &str, timeout: u64, root: &Path) -> Result<String, String> {
     // The command stays in the agent's process group, so stopping the turn stops it too.
-    #[cfg(unix)]
-    let mut cmd = {
-        let shell = std::env::var("SHELL")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .unwrap_or("/bin/sh".into());
-        let mut cmd = crate::host_command(shell);
-        cmd.args(["-c", command]);
-        cmd
-    };
-    #[cfg(not(unix))]
-    let mut cmd = {
-        let mut cmd = crate::host_command("cmd");
-        cmd.args(["/C", command]);
-        cmd
-    };
+    // The turn sets SHELL to the shell Settings chose. On Windows it must name a file, since Git
+    // Bash sets it to a path of its own.
+    let shell = std::env::var("SHELL")
+        .ok()
+        .filter(|s| !s.is_empty() && (!cfg!(windows) || Path::new(s).is_file()))
+        .or_else(|| crate::effective_shell(None))
+        .unwrap_or_else(|| if cfg!(windows) { "cmd" } else { "/bin/sh" }.into());
+    let mut cmd = crate::host_command(&shell);
+    cmd.args(crate::shell_args(&shell, command));
     cmd.current_dir(root)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

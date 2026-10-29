@@ -23,21 +23,30 @@ use super::tool_started;
 use super::ToolStart;
 use super::TurnSpec;
 
+/// The Antigravity CLI's file name.
+pub const BINARY: &str = if cfg!(windows) { "agy.exe" } else { "agy" };
+
 /// The Antigravity CLI: Patchwork's own install (`patchwork/clis` in the config folder),
-/// else `agy` on PATH.
+/// else `agy` on PATH, else where Antigravity's Windows installer puts it by default.
 pub fn antigravity_bin() -> Option<PathBuf> {
     let config = if cfg!(target_os = "macos") {
         home_dir().map(|h| h.join("Library/Application Support"))
+    } else if cfg!(windows) {
+        std::env::var_os("APPDATA").map(PathBuf::from)
     } else {
         std::env::var_os("XDG_CONFIG_HOME")
             .map(PathBuf::from)
             .or_else(|| home_dir().map(|h| h.join(".config")))
     };
+    let windows_default = std::env::var_os("LOCALAPPDATA")
+        .filter(|_| cfg!(windows))
+        .map(|d| PathBuf::from(d).join(r"agy\bin\agy.exe"));
     located_or(AgentKind::Antigravity, || {
         config
-            .map(|c| c.join("patchwork/clis/agy"))
+            .map(|c| c.join("patchwork").join("clis").join(BINARY))
             .filter(|p| p.is_file())
-            .or_else(|| which::which("agy").ok())
+            .or_else(|| super::find_binary("agy"))
+            .or_else(|| windows_default.filter(|p| p.is_file()))
     })
 }
 

@@ -1,6 +1,6 @@
 //! Model lists for CLIs that don't publish one. The manifest lives in the private
 //! repo; the server fetches it in the background and caches it in the config dir.
-//! Nothing is compiled in, so a provider's models appear only after a fetch succeeds.
+//! The copy in this repo is compiled in, for installs that have not fetched a newer one.
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -27,8 +27,8 @@ pub fn start(config_dir: &Path) {
         .map(|t| t.trim().to_owned())
         .filter(|t| !t.is_empty());
     let Some(token) = token else {
-        eprintln!(
-            "model manifest: {TOKEN_VAR} is not set in the environment or .env; no models will be listed"
+        log::info!(
+            "model manifest: {TOKEN_VAR} is not set in the environment or .env; listing the bundled models"
         );
         return;
     };
@@ -39,14 +39,21 @@ pub fn start(config_dir: &Path) {
     });
 }
 
-/// The cached manifest's models for `provider` ("claude", "antigravity").
-/// Empty until a fetch has succeeded.
+/// The manifest as this build was made with it, for installs that have never fetched one: a
+/// fetch needs a token, so without this they list no models and only the CLI's default.
+const BUNDLED: &str = include_str!("model-manifest.json");
+
+/// The models for `provider` ("claude", "antigravity") from the newer of the cached manifest and
+/// the bundled one.
 pub fn models(provider: &str) -> Vec<ModelOption> {
-    CACHE
+    let cached = CACHE
         .get()
         .and_then(|path| std::fs::read_to_string(path).ok())
-        .map(|text| models_in(&text, provider))
-        .unwrap_or_default()
+        .filter(|text| {
+            let parse = |t: &str| serde_json::from_str::<Value>(t).ok();
+            parse(text).is_some_and(|c| !is_newer(&parse(BUNDLED).unwrap_or_default(), Some(&c)))
+        });
+    models_in(cached.as_deref().unwrap_or(BUNDLED), provider)
 }
 
 /// `key` from the nearest `.env` above the working directory, as `KEY=value` lines.

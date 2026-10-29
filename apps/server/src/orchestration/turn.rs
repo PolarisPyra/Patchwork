@@ -244,6 +244,11 @@ impl Runner {
         let input = provider::turn_input(agent, &spec);
         let (mut cmd, scope) = scope::scoped(provider::turn_command(agent)?);
         if let Some(shell) = crate::effective_shell(server.store.settings().shell.as_deref()) {
+            // Claude Code on Windows runs its commands in Git Bash, and refuses to start when it
+            // cannot find it on PATH.
+            if cfg!(windows) && agent == AgentKind::Claude && shell.ends_with("bash.exe") {
+                cmd.env("CLAUDE_CODE_GIT_BASH_PATH", &shell);
+            }
             cmd.env("SHELL", shell);
         }
         if agent == AgentKind::Claude {

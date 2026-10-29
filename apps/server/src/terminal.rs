@@ -38,7 +38,15 @@ const OWN_ENV: [&str; 1] = ["WEBKIT_DISABLE_DMABUF_RENDERER"];
 /// The shell for a terminal in `workspace`, the project folder when there is one.
 pub fn launch(settings: &Settings, workspace: Option<&Path>) -> Launch {
     let terminal = &settings.terminal;
-    let shell = crate::effective_shell(settings.shell.as_deref()).unwrap_or_else(|| {
+    // On Windows the shell agents default to is Git Bash, which suits commands a model writes; the
+    // terminal stays in PowerShell unless a shell was chosen.
+    let chosen = settings.shell.as_deref();
+    let shell = if cfg!(windows) && chosen.is_none() {
+        None
+    } else {
+        crate::effective_shell(chosen)
+    };
+    let shell = shell.unwrap_or_else(|| {
         if cfg!(windows) {
             "powershell.exe".into()
         } else {

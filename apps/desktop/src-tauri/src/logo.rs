@@ -48,8 +48,10 @@ logos![
     "snow",
 ];
 
-/// Counts launcher icon changes, so only the latest one remaps the window.
+/// Counts launcher icon changes, so only the latest one remaps the window. Only Linux has a
+/// launcher to change.
 #[derive(Debug, Default)]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub struct LogoChanges(AtomicU64);
 
 /// Find the color way named `id`, falling back to the default.

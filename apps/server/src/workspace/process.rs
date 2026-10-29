@@ -4,6 +4,7 @@ use crate::Error;
 use std::path::Path;
 use std::process::Stdio;
 
+#[cfg(target_os = "linux")]
 use crate::types::new_id;
 
 /// Sends `signal` to the process group led by `pid`. Agent children are spawned
@@ -15,11 +16,22 @@ pub fn signal_process_group(pid: u32, signal: i32) {
     unsafe { libc::kill(-(pid as libc::pid_t), signal) };
 }
 
+/// Windows has no signals a console program can be sent, so either one ends the process with
+/// the processes it started, as `taskkill /T` finds them. Agents started through a `.cmd` shim
+/// run under `cmd.exe`, so killing the shim alone would leave the agent running.
 #[cfg(not(unix))]
-pub fn signal_process_group(_pid: u32, _signal: i32) {}
+pub fn signal_process_group(pid: u32, _signal: i32) {
+    let _ = crate::host_command("taskkill")
+        .args(["/T", "/F", "/PID"])
+        .arg(pid.to_string())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
 
-/// Signals for `signal_process_group`. Windows libc has no SIGKILL; the call is a no-op
-/// there, so the values only need to exist.
+/// Signals for `signal_process_group`. Windows libc has no SIGKILL, and the call ignores the
+/// signal there, so the values only need to exist.
 #[cfg(unix)]
 pub use libc::{SIGKILL, SIGTERM};
 #[cfg(not(unix))]
@@ -31,12 +43,17 @@ pub fn open_in_editor(root: &str, rel: &str, token: Option<&str>) -> Result<(), 
     let path = Path::new(root).join(rel);
     let fallback = if cfg!(target_os = "macos") {
         "open"
+    } else if cfg!(windows) {
+        "explorer"
     } else {
         "xdg-open"
     };
-    let candidates = ["idea", "code", "zed", fallback];
+    let candidates = ["idea", "code", "code-insiders", "cursor", "zed", fallback];
     for program in candidates {
-        let mut cmd = crate::host_command(program);
+        let Some(bin) = editor_program(program) else {
+            continue;
+        };
+        let mut cmd = crate::host_command(bin);
         crate::launch::pass_token(&mut cmd, token);
         let spawned = cmd
             .arg(&path)
@@ -55,6 +72,33 @@ pub fn open_in_editor(root: &str, rel: &str, token: Option<&str>) -> Result<(), 
         }
     }
     Err(format!("No editor found (tried {})", candidates.join(", ")).into())
+}
+
+/// The editor `program` on PATH. On Windows the editors' launchers are `.cmd` files, which only a
+/// search with the system's extensions finds, and installers that skip PATH are looked for where
+/// they install.
+fn editor_program(program: &str) -> Option<std::path::PathBuf> {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    if let Ok(found) = which::which_in(program, crate::path_var(), cwd) {
+        return Some(found);
+    }
+    if !cfg!(windows) {
+        return Some(program.into());
+    }
+    let folder = match program {
+        "code" => r"Microsoft VS Code\bin\code.cmd",
+        "code-insiders" => r"Microsoft VS Code Insiders\bin\code-insiders.cmd",
+        "cursor" => r"cursor\resources\app\bin\cursor.cmd",
+        "zed" => r"Zed\bin\zed.exe",
+        _ => return None,
+    };
+    let local = std::env::var_os("LOCALAPPDATA").map(|d| Path::new(&d).join("Programs"));
+    let system = std::env::var_os("ProgramFiles").map(std::path::PathBuf::from);
+    [local, system]
+        .into_iter()
+        .flatten()
+        .map(|dir| dir.join(folder))
+        .find(|p| p.is_file())
 }
 
 /// On KDE, brings the editor's window to the front once it shows the file. KWin's focus-stealing

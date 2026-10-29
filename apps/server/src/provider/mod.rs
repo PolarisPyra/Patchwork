@@ -115,19 +115,22 @@ fn fallback_dirs() -> Vec<PathBuf> {
 }
 
 fn find_binary(name: &str) -> Option<PathBuf> {
-    which::which(name).ok().or_else(|| {
-        let names: &[&str] = if cfg!(windows) {
-            &["exe", "cmd", "bat"]
-        } else {
-            &[""]
-        };
-        fallback_dirs().into_iter().find_map(|d| {
-            names
-                .iter()
-                .map(|ext| d.join(name).with_extension(ext))
-                .find(|p| p.is_file())
+    let cwd = std::env::current_dir().unwrap_or_default();
+    which::which_in(name, crate::path_var(), cwd)
+        .ok()
+        .or_else(|| {
+            let names: &[&str] = if cfg!(windows) {
+                &["exe", "cmd", "bat"]
+            } else {
+                &[""]
+            };
+            fallback_dirs().into_iter().find_map(|d| {
+                names
+                    .iter()
+                    .map(|ext| d.join(name).with_extension(ext))
+                    .find(|p| p.is_file())
+            })
         })
-    })
 }
 
 /// Resolves the agent CLI (searching PATH plus common install dirs, since GUI
@@ -149,11 +152,11 @@ pub fn agent_command(kind: AgentKind) -> Result<Command, String> {
             std::env::current_exe().map_err(|e| format!("Failed to find Patchwork: {e}"))?
         }
     };
-    let mut cmd = crate::host_command(&bin);
+    let mut cmd = program_command(&bin);
     if let Some(dir) = bin.parent() {
         let mut paths = vec![dir.to_path_buf()];
         paths.extend(shell_path().into_iter().flat_map(std::env::split_paths));
-        if let Some(existing) = std::env::var_os("PATH") {
+        if let Some(existing) = crate::path_var() {
             paths.extend(std::env::split_paths(&existing));
         }
         if let Ok(joined) = std::env::join_paths(paths) {
@@ -163,6 +166,51 @@ pub fn agent_command(kind: AgentKind) -> Result<Command, String> {
     Ok(cmd)
 }
 
+/// A command for the program at `bin`, past the npm shim when it is one.
+fn program_command(bin: &Path) -> Command {
+    match unwrap_cmd_shim(bin) {
+        Some((program, script)) => {
+            let mut cmd = crate::host_command(program);
+            cmd.args(script);
+            cmd
+        }
+        None => crate::host_command(bin),
+    }
+}
+
+/// What an npm `.cmd` shim on Windows starts: node with the CLI's script, or a native binary.
+/// Through the shim the agent runs under `cmd.exe`, which cannot take arguments with newlines
+/// or `%` (Rust refuses to start it with them), so a turn's instructions would fail it.
+fn unwrap_cmd_shim(bin: &Path) -> Option<(PathBuf, Option<PathBuf>)> {
+    let is_cmd = bin
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("cmd"));
+    if !cfg!(windows) || !is_cmd {
+        return None;
+    }
+    let text = std::fs::read_to_string(bin).ok()?;
+    let dir = bin.parent()?;
+    // The target is the last quoted path in the shim's folder: "%dp0%\node_modules\…".
+    let target = text
+        .split('"')
+        .filter_map(|part| part.strip_prefix("%dp0%\\"))
+        .next_back()?;
+    let target = dir.join(target);
+    if !target.is_file() {
+        return None;
+    }
+    if target
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("exe"))
+    {
+        return Some((target, None));
+    }
+    let node = Some(dir.join("node.exe"))
+        .filter(|p| p.is_file())
+        .or_else(|| find_binary("node"))?;
+    Some((node, Some(target)))
+}
+
 /// A command the user configured, such as an MCP server: found and run with the PATH their
 /// login shell sets up, as agents get it.
 pub fn user_command(program: &str) -> Command {
@@ -170,7 +218,7 @@ pub fn user_command(program: &str) -> Command {
         .into_iter()
         .flat_map(std::env::split_paths)
         .collect();
-    if let Some(existing) = std::env::var_os("PATH") {
+    if let Some(existing) = crate::path_var() {
         paths.extend(std::env::split_paths(&existing));
     }
     let path = std::env::join_paths(paths).ok();
@@ -179,7 +227,7 @@ pub fn user_command(program: &str) -> Command {
         .and_then(|p| which::which_in(program, Some(p), ".").ok())
         .or_else(|| find_binary(program))
         .unwrap_or_else(|| PathBuf::from(program));
-    let mut cmd = crate::host_command(bin);
+    let mut cmd = program_command(&bin);
     if let Some(path) = path {
         cmd.env("PATH", path);
     }
@@ -191,7 +239,9 @@ pub fn user_command(program: &str) -> Command {
 pub fn turn_command(kind: AgentKind) -> Result<Command, String> {
     if kind == AgentKind::Api || (kind == AgentKind::OpenCode && opencode::uses_serve()) {
         let exe = std::env::current_exe().map_err(|e| format!("Failed to find Patchwork: {e}"))?;
-        return Ok(Command::new(exe));
+        let mut cmd = Command::new(exe);
+        crate::hide_console(&mut cmd);
+        return Ok(cmd);
     }
     agent_command(kind)
 }
