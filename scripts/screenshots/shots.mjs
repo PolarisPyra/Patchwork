@@ -56,8 +56,15 @@ async function shot(browser, { name, mode = "goal", act }) {
 
 const browser = await chromium.launch();
 
-// A /goal being worked toward, with the reply streaming in.
-await shot(browser, { name: "grid-1" });
+// A turn still running, with its work rows opened so each step shows.
+await shot(browser, {
+  name: "grid-1",
+  act: async (page) => {
+    // A run of calls folds into one summary row; opening it lists them.
+    await page.getByRole("button", { name: /^Running npm/ }).first().click();
+    await page.waitForTimeout(400);
+  },
+});
 
 // An empty task, ready for a prompt.
 await shot(browser, { name: "grid-2", mode: "new" });
@@ -72,11 +79,13 @@ await shot(browser, {
   },
 });
 
-// Subscription usage, opened from the sidebar.
+// A finished turn, with the subscription usage open over it.
 await shot(browser, {
   name: "grid-4",
   act: async (page) => {
-    await page.getByRole("button", { name: /Usage/ }).first().click();
+    await page.locator('[data-thread-id="t1"]').first().click();
+    await page.waitForTimeout(600);
+    await page.getByRole("button", { name: "Usage" }).first().click();
     await page.waitForTimeout(700);
   },
 });

@@ -14,9 +14,9 @@
   const DAY = 86_400_000;
 
   const projects = [
-    { id: "p1", name: "checkout", path: "/home/you/code/checkout" },
-    { id: "p2", name: "landing-site", path: "/home/you/code/landing-site" },
-    { id: "p3", name: "notes-app", path: "/home/you/code/notes-app" },
+    { id: "p1", name: "acme-storefront", path: "/home/you/code/acme-storefront" },
+    { id: "p2", name: "acme-api", path: "/home/you/code/acme-api" },
+    { id: "p3", name: "acme-docs", path: "/home/you/code/acme-docs" },
   ];
 
   /** A message, shaped like the backend's. */
@@ -26,9 +26,9 @@
     text: o.text,
     createdAt: now - (o.ago ?? 0),
     status: o.status ?? "complete",
-    tools: [],
+    tools: o.tools ?? [],
     plan: [],
-    files: [],
+    files: o.files ?? [],
     error: null,
     approvals: [],
     attachments: [],
@@ -37,9 +37,9 @@
     background: [],
     cutOff: false,
     refusal: null,
-    parts: [{ type: "text", text: o.text }],
+    parts: o.parts ?? [{ type: "text", text: o.text }],
     finishedAt: o.ago ? now - o.ago + 40_000 : null,
-    usage: null,
+    usage: o.usage ?? null,
     turn: null,
   });
 
@@ -65,98 +65,154 @@
     role: null,
   });
 
-  const goalThread = thread({
-    id: "t1",
-    title: "Tidy up the release scripts",
-    ago: 3 * 60_000,
-    goal: {
-      objective: "Make every release script take the version out of a bundle's name",
-      status: "pursuing",
-      startedAt: now - 2 * 60_000,
-      checks: 1,
-      tokensUsed: null,
-      tokenBudget: null,
-      timeUsedSeconds: null,
-    },
+  /** A tool call, as the timeline draws it. */
+  const tool = (o) => ({
+    id: o.id,
+    name: o.name,
+    summary: o.summary,
+    status: o.status ?? "done",
+    subagent: null,
+    parent: null,
+    startedAt: now - (o.ago ?? 60_000),
+    endedAt: o.status === "running" ? null : now - (o.ago ?? 60_000) + 4_000,
+    output: null,
+  });
+
+  // The cart's promo code, still being written: the work rows, then the words landing.
+  const promoCode = thread({
+    id: "t0",
+    title: "Add a promo code field to the cart",
+    ago: 12 * 60_000,
     messages: [
       msg({
-        id: "m1",
+        id: "c1",
         role: "user",
-        text: "/goal Make every release script take the version out of a bundle's name",
-        ago: 3 * 60_000,
+        text: "Can you add a promo code field to the cart? It should tell people straight away if a code is wrong.",
+        ago: 12 * 60_000,
       }),
       msg({
-        id: "m2",
+        id: "c2",
         role: "assistant",
         status: "streaming",
-        ago: 2 * 60_000,
-        text: "I'll start by reading the release script to see where each bundle gets its name.",
+        ago: 40_000,
+        text: [
+          "The cart now takes a code above the total, and checks it as it is typed, so a wrong one",
+          "shows an inline error rather than waiting for the customer to reach checkout.",
+          "",
+          "It reads the same `discounts` table the checkout already uses, so a code that works in",
+          "the cart is honoured there too, and an expired one is refused in both.",
+          "",
+          "Nothing else about the total changes: the code is applied to the price, not the tax, and",
+          "the cart keeps it if the customer refreshes or comes back later.",
+        ].join("\n"),
+        tools: [
+          tool({ id: "k1", name: "Read", summary: "app/cart/page.tsx", ago: 38_000 }),
+          tool({ id: "k2", name: "Grep", summary: "discounts", ago: 30_000 }),
+          tool({ id: "k3", name: "Edit", summary: "app/cart/page.tsx", ago: 22_000 }),
+          tool({ id: "k4", name: "Bash", summary: "npm test -- cart", status: "running", ago: 8_000 }),
+        ],
+        parts: [
+          { type: "thinking", text: "Find where the cart renders the total.", startedAt: now - 39_000, endedAt: now - 36_000 },
+          { type: "tool", id: "k1" },
+          { type: "tool", id: "k2" },
+          { type: "tool", id: "k3" },
+          { type: "tool", id: "k4" },
+          {
+            type: "text",
+            text: [
+              "The cart now takes a code above the total, and checks it as it is typed, so a wrong one",
+              "shows an inline error rather than waiting for the customer to reach checkout.",
+              "",
+              "It reads the same `discounts` table the checkout already uses, so a code that works in",
+              "the cart is honoured there too, and an expired one is refused in both.",
+              "",
+              "Nothing else about the total changes: the code is applied to the price, not the tax, and",
+              "the cart keeps it if the customer refreshes or comes back later.",
+            ].join("\n"),
+          },
+        ],
       }),
     ],
   });
 
-
-  const showcase = thread({
-    id: "t0",
-    title: "Make the download links stable",
-    ago: 40 * 60_000,
+  // A finished turn, with the files it touched and the tokens it spent.
+  const searchSpeed = thread({
+    id: "t1",
+    title: "Speed up product search",
+    ago: 55 * 60_000,
     messages: [
       msg({
         id: "s1",
         role: "user",
-        text: "The release links break every version. Make the installer names stable.",
-        ago: 40 * 60_000,
+        text: "Product search takes about a second on the catalogue page. Can you make it faster?",
+        ago: 55 * 60_000,
       }),
       msg({
         id: "s2",
         role: "assistant",
-        ago: 30 * 60_000,
+        ago: 40 * 60_000,
+        files: ["app/catalogue/search.ts", "app/catalogue/page.tsx", "db/migrations/0042_search_index.sql"],
+        usage: {
+          input: 3_900,
+          cacheRead: 121_000,
+          cacheWrite: 16_200,
+          output: 1_800,
+          context: 124_100,
+        },
         text: [
-          "The name came from Tauri, which puts the version in it. I strip it after the build:",
+          "Search was scanning every product row on each keystroke. Results now come from indexed",
+          "columns, and requests wait until you pause typing, so the page answers in about 40ms.",
           "",
-          "```sh",
-          'name=${name//_${version}_/_}',
-          "```",
-          "",
-          "That leaves one name per platform, so the links hold across releases:",
-          "",
-          "| Platform | File |",
-          "| --- | --- |",
-          "| Linux | `Patchwork_amd64.AppImage` |",
-          "| Windows | `Patchwork_x64-setup.exe` |",
-          "| macOS | `Patchwork_aarch64.dmg` |",
-          "",
-          "The updater picks its file by suffix, so nothing about updating changes.",
+          "- Results keep their relevance order, and paging still works.",
+          "- If the index is missing the old scan runs instead, so a checkout deploys before the",
+          "  migration cannot break search.",
+          "- A search of one letter no longer queries the database at all.",
         ].join("\n"),
-        usage: { input: 4200, cacheRead: 131_000, cacheWrite: 18_400, output: 2_100, context: 131_400 },
-        files: ["scripts/bundle-names.sh", "scripts/release.sh"],
       }),
     ],
   });
 
   const threads = [
-    showcase,
-    goalThread,
+    promoCode,
+    searchSpeed,
     thread({
       id: "t2",
-      title: "Review the diff view",
-      ago: DAY,
+      title: "Fix the pay button in Safari",
+      ago: 5 * 60 * 60_000,
       messages: [
-        msg({ id: "m3", role: "user", text: "Show me what changed in the canvas.", ago: DAY }),
         msg({
-          id: "m4",
+          id: "m1",
+          role: "user",
+          text: "The pay button does nothing in Safari, but it is fine in Chrome.",
+          ago: 5 * 60 * 60_000,
+        }),
+        msg({
+          id: "m2",
           role: "assistant",
-          ago: DAY - 60_000,
-          text: "The canvas lists every file the turn touched, and rejecting one restores it.",
+          ago: 40 * 60_000,
+          text: "Safari drops the form submission because the pay button is removed from the page while it is still handling the click. Switching it to a disabled state fixes it in both browsers.",
         }),
       ],
     }),
     thread({
       id: "t3",
       projectId: "p2",
-      title: "Fix the broken link",
+      title: "Unknown ids should 404",
       ago: 2 * DAY,
-      messages: [msg({ id: "m5", role: "user", text: "The docs link is 404.", ago: 2 * DAY })],
+      messages: [
+        msg({
+          id: "m3",
+          role: "user",
+          text: "GET /orders/:id returns an empty 200 for ids that do not exist. It should be a 404.",
+          ago: 2 * DAY,
+        }),
+        msg({
+          id: "m4",
+          role: "assistant",
+          ago: 2 * DAY - 30_000,
+          text: "The handler returned whatever the query found, including nothing. It now answers 404 when no order matches, and the same for customers and invoices, which had the same bug.",
+        }),
+      ],
     }),
   ];
 
@@ -238,7 +294,11 @@
     get_thread: (args) => threads.find((t) => t.id === args?.id) ?? threads[0],
     get_collapsed: [],
     set_collapsed: null,
-    git_changes: [],
+    git_changes: [
+      { path: "app/catalogue/search.ts", status: "modified", additions: 46, deletions: 21, staged: false },
+      { path: "app/catalogue/page.tsx", status: "modified", additions: 18, deletions: 12, staged: false },
+      { path: "db/migrations/0042_search_index.sql", status: "added", additions: 9, deletions: 0, staged: true },
+    ],
     git_status: { branch: "main", ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [] },
     list_agent_status: [
       { kind: "claude", installed: true, version: "2.0.1", signedIn: true, detail: "Signed in" },
