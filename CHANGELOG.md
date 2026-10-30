@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.1.9] - 2026-10-30
+
+### Changed
+
+- In Settings → Providers, the Vision model picker now sits under the API providers, and Default for new tasks is a plain dropdown. Model pickers in Settings call their empty choice Default, and dropdowns there no longer darken or flash blue when clicked. The Computer use switch now decides whether the agent may use the screen without asking, and Permissions lists only Run commands for now.
+
 ## [26.1.8] - 2026-10-30
 
 ### Changed
