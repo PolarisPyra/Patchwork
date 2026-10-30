@@ -3,6 +3,22 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.1.3] - 2026-10-29
+
+### Added
+
+- Settings → Providers can now give each agent its own system prompt: a Prompt button on each agent row, for Claude Code, Codex, OpenCode and Antigravity, and a System prompt field in each API provider's form, such as DeepSeek's. The agent gets it when a task starts, after Patchwork's own instructions. Every prompt is blank until you write one.
+
+### Changed
+
+- A plugin that only runs hooks now needs just one file in its folder, holding its hooks, and is named after the folder. The separate manifest file is no longer needed, and Settings → Hooks says so when there are no plugins yet.
+
+### Fixed
+
+- A failed command that runs several programs in a row is now labelled "Failed command" in the chat. Before, it was named after its first program, so a failure in a later part read as, for example, "Failed git" even when git had worked.
+- In the Changes list, every file's added and removed line counts now sit right next to its diff button. Before, files with few removed lines left a gap there, so some counts looked far from the button.
+- Agents are now told the shell their commands really run in. Claude Code only runs bash or zsh and Codex always uses your login shell, so picking another shell in Settings used to tell them the wrong one. When your shell is fish, plugin hooks and API provider agents now run their commands in bash, which they are written for, and agents on zsh are warned about the quoting zsh needs.
+
 ## [26.1.2] - 2026-10-29
 
 ### Changed
