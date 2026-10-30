@@ -138,6 +138,102 @@ Not a CLI: Patchwork runs these itself, for any OpenAI-compatible Chat Completio
 | Output used | `reasoning_content` (DeepSeek) or `reasoning`, `content`, `tool_calls`, and `usage` (with `prompt_tokens_details.cached_tokens` or DeepSeek's `prompt_cache_hit_tokens`). |
 | Slash commands | `/compact` summarizes the conversation and keeps the summary. No `/goal`. |
 
+## Against the official docs
+
+Checked on 2026-10-30 against [Claude Code and the Claude API](https://platform.claude.com/docs/en/home),
+the [Codex app-server and OpenAI API](https://developers.openai.com/api/docs), and the
+[OpenCode v2 API](https://opencode.ai/v2/docs/api). Everything not listed here uses the documented
+call. *Unconfirmed* means the docs did not say either way.
+
+### Claude Code
+
+Not as documented:
+
+- **Output tokens.** They are read from each `assistant` message's `usage`, where `output_tokens`
+  is only the placeholder from `message_start`. The real totals are in the `result` message
+  (`usage`, `modelUsage`, which also counts subagents and compaction).
+- **Steering.** It sends `priority: "now"` with no `origin`, which the SDK documents as an
+  interrupt. `origin: {kind: "human"}` reads the message in the same turn, and `next` waits for
+  the next tool boundary, as this page says steering does.
+- **Approvals.** `--permission-prompt-tool stdio` and the raw `control_request` shapes are not
+  documented values; the allow and deny answers match the SDK's `canUseTool`.
+- **Usage limits.** The `api/oauth/usage` and `/profile` endpoints and `rate_limit_event` are
+  undocumented.
+- **Fork** copies messages into a new session instead of `--resume <id> --fork-session`, so the
+  fork loses the cache and the CLI's own history.
+
+Not used yet:
+
+- `compact_boundary` (manual or auto, tokens before) and the `get_context_usage` control request,
+  which reports the context percentage and the auto-compact threshold.
+- `set_permission_mode` and `set_model`, which change mode and model without a respawn; the `plan`
+  and `dontAsk` modes.
+- `updatedPermissions` from a request's `suggestions`, the documented "always allow".
+- The interrupt receipt and `cancel_queued`, which say which queued messages a stop dropped.
+- `permission_denied` messages and `permission_denials` on `result`.
+- `total_cost_usd`, `tool_progress` heartbeats, `subagent_retry`, and the goal being cleared after
+  an unrecoverable error.
+
+Unconfirmed: whether any structured goal event exists. Not passed: `--thinking-display summarized`,
+which holds back a reply's text after a think and sends it in one burst as the think ends.
+
+### Codex
+
+Not as documented:
+
+- **Reply text.** It is read only from `item/completed`, so a reply appears whole;
+  `item/agentMessage/delta` streams it.
+- **Usage limits.** They are read from rollout files on disk, not `account/rateLimits/read` and
+  `account/rateLimits/updated`, which also give per-model buckets.
+- **Models.** They come from `codex debug models`, not `model/list`, which gives each model's
+  efforts, default and input types. `model/list` may not carry the context window (unconfirmed).
+- **Subagents.** They are read from `subAgentActivity` items, which the docs do not list; the
+  documented item is `collabToolCall`.
+- **Approval policy.** It is sent as `on-request`, while the docs spell it `onRequest`.
+
+Not used yet:
+
+- `acceptForSession` and `acceptWithExecpolicyAmendment` on approvals. `item/permissions/requestApproval`
+  and `mcpServer/elicitation/request` are refused.
+- `thread/fork`, `thread/revert`, and `review/start`.
+- `thread/backgroundTerminals/list` and `terminate`, which would let background tasks be stopped.
+- `codexErrorInfo` codes (`ContextWindowExceeded`, `UsageLimitExceeded`, `Unauthorized`), so every
+  error shows its raw message.
+- Reasoning section breaks (`summaryPartAdded`), raw reasoning (`textDelta`), and `tokenBudget` on
+  `thread/goal/set`.
+
+Unconfirmed: `developerInstructions` on `thread/start`, `approvalsReviewer`, and the
+`<proposed_plan>` convention.
+
+### OpenCode
+
+Every route Patchwork calls exists with the documented method and body. Not as documented:
+
+- **Questions.** `question.asked` and its reply routes are not in the v2 docs, which use forms
+  (`form.created`, `POST .../form/{id}/reply`). Both are handled.
+- **Plan.** It is read from the `todowrite` tool's input; the docs list no todo route or event.
+- **Event stream.** A dropped `/api/event` stream fails the turn. The documented
+  `/api/experimental/session/{id}/log?after=` resumes from a cursor.
+
+Not used yet:
+
+- Child sessions (`parentID`), so subagents are not shown.
+- `fork`, `revert`, `diff`, and the steering inbox (cancel or re-queue, `delivery: "queue"`).
+- `always` and a message on permission replies, and saved permissions.
+- `session.usage.updated` and `cost`, `retry.scheduled`, and `step.failed`, so retries do not show.
+- `GET /api/agent`, `/api/model` and `/api/provider`.
+
+Unconfirmed: the event field names Patchwork reads (`tokens`, `delta`, the tool events), and
+whether OpenCode's own automatic compaction runs alongside Patchwork's.
+
+### API providers
+
+They speak only Chat Completions. For OpenAI's reasoning models the docs point to the Responses
+API instead. Through Chat Completions those models return no reasoning text, and their reasoning
+is not carried across tool calls. Since GPT-5.4 they also reject tools with any effort but `none`,
+and every turn sends tools. No provider speaks Anthropic's Messages API, so thinking signatures,
+`pause_turn`, prompt caching, and server-side compaction are out of reach.
+
 ## T3 Code
 
 Imports only: `~/.t3/userdata/statev2.sqlite` is opened read-only, and its Claude and Codex
