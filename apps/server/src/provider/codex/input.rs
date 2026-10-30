@@ -16,9 +16,12 @@ use crate::provider::TurnSpec;
 
 use super::{configured_model, models};
 
-/// `codex app-server` speaks JSON-RPC on stdio; `turn_input` starts the conversation.
+/// `codex app-server` speaks JSON-RPC on stdio; `turn_input` starts the conversation. Codex leaves
+/// out its `update_plan` tool unless asked, and that tool is what fills the plan above the chat box.
 pub fn turn_args() -> Vec<String> {
-    vec!["app-server".into()]
+    ["app-server", "-c", "tools.update_plan.enabled=true"]
+        .map(String::from)
+        .into()
 }
 
 /// A set compact window makes Codex compact once its context reaches it.

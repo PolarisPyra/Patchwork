@@ -28,7 +28,7 @@ export type Step =
   | { kind: "approvals"; ids: string[] };
 
 /** Calls that keep a plan the composer already shows, so the turn does not repeat it. */
-const HIDDEN_TOOLS = new Set(["TodoWrite"]);
+const HIDDEN_TOOLS = new Set(["TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet"]);
 
 /**
  * The reply's parts as steps. A reply saved before parts were kept shows its calls, then its text.

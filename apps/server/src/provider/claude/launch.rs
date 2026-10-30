@@ -89,10 +89,15 @@ pub fn agents_args(agents: &[Agent], root: &str) -> Vec<String> {
 }
 
 /// Environment for Claude's process. The claude.ai connectors are left out, since their tool
-/// lists and instructions are added to the context again whenever a session resumes. A set
-/// compact window, the chat's or Settings', makes Claude compact once its context reaches it.
+/// lists and instructions are added to the context again whenever a session resumes. Claude only
+/// offers its task list tools to newer models when asked, and they are what fills the plan above
+/// the chat box. A set compact window, the chat's or Settings', makes Claude compact once its
+/// context reaches it.
 pub fn launch_env(compact_window: u64) -> Vec<(&'static str, String)> {
-    let mut env = vec![("ENABLE_CLAUDEAI_MCP_SERVERS", "false".to_string())];
+    let mut env = vec![
+        ("ENABLE_CLAUDEAI_MCP_SERVERS", "false".to_string()),
+        ("CLAUDE_CODE_ENABLE_TODO_TOOLS", "1".to_string()),
+    ];
     if compact_window > 0 {
         env.push((
             "CLAUDE_CODE_AUTO_COMPACT_WINDOW",

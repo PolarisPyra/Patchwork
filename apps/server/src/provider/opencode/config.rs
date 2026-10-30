@@ -144,6 +144,12 @@ pub fn instructions_config(spec: &TurnSpec) -> Option<Value> {
     }
 }
 
+/// 2.x leaves out its `todowrite` tool unless asked, and that tool is what fills the plan above
+/// the chat box.
+pub fn todo_config() -> Option<Value> {
+    Some(json!({ "experimental": { "todo": true } }))
+}
+
 /// The skills folder for 2.x's `skills.paths`.
 pub fn skills_config(spec: &TurnSpec) -> Option<Value> {
     spec.skills_dir

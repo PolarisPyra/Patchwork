@@ -11,7 +11,7 @@ pub use input::{
     turn_args, user_message, steer_message, background_task, stop_task, interrupt, approval_reply,
 };
 use input::PLAN_CAPTURED;
-pub use parse::{subagent_events, SHELL_TASK, parse, goal_outcome};
+pub use parse::{subagent_events, SHELL_TASK, parse, goal_outcome, TaskList};
 pub(crate) use parse::claude_target;
 pub(super) use parse::claude_step_status;
 

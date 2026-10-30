@@ -228,12 +228,14 @@ pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)
     match agent {
         // The bridge sets up its own server, which inherits this environment. 2.x takes the
         // system prompt from the bridge, as an instruction entry on the session.
-        AgentKind::OpenCode if opencode::uses_serve() => {
-            opencode::config_content([opencode::skills_config(spec), opencode::agents_config(spec)])
-                .map(|config| ("OPENCODE_CONFIG_CONTENT", config))
-                .into_iter()
-                .collect()
-        }
+        AgentKind::OpenCode if opencode::uses_serve() => opencode::config_content([
+            opencode::skills_config(spec),
+            opencode::agents_config(spec),
+            opencode::todo_config(),
+        ])
+        .map(|config| ("OPENCODE_CONFIG_CONTENT", config))
+        .into_iter()
+        .collect(),
         AgentKind::OpenCode => std::iter::once(("PWD", spec.root.to_string()))
             .chain(
                 opencode::config_content([

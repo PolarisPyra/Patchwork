@@ -3,6 +3,7 @@
 mod goal;
 mod requests;
 mod tasks;
+mod todos;
 
 pub use goal::{goal_outcome};
 use goal::{goal_from_command};
@@ -10,6 +11,7 @@ use requests::claude_control_request;
 pub(crate) use requests::claude_target;
 pub use tasks::{subagent_events, SHELL_TASK};
 pub(super) use tasks::{claude_ended_status, claude_task_status};
+pub use todos::TaskList;
 use tasks::{subagent_of, tool_result};
 
 use serde_json::Value;

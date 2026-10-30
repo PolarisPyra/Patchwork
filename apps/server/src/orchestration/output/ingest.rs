@@ -145,6 +145,8 @@ pub(in crate::orchestration) fn ingest(
     let mut unsaved = Unsaved::default();
     // Every model request the turn has made; each reply's usage is summed from these.
     let mut requests: Vec<Request> = Vec::new();
+    // Claude's task list, shown as the plan of whichever reply changes it.
+    let mut claude_tasks = provider::claude::TaskList::default();
 
     // Kinds of output the parser had no use for, logged once each per turn, so a CLI that
     // changes how it reports something shows up in the agent log.
@@ -214,7 +216,15 @@ pub(in crate::orchestration) fn ingest(
             }
             continue;
         }
-        let parsed = provider::parse_line(turn.agent, &value, &turn.spec(), &turn.message_id);
+        let mut parsed = provider::parse_line(turn.agent, &value, &turn.spec(), &turn.message_id);
+        if turn.agent == AgentKind::Claude
+            && let Some(steps) = claude_tasks.read(&value)
+        {
+            parsed.push(Parsed::Event(AgentEvent::PlanUpdated {
+                message_id: turn.message_id.clone(),
+                steps,
+            }));
+        }
         // A subagent's frames went to its own thread above.
         let routed = turn.agent == AgentKind::Claude && value["parent_tool_use_id"].is_string();
         if parsed.is_empty() && !routed && AGENTS.logs(LogLevel::Warning) {
