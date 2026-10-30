@@ -1,5 +1,6 @@
 import { ArrowClockwiseIcon, TargetIcon } from "@phosphor-icons/react";
 import Spinner from "~/components/Spinner";
+import { RowIcon } from "~/features/chat/turn/components/Row";
 import { type Phase } from "~/features/chat/turn/lib/model";
 import { useNow } from "~/features/chat/hooks/useNow";
 import { fullElapsed } from "~/lib/util";
@@ -23,8 +24,8 @@ export default function StatusLine({ phase, since }: { phase: Phase; since: numb
           : `Working for ${fullElapsed(Math.max(0, now - since))}`;
   return (
     <div className="mb-1.5 border-b border-border pt-1 pb-2">
-      <div className="flex h-6 min-w-0 items-center gap-1.5 px-1 text-[length:var(--fs-md)] text-fg-muted tabular-nums">
-        <span className="flex flex-none opacity-70">
+      <div className="flex h-6 min-w-0 items-center gap-1.5 px-0.5 text-[length:var(--fs-md)] text-fg-muted tabular-nums">
+        <RowIcon>
           {phase.kind === "retry" ? (
             <ArrowClockwiseIcon size={15} />
           ) : phase.kind === "checking-goal" ? (
@@ -32,7 +33,7 @@ export default function StatusLine({ phase, since }: { phase: Phase; since: numb
           ) : (
             <Spinner size={13} className="text-fg-subtle" />
           )}
-        </span>
+        </RowIcon>
         <span className="min-w-0 truncate">{label}</span>
       </div>
     </div>
