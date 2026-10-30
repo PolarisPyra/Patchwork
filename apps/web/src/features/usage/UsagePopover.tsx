@@ -91,6 +91,9 @@ type Entry = {
 /** The agents with plan limits to show, whether or not they are switched on for new tasks. */
 const PLAN_AGENTS: AgentKind[] = ["claude", "codex", "antigravity"];
 
+/** How long "Up to date" stands in for the plan badge before the badge comes back. */
+const UP_TO_DATE_MS = 1200;
+
 /** Sidebar footer button that opens subscription usage for each installed agent with a plan. */
 export default function UsagePopover() {
   const [open, setOpen] = useState(false);
@@ -102,7 +105,12 @@ export default function UsagePopover() {
   /** The agent whose last refresh was turned down, and how: no new numbers, or a rate limit. */
   const [denied, setDenied] = useState<{ kind: AgentKind; how: "shake" | "denied" } | null>(null);
   /** The agent whose last refresh brought nothing new, while "Up to date" shows for it. */
-  const [upToDate, setUpToDate] = useState<{ kind: AgentKind; at: number } | null>(null);
+  const [upToDate, setUpToDate] = useState<{ kind: AgentKind } | null>(null);
+  useEffect(() => {
+    if (!upToDate) return;
+    const timer = window.setTimeout(() => setUpToDate(null), UP_TO_DATE_MS);
+    return () => window.clearTimeout(timer);
+  }, [upToDate]);
   /** When each agent's numbers were read, to tell a turned-down refresh from a new reading. */
   const readAt = useRef(new Map<AgentKind, number>());
   /** Agents whose usage is still being read; each one finishes on its own. */
@@ -139,7 +147,7 @@ export default function UsagePopover() {
         if (limitedUntil(entry, Date.now()) != null) setDenied({ kind, how: "denied" });
         else if (before != null && after === before) {
           setDenied({ kind, how: "shake" });
-          setUpToDate({ kind, at: Date.now() });
+          setUpToDate({ kind });
         }
       }
       setNow(Date.now());
@@ -222,8 +230,7 @@ export default function UsagePopover() {
                     kind={kind}
                     entry={entries[kind]}
                     now={now}
-                    upToDate={upToDate?.kind === kind ? upToDate.at : null}
-                    onFaded={() => setUpToDate(null)}
+                    upToDate={upToDate?.kind === kind}
                     hidden={kind !== current}
                   />
                 ))}
@@ -279,15 +286,13 @@ function AgentUsage({
   entry,
   now,
   upToDate,
-  onFaded,
   hidden,
 }: {
   kind: AgentKind;
   entry: Entry | undefined;
   now: number;
-  /** When a refresh of this agent brought nothing new, while that shows. */
-  upToDate: number | null;
-  onFaded: () => void;
+  /** Whether a refresh of this agent brought nothing new, while "Up to date" shows. */
+  upToDate: boolean;
   hidden: boolean;
 }) {
   const usage = entry?.usage;
@@ -316,12 +321,10 @@ function AgentUsage({
           <span className="badge badge-danger" role="status">
             Rate limited<span aria-hidden="true"> · {waitLeft(limit, now)}</span>
           </span>
-        ) : upToDate != null ? (
+        ) : upToDate ? (
           <span
-            key={upToDate}
-            className="up-to-date inline-flex h-5 items-center text-fg-subtle text-[length:var(--fs-xs)]"
+            className="inline-flex h-5 items-center text-fg-subtle text-[length:var(--fs-xs)]"
             role="status"
-            onAnimationEnd={onFaded}
           >
             Up to date
           </span>
