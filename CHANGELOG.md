@@ -3,14 +3,18 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
-## [26.2.2] - 2026-10-30
+## [26.2.4] - 2026-10-30
 
 ### Changed
 
+- The system prompt you give an API provider in Settings → Providers now comes after the project's own instructions file, so a project can no longer override it, as with the other agents.
 - While an agent works, its reply now shows "Thinking for 12s" with a grey shimmer that becomes "Thought for 12s" when done, and the separate reasoning rows are gone. Text now appears word by word even when it arrives together with a tool call, and the chat no longer jumps as a reply starts, grows or ends. The plan above the chat box now opens collapsed and keeps naming the step a stopped reply was on.
 
 ### Fixed
 
+- The system prompt you set for Antigravity in Settings → Providers now reaches it at the start of each new chat. Before, Antigravity never saw it, and a plugin hook that runs when a chat starts could stop Patchwork's permission rules from applying to Antigravity.
+- Permission rules for editing files now also apply when Antigravity writes a file. Before, its file writes slipped past those rules.
+- A change to Claude's system prompt in Settings → Providers now applies to chats you already started, from their next message. Before, a chat kept the prompt it began with.
 - In the changed files card under a reply, each file's added and removed line counts now line up in columns against the right edge, and a note such as "No changes" sits at that same edge.
 - The icons on the steps in a reply now line up with the words of the line above them, instead of sitting indented to the right.
 - Claude's reply now streams in word by word after a long think, instead of appearing all at once when the thinking ends.
