@@ -30,4 +30,6 @@ pub struct ProviderUsage {
     pub error: Option<String>,
     /// When the provider last reported these numbers (epoch ms).
     pub updated_at: Option<u64>,
+    /// While the provider is rate-limiting usage checks, when it allows the next one (epoch ms).
+    pub retry_at: Option<u64>,
 }

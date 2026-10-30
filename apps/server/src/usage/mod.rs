@@ -56,6 +56,7 @@ fn empty(kind: AgentKind) -> ProviderUsage {
         windows: vec![],
         error: None,
         updated_at: None,
+        retry_at: None,
     }
 }
 
@@ -132,11 +133,13 @@ impl UsageCache {
                     .filter(|u| !u.windows.is_empty())
                     .unwrap_or_else(|| empty(kind));
                 usage.error = Some(failure.message);
+                let wait = failure.retry_after.map(|d| d.max(MIN_REFRESH));
+                usage.retry_at = wait.map(|d| now_ms() + d.as_millis() as u64);
                 Entry {
                     fetched: now,
                     reported: false,
                     usage,
-                    blocked_until: failure.retry_after.map(|d| now + d.max(MIN_REFRESH)),
+                    blocked_until: wait.map(|d| now + d),
                 }
             }
         };

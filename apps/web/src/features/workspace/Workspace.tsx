@@ -118,12 +118,6 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     }),
     [sidebarKey],
   );
-  const agentsKey = connectedAgents.join();
-  const sidebarAgents = useMemo(
-    () => (connectedAgents.length > 0 ? connectedAgents : [defaultAgent]),
-    [agentsKey, defaultAgent],
-  );
-
   const [view, setView] = useState<SidebarView | null>("tasks");
   // The side nav Space reopens: the last view that was open.
   const lastView = useRef<SidebarView>("tasks");
@@ -428,7 +422,6 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
         {view && (
           <Sidebar
             view={view}
-            agents={sidebarAgents}
             project={project}
             projects={settings.projects}
             threads={sidebarThreads.live}

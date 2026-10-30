@@ -626,6 +626,36 @@
 @media (prefers-reduced-motion: reduce) {
   .project-flash { animation-duration: 1ms; }
 }
+/* A refresh that brought no new numbers shakes its button; one the provider rate-limited also
+   flashes it red. */
+.refresh-shake {
+  animation: refresh-shake 450ms ease-out;
+}
+.refresh-denied {
+  animation: refresh-shake 450ms ease-out, refresh-red 450ms ease-out;
+}
+@keyframes refresh-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+@keyframes refresh-red {
+  0%, 80% { background-color: var(--danger-soft); color: var(--danger); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .refresh-shake { animation: none; }
+  .refresh-denied { animation: refresh-red 450ms ease-out; }
+}
+/* "Up to date" stands in for the plan badge after a refresh that brought nothing new, then fades. */
+.up-to-date {
+  animation: up-to-date 1600ms ease-in forwards;
+}
+@keyframes up-to-date {
+  0%, 70% { opacity: 1; }
+  100% { opacity: 0; }
+}
 /* The model picker slides out to the right of its chip instead of dropping down. */
 .model-picker-panel {
   animation: model-picker-out 180ms cubic-bezier(0.2, 0.8, 0.2, 1);

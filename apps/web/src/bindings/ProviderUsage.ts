@@ -17,4 +17,8 @@ error: string | null,
 /**
  * When the provider last reported these numbers (epoch ms).
  */
-updatedAt: number | null, };
+updatedAt: number | null, 
+/**
+ * While the provider is rate-limiting usage checks, when it allows the next one (epoch ms).
+ */
+retryAt: number | null, };

@@ -16,6 +16,18 @@ function resetsIn(at: number): string {
   return `in ${m}m`;
 }
 
+/** "4m", "1h 5m": the wait left, rounded up so it never reads 0m. */
+function waitLeft(at: number, now: number): string {
+  const mins = Math.max(1, Math.ceil((at - now) / 60000));
+  return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+}
+
+/** When the provider allows the next usage check, while it is rate-limiting them. */
+function limitedUntil(entry: Entry | undefined, now: number): number | null {
+  const at = entry?.usage?.retryAt;
+  return at != null && at > now ? at : null;
+}
+
 function level(percent: number): string {
   if (percent >= 90) return "stroke-danger";
   if (percent >= 70) return "stroke-warning";
@@ -74,70 +86,79 @@ type Entry = {
   usage?: ProviderUsage;
   error?: string;
   status?: AgentStatus | null;
-  /** Why an explicit refresh did not bring new numbers. */
-  refreshNote?: string;
 };
 
-/** Sidebar footer button that opens subscription usage for each connected agent. */
-export default function UsagePopover({ agents }: { agents: AgentKind[] }) {
+/** The agents with plan limits to show, whether or not they are switched on for new tasks. */
+const PLAN_AGENTS: AgentKind[] = ["claude", "codex", "antigravity"];
+
+/** Sidebar footer button that opens subscription usage for each installed agent with a plan. */
+export default function UsagePopover() {
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<Partial<Record<AgentKind, Entry>>>({});
+  const agents = PLAN_AGENTS.filter((kind) => entries[kind]?.status?.installed !== false);
+  /** Ticks while a rate limit counts down. */
+  const [now, setNow] = useState(Date.now);
+  const limited = agents.some((kind) => limitedUntil(entries[kind], now) != null);
+  /** The agent whose last refresh was turned down, and how: no new numbers, or a rate limit. */
+  const [denied, setDenied] = useState<{ kind: AgentKind; how: "shake" | "denied" } | null>(null);
+  /** The agent whose last refresh brought nothing new, while "Up to date" shows for it. */
+  const [upToDate, setUpToDate] = useState<{ kind: AgentKind; at: number } | null>(null);
+  /** When each agent's numbers were read, to tell a turned-down refresh from a new reading. */
+  const readAt = useRef(new Map<AgentKind, number>());
   /** Agents whose usage is still being read; each one finishes on its own. */
   const [pending, setPending] = useState<AgentKind[]>([]);
   const [selected, setSelected] = useState<AgentKind | null>(null);
   const current = selected && agents.includes(selected) ? selected : agents[0];
+  /** The refresh button belongs to the agent being looked at, and reads only that one. */
+  const currentDenied = denied?.kind === current ? denied.how : null;
+  const currentLimited = limitedUntil(current && entries[current], now) != null;
   const inFlight = useRef(new Set<AgentKind>());
   const ref = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(
-    (refresh: boolean) => {
-      // An agent still being read is skipped, so a slow one is not asked twice.
-      agents.forEach(async (kind) => {
-        if (inFlight.current.has(kind)) {
-          if (refresh) {
-            setEntries((prev) => ({
-              ...prev,
-              [kind]: { ...prev[kind], refreshNote: "Still reading; refresh skipped." },
-            }));
-          }
-          return;
+  const load = useCallback((refresh: boolean, kinds: AgentKind[] = PLAN_AGENTS) => {
+    // An agent still being read is skipped, so a slow one is not asked twice.
+    kinds.forEach(async (kind) => {
+      if (inFlight.current.has(kind)) return;
+      inFlight.current.add(kind);
+      setPending((prev) => [...prev, kind]);
+      const status = await api.detectAgent(kind).catch(() => null);
+      const entry: Entry = { status };
+      if (status?.installed && status.signedIn) {
+        try {
+          entry.usage = await api.getUsage(kind, refresh);
+        } catch (e) {
+          entry.error = errorText(e);
         }
-        inFlight.current.add(kind);
-        setPending((prev) => [...prev, kind]);
-        const status = await api.detectAgent(kind).catch(() => null);
-        const entry: Entry = { status };
-        if (status?.installed && status.signedIn) {
-          try {
-            entry.usage = await api.getUsage(kind, refresh);
-          } catch (e) {
-            entry.error = errorText(e);
-          }
+      }
+      // The backend returns the last numbers when it skips a refresh, so the same reading time
+      // means no new numbers came back. Only a rate limit from the provider shows as one.
+      const before = readAt.current.get(kind);
+      const after = entry.usage?.updatedAt;
+      if (after != null) readAt.current.set(kind, after);
+      if (refresh) {
+        if (limitedUntil(entry, Date.now()) != null) setDenied({ kind, how: "denied" });
+        else if (before != null && after === before) {
+          setDenied({ kind, how: "shake" });
+          setUpToDate({ kind, at: Date.now() });
         }
-        setEntries((prev) => {
-          // The backend returns the last numbers when it throttles a refresh, so the
-          // same reading time means no new numbers came back.
-          const before = prev[kind]?.usage?.updatedAt;
-          const after = entry.usage?.updatedAt;
-          const throttled = refresh && before != null && after === before;
-          if (throttled) {
-            const time = new Date(after).toLocaleTimeString([], {
-              hour: "numeric",
-              minute: "2-digit",
-            });
-            entry.refreshNote = `Refresh is limited; showing numbers from ${time}.`;
-          }
-          return { ...prev, [kind]: entry };
-        });
-        inFlight.current.delete(kind);
-        setPending((prev) => prev.filter((k) => k !== kind));
-      });
-    },
-    [agents],
-  );
+      }
+      setNow(Date.now());
+      setEntries((prev) => ({ ...prev, [kind]: entry }));
+      inFlight.current.delete(kind);
+      setPending((prev) => prev.filter((k) => k !== kind));
+    });
+  }, []);
 
   useEffect(() => {
-    if (open) load(false);
+    if (!open) return;
+    setNow(Date.now());
+    load(false);
   }, [open, load]);
+  useEffect(() => {
+    if (!open || !limited) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [open, limited]);
   useDismiss(ref, open, () => setOpen(false));
 
   return (
@@ -171,19 +192,24 @@ export default function UsagePopover({ agents }: { agents: AgentKind[] }) {
                     key={kind}
                     kind={kind}
                     entry={entries[kind]}
+                    now={now}
                     active={kind === current}
-                    onSelect={() => setSelected(kind)}
+                    onSelect={() => {
+                      setSelected(kind);
+                      setDenied(null);
+                    }}
                   />
                 ))}
                 <button
-                  className="btn-icon mt-auto w-10"
-                  title="Refresh"
-                  aria-label="Refresh"
-                  onClick={() => load(true)}
+                  className={`btn-icon mt-auto w-10${currentDenied ? ` refresh-${currentDenied}` : ""}`}
+                  title={currentLimited ? "Rate limited" : "Refresh"}
+                  aria-label={currentLimited ? "Rate limited" : "Refresh"}
+                  onClick={() => current && load(true, [current])}
+                  onAnimationEnd={() => setDenied(null)}
                 >
                   <ArrowsClockwiseIcon
                     size={14}
-                    className={pending.length > 0 ? "spin" : undefined}
+                    className={current && pending.includes(current) ? "spin" : undefined}
                   />
                 </button>
               </div>
@@ -195,6 +221,9 @@ export default function UsagePopover({ agents }: { agents: AgentKind[] }) {
                     key={kind}
                     kind={kind}
                     entry={entries[kind]}
+                    now={now}
+                    upToDate={upToDate?.kind === kind ? upToDate.at : null}
+                    onFaded={() => setUpToDate(null)}
                     hidden={kind !== current}
                   />
                 ))}
@@ -216,22 +245,26 @@ function peak(entry: Entry | undefined): number | null {
 function AgentTab({
   kind,
   entry,
+  now,
   active,
   onSelect,
 }: {
   kind: AgentKind;
   entry: Entry | undefined;
+  now: number;
   active: boolean;
   onSelect: () => void;
 }) {
   const top = peak(entry);
+  const used = top == null ? null : `${Math.round(top)}% used`;
+  const limit = limitedUntil(entry, now) != null ? "Rate limited" : null;
   return (
     <button
       className={`grid place-items-center w-10 h-10 p-0 border-none rounded-[var(--radius-sm)] cursor-pointer ${active ? "bg-hover" : "bg-transparent hover:bg-hover/60"}`}
       role="tab"
       aria-selected={active}
       aria-label={AGENT_LABELS[kind]}
-      title={top == null ? AGENT_LABELS[kind] : `${AGENT_LABELS[kind]} · ${Math.round(top)}% used`}
+      title={[AGENT_LABELS[kind], used, limit].filter(Boolean).join(" · ")}
       onClick={onSelect}
     >
       <Ring percent={top} size={34} stroke={3}>
@@ -244,21 +277,33 @@ function AgentTab({
 function AgentUsage({
   kind,
   entry,
+  now,
+  upToDate,
+  onFaded,
   hidden,
 }: {
   kind: AgentKind;
   entry: Entry | undefined;
+  now: number;
+  /** When a refresh of this agent brought nothing new, while that shows. */
+  upToDate: number | null;
+  onFaded: () => void;
   hidden: boolean;
 }) {
   const usage = entry?.usage;
   const ready = entry?.status?.installed && entry.status.signedIn;
+  const limit = limitedUntil(entry, now);
+  // A rate limit's error reads "trying again in about N min", which the badge counts down
+  // instead, and which is out of date once the wait is over.
+  const rateLimited = usage?.retryAt != null;
   const note = !entry
     ? "Loading…"
     : !ready
       ? describeAgent(entry.status)
       : (entry.error ??
-        usage?.error ??
-        (usage?.windows.length === 0 ? "No limits reported" : null));
+        (rateLimited
+          ? null
+          : (usage?.error ?? (usage?.windows.length === 0 ? "No limits reported" : null))));
   return (
     <section
       className={`[grid-area:1/1] flex min-w-0 flex-col gap-2.5 p-2.5${hidden ? " invisible" : ""}`}
@@ -267,12 +312,24 @@ function AgentUsage({
     >
       <div className="flex items-center gap-1.5 pb-2.5 border-b border-border">
         <span className="min-w-0 flex-1 truncate font-semibold">{AGENT_LABELS[kind]}</span>
-        {usage?.plan && <span className="badge">{usage.plan}</span>}
+        {limit != null ? (
+          <span className="badge badge-danger" role="status">
+            Rate limited<span aria-hidden="true"> · {waitLeft(limit, now)}</span>
+          </span>
+        ) : upToDate != null ? (
+          <span
+            key={upToDate}
+            className="up-to-date inline-flex h-5 items-center text-fg-subtle text-[length:var(--fs-xs)]"
+            role="status"
+            onAnimationEnd={onFaded}
+          >
+            Up to date
+          </span>
+        ) : (
+          usage?.plan && <span className="badge">{usage.plan}</span>
+        )}
       </div>
       {note && <div className="text-fg-muted text-[length:var(--fs-sm)]">{note}</div>}
-      {entry?.refreshNote && (
-        <div className="text-fg-subtle text-[length:var(--fs-xs)]">{entry.refreshNote}</div>
-      )}
       {usage?.windows.map((w) => (
         <div key={w.label} className="flex items-center gap-2">
           <Ring percent={w.usedPercent} size={42} stroke={3.5}>
