@@ -6,14 +6,22 @@ point where it touches them.
 
 ## System prompts
 
-Settings → Providers gives each agent a system prompt of its own: a Prompt button on the Claude
-Code, Codex and OpenCode rows, and a field in each API provider's form. Claude Code gets it at the
-end of `--append-system-prompt`, Codex at the end of `developerInstructions`, and API providers
-at the end of Patchwork's system prompt, before the project's instructions. OpenCode 2.x gets it as
-the `patchwork-system-prompt` instruction entry on the session (`PUT
-/api/experimental/session/:id/instructions/entries/:key`), removed when the prompt is cleared;
-`opencode run` gets it as a file in its `instructions` config. Antigravity has no way to be given
-one.
+Settings → Providers gives each agent a system prompt of its own: a System Prompt button on each
+CLI's row, and a field in each API provider's form. Each agent gets it last, after Patchwork's own
+instructions:
+
+| Agent | How | A chat already started |
+| --- | --- | --- |
+| Claude Code | The end of `--append-system-prompt`, with `--system-prompt-snapshot off` | Gets the new prompt. Without the flag, Claude resumes with the prompt it recorded on the conversation's first request. A saved change also stops idle Claude processes, which were launched with the old one. |
+| Codex | The end of `developerInstructions` on `thread/start` and `thread/resume` | Keeps the prompt it started with: `thread/resume` and `collaborationMode.settings.developer_instructions` do not replace it (checked with codex-cli 0.165.0). |
+| OpenCode 2.x | The `patchwork-system-prompt` instruction entry on the session (`PUT /api/experimental/session/:id/instructions/entries/:key`), removed when the prompt is cleared. A server without the API runs the turn without it and says so on the bridge's stderr, in the agents' log. | Gets the new prompt. |
+| `opencode run` | A file in its `instructions` config | Gets the new prompt. |
+| Antigravity | A `SessionStart` hook in the `--add-dir` folder's `.agents/hooks.json` runs `patchwork --system-prompt-hook`, which answers with the prompt from `PATCHWORK_SYSTEM_PROMPT` as an `injectSteps` system message. Rules such as a `GEMINI.md` in an `--add-dir` folder are not read (checked with agy 1.4.11). | Keeps the prompt it started with: `SessionStart` runs only for a new conversation. |
+| API providers | The end of Patchwork's system prompt, after the project's `AGENTS.md` or `CLAUDE.md` | Gets the new prompt. |
+
+Antigravity's `hooks.json` keys each hook by a name (`patchwork-pretooluse-0`, …): a tool event
+holds `{matcher, hooks}` groups, and `SessionStart` lists its commands directly. It refuses a
+file in Claude Code's shape.
 
 ## The shell each agent runs
 
@@ -36,7 +44,7 @@ bash when it is fish or Nushell. The terminal panel always runs the chosen shell
 | --- | --- |
 | Detect | `claude --version`, then `claude auth status`, whose JSON says whether and how it is signed in. Home is `$CLAUDE_CONFIG_DIR` or `~/.claude`. |
 | Default model | `$ANTHROPIC_MODEL`, else `model` in `~/.claude/settings.json`. |
-| Run | `claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-mode <mode> --permission-prompt-tool stdio [--resume <session>] [--model <m>] [--effort <e>] --append-system-prompt <installed shells, then the system prompt from Settings → Providers>` |
+| Run | `claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-mode <mode> --permission-prompt-tool stdio [--resume <session>] [--model <m>] [--effort <e>] --system-prompt-snapshot off --append-system-prompt <installed shells, then the system prompt from Settings → Providers>` |
 | Access modes | Supervised `default`, Auto-accept edits `acceptEdits`, Auto `auto`, Full access `bypassPermissions`. |
 | Prompt | A stream-json `user` line on stdin, with images as base64 blocks. stdin stays open for the turn. |
 | Output used | `stream_event` text and reasoning deltas; `assistant` tool calls, token usage, and synthetic command output; `user` tool results; `system` init (session id) and the task events `task_started`, `task_updated`, `task_progress`, and `task_notification`; `rate_limit_event` (usage limits); `result` (end of turn, errors). `TodoWrite` becomes the plan, edit tools become touched files, `Task`/`Agent` calls become subagents. |
