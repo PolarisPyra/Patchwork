@@ -5,7 +5,7 @@ import { CHIP_CLASS } from "~/components/chip";
 import { formatTokens } from "~/lib/tokens";
 
 /** Context sizes to compact at, each twice the one before. */
-export const COMPACT_LEVELS = [128_000, 256_000, 512_000, 1_024_000, 2_048_000];
+export const COMPACT_LEVELS = [128_000, 256_000, 512_000];
 
 /** Context sizes a chat can compact at; 0 leaves it to the agent, near its full window. */
 const WINDOWS = [...COMPACT_LEVELS, 0];
