@@ -16,8 +16,8 @@ pub struct HookContext<'a> {
 }
 
 /// Runs the enabled plugins' command hooks for `context.event`, one after another, in the user's
-/// shell in the project folder. Returns `"<plugin name>: <why>"` for each one that failed; a
-/// failed hook never stops the turn.
+/// shell, or bash where it is not a POSIX one, in the project folder. Returns
+/// `"<plugin name>: <why>"` for each one that failed; a failed hook never stops the turn.
 pub fn run_hooks(settings: &Settings, context: &HookContext<'_>) -> Vec<String> {
     let commands: Vec<(String, String, u64)> = list(settings)
         .into_iter()
@@ -44,7 +44,7 @@ pub fn run_hooks(settings: &Settings, context: &HookContext<'_>) -> Vec<String> 
     if commands.is_empty() {
         return Vec::new();
     }
-    let Some(shell) = crate::system::effective_shell(None) else {
+    let Some(shell) = crate::system::posix_shell(crate::system::effective_shell(None)) else {
         return vec!["hooks: no shell to run them in".into()];
     };
     commands

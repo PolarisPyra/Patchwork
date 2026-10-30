@@ -237,9 +237,34 @@ pub fn shell_var(name: &str) -> Option<String> {
     valid.then(|| login_shell_value(name, true)).flatten()
 }
 
+/// The shell `agent` runs its commands in. Each CLI picks its own, so it is not always the one
+/// Settings chose: Claude Code runs only bash or zsh, and looks for zsh first when SHELL is
+/// neither; Codex always runs the account's login shell. The rest run SHELL, which the turn sets
+/// to this, so it reads POSIX commands: OpenCode refuses fish and Nushell, and Patchwork's own
+/// agent calls its tool `bash`. Windows keeps the chosen shell. None when it is not known.
+pub fn agent_shell(agent: AgentKind, chosen: Option<&str>) -> Option<String> {
+    use crate::system::{find_shell, is_posix, login_shell, posix_shell, shell_name};
+    let shell = crate::system::effective_shell(chosen);
+    if cfg!(windows) {
+        return shell;
+    }
+    match agent {
+        AgentKind::Claude => shell
+            .filter(|shell| matches!(shell_name(shell).as_str(), "bash" | "zsh"))
+            .or_else(|| find_shell("zsh"))
+            .or_else(|| find_shell("bash")),
+        AgentKind::Codex => login_shell().filter(|shell| is_posix(shell)),
+        AgentKind::Antigravity | AgentKind::OpenCode | AgentKind::Api => posix_shell(shell),
+    }
+}
+
 /// `$name` in the user's login shell, read with a marker since profile scripts may print too.
+/// Only a POSIX shell or fish reads the probe; Nushell, for one, would print `$name` as it is.
 fn login_shell_value(name: &str, interactive: bool) -> Option<String> {
     let shell = crate::system::login_shell().or_else(|| std::env::var("SHELL").ok())?;
+    if !crate::system::is_posix(&shell) && crate::system::shell_name(&shell) != "fish" {
+        return None;
+    }
     let mut cmd = crate::system::host_command(shell);
     let flags = if interactive { "-lic" } else { "-lc" };
     cmd.args([

@@ -12,7 +12,10 @@ pub(crate) mod time;
 
 pub use host::{hide_console, host_command, host_env, path_var};
 pub use dirs::{Dirs, dirs};
-pub use shells::{available_shells, effective_shell, login_shell, shell_args};
+pub use shells::{
+    available_shells, effective_shell, find_shell, is_posix, login_shell, posix_shell, shell_args,
+    shell_name,
+};
 
 pub fn now_ms() -> u64 {
     std::time::SystemTime::now()

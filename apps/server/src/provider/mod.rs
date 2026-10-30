@@ -6,7 +6,10 @@ mod parsed;
 mod probe;
 mod turn;
 
-pub use locate::{set_agent_paths, codex_binary, agent_command, user_command, turn_command, shell_var};
+pub use locate::{
+    set_agent_paths, codex_binary, agent_command, agent_shell, user_command, turn_command,
+    shell_var,
+};
 use locate::{located, located_or, find_binary};
 pub use parsed::{TaskEvent, Parsed, GoalUpdate};
 pub(crate) use parsed::{one_line};

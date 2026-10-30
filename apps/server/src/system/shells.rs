@@ -130,14 +130,47 @@ pub fn effective_shell(chosen: Option<&str>) -> Option<String> {
         .or_else(|| std::env::var("SHELL").ok().filter(|s| !s.is_empty()))
 }
 
-/// The arguments that make `shell` run `command` and exit.
-pub fn shell_args(shell: &str, command: &str) -> Vec<String> {
-    let name = Path::new(shell)
+/// Shells that read the POSIX command language, which models write their commands in.
+const POSIX_SHELLS: [&str; 5] = ["sh", "bash", "zsh", "dash", "ksh"];
+
+/// A shell's program name, such as `zsh` for `/usr/bin/zsh` or `pwsh` for `pwsh.exe`.
+pub fn shell_name(shell: &str) -> String {
+    Path::new(shell)
         .file_stem()
         .and_then(|n| n.to_str())
         .unwrap_or_default()
-        .to_ascii_lowercase();
-    match name.as_str() {
+        .to_ascii_lowercase()
+}
+
+/// Whether `shell` reads POSIX commands, as fish and Nushell do not.
+pub fn is_posix(shell: &str) -> bool {
+    POSIX_SHELLS.contains(&shell_name(shell).as_str())
+}
+
+/// The installed shell named `name`, from PATH.
+pub fn find_shell(name: &str) -> Option<String> {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    which::which_in(name, path_var(), cwd)
+        .ok()
+        .map(|path| path.to_string_lossy().into_owned())
+}
+
+/// `shell` if it reads POSIX commands, else bash, else `sh`: where commands written for bash run,
+/// such as a model's or a plugin's hooks, when the user's shell reads another language. Windows
+/// keeps its shell, since agents there are told which one runs.
+pub fn posix_shell(shell: Option<String>) -> Option<String> {
+    if cfg!(windows) {
+        return shell;
+    }
+    shell
+        .filter(|shell| is_posix(shell))
+        .or_else(|| find_shell("bash"))
+        .or_else(|| Some("/bin/sh".into()))
+}
+
+/// The arguments that make `shell` run `command` and exit.
+pub fn shell_args(shell: &str, command: &str) -> Vec<String> {
+    match shell_name(shell).as_str() {
         "cmd" => vec!["/C".into(), command.into()],
         "powershell" | "pwsh" => ["-NoProfile", "-NonInteractive", "-Command", command]
             .map(String::from)

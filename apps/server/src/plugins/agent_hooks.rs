@@ -24,7 +24,7 @@ pub struct AgentHook {
     pub timeout_secs: u64,
 }
 
-/// What a hook runs: a command in the user's shell, or a check Patchwork carries itself.
+/// What a hook runs: a shell command, or a check Patchwork carries itself.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "type",
@@ -98,7 +98,7 @@ pub fn run_tool_hook(hook: &AgentHook, input: &Value, root: &str) -> Option<Stri
 
 fn run_command(hook: &AgentHook, command: &str, input: &Value, root: &str) -> Option<String> {
     let event = hook.event.name();
-    let shell = crate::system::effective_shell(None)?;
+    let shell = crate::system::posix_shell(crate::system::effective_shell(None))?;
     let mut cmd = crate::system::host_command(&shell);
     cmd.current_dir(root)
         .args(crate::system::shell_args(&shell, command))

@@ -13,13 +13,13 @@ const MAX_PIPE: usize = 1_000_000;
 
 pub(super) fn bash(command: &str, timeout: u64, root: &Path) -> Result<String, String> {
     // The command stays in the agent's process group, so stopping the turn stops it too.
-    // The turn sets SHELL to the shell Settings chose. On Windows it must name a file, since Git
-    // Bash sets it to a path of its own.
+    // The turn sets SHELL to a shell that reads the POSIX commands the model writes. On Windows it
+    // must name a file, since Git Bash sets it to a path of its own.
     let shell = std::env::var("SHELL")
         .ok()
         .filter(|s| !s.is_empty() && (!cfg!(windows) || Path::new(s).is_file()))
-        .or_else(|| crate::system::effective_shell(None))
-        .unwrap_or_else(|| if cfg!(windows) { "cmd" } else { "/bin/sh" }.into());
+        .or_else(|| crate::system::effective_shell(None));
+    let shell = crate::system::posix_shell(shell).unwrap_or_else(|| "cmd".into());
     let mut cmd = crate::system::host_command(&shell);
     cmd.args(crate::system::shell_args(&shell, command));
     cmd.current_dir(root)
