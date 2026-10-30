@@ -248,8 +248,6 @@ mod tests {
                 "--verbose",
                 "--include-partial-messages",
                 "--forward-subagent-text",
-                "--thinking-display",
-                "summarized",
                 "--permission-mode",
                 "bypassPermissions",
                 "--permission-prompt-tool",

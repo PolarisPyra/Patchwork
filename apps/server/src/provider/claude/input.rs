@@ -27,10 +27,9 @@ pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
         "--include-partial-messages",
         // A subagent's own text and reasoning, for its thread; without this only its calls arrive.
         "--forward-subagent-text",
-        // Newer models send no reasoning text unless asked, so a long think streamed nothing
-        // and the reply looked hung.
-        "--thinking-display",
-        "summarized",
+        // No `--thinking-display summarized`: with it the reply's text after a think arrived all
+        // at once, as the think ended, instead of streaming. The status line's timer shows a long
+        // think is still going.
         "--permission-mode",
         mode,
     ]
