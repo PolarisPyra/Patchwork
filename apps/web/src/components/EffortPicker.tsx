@@ -17,7 +17,7 @@ const label = (effort: string) =>
   LABELS[effort] ?? effort.charAt(0).toUpperCase() + effort.slice(1);
 
 /**
- * The thinking levels each CLI takes on every model it has. Used only for a model whose own
+ * The effort levels each CLI takes on every model it has. Used only for a model whose own
  * levels the CLI does not report: `claude --effort` and `agy --effort` take all five, Codex takes
  * `effort` on each turn, and the rest are the levels most providers share.
  */
@@ -92,8 +92,8 @@ export default function EffortPicker({
           className={CHIP_CLASS}
           aria-haspopup="menu"
           aria-expanded={open}
-          aria-label={`Thinking: ${current ? label(current) : "Default"}`}
-          title="Thinking"
+          aria-label={`Effort: ${current ? label(current) : "Default"}`}
+          title="Effort"
           onClick={toggle}
         >
           <LightbulbIcon size={16} />

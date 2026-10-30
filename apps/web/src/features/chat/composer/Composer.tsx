@@ -204,7 +204,7 @@ function Composer({
   onClearRole,
 }: ComposerProps) {
   const models = useModels(agents);
-  // The model's own thinking levels, or null when its CLI does not report them.
+  // The model's own effort levels, or null when its CLI does not report them.
   const levels = useMemo(() => modelEfforts(agent, model, models), [agent, model, models]);
   // A level this model does not take would make its CLI refuse the turn, so it falls back to the
   // CLI's own default instead of being sent.
