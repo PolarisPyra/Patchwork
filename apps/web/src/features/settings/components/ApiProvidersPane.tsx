@@ -21,7 +21,7 @@ import {
 import type { UpdateSettings } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
 import { errorText } from "~/lib/util";
-import { INPUT, TEXTAREA } from "~/features/settings/components/controls";
+import { INPUT } from "~/features/settings/components/controls";
 
 /** Endpoints a provider can start from. */
 interface Preset {
@@ -68,14 +68,19 @@ export function syncAgents(providers: ApiProviderView[], updateSettings: UpdateS
   });
 }
 
-/** A saved provider in the Providers list: click or Edit to change it, the switch to use it. */
+/** A saved provider in the Providers list: click or Edit to change it, Prompt for its system
+ * prompt, the switch to use it. */
 export function ApiProviderRow({
   provider: p,
+  prompting,
   onEdit,
+  onPrompt,
   onToggle,
 }: {
   provider: ApiProviderView;
+  prompting: boolean;
   onEdit: () => void;
+  onPrompt: () => void;
   onToggle: () => void;
 }) {
   return (
@@ -90,6 +95,13 @@ export function ApiProviderRow({
       </button>
       <button className="btn" onClick={onEdit}>
         Edit
+      </button>
+      <button
+        className={`btn${p.systemPrompt ? " text-accent" : ""}`}
+        aria-expanded={prompting}
+        onClick={onPrompt}
+      >
+        Prompt
       </button>
       <button
         className="toggle"
@@ -382,14 +394,6 @@ export function ProviderForm({
         typedKey={useEnv ? null : key}
         keyEnv={useEnv ? draft.keyEnv : null}
       />
-      <Field label="System prompt">
-        <textarea
-          className={TEXTAREA}
-          value={draft.systemPrompt}
-          spellCheck
-          onChange={(e) => set({ systemPrompt: e.target.value })}
-        />
-      </Field>
       <button
         className="flex cursor-pointer items-center gap-1 self-start border-none bg-transparent p-0 text-[length:var(--fs-sm)] text-fg-muted hover:text-fg"
         aria-expanded={advanced}

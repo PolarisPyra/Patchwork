@@ -49,29 +49,79 @@ function CliInstall({ kind, onInstalled }: { kind: CliKind; onInstalled: () => v
 
 /** One row per CLI: whether it is installed, where it is, and whether Patchwork connects to it. */
 
-/** A CLI's system prompt, saved when the field loses focus. */
-function SystemPrompt({ kind, settings, updateSettings }: PaneProps & { kind: AgentKind }) {
-  const saved = settings.systemPrompts[kind] ?? "";
+/** A provider's system prompt, with Save and Cancel under the field. Save waits for `onSave`
+ * and shows its error here; the parent closes the editor once it has saved. */
+function PromptEditor({
+  label,
+  saved,
+  onSave,
+  onCancel,
+}: {
+  label: string;
+  saved: string;
+  onSave: (text: string) => Promise<void>;
+  onCancel: () => void;
+}) {
   const [draft, setDraft] = useState(saved);
-  const save = () => {
-    if (draft === saved) return;
-    void updateSettings((st) => {
-      const { [kind]: _, ...rest } = st.systemPrompts;
-      return { ...st, systemPrompts: draft.trim() ? { ...rest, [kind]: draft } : rest };
-    });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onSave(draft);
+    } catch (e) {
+      setError(errorText(e));
+      setBusy(false);
+    }
   };
   return (
-    <div className="border-b border-border py-2.5">
+    <div className="flex flex-col gap-2 border-b border-border py-2.5">
       <textarea
         className={TEXTAREA}
-        aria-label={`${AGENT_LABELS[kind]} system prompt`}
+        aria-label={`${label} system prompt`}
         value={draft}
         autoFocus
         spellCheck
         onChange={(e) => setDraft(e.target.value)}
-        onBlur={save}
       />
+      {error && <div className="text-[length:var(--fs-sm)] text-danger">{error}</div>}
+      <div className="flex items-center gap-2">
+        <button
+          className="btn btn-primary"
+          disabled={busy || draft === saved}
+          onClick={() => void save()}
+        >
+          {busy ? "Saving…" : "Save"}
+        </button>
+        <button className="btn" disabled={busy} onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
     </div>
+  );
+}
+
+/** A CLI's system prompt, saved in the settings. */
+function SystemPrompt({
+  kind,
+  settings,
+  updateSettings,
+  onDone,
+}: PaneProps & { kind: AgentKind; onDone: () => void }) {
+  return (
+    <PromptEditor
+      label={AGENT_LABELS[kind]}
+      saved={settings.systemPrompts[kind] ?? ""}
+      onSave={async (text) => {
+        await updateSettings((st) => {
+          const { [kind]: _, ...rest } = st.systemPrompts;
+          return { ...st, systemPrompts: text.trim() ? { ...rest, [kind]: text } : rest };
+        });
+        onDone();
+      }}
+      onCancel={onDone}
+    />
   );
 }
 
@@ -180,7 +230,12 @@ function CliProviderRows({ settings, updateSettings }: PaneProps) {
               />
             </div>
             {prompting === kind && (
-              <SystemPrompt kind={kind} settings={settings} updateSettings={updateSettings} />
+              <SystemPrompt
+                kind={kind}
+                settings={settings}
+                updateSettings={updateSettings}
+                onDone={() => setPrompting(null)}
+              />
             )}
           </Fragment>
         );
@@ -194,6 +249,7 @@ function CliProviderRows({ settings, updateSettings }: PaneProps) {
 export default function ProvidersPane({ settings, updateSettings }: PaneProps) {
   const [providers, setProviders] = useState<ApiProviderView[]>([]);
   const [editing, setEditing] = useState<ApiProvider | null>(null);
+  const [promptingId, setPromptingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const reload = async () => {
@@ -218,6 +274,12 @@ export default function ProvidersPane({ settings, updateSettings }: PaneProps) {
     } catch (e) {
       setError(errorText(e));
     }
+  };
+
+  const savePrompt = async (p: ApiProviderView, systemPrompt: string) => {
+    await api.saveApiProvider({ ...p, systemPrompt }, { action: "keep" });
+    await reload();
+    setPromptingId(null);
   };
 
   if (editing !== null) {
@@ -246,12 +308,23 @@ export default function ProvidersPane({ settings, updateSettings }: PaneProps) {
     <>
       <CliProviderRows settings={settings} updateSettings={updateSettings} />
       {providers.map((p) => (
-        <ApiProviderRow
-          key={p.id}
-          provider={p}
-          onEdit={() => setEditing(p)}
-          onToggle={() => void toggle(p)}
-        />
+        <Fragment key={p.id}>
+          <ApiProviderRow
+            provider={p}
+            prompting={promptingId === p.id}
+            onEdit={() => setEditing(p)}
+            onPrompt={() => setPromptingId(promptingId === p.id ? null : p.id)}
+            onToggle={() => void toggle(p)}
+          />
+          {promptingId === p.id && (
+            <PromptEditor
+              label={p.name}
+              saved={p.systemPrompt}
+              onSave={(text) => savePrompt(p, text)}
+              onCancel={() => setPromptingId(null)}
+            />
+          )}
+        </Fragment>
       ))}
       {connected.length > 1 && (
         <div className="flex items-center gap-3 border-b border-border py-2.5">
