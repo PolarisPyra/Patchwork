@@ -71,6 +71,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     reload,
     selected,
     select,
+    opening,
     createThread,
     deleteThread,
     setThreadArchived,
@@ -338,7 +339,10 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   useCommand("sidebar.showArchived", () => setView("archived"));
   // Acts on the picked rows and, while the compose box is not active, on the open chat in the task
   // list even when it is not picked.
+  // Both wait while the next chat is still loading to open: the one on screen is the chat they just
+  // archived, so a held key archived it again instead of moving on, and the run stopped.
   useCommand("workspace.closeChat", () => {
+    if (opening()) return;
     const picked = getSelectedRows();
     const openChat =
       view === "tasks" &&
@@ -350,6 +354,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   });
   // Acts on the picked rows; with none picked, it archives the open chat in the task list.
   useCommand("workspace.deleteChat", () => {
+    if (opening()) return;
     const picked = getSelectedRows();
     if (picked.length > 0) void removePicked(picked);
     else if (view === "tasks" && selected)

@@ -88,6 +88,9 @@ export function useThreads(initialProjectId: string | null) {
   threadsRef.current = threads;
   /** The thread last asked to open; a slower load for an earlier pick does not open it. */
   const wantedId = useRef<string | null>(null);
+  /** The thread waiting for its history to load before it opens, if any. Cleared once it is the
+   * selection on screen, not when the load answers, so nothing acts on the old one meanwhile. */
+  const loadingId = useRef<string | null>(null);
 
   /** Loads a listed thread's full history into the list. */
   const loadThread = useCallback(async (id: string) => {
@@ -100,18 +103,26 @@ export function useThreads(initialProjectId: string | null) {
     (id: string | null) => {
       wantedId.current = id;
       if (!id || !threadsRef.current.find((t) => t.id === id)?.partial) {
+        loadingId.current = null;
         setSelectedId(id);
         return;
       }
+      loadingId.current = id;
       // If loading fails, the thread opens with the messages it has.
       void loadThread(id)
         .catch(() => undefined)
         .then(() => {
-          if (wantedId.current === id) setSelectedId(id);
+          if (wantedId.current !== id) return;
+          if (selectedRef.current === id) loadingId.current = null;
+          else setSelectedId(id);
         });
     },
     [loadThread],
   );
+
+  useEffect(() => {
+    if (loadingId.current === selectedId) loadingId.current = null;
+  }, [selectedId]);
 
   // Remember the open thread, so the next launch returns to it. A failed write only
   // means the next launch opens the newest task instead.
@@ -314,6 +325,9 @@ export function useThreads(initialProjectId: string | null) {
     if (archived) setSelectedId((cur) => (cur === id ? null : cur));
   }
 
+  /** Whether a thread is still loading to open, so the one on screen is about to change. */
+  const opening = useCallback(() => loadingId.current !== null, []);
+
   /** Empties a chat: its messages and agent session are deleted, the chat itself stays. */
   async function clearThread(id: string): Promise<void> {
     await api.clearThread(id);
@@ -513,6 +527,7 @@ export function useThreads(initialProjectId: string | null) {
     reload,
     selected,
     select,
+    opening,
     createThread,
     deleteThread,
     setThreadArchived,

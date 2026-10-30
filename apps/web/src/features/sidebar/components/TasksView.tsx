@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from "react";
 import {
   ArchiveIcon,
   ArrowCounterClockwiseIcon,
@@ -124,9 +132,10 @@ export default function TasksView({
       unlisten?.();
     };
   }, [onDropFolders]);
-  // Set when a chat opens from the tree, so its composer does not take the focus from the tree.
+  // Set when a chat opens from the tree, so its composer does not take the focus from the tree;
+  // false when the tree hands the focus to the chat, null when the tree has not said.
   // Only set when the selection changes, since the effect that clears it runs on that change.
-  const keepTreeFocus = useRef(false);
+  const keepTreeFocus = useRef<boolean | null>(null);
   /** Also marks the tree, so the composer leaves the focus there instead of taking it and handing
    * it back: each move restyles every row that styles on the tree's focus. */
   const holdTreeFocus = (on: boolean) => {
@@ -329,9 +338,20 @@ export default function TasksView({
   }, [selectedId]);
 
   // Opening a chat from the tree previews it: the composer's autofocus runs after this, so the tree takes the focus back.
+  // The chat that opens in place of one leaving the list keeps the tree's focus too, such as the
+  // next one after Ctrl+W: its composer took the focus, so a held Ctrl+W stopped partway.
+  const lastSelectedId = useRef(selectedId);
+  useLayoutEffect(() => {
+    const left = lastSelectedId.current;
+    lastSelectedId.current = selectedId;
+    const gone = left !== null && (leavingIds.has(left) || !threads.some((t) => t.id === left));
+    if (gone && keepTreeFocus.current === null && document.activeElement === treeRef.current)
+      holdTreeFocus(true);
+  }, [selectedId]);
   useEffect(() => {
-    if (!keepTreeFocus.current) return;
-    keepTreeFocus.current = false;
+    const keep = keepTreeFocus.current;
+    keepTreeFocus.current = null;
+    if (!keep) return;
     setTimeout(() => {
       treeRef.current?.focus();
       treeRef.current?.removeAttribute("data-keeps-focus");
