@@ -39,13 +39,17 @@ impl Server {
 
     pub fn save_settings(&self, settings: Settings) -> Result<(), String> {
         follow_log_levels(&settings);
-        let guards_changed =
-            !permissions::same_guards(&self.store.settings().permissions, &settings.permissions);
+        let old = self.store.settings();
+        let guards_changed = !permissions::same_guards(&old.permissions, &settings.permissions);
+        // The system prompts and the shell are what an agent's launch instructions are made of.
+        let prompt_changed =
+            old.system_prompts != settings.system_prompts || old.shell != settings.shell;
         self.store.update_settings(|s| *s = settings)?;
         // A rule the user just added may answer requests already waiting.
         self.runner.apply_rules(self);
-        // Idle agents were told the old deny and ask rules, so the next message starts a new one.
-        if guards_changed {
+        // Idle agents were told the old deny and ask rules, or launched with the old system
+        // prompt, so the next message starts a new one.
+        if guards_changed || prompt_changed {
             self.runner.retire_all_idle();
         }
         Ok(())

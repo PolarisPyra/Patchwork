@@ -8,9 +8,14 @@ use crate::provider::AgentKind;
 use crate::settings::Settings;
 
 /// Arguments that append the checklist and shell instructions to Claude's system prompt, and load
-/// Patchwork's skills and the plugins' hooks from the `claude` folder as a plugin.
+/// Patchwork's skills and the plugins' hooks from the `claude` folder as a plugin. Claude records
+/// a conversation's system prompt on its first request and resumes with that record, so a prompt
+/// edited in Settings would never reach a chat already started; with the record off the prompt
+/// is built on each request, and the cache still holds it while it stays the same.
 pub fn launch_args(settings: &Settings, hooks: &[AgentHook]) -> Vec<String> {
     let mut args = vec![
+        "--system-prompt-snapshot".to_string(),
+        "off".to_string(),
         "--append-system-prompt".to_string(),
         crate::orchestration::agent_instructions(settings, AgentKind::Claude),
     ];
