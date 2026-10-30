@@ -23,6 +23,6 @@ export function useReplyFiles(
   return {
     turnFiles: useTurnFiles(projectId, turn, paths, changes),
     missing: useMissingFiles(projectId, paths, changes),
-    media: useFileMedia(projectId, paths),
+    media: useFileMedia(projectId, paths, changes),
   };
 }

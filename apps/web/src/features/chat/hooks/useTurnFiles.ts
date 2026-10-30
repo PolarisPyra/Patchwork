@@ -1,5 +1,8 @@
 import { api, type FileChange, type TurnFile, type TurnTrees } from "~/api";
-import { useAsync } from "~/hooks/useAsync";
+import { cachePerChanges, useAsync } from "~/hooks/useAsync";
+
+// Kept per `changes`, so a chat opened again shows its replies' files without asking the backend.
+const cacheFor = cachePerChanges<TurnFile[]>();
 
 /**
  * What a reply's turn did to each of `paths`, from the snapshots around the turn, and where each
@@ -20,5 +23,6 @@ export function useTurnFiles(
       ? () => api.turnFiles(projectId, { before, after }, key.split("\0"))
       : null,
     [projectId, before, after, key, changes],
+    { store: cacheFor(changes), key: `${projectId}\0${before}\0${after}\0${key}` },
   );
 }

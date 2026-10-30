@@ -1,7 +1,10 @@
 import { api, type FileChange } from "~/api";
-import { useAsync } from "~/hooks/useAsync";
+import { cachePerChanges, useAsync } from "~/hooks/useAsync";
 
 const NONE: ReadonlySet<string> = new Set();
+
+// Kept per `changes`, so a chat opened again shows its replies' files without asking the backend.
+const cacheFor = cachePerChanges<ReadonlySet<string>>();
 
 /**
  * Which of `paths` no longer exist in the project, such as a deleted file git never tracked.
@@ -19,6 +22,7 @@ export function useMissingFiles(
       ? () => api.missingFiles(projectId, unchanged.split("\0")).then((found) => new Set(found))
       : null,
     [projectId, unchanged, changes],
+    { store: cacheFor(changes), key: `${projectId}\0${unchanged}` },
   );
   return missing ?? NONE;
 }
