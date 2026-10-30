@@ -87,15 +87,18 @@ function PromptEditor({
       />
       {error && <div className="text-[length:var(--fs-sm)] text-danger">{error}</div>}
       <div className="flex items-center gap-2">
+        <button className="btn" disabled={busy || !draft} onClick={() => setDraft("")}>
+          Clear
+        </button>
+        <button className="btn" disabled={busy} onClick={onCancel}>
+          Cancel
+        </button>
         <button
           className="btn btn-primary"
           disabled={busy || draft === saved}
           onClick={() => void save()}
         >
           {busy ? "Saving…" : "Save"}
-        </button>
-        <button className="btn" disabled={busy} onClick={onCancel}>
-          Cancel
         </button>
       </div>
     </div>
@@ -218,7 +221,7 @@ function CliProviderRows({ settings, updateSettings }: PaneProps) {
                 aria-expanded={prompting === kind}
                 onClick={() => setPrompting(prompting === kind ? null : kind)}
               >
-                Prompt
+                System Prompt
               </button>
               <button
                 className="toggle"

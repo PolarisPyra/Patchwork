@@ -101,7 +101,7 @@ export function ApiProviderRow({
         aria-expanded={prompting}
         onClick={onPrompt}
       >
-        Prompt
+        System Prompt
       </button>
       <button
         className="toggle"
