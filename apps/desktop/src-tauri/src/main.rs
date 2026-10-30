@@ -19,6 +19,10 @@ fn main() {
     if std::env::args().nth(1).as_deref() == Some(patchwork_server::permissions::hook::HOOK_ARG) {
         std::process::exit(patchwork_server::permissions::hook::run());
     }
+    // Antigravity starts this binary at session start for the system prompt from Settings.
+    if std::env::args().nth(1).as_deref() == Some(patchwork_server::provider::hooks::PROMPT_ARG) {
+        std::process::exit(patchwork_server::provider::hooks::run_prompt_hook());
+    }
     // An agent starts this binary as a plugin's built-in hook, such as `boundedWaits`.
     if std::env::args().nth(1).as_deref() == Some(patchwork_server::plugins::builtin::HOOK_ARG) {
         std::process::exit(patchwork_server::plugins::builtin::run());

@@ -246,9 +246,8 @@ pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)
                 .map(|config| ("OPENCODE_CONFIG_CONTENT", config)),
             )
             .collect(),
-        AgentKind::Claude | AgentKind::Codex | AgentKind::Antigravity | AgentKind::Api => {
-            Vec::new()
-        }
+        AgentKind::Antigravity => crate::provider::hooks::antigravity_env(spec),
+        AgentKind::Claude | AgentKind::Codex | AgentKind::Api => Vec::new(),
     }
 }
 

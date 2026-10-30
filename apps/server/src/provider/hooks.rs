@@ -300,47 +300,79 @@ fn list_codex_hooks(overrides: &[String], root: &str) -> Option<Vec<(String, Str
     )
 }
 
+/// The argument that starts Patchwork's binary as Antigravity's session start hook, which hands it
+/// the system prompt from Settings.
+pub const PROMPT_ARG: &str = "--system-prompt-hook";
+/// Where that hook finds the prompt: the turn's environment, which Antigravity passes on to it.
+const PROMPT_ENV: &str = "PATCHWORK_SYSTEM_PROMPT";
+
+/// Environment for an Antigravity turn: the system prompt its session start hook hands over.
+pub fn antigravity_env(spec: &TurnSpec) -> Vec<(&'static str, String)> {
+    antigravity_prompt(spec)
+        .map(|text| (PROMPT_ENV, text.to_string()))
+        .into_iter()
+        .collect()
+}
+
+fn antigravity_prompt<'a>(spec: &TurnSpec<'a>) -> Option<&'a str> {
+    spec.instructions.filter(|text| !text.trim().is_empty())
+}
+
+/// Runs the session start hook: answers Antigravity with the system prompt as a system message,
+/// which it adds to the conversation before the first model call.
+pub fn run_prompt_hook() -> i32 {
+    let answer = match std::env::var(PROMPT_ENV) {
+        Ok(text) if !text.trim().is_empty() => {
+            json!({"injectSteps": [{"systemMessage": {"systemMessage": text}}]})
+        }
+        _ => json!({}),
+    };
+    let mut out = std::io::stdout();
+    let _ = writeln!(out, "{answer}");
+    let _ = out.flush();
+    0
+}
+
 /// The folder Antigravity is given with `--add-dir`, or None when there is nothing to put in it:
-/// the hooks file it loads from there (Patchwork's permission hook before each tool call, and the
-/// plugins' hooks), and the user's system prompt as a `GEMINI.md`, which it reads as a rule. Each
-/// set of contents has a folder of its own, named by its hash, so turns that differ do not share
-/// a file.
+/// the hooks file it loads from there (the system prompt at session start, Patchwork's permission
+/// hook before each tool call, and the plugins' hooks). Rules such as a `GEMINI.md` in that folder
+/// are not read, so the prompt goes through a hook. Each hooks file has a folder of its own, named
+/// by its hash, so turns that differ do not share a file.
 pub fn antigravity_dir(spec: &TurnSpec) -> Option<std::path::PathBuf> {
-    let hooks = antigravity_hooks(spec);
-    let prompt = spec.instructions.filter(|text| !text.trim().is_empty());
-    if hooks.is_none() && prompt.is_none() {
-        return None;
-    }
+    let hooks = antigravity_hooks(spec)?;
     // FNV-1a, 64-bit, so the folder's name stays the same across builds.
-    let key = format!(
-        "{}\0{}",
-        hooks.as_deref().unwrap_or(""),
-        prompt.unwrap_or("")
-    );
-    let hash = key.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
+    let hash = hooks.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
         (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
     });
     let dir = crate::skills::cli_dir("antigravity").join(format!("{hash:016x}"));
-    let files = [
-        (dir.join(".agents").join("hooks.json"), hooks.as_deref()),
-        (dir.join("GEMINI.md"), prompt),
-    ];
-    for (file, text) in files {
-        let Some(text) = text else { continue };
-        if std::fs::read_to_string(&file).ok().as_deref() != Some(text) {
-            std::fs::create_dir_all(file.parent()?).ok()?;
-            std::fs::write(&file, text).ok()?;
-        }
+    let file = dir.join(".agents").join("hooks.json");
+    if std::fs::read_to_string(&file).ok().as_deref() != Some(hooks.as_str()) {
+        std::fs::create_dir_all(file.parent()?).ok()?;
+        std::fs::write(&file, hooks).ok()?;
     }
     Some(dir)
 }
 
 /// The hooks file Antigravity runs, or None when there are no hooks to run.
 fn antigravity_hooks(spec: &TurnSpec) -> Option<String> {
-    crate::provider::mcp::relay_file()?;
     let mut hooks = hooks_json(spec.hooks, AgentKind::Antigravity);
+    // The prompt is the session's first system message, so a resumed conversation keeps the one
+    // it started with.
+    if antigravity_prompt(spec).is_some() {
+        let prompt = json!({
+            "hooks": [{"type": "command", "command": patchwork_command(AgentKind::Antigravity, &[PROMPT_ARG])?}],
+        });
+        let groups = hooks["hooks"]["SessionStart"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        hooks["hooks"]["SessionStart"] =
+            Value::Array(std::iter::once(prompt).chain(groups).collect());
+    }
     // Installed for every turn, so a rule saved while the turn runs decides its next call.
-    if crate::provider::mcp::relay_endpoint().is_some() {
+    if crate::provider::mcp::relay_file().is_some()
+        && crate::provider::mcp::relay_endpoint().is_some()
+    {
         let permission = json!({
             "matcher": "*",
             "hooks": [{"type": "command", "command": patchwork_command(AgentKind::Antigravity, &[HOOK_ARG, "antigravity"])?, "timeout": 86400}],
@@ -358,7 +390,30 @@ fn antigravity_hooks(spec: &TurnSpec) -> Option<String> {
     {
         return None;
     }
-    serde_json::to_string_pretty(&hooks).ok()
+    serde_json::to_string_pretty(&named(&hooks)).ok()
+}
+
+/// `hooks` in the shape Antigravity reads, which keys each hook by a name of its own: a tool
+/// event's groups keep their matcher, and the other events list their commands directly. It
+/// refuses a file in the shape Claude Code reads.
+fn named(hooks: &Value) -> Value {
+    let mut named = serde_json::Map::new();
+    for (event, groups) in hooks["hooks"].as_object().into_iter().flatten() {
+        for (i, group) in groups.as_array().into_iter().flatten().enumerate() {
+            let entries = if matches!(event.as_str(), "PreToolUse" | "PostToolUse") {
+                vec![group.clone()]
+            } else {
+                group["hooks"].as_array().cloned().unwrap_or_default()
+            };
+            let mut hook = serde_json::Map::new();
+            hook.insert(event.clone(), Value::Array(entries));
+            named.insert(
+                format!("patchwork-{}-{i}", event.to_ascii_lowercase()),
+                Value::Object(hook),
+            );
+        }
+    }
+    Value::Object(named)
 }
 
 #[cfg(test)]

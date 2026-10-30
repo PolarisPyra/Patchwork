@@ -200,8 +200,8 @@ impl Runner {
             Some(context) => format!("{context}{text}"),
             None => text,
         };
-        // Codex takes its instructions in the turn's input; Claude takes them as launch arguments.
-        // OpenCode and Antigravity get only the user's system prompt.
+        // Codex takes its instructions as the thread's developer instructions; Claude takes them as
+        // launch arguments. OpenCode and Antigravity get only the user's system prompt.
         let instructions = match agent {
             AgentKind::Codex => Some(crate::orchestration::agent_instructions(
                 &settings,
