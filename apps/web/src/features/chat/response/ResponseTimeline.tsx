@@ -3,9 +3,9 @@ import { type AgentKind, type Message } from "~/api";
 import { isGoalClearedReply } from "~/features/chat/lib/goalPresentation";
 import FoldHead from "~/features/chat/response/components/FoldHead";
 import GoalClearedNotice from "~/features/chat/response/components/GoalClearedNotice";
-import StatusLine from "~/features/chat/response/components/StatusLine";
+import TurnStatus from "~/features/chat/response/components/TurnStatus";
 import Subagents from "~/features/chat/response/components/Subagents";
-import WorkGroup from "~/features/chat/response/components/WorkGroup";
+import StepGroup from "~/features/chat/response/components/StepGroup";
 import {
   type Step,
   foldHeadOf,
@@ -95,7 +95,7 @@ export default function ResponseTimeline({
     <div className="flex min-w-0 flex-col">
       {/* The head of a turn, in the one place its status ever goes. */}
       {!goalCleared && !compacts && phase !== null && (
-        <StatusLine phase={phase} since={message.createdAt} />
+        <TurnStatus phase={phase} since={message.createdAt} />
       )}
       {/* A turn stopped before it did anything keeps the line too, saying so, so stopping does not
           take a line out of the chat and drop everything above it. */}
@@ -149,7 +149,7 @@ export default function ResponseTimeline({
             );
           case "work":
             return (
-              <WorkGroup
+              <StepGroup
                 key={`w${step.entries[0] ? workKey(step.entries[0]) : step.entries.length}`}
                 entries={step.entries}
                 live={streaming}

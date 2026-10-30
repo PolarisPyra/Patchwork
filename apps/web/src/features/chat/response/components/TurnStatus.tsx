@@ -1,6 +1,6 @@
 import { ArrowClockwiseIcon, TargetIcon } from "@phosphor-icons/react";
 import Spinner from "~/components/Spinner";
-import { IconColumn } from "~/features/chat/response/components/WorkGroup";
+import { LineGutter } from "~/features/chat/response/components/AgentStepDisplay";
 import { type Phase } from "~/features/chat/response/lib/model";
 import { useNow } from "~/features/chat/hooks/useNow";
 import { fullElapsed } from "~/lib/util";
@@ -14,7 +14,7 @@ import { fullElapsed } from "~/lib/util";
  * the words instead of a spinner beside them, so they sit where the settled line's words will.
  * `tabular-nums` keeps the digits from shifting as the count grows.
  */
-export default function StatusLine({ phase, since }: { phase: Phase; since: number }) {
+export default function TurnStatus({ phase, since }: { phase: Phase; since: number }) {
   const now = useNow(phase.kind === "working");
   const label =
     phase.kind === "retry"
@@ -28,13 +28,14 @@ export default function StatusLine({ phase, since }: { phase: Phase; since: numb
     <div className="mb-1.5 border-b border-border pt-1 pb-2">
       <div className="flex h-6 min-w-0 items-center gap-1.5 text-[length:var(--fs-md)] text-fg-muted tabular-nums">
         {phase.kind === "compacting" ? (
-          // The same size, drop and gap to its words as a running row's spinner, centred over the
-          // rows' icons: the icon column is 24px wide and the spinner 11px.
-          <Spinner size={11} className="ms-[6.5px] translate-y-px text-fg-subtle opacity-70" />
+          // In the line gutter, like a running row's spinner, so its words line up with the rows'.
+          <LineGutter>
+            <Spinner size={11} className="translate-y-px text-fg-subtle" />
+          </LineGutter>
         ) : phase.kind !== "working" ? (
-          <IconColumn>
+          <LineGutter>
             {phase.kind === "retry" ? <ArrowClockwiseIcon size={15} /> : <TargetIcon size={15} />}
-          </IconColumn>
+          </LineGutter>
         ) : null}
         <span className={`min-w-0 truncate ${phase.kind === "working" ? "text-shimmer" : ""}`}>
           {label}
