@@ -12,6 +12,10 @@ const MANIFESTS: [&str; 2] = [".patchwork-plugin/plugin.json", ".codex-plugin/pl
 /// Codex writes `plugin.json` as a flat file in some bundles; so do we.
 const ROOT_MANIFEST: &str = "plugin.json";
 
+/// A plugin that only carries hooks can be this one file, named for its folder unless it says
+/// `name`, as Claude Code's `hooks.json` is.
+const HOOKS_ONLY: &str = "hooks.json";
+
 /// How long a hook command may run when its manifest does not say, and the bounds on what it may.
 pub(super) const DEFAULT_TIMEOUT_SECS: u64 = 60;
 
@@ -23,8 +27,8 @@ const TIMEOUT_RANGE: (u64, u64) = (1, 600);
 pub(super) fn read_bundle(dir: &Path, enabled: bool) -> Option<Plugin> {
     let manifest_path = MANIFESTS
         .iter()
+        .chain([&ROOT_MANIFEST, &HOOKS_ONLY])
         .map(|rel| dir.join(rel))
-        .chain(std::iter::once(dir.join(ROOT_MANIFEST)))
         .find(|path| path.is_file())?;
     let text = std::fs::read_to_string(&manifest_path).ok()?;
     let manifest: Value = serde_json::from_str(&text).ok()?;
@@ -37,9 +41,15 @@ pub(super) fn read_bundle(dir: &Path, enabled: bool) -> Option<Plugin> {
             .filter(|text| !text.is_empty())
             .map(str::to_string)
     };
+    // Without a name it is called after its folder, `patchwork` reading as "Patchwork".
+    let mut folder = id.chars();
+    let named_for_folder = folder
+        .next()
+        .map(|first| first.to_uppercase().chain(folder).collect())
+        .unwrap_or_else(|| "Plugin".into());
     Some(Plugin {
+        name: string("name").unwrap_or(named_for_folder),
         id,
-        name: string("name").unwrap_or_else(|| "Plugin".into()),
         version: string("version"),
         description: string("description"),
         path: dir.to_string_lossy().into_owned(),

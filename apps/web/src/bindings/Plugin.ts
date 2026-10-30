@@ -3,7 +3,8 @@ import type { PluginApp } from "./PluginApp";
 import type { PluginHook } from "./PluginHook";
 
 /**
- * A plugin bundle: a folder with a `plugin.json`, the hooks it runs, and the apps it names.
+ * A plugin bundle: a folder with a `plugin.json` or only a `hooks.json`, the hooks it runs, and
+ * the apps it names.
  */
 export type Plugin = { 
 /**

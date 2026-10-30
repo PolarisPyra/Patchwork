@@ -5,7 +5,8 @@ use ts_rs::TS;
 
 use crate::provider::AgentKind;
 
-/// A plugin bundle: a folder with a `plugin.json`, the hooks it runs, and the apps it names.
+/// A plugin bundle: a folder with a `plugin.json` or only a `hooks.json`, the hooks it runs, and
+/// the apps it names.
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]

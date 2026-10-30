@@ -14,8 +14,8 @@ import { AGENT_KINDS, errorText } from "~/lib/util";
 
 /**
  * Settings → Hooks: plugin bundles of hooks that run on turn events and the apps they ask for. A bundle
- * is a folder with a `plugin.json`; a Codex plugin bundle works as it is because the manifest is the same
- * shape.
+ * is a folder with a `hooks.json`, or a `plugin.json` when it carries more; a Codex plugin bundle works
+ * as it is because the manifest is the same shape.
  */
 export default function PluginsPane({
   settings,
@@ -135,7 +135,7 @@ export default function PluginsPane({
 
       {plugins && plugins.length === 0 && (
         <div className="py-6 text-center text-fg-muted">
-          No plugins yet. A plugin is a folder with a <code>plugin.json</code>; drop one in the
+          No plugins yet. A plugin is a folder with a <code>hooks.json</code>; drop one in the
           plugins folder.
         </div>
       )}

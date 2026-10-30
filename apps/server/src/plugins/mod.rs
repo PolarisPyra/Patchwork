@@ -1,8 +1,9 @@
 //! Plugins: a folder with a `plugin.json`, the hooks it runs, and the apps it names. Skills belong
 //! in the skills folder and MCP servers in Settings → MCP Servers, so a plugin carries neither.
 //! The format is Codex's `.codex-plugin/plugin.json` where it can be, so a Codex bundle works as
-//! it is. The app ships none: a plugin's hooks go in its `plugin.json` as `"hooks": { … }`, or in
-//! a file the manifest names, such as Codex's `"hooks": "./hooks.json"`.
+//! it is. The app ships none. A plugin that only runs hooks is one `hooks.json`, named for its
+//! folder; a fuller one puts its hooks in its `plugin.json` as `"hooks": { … }`, or in a file the
+//! manifest names, such as Codex's `"hooks": "./hooks.json"`.
 //!
 //! Patchwork runs the turn hooks itself, for every agent. Each agent runs the rest on its own
 //! events, such as before a tool call, so they get the event as JSON on stdin and can refuse it:
