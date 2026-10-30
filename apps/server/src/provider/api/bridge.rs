@@ -29,9 +29,6 @@ use crate::threads::AccessMode;
 /// The argument that starts Patchwork's own binary as the API agent.
 pub const BRIDGE_ARG: &str = "--api-bridge";
 
-/// Model requests a turn may make, so a model that never stops calling tools ends.
-const MAX_STEPS: usize = 400;
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Request {
@@ -233,7 +230,7 @@ impl Agent {
             .push(json!({"role": "user", "content": content}));
         self.save()?;
 
-        for _ in 0..MAX_STEPS {
+        loop {
             self.compact_if_full()?;
             let reply = match self.complete(true) {
                 Ok(reply) => reply,
@@ -308,9 +305,6 @@ impl Agent {
                 return Ok(());
             }
         }
-        Err(format!(
-            "Stopped after {MAX_STEPS} model requests in one turn"
-        ))
     }
 
     /// A user message's content: plain text, or text and images. A model that cannot read the
