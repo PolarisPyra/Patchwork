@@ -4,6 +4,7 @@ use serde_json::Value;
 
 use crate::provider::probe_until;
 use crate::system::time::parse_rfc3339_ms;
+use crate::system::now_ms;
 use crate::provider::AgentKind;
 use crate::usage::{UsageWindow, ProviderUsage};
 
@@ -47,5 +48,6 @@ pub fn usage(mut out: ProviderUsage) -> Result<ProviderUsage, String> {
                 }
             })
     }));
+    out.updated_at = Some(now_ms());
     Ok(out)
 }
