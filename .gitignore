@@ -6,3 +6,8 @@ apps/desktop/src-tauri/gen
 .release-notes
 # Scratch work: extractions, throwaway clones, screenshots, check output. See AGENTS.md.
 /research
+# Local agent settings and editor and OS files.
+.claude/settings.local.json
+.DS_Store
+*.swp
+*.log
