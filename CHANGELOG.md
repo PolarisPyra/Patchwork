@@ -17,7 +17,7 @@ Each release adds its notes at the top; see docs/release.md.
 
 ### Added
 
-- Settings → Providers can now give each agent its own system prompt: a Prompt button on each agent row, for Claude Code, Codex, OpenCode and Antigravity, and a System prompt field in each API provider's form, such as DeepSeek's. The agent gets it when a task starts, after Patchwork's own instructions. Every prompt is blank until you write one.
+- Settings → Providers can now give each provider its own system prompt: a Prompt button on the rows for Claude Code, Codex, OpenCode and Antigravity, and a System prompt field in each API provider's form, such as DeepSeek's. A provider's prompt is sent when a task on it starts, after Patchwork's own instructions. Every prompt is blank until you write one.
 
 ### Changed
 
