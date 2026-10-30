@@ -97,6 +97,7 @@ const Mermaid = memo(function Mermaid({ code }: { code: string }) {
 /** An HTML or SVG artifact, run in a frame that cannot reach the app. */
 const ArtifactFrame = memo(function ArtifactFrame({ code, lang }: { code: string; lang: string }) {
   const [height, setHeight] = useState(FRAME_HEIGHT);
+  const [empty, setEmpty] = useState(false);
   const frame = useRef<HTMLIFrameElement>(null);
   const doc = useMemo(() => {
     if (lang === "svg" && !/^\s*<(?:svg|!doctype|html)/i.test(code)) {
@@ -108,30 +109,43 @@ const ArtifactFrame = memo(function ArtifactFrame({ code, lang }: { code: string
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       if (event.source !== frame.current?.contentWindow) return;
-      const data = event.data as { type?: string; height?: number } | null;
+      const data = event.data as { type?: string; height?: number; empty?: boolean } | null;
       if (data?.type === "patchwork-artifact-height" && typeof data.height === "number") {
         setHeight(Math.min(Math.max(data.height + 8, 80), 900));
+        setEmpty(Boolean(data.empty));
       }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
   }, []);
+  // A streaming artifact is rebuilt as it grows; clear the note until the frame reports again, so a
+  // partial render does not flash "nothing visible".
+  useEffect(() => setEmpty(false), [code]);
   // A frame with no same-origin access cannot read the page it runs, so the height comes from a
   // snippet added to the document. It measures the body, not the document element, whose height is
-  // never less than the frame's own and would keep the frame at the height it started with.
-  const measured = `<script>new ResizeObserver(() => parent.postMessage({type:"patchwork-artifact-height",height:document.body.scrollHeight},"*")).observe(document.body)</script>`;
+  // never less than the frame's own and would keep the frame at the height it started with. The same
+  // snippet reports whether the body rendered anything visible, so an artifact that draws nothing — a
+  // bare broken image, or a script that threw before it touched the DOM — shows a note, not an empty box.
+  const measured = `<script>(function(){function v(){var b=document.body;if(!b)return false;if(b.innerText&&b.innerText.trim())return true;var m=b.querySelectorAll('img,svg,canvas,video,picture,object,embed,iframe');for(var i=0;i<m.length;i++){var e=m[i];if(e.tagName==='IMG'){if(e.complete&&e.naturalWidth>0)return true;}else return true;}return false;}function p(){parent.postMessage({type:"patchwork-artifact-height",height:document.body.scrollHeight,empty:!v()},"*");}new ResizeObserver(p).observe(document.body);setTimeout(p,200);})()</script>`;
   const srcDoc = /<\/body>/i.test(doc)
     ? doc.replace(/<\/body>/i, `${measured}</body>`)
     : `${doc}${measured}`;
   return (
-    <iframe
-      ref={frame}
-      title="Artifact"
-      sandbox="allow-scripts"
-      srcDoc={srcDoc}
-      className="w-full border-0 bg-white"
-      style={{ height }}
-    />
+    <div className="relative">
+      <iframe
+        ref={frame}
+        title="Artifact"
+        sandbox="allow-scripts"
+        srcDoc={srcDoc}
+        className="w-full border-0 bg-white"
+        style={{ height: empty ? 80 : height }}
+      />
+      {empty && (
+        <div className="absolute inset-0 grid place-items-center bg-panel px-3 text-center text-[length:var(--fs-sm)] text-fg-subtle">
+          This artifact rendered nothing visible.
+        </div>
+      )}
+    </div>
   );
 });
 
