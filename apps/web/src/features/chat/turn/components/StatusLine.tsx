@@ -25,15 +25,15 @@ export default function StatusLine({ phase, since }: { phase: Phase; since: numb
   return (
     <div className="mb-1.5 border-b border-border pt-1 pb-2">
       <div className="flex h-6 min-w-0 items-center gap-1.5 px-0.5 text-[length:var(--fs-md)] text-fg-muted tabular-nums">
-        <RowIcon>
-          {phase.kind === "retry" ? (
-            <ArrowClockwiseIcon size={15} />
-          ) : phase.kind === "checking-goal" ? (
-            <TargetIcon size={15} />
-          ) : (
-            <Spinner size={13} className="text-fg-subtle" />
-          )}
-        </RowIcon>
+        {phase.kind === "working" || phase.kind === "compacting" ? (
+          // The same size, drop and gap to its words as a running row's spinner, centred over the
+          // rows' icons: the icon column is 24px wide and the spinner 11px.
+          <Spinner size={11} className="ms-[6.5px] translate-y-px text-fg-subtle opacity-70" />
+        ) : (
+          <RowIcon>
+            {phase.kind === "retry" ? <ArrowClockwiseIcon size={15} /> : <TargetIcon size={15} />}
+          </RowIcon>
+        )}
         <span className="min-w-0 truncate">{label}</span>
       </div>
     </div>

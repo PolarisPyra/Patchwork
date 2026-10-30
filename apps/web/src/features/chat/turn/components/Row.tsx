@@ -50,7 +50,9 @@ export function RowLabel({
       className={`flex min-w-0 flex-1 items-center gap-1.5 ${entering ? "timeline-status-enter" : ""} ${className}`}
     >
       <span className="min-w-0 truncate">{children}</span>
-      {running && <Spinner size={11} className="text-fg-subtle" />}
+      {/* Centred on the line, the spinner sits level with the capitals and looks high beside
+          the lowercase letters most labels are made of, so it drops a pixel. */}
+      {running && <Spinner size={11} className="translate-y-px text-fg-subtle" />}
     </span>
   );
 }
