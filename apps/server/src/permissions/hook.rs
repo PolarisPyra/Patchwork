@@ -20,7 +20,7 @@ const ENV: &str = "PATCHWORK_PERMISSION_HOOK";
 
 /// Environment that tells the hook which thread it works for, for the agents that run one:
 /// Codex, Claude, and Antigravity. The relay's port and token are copied in: a hook that read
-/// them from the file could reach another copy of Patchwork that shares the config folder and
+/// them from the file could reach another copy of Patchwork that shares the state folder and
 /// wrote that file since.
 pub fn env(agent: AgentKind, thread_id: &str, root: &str) -> Vec<(&'static str, String)> {
     // The agents that run Patchwork's permission hook.

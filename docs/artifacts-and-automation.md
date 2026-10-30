@@ -42,15 +42,15 @@ servers in Settings → MCP Servers. The app ships no plugins. Patchwork's own h
 
 ```
 plugins/patchwork/
-├── plugin.json   { "name": "Patchwork", "hooks": "./hooks.json" }
-└── hooks.json    { "hooks": { "stop": [ { "hooks": [ { "type": "command", "command": "…" } ] } ] } }
+└── plugin.json   { "name": "Patchwork", "hooks": { "stop": [ { "hooks": [ { "type": "command", "command": "…" } ] } ] } }
 ```
 
 `apps/server/src/plugins/` reads the manifest from `.patchwork-plugin/plugin.json`,
 `.codex-plugin/plugin.json`, or a plain `plugin.json`, so a Codex bundle works as it is. `hooks`
-and `apps` are each either inline (`{ "hooks": { … } }`, `{ "apps": { … } }`) or a path, relative to
-the bundle folder, to a file holding that. Each part is read on its own: one this version cannot
-read is left empty, and the rest of the bundle still loads.
+and `apps` are each either inline or a path, relative to the bundle folder, to a file holding them,
+and may be nested under their own key as Codex writes them (`{ "hooks": { … } }`,
+`{ "apps": { … } }`). Each part is read on its own: one this version cannot read is left empty, and
+the rest of the bundle still loads.
 
 Hook events match whatever their case: `userPromptSubmit`, `sessionStart`, `preToolUse`,
 `permissionRequest`, `postToolUse`, `preCompact`, `postCompact`, `subagentStart`,

@@ -1,4 +1,4 @@
-//! MCP servers for API providers. The servers live in `mcp-servers.json` in the config folder,
+//! MCP servers for API providers. The servers live in `mcp.json` in the config folder,
 //! in the `mcpServers` shape other MCP clients use, so a server's README snippet pastes in as
 //! is. Each enabled server starts once, when Patchwork opens, and stays up: every API turn
 //! gets its tools without waiting, and a server keeps its state (a browser, a login) between
@@ -31,7 +31,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
-const CONFIG_FILE: &str = "mcp-servers.json";
+const CONFIG_FILE: &str = "mcp.json";
 const PROTOCOL: &str = "2025-06-18";
 /// Starting a server and listing its tools; `npx` may download the server first.
 const START_TIMEOUT: Duration = Duration::from_secs(90);

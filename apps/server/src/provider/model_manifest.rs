@@ -16,10 +16,10 @@ const CACHE_FILE: &str = "model-manifest.json";
 
 static CACHE: OnceLock<PathBuf> = OnceLock::new();
 
-/// Starts the background fetch. Call once at startup with the config directory.
+/// Starts the background fetch. Call once at startup with the cache directory.
 /// Without a token (environment or `.env`) nothing is fetched.
-pub fn start(config_dir: &Path) {
-    let path = config_dir.join(CACHE_FILE);
+pub fn start(cache_dir: &Path) {
+    let path = cache_dir.join(CACHE_FILE);
     let _ = CACHE.set(path.clone());
     let token = std::env::var(TOKEN_VAR)
         .ok()

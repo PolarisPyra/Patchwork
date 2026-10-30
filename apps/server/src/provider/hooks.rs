@@ -305,7 +305,7 @@ fn list_codex_hooks(overrides: &[String], root: &str) -> Option<Vec<(String, Str
 /// call, and the plugins' hooks. Each set of hooks has a folder of its own, named by its hash, so
 /// turns that run different ones do not share a file.
 pub fn antigravity_dir(spec: &TurnSpec) -> Option<std::path::PathBuf> {
-    let relay = crate::provider::mcp::relay_file()?;
+    crate::provider::mcp::relay_file()?;
     let mut hooks = hooks_json(spec.hooks, AgentKind::Antigravity);
     // Installed for every turn, so a rule saved while the turn runs decides its next call.
     if crate::provider::mcp::relay_endpoint().is_some() {
@@ -331,10 +331,7 @@ pub fn antigravity_dir(spec: &TurnSpec) -> Option<std::path::PathBuf> {
     let hash = text.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
         (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
     });
-    let dir = relay
-        .parent()?
-        .join("antigravity-hooks")
-        .join(format!("{hash:016x}"));
+    let dir = crate::skills::cli_dir("antigravity").join(format!("{hash:016x}"));
     let file = dir.join(".agents").join("hooks.json");
     if std::fs::read_to_string(&file).ok().as_deref() != Some(text.as_str()) {
         std::fs::create_dir_all(file.parent()?).ok()?;

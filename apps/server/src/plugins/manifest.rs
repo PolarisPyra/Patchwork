@@ -53,8 +53,9 @@ pub(super) fn read_bundle(dir: &Path, enabled: bool) -> Option<Plugin> {
     })
 }
 
-/// A part of the manifest that Codex nests under its own key, `{ "<key>": { … } }`, either inline
-/// or in a file the manifest names by path relative to the bundle.
+/// A part of the manifest, either inline or in a file the manifest names by path relative to the
+/// bundle. Codex nests it under its own key, `{ "<key>": { … } }`; without that key it is the part
+/// itself, so `plugin.json` can hold its hooks as `"hooks": { "preToolUse": … }`.
 fn section(dir: &Path, value: Option<&Value>, key: &str) -> Option<Value> {
     let outer = match value? {
         Value::String(path) => {
@@ -62,7 +63,7 @@ fn section(dir: &Path, value: Option<&Value>, key: &str) -> Option<Value> {
         }
         other => other.clone(),
     };
-    outer.get(key).cloned()
+    Some(outer.get(key).cloned().unwrap_or(outer))
 }
 
 /// The hooks in `{ "<Event>": [ { "hooks": [ handler, … ] } ] }`, sorted by event. Events this

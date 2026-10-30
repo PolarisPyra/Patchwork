@@ -9,14 +9,14 @@ use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 use serde_json::{Value, json};
 
-use super::{CALL_TIMEOUT, path, pool};
+use super::{CALL_TIMEOUT, pool};
 
 /// The argument that starts Patchwork's binary as a relay to one of Patchwork's servers.
 pub const PROXY_ARG: &str = "--mcp-proxy";
 const RELAY_FILE: &str = "mcp-relay.json";
 static RELAY_READY: AtomicBool = AtomicBool::new(false);
 /// This copy's own relay, as it bound it. Kept in memory rather than read back from `RELAY_FILE`,
-/// which every copy of the app on the machine writes to the same config folder.
+/// which every copy of the app on the machine writes to the same state folder.
 static ENDPOINT: OnceLock<Value> = OnceLock::new();
 
 /// Answers a permission hook's request (see `crate::permissions::hook`).
@@ -32,12 +32,12 @@ pub fn set_hook_handler(handler: HookHandler) {
 pub fn relay_file() -> Option<PathBuf> {
     RELAY_READY
         .load(Ordering::Relaxed)
-        .then(|| path().with_file_name(RELAY_FILE))
+        .then(|| crate::system::dirs().state.join(RELAY_FILE))
 }
 
 /// The relay this copy of Patchwork listens on, as `{"port", "token"}`. A turn is handed it
 /// outright, so its hooks reach the app that started them: two copies of Patchwork share one
-/// config folder, and `relay_file` names whichever of them started last.
+/// state folder, and `relay_file` names whichever of them started last.
 pub fn relay_endpoint() -> Option<Value> {
     ENDPOINT.get().cloned()
 }
@@ -48,7 +48,10 @@ pub(super) fn serve_relay() -> Result<(), String> {
     let token = uuid::Uuid::new_v4().simple().to_string();
     let endpoint = json!({"port": port, "token": token});
     let _ = ENDPOINT.set(endpoint.clone());
-    crate::system::fs::write_private(&path().with_file_name(RELAY_FILE), &endpoint.to_string())?;
+    crate::system::fs::write_private(
+        &crate::system::dirs().state.join(RELAY_FILE),
+        &endpoint.to_string(),
+    )?;
     RELAY_READY.store(true, Ordering::Relaxed);
     for stream in listener.incoming().flatten() {
         let token = token.clone();

@@ -1,4 +1,4 @@
-//! App state persisted in SQLite (`patchwork.db` in the app config dir).
+//! App state persisted in SQLite (`patchwork.db` in the data folder).
 //!
 //! - `store`: the `Store` the rest of the app uses, with its in-memory cache.
 //! - `connection`: opening the file, then migrating it.

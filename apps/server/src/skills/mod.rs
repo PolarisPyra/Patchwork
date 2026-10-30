@@ -23,11 +23,6 @@ pub fn init(config_dir: &Path) {
     }
 }
 
-/// The config folder, once `init` has run.
-pub(crate) fn config_dir() -> Option<&'static Path> {
-    CONFIG_DIR.get().map(PathBuf::as_path)
-}
-
 fn default_dir() -> PathBuf {
     CONFIG_DIR.get().cloned().unwrap_or_default().join("skills")
 }
@@ -162,14 +157,14 @@ pub fn invocation(agent: AgentKind, skill: &Skill, rest: &str) -> String {
     text.trim_end().to_string()
 }
 
-/// Claude loads the skills as the plugin in `<config>/claude`, which takes its name from that
-/// folder, so they show up as `claude:<name>`.
+/// Claude loads the skills as the plugin in `<cache>/launch/claude`, which takes its name from
+/// that folder, so they show up as `claude:<name>`.
 const PLUGIN: &str = "claude";
 
-/// The folder a CLI loads its skills and agents from: `<config>/<cli>`, holding `skills` and
-/// `agents`.
-pub(crate) fn cli_dir(cli: &str) -> Option<PathBuf> {
-    CONFIG_DIR.get().map(|config| config.join(cli))
+/// The folder a CLI loads its skills and agents from: `<cache>/launch/<cli>`, holding `skills`
+/// and `agents`.
+pub(crate) fn cli_dir(cli: &str) -> PathBuf {
+    crate::system::dirs().launch(cli)
 }
 
 /// Makes the `skills` folder in a CLI's folder hold a copy of each enabled skill and nothing
@@ -177,7 +172,7 @@ pub(crate) fn cli_dir(cli: &str) -> Option<PathBuf> {
 /// switched-off skills stay out. They are copies rather than links, since Windows needs a
 /// privilege to make links.
 pub fn sync(settings: &Settings, cli: &str) -> Option<PathBuf> {
-    let root = cli_dir(cli)?;
+    let root = cli_dir(cli);
     let skills = root.join("skills");
     std::fs::create_dir_all(&skills).ok()?;
     let wanted: Vec<(std::ffi::OsString, PathBuf)> = enabled(settings)
@@ -256,7 +251,7 @@ pub fn folders(settings: &Settings) -> Vec<PathBuf> {
     out.extend(
         ["claude", "codex", "opencode"]
             .iter()
-            .filter_map(|cli| Some(cli_dir(cli)?.join("skills"))),
+            .map(|cli| cli_dir(cli).join("skills")),
     );
     if let Some(home) = crate::system::fs::home_dir() {
         out.extend(AGENT_SKILLS.iter().map(|folder| home.join(folder)));

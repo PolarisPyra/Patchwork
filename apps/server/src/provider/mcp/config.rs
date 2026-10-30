@@ -1,4 +1,4 @@
-//! The servers `mcp-servers.json` lists: reading and saving them, their stored secrets, and matching a CLI's servers against them.
+//! The servers `mcp.json` lists: reading and saving them, their stored secrets, and matching a CLI's servers against them.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

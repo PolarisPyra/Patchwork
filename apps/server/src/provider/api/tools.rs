@@ -31,9 +31,7 @@ fn number(args: &Value, key: &str) -> Result<i32, String> {
 
 /// Takes a screenshot and returns its path, for the model to read as an image.
 fn computer_screenshot() -> Result<String, String> {
-    let dir = crate::skills::config_dir()
-        .ok_or("Patchwork's config folder is not known")?
-        .join("screenshots");
+    let dir = crate::system::dirs().cache.join("screenshots");
     let path = crate::computer::screenshot_to_file(&dir)?;
     Ok(format!(
         "Screenshot written to {}. Read it with read_file to see the screen.",

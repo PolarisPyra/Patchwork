@@ -73,4 +73,16 @@ The open project is watched for changes, and the UI never polls git.
 
 ## Config location
 
-State lives in SQLite at `~/.config/patchwork/patchwork.db`, and future config files go in the same folder. On first launch Patchwork moves its data there from the old `~/.config/dev.patchwork.ade` folder, and converts any older `settings.json` / `threads.json` into the database, keeping them as `*.json.bak`.
+`apps/server/src/system/dirs.rs` splits Patchwork's files by who owns them, each in a `patchwork` folder inside the platform's own:
+
+| Holds | Linux | macOS | Windows |
+|---|---|---|---|
+| Config: what the user edits, `skills/`, `agents/`, `plugins/`, `mcp.json`, `providers.json` | `~/.config/patchwork` | `~/Library/Application Support/patchwork` | `%APPDATA%\patchwork` |
+| Data: what Patchwork keeps, `patchwork.db` and `api-sessions/` | `~/.local/share/patchwork` | `~/Library/Application Support/patchwork/data` | `%LOCALAPPDATA%\patchwork` |
+| Cache: what Patchwork rebuilds, `launch/<cli>/` (the skills, agents and hooks each CLI is launched with), `model-manifest.json`, `mcp-cli-tools.json`, `screenshots/` | `~/.cache/patchwork` | `~/Library/Caches/patchwork` | `%LOCALAPPDATA%\patchwork\cache` |
+| State: `mcp-relay.json` | `~/.local/state/patchwork` | the data folder | the data folder |
+| Logs, one folder per launch | `~/.local/state/patchwork/logs` | `~/Library/Logs/patchwork` | `%LOCALAPPDATA%\patchwork\logs` |
+
+macOS has one folder for config and data, and Windows one for data and cache, so the second is a subfolder of the first. Chats' scratch folders and pasted images stay in the app-identifier data folder.
+
+On launch, `Dirs::adopt_old_layout` moves what older versions kept in the config folder to its new folder and deletes what nothing reads any more; something already in its new place wins. Patchwork also moves its database from the older `~/.config/dev.patchwork.ade` folder, and converts any older `settings.json` / `threads.json` into the database, keeping them as `*.json.bak`.

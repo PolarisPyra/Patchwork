@@ -83,7 +83,7 @@ folder that is deleted with the chat.
 
 ## Your data
 
-- State lives in SQLite at `~/.config/patchwork/patchwork.db`.
+- What you edit (skills, agents, plugins, MCP servers, API providers) is in `~/.config/patchwork`. State lives in SQLite at `~/.local/share/patchwork/patchwork.db`. `~/.cache/patchwork` is rebuilt when deleted, and logs are in `~/.local/state/patchwork/logs`. macOS and Windows use their own folders (see `docs/architecture.md`).
 - Tasks run directly in your project folder. Chats run in a scratch folder, deleted with the chat.
 - The agent CLIs do the work and talk to their own services. Patchwork reads the files they save,
   such as session transcripts, to show history and usage — [Agent CLIs](docs/agent-clis.md) lists

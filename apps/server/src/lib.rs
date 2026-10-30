@@ -78,20 +78,22 @@ pub struct Server {
 }
 
 impl Server {
-    /// `config_dir` holds the database and config files; `data_dir` holds chat scratch folders.
-    pub fn open(config_dir: PathBuf, data_dir: &Path, sink: EventSink) -> Res<Arc<Self>> {
-        provider::model_manifest::start(&config_dir);
-        crate::provider::api::config::init(&config_dir);
-        provider::mcp::init(&config_dir);
-        skills::init(&config_dir);
-        plugins::init(&config_dir);
-        let agents = agents::Library::open(&config_dir);
+    /// `dirs` are Patchwork's folders (see `system::dirs`); `data_dir` is the app's own folder,
+    /// which holds chat scratch folders.
+    pub fn open(dirs: system::Dirs, data_dir: &Path, sink: EventSink) -> Res<Arc<Self>> {
+        system::dirs::init(dirs.clone());
+        provider::model_manifest::start(&dirs.cache);
+        crate::provider::api::config::init(&dirs.config);
+        provider::mcp::init(&dirs.config);
+        skills::init(&dirs.config);
+        plugins::init(&dirs.config);
+        let agents = agents::Library::open(&dirs.config);
         std::thread::spawn(system::scope::prepare);
-        let logs = logging::session_dir(&config_dir);
+        let logs = logging::session_dir(&dirs.logs);
         import::debug_log::LOG.init(logs.clone());
         logging::RENDERER.init(logs.clone());
         logging::AGENTS.init(logs);
-        let store = Store::open(config_dir)?;
+        let store = Store::open(dirs.data)?;
         follow_log_levels(&store.settings());
         orchestration::recovery::recover(&store)?;
         let server = Arc::new(Self {

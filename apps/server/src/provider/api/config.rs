@@ -1,5 +1,5 @@
 //! API providers: OpenAI-compatible endpoints the user adds with their own key. The providers
-//! live in `api-providers.json` in the config folder, which holds no secrets. Each key goes to
+//! live in `providers.json` in the config folder, which holds no secrets. Each key goes to
 //! the system credential store (Keychain, Credential Manager, or the Secret Service), or, where
 //! none is available, to `api-keys.json` beside it, readable only by the user. A provider can
 //! instead name an environment variable that holds its key. Header values are stored the same
@@ -20,9 +20,9 @@ use crate::provider::ModelOption;
 
 /// The credential store's service name for every key Patchwork saves.
 const SERVICE: &str = "dev.patchwork.ade";
-const CONFIG_FILE: &str = "api-providers.json";
+const CONFIG_FILE: &str = "providers.json";
 const KEYS_FILE: &str = "api-keys.json";
-/// Conversations of API tasks, one file per session.
+/// Conversations of API tasks, one file per session, in the data folder.
 const SESSIONS_DIR: &str = "api-sessions";
 
 static DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -41,7 +41,7 @@ fn dir() -> PathBuf {
 }
 
 pub fn sessions_dir() -> PathBuf {
-    dir().join(SESSIONS_DIR)
+    crate::system::dirs().data.join(SESSIONS_DIR)
 }
 
 fn keys() -> std::sync::MutexGuard<'static, HashMap<String, String>> {

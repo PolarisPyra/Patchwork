@@ -173,7 +173,7 @@ fn cache() -> std::sync::MutexGuard<'static, Listings> {
 }
 
 fn cache_file() -> PathBuf {
-    mcp::path().with_file_name(CACHE_FILE)
+    crate::system::dirs().cache.join(CACHE_FILE)
 }
 
 /// Saves the tool lists that were read; failures are not kept, so they are tried again.

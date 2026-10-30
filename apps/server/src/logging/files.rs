@@ -27,12 +27,12 @@ const MAX_READ_BYTES: u64 = 1024 * 1024;
 /// This launch's log folder, made and tidied by the first call to `session_dir`.
 static SESSION: OnceLock<PathBuf> = OnceLock::new();
 
-/// This launch's folder in `<config>/logs`. The first call makes it, deletes all but the
+/// This launch's folder in the logs folder `logs`. The first call makes it, deletes all but the
 /// newest `KEEP_SESSIONS` folders, and deletes the single log files older versions wrote.
-pub fn session_dir(config_dir: &Path) -> PathBuf {
+pub fn session_dir(logs: &Path) -> PathBuf {
     SESSION
         .get_or_init(|| {
-            let root = config_dir.join("logs");
+            let root = logs.to_path_buf();
             let dir = root.join(Local::now().format("%Y%m%dT%H%M%S").to_string());
             let _ = std::fs::create_dir_all(&dir);
             let entries: Vec<_> = std::fs::read_dir(&root)

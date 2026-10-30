@@ -180,15 +180,21 @@ pub fn run() {
             }
         })
         .setup(|app| {
-            // Config lives in `~/.config/patchwork` rather than the app-identifier folder.
-            let config_dir = app.path().config_dir()?.join("patchwork");
+            // Patchwork's folders are `patchwork` in the platform's own rather than the
+            // app-identifier folders. Older versions kept everything in the config folder.
+            let dirs = patchwork_server::system::Dirs::new(
+                &app.path().config_dir()?,
+                &app.path().local_data_dir()?,
+                &app.path().cache_dir()?,
+            );
+            let not_moved = dirs.adopt_old_layout();
             // The app's own messages go to `main.log` in this launch's log folder in every
             // build, as VS Code writes its own, and to stdout in development. Settings →
             // Logging sets how much they record.
             {
                 use tauri_plugin_log::{Builder, RotationStrategy, Target, TargetKind};
                 let mut targets = vec![Target::new(TargetKind::Folder {
-                    path: patchwork_server::logging::session_dir(&config_dir),
+                    path: patchwork_server::logging::session_dir(&dirs.logs),
                     file_name: Some("main".into()),
                 })];
                 if cfg!(debug_assertions) {
@@ -220,11 +226,14 @@ pub fn run() {
                     report(info);
                 }));
             }
-            persistence::adopt_old_dir(&app.path().app_config_dir()?, &config_dir)?;
+            for problem in not_moved {
+                log::warn!("could not move to Patchwork's new folders: {problem}");
+            }
+            persistence::adopt_old_dir(&app.path().app_config_dir()?, &dirs.data)?;
             let handle = app.handle().clone();
             let notifier = Notifier::default();
             let server = Server::open(
-                config_dir,
+                dirs,
                 &app.path().app_local_data_dir()?,
                 Box::new(move |event| {
                     notifier.on_event(&handle, &event);

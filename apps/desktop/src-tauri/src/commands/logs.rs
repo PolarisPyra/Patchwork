@@ -5,11 +5,7 @@ use super::*;
 /// Opens the folder of the debug logs in the file manager, creating it first.
 #[tauri::command]
 pub(crate) async fn open_logs_folder(app: AppHandle) -> Res<()> {
-    let dir = app
-        .path()
-        .config_dir()
-        .map_err(|e| e.to_string())?
-        .join("patchwork/logs");
+    let dir = patchwork_server::system::dirs().logs.clone();
     open_folder(&app, &dir).await
 }
 
