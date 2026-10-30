@@ -222,6 +222,7 @@ fn antigravity_call(call: &Value) -> Option<(String, String, Target)> {
         arg(&[
             "TargetFile",
             "AbsolutePath",
+            "Path",
             "path",
             "file_path",
             "filePath",
