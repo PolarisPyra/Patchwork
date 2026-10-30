@@ -42,15 +42,16 @@ servers in Settings → MCP Servers. The app ships no plugins. Patchwork's own h
 
 ```
 plugins/patchwork/
-└── plugin.json   { "name": "Patchwork", "hooks": { "stop": [ { "hooks": [ { "type": "command", "command": "…" } ] } ] } }
+└── hooks.json   { "hooks": { "stop": [ { "hooks": [ { "type": "command", "command": "…" } ] } ] } }
 ```
 
 `apps/server/src/plugins/` reads the manifest from `.patchwork-plugin/plugin.json`,
-`.codex-plugin/plugin.json`, or a plain `plugin.json`, so a Codex bundle works as it is. `hooks`
-and `apps` are each either inline or a path, relative to the bundle folder, to a file holding them,
-and may be nested under their own key as Codex writes them (`{ "hooks": { … } }`,
-`{ "apps": { … } }`). Each part is read on its own: one this version cannot read is left empty, and
-the rest of the bundle still loads.
+`.codex-plugin/plugin.json`, or a plain `plugin.json`, so a Codex bundle works as it is. A folder
+with none of those and a `hooks.json` is a plugin of hooks alone, named for its folder unless the
+file gives `name`. `hooks` and `apps` are each either inline or a path, relative to the bundle
+folder, to a file holding them, and may be nested under their own key as Codex writes them
+(`{ "hooks": { … } }`, `{ "apps": { … } }`). Each part is read on its own: one this version cannot
+read is left empty, and the rest of the bundle still loads.
 
 Hook events match whatever their case: `userPromptSubmit`, `sessionStart`, `preToolUse`,
 `permissionRequest`, `postToolUse`, `preCompact`, `postCompact`, `subagentStart`,
@@ -59,8 +60,8 @@ Hook events match whatever their case: `userPromptSubmit`, `sessionStart`, `preT
 (`Bash`, `Edit|Write`); none, or `*`, is every tool.
 
 Patchwork runs the turn events itself, for every agent: `userPromptSubmit` before a turn starts,
-and `stop` or `interrupt` then `sessionEnd` after it ends. Such a command runs in the user's shell
-in the turn's project folder, with `PATCHWORK_EVENT`, `PATCHWORK_THREAD`, `PATCHWORK_CWD`,
+and `stop` or `interrupt` then `sessionEnd` after it ends. Such a command runs in the user's shell,
+or bash when that shell does not read POSIX commands (fish, Nushell), in the turn's project folder, with `PATCHWORK_EVENT`, `PATCHWORK_THREAD`, `PATCHWORK_CWD`,
 `PATCHWORK_AGENT` and `PATCHWORK_STATUS` set, and is stopped at its `timeoutSec` (default 60, 1 to
 600). A failed hook is logged and never stops the turn.
 

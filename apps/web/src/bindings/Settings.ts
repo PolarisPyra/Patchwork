@@ -22,7 +22,12 @@ agent: AgentKind | null,
 /**
  * Agent CLIs the user located by hand, used instead of searching for them.
  */
-agentPaths: { [key in AgentKind]?: string }, integrations: Integrations, projects: Array<Project>, activeProjectId: string | null, tokens: TokenSettings, 
+agentPaths: { [key in AgentKind]?: string }, 
+/**
+ * What each agent CLI is told at launch after Patchwork's own instructions. API providers
+ * keep theirs with the provider.
+ */
+systemPrompts: { [key in AgentKind]?: string }, integrations: Integrations, projects: Array<Project>, activeProjectId: string | null, tokens: TokenSettings, 
 /**
  * Model, `provider/model`, that reads the images of a message on Patchwork's own agent.
  * None sends images to the main model.

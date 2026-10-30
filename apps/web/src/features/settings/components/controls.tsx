@@ -11,6 +11,9 @@ import { MinusIcon, PlusIcon } from "@phosphor-icons/react";
 export const INPUT =
   "h-7 w-full min-w-0 rounded-[var(--radius-sm)] border border-border-strong bg-editor px-2 text-[length:var(--fs-sm)] text-fg outline-none focus:border-accent";
 
+/** A text area in the same style, for text longer than a line. */
+export const TEXTAREA = `${INPUT} h-auto min-h-[70px] w-full resize-y py-1.5`;
+
 /** A filter chip, filled when it is the one showing. */
 export function chip(on: boolean): string {
   return `flex h-7 flex-none cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-[length:var(--fs-sm)] ${on ? "border-accent bg-accent-soft text-fg" : "border-border bg-transparent text-fg hover:bg-hover"}`;

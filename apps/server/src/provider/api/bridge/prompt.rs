@@ -1,4 +1,4 @@
-//! The system prompt the agent runs with: Patchwork's guidance, the project's instructions, and the plan-mode and computer-use parts.
+//! The system prompt the agent runs with: Patchwork's guidance, the provider's own prompt from Settings, the project's instructions, and the plan-mode and computer-use parts.
 
 use std::path::Path;
 use super::Request;
@@ -19,6 +19,10 @@ pub(super) fn system_prompt(request: &Request, root_dir: &Path) -> String {
     );
     if let Some(instructions) = &request.instructions {
         prompt.push_str(&format!("\n\n{instructions}"));
+    }
+    let custom = request.system_prompt.trim();
+    if !custom.is_empty() {
+        prompt.push_str(&format!("\n\n{custom}"));
     }
     if request.plan {
         prompt.push_str(&format!("\n\n{PLAN_MODE}"));

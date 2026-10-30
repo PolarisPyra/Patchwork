@@ -19,26 +19,30 @@ use crate::threads::Role;
 use crate::threads::Thread;
 use crate::threads::ThreadParent;
 use crate::threads::ToolCall;
-use super::process::write_line;
-use super::Runner;
-use super::stream::publish;
-use super::turn::assistant_message;
-use super::turn::Turn;
+use crate::orchestration::turn::process::write_line;
+use crate::orchestration::Runner;
+use crate::orchestration::output::stream::publish;
+use crate::orchestration::turn::start::assistant_message;
+use crate::orchestration::turn::start::Turn;
 
 /// Subagents the agent started: tool call id → the agent's own task id.
-pub(super) type Tasks = Arc<Mutex<HashMap<String, String>>>;
+pub(in crate::orchestration) type Tasks = Arc<Mutex<HashMap<String, String>>>;
 
 /// Control requests waiting for the agent's answer, by request id.
-pub(super) type Controls = Arc<Mutex<HashMap<String, mpsc::Sender<()>>>>;
+pub(in crate::orchestration) type Controls = Arc<Mutex<HashMap<String, mpsc::Sender<()>>>>;
 
 /// How long a steer waits for Claude to move its foreground subagents to the background.
-pub(super) const BACKGROUND_WAIT: Duration = Duration::from_secs(5);
+pub(in crate::orchestration) const BACKGROUND_WAIT: Duration = Duration::from_secs(5);
 
 impl Runner {
     /// Claude takes a steer by cancelling the calls it is running, and a subagent working in the
     /// foreground is one of them. Each is moved to the background first, where it keeps working
     /// and reports back when done; this waits for Claude to confirm, up to `BACKGROUND_WAIT`.
-    pub(super) fn background_subagents(&self, thread_id: &str, subagents: &[String]) {
+    pub(in crate::orchestration) fn background_subagents(
+        &self,
+        thread_id: &str,
+        subagents: &[String],
+    ) {
         let (stdin, controls) = {
             let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
             let Some(turn) = turns.get(thread_id) else {
@@ -94,16 +98,16 @@ impl Runner {
 }
 
 /// A subagent's own thread, which its frames stream into while it runs.
-pub(super) struct SubagentThread {
-    pub(super) thread_id: String,
+pub(in crate::orchestration) struct SubagentThread {
+    pub(in crate::orchestration) thread_id: String,
     /// The reply its work streams into.
-    pub(super) message_id: String,
-    pub(super) has_text: bool,
+    pub(in crate::orchestration) message_id: String,
+    pub(in crate::orchestration) has_text: bool,
 }
 
 /// Opens a read-only thread for the subagent `tool` started, with its instructions as the
 /// first message and an empty reply for its work. None when the call starts no subagent.
-pub(super) fn open_child(turn: &Turn, tool: &ToolCall) -> Option<SubagentThread> {
+pub(in crate::orchestration) fn open_child(turn: &Turn, tool: &ToolCall) -> Option<SubagentThread> {
     let sub = tool.subagent.as_ref()?;
     let parent = turn.server.store.thread(&turn.thread_id)?;
     let created_at = now_ms();
@@ -166,7 +170,7 @@ pub(super) fn open_child(turn: &Turn, tool: &ToolCall) -> Option<SubagentThread>
 }
 
 /// Ends the reply in the thread of the subagent `tool_id` started, once that subagent is done.
-pub(super) fn finish_child(
+pub(in crate::orchestration) fn finish_child(
     turn: &Turn,
     children: &mut HashMap<String, SubagentThread>,
     tool_id: &str,

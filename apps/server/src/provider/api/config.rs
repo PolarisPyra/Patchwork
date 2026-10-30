@@ -78,6 +78,9 @@ pub struct ApiProvider {
     /// A logo chosen for it, as an image `data:` URL; replaces the preset's.
     #[serde(default)]
     pub logo: Option<String>,
+    /// Added to the system prompt of every turn on this provider's models.
+    #[serde(default)]
+    pub system_prompt: String,
 }
 
 fn custom() -> String {
@@ -514,6 +517,7 @@ fn blank() -> ApiProvider {
         key_env: None,
         key_store: None,
         logo: None,
+        system_prompt: String::new(),
     }
 }
 
@@ -551,5 +555,6 @@ pub fn connection(model: Option<&str>) -> Result<Value, String> {
         "model": model_id,
         "provider": provider.name,
         "preset": provider.preset,
+        "systemPrompt": provider.system_prompt,
     }))
 }

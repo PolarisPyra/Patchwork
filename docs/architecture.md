@@ -8,7 +8,7 @@ The repo is split into `apps/web`, `apps/server`, and `apps/desktop`:
   - `src/lib.rs` — the module list, `Server`, and how it opens. Every other folder is one domain, holding its wire types (`types.rs`, re-exported from the folder), its `impl Server` operations (`ops.rs` where it has them), and its logic:
   - `src/threads/` — threads and their messages; `src/projects/` — projects and their folders; `src/settings/` — the settings
   - `src/provider/` — one module per agent CLI (`claude/`, `codex/`, `antigravity.rs`, `opencode/`, `api/`), finding and probing them (`locate.rs`, `probe.rs`), what a turn sends them (`turn.rs`) and reads back (`parsed.rs`), and handing each one its hooks (`hooks.rs`)
-  - `src/orchestration/` — runs turns: spawns agent CLIs, turns their output into agent events, handles steering, queues, subagents, goals, per-turn file checkpoints (`checkpoint.rs`), which files each reply changed (`attribution.rs`), and continuing turns cut off by a restart (`recovery.rs`)
+  - `src/orchestration/` — runs turns, grouped by feature, one folder each, with `orchestration.rs` as the index: `turn/` (the `Runner`, starting and ending a turn, its process, turns cut off by a restart), `messages/` (sending, steering and queueing), `output/` (reading agent output into agent events and streaming them), `approvals/`, `changes/` (which files each reply changed, and per-turn checkpoints), `tasks/` (background tasks and subagents), and `goal/`
   - `src/permissions/` — the rules Patchwork answers approvals by, and the permission hook Codex and Antigravity run
   - `src/plugins/` — plugin bundles and their hooks, with the built-in hooks Patchwork carries (`builtin/`)
   - `src/persistence/` — SQLite store and schema migrations
@@ -28,7 +28,7 @@ The repo is split into `apps/web`, `apps/server`, and `apps/desktop`:
 
 ## Data model
 
-Everything the sidebar shows comes from one SQLite database, `patchwork.db`, in the config folder. The store loads it into memory at startup and writes each change through before it is visible (`apps/server/src/persistence/mod.rs`).
+Everything the sidebar shows comes from one SQLite database, `patchwork.db`, in the data folder. The store loads it into memory at startup and writes each change through before it is visible (`apps/server/src/persistence/mod.rs`).
 
 | Table | What it holds |
 | --- | --- |
@@ -55,7 +55,7 @@ The open project is watched for changes, and the UI never polls git.
 
 - **Watching** (`apps/server/src/watch/`). On Linux, inotify watches one folder at a time, so `linux.rs` adds a watch for each folder git keeps. On macOS and Windows, FSEvents and ReadDirectoryChangesW cover a whole tree with one watch, so `tree.rs` watches the project root. On every platform, `filter.rs` drops paths git ignores, `node_modules`, `target`, and everything in `.git` below its top level. The top level is kept because commits, staging, and checkouts change it.
 - **Refreshing.** Events are merged until 250 ms pass without one, or for at most 1 s. Then `Server::watch_project` runs one `git status`. It runs one `git diff HEAD --numstat` for line counts only when a tracked file changed. The result goes to the UI as a `project-changed` event. Git runs with `GIT_OPTIONAL_LOCKS=0`, so its own reads do not rewrite `.git/index` and trigger another refresh.
-- **Which files a reply changed** (`apps/server/src/orchestration/attribution.rs`).
+- **Which files a reply changed** (`apps/server/src/orchestration/changes/attribution.rs`).
   - **Edit tools.** They name their files, and those files are listed as soon as the tool reports them.
   - **Other changes.** Changes made any other way, such as a shell `rm`, are found by comparing `git status` with how it stood when the reply started.
   - **Who made a change.** No platform reports which process wrote a file. A change therefore counts only if it happened while one of the reply's calls that could write it was running:

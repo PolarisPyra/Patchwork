@@ -130,6 +130,19 @@ pub fn permission_config(spec: &TurnSpec) -> Option<Value> {
     (!rules.is_empty()).then(|| json!({ "permission": rules }))
 }
 
+/// The user's system prompt for `opencode run`, in a file its `instructions` loads into the system
+/// prompt. 2.x gets it from the bridge instead (see `bridge.rs`).
+pub fn instructions_config(spec: &TurnSpec) -> Option<Value> {
+    let text = spec.instructions?;
+    match crate::agents::launch_file("opencode", spec.root, "system-prompt.md", text) {
+        Ok(file) => Some(json!({ "instructions": [file] })),
+        Err(e) => {
+            log::warn!("could not write OpenCode's system prompt: {e}");
+            None
+        }
+    }
+}
+
 /// The skills folder for 2.x's `skills.paths`.
 pub fn skills_config(spec: &TurnSpec) -> Option<Value> {
     spec.skills_dir

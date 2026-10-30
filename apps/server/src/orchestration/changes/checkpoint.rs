@@ -96,7 +96,7 @@ fn snapshot(root: &str) -> Result<String, String> {
 
 /// Snapshots the project before the turn for `message_id` changes it. Nothing is taken outside
 /// a git repository.
-pub(super) fn capture(root: &str, thread_id: &str, message_id: &str) {
+pub(in crate::orchestration) fn capture(root: &str, thread_id: &str, message_id: &str) {
     if git(root, &["rev-parse", "--git-dir"]).is_err() {
         return;
     }
@@ -114,7 +114,7 @@ pub(super) fn capture(root: &str, thread_id: &str, message_id: &str) {
 /// Snapshots the project as the turn after `user_message_id` ends, and pairs it with the snapshot
 /// from before that turn. Each of `replies` keeps the end snapshot alive. None when the turn had
 /// no snapshot before it.
-pub(super) fn record_end(
+pub(in crate::orchestration) fn record_end(
     root: &str,
     thread_id: &str,
     user_message_id: &str,

@@ -18,59 +18,63 @@ use crate::logging::{AGENTS, Data, Source};
 use crate::provider::AgentKind;
 use crate::settings::LogLevel;
 use crate::workspace;
-use super::queue::Steers;
+use crate::orchestration::messages::queue::Steers;
 
 /// How much of the agent's stderr is kept for error reporting.
-pub(super) const STDERR_TAIL_BYTES: usize = 4096;
+pub(in crate::orchestration) const STDERR_TAIL_BYTES: usize = 4096;
 
 /// How long a stopped agent gets to exit after SIGTERM before it is sent SIGKILL.
-pub(super) const KILL_AFTER: Duration = Duration::from_secs(5);
+pub(in crate::orchestration) const KILL_AFTER: Duration = Duration::from_secs(5);
 
 /// How long quitting the app waits for agents to exit after SIGTERM.
-pub(super) const QUIT_GRACE: Duration = Duration::from_secs(2);
+pub(in crate::orchestration) const QUIT_GRACE: Duration = Duration::from_secs(2);
 
 /// How long a stopped agent gets to end its reply after being interrupted before it is sent
 /// SIGTERM.
-pub(super) const INTERRUPT_GRACE: Duration = Duration::from_secs(5);
+pub(in crate::orchestration) const INTERRUPT_GRACE: Duration = Duration::from_secs(5);
 
 /// The longest line of agent output that is kept; longer lines are dropped whole.
-pub(super) const MAX_LINE_BYTES: usize = 8 << 20;
+pub(in crate::orchestration) const MAX_LINE_BYTES: usize = 8 << 20;
 
 /// How long a turn may run before the agent is stopped as timed out.
-pub(super) const TURN_TIMEOUT: Duration = Duration::from_secs(4 * 60 * 60);
+pub(in crate::orchestration) const TURN_TIMEOUT: Duration = Duration::from_secs(4 * 60 * 60);
 
 /// How long an idle agent stays up for the next message after its last reply, unless shell
 /// commands it left running keep it up longer.
-pub(super) const IDLE_LIMIT: Duration = Duration::from_secs(30 * 60);
+pub(in crate::orchestration) const IDLE_LIMIT: Duration = Duration::from_secs(30 * 60);
 
 /// How often a running agent is checked against `TURN_TIMEOUT` and `IDLE_LIMIT`.
-pub(super) const WATCH_EVERY: Duration = Duration::from_secs(60);
+pub(in crate::orchestration) const WATCH_EVERY: Duration = Duration::from_secs(60);
 
 /// The agent's stdin; None once the turn has finished.
-pub(super) type Stdin = Arc<Mutex<Option<AgentStdin>>>;
+pub(in crate::orchestration) type Stdin = Arc<Mutex<Option<AgentStdin>>>;
 
 /// The agent's stdin pipe, with where its lines come from for the agent log.
-pub(super) struct AgentStdin {
+pub(in crate::orchestration) struct AgentStdin {
     pipe: ChildStdin,
     source: Source,
 }
 
 impl AgentStdin {
-    pub(super) fn take(child: &mut Child, agent: AgentKind, thread_id: &str) -> Option<Self> {
+    pub(in crate::orchestration) fn take(
+        child: &mut Child,
+        agent: AgentKind,
+        thread_id: &str,
+    ) -> Option<Self> {
         let source = Source::agent(agent, child.id(), thread_id, None);
         child.stdin.take().map(|pipe| Self { pipe, source })
     }
 }
 
 /// Writes one line to the agent's stdin, if it is still open.
-pub(super) fn write_line(stdin: &Mutex<Option<AgentStdin>>, line: &str) -> bool {
+pub(in crate::orchestration) fn write_line(stdin: &Mutex<Option<AgentStdin>>, line: &str) -> bool {
     write_to(
         &mut stdin.lock().unwrap_or_else(PoisonError::into_inner),
         line,
     )
 }
 
-pub(super) fn write_to(stdin: &mut Option<AgentStdin>, line: &str) -> bool {
+pub(in crate::orchestration) fn write_to(stdin: &mut Option<AgentStdin>, line: &str) -> bool {
     let Some(AgentStdin { pipe, source }) = stdin.as_mut() else {
         return false;
     };
@@ -92,7 +96,7 @@ pub(super) fn write_to(stdin: &mut Option<AgentStdin>, line: &str) -> bool {
 
 /// Sends SIGTERM to the agent's process group, then SIGKILL if the agent has not exited
 /// after `KILL_AFTER`.
-pub(super) fn terminate(pid: u32, exited: Arc<AtomicBool>) {
+pub(in crate::orchestration) fn terminate(pid: u32, exited: Arc<AtomicBool>) {
     workspace::signal_process_group(pid, workspace::SIGTERM);
     std::thread::spawn(move || {
         std::thread::sleep(KILL_AFTER);
@@ -106,35 +110,35 @@ pub(super) fn terminate(pid: u32, exited: Arc<AtomicBool>) {
 /// ending its reply and staying up for the next message. An agent that neither does so nor exits
 /// is stopped with a signal.
 #[derive(Default)]
-pub(super) struct Interrupts {
+pub(in crate::orchestration) struct Interrupts {
     asked: AtomicU64,
     answered: AtomicU64,
 }
 
 impl Interrupts {
     /// Counts one more interrupt, and returns its number.
-    pub(super) fn ask(&self) -> u64 {
+    pub(in crate::orchestration) fn ask(&self) -> u64 {
         self.asked.fetch_add(1, Ordering::SeqCst) + 1
     }
 
     /// Whether an interrupt is still waiting for the agent to end its reply.
-    pub(super) fn waiting(&self) -> bool {
+    pub(in crate::orchestration) fn waiting(&self) -> bool {
         self.answered.load(Ordering::SeqCst) < self.asked.load(Ordering::SeqCst)
     }
 
     /// The agent ended its reply and stays up, which answers every interrupt written so far.
-    pub(super) fn answer(&self) {
+    pub(in crate::orchestration) fn answer(&self) {
         self.answered
             .store(self.asked.load(Ordering::SeqCst), Ordering::SeqCst);
     }
 
-    pub(super) fn answered(&self, number: u64) -> bool {
+    pub(in crate::orchestration) fn answered(&self, number: u64) -> bool {
         self.answered.load(Ordering::SeqCst) >= number
     }
 }
 
 /// Why the agent's process ended, when it left no error message of its own.
-pub(super) fn exit_error(exit: Option<ExitStatus>) -> String {
+pub(in crate::orchestration) fn exit_error(exit: Option<ExitStatus>) -> String {
     if let Some(code) = exit.and_then(|s| s.code()) {
         return format!("Agent exited with code {code}");
     }
@@ -147,7 +151,7 @@ pub(super) fn exit_error(exit: Option<ExitStatus>) -> String {
 }
 
 /// Closes stdin, which lets the agent exit, unless it still owes an answer to a steering message.
-pub(super) fn close_stdin_unless_steered(stdin: &Stdin, steers: &Steers) {
+pub(in crate::orchestration) fn close_stdin_unless_steered(stdin: &Stdin, steers: &Steers) {
     let mut stdin = stdin.lock().unwrap_or_else(PoisonError::into_inner);
     if steers
         .lock()
@@ -160,7 +164,7 @@ pub(super) fn close_stdin_unless_steered(stdin: &Stdin, steers: &Steers) {
 
 /// The next line of agent output, or None once the output has ended or cannot be read.
 /// A line longer than `MAX_LINE_BYTES` is dropped whole, without being held in memory.
-pub(super) fn next_line(reader: &mut impl BufRead) -> Option<String> {
+pub(in crate::orchestration) fn next_line(reader: &mut impl BufRead) -> Option<String> {
     let mut line = Vec::new();
     let mut oversized = false;
     loop {
@@ -198,7 +202,7 @@ pub(super) fn next_line(reader: &mut impl BufRead) -> Option<String> {
 }
 
 /// Reads all of stderr but keeps only roughly the last `STDERR_TAIL_BYTES`.
-pub(super) fn read_stderr_tail(stderr: ChildStderr, source: Source) -> String {
+pub(in crate::orchestration) fn read_stderr_tail(stderr: ChildStderr, source: Source) -> String {
     let mut reader = BufReader::new(stderr);
     let mut tail = String::new();
     let mut line = Vec::new();
@@ -224,7 +228,7 @@ pub(super) fn read_stderr_tail(stderr: ChildStderr, source: Source) -> String {
 }
 
 /// The last few non-empty stderr lines, used as the error text when the CLI fails without a message.
-pub(super) fn last_lines(tail: &str) -> Option<String> {
+pub(in crate::orchestration) fn last_lines(tail: &str) -> Option<String> {
     let mut lines: Vec<&str> = tail
         .lines()
         .rev()

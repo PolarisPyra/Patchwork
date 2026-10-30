@@ -13,7 +13,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
-use super::publish;
+use crate::orchestration::publish;
 use crate::Server;
 use crate::orchestration::AgentEvent;
 use crate::system::now_ms;
@@ -39,15 +39,17 @@ const READ_ONLY: [&str; 9] = [
 /// Calls that write only the files their summary names, comma-separated as Codex lists them.
 const EDITS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 
-pub(super) type SharedAttribution = Arc<Mutex<Attribution>>;
+pub(in crate::orchestration) type SharedAttribution = Arc<Mutex<Attribution>>;
 
-pub(super) fn lock(attribution: &Mutex<Attribution>) -> MutexGuard<'_, Attribution> {
+pub(in crate::orchestration) fn lock(
+    attribution: &Mutex<Attribution>,
+) -> MutexGuard<'_, Attribution> {
     attribution.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// What a call can write.
 #[derive(Debug, Clone)]
-pub(super) enum Reach {
+pub(in crate::orchestration) enum Reach {
     /// These files, and only these; none for a call that only reads.
     Files(Vec<String>),
     /// Anything, as a shell command can; the command, to tell whether it names a file.
@@ -55,7 +57,7 @@ pub(super) enum Reach {
 }
 
 impl Reach {
-    pub(super) fn of(tool: &ToolCall) -> Self {
+    pub(in crate::orchestration) fn of(tool: &ToolCall) -> Self {
         let name = tool.name.as_str();
         if READ_ONLY.contains(&name) {
             Self::Files(Vec::new())
@@ -95,14 +97,14 @@ enum Cover {
 }
 
 /// A change one reply could claim from a burst.
-pub(super) struct Candidate {
+pub(in crate::orchestration) struct Candidate {
     path: String,
     times: Vec<Instant>,
     cover: Cover,
 }
 
 /// What a reply under way has to go on to claim the files it changed.
-pub(super) struct Attribution {
+pub(in crate::orchestration) struct Attribution {
     /// `git status` when the reply started.
     baseline: Vec<FileChange>,
     /// Calls under way, by id, with when each started and what it can write. A background
@@ -118,7 +120,7 @@ pub(super) struct Attribution {
 }
 
 impl Attribution {
-    pub(super) fn shared(baseline: Vec<FileChange>) -> SharedAttribution {
+    pub(in crate::orchestration) fn shared(baseline: Vec<FileChange>) -> SharedAttribution {
         Arc::new(Mutex::new(Self::new(baseline)))
     }
 
@@ -135,7 +137,12 @@ impl Attribution {
     /// `started_at` is when the call started, in ms since the epoch, which for an agent that
     /// reports calls once done is before now. Codex reports a call when it starts and again when
     /// it completes; the first start counts.
-    pub(super) fn tool_started(&mut self, id: &str, started_at: Option<u64>, reach: Reach) {
+    pub(in crate::orchestration) fn tool_started(
+        &mut self,
+        id: &str,
+        started_at: Option<u64>,
+        reach: Reach,
+    ) {
         let now = Instant::now();
         let start = started_at
             .and_then(|ms| now.checked_sub(Duration::from_millis(now_ms().saturating_sub(ms))))
@@ -144,7 +151,7 @@ impl Attribution {
     }
 
     /// Ends a call's window and returns the waiting paths it covers, which are the reply's.
-    pub(super) fn tool_finished(&mut self, id: &str) -> Vec<String> {
+    pub(in crate::orchestration) fn tool_finished(&mut self, id: &str) -> Vec<String> {
         let Some((start, reach)) = self.running.remove(id) else {
             return Vec::new();
         };
@@ -246,7 +253,7 @@ impl Attribution {
     /// changing while none of its calls that could write them ran, or that another reply's call
     /// named. A path the watcher never saw, as in a project that is not the open one, counts.
     /// Starts over from `after` for the next reply.
-    pub(super) fn settle(&mut self, after: Vec<FileChange>) -> Vec<String> {
+    pub(in crate::orchestration) fn settle(&mut self, after: Vec<FileChange>) -> Vec<String> {
         let paths = changed_paths(&self.baseline, &after)
             .into_iter()
             .filter(|path| !self.pending.contains_key(path) && !self.taken.contains(path))
@@ -272,7 +279,10 @@ fn covers_path(event_path: &str, path: &str) -> bool {
 
 /// Paths whose git status or line counts differ between two snapshots, and paths that left the
 /// list: a deleted untracked file, or a change undone.
-pub(super) fn changed_paths(before: &[FileChange], after: &[FileChange]) -> Vec<String> {
+pub(in crate::orchestration) fn changed_paths(
+    before: &[FileChange],
+    after: &[FileChange],
+) -> Vec<String> {
     let key = |c: &FileChange| (c.status.clone(), c.additions, c.deletions);
     let changed = after.iter().filter(|a| {
         before

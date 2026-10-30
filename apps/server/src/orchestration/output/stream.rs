@@ -9,12 +9,12 @@ use crate::system::now_ms;
 use crate::threads::Part;
 use crate::threads::StepStatus;
 use crate::threads::Thread;
-use super::turn::Turn;
+use crate::orchestration::turn::start::Turn;
 
 impl Turn {
     /// Streams a text delta to the frontend without saving it; the reader
     /// collects it in `unsaved` so it is stored in one write later.
-    pub(super) fn stream_text(&self, event: AgentEvent, unsaved: &mut Unsaved) {
+    pub(in crate::orchestration) fn stream_text(&self, event: AgentEvent, unsaved: &mut Unsaved) {
         self.save_thinking(unsaved);
         if let AgentEvent::TextDelta { text, .. } = &event {
             unsaved.text.push_str(text);
@@ -23,7 +23,11 @@ impl Turn {
     }
 
     /// Streams reasoning like `stream_text`; it is stored as one block when it ends.
-    pub(super) fn stream_thinking(&self, event: AgentEvent, unsaved: &mut Unsaved) {
+    pub(in crate::orchestration) fn stream_thinking(
+        &self,
+        event: AgentEvent,
+        unsaved: &mut Unsaved,
+    ) {
         self.save_only_text(unsaved);
         if let AgentEvent::Thinking { text, .. } = &event {
             if unsaved.thinking.is_empty() {
@@ -34,7 +38,7 @@ impl Turn {
         self.emit(event);
     }
 
-    pub(super) fn emit(&self, event: AgentEvent) {
+    pub(in crate::orchestration) fn emit(&self, event: AgentEvent) {
         self.server.emit(AgentEventEnvelope {
             thread_id: self.thread_id.clone(),
             event,
@@ -42,12 +46,12 @@ impl Turn {
     }
 
     /// Saves text and reasoning that were streamed but not yet stored.
-    pub(super) fn save_text(&self, unsaved: &mut Unsaved) {
+    pub(in crate::orchestration) fn save_text(&self, unsaved: &mut Unsaved) {
         self.save_thinking(unsaved);
         self.save_only_text(unsaved);
     }
 
-    pub(super) fn save_only_text(&self, unsaved: &mut Unsaved) {
+    pub(in crate::orchestration) fn save_only_text(&self, unsaved: &mut Unsaved) {
         if unsaved.text.is_empty() {
             return;
         }
@@ -61,7 +65,7 @@ impl Turn {
     }
 
     /// Saves the reasoning block that streamed since `thinking_since`; it ends now.
-    pub(super) fn save_thinking(&self, unsaved: &mut Unsaved) {
+    pub(in crate::orchestration) fn save_thinking(&self, unsaved: &mut Unsaved) {
         if unsaved.thinking.is_empty() {
             return;
         }
@@ -90,16 +94,16 @@ pub(crate) fn publish(server: &Server, thread_id: &str, event: AgentEvent) {
 
 /// Streamed output not yet stored: text, or a block of reasoning and when it started.
 #[derive(Default)]
-pub(super) struct Unsaved {
-    pub(super) text: String,
-    pub(super) thinking: String,
-    pub(super) thinking_since: u64,
+pub(in crate::orchestration) struct Unsaved {
+    pub(in crate::orchestration) text: String,
+    pub(in crate::orchestration) thinking: String,
+    pub(in crate::orchestration) thinking_since: u64,
 }
 
 /// Applies one event to the stored message. Used for both persistence and replay.
 /// Applies `event` to the stored thread. Removing a message moves the ones after it, so
 /// that goes through `update_thread`; every other event changes at most one message in place.
-pub(super) fn save_event(
+pub(in crate::orchestration) fn save_event(
     server: &Server,
     thread_id: &str,
     event: &AgentEvent,
@@ -118,7 +122,7 @@ pub(super) fn save_event(
 }
 
 /// The existing message `event` changes, if it changes one.
-pub(super) fn event_message(event: &AgentEvent) -> Option<&str> {
+pub(in crate::orchestration) fn event_message(event: &AgentEvent) -> Option<&str> {
     match event {
         AgentEvent::MessageStarted { .. }
         | AgentEvent::GoalUpdated { .. }
@@ -155,13 +159,13 @@ pub(super) fn event_message(event: &AgentEvent) -> Option<&str> {
 }
 
 /// Ends the reasoning block still streaming, if any, as the next step starts.
-pub(super) fn end_thinking(msg: &mut Message) {
+pub(in crate::orchestration) fn end_thinking(msg: &mut Message) {
     if let Some(Part::Thinking { ended_at, .. }) = msg.parts.last_mut() {
         ended_at.get_or_insert_with(now_ms);
     }
 }
 
-pub(super) fn apply(thread: &mut Thread, event: &AgentEvent) {
+pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
     match event {
         AgentEvent::MessageStarted { message } => {
             if !thread.messages.iter().any(|m| m.id == message.id) {

@@ -7,11 +7,11 @@ use std::collections::HashMap;
 use crate::threads::ToolCall;
 
 /// How many times in a row the same call may repeat before the turn is stopped.
-pub(super) const LOOP_LIMIT: usize = 8;
+pub(in crate::orchestration) const LOOP_LIMIT: usize = 8;
 
 /// The calls of one turn, and how the latest ones repeat.
 #[derive(Default)]
-pub(super) struct Repeats {
+pub(in crate::orchestration) struct Repeats {
     /// Calls under way: their tool's name, and that name with what the call was given.
     calls: HashMap<String, (String, String)>,
     /// What the latest finished call came to, and how many in a row came to the same.
@@ -21,7 +21,7 @@ pub(super) struct Repeats {
 
 impl Repeats {
     /// Codex reports a call when it starts and again when it completes; the first counts.
-    pub(super) fn started(&mut self, tool: &ToolCall) {
+    pub(in crate::orchestration) fn started(&mut self, tool: &ToolCall) {
         let call = format!("{}\0{}", tool.name, tool.summary);
         self.calls
             .entry(tool.id.clone())
@@ -32,7 +32,7 @@ impl Repeats {
     /// with the same result, or had the same call fail whatever the error said, `LOOP_LIMIT`
     /// times in a row. Different calls that fail, such as searches that find nothing, do not
     /// count as a loop.
-    pub(super) fn finished(
+    pub(in crate::orchestration) fn finished(
         &mut self,
         id: &str,
         failed: bool,

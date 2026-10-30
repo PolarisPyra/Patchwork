@@ -42,6 +42,7 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         "files": image_paths(spec.attachments),
         "command": command_of(spec),
         "compactWindow": spec.compact_window,
+        "systemPrompt": spec.instructions,
     })
     .to_string()
 }

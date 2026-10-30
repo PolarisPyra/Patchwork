@@ -11,8 +11,8 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 
-use super::turn::PendingApproval;
-use super::{Runner, publish, unasked};
+use crate::orchestration::turn::start::PendingApproval;
+use crate::orchestration::{Runner, publish, unasked};
 use crate::Server;
 use crate::permissions::{self, Target, Unasked};
 use crate::orchestration::AgentEvent;
@@ -143,7 +143,12 @@ impl Runner {
     }
 
     /// Whether the user already allowed `target` through a hook, which then counts once.
-    pub(super) fn take_grant(&self, thread_id: &str, target: &Target, root: &Path) -> bool {
+    pub(in crate::orchestration) fn take_grant(
+        &self,
+        thread_id: &str,
+        target: &Target,
+        root: &Path,
+    ) -> bool {
         let mut grants = self.grants.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(granted) = grants.get_mut(thread_id) else {
             return false;

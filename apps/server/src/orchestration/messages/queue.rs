@@ -7,16 +7,16 @@ use std::sync::PoisonError;
 
 use crate::provider;
 use crate::threads::Attachment;
-use super::process::write_to;
-use super::Runner;
+use crate::orchestration::turn::process::write_to;
+use crate::orchestration::Runner;
 
 /// A message sent during a turn, kept until the agent answers it or the turn ends.
-pub(super) struct FollowUp {
+pub(in crate::orchestration) struct FollowUp {
     /// The user message this is, so the thread can show it as queued or drop it.
-    pub(super) message_id: String,
-    pub(super) text: String,
-    pub(super) attachments: Vec<Attachment>,
-    pub(super) images: Vec<provider::Image>,
+    pub(in crate::orchestration) message_id: String,
+    pub(in crate::orchestration) text: String,
+    pub(in crate::orchestration) attachments: Vec<Attachment>,
+    pub(in crate::orchestration) images: Vec<provider::Image>,
 }
 
 /// A message to hold for a running turn, borrowed from the caller.
@@ -28,10 +28,10 @@ pub struct FollowUpInput<'a> {
 }
 
 /// Steering messages written to the agent that it has not yet answered, oldest first.
-pub(super) type Steers = Arc<Mutex<VecDeque<FollowUp>>>;
+pub(in crate::orchestration) type Steers = Arc<Mutex<VecDeque<FollowUp>>>;
 
 /// Messages the agent could not take mid-turn; they start the next turn.
-pub(super) type Queue = Arc<Mutex<Vec<FollowUp>>>;
+pub(in crate::orchestration) type Queue = Arc<Mutex<Vec<FollowUp>>>;
 
 impl Runner {
     /// Holds a message for the next turn of the one running in `thread_id`, even when the agent

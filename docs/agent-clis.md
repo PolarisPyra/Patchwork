@@ -4,13 +4,39 @@ Patchwork has no model access of its own. It runs the `claude`, `codex`, and `ag
 installed and signed in on the machine, and reads some of their files. This page lists every
 point where it touches them.
 
+## System prompts
+
+Settings → Providers gives each agent a system prompt of its own: a Prompt button on the Claude
+Code, Codex and OpenCode rows, and a field in each API provider's form. Claude Code gets it at the
+end of `--append-system-prompt`, Codex at the end of `developerInstructions`, and API providers
+at the end of Patchwork's system prompt, before the project's instructions. OpenCode 2.x gets it as
+the `patchwork-system-prompt` instruction entry on the session (`PUT
+/api/experimental/session/:id/instructions/entries/:key`), removed when the prompt is cleared;
+`opencode run` gets it as a file in its `instructions` config. Antigravity has no way to be given
+one.
+
+## The shell each agent runs
+
+Each CLI picks the shell its commands run in, so the shell chosen in Settings is not always the
+one an agent gets. `provider::agent_shell` follows each CLI's rule, the turn sets `SHELL` to it,
+and the agent's instructions name it:
+
+| Agent | Shell |
+| --- | --- |
+| Claude Code | Only bash or zsh: the chosen shell if it is one of them, else zsh, else bash |
+| Codex | The account's login shell, whatever `SHELL` says |
+| OpenCode, Antigravity, API providers | The chosen shell if it reads POSIX commands, else bash, else `sh`. OpenCode refuses fish and Nushell itself, and Patchwork's own agent calls its tool `bash` |
+
+On Windows every agent gets the chosen shell. Plugin hook commands run in the user's shell, or
+bash when it is fish or Nushell. The terminal panel always runs the chosen shell.
+
 ## Claude Code (`claude`)
 
 | | |
 | --- | --- |
 | Detect | `claude --version`, then `claude auth status`, whose JSON says whether and how it is signed in. Home is `$CLAUDE_CONFIG_DIR` or `~/.claude`. |
 | Default model | `$ANTHROPIC_MODEL`, else `model` in `~/.claude/settings.json`. |
-| Run | `claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-mode <mode> --permission-prompt-tool stdio [--resume <session>] [--model <m>] [--effort <e>] --append-system-prompt <installed shells>` |
+| Run | `claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-mode <mode> --permission-prompt-tool stdio [--resume <session>] [--model <m>] [--effort <e>] --append-system-prompt <installed shells, then the system prompt from Settings → Providers>` |
 | Access modes | Supervised `default`, Auto-accept edits `acceptEdits`, Auto `auto`, Full access `bypassPermissions`. |
 | Prompt | A stream-json `user` line on stdin, with images as base64 blocks. stdin stays open for the turn. |
 | Output used | `stream_event` text and reasoning deltas; `assistant` tool calls, token usage, and synthetic command output; `user` tool results; `system` init (session id) and the task events `task_started`, `task_updated`, `task_progress`, and `task_notification`; `rate_limit_event` (usage limits); `result` (end of turn, errors). `TodoWrite` becomes the plan, edit tools become touched files, `Task`/`Agent` calls become subagents. |
@@ -101,7 +127,7 @@ Not a CLI: Patchwork runs these itself, for any OpenAI-compatible Chat Completio
 
 | | |
 |---|---|
-| Configuration | `providers.json` in the config folder: each provider's id, name, preset, base URL, models, extra header names, and a custom provider's logo (a PNG `data:` URL scaled to 128px), with no keys or header values. The base URL must start with `http://` or `https://`. Saving, fetching models, and each turn check it. Model ids are `<provider id>/<model id>`. |
+| Configuration | `providers.json` in the config folder: each provider's id, name, preset, base URL, models, extra header names, and its system prompt, and a custom provider's logo (a PNG `data:` URL scaled to 128px), with no keys or header values. The base URL must start with `http://` or `https://`. Saving, fetching models, and each turn check it. Model ids are `<provider id>/<model id>`. |
 | Keys | The system credential store through the `keyring` crate, under the service `dev.patchwork.ade` and the account `api-provider:<id>`. Header values are stored the same way, as a JSON array under `api-provider:<id>:headers`. Without a store, `api-keys.json` beside the config, mode 0600. A provider can name an environment variable instead, read from the app's environment or else the login shell's. |
 | Run | Each turn starts Patchwork's own binary with `--api-bridge` (`apps/server/src/provider/api/bridge.rs`). The first stdin line carries the connection, key included, so the key is never in the arguments or environment. It posts to `<base URL>/chat/completions` with `stream: true` and the tools, runs the calls the model makes, and repeats until a reply makes none. Failed requests (429, 5xx, network) are retried 3 times. A reply that sends nothing for 180 s is stopped; a long reply that keeps streaming is not. When the provider refuses a request as too long for its context (a 413, or a 400, 415, or 422 whose body names the context or prompt length, as OpenAI, DeepSeek, OpenRouter, Groq, Mistral, xAI, Fireworks, vLLM, LM Studio, and llama.cpp word it), all but the last 8 tool results are cut to a note and the request is sent again, then all but the last 2, then all of them. If it is still too long, the conversation is summarized as `/compact` does, leaving out the oldest messages until the summary request fits, and the user's latest message follows the summary word for word. Ollama does not refuse: it drops the oldest messages itself. A request refused for its images is sent again without them, with a note in their place; DeepSeek gets that note from the start, since its API takes text only. `bash` keeps at most 1 MB of each output stream, the start and the latest, and the model is shown 40 KB. `grep` stops at 200 matches. |
 | Tools | `read_file`, `list_dir`, `glob`, `grep`, `fetch_url`, `ask_user`, `update_plan`, and, outside plan mode, `write_file`, `edit_file`, `bash` (`apps/server/src/provider/api/tools.rs`). The system prompt adds the project's `AGENTS.md` or `CLAUDE.md`. |

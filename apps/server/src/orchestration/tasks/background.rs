@@ -34,7 +34,7 @@ struct Entry {
 
 /// The tasks one agent process has started, and what each change to them publishes.
 #[derive(Debug, Default)]
-pub(super) struct Background {
+pub(in crate::orchestration) struct Background {
     /// Every task seen, by the id of the tool call that started it.
     tasks: HashMap<String, Entry>,
     /// The tool call of each task, by the id the agent reports it under.
@@ -44,7 +44,11 @@ pub(super) struct Background {
 
 impl Background {
     /// Applies one change the agent reports for a task, and returns what to publish.
-    pub(super) fn apply(&mut self, event: TaskEvent, message_id: &str) -> Vec<AgentEvent> {
+    pub(in crate::orchestration) fn apply(
+        &mut self,
+        event: TaskEvent,
+        message_id: &str,
+    ) -> Vec<AgentEvent> {
         match event {
             TaskEvent::Started {
                 task,
@@ -71,13 +75,16 @@ impl Background {
 
     /// Records a Codex command or subagent that the agent reports no end for. It is listed by
     /// `list_unreported` if its turn completes with it still open.
-    pub(super) fn start_unreported(&mut self, task: BackgroundTask) {
+    pub(in crate::orchestration) fn start_unreported(&mut self, task: BackgroundTask) {
         self.insert(task, true, false);
     }
 
     /// Lists the open tasks the agent reports no end for, in the order they started. Codex's
     /// commands still running when its turn completes are listed this way.
-    pub(super) fn list_unreported(&mut self, message_id: &str) -> Vec<AgentEvent> {
+    pub(in crate::orchestration) fn list_unreported(
+        &mut self,
+        message_id: &str,
+    ) -> Vec<AgentEvent> {
         let mut open: Vec<(u64, String)> = self
             .tasks
             .iter()
@@ -91,7 +98,11 @@ impl Background {
     }
 
     /// Ends an unreported task whose call finished, with the call's outcome.
-    pub(super) fn finish_unreported(&mut self, tool_id: &str, failed: bool) -> Vec<AgentEvent> {
+    pub(in crate::orchestration) fn finish_unreported(
+        &mut self,
+        tool_id: &str,
+        failed: bool,
+    ) -> Vec<AgentEvent> {
         let Some(entry) = self.tasks.get_mut(tool_id) else {
             return Vec::new();
         };
@@ -118,7 +129,7 @@ impl Background {
     /// Records that a tool call returned while the reported task it started still runs. Its
     /// finish is held back and shown when the task ends, so this returns true. A shell command's
     /// call is not held: it is shown finished as soon as it returns.
-    pub(super) fn call_returned(
+    pub(in crate::orchestration) fn call_returned(
         &mut self,
         tool_id: &str,
         message_id: &str,
@@ -136,18 +147,18 @@ impl Background {
 
     /// Whether the agent's stdin stays open. A task the agent reports holds it open until the task
     /// ends, whatever its kind, so the agent can take the report that the task ended.
-    pub(super) fn keeps_stdin_open(&self) -> bool {
+    pub(in crate::orchestration) fn keeps_stdin_open(&self) -> bool {
         self.tasks.values().any(|e| e.reported && !e.ended)
     }
 
     /// Whether a task listed under the background is still running.
-    pub(super) fn any_listed_live(&self) -> bool {
+    pub(in crate::orchestration) fn any_listed_live(&self) -> bool {
         self.tasks.values().any(|e| e.shown.is_some() && !e.ended)
     }
 
     /// Ends every task still open, because the process that ran them has gone. A listed one is
     /// published as stopped, and a call a task still held is shown finished as failed.
-    pub(super) fn stop_all(&mut self) -> Vec<AgentEvent> {
+    pub(in crate::orchestration) fn stop_all(&mut self) -> Vec<AgentEvent> {
         let mut open: Vec<(u64, String)> = self
             .tasks
             .iter()

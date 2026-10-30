@@ -7,6 +7,7 @@ mod serve;
 
 pub use config::{
     opencode_bin, auth, models, permission_config, skills_config, agents_config, config_content,
+    instructions_config,
 };
 use config::major_version;
 pub use run::{turn_args, parse};

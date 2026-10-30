@@ -4,7 +4,7 @@
 use crate::persistence::Store;
 use crate::threads::GoalStatus;
 use crate::threads::MessageStatus;
-use super::goal;
+use crate::orchestration::goal;
 
 /// Finished goals remain visible for the session in which they ended. A new app session
 /// dismisses them, including cached reports from the provider on its next run. Unfinished

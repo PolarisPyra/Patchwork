@@ -300,11 +300,43 @@ fn list_codex_hooks(overrides: &[String], root: &str) -> Option<Vec<(String, Str
     )
 }
 
-/// Writes the hooks file Antigravity loads from a folder added with `--add-dir`, and returns that
-/// folder, or None when there are no hooks to run: Patchwork's permission hook before each tool
-/// call, and the plugins' hooks. Each set of hooks has a folder of its own, named by its hash, so
-/// turns that run different ones do not share a file.
+/// The folder Antigravity is given with `--add-dir`, or None when there is nothing to put in it:
+/// the hooks file it loads from there (Patchwork's permission hook before each tool call, and the
+/// plugins' hooks), and the user's system prompt as a `GEMINI.md`, which it reads as a rule. Each
+/// set of contents has a folder of its own, named by its hash, so turns that differ do not share
+/// a file.
 pub fn antigravity_dir(spec: &TurnSpec) -> Option<std::path::PathBuf> {
+    let hooks = antigravity_hooks(spec);
+    let prompt = spec.instructions.filter(|text| !text.trim().is_empty());
+    if hooks.is_none() && prompt.is_none() {
+        return None;
+    }
+    // FNV-1a, 64-bit, so the folder's name stays the same across builds.
+    let key = format!(
+        "{}\0{}",
+        hooks.as_deref().unwrap_or(""),
+        prompt.unwrap_or("")
+    );
+    let hash = key.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    });
+    let dir = crate::skills::cli_dir("antigravity").join(format!("{hash:016x}"));
+    let files = [
+        (dir.join(".agents").join("hooks.json"), hooks.as_deref()),
+        (dir.join("GEMINI.md"), prompt),
+    ];
+    for (file, text) in files {
+        let Some(text) = text else { continue };
+        if std::fs::read_to_string(&file).ok().as_deref() != Some(text) {
+            std::fs::create_dir_all(file.parent()?).ok()?;
+            std::fs::write(&file, text).ok()?;
+        }
+    }
+    Some(dir)
+}
+
+/// The hooks file Antigravity runs, or None when there are no hooks to run.
+fn antigravity_hooks(spec: &TurnSpec) -> Option<String> {
     crate::provider::mcp::relay_file()?;
     let mut hooks = hooks_json(spec.hooks, AgentKind::Antigravity);
     // Installed for every turn, so a rule saved while the turn runs decides its next call.
@@ -326,18 +358,7 @@ pub fn antigravity_dir(spec: &TurnSpec) -> Option<std::path::PathBuf> {
     {
         return None;
     }
-    let text = serde_json::to_string_pretty(&hooks).ok()?;
-    // FNV-1a, 64-bit, so the folder's name stays the same across builds.
-    let hash = text.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
-        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
-    });
-    let dir = crate::skills::cli_dir("antigravity").join(format!("{hash:016x}"));
-    let file = dir.join(".agents").join("hooks.json");
-    if std::fs::read_to_string(&file).ok().as_deref() != Some(text.as_str()) {
-        std::fs::create_dir_all(file.parent()?).ok()?;
-        std::fs::write(&file, text).ok()?;
-    }
-    Some(dir)
+    serde_json::to_string_pretty(&hooks).ok()
 }
 
 #[cfg(test)]

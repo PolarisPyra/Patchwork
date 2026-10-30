@@ -65,7 +65,7 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
     }
     case "messageStarted":
       return { ...thread, messages: upsertMessage(thread.messages, event.message) };
-    // Parts follow the server's (orchestration/stream.rs `apply`).
+    // Parts follow the server's (orchestration/output/stream.rs `apply`).
     case "textDelta": {
       const { messageId, text } = event;
       return updateMessage(thread, messageId, (m) => {
@@ -196,7 +196,7 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
     }
     case "turnCompleted": {
       const { messageId, status, error } = event;
-      // Nothing can still be running once the turn has ended (mirrors orchestration/stream.rs).
+      // Nothing can still be running once the turn has ended (mirrors orchestration/output/stream.rs).
       const toolEnd = status === "complete" ? "done" : "error";
       const endedAt = Date.now();
       return updateMessage(thread, messageId, (m) => ({

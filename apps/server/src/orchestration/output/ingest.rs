@@ -59,31 +59,31 @@ use crate::logging::{AGENTS, Data, Source};
 use crate::settings::LogLevel;
 use crate::workspace;
 
-use super::attribution;
-use super::background::Background;
+use crate::orchestration::changes::attribution;
+use crate::orchestration::tasks::background::Background;
 #[cfg(test)]
-use super::attribution::changed_paths;
-use super::goal::end_input;
-use super::goal;
-use super::process::exit_error;
-use super::process::last_lines;
-use super::process::next_line;
-use super::process::TURN_TIMEOUT;
-use super::process::terminate;
-use super::stuck::{LOOP_LIMIT, Repeats};
-use super::process::write_line;
-use super::stream::publish;
-use super::stream::Unsaved;
-use super::subagents::finish_child;
-use super::subagents::open_child;
-use super::subagents::SubagentThread;
-use super::turn::{TurnEnd, finish, plugin_hooks, record_turn};
-use super::turn::{PendingApproval, Turn};
-use super::decide;
-use super::unasked;
-use super::usage::message_usage;
-use super::usage::record_request;
-use super::usage::Request;
+use crate::orchestration::changes::attribution::changed_paths;
+use crate::orchestration::goal::end_input;
+use crate::orchestration::goal;
+use crate::orchestration::turn::process::exit_error;
+use crate::orchestration::turn::process::last_lines;
+use crate::orchestration::turn::process::next_line;
+use crate::orchestration::turn::process::TURN_TIMEOUT;
+use crate::orchestration::turn::process::terminate;
+use crate::orchestration::turn::stuck::{LOOP_LIMIT, Repeats};
+use crate::orchestration::turn::process::write_line;
+use crate::orchestration::output::stream::publish;
+use crate::orchestration::output::stream::Unsaved;
+use crate::orchestration::tasks::subagents::finish_child;
+use crate::orchestration::tasks::subagents::open_child;
+use crate::orchestration::tasks::subagents::SubagentThread;
+use crate::orchestration::turn::end::{TurnEnd, finish, plugin_hooks, record_turn};
+use crate::orchestration::turn::start::{PendingApproval, Turn};
+use crate::orchestration::decide;
+use crate::orchestration::unasked;
+use crate::orchestration::output::usage::message_usage;
+use crate::orchestration::output::usage::record_request;
+use crate::orchestration::output::usage::Request;
 
 /// Completes the replies a steer moved the turn on from, and counts them in `completed`, which is
 /// how many of `segments` are done. Left streaming, the reply before the steer keeps its own
@@ -101,7 +101,7 @@ fn close_steered_segment(turn: &Turn, segments: &[String], completed: &mut usize
 }
 
 /// Reads the agent's stdout until it closes, then records the final status.
-pub(super) fn ingest(
+pub(in crate::orchestration) fn ingest(
     mut turn: Turn,
     mut child: Child,
     stdout: ChildStdout,
@@ -919,13 +919,13 @@ mod tests {
     use std::io::BufRead;
     use crate::threads::AccessMode;
     use std::sync::Mutex;
-    use crate::orchestration::process::AgentStdin;
-    use crate::orchestration::process::Stdin;
+    use crate::orchestration::turn::process::AgentStdin;
+    use crate::orchestration::turn::process::Stdin;
     use std::process::Stdio;
     use crate::provider::TurnSpec;
     use super::*;
 
-    pub(super) fn change(path: &str, status: &str, additions: u32) -> FileChange {
+    pub(in crate::orchestration) fn change(path: &str, status: &str, additions: u32) -> FileChange {
         FileChange {
             path: path.into(),
             status: status.into(),
@@ -936,7 +936,7 @@ mod tests {
     }
 
     #[test]
-    pub(super) fn changed_paths_finds_new_and_modified_files() {
+    pub(in crate::orchestration) fn changed_paths_finds_new_and_modified_files() {
         let before = [change("a.rs", "modified", 1), change("b.rs", "modified", 2)];
         let after = [
             change("a.rs", "modified", 1),
@@ -949,7 +949,7 @@ mod tests {
     /// Runs a real turn through the installed CLI, allowing every approval, and
     /// checks the parsed stream. Needs the agent installed and signed in:
     /// `cargo test -- --ignored`.
-    pub(super) fn live_turn(agent: AgentKind, mode: AccessMode) {
+    pub(in crate::orchestration) fn live_turn(agent: AgentKind, mode: AccessMode) {
         let root = std::env::temp_dir().join(new_id());
         std::fs::create_dir_all(&root).unwrap();
         let root_str = root.to_str().unwrap();
@@ -1043,31 +1043,31 @@ mod tests {
 
     #[test]
     #[ignore = "runs the real Claude Code CLI"]
-    pub(super) fn live_claude_supervised_turn() {
+    pub(in crate::orchestration) fn live_claude_supervised_turn() {
         live_turn(AgentKind::Claude, AccessMode::Supervised);
     }
 
     #[test]
     #[ignore = "runs the real Codex CLI"]
-    pub(super) fn live_codex_supervised_turn() {
+    pub(in crate::orchestration) fn live_codex_supervised_turn() {
         live_turn(AgentKind::Codex, AccessMode::Supervised);
     }
 
     #[test]
     #[ignore = "runs the real Claude Code CLI"]
-    pub(super) fn live_claude_turn() {
+    pub(in crate::orchestration) fn live_claude_turn() {
         live_turn(AgentKind::Claude, AccessMode::FullAccess);
     }
 
     #[test]
     #[ignore = "runs the real Codex CLI"]
-    pub(super) fn live_codex_turn() {
+    pub(in crate::orchestration) fn live_codex_turn() {
         live_turn(AgentKind::Codex, AccessMode::FullAccess);
     }
 
     #[test]
     #[ignore = "runs the real Antigravity CLI"]
-    pub(super) fn live_antigravity_turn() {
+    pub(in crate::orchestration) fn live_antigravity_turn() {
         live_turn(AgentKind::Antigravity, AccessMode::AutoAcceptEdits);
     }
 }

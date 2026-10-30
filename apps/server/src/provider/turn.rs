@@ -25,7 +25,8 @@ pub struct TurnSpec<'a> {
     pub attachments: &'a [Attachment],
     /// The image attachments, read from disk by `load_images`.
     pub images: &'a [Image],
-    /// Instructions added to the agent's own, for agents that take them in the turn's input.
+    /// Instructions added to the agent's own: Patchwork's in Codex's and the API agent's turn input,
+    /// and only the user's system prompt for OpenCode and Antigravity.
     pub instructions: Option<&'a str>,
     /// Patchwork's skills folder, which the agent loads skills from.
     pub skills_dir: Option<&'a str>,
@@ -225,7 +226,8 @@ pub fn turn_args(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
 /// Environment for one turn's agent process, on top of the app's own.
 pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)> {
     match agent {
-        // The bridge sets up its own server, which inherits this environment.
+        // The bridge sets up its own server, which inherits this environment. 2.x takes the
+        // system prompt from the bridge, as an instruction entry on the session.
         AgentKind::OpenCode if opencode::uses_serve() => {
             opencode::config_content([opencode::skills_config(spec), opencode::agents_config(spec)])
                 .map(|config| ("OPENCODE_CONFIG_CONTENT", config))
@@ -237,6 +239,7 @@ pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)
                 opencode::config_content([
                     opencode::permission_config(spec),
                     opencode::agents_config(spec),
+                    opencode::instructions_config(spec),
                 ])
                 .map(|config| ("OPENCODE_CONFIG_CONTENT", config)),
             )

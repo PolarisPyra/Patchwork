@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   api,
@@ -17,7 +17,7 @@ import {
   ProviderForm,
   syncAgents,
 } from "~/features/settings/components/ApiProvidersPane";
-import { Segmented } from "~/features/settings/components/controls";
+import { Segmented, TEXTAREA } from "~/features/settings/components/controls";
 import type { PaneProps } from "~/features/settings/types";
 import { AGENT_KINDS, CLI_KINDS, describeAgent, errorText } from "~/lib/util";
 
@@ -48,7 +48,35 @@ function CliInstall({ kind, onInstalled }: { kind: CliKind; onInstalled: () => v
 }
 
 /** One row per CLI: whether it is installed, where it is, and whether Patchwork connects to it. */
+
+/** A CLI's system prompt, saved when the field loses focus. */
+function SystemPrompt({ kind, settings, updateSettings }: PaneProps & { kind: AgentKind }) {
+  const saved = settings.systemPrompts[kind] ?? "";
+  const [draft, setDraft] = useState(saved);
+  const save = () => {
+    if (draft === saved) return;
+    void updateSettings((st) => {
+      const { [kind]: _, ...rest } = st.systemPrompts;
+      return { ...st, systemPrompts: draft.trim() ? { ...rest, [kind]: draft } : rest };
+    });
+  };
+  return (
+    <div className="border-b border-border py-2.5">
+      <textarea
+        className={TEXTAREA}
+        aria-label={`${AGENT_LABELS[kind]} system prompt`}
+        value={draft}
+        autoFocus
+        spellCheck
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+      />
+    </div>
+  );
+}
+
 function CliProviderRows({ settings, updateSettings }: PaneProps) {
+  const [prompting, setPrompting] = useState<AgentKind | null>(null);
   const [status, setStatus] = useState<Partial<Record<AgentKind, AgentStatus | null>>>({});
   // Re-reads an agent, skipping the cache, so a fresh install shows at once.
   const recheck = (kind: AgentKind) =>
@@ -112,37 +140,49 @@ function CliProviderRows({ settings, updateSettings }: PaneProps) {
         // Keep at least one agent connected, and only connect installed ones.
         const locked = on ? connected.length === 1 : !s?.installed;
         return (
-          <div key={kind} className="flex items-center gap-3 border-b border-border py-2.5">
-            <ProviderLogos kind={kind} size={20} />
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold">{AGENT_LABELS[kind]}</div>
-              <div className="text-[length:var(--fs-sm)] text-fg-muted">{describeAgent(s)}</div>
-            </div>
-            <span className={`badge${s?.installed ? " badge-success" : ""}`}>{badge}</span>
-            {!s?.installed && s !== undefined && !path && (
-              <CliInstall kind={kind} onInstalled={refresh} />
-            )}
-            {path ? (
-              <button className="btn" title={path} onClick={() => void setPath(kind, undefined)}>
-                Auto-detect
-              </button>
-            ) : (
-              s !== undefined &&
-              !s?.installed && (
-                <button className="btn" onClick={() => void locate(kind)}>
-                  Locate…
+          <Fragment key={kind}>
+            <div className="flex items-center gap-3 border-b border-border py-2.5">
+              <ProviderLogos kind={kind} size={20} />
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold">{AGENT_LABELS[kind]}</div>
+                <div className="text-[length:var(--fs-sm)] text-fg-muted">{describeAgent(s)}</div>
+              </div>
+              <span className={`badge${s?.installed ? " badge-success" : ""}`}>{badge}</span>
+              {!s?.installed && s !== undefined && !path && (
+                <CliInstall kind={kind} onInstalled={refresh} />
+              )}
+              {path ? (
+                <button className="btn" title={path} onClick={() => void setPath(kind, undefined)}>
+                  Auto-detect
                 </button>
-              )
+              ) : (
+                s !== undefined &&
+                !s?.installed && (
+                  <button className="btn" onClick={() => void locate(kind)}>
+                    Locate…
+                  </button>
+                )
+              )}
+              <button
+                className={`btn${settings.systemPrompts[kind] ? " text-accent" : ""}`}
+                aria-expanded={prompting === kind}
+                onClick={() => setPrompting(prompting === kind ? null : kind)}
+              >
+                Prompt
+              </button>
+              <button
+                className="toggle"
+                role="switch"
+                aria-label={`Connect ${AGENT_LABELS[kind]}`}
+                aria-checked={on}
+                disabled={locked}
+                onClick={() => toggle(kind)}
+              />
+            </div>
+            {prompting === kind && (
+              <SystemPrompt kind={kind} settings={settings} updateSettings={updateSettings} />
             )}
-            <button
-              className="toggle"
-              role="switch"
-              aria-label={`Connect ${AGENT_LABELS[kind]}`}
-              aria-checked={on}
-              disabled={locked}
-              onClick={() => toggle(kind)}
-            />
-          </div>
+          </Fragment>
         );
       })}
     </>

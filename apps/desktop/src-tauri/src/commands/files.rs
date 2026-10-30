@@ -53,9 +53,9 @@ pub(crate) async fn turn_files(
     project_id: String,
     turn: TurnTrees,
     paths: Vec<String>,
-) -> Res<Vec<orchestration::checkpoint::TurnFile>> {
+) -> Res<Vec<orchestration::changes::checkpoint::TurnFile>> {
     let root = server.project_root(&project_id)?;
-    blocking(move || orchestration::checkpoint::turn_files(&root, &turn, &paths)).await?
+    blocking(move || orchestration::changes::checkpoint::turn_files(&root, &turn, &paths)).await?
 }
 
 /// A reply's turn's diff of one file.
@@ -67,7 +67,8 @@ pub(crate) async fn turn_file_diff(
     path: String,
 ) -> Res<String> {
     let root = server.project_root(&project_id)?;
-    blocking(move || orchestration::checkpoint::turn_file_diff(&root, &turn, &path)).await?
+    blocking(move || orchestration::changes::checkpoint::turn_file_diff(&root, &turn, &path))
+        .await?
 }
 
 #[tauri::command]

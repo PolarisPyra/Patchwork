@@ -43,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   agent: null,
   importLogDisabled: false,
   agentPaths: {},
+  systemPrompts: {},
   shell: null,
   skillsDir: null,
   disabledSkills: [],

@@ -95,7 +95,7 @@ impl Server {
         logging::AGENTS.init(logs);
         let store = Store::open(dirs.data)?;
         follow_log_levels(&store.settings());
-        orchestration::recovery::recover(&store)?;
+        orchestration::turn::recovery::recover(&store)?;
         let server = Arc::new(Self {
             store,
             usage: usage::UsageCache::default(),

@@ -34,4 +34,8 @@ keyStore: KeyStore | null,
 /**
  * A logo chosen for it, as an image `data:` URL; replaces the preset's.
  */
-logo: string | null, };
+logo: string | null, 
+/**
+ * Added to the system prompt of every turn on this provider's models.
+ */
+systemPrompt: string, };

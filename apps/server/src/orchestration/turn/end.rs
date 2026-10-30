@@ -14,9 +14,9 @@ use crate::threads::Role;
 use crate::logging::{AGENTS, Data, Source};
 use crate::settings::LogLevel;
 use crate::orchestration::FollowUpInput;
-use crate::orchestration::checkpoint;
-use crate::orchestration::stream::publish;
-use super::{Turn, TurnRequest};
+use crate::orchestration::changes::checkpoint;
+use crate::orchestration::output::stream::publish;
+use crate::orchestration::turn::start::{Turn, TurnRequest};
 
 /// Ends a turn whose agent has exited: forgets it, completes each of its messages, then starts
 /// the turn that drops its goal or answers the steering messages it never took. When the agent lost
@@ -275,13 +275,13 @@ pub(in crate::orchestration) fn plugin_hooks(
 }
 
 /// A background command's window, apart from its call's, which has the same id.
-pub(super) fn background_id(tool_id: &str) -> String {
+pub(in crate::orchestration) fn background_id(tool_id: &str) -> String {
     format!("background:{tool_id}")
 }
 
 /// Logs the agent's CLI version once per run of the app. A thread asks, since running the CLI
 /// takes a moment the turn should not wait for.
-pub(super) fn log_cli_version(agent: AgentKind) {
+pub(in crate::orchestration) fn log_cli_version(agent: AgentKind) {
     static LOGGED: Mutex<Vec<AgentKind>> = Mutex::new(Vec::new());
     if agent == AgentKind::Api {
         return;

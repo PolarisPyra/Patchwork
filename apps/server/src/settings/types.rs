@@ -42,6 +42,9 @@ pub struct Settings {
     pub agent: Option<AgentKind>,
     /// Agent CLIs the user located by hand, used instead of searching for them.
     pub agent_paths: HashMap<AgentKind, String>,
+    /// What each agent CLI is told at launch after Patchwork's own instructions. API providers
+    /// keep theirs with the provider.
+    pub system_prompts: HashMap<AgentKind, String>,
     pub integrations: Integrations,
     pub projects: Vec<Project>,
     pub active_project_id: Option<String>,

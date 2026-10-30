@@ -49,7 +49,13 @@ pub struct Request {
     /// Compacts the session once a step's context reaches this; 0 leaves it to OpenCode.
     #[serde(default)]
     pub compact_window: u64,
+    /// The system prompt the user gave OpenCode in Settings.
+    #[serde(default)]
+    pub system_prompt: Option<String>,
 }
+
+/// The session's instruction entry that holds the user's system prompt.
+const PROMPT_ENTRY: &str = "patchwork-system-prompt";
 
 #[derive(Deserialize)]
 pub struct SlashCommand {
@@ -150,6 +156,15 @@ fn turn(request: &Request, tx: &Sender<Msg>, rx: &Receiver<Msg>) -> Result<(), S
         &format!("/api/session/{session_id}"),
         &json!({ "permissions": request.permissions }),
     )?;
+    // The system prompt rides on the session as an instruction entry, which OpenCode adds to the
+    // model's instructions; a cleared prompt is taken off a resumed session. The API is marked
+    // experimental, so a server without it runs the turn without the prompt.
+    let entry =
+        format!("/api/experimental/session/{session_id}/instructions/entries/{PROMPT_ENTRY}");
+    let _ = match &request.system_prompt {
+        Some(text) => api.put(&entry, &json!({ "value": text })),
+        None => api.delete(&entry),
+    };
     // Subscribed before the prompt, so no event of the turn is missed.
     events(&api, &session_id, request.compact_window, tx.clone())?;
     send(&api, &session_id, request)?;
@@ -520,6 +535,15 @@ impl Api {
         let response = self
             .agent
             .post(format!("{}{path}", self.base))
+            .header("Authorization", &self.auth)
+            .send_json(body);
+        read(path, response)
+    }
+
+    fn put(&self, path: &str, body: &Value) -> Result<Value, String> {
+        let response = self
+            .agent
+            .put(format!("{}{path}", self.base))
             .header("Authorization", &self.auth)
             .send_json(body);
         read(path, response)

@@ -1,158 +1,21 @@
-//! Runs agent turns by spawning the agent CLIs and translating their JSONL output into
-//! `AgentEvent`s. Each turn is one child process; its stdin stays open while the turn runs so
-//! approvals can be answered. `Runner` is the entry point; the other modules each cover one part
-//! of a turn, and `claude` and `codex` hold the instructions each agent is launched with.
-
-mod events;
-mod queue_ops;
-mod send;
-
-pub use events::{AgentEvent, AgentEventEnvelope};
-
-pub mod checkpoint;
-mod attribution;
-mod background;
-mod ingest;
-pub(crate) mod goal;
-mod hook;
-mod process;
-mod queue;
-pub(crate) mod recovery;
-mod stream;
-mod stuck;
-mod subagents;
-mod turn;
-mod usage;
+//! The `Runner`: the agent processes up in each thread, and handing a message to one, stopping
+//! one, or stopping them all.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
-use process::{INTERRUPT_GRACE, QUIT_GRACE, terminate, write_line, write_to};
-use queue::FollowUp;
-pub use queue::FollowUpInput;
-pub use turn::TurnRequest;
-
-/// The user's answer to an approval request: whether it was allowed, any answers to questions,
-/// and the rule the user saved with it.
-pub struct ApprovalDecision<'a> {
-    pub approval_id: &'a str,
-    pub allow: bool,
-    pub answers: HashMap<String, Vec<String>>,
-    pub rule: Option<RuleRef>,
-}
-use turn::RunningTurn;
-
-pub(crate) use stream::publish;
-use crate::permissions::{self, Decision, Target};
+use crate::orchestration::changes::attribution::SharedAttribution;
+use crate::orchestration::turn::process::{
+    INTERRUPT_GRACE, QUIT_GRACE, terminate, write_line, write_to,
+};
+use crate::orchestration::messages::queue::{FollowUp, FollowUpInput};
+use crate::orchestration::turn::start::RunningTurn;
+use crate::permissions::Target;
 use crate::provider;
 use crate::system::scope;
-use crate::Server;
-use crate::permissions::RuleRef;
-use crate::provider::AgentKind;
-use crate::settings::Settings;
 use crate::workspace;
-
-/// What the permission rules answer to `target` in the thread, or None to ask the user.
-fn decide(server: &Server, thread_id: &str, root: &str, target: &Target) -> Option<Decision> {
-    let project = server.store.thread(thread_id).and_then(|t| t.project_id);
-    let settings = server.store.settings();
-    permissions::decide(
-        &settings.permissions,
-        project.as_deref(),
-        std::path::Path::new(root),
-        target,
-        &crate::skills::folders(&settings),
-    )
-}
-
-/// What the permission rules answer to `target` in the thread when the access mode runs it
-/// without asking.
-fn unasked(
-    server: &Server,
-    thread_id: &str,
-    root: &str,
-    target: &Target,
-    asks: bool,
-) -> permissions::Unasked {
-    let project = server.store.thread(thread_id).and_then(|t| t.project_id);
-    let settings = server.store.settings();
-    permissions::unasked(
-        &settings.permissions,
-        project.as_deref(),
-        std::path::Path::new(root),
-        target,
-        &crate::skills::folders(&settings),
-        asks,
-    )
-}
-
-/// Whether `text` is upkeep the app also sends on its own rather than work for the agent: an idle
-/// `/compact`, or the message that has the agent drop its goal.
-pub fn is_upkeep(text: &str) -> bool {
-    let text = text.trim();
-    text == "/compact"
-        || [AgentKind::Claude, AgentKind::Antigravity]
-            .into_iter()
-            .any(|agent| text == goal::clear_command(agent))
-}
-
-/// What an agent that takes instructions at launch is told: to keep its task list with its own
-/// tool, so the Tasks badge fills in, then which shells are installed and which one runs its
-/// commands.
-pub(crate) fn agent_instructions(settings: &Settings, agent: AgentKind) -> String {
-    [
-        checklist_instructions(agent),
-        Some(shell_instructions(settings)),
-    ]
-    .into_iter()
-    .flatten()
-    .filter(|part| !part.is_empty())
-    .collect::<Vec<_>>()
-    .join("\n\n")
-}
-
-/// The line that tells `agent` to keep a checklist with its own tool. Antigravity has no such
-/// tool, and Patchwork's own agent is told in its own guidance.
-fn checklist_instructions(agent: AgentKind) -> Option<String> {
-    let tool = match agent {
-        AgentKind::Claude => "TodoWrite",
-        AgentKind::Codex => "update_plan",
-        AgentKind::OpenCode => "todowrite",
-        AgentKind::Antigravity | AgentKind::Api => return None,
-    };
-    Some(format!(
-        "For any task with more than one step, keep a checklist with your {tool} tool: add every \
-         step before you start, mark one in progress at a time, and mark each done as soon as it \
-         is finished."
-    ))
-}
-
-/// Which shells are installed and which one runs the agent's commands.
-fn shell_instructions(settings: &Settings) -> String {
-    let mut prompt = String::new();
-    let installed = crate::system::available_shells();
-    if !installed.is_empty() {
-        prompt.push_str(&format!(
-            "Shells on this machine: {}.",
-            installed.join(", ")
-        ));
-    }
-    let chosen = settings.shell.as_deref();
-    if let Some(shell) = crate::system::effective_shell(chosen) {
-        if chosen == Some(shell.as_str()) {
-            prompt.push_str(&format!(
-                " The user chose {shell} for shell commands; run them in it and write them for it."
-            ));
-        } else {
-            prompt.push_str(&format!(
-                " Shell commands run in {shell}, the user's login shell; write them for it."
-            ));
-        }
-    }
-    prompt.trim_start().to_string()
-}
 
 /// What became of a message sent to a thread.
 pub enum Delivery {
@@ -168,15 +31,15 @@ pub enum Delivery {
 
 #[derive(Default)]
 pub struct Runner {
-    turns: Mutex<HashMap<String, RunningTurn>>,
+    pub(in crate::orchestration) turns: Mutex<HashMap<String, RunningTurn>>,
     /// Messages this process has handed to a turn, whether steered or queued. Written under the
     /// `turns` lock, so a withdrawal sees it in the same order as the queue it checks.
-    handed_over: Mutex<HashSet<String>>,
+    pub(in crate::orchestration) handed_over: Mutex<HashSet<String>>,
     /// Permission hooks waiting for the user, by approval id.
-    hooks: Mutex<HashMap<String, std::sync::mpsc::Sender<bool>>>,
+    pub(in crate::orchestration) hooks: Mutex<HashMap<String, std::sync::mpsc::Sender<bool>>>,
     /// Calls the user allowed through a hook, by thread, so the agent's own request for them
     /// is not asked again.
-    grants: Mutex<HashMap<String, Vec<Target>>>,
+    pub(in crate::orchestration) grants: Mutex<HashMap<String, Vec<Target>>>,
 }
 
 impl Runner {
@@ -199,7 +62,7 @@ impl Runner {
     }
 
     /// The threads with a reply under way, each with what its files are judged by.
-    fn attributions(&self) -> Vec<(String, attribution::SharedAttribution)> {
+    pub(in crate::orchestration) fn attributions(&self) -> Vec<(String, SharedAttribution)> {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         turns
             .iter()
@@ -444,108 +307,6 @@ impl Runner {
             .filter(|(_, exited)| !exited.load(Ordering::SeqCst))
             .for_each(|(pid, _)| workspace::signal_process_group(*pid, workspace::SIGKILL));
     }
-
-    /// Sends the user's answer to a pending approval and records it.
-    pub fn respond(
-        &self,
-        server: &Server,
-        thread_id: &str,
-        decision: ApprovalDecision<'_>,
-    ) -> Result<(), String> {
-        self.resolve(server, thread_id, decision, false)
-    }
-
-    /// Answers the pending approvals the permission rules now cover, in every running turn, once
-    /// the user changed the rules.
-    pub fn apply_rules(&self, server: &Server) {
-        let waiting: Vec<(String, String, Target, String)> = {
-            let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
-            turns
-                .iter()
-                .flat_map(|(thread_id, turn)| {
-                    let pending = turn.pending.lock().unwrap_or_else(PoisonError::into_inner);
-                    pending
-                        .iter()
-                        .filter_map(|(id, p)| {
-                            let target = p.target.clone()?;
-                            Some((thread_id.clone(), id.clone(), target, p.root.clone()))
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .collect()
-        };
-        for (thread_id, approval_id, target, root) in waiting {
-            let Some(Decision { allow, rule }) = decide(server, &thread_id, &root, &target) else {
-                continue;
-            };
-            let decision = ApprovalDecision {
-                approval_id: &approval_id,
-                allow,
-                answers: HashMap::new(),
-                rule: Some(rule),
-            };
-            // The user may have answered it meanwhile.
-            let _ = self.resolve(server, &thread_id, decision, true);
-        }
-    }
-
-    /// Sends an answer to a pending approval and records it; `auto` when a rule gave it.
-    fn resolve(
-        &self,
-        server: &Server,
-        thread_id: &str,
-        decision: ApprovalDecision<'_>,
-        auto: bool,
-    ) -> Result<(), String> {
-        let ApprovalDecision {
-            approval_id,
-            allow,
-            answers,
-            rule,
-        } = decision;
-        let (agent, stdin, pending) = {
-            let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
-            let turn = turns
-                .get(thread_id)
-                .ok_or("This turn is no longer running")?;
-            let pending = turn
-                .pending
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .remove(approval_id)
-                .ok_or("This request was already answered")?;
-            (turn.agent, turn.stdin.clone(), pending)
-        };
-        // A permission hook holds the call until it hears the answer.
-        if pending.reply.get("hook").is_some() {
-            if let Some(waiter) = self
-                .hooks
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .remove(approval_id)
-            {
-                let _ = waiter.send(allow);
-            }
-        } else {
-            write_line(
-                &stdin,
-                &provider::approval_reply(agent, &pending.reply, allow, &answers),
-            );
-        }
-        publish(
-            server,
-            thread_id,
-            AgentEvent::ApprovalResolved {
-                message_id: pending.message_id,
-                approval_id: approval_id.into(),
-                allowed: allow,
-                answers,
-                rule,
-                auto,
-            },
-        );
-        Ok(())
-    }
 }
 
 /// Marks the turn stopped and takes back the messages waiting for it, returning their ids.
@@ -557,40 +318,4 @@ fn stop_turn(turn: &RunningTurn) -> Vec<String> {
         .drain(..)
         .map(|f| f.message_id)
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn each_agent_is_told_to_keep_a_checklist_with_its_own_tool() {
-        let settings = Settings::default();
-        for (agent, tool) in [
-            (AgentKind::Claude, "TodoWrite"),
-            (AgentKind::Codex, "update_plan"),
-            (AgentKind::OpenCode, "todowrite"),
-        ] {
-            let text = agent_instructions(&settings, agent);
-            assert!(
-                text.contains(&format!("your {tool} tool")),
-                "{agent:?}: {text}"
-            );
-        }
-        for agent in [AgentKind::Antigravity, AgentKind::Api] {
-            assert_eq!(checklist_instructions(agent), None, "{agent:?}");
-            let text = agent_instructions(&settings, agent);
-            assert!(!text.contains("checklist"), "{agent:?}: {text}");
-        }
-    }
-
-    #[test]
-    fn the_instructions_carry_the_checklist_and_the_shell_line() {
-        let shell = shell_instructions(&Settings::default());
-        let text = agent_instructions(&Settings::default(), AgentKind::Claude);
-        assert!(text.starts_with("For any task with more than one step"));
-        assert!(text.ends_with(&shell), "{text}");
-        assert!(!text.contains("\n\n\n"), "no double blank line: {text:?}");
-        assert!(!text.ends_with('\n'));
-    }
 }

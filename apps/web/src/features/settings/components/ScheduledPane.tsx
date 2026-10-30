@@ -22,7 +22,7 @@ import {
   type Weekday,
 } from "~/api";
 import type { UpdateSettings } from "~/api";
-import { INPUT, chip, TokenSwitch } from "~/features/settings/components/controls";
+import { INPUT, TEXTAREA, chip, TokenSwitch } from "~/features/settings/components/controls";
 import { AGENT_KINDS, errorText } from "~/lib/util";
 
 /**
@@ -49,7 +49,6 @@ const DAYS: { day: Weekday; label: string }[] = [
 
 const SELECT =
   "h-7 rounded-[var(--radius-sm)] border border-border-strong bg-editor px-2 text-[length:var(--fs-sm)] text-fg";
-const TEXTAREA = `${INPUT} h-auto min-h-[70px] w-full resize-y py-1.5`;
 const RELATIVE_DAY = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 const DAY_MS = 86_400_000;
 

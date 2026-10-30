@@ -21,7 +21,7 @@ import {
 import type { UpdateSettings } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
 import { errorText } from "~/lib/util";
-import { INPUT } from "~/features/settings/components/controls";
+import { INPUT, TEXTAREA } from "~/features/settings/components/controls";
 
 /** Endpoints a provider can start from. */
 interface Preset {
@@ -52,6 +52,7 @@ export const blank = (preset: Preset): ApiProvider => ({
   keyEnv: null,
   keyStore: null,
   logo: null,
+  systemPrompt: "",
 });
 
 /** Puts the API agent in `settings.agents` while a provider can run a task, and takes it out
@@ -381,6 +382,14 @@ export function ProviderForm({
         typedKey={useEnv ? null : key}
         keyEnv={useEnv ? draft.keyEnv : null}
       />
+      <Field label="System prompt">
+        <textarea
+          className={TEXTAREA}
+          value={draft.systemPrompt}
+          spellCheck
+          onChange={(e) => set({ systemPrompt: e.target.value })}
+        />
+      </Field>
       <button
         className="flex cursor-pointer items-center gap-1 self-start border-none bg-transparent p-0 text-[length:var(--fs-sm)] text-fg-muted hover:text-fg"
         aria-expanded={advanced}

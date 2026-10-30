@@ -1,8 +1,6 @@
 //! One running turn: its shared state, and the spawn that starts it.
-mod end;
 
-pub(super) use end::{TurnEnd, finish, plugin_hooks, record_turn};
-use end::{background_id, log_cli_version};
+use crate::orchestration::turn::end::{background_id, log_cli_version, plugin_hooks};
 
 use std::collections::HashMap;
 #[cfg(unix)]
@@ -17,7 +15,7 @@ use std::time::Instant;
 
 use serde_json::Value;
 
-use super::attribution::{self, Attribution, Reach, SharedAttribution};
+use crate::orchestration::changes::attribution::{self, Attribution, Reach, SharedAttribution};
 use crate::plugins::HookEvent;
 use crate::permissions::Target;
 use crate::provider::TurnSpec;
@@ -38,65 +36,65 @@ use crate::threads::Role;
 use crate::logging::{AGENTS, Data, Source};
 use crate::settings::LogLevel;
 use crate::workspace;
-use super::checkpoint;
-use super::ingest::ingest;
-use super::process::AgentStdin;
-use super::process::Interrupts;
-use super::process::close_stdin_unless_steered;
-use super::process::read_stderr_tail;
-use super::process::Stdin;
-use super::process::terminate;
-use super::process::IDLE_LIMIT;
-use super::process::TURN_TIMEOUT;
-use super::process::WATCH_EVERY;
-use super::process::write_line;
-use super::queue::Queue;
-use super::queue::Steers;
-use super::Runner;
-use super::stream::publish;
-use super::stream::Unsaved;
-use super::subagents::Controls;
-use super::subagents::Tasks;
+use crate::orchestration::changes::checkpoint;
+use crate::orchestration::output::ingest::ingest;
+use crate::orchestration::turn::process::AgentStdin;
+use crate::orchestration::turn::process::Interrupts;
+use crate::orchestration::turn::process::close_stdin_unless_steered;
+use crate::orchestration::turn::process::read_stderr_tail;
+use crate::orchestration::turn::process::Stdin;
+use crate::orchestration::turn::process::terminate;
+use crate::orchestration::turn::process::IDLE_LIMIT;
+use crate::orchestration::turn::process::TURN_TIMEOUT;
+use crate::orchestration::turn::process::WATCH_EVERY;
+use crate::orchestration::turn::process::write_line;
+use crate::orchestration::messages::queue::Queue;
+use crate::orchestration::messages::queue::Steers;
+use crate::orchestration::Runner;
+use crate::orchestration::output::stream::publish;
+use crate::orchestration::output::stream::Unsaved;
+use crate::orchestration::tasks::subagents::Controls;
+use crate::orchestration::tasks::subagents::Tasks;
 
 /// An approval waiting for the user.
-pub(super) struct PendingApproval {
-    pub(super) message_id: String,
+pub(in crate::orchestration) struct PendingApproval {
+    pub(in crate::orchestration) message_id: String,
     /// What `approval_reply` needs to answer it.
-    pub(super) reply: Value,
+    pub(in crate::orchestration) reply: Value,
     /// What it asks to do, for the permission rules.
-    pub(super) target: Option<Target>,
+    pub(in crate::orchestration) target: Option<Target>,
     /// The folder the thread works in.
-    pub(super) root: String,
+    pub(in crate::orchestration) root: String,
 }
 
 /// Pending approvals of one turn, by approval id.
-pub(super) type Pending = Arc<Mutex<HashMap<String, PendingApproval>>>;
+pub(in crate::orchestration) type Pending = Arc<Mutex<HashMap<String, PendingApproval>>>;
 
 /// The agent's id for the turn now running (Codex reports it once the turn starts).
-pub(super) type NativeTurn = Arc<Mutex<Option<String>>>;
+pub(in crate::orchestration) type NativeTurn = Arc<Mutex<Option<String>>>;
 
-pub(super) struct RunningTurn {
-    pub(super) pid: u32,
-    pub(super) cancelled: Arc<AtomicBool>,
+pub(in crate::orchestration) struct RunningTurn {
+    pub(in crate::orchestration) pid: u32,
+    pub(in crate::orchestration) cancelled: Arc<AtomicBool>,
     /// The interrupts Stop wrote to the agent, and whether it answered them.
-    pub(super) interrupts: Arc<Interrupts>,
+    pub(in crate::orchestration) interrupts: Arc<Interrupts>,
     /// Set once the agent process has exited and been reaped.
-    pub(super) exited: Arc<AtomicBool>,
+    pub(in crate::orchestration) exited: Arc<AtomicBool>,
     /// The systemd scope the agent runs in, when scopes are on.
-    pub(super) scope: Option<String>,
-    pub(super) agent: AgentKind,
-    pub(super) stdin: Stdin,
-    pub(super) pending: Pending,
-    pub(super) native_turn: NativeTurn,
-    pub(super) steers: Steers,
-    pub(super) queue: Queue,
-    pub(super) tasks: Tasks,
-    pub(super) controls: Controls,
+    pub(in crate::orchestration) scope: Option<String>,
+    pub(in crate::orchestration) agent: AgentKind,
+    pub(in crate::orchestration) stdin: Stdin,
+    pub(in crate::orchestration) pending: Pending,
+    pub(in crate::orchestration) native_turn: NativeTurn,
+    pub(in crate::orchestration) steers: Steers,
+    pub(in crate::orchestration) queue: Queue,
+    pub(in crate::orchestration) tasks: Tasks,
+    pub(in crate::orchestration) controls: Controls,
     /// The agent has finished its reply and stays up only for shell commands it left running;
     /// the thread counts as idle, and the next message starts a new reply in this process.
-    pub(super) idle: Arc<AtomicBool>,
+    pub(in crate::orchestration) idle: Arc<AtomicBool>,
     /// Shared with the project's watcher, which adds files to the reply as they change.
-    pub(super) attribution: SharedAttribution,
+    pub(in crate::orchestration) attribution: SharedAttribution,
 }
 
 /// What a new turn sends to the agent, and the thread it belongs to.
@@ -203,18 +201,25 @@ impl Runner {
             None => text,
         };
         // Codex takes its instructions in the turn's input; Claude takes them as launch arguments.
+        // OpenCode and Antigravity get only the user's system prompt.
         let instructions = match agent {
-            AgentKind::Codex => Some(super::agent_instructions(&settings, AgentKind::Codex))
-                .filter(|text| !text.is_empty()),
+            AgentKind::Codex => Some(crate::orchestration::agent_instructions(
+                &settings,
+                AgentKind::Codex,
+            ))
+            .filter(|text| !text.is_empty()),
             // Patchwork's own agent has no skill loader, so it is told where the skills are.
             AgentKind::Api => {
-                let shell =
-                    Some(super::agent_instructions(&settings, agent)).filter(|t| !t.is_empty());
+                let shell = Some(crate::orchestration::agent_instructions(&settings, agent))
+                    .filter(|t| !t.is_empty());
                 let parts = [shell, crate::skills::instructions(&skills)];
                 Some(parts.into_iter().flatten().collect::<Vec<_>>().join("\n\n"))
                     .filter(|t| !t.is_empty())
             }
-            AgentKind::Claude | AgentKind::Antigravity | AgentKind::OpenCode => None,
+            AgentKind::OpenCode | AgentKind::Antigravity => {
+                crate::orchestration::system_prompt(&settings, agent).map(str::to_string)
+            }
+            AgentKind::Claude => None,
         };
         // Codex and OpenCode load skills from a folder of their own; Claude's comes with its launch.
         let skills_dir = match agent {
@@ -276,9 +281,7 @@ impl Runner {
         }
         let input = provider::turn_input(agent, &spec);
         let (mut cmd, scope) = scope::scoped(provider::turn_command(agent)?);
-        if let Some(shell) =
-            crate::system::effective_shell(server.store.settings().shell.as_deref())
-        {
+        if let Some(shell) = provider::agent_shell(agent, settings.shell.as_deref()) {
             // Claude Code on Windows runs its commands in Git Bash, and refuses to start when it
             // cannot find it on PATH.
             if cfg!(windows) && agent == AgentKind::Claude && shell.ends_with("bash.exe") {
@@ -502,53 +505,53 @@ fn watch(w: Watched) {
 }
 
 /// Everything the stdout reader needs to persist and publish one turn's events.
-pub(super) struct Turn {
-    pub(super) server: Arc<Server>,
-    pub(super) thread_id: String,
-    pub(super) message_id: String,
-    pub(super) agent: AgentKind,
-    pub(super) cancelled: Arc<AtomicBool>,
-    pub(super) interrupts: Arc<Interrupts>,
+pub(in crate::orchestration) struct Turn {
+    pub(in crate::orchestration) server: Arc<Server>,
+    pub(in crate::orchestration) thread_id: String,
+    pub(in crate::orchestration) message_id: String,
+    pub(in crate::orchestration) agent: AgentKind,
+    pub(in crate::orchestration) cancelled: Arc<AtomicBool>,
+    pub(in crate::orchestration) interrupts: Arc<Interrupts>,
     /// Set when the turn ran past `TURN_TIMEOUT` and the agent was stopped for it.
-    pub(super) timed_out: Arc<AtomicBool>,
-    pub(super) exited: Arc<AtomicBool>,
+    pub(in crate::orchestration) timed_out: Arc<AtomicBool>,
+    pub(in crate::orchestration) exited: Arc<AtomicBool>,
     /// The files this reply changed, as far as they are known yet.
-    pub(super) attribution: SharedAttribution,
+    pub(in crate::orchestration) attribution: SharedAttribution,
     /// The agent's systemd scope, when agents run in scopes.
-    pub(super) scope: Option<String>,
-    pub(super) stdin: Stdin,
-    pub(super) pending: Pending,
-    pub(super) native_turn: NativeTurn,
-    pub(super) steers: Steers,
-    pub(super) queue: Queue,
-    pub(super) tasks: Tasks,
-    pub(super) controls: Controls,
-    pub(super) idle: Arc<AtomicBool>,
-    pub(super) root: String,
-    pub(super) session_id: Option<String>,
-    pub(super) model: Option<String>,
-    pub(super) vision_model: Option<String>,
-    pub(super) text: String,
-    pub(super) mode: AccessMode,
-    pub(super) plan: bool,
-    pub(super) effort: Option<String>,
-    pub(super) compact_window: u64,
-    pub(super) attachments: Vec<Attachment>,
-    pub(super) images: Vec<provider::Image>,
+    pub(in crate::orchestration) scope: Option<String>,
+    pub(in crate::orchestration) stdin: Stdin,
+    pub(in crate::orchestration) pending: Pending,
+    pub(in crate::orchestration) native_turn: NativeTurn,
+    pub(in crate::orchestration) steers: Steers,
+    pub(in crate::orchestration) queue: Queue,
+    pub(in crate::orchestration) tasks: Tasks,
+    pub(in crate::orchestration) controls: Controls,
+    pub(in crate::orchestration) idle: Arc<AtomicBool>,
+    pub(in crate::orchestration) root: String,
+    pub(in crate::orchestration) session_id: Option<String>,
+    pub(in crate::orchestration) model: Option<String>,
+    pub(in crate::orchestration) vision_model: Option<String>,
+    pub(in crate::orchestration) text: String,
+    pub(in crate::orchestration) mode: AccessMode,
+    pub(in crate::orchestration) plan: bool,
+    pub(in crate::orchestration) effort: Option<String>,
+    pub(in crate::orchestration) compact_window: u64,
+    pub(in crate::orchestration) attachments: Vec<Attachment>,
+    pub(in crate::orchestration) images: Vec<provider::Image>,
     /// What `spec` passes as `TurnSpec::instructions`.
-    pub(super) instructions: Option<String>,
+    pub(in crate::orchestration) instructions: Option<String>,
     /// What `spec` passes as `TurnSpec::skills_dir`.
-    pub(super) skills_dir: Option<String>,
+    pub(in crate::orchestration) skills_dir: Option<String>,
     /// What `spec` passes as `TurnSpec::guarded`.
-    pub(super) guarded: Vec<crate::permissions::Guarded>,
+    pub(in crate::orchestration) guarded: Vec<crate::permissions::Guarded>,
     /// What `spec` passes as `TurnSpec::agents`.
-    pub(super) agents: Vec<crate::agents::Agent>,
+    pub(in crate::orchestration) agents: Vec<crate::agents::Agent>,
     /// What `spec` passes as `TurnSpec::hooks`.
-    pub(super) hooks: Vec<crate::plugins::AgentHook>,
+    pub(in crate::orchestration) hooks: Vec<crate::plugins::AgentHook>,
 }
 
 impl Turn {
-    pub(super) fn publish(&self, event: AgentEvent) {
+    pub(in crate::orchestration) fn publish(&self, event: AgentEvent) {
         // Changes that waited for a call to cover them, which this finished one does.
         let covered = match &event {
             AgentEvent::ToolStarted { tool, .. } => {
@@ -592,7 +595,7 @@ impl Turn {
 
     /// Starts a new assistant message for what the agent says after taking a steering
     /// message, so the answer follows that message instead of growing the reply above it.
-    pub(super) fn next_segment(&mut self, unsaved: &mut Unsaved) {
+    pub(in crate::orchestration) fn next_segment(&mut self, unsaved: &mut Unsaved) {
         self.save_text(unsaved);
         let message = assistant_message();
         self.message_id = message.id.clone();
@@ -601,11 +604,11 @@ impl Turn {
 
     /// Closes stdin, which lets the agent exit, unless it still owes an answer to a
     /// steering message.
-    pub(super) fn close_unless_steered(&self) {
+    pub(in crate::orchestration) fn close_unless_steered(&self) {
         close_stdin_unless_steered(&self.stdin, &self.steers);
     }
 
-    pub(super) fn spec(&self) -> TurnSpec<'_> {
+    pub(in crate::orchestration) fn spec(&self) -> TurnSpec<'_> {
         TurnSpec {
             root: &self.root,
             session_id: self.session_id.as_deref(),
@@ -628,7 +631,7 @@ impl Turn {
 }
 
 /// An empty assistant message the agent's output streams into.
-pub(super) fn assistant_message() -> Message {
+pub(in crate::orchestration) fn assistant_message() -> Message {
     Message {
         id: new_id(),
         role: Role::Assistant,

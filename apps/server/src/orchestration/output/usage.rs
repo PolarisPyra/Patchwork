@@ -2,18 +2,21 @@
 use crate::threads::TokenUsage;
 
 /// A model request the agent made during a turn, and the tokens it used.
-pub(super) struct Request {
-    pub(super) id: String,
+pub(in crate::orchestration) struct Request {
+    pub(in crate::orchestration) id: String,
     /// The message that was current when the request was reported.
-    pub(super) message_id: String,
+    pub(in crate::orchestration) message_id: String,
     /// False for a subagent's request, which does not count toward the context.
-    pub(super) top_level: bool,
-    pub(super) usage: TokenUsage,
+    pub(in crate::orchestration) top_level: bool,
+    pub(in crate::orchestration) usage: TokenUsage,
 }
 
 /// The tokens a message used, summed over its requests. Its context is the prompt of the
 /// last request the main agent made for it.
-pub(super) fn message_usage(requests: &[Request], message_id: &str) -> TokenUsage {
+pub(in crate::orchestration) fn message_usage(
+    requests: &[Request],
+    message_id: &str,
+) -> TokenUsage {
     let mut total = TokenUsage::default();
     for r in requests.iter().filter(|r| r.message_id == message_id) {
         total.input += r.usage.input;
@@ -30,7 +33,7 @@ pub(super) fn message_usage(requests: &[Request], message_id: &str) -> TokenUsag
 /// Records the tokens a request used, made while `current` was the message being written, and
 /// returns the message they count toward. Claude reports a request once per content block, so a
 /// repeat updates it.
-pub(super) fn record_request(
+pub(in crate::orchestration) fn record_request(
     requests: &mut Vec<Request>,
     request_id: String,
     usage: TokenUsage,

@@ -61,6 +61,9 @@ struct Request {
     /// Patchwork's instructions about the user's shell.
     #[serde(default)]
     instructions: Option<String>,
+    /// The system prompt the user gave the provider in Settings.
+    #[serde(default)]
+    system_prompt: String,
     /// `compact` summarizes the conversation instead of sending a message.
     #[serde(default)]
     command: Option<String>,
