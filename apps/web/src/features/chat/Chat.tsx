@@ -42,7 +42,7 @@ import {
   threadScope,
   withScopeRules,
 } from "~/lib/permissions";
-import TasksBadge from "~/features/chat/components/TasksBadge";
+import PlanPanel from "~/features/chat/components/PlanPanel";
 import { planTitle } from "~/features/chat/components/ProposedPlanCard";
 import MissingFolderPrompt from "~/features/chat/components/MissingFolderPrompt";
 import ResumePrompt from "~/features/chat/components/ResumePrompt";
@@ -813,7 +813,7 @@ export default function Chat({
         </div>
       )}
       <div className={`w-full flex-none box-border px-6 pb-4 ${thread?.parent ? " hidden" : ""}`}>
-        {plan.length > 0 && <TasksBadge steps={plan} />}
+        {plan.length > 0 && <PlanPanel steps={plan} />}
         {readyPlan !== null && (
           <div
             title="Write feedback to refine the plan, or send nothing to implement it"

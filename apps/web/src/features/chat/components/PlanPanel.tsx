@@ -24,7 +24,7 @@ function StepIcon({ status }: { status: StepStatus }) {
 }
 
 /** The agent's plan above the composer: how far it has got, opening to the steps. */
-export default function TasksBadge({ steps }: { steps: PlanStep[] }) {
+export default function PlanPanel({ steps }: { steps: PlanStep[] }) {
   const [open, setOpen] = useState(true);
   const done = steps.filter((s) => s.status === "done").length;
   const current = steps.find((s) => s.status === "running");
@@ -44,7 +44,7 @@ export default function TasksBadge({ steps }: { steps: PlanStep[] }) {
         {current && <span className="min-w-0 flex-1 truncate">{current.text}</span>}
         {steps.length > 0 && (
           <span
-            className="flex h-2 flex-none items-center gap-1"
+            className="ml-auto flex h-2 flex-none items-center gap-1"
             role="img"
             aria-label={`${done} of ${steps.length} tasks complete${current ? `; current task: ${current.text}` : ""}`}
             title={`${done} of ${steps.length} tasks complete`}
@@ -71,7 +71,7 @@ export default function TasksBadge({ steps }: { steps: PlanStep[] }) {
             )}
           </span>
         )}
-        <Caret size={12} className="ml-auto flex-none" />
+        <Caret size={12} className={`flex-none ${steps.length > 0 ? "" : "ml-auto"}`} />
       </button>
       {open && (
         <ol className="m-0 flex list-none flex-col gap-1.5 border-t border-border px-3 py-2.5">
