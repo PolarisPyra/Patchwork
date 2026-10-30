@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.2.1] - 2026-10-30
+
+### Changed
+
+- While an agent works, its reply now shows "Thinking for 12s" with a grey shimmer that becomes "Thought for 12s" when done, and the separate reasoning rows are gone. Text now appears word by word even when it arrives together with a tool call, and the chat no longer jumps as a reply starts, grows or ends. The plan above the chat box now opens collapsed and keeps naming the step a stopped reply was on.
+
+### Fixed
+
+- Claude's reply now streams in word by word after a long think, instead of appearing all at once when the thinking ends.
+
 ## [26.2.0] - 2026-10-30
 
 ### Changed
