@@ -3,6 +3,19 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.2.0] - 2026-10-30
+
+### Changed
+
+- A step that is still running in a reply, such as Thinking, now shows a smooth grey shimmer across its label instead of a spinner beside it.
+
+### Fixed
+
+- A new chat now appears in the sidebar the moment you add it, instead of after a pause of a second or two, and the compaction ring in the chat box no longer turns into an arrows icon for a moment when you add a chat.
+- Holding Ctrl+W in the sidebar now archives chat after chat until the list is empty, instead of stopping partway and moving the cursor into the chat box.
+- Long chats you have already opened now open as quickly as short ones, and their file cards and images show at once instead of popping in.
+- The progress chips in the Tasks box above the chat box now always sit at its right edge, also before the agent has started a step.
+
 ## [26.1.9] - 2026-10-30
 
 ### Changed
