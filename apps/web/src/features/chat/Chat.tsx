@@ -915,6 +915,9 @@ export default function Chat({
           onStop={composerHandlers.onStop}
           goalActive={thread?.goal?.status === "active"}
           working={working}
+          backgroundRunning={background.some(
+            (task) => task.status === "running" || task.status === "waiting",
+          )}
           error={error}
           agent={agent}
           model={model}

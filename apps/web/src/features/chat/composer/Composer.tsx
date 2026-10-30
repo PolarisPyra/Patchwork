@@ -62,6 +62,8 @@ interface ComposerProps {
   canQueueFollowUp: boolean;
   onStop: () => void;
   working: boolean;
+  /** The agent left commands running after its reply, which Stop ends with it. */
+  backgroundRunning: boolean;
   error: string | null;
   agent: AgentKind;
   model: string | null;
@@ -169,6 +171,7 @@ function Composer({
   canQueueFollowUp,
   onStop,
   working,
+  backgroundRunning,
   error,
   agent,
   model,
@@ -878,12 +881,14 @@ function Composer({
             onPick={() => pickAttachments(true)}
           />
         </div>
-        {working && (
+        {/* Commands the agent left running keep its process up after the reply, so Stop stays
+            until they end. */}
+        {(working || backgroundRunning) && (
           <button
             className="grid h-8 w-8 flex-none cursor-pointer place-items-center rounded-[var(--radius)] border-none bg-selected-muted text-fg enabled:hover:bg-accent-hover"
             onClick={onStop}
-            title="Stop"
-            aria-label="Stop"
+            title={working ? "Stop" : "Stop background commands"}
+            aria-label={working ? "Stop" : "Stop background commands"}
           >
             <SquareIcon size={12} weight="fill" />
           </button>
