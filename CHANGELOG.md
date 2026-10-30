@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.1.4] - 2026-10-29
+
+### Fixed
+
+- The compact button under the chat box now shows how full the context is when it is set to When full. Its ring used to stay empty there, and now it fills against how much the chat's model holds, for Claude Code and Codex models. When Patchwork can't tell how much the model holds, the button shows a compress icon instead of an empty ring.
+
+### Removed
+
+- The compact button under the chat box and Settings → Tokens no longer offer 1M and 2M. A chat already set to one of them keeps it.
+
 ## [26.1.3] - 2026-10-29
 
 ### Added
