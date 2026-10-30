@@ -67,6 +67,25 @@ function programOf(command: string): string {
   return word.split("/").pop() || "command";
 }
 
+/**
+ * Whether a command line runs more than one program: a `;`, `|`, `&&` or line break outside
+ * quotes. Its exit status says only that one part failed, not which, so it is not put on the first.
+ */
+function isCompound(command: string): boolean {
+  let quote: string | null = null;
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i];
+    if (quote) {
+      if (c === quote) quote = null;
+      else if (c === "\\" && quote === '"') i++;
+    } else if (c === "'" || c === '"') quote = c;
+    else if (c === "\\") i++;
+    else if (c === ";" || c === "|" || c === "\n" || (c === "&" && command[i + 1] === "&"))
+      return true;
+  }
+  return false;
+}
+
 /** `mcp__server__tool` and Codex's `server.tool` name the tool last. */
 function toolName(tool: ToolCall): string {
   if (tool.name.startsWith("mcp__")) return tool.name.split("__").pop() ?? tool.name;
@@ -82,7 +101,8 @@ export function toolLabel(tool: ToolCall): string {
   switch (actionOf(tool)) {
     case "command":
       if (running) return `Running ${programOf(summary)}`;
-      if (tool.status === "error") return `Failed ${programOf(summary)}`;
+      if (tool.status === "error")
+        return isCompound(summary) ? "Failed command" : `Failed ${programOf(summary)}`;
       return summary || "Ran command";
     case "read":
       return summary ? `${verb("Reading", "Read")} ${summary}` : "Read file";
