@@ -3,6 +3,14 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.1.2] - 2026-10-29
+
+### Changed
+
+- Patchwork's config folder now holds only what you edit: your skills, agents, plugins, MCP servers and API providers. Chat history goes to the system's data folder, and files Patchwork rebuilds on its own go to the cache folder. Logs go to the system's log folder. Your existing files move there by themselves the first time this version opens, and leftovers from older versions are removed. A plugin's hooks can now be written inside the plugin's own manifest instead of a separate file.
+- The spinner beside "Working for…" above a reply now starts at the left edge of the line, where the finished "Worked for…" text starts. Before, it sat indented.
+- The button in the chat box that sets how hard the agent thinks is now named Effort when you point at it, instead of Thinking.
+
 ## [26.1.1] - 2026-10-29
 
 ### Added
