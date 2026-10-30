@@ -2,14 +2,18 @@
 
 use super::*;
 
+/// Off the main thread: listing runs agent CLIs (`codex debug models`, `opencode models`), and
+/// every new chat's composer asks for each agent's models, so the window stopped painting until
+/// they answered.
 #[tauri::command]
-pub(crate) fn list_models(kind: AgentKind) -> Vec<ModelOption> {
-    provider::list_models(kind)
+pub(crate) async fn list_models(kind: AgentKind) -> Res<Vec<ModelOption>> {
+    blocking(move || provider::list_models(kind)).await
 }
 
 #[tauri::command]
-pub(crate) fn list_api_providers() -> Vec<patchwork_server::provider::api::config::ProviderView> {
-    patchwork_server::provider::api::config::list()
+pub(crate) async fn list_api_providers()
+-> Res<Vec<patchwork_server::provider::api::config::ProviderView>> {
+    blocking(patchwork_server::provider::api::config::list).await
 }
 
 #[tauri::command]
