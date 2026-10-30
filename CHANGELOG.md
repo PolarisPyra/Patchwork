@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.1.8] - 2026-10-30
+
+### Changed
+
+- In Settings → Providers, the Prompt button is now System Prompt, for agent CLIs and API providers alike. Its editor has a Clear button that empties the text, so you can remove a system prompt; nothing changes until you press Save.
+
 ## [26.1.7] - 2026-10-30
 
 ### Changed
