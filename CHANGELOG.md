@@ -3,6 +3,13 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.1.6] - 2026-10-29
+
+### Fixed
+
+- Refreshing Antigravity in the Usage popover now briefly shows "Up to date" when there is nothing new, like Claude Code and Codex. Before, it showed nothing at all.
+- The spinners in a running reply now sit level with their text instead of a little too high. The one beside "Working for" is now the same size as the others, sits just as close to its text, and lines up with the step icons below it.
+
 ## [26.1.5] - 2026-10-29
 
 ### Changed
