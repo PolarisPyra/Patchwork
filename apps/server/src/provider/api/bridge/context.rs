@@ -55,6 +55,35 @@ fn images_note(provider: &str, count: usize) -> String {
     format!("(The user attached {what} {provider} cannot read, so {it} left out. Tell the user.)")
 }
 
+/// Characters per token, for sizing text the endpoint has not counted.
+const CHARS_PER_TOKEN: u64 = 4;
+
+/// The share of the model's context window a conversation fills before it is compacted, leaving
+/// room for the reply and the next tool output.
+const MODEL_SHARE: (u64, u64) = (4, 5);
+
+/// The characters of a message the model reads as text: its content, without image data, and the
+/// arguments of the calls it makes.
+fn text_len(message: &Value) -> usize {
+    let content = match &message["content"] {
+        Value::String(text) => text.len(),
+        Value::Array(parts) => parts
+            .iter()
+            .filter_map(|p| p["text"].as_str())
+            .map(str::len)
+            .sum(),
+        _ => 0,
+    };
+    let calls: usize = message["tool_calls"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|c| c["function"]["arguments"].as_str())
+        .map(str::len)
+        .sum();
+    content + calls
+}
+
 const COMPACT_PROMPT: &str = "\
 Summarize this conversation so that work can continue from the summary alone. Include the user's \
 goals and instructions, decisions made, files read or changed with what was learned or done, \
@@ -71,15 +100,69 @@ impl Agent {
         self.save()
     }
 
+    /// Summarizes the conversation before the next request once it reached the size to compact
+    /// at, so the request starts small again.
+    pub(super) fn compact_if_full(&mut self) -> Result<(), String> {
+        let at = self.compact_at();
+        // When the system prompt and tools alone fill that much, summarizing frees nothing.
+        if at == 0 || at <= self.fixed_size() || self.context.max(self.estimate()) < at {
+            return Ok(());
+        }
+        emit(&json!({"type": "api.compacting"}));
+        self.summarize(true)?;
+        self.save()
+    }
+
+    /// The size to compact at: the chat's compact window, or less when the model's own context
+    /// window is smaller, so a local model loaded with a small context compacts before it is full.
+    fn compact_at(&mut self) -> u64 {
+        let model = self
+            .model_window()
+            .map_or(0, |w| w * MODEL_SHARE.0 / MODEL_SHARE.1);
+        match (self.request.compact_window, model) {
+            (0, model) => model,
+            (window, 0) => window,
+            (window, model) => window.min(model),
+        }
+    }
+
+    /// The model's context window, asked of the endpoint once a turn.
+    fn model_window(&mut self) -> Option<u64> {
+        if self.model_window.is_none() {
+            self.model_window = Some(self.endpoint_window());
+        }
+        self.model_window.flatten()
+    }
+
+    /// The size the system prompt and tools take in every request, estimated from their text.
+    fn fixed_size(&self) -> u64 {
+        (self.system.len() + self.tools.to_string().len()) as u64 / CHARS_PER_TOKEN
+    }
+
+    /// The size of the next request, estimated from its text. The endpoint's own count comes only
+    /// with a reply, so it leaves out the tool output since then, and LM Studio counts a prompt
+    /// only after cutting it to fit.
+    fn estimate(&self) -> u64 {
+        let text: usize = self.messages.iter().map(text_len).sum();
+        self.fixed_size() + text as u64 / CHARS_PER_TOKEN
+    }
+
     /// Replaces the conversation with the model's summary of it. When even the request for the
     /// summary does not fit, the oldest messages are left out of it until it does. With `resume`,
-    /// the user's latest message follows the summary word for word, as the request to answer.
+    /// the user's latest message follows the summary word for word, as the request to answer,
+    /// and the summary is not streamed, since it is not the reply.
     pub(super) fn summarize(&mut self, resume: bool) -> Result<(), String> {
         let latest = resume
             .then(|| self.messages.iter().rev().find(|m| m["role"] == "user"))
             .flatten()
             .and_then(|m| m["content"].as_str())
             .map(str::to_string);
+        // An endpoint that cuts a prompt to fit, as LM Studio does, would summarize only part of
+        // the conversation, so when the model's window is known the oldest messages go first.
+        if let Some(window) = self.model_window() {
+            while self.estimate() > window * 9 / 10 && self.drop_oldest() {}
+        }
+        self.quiet = resume;
         let reply = loop {
             self.messages
                 .push(json!({"role": "user", "content": COMPACT_PROMPT}));
@@ -87,9 +170,11 @@ impl Agent {
             self.messages.pop();
             match reply {
                 Err(Failure::Context(_)) if self.drop_oldest() => continue,
-                reply => break reply?,
+                reply => break reply,
             }
         };
+        self.quiet = false;
+        let reply = reply?;
         if reply.content.trim().is_empty() {
             return Err("The model returned an empty summary, so the conversation was kept".into());
         }
@@ -103,6 +188,7 @@ impl Agent {
             ));
         }
         self.messages = vec![json!({"role": "user", "content": summary})];
+        self.context = 0;
         Ok(())
     }
 

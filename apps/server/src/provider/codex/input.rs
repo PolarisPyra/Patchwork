@@ -21,6 +21,17 @@ pub fn turn_args() -> Vec<String> {
     vec!["app-server".into()]
 }
 
+/// A set compact window makes Codex compact once its context reaches it.
+pub fn compact_args(spec: &TurnSpec) -> Vec<String> {
+    if spec.compact_window == 0 {
+        return Vec::new();
+    }
+    vec![
+        "-c".into(),
+        format!("model_auto_compact_token_limit={}", spec.compact_window),
+    ]
+}
+
 /// `-c` overrides that give Codex the custom agents as roles its `spawn_agent` starts by name.
 /// A role's instructions and model live in a file of their own, which the role points to.
 pub fn agents_args(spec: &TurnSpec) -> Vec<String> {

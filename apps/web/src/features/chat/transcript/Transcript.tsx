@@ -8,7 +8,12 @@ import {
   TranscriptRow,
   type RowContext,
 } from "~/features/chat/transcript/components/TranscriptRow";
-import { contextBefore, rowKindOf, visibleMessages } from "~/features/chat/transcript/lib/rows";
+import {
+  compactionState,
+  contextBefore,
+  rowKindOf,
+  visibleMessages,
+} from "~/features/chat/transcript/lib/rows";
 import { useTranscriptScroll } from "~/features/chat/transcript/hooks/useTranscriptScroll";
 import { shortcutContext, useCommand } from "~/lib/shortcuts";
 
@@ -159,7 +164,12 @@ export default function Transcript({
           const kind = rowKindOf(item);
           if (kind === "absent") return <div />;
           if (kind === "divider") {
-            return <CompactedDivider before={tokens.showUsage ? before[index] : undefined} />;
+            return (
+              <CompactedDivider
+                state={compactionState(messages, index, busy)}
+                before={tokens.showUsage ? before[index] : undefined}
+              />
+            );
           }
           return (
             <TranscriptRow

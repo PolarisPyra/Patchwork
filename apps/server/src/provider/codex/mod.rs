@@ -7,7 +7,8 @@ mod parse;
 
 pub use config::{home, auth, configured_model, models, rollout_files};
 pub use input::{
-    turn_args, agents_args, turn_input, goal_pause, steer_input, interrupt, approval_reply,
+    turn_args, agents_args, compact_args, turn_input, goal_pause, steer_input, interrupt,
+    approval_reply,
 };
 use input::{
     THREAD_REQUEST, thread_params, SKILLS_REQUEST, TURN_REQUEST, begin, GOAL_REQUEST, GOAL_SETUP,
@@ -60,6 +61,7 @@ mod tests {
             mode,
             plan: false,
             effort: None,
+            compact_window: 0,
             attachments: &[],
             images: &[],
             instructions: None,

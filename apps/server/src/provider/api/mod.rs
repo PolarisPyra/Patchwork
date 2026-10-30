@@ -70,6 +70,7 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         "mode": spec.mode,
         "plan": spec.plan,
         "effort": spec.effort,
+        "compactWindow": spec.compact_window,
         "instructions": spec.instructions,
         "command": command,
         "mcpTools": mcp::turn_tools(spec.plan),
@@ -284,6 +285,7 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
                 top_level: true,
             }]
         }
+        Some("api.compacting") => vec![Parsed::Compacting],
         Some("api.retry") => vec![Parsed::Retrying {
             reason: text("reason").into(),
             attempt: v["attempt"].as_u64().unwrap_or(1) as u32,

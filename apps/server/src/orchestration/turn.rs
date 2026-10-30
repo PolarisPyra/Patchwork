@@ -117,7 +117,19 @@ impl Runner {
         } = request;
         // A turn of its own (a /goal, a compaction) replaces an idle agent process.
         self.retire_idle(&thread_id);
-        let (agent, root, session_id, model, mode, effort, plan, context, project_id, checkpoint) = {
+        let (
+            agent,
+            root,
+            session_id,
+            model,
+            mode,
+            effort,
+            compact_window,
+            plan,
+            context,
+            project_id,
+            checkpoint,
+        ) = {
             let thread = server.store.thread(&thread_id).ok_or("Task not found")?;
             // The message being sent is the newest user message; the transcript is what came before.
             let context = thread.context_pending.then(|| {
@@ -158,6 +170,9 @@ impl Runner {
                 thread.model,
                 thread.access_mode,
                 thread.effort,
+                thread
+                    .compact_window
+                    .unwrap_or_else(|| settings.tokens.compact_window(thread.agent)),
                 thread.plan_mode,
                 context,
                 thread.project_id.clone(),
@@ -227,6 +242,7 @@ impl Runner {
             mode,
             plan,
             effort: effort.as_deref(),
+            compact_window,
             attachments: &attachments,
             images: &images,
             instructions: instructions.as_deref(),
@@ -271,7 +287,7 @@ impl Runner {
             cmd.env("SHELL", shell);
         }
         if agent == AgentKind::Claude {
-            cmd.envs(crate::provider::claude::launch::launch_env(&settings));
+            cmd.envs(crate::provider::claude::launch::launch_env(compact_window));
         }
         cmd.args(&args)
             .envs(provider::turn_env(agent, &spec))
@@ -377,6 +393,7 @@ impl Runner {
             mode,
             plan,
             effort,
+            compact_window,
             attachments,
             images,
             instructions,
@@ -515,6 +532,7 @@ pub(super) struct Turn {
     pub(super) mode: AccessMode,
     pub(super) plan: bool,
     pub(super) effort: Option<String>,
+    pub(super) compact_window: u64,
     pub(super) attachments: Vec<Attachment>,
     pub(super) images: Vec<provider::Image>,
     /// What `spec` passes as `TurnSpec::instructions`.
@@ -597,6 +615,7 @@ impl Turn {
             mode: self.mode,
             plan: self.plan,
             effort: self.effort.as_deref(),
+            compact_window: self.compact_window,
             attachments: &self.attachments,
             images: &self.images,
             instructions: self.instructions.as_deref(),

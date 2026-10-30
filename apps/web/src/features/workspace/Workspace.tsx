@@ -10,6 +10,7 @@ import {
 import type { UpdateSettings } from "~/api";
 import type { CanvasTab } from "~/features/canvas/Canvas";
 import { lastAccessMode } from "~/components/AccessPicker";
+import { lastCompactWindow } from "~/components/CompactPicker";
 import { lastEffort } from "~/components/EffortPicker";
 import Chat from "~/features/chat";
 import CommandPalette from "~/features/workspace/components/CommandPalette";
@@ -88,6 +89,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     setAccessMode,
     setPlanMode,
     setEffort,
+    setCompactWindow,
     send,
     startThread,
   } = useThreads(settings.activeProjectId);
@@ -289,6 +291,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     model: settings.tokens.defaultModels[defaultAgent] ?? null,
     accessMode: lastAccessMode(),
     effort: lastEffort(defaultAgent),
+    compactWindow: lastCompactWindow(defaultAgent),
   });
 
   /** New thread in a project, or a chat without a project when `id` is null. */
@@ -487,6 +490,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
                   )
                 }
                 onSetEffort={setEffort}
+                onSetCompactWindow={setCompactWindow}
                 permissionSettings={settings.permissions}
                 confirmAnswers={settings.confirmAnswers}
                 projects={settings.projects}

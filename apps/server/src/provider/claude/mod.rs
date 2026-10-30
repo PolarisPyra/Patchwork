@@ -228,6 +228,7 @@ mod tests {
             mode: AccessMode::FullAccess,
             plan: false,
             effort: None,
+            compact_window: 0,
             attachments: &[],
             images: &[],
             instructions: None,

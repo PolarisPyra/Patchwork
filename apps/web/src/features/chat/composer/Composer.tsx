@@ -22,6 +22,7 @@ import {
   type Skill,
 } from "~/api";
 import AccessPicker from "~/components/AccessPicker";
+import CompactPicker from "~/components/CompactPicker";
 import EffortPicker, { modelEfforts } from "~/components/EffortPicker";
 import AttachmentChip from "~/features/chat/components/AttachmentChip";
 import { commandScore, LOCAL_COMMANDS, SLASH_COMMANDS } from "~/lib/composerActions";
@@ -75,6 +76,15 @@ interface ComposerProps {
   onPickAccess: (mode: AccessMode) => void;
   effort: string | null;
   onPickEffort: (effort: string | null) => void;
+  /** The chat's own context size to compact at, or null to follow Settings. */
+  compactWindow: number | null;
+  /** The size Settings gives the agent. */
+  defaultCompactWindow: number;
+  /** The chat's context now, or null before a reply has reported it. */
+  context: number | null;
+  onPickCompactWindow: (window: number | null) => void;
+  /** Compacts the chat now; null when it cannot be. */
+  onCompactNow: (() => void) | null;
   attachments: Attachment[];
   /** Adds the files or folders at these paths to the draft's attachments. */
   onAttachPaths: (paths: string[]) => void;
@@ -171,6 +181,11 @@ function Composer({
   onPickAccess,
   effort,
   onPickEffort,
+  compactWindow,
+  defaultCompactWindow,
+  context,
+  onPickCompactWindow,
+  onCompactNow,
   attachments,
   onAttachPaths,
   onRemoveAttachment,
@@ -818,6 +833,14 @@ function Composer({
           openRequest={modelPickerRequest}
         />
         <EffortPicker agent={agent} effort={effort} levels={levels} onPick={onPickEffort} />
+        <CompactPicker
+          agent={agent}
+          window={compactWindow}
+          fallback={defaultCompactWindow}
+          context={context}
+          onPick={onPickCompactWindow}
+          onCompactNow={onCompactNow}
+        />
         <AccessPicker mode={accessMode} onPick={onPickAccess} />
         {role && (
           <span

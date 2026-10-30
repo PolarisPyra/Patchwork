@@ -20,6 +20,8 @@ pub struct TurnSpec<'a> {
     pub plan: bool,
     /// Reasoning effort, e.g. "high"; None leaves the CLI's default.
     pub effort: Option<&'a str>,
+    /// The context size at which the agent compacts mid-task; 0 leaves it to the agent.
+    pub compact_window: u64,
     pub attachments: &'a [Attachment],
     /// The image attachments, read from disk by `load_images`.
     pub images: &'a [Image],
@@ -211,6 +213,7 @@ pub fn turn_args(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
             crate::provider::mcp::clis::overrides(agent, spec.root),
             crate::provider::hooks::codex_args(spec),
             codex::agents_args(spec),
+            codex::compact_args(spec),
         ]
         .concat(),
         AgentKind::Antigravity => antigravity::turn_args(spec),

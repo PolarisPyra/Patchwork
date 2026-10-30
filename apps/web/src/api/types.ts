@@ -152,6 +152,8 @@ export type {
 export type Message = WireMessage & {
   /** The agent is checking whether the goal is met; not saved. */
   checkingGoal?: boolean;
+  /** The agent is summarizing the conversation to free up context; not saved. */
+  compacting?: boolean;
   /** The agent is retrying a model request that failed or stalled; not saved. */
   retry?: { reason: string; attempt: number; maxAttempts: number } | null;
 };

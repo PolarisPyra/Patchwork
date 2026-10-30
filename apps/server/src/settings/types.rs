@@ -275,6 +275,17 @@ pub struct TokenSettings {
     // Missing in settings saved before it, unlike the struct's default.
     #[serde(default)]
     pub compact_window_defaulted: bool,
+    /// The context size at which Patchwork's own agent compacts an API task before its next
+    /// request. 0 leaves it until the provider refuses the conversation as too long.
+    pub api_compact_window: u64,
+    /// The context size at which Codex compacts mid-task. 0 leaves Codex's own.
+    pub codex_compact_window: u64,
+    /// The context size at which OpenCode compacts mid-task. 0 leaves OpenCode's own, near the
+    /// model's full window.
+    pub opencode_compact_window: u64,
+    /// The context size over which an Antigravity task compacts before its next message, since
+    /// Antigravity has no setting for it. 0 leaves Antigravity's own.
+    pub antigravity_compact_window: u64,
     /// Model for new tasks, per agent. A missing agent uses the CLI's own default.
     pub default_models: HashMap<AgentKind, String>,
     /// Names a new chat or task with a title its provider writes from the first message,
@@ -290,8 +301,25 @@ impl Default for TokenSettings {
             ask_before_resume: true,
             claude_compact_window: 200_000,
             compact_window_defaulted: true,
+            api_compact_window: 128_000,
+            codex_compact_window: 0,
+            opencode_compact_window: 0,
+            antigravity_compact_window: 0,
             default_models: HashMap::new(),
             generate_titles: true,
+        }
+    }
+}
+
+impl TokenSettings {
+    /// The context size at which `agent` compacts by default; 0 leaves it to the agent.
+    pub fn compact_window(&self, agent: AgentKind) -> u64 {
+        match agent {
+            AgentKind::Claude => self.claude_compact_window,
+            AgentKind::Codex => self.codex_compact_window,
+            AgentKind::Antigravity => self.antigravity_compact_window,
+            AgentKind::OpenCode => self.opencode_compact_window,
+            AgentKind::Api => self.api_compact_window,
         }
     }
 }

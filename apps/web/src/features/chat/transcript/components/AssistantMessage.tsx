@@ -7,7 +7,7 @@ import { ACTION_CLASS, CopyButton } from "~/features/chat/components/CopyButton"
 import { Approvals } from "~/features/chat/transcript/components/Approvals";
 import { ChangeSummary } from "~/features/chat/transcript/components/ChangeSummary";
 import TurnTimeline from "~/features/chat/turn/TurnTimeline";
-import { isGoalClearCommand } from "~/lib/composerActions";
+import { isCompactCommand, isGoalClearCommand } from "~/lib/composerActions";
 import { useReplyFiles } from "~/features/chat/hooks/useReplyFiles";
 import { formatClock } from "~/lib/util";
 
@@ -51,6 +51,8 @@ export const AssistantMessage = memo(function AssistantMessage({
 }: AssistantProps) {
   const streaming = message.status === "streaming";
   const clearsGoal = retryMessage !== null && isGoalClearCommand(retryMessage.text);
+  // The compacted divider above already says how a /compact is going.
+  const compacts = retryMessage !== null && isCompactCommand(retryMessage.text);
   const replyFiles = useReplyFiles(projectId, message.turn, message.files, changes);
   // A file with nothing left to diff opens on its contents instead.
   const openFile =
@@ -68,6 +70,7 @@ export const AssistantMessage = memo(function AssistantMessage({
         message={message}
         agent={agent}
         clearsGoal={clearsGoal}
+        compacts={compacts}
         onOpenThread={onOpenThread}
         onOpenFile={openFile}
         renderApprovals={(ids) => (

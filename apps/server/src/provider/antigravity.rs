@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
-use crate::threads::AccessMode;
+use crate::threads::{AccessMode, TokenUsage};
 use crate::provider::AgentKind;
 use crate::provider::AgentStatus;
 use crate::provider::ModelOption;
@@ -135,6 +135,25 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                     let failed = tool["error"].as_str().is_some_and(|e| !e.is_empty());
                     out.push(tool_finished(message_id, &id, failed, ""));
                 }
+            }
+            // A step's usage is its one model request; `input_tokens` is the whole prompt, the
+            // cached part included. The result's usage totals every turn of the conversation.
+            let usage = &step["usage"];
+            if usage.is_object() {
+                let count = |key: &str| usage[key].as_u64().unwrap_or(0);
+                let prompt = count("input_tokens");
+                let cached = count("cache_read_tokens");
+                out.push(Parsed::RequestUsage {
+                    request_id: format!("{}-{}", step["conversation_id"], step["step_index"]),
+                    usage: TokenUsage {
+                        input: prompt.saturating_sub(cached),
+                        cache_read: cached,
+                        cache_write: 0,
+                        output: count("output_tokens") + count("thinking_tokens"),
+                        context: prompt,
+                    },
+                    top_level: true,
+                });
             }
         }
         Some("result") => {

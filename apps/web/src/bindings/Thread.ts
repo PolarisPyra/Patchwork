@@ -16,6 +16,11 @@ projectId: string | null, title: string, agent: AgentKind, model: string | null,
  */
 effort: string | null, 
 /**
+ * The context size at which this thread's agent compacts mid-task. None follows Settings →
+ * Tokens; 0 leaves it until the context is full.
+ */
+compactWindow: number | null, 
+/**
  * Claude session_id / Codex thread_id used to resume the conversation.
  */
 sessionId: string | null, createdAt: number, messages: Array<Message>, 

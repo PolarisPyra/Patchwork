@@ -106,6 +106,7 @@ export function workKey(entry: Entry): string {
 export type Phase =
   | { kind: "retry"; reason: string; attempt: number; maxAttempts: number }
   | { kind: "checking-goal" }
+  | { kind: "compacting" }
   /** Nothing else is active: the model is between parts, or thinking about the next one. */
   | { kind: "working" };
 
@@ -114,6 +115,7 @@ export function phaseOf(message: Message, streaming: boolean): Phase | null {
   if (!streaming) return null;
   if (message.retry) return { kind: "retry", ...message.retry };
   if (message.checkingGoal) return { kind: "checking-goal" };
+  if (message.compacting) return { kind: "compacting" };
   return { kind: "working" };
 }
 

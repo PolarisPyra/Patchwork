@@ -46,6 +46,9 @@ pub struct Request {
     /// A message that is only `/name` and its arguments.
     #[serde(default)]
     pub command: Option<SlashCommand>,
+    /// Compacts the session once a step's context reaches this; 0 leaves it to OpenCode.
+    #[serde(default)]
+    pub compact_window: u64,
 }
 
 #[derive(Deserialize)]
@@ -98,6 +101,8 @@ enum Msg {
     Delivered(String),
     /// The session's run ended.
     Ended,
+    /// A compaction the bridge asked for started (true), or ended or failed (false).
+    Compaction(bool),
     /// The event stream closed.
     StreamClosed,
 }
@@ -146,11 +151,13 @@ fn turn(request: &Request, tx: &Sender<Msg>, rx: &Receiver<Msg>) -> Result<(), S
         &json!({ "permissions": request.permissions }),
     )?;
     // Subscribed before the prompt, so no event of the turn is missed.
-    events(&api, &session_id, tx.clone())?;
+    events(&api, &session_id, request.compact_window, tx.clone())?;
     send(&api, &session_id, request)?;
 
-    // Steering messages sent but not yet taken into the turn; the turn ends once none wait.
+    // Steering messages sent but not yet taken into the turn; the turn ends once none wait, and
+    // once a compaction it asked for is done, since the server stops with the turn.
     let mut steers = HashSet::new();
+    let (mut compacting, mut ended) = (false, false);
     for msg in rx {
         match msg {
             Msg::Input(line) => command(&api, &session_id, &line, &mut steers),
@@ -159,8 +166,14 @@ fn turn(request: &Request, tx: &Sender<Msg>, rx: &Receiver<Msg>) -> Result<(), S
                     emit(&json!({"type": "bridge.steered"}));
                 }
             }
-            Msg::Ended if steers.is_empty() => return Ok(()),
-            Msg::Ended => {}
+            Msg::Compaction(on) => {
+                compacting = on;
+                if !on && ended && steers.is_empty() {
+                    return Ok(());
+                }
+            }
+            Msg::Ended if steers.is_empty() && !compacting => return Ok(()),
+            Msg::Ended => ended = true,
             Msg::StreamClosed => return Err("OpenCode's event stream closed".into()),
         }
     }
@@ -304,12 +317,15 @@ fn model_ref(request: &Request) -> Option<Value> {
 }
 
 /// Streams the server's events in a thread: the session's own go to stdout, with each tool
-/// event carrying the tool's name and input, which OpenCode sends only once.
-fn events(api: &Api, session_id: &str, tx: Sender<Msg>) -> Result<(), String> {
+/// event carrying the tool's name and input, which OpenCode sends only once. A step whose
+/// context reached `compact_window` has the session compacted at its next safe point.
+fn events(api: &Api, session_id: &str, compact_window: u64, tx: Sender<Msg>) -> Result<(), String> {
     let response = api.stream("/api/event")?;
     let session_id = session_id.to_string();
+    let api = api.clone();
     std::thread::spawn(move || {
         let mut tools: HashMap<String, (String, Value)> = HashMap::new();
+        let mut compacting = false;
         for line in BufReader::new(response).lines() {
             let Ok(line) = line else { break };
             let Some(data) = line.strip_prefix("data:") else {
@@ -343,6 +359,28 @@ fn events(api: &Api, session_id: &str, tx: Sender<Msg>) -> Result<(), String> {
                         event["data"]["name"] = json!(name);
                         event["data"]["input"] = input;
                     }
+                }
+                "session.step.ended" if compact_window > 0 && !compacting => {
+                    let tokens = &event["data"]["tokens"];
+                    let count = |v: &Value| v.as_u64().unwrap_or(0);
+                    let context = count(&tokens["input"])
+                        + count(&tokens["cache"]["read"])
+                        + count(&tokens["cache"]["write"])
+                        + count(&tokens["output"])
+                        + count(&tokens["reasoning"]);
+                    if context >= compact_window {
+                        match api.post(&format!("/api/session/{session_id}/compact"), &json!({})) {
+                            Ok(_) => {
+                                compacting = true;
+                                let _ = tx.send(Msg::Compaction(true));
+                            }
+                            Err(message) => log_error(&message),
+                        }
+                    }
+                }
+                "session.compaction.ended" | "session.compaction.failed" if compacting => {
+                    compacting = false;
+                    let _ = tx.send(Msg::Compaction(false));
                 }
                 "session.inbox.delivered" => {
                     if let Some(id) = event["data"]["inboxID"].as_str() {

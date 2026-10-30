@@ -21,10 +21,11 @@ export const threadsApi = {
     model: string | null,
     accessMode: AccessMode,
     effort: string | null,
+    compactWindow: number | null,
     planMode: boolean,
   ) =>
     invoke<Thread>("create_thread", {
-      request: { id, projectId, agent, model, accessMode, effort, planMode },
+      request: { id, projectId, agent, model, accessMode, effort, compactWindow, planMode },
     }),
   deleteThread: (id: string) => invoke<void>("delete_thread", { id }),
   /** Deletes a chat's messages and agent session; the chat stays, empty. */
@@ -41,6 +42,9 @@ export const threadsApi = {
   setThreadPlanMode: (id: string, on: boolean) => invoke<void>("set_thread_plan_mode", { id, on }),
   setThreadEffort: (id: string, effort: string | null) =>
     invoke<void>("set_thread_effort", { id, effort }),
+  /** Takes effect from the thread's next turn; null follows Settings → Tokens. */
+  setThreadCompactWindow: (id: string, window: number | null) =>
+    invoke<void>("set_thread_compact_window", { id, window }),
   setThreadRole: (id: string, role: string | null) => invoke<void>("set_thread_role", { id, role }),
   /** The user messages of a thread whose turn can be undone: the project was snapshotted before it. */
   checkpoints: (threadId: string) => invoke<string[]>("checkpoints", { threadId }),

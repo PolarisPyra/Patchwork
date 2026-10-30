@@ -572,6 +572,11 @@ pub(super) fn ingest(
                         .lock()
                         .unwrap_or_else(PoisonError::into_inner) = Some(id);
                 }
+                Parsed::Compacting => {
+                    turn.emit(AgentEvent::Compacting {
+                        message_id: turn.message_id.clone(),
+                    });
+                }
                 Parsed::Retrying {
                     reason,
                     attempt,
@@ -964,6 +969,7 @@ mod tests {
             mode,
             plan: false,
             effort: None,
+            compact_window: 0,
             attachments: &[],
             images: &[],
             instructions: None,

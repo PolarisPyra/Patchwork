@@ -122,6 +122,11 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
     // Messages from inside a subagent name the Agent call they belong to.
     let parent = v["parent_tool_use_id"].as_str();
     match v["type"].as_str() {
+        Some("system")
+            if v["subtype"] == "status" && v["status"] == "compacting" && parent.is_none() =>
+        {
+            out.push(Parsed::Compacting);
+        }
         Some("system") if v["subtype"] == "task_started" => {
             if let (Some(tool_id), Some(task_id)) =
                 (v["tool_use_id"].as_str(), v["task_id"].as_str())

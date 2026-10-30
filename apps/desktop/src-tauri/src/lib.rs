@@ -331,6 +331,7 @@ pub fn run() {
             commands::threads::set_thread_role,
             commands::files::save_text_file,
             commands::threads::set_thread_effort,
+            commands::threads::set_thread_compact_window,
             commands::turns::send_message,
             commands::attachments::attachment_for_path,
             commands::attachments::save_pasted_image,

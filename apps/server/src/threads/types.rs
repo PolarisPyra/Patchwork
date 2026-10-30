@@ -36,6 +36,10 @@ pub struct Thread {
     /// Reasoning effort passed to the agent, e.g. "high"; None leaves the CLI's default.
     #[serde(default)]
     pub effort: Option<String>,
+    /// The context size at which this thread's agent compacts mid-task. None follows Settings →
+    /// Tokens; 0 leaves it until the context is full.
+    #[serde(default)]
+    pub compact_window: Option<u64>,
     /// Claude session_id / Codex thread_id used to resume the conversation.
     pub session_id: Option<String>,
     pub created_at: u64,

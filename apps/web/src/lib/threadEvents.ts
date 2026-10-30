@@ -42,6 +42,8 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
       };
     case "goalChecking":
       return updateMessage(thread, event.messageId, (m) => ({ ...m, checkingGoal: true }));
+    case "compacting":
+      return updateMessage(thread, event.messageId, (m) => ({ ...m, compacting: true }));
     case "retrying": {
       const { messageId, reason, attempt, maxAttempts } = event;
       return updateMessage(thread, messageId, (m) => ({
@@ -72,6 +74,7 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
         return {
           ...m,
           checkingGoal: false,
+          compacting: false,
           retry: null,
           text: m.text + text,
           parts:
@@ -88,6 +91,7 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
         return {
           ...m,
           checkingGoal: false,
+          compacting: false,
           retry: null,
           parts:
             last?.type === "thinking" && last.endedAt === null
@@ -109,6 +113,7 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
       return updateMessage(thread, messageId, (m) => ({
         ...m,
         checkingGoal: false,
+        compacting: false,
         retry: null,
         tools: [...m.tools, tool],
         parts: [...endThinking(m.parts), { type: "tool", id: tool.id }],

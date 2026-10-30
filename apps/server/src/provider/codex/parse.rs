@@ -407,6 +407,9 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
             }
         }
         (Some(_), Some(_)) => out.push(codex_server_request(v)),
+        (None, Some("item/started")) if params["item"]["type"] == "contextCompaction" => {
+            out.push(Parsed::Compacting);
+        }
         (None, Some(kind @ ("item/started" | "item/completed"))) => {
             codex_item(
                 kind == "item/completed",

@@ -41,6 +41,7 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         "text": prompt(spec),
         "files": image_paths(spec.attachments),
         "command": command_of(spec),
+        "compactWindow": spec.compact_window,
     })
     .to_string()
 }
@@ -404,6 +405,7 @@ pub(super) fn parse_serve(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<P
                 target: None,
             }]
         }
+        Some("session.compaction.started") => vec![Parsed::Compacting],
         Some("session.execution.failed") => vec![Parsed::Error(message_of(v))],
         _ => Vec::new(),
     }
@@ -482,6 +484,7 @@ mod tests {
             mode,
             plan,
             effort: None,
+            compact_window: 0,
             attachments: &[],
             images: &[],
             instructions: None,
@@ -573,6 +576,7 @@ mod dump_rules {
                 mode,
                 plan,
                 effort: None,
+                compact_window: 0,
                 attachments: &[],
                 images: &[],
                 instructions: None,

@@ -11,7 +11,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use super::codec::{enc, err};
 use super::connection;
 use super::settings::{load_settings, save_settings};
-use super::threads::{load_folders, load_threads, save_message, save_thread_row};
+use super::threads::{compact_window_key, load_folders, load_threads, save_message, save_thread_row};
 use crate::projects::Folder;
 use crate::settings::Settings;
 use crate::threads::{MessageStatus, Thread};
@@ -384,6 +384,13 @@ impl Store {
             .conn
             .execute("DELETE FROM threads WHERE id = ?1", [id])
             .map_err(err)?;
+        inner
+            .conn
+            .execute(
+                "DELETE FROM app_state WHERE key = ?1",
+                [compact_window_key(id)],
+            )
+            .map_err(err)?;
         inner.threads.retain(|t| t.id != id);
         Ok(())
     }
@@ -395,6 +402,21 @@ impl Store {
             .conn
             .execute("DELETE FROM threads WHERE project_id = ?1", [project_id])
             .map_err(err)?;
+        let ids: Vec<String> = inner
+            .threads
+            .iter()
+            .filter(|t| t.project_id.as_deref() == Some(project_id))
+            .map(|t| t.id.clone())
+            .collect();
+        for id in ids {
+            inner
+                .conn
+                .execute(
+                    "DELETE FROM app_state WHERE key = ?1",
+                    [compact_window_key(&id)],
+                )
+                .map_err(err)?;
+        }
         inner
             .conn
             .execute("DELETE FROM folders WHERE project_id = ?1", [project_id])

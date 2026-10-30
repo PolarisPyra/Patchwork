@@ -4,6 +4,8 @@ import {
   type OpenCanvas,
 } from "~/features/chat/transcript/components/AssistantMessage";
 import { UserMessage } from "~/features/chat/transcript/components/UserMessage";
+import Spinner from "~/components/Spinner";
+import { type CompactionState } from "~/features/chat/transcript/lib/rows";
 import { formatTokens } from "~/lib/tokens";
 
 /**
@@ -77,18 +79,33 @@ export function TranscriptRow({
 }
 
 /**
- * The line a thread gets where its context was compacted, with the size it held before when usage
- * is shown.
+ * The line a thread gets where its context was compacted: while it runs, then with the size it
+ * held before when usage is shown.
  */
-export function CompactedDivider({ before }: { before: number | undefined }) {
+export function CompactedDivider({
+  state,
+  before,
+}: {
+  state: CompactionState;
+  before: number | undefined;
+}) {
   return (
     <div className="px-6">
       <div className="flex pb-5">
         <div className="flex w-full items-center gap-3 text-[length:var(--fs-xs)] text-fg-subtle">
           <span className="h-px flex-1 bg-border" />
-          <span>
-            Context compacted{before !== undefined && ` · was ${formatTokens(before)} tokens`}
-          </span>
+          {state === "compacting" ? (
+            <span className="inline-flex items-center gap-1.5">
+              <Spinner size={11} />
+              Compacting context
+            </span>
+          ) : state === "stopped" ? (
+            <span>Compaction stopped</span>
+          ) : (
+            <span>
+              Context compacted{before !== undefined && ` · was ${formatTokens(before)} tokens`}
+            </span>
+          )}
           <span className="h-px flex-1 bg-border" />
         </div>
       </div>

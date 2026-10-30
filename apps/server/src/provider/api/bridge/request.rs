@@ -87,6 +87,9 @@ pub(super) struct Reply {
     /// The endpoint sent its reasoning as `reasoning_content`, which it wants back.
     pub(super) reasoning_content: bool,
     pub(super) calls: Vec<Call>,
+    /// Tokens of the request and the reply, which the next request starts from; 0 when the
+    /// endpoint reported none.
+    pub(super) context: u64,
 }
 
 #[derive(Default, Clone)]
@@ -97,7 +100,8 @@ pub(super) struct Call {
 }
 
 /// Reports a request's tokens: OpenAI's cached-token details, or DeepSeek's cache hit count.
-fn emit_usage(usage: &Value) {
+/// Returns the tokens of the request and its reply.
+fn emit_usage(usage: &Value) -> u64 {
     let count = |v: &Value| v.as_u64().unwrap_or(0);
     let prompt = count(&usage["prompt_tokens"]);
     let cached = usage["prompt_tokens_details"]["cached_tokens"]
@@ -112,9 +116,52 @@ fn emit_usage(usage: &Value) {
         "output": count(&usage["completion_tokens"]),
         "context": prompt,
     }));
+    prompt + count(&usage["completion_tokens"])
 }
 
 impl Agent {
+    /// The model's context window as the endpoint reports it: the size LM Studio loaded the model
+    /// with, which can be far below its maximum, or what `/models` lists for it (vLLM's
+    /// `max_model_len`, OpenRouter's `context_length`, Groq's `context_window`). None when the
+    /// endpoint does not say.
+    pub(super) fn endpoint_window(&self) -> Option<u64> {
+        let base = self.request.base_url.trim_end_matches('/');
+        let get = |url: &str| -> Option<Value> {
+            let mut request = self
+                .http
+                .get(url)
+                .config()
+                .timeout_global(Some(Duration::from_secs(5)))
+                .build();
+            if let Some(key) = &self.request.api_key {
+                request = request.header("Authorization", &format!("Bearer {key}"));
+            }
+            for (name, value) in &self.request.headers {
+                request = request.header(name, value);
+            }
+            let mut response = request.call().ok()?;
+            if !response.status().is_success() {
+                return None;
+            }
+            response.body_mut().read_json().ok()
+        };
+        let model = self.request.model.as_str();
+        if let Some(origin) = base.strip_suffix("/v1")
+            && let Some(loaded) = get(&format!("{origin}/api/v0/models/{model}"))
+                .and_then(|v| v["loaded_context_length"].as_u64())
+        {
+            return Some(loaded);
+        }
+        let listed = get(&format!("{base}/models"))?;
+        let entry = listed["data"]
+            .as_array()?
+            .iter()
+            .find(|m| m["id"] == model)?;
+        ["max_model_len", "context_length", "context_window"]
+            .iter()
+            .find_map(|key| entry[*key].as_u64())
+    }
+
     /// Sends the conversation and streams the reply, retrying a request that failed before
     /// any of it arrived.
     pub(super) fn complete(&self, with_tools: bool) -> Result<Reply, Failure> {
@@ -163,9 +210,18 @@ impl Agent {
             }
             let failure = match request.send(body.as_str()) {
                 Ok(response) if response.status().is_success() => {
+                    // Some endpoints, such as LM Studio, accept the request and then refuse a
+                    // prompt too long for the loaded context as an error event in the stream.
                     return self
                         .stream(response.into_body().into_reader())
-                        .map_err(Failure::Other);
+                        .map_err(|message| {
+                            let lower = message.to_lowercase();
+                            if CONTEXT_PHRASES.iter().any(|p| lower.contains(p)) {
+                                Failure::Context(message)
+                            } else {
+                                Failure::Other(message)
+                            }
+                        });
                 }
                 Ok(mut response) => {
                     let status = response.status().as_u16();
@@ -260,14 +316,20 @@ impl Agent {
             {
                 reply.reasoning_content = true;
                 reply.reasoning.push_str(text);
-                emit(&json!({"type": "api.reasoning", "delta": text}));
+                if !self.quiet {
+                    emit(&json!({"type": "api.reasoning", "delta": text}));
+                }
             } else if let Some(text) = delta["reasoning"].as_str().filter(|t| !t.is_empty()) {
                 reply.reasoning.push_str(text);
-                emit(&json!({"type": "api.reasoning", "delta": text}));
+                if !self.quiet {
+                    emit(&json!({"type": "api.reasoning", "delta": text}));
+                }
             }
             if let Some(text) = delta["content"].as_str().filter(|t| !t.is_empty()) {
                 reply.content.push_str(text);
-                emit(&json!({"type": "api.text", "delta": text}));
+                if !self.quiet {
+                    emit(&json!({"type": "api.text", "delta": text}));
+                }
             }
             for part in delta["tool_calls"].as_array().into_iter().flatten() {
                 // Calls carry an index; without one, a new id starts a new call.
@@ -294,7 +356,7 @@ impl Agent {
             }
         }
         if !usage.is_null() {
-            emit_usage(&usage);
+            reply.context = emit_usage(&usage);
         }
         reply.calls = calls
             .into_iter()

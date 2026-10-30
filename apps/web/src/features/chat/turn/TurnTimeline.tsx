@@ -33,6 +33,7 @@ export default function TurnTimeline({
   message,
   agent,
   clearsGoal = false,
+  compacts = false,
   onOpenThread,
   onOpenFile,
   renderApprovals,
@@ -41,6 +42,8 @@ export default function TurnTimeline({
   agent: AgentKind;
   /** The reply answers a cleared goal, so it shows no working line even before its text arrives. */
   clearsGoal?: boolean;
+  /** The reply answers a /compact, whose divider shows its progress instead of a working line. */
+  compacts?: boolean;
   /** Opens a subagent's thread. */
   onOpenThread: (id: string) => void;
   /** Opens a file; edit rows link to their file when given. */
@@ -69,7 +72,9 @@ export default function TurnTimeline({
   return (
     <div className="flex min-w-0 flex-col">
       {/* The head of a turn, in the one place its status ever goes. */}
-      {!goalCleared && phase !== null && <StatusLine phase={phase} since={message.createdAt} />}
+      {!goalCleared && !compacts && phase !== null && (
+        <StatusLine phase={phase} since={message.createdAt} />
+      )}
       {!goalCleared && !streaming && didWork && (
         <FoldHead summary={head} open={open} onToggle={() => setOpen((o) => !o)} />
       )}

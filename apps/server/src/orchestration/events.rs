@@ -96,6 +96,11 @@ pub enum AgentEvent {
     GoalChecking {
         message_id: String,
     },
+    /// The agent is summarizing the conversation to free up context. Streamed, not saved; the
+    /// message's next output ends it.
+    Compacting {
+        message_id: String,
+    },
     /// The agent's model request failed or stalled and the agent is retrying it. Streamed, not
     /// saved; the message's next output ends it.
     Retrying {

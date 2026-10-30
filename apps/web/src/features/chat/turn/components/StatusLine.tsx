@@ -19,7 +19,9 @@ export default function StatusLine({ phase, since }: { phase: Phase; since: numb
       ? `Retrying: ${phase.reason} (${phase.attempt}/${phase.maxAttempts})`
       : phase.kind === "checking-goal"
         ? "Checking goal"
-        : `Working for ${fullElapsed(Math.max(0, now - since))}`;
+        : phase.kind === "compacting"
+          ? "Compacting context"
+          : `Working for ${fullElapsed(Math.max(0, now - since))}`;
   return (
     <div className="mb-1.5 border-b border-border pt-1 pb-2">
       <div className="flex h-6 min-w-0 items-center gap-0.5 px-1 text-[length:var(--fs-md)] text-fg-muted tabular-nums">

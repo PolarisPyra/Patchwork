@@ -75,6 +75,7 @@ mod tests {
             position: 0,
             folder_id: None,
             effort: None,
+            compact_window: None,
             archived_at: None,
             parent: None,
             plan_mode: false,

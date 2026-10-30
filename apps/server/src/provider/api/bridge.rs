@@ -54,6 +54,10 @@ struct Request {
     mode: AccessMode,
     plan: bool,
     effort: Option<String>,
+    /// Summarizes the conversation before a request once the last one's context reached this; 0
+    /// leaves it until the provider refuses the conversation as too long.
+    #[serde(default)]
+    compact_window: u64,
     /// Patchwork's instructions about the user's shell.
     #[serde(default)]
     instructions: Option<String>,
@@ -138,6 +142,13 @@ struct Agent {
     session_id: String,
     session_file: PathBuf,
     messages: Vec<Value>,
+    /// Tokens of the last request and its reply, which the next request starts from; saved with
+    /// the conversation, so a turn knows where the last one left off.
+    context: u64,
+    /// Replies stream to Patchwork unless set, as while summarizing on the agent's own.
+    quiet: bool,
+    /// The model's context window as the endpoint reports it; None until asked, once a turn.
+    model_window: Option<Option<u64>>,
     input: Receiver<Value>,
     /// Steering messages that came in while the agent was busy.
     steers: Vec<Value>,
@@ -161,10 +172,10 @@ impl Agent {
             None => (uuid::Uuid::new_v4().to_string(), false),
         };
         let session_file = Path::new(&request.sessions_dir).join(format!("{session_id}.json"));
-        let messages = if existing {
+        let (messages, context) = if existing {
             load(&session_file).unwrap_or_default()
         } else {
-            Vec::new()
+            (Vec::new(), 0)
         };
         let http = ureq::Agent::config_builder()
             .timeout_connect(Some(Duration::from_secs(30)))
@@ -187,6 +198,9 @@ impl Agent {
             session_id,
             session_file,
             messages,
+            context,
+            quiet: false,
+            model_window: None,
             input,
             steers: Vec::new(),
             read_images: Vec::new(),
@@ -217,10 +231,14 @@ impl Agent {
         self.save()?;
 
         for _ in 0..MAX_STEPS {
+            self.compact_if_full()?;
             let reply = match self.complete(true) {
                 Ok(reply) => reply,
                 Err(failure) => self.recover(failure)?,
             };
+            if reply.context > 0 {
+                self.context = reply.context;
+            }
             let mut message = json!({"role": "assistant", "content": reply.content});
             if reply.reasoning_content && !reply.reasoning.is_empty() {
                 message["reasoning_content"] = json!(reply.reasoning);
@@ -324,16 +342,19 @@ impl Agent {
         let text = serde_json::to_string(&json!({
             "model": self.request.model,
             "messages": self.messages,
+            "context": self.context,
         }))
         .map_err(|e| e.to_string())?;
         crate::system::fs::write_private(&self.session_file, &text)
     }
 }
 
-fn load(path: &Path) -> Option<Vec<Value>> {
+/// A saved conversation and its context; 0 for one saved before the context was.
+fn load(path: &Path) -> Option<(Vec<Value>, u64)> {
     let text = std::fs::read_to_string(path).ok()?;
     let v: Value = serde_json::from_str(&text).ok()?;
-    v["messages"].as_array().cloned()
+    let messages = v["messages"].as_array().cloned()?;
+    Some((messages, v["context"].as_u64().unwrap_or(0)))
 }
 
 fn emit(v: &Value) {

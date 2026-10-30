@@ -68,6 +68,8 @@ pub enum Parsed {
     },
     /// The agent's id for the turn now running, which a steering message must name.
     TurnStarted(String),
+    /// The agent is summarizing the conversation to free up context.
+    Compacting,
     /// The agent is retrying a model request that failed or stalled.
     Retrying {
         reason: String,

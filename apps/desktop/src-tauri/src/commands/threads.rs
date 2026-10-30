@@ -68,6 +68,11 @@ pub(crate) fn set_thread_effort(server: Srv, id: String, effort: Option<String>)
 }
 
 #[tauri::command]
+pub(crate) fn set_thread_compact_window(server: Srv, id: String, window: Option<u64>) -> Res<()> {
+    server.set_thread_compact_window(&id, window)
+}
+
+#[tauri::command]
 pub(crate) fn set_thread_role(server: Srv, id: String, role: Option<String>) -> Res<()> {
     server.set_thread_role(&id, role)
 }

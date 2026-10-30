@@ -19,6 +19,7 @@ import {
 import ProviderLogos from "~/components/ProviderLogos";
 import type { CanvasTab } from "~/features/canvas/Canvas";
 import { lastAccessMode } from "~/components/AccessPicker";
+import { COMPACT_SETTINGS, lastCompactWindow } from "~/components/CompactPicker";
 import { effortFor, lastEffort } from "~/components/EffortPicker";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import ChoicePanel from "~/features/chat/components/ChoicePanel";
@@ -96,6 +97,7 @@ interface ChatProps {
   /** Starts a thread in this project with `text` as its first message, named `title`. */
   onStartThread: (opts: NewThreadOptions, title: string, text: string) => Promise<void>;
   onSetEffort: (threadId: string, effort: string | null) => Promise<void>;
+  onSetCompactWindow: (threadId: string, window: number | null) => Promise<void>;
   /** Starts a fresh chat in this project; the current chat stays in the sidebar. */
   onNewChat: () => void;
   /** Picks another folder for the project, after it was moved or deleted. */
@@ -144,6 +146,7 @@ export default function Chat({
   onSetPlanMode,
   onStartThread,
   onSetEffort,
+  onSetCompactWindow,
   permissionSettings,
   confirmAnswers,
   projects,
@@ -246,6 +249,7 @@ export default function Chat({
     model: tokens.defaultModels[defaultAgent] ?? null,
     accessMode: lastAccessMode(),
     effort: lastEffort(defaultAgent),
+    compactWindow: lastCompactWindow(defaultAgent),
   };
   const empty = !thread || thread.messages.length === 0;
   const queued = useMemo(() => thread?.messages.filter((m) => m.queued) ?? [], [thread?.messages]);
@@ -257,6 +261,7 @@ export default function Chat({
   const model = thread ? thread.model : newOpts.model;
   const accessMode = thread?.accessMode ?? newOpts.accessMode;
   const effort = thread ? thread.effort : newOpts.effort;
+  const compactWindow = thread ? thread.compactWindow : newOpts.compactWindow;
   const working = sending || isWorking(thread);
   const usage = thread && threadUsage(thread.messages);
   const { clearOfGoal, clearGoal } = useGoalClear(thread, working);
@@ -350,14 +355,16 @@ export default function Chat({
     }
   }
 
-  // /compact is passed to Claude Code, Codex, or OpenCode, which compact their own context. Other
-  // agents have no such command, so the request is refused here rather than sent as plain text.
+  // The typed /compact: the draft held only the command.
   function compactChat() {
     setDraft("");
-    if (!thread || !["claude", "codex", "opencode"].includes(thread.agent)) {
-      setError("/compact works in Claude, Codex, and OpenCode chats only.");
-      return;
-    }
+    compactNow();
+  }
+
+  // /compact is passed to the agent, which compacts its own context. The compact picker calls it
+  // too, leaving the draft as it is.
+  function compactNow() {
+    if (!thread) return;
     void dispatch("/compact", [], true);
   }
 
@@ -496,8 +503,14 @@ export default function Chat({
 
   function pickModel(nextAgent: AgentKind, nextModel: string | null) {
     if (!thread) {
-      const nextEffort = nextAgent === agent ? newOpts.effort : lastEffort(nextAgent);
-      setPick({ ...newOpts, agent: nextAgent, model: nextModel, effort: nextEffort });
+      const same = nextAgent === agent;
+      setPick({
+        ...newOpts,
+        agent: nextAgent,
+        model: nextModel,
+        effort: same ? newOpts.effort : lastEffort(nextAgent),
+        compactWindow: same ? newOpts.compactWindow : lastCompactWindow(nextAgent),
+      });
       return;
     }
     setError(null);
@@ -513,6 +526,15 @@ export default function Chat({
     }
     setError(null);
     onSetEffort(thread.id, next).catch((e: unknown) => setError(errorText(e)));
+  }
+
+  function pickCompactWindow(next: number | null) {
+    if (!thread) {
+      setPick({ ...newOpts, compactWindow: next });
+      return;
+    }
+    setError(null);
+    onSetCompactWindow(thread.id, next).catch((e: unknown) => setError(errorText(e)));
   }
 
   const planSupported = agent !== "antigravity";
@@ -674,6 +696,7 @@ export default function Chat({
         model: thread.model,
         accessMode: thread.accessMode,
         effort: thread.effort,
+        compactWindow: thread.compactWindow,
       };
       await onStartThread(opts, `Implement ${planTitle(readyPlan)}`.slice(0, 60), text);
       return;
@@ -708,6 +731,8 @@ export default function Chat({
     onSelectSlashCommand: selectSlashCommand,
     onPickAccess: pickAccess,
     onPickEffort: pickEffort,
+    onPickCompactWindow: pickCompactWindow,
+    onCompactNow: compactNow,
     onAttachPaths: (paths: string[]) => void attach(paths),
     onRemoveAttachment: (i: number) =>
       setComposerAttachments(composerAttachments.filter((_, j) => j !== i)),
@@ -902,6 +927,11 @@ export default function Chat({
           onPickAccess={composerHandlers.onPickAccess}
           effort={effort}
           onPickEffort={composerHandlers.onPickEffort}
+          compactWindow={compactWindow}
+          defaultCompactWindow={tokens[COMPACT_SETTINGS[agent]]}
+          context={usage?.context ?? null}
+          onPickCompactWindow={composerHandlers.onPickCompactWindow}
+          onCompactNow={thread && !empty && !working ? composerHandlers.onCompactNow : null}
           attachments={composerAttachments}
           onAttachPaths={composerHandlers.onAttachPaths}
           onRemoveAttachment={composerHandlers.onRemoveAttachment}

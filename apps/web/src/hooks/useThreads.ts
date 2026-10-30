@@ -29,6 +29,8 @@ export interface NewThreadOptions {
   model: string | null;
   accessMode: AccessMode;
   effort: string | null;
+  /** The context size to compact at; null follows Settings → Tokens. */
+  compactWindow: number | null;
   /** Start the thread in plan mode. */
   planMode?: boolean;
 }
@@ -258,6 +260,7 @@ export function useThreads(initialProjectId: string | null) {
       model: opts.model,
       accessMode: opts.accessMode,
       effort: opts.effort,
+      compactWindow: opts.compactWindow,
       sessionId: null,
       createdAt: Date.now(),
       messages: [],
@@ -281,6 +284,7 @@ export function useThreads(initialProjectId: string | null) {
         opts.model,
         opts.accessMode,
         opts.effort,
+        opts.compactWindow,
         draft.planMode,
       );
       setThreads((prev) =>
@@ -459,6 +463,11 @@ export function useThreads(initialProjectId: string | null) {
     setThreads((prev) => prev.map((t) => (t.id === id ? { ...t, effort } : t)));
   }
 
+  async function setCompactWindow(id: string, compactWindow: number | null): Promise<void> {
+    await api.setThreadCompactWindow(id, compactWindow);
+    setThreads((prev) => prev.map((t) => (t.id === id ? { ...t, compactWindow } : t)));
+  }
+
   /** Sends a message, creating a thread in `projectId` first when none is selected. */
   async function send(
     text: string,
@@ -521,6 +530,7 @@ export function useThreads(initialProjectId: string | null) {
     setAccessMode,
     setPlanMode,
     setEffort,
+    setCompactWindow,
     send,
     startThread,
   };

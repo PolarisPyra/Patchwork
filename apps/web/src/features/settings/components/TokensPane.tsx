@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, AGENT_LABELS, type AgentKind, type ModelOption, type TokenSettings } from "~/api";
+import { COMPACT_LEVELS, COMPACT_SETTINGS } from "~/components/CompactPicker";
 import { Segmented, TokenRow, TokenSwitch } from "~/features/settings/components/controls";
 import type { PaneProps } from "~/features/settings/types";
 import { formatTokens } from "~/lib/tokens";
@@ -9,7 +10,7 @@ import { AGENT_KINDS } from "~/lib/util";
 const TOKEN_LEVELS = [100_000, 150_000, 200_000, 300_000];
 
 /** Context sizes to compact at; 0 is Default. */
-const COMPACT_WINDOWS = [0, 200_000, 300_000, 500_000];
+const COMPACT_WINDOWS = [0, ...COMPACT_LEVELS];
 
 /** A context size picked from a few, with 0 read as the given word. */
 function ContextLevels({
@@ -141,18 +142,30 @@ export default function TokensPane({ settings, updateSettings }: PaneProps) {
           onChange={(generateTitles) => update({ generateTitles })}
         />
       </TokenRow>
-      <TokenRow
-        title="Claude compacts at"
-        desc="Compacts a working Claude task once its context reaches this. Default waits until the model's window is almost full"
-      >
-        <ContextLevels
-          label="Claude compacts at"
-          value={tokens.claudeCompactWindow}
-          levels={COMPACT_WINDOWS}
-          zero="Default"
-          onChange={(claudeCompactWindow) => update({ claudeCompactWindow })}
-        />
-      </TokenRow>
+      {connected.map((kind) => {
+        const key = COMPACT_SETTINGS[kind];
+        const value = tokens[key];
+        return (
+          <TokenRow
+            key={`compact-${kind}`}
+            title={`${AGENT_LABELS[kind]} compacts at`}
+            desc="Compacts a task once its context reaches this. Default leaves it to the agent, near the model's full window"
+          >
+            <ContextLevels
+              label={`${AGENT_LABELS[kind]} compacts at`}
+              value={value}
+              // A size saved before these levels stays shown, so the row still marks it.
+              levels={
+                COMPACT_WINDOWS.includes(value)
+                  ? COMPACT_WINDOWS
+                  : [...COMPACT_WINDOWS, value].sort((a, b) => a - b)
+              }
+              zero="Default"
+              onChange={(window) => update({ [key]: window })}
+            />
+          </TokenRow>
+        );
+      })}
       {connected.map((kind) => (
         <TokenRow
           key={kind}

@@ -130,6 +130,7 @@ pub(super) fn open_child(turn: &Turn, tool: &ToolCall) -> Option<SubagentThread>
         model: sub.model.clone().or(parent.model),
         access_mode: parent.access_mode,
         effort: None,
+        compact_window: None,
         session_id: None,
         created_at,
         messages: vec![asked, reply],

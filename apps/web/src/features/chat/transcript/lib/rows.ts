@@ -26,6 +26,21 @@ export function rowKindOf(message: Message): RowKind {
   return "user";
 }
 
+/** Where a /compact is: running, done, or stopped before it was. */
+export type CompactionState = "compacting" | "compacted" | "stopped";
+
+/** The state of the /compact at `index`, read from the reply after it. */
+export function compactionState(
+  messages: readonly Message[],
+  index: number,
+  busy: boolean,
+): CompactionState {
+  const reply = messages[index + 1];
+  if (reply ? reply.status === "streaming" : busy) return "compacting";
+  if (!reply || reply.status === "error" || reply.status === "cancelled") return "stopped";
+  return "compacted";
+}
+
 /** The messages a thread shows: one still queued is waiting above the composer, not a row here. */
 export function visibleMessages(messages: readonly Message[]): Message[] {
   return messages.filter((message) => !message.queued);

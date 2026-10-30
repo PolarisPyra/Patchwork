@@ -159,6 +159,7 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
         position: -(session.created_at as i64),
         folder_id: None,
         effort: None,
+        compact_window: None,
         archived_at: None,
         parent: None,
         plan_mode: false,

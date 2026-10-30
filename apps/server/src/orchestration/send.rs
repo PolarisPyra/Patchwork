@@ -153,6 +153,14 @@ impl Server {
                 orchestration::goal::clear_dismissal(&self.store, &thread_id)?;
             }
         }
+        // Antigravity has no setting for when it compacts, so a chat over its compact window
+        // compacts first, and the message waits for it in the queue.
+        let queue = if self.compacts_first(&thread_id, &text) {
+            self.send_message(thread_id.clone(), "/compact".into(), Vec::new(), false)?;
+            true
+        } else {
+            queue
+        };
         // Checked before the message is stored, so a refused message leaves no trace.
         let mut msg = user_message(&text, attachments.clone());
         // Stored before the agent sees it, so its answer is stored after it.
@@ -322,6 +330,36 @@ impl Server {
             }
         }
         Ok(msg)
+    }
+
+    /// Whether `text` should wait for an Antigravity chat to compact first: no turn is running,
+    /// and the context its last reply reported, with no /compact since, reached the window.
+    fn compacts_first(&self, thread_id: &str, text: &str) -> bool {
+        let Some(thread) = self.store.thread(thread_id) else {
+            return false;
+        };
+        if thread.agent != AgentKind::Antigravity
+            || orchestration::is_upkeep(text)
+            || provider::is_goal_command(text)
+            || self.runner.is_running(thread_id)
+        {
+            return false;
+        }
+        let window = thread
+            .compact_window
+            .unwrap_or_else(|| self.store.settings().tokens.compact_window(thread.agent));
+        if window == 0 {
+            return false;
+        }
+        for m in thread.messages.iter().rev() {
+            if m.role == Role::User && m.text.trim() == "/compact" {
+                return false;
+            }
+            if let Some(usage) = &m.usage {
+                return usage.context >= window;
+            }
+        }
+        false
     }
 
     /// Stops the running turn by interrupting the agent, so its session records the stop and an

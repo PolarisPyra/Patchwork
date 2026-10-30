@@ -18,6 +18,9 @@ pub struct NewThread {
     pub model: Option<String>,
     pub access_mode: AccessMode,
     pub effort: Option<String>,
+    /// None follows Settings → Tokens.
+    #[serde(default)]
+    pub compact_window: Option<u64>,
     pub plan_mode: bool,
 }
 
@@ -89,6 +92,7 @@ impl Server {
             model,
             access_mode,
             effort,
+            compact_window,
             plan_mode,
         } = new;
         if let Some(id) = &project_id {
@@ -108,6 +112,7 @@ impl Server {
             model,
             access_mode,
             effort,
+            compact_window,
             session_id: None,
             created_at,
             messages: vec![],
@@ -267,6 +272,18 @@ impl Server {
             .update_thread(id, |t| t.effort = effort.clone())?;
         // An idle agent was started with the old setting.
         if thread.effort != effort {
+            self.runner.retire_idle(id);
+        }
+        Ok(())
+    }
+
+    /// Takes effect from the thread's next turn. None follows Settings → Tokens.
+    pub fn set_thread_compact_window(&self, id: &str, window: Option<u64>) -> Result<(), String> {
+        let thread = self.store.thread(id).ok_or("Task not found")?;
+        self.store
+            .update_thread(id, |t| t.compact_window = window)?;
+        // An idle agent was started with the old setting.
+        if thread.compact_window != window {
             self.runner.retire_idle(id);
         }
         Ok(())

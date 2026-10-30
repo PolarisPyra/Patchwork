@@ -28,6 +28,25 @@ claudeCompactWindow: number,
  */
 compactWindowDefaulted: boolean, 
 /**
+ * The context size at which Patchwork's own agent compacts an API task before its next
+ * request. 0 leaves it until the provider refuses the conversation as too long.
+ */
+apiCompactWindow: number, 
+/**
+ * The context size at which Codex compacts mid-task. 0 leaves Codex's own.
+ */
+codexCompactWindow: number, 
+/**
+ * The context size at which OpenCode compacts mid-task. 0 leaves OpenCode's own, near the
+ * model's full window.
+ */
+opencodeCompactWindow: number, 
+/**
+ * The context size over which an Antigravity task compacts before its next message, since
+ * Antigravity has no setting for it. 0 leaves Antigravity's own.
+ */
+antigravityCompactWindow: number, 
+/**
  * Model for new tasks, per agent. A missing agent uses the CLI's own default.
  */
 defaultModels: { [key in AgentKind]?: string }, 
