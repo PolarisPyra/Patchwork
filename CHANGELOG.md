@@ -3,7 +3,7 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
-## [26.2.1] - 2026-10-30
+## [26.2.2] - 2026-10-30
 
 ### Changed
 
@@ -11,6 +11,8 @@ Each release adds its notes at the top; see docs/release.md.
 
 ### Fixed
 
+- In the changed files card under a reply, each file's added and removed line counts now line up in columns against the right edge, and a note such as "No changes" sits at that same edge.
+- The icons on the steps in a reply now line up with the words of the line above them, instead of sitting indented to the right.
 - Claude's reply now streams in word by word after a long think, instead of appearing all at once when the thinking ends.
 
 ## [26.2.0] - 2026-10-30
