@@ -3,10 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
-## [26.2.4] - 2026-10-30
+## [26.2.5] - 2026-10-30
 
 ### Changed
 
+- An HTML or SVG artifact that draws nothing — a bare broken image, or a script that failed before it changed the page — now shows "This artifact rendered nothing visible." in a tidy box instead of an empty frame with a broken-image icon.
+- Each of Patchwork's own MCP servers is now kept in its own file, named after the server, in an MCP folder inside Patchwork's config folder, instead of all in one shared file. Your servers move over on the next start, and Settings → MCP opens each server's own file.
 - The system prompt you give an API provider in Settings → Providers now comes after the project's own instructions file, so a project can no longer override it, as with the other agents.
 - While an agent works, its reply now shows "Thinking for 12s" with a grey shimmer that becomes "Thought for 12s" when done, and the separate reasoning rows are gone. Text now appears word by word even when it arrives together with a tool call, and the chat no longer jumps as a reply starts, grows or ends. The plan above the chat box now opens collapsed and keeps naming the step a stopped reply was on.
 
