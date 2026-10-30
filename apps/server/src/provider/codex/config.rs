@@ -52,11 +52,13 @@ pub fn models() -> Vec<ModelOption> {
     let catalog = crate::provider::codex::cli::models();
     let mut models = model_manifest::models("codex");
     for model in &mut models {
-        if let Some(id) = model.id.as_deref() {
-            model.efforts = catalog
-                .iter()
-                .find(|known| known.slug == id)
-                .map(|known| known.efforts.clone());
+        if let Some(known) = model
+            .id
+            .as_deref()
+            .and_then(|id| catalog.iter().find(|known| known.slug == id))
+        {
+            model.efforts = Some(known.efforts.clone());
+            model.context_window = known.context_window;
         }
     }
     models

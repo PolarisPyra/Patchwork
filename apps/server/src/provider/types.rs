@@ -54,6 +54,9 @@ pub struct ModelOption {
     /// not say, so the picker offers the levels its agent shares; an empty list when the model
     /// takes none, so the picker offers no level for it.
     pub efforts: Option<Vec<String>>,
+    /// How many tokens the model's context holds, as its CLI's catalog reports it. `None` when the
+    /// catalog does not say, so the compact picker has nothing to measure "When full" against.
+    pub context_window: Option<u64>,
 }
 
 /// A slash command advertised by a provider CLI for this thread/workspace.

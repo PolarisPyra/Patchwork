@@ -17,4 +17,9 @@ isLegacy: boolean,
  * not say, so the picker offers the levels its agent shares; an empty list when the model
  * takes none, so the picker offers no level for it.
  */
-efforts: Array<string> | null, };
+efforts: Array<string> | null, 
+/**
+ * How many tokens the model's context holds, as its CLI's catalog reports it. `None` when the
+ * catalog does not say, so the compact picker has nothing to measure "When full" against.
+ */
+contextWindow: number | null, };

@@ -194,12 +194,21 @@ pub fn list_models(kind: AgentKind) -> Vec<ModelOption> {
             crate::provider::api::config::models(),
         ),
     };
+    let default_model = default_model.filter(|m| !m.trim().is_empty());
+    // The default holds what the model it names holds, when that model is listed.
+    let context_window = default_model.as_deref().and_then(|id| {
+        models
+            .iter()
+            .find(|m| m.id.as_deref() == Some(id))?
+            .context_window
+    });
     let mut out = vec![ModelOption {
         id: None,
         label: "Default".into(),
-        default_model: default_model.filter(|m| !m.trim().is_empty()),
+        default_model,
         is_legacy: false,
         efforts: None,
+        context_window,
     }];
     out.extend(models);
     out

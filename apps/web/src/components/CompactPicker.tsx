@@ -1,4 +1,4 @@
-import { CaretDownIcon } from "@phosphor-icons/react";
+import { ArrowsInSimpleIcon, CaretDownIcon } from "@phosphor-icons/react";
 import type { AgentKind, TokenSettings } from "~/api";
 import Dropdown from "~/components/Dropdown";
 import { CHIP_CLASS } from "~/components/chip";
@@ -76,6 +76,7 @@ export default function CompactPicker({
   agent,
   window,
   fallback,
+  full,
   context,
   onPick,
   onCompactNow,
@@ -85,6 +86,8 @@ export default function CompactPicker({
   window: number | null;
   /** The size Settings gives `agent`. */
   fallback: number;
+  /** The context the chat's model holds, which "When full" fills; null when its CLI does not say. */
+  full: number | null;
   /** The chat's context now, or null before a reply has reported it. */
   context: number | null;
   onPick: (window: number | null) => void;
@@ -92,7 +95,8 @@ export default function CompactPicker({
   onCompactNow: (() => void) | null;
 }) {
   const effective = window ?? fallback;
-  const fill = context !== null && effective > 0 ? context / effective : 0;
+  const limit = effective > 0 ? effective : full;
+  const fill = context !== null && limit ? context / limit : 0;
   return (
     <Dropdown
       up
@@ -109,7 +113,7 @@ export default function CompactPicker({
           }
           onClick={toggle}
         >
-          <FillRing fill={fill} />
+          {limit ? <FillRing fill={fill} /> : <ArrowsInSimpleIcon size={16} />}
           <span>{label(effective)}</span>
           <CaretDownIcon size={14} />
         </button>

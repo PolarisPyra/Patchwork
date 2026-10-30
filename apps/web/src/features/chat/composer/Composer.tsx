@@ -206,6 +206,8 @@ function Composer({
   const models = useModels(agents);
   // The model's own effort levels, or null when its CLI does not report them.
   const levels = useMemo(() => modelEfforts(agent, model, models), [agent, model, models]);
+  // How much the model holds, so a chat that compacts when full still shows how full it is.
+  const fullWindow = models[agent]?.find((option) => option.id === model)?.contextWindow ?? null;
   // A level this model does not take would make its CLI refuse the turn, so it falls back to the
   // CLI's own default instead of being sent.
   useEffect(() => {
@@ -840,6 +842,7 @@ function Composer({
           agent={agent}
           window={compactWindow}
           fallback={defaultCompactWindow}
+          full={fullWindow}
           context={context}
           onPick={onPickCompactWindow}
           onCompactNow={onCompactNow}

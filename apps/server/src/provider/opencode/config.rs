@@ -50,6 +50,7 @@ pub fn models() -> Vec<ModelOption> {
             default_model: None,
             is_legacy: false,
             efforts: None,
+            context_window: None,
         })
         .collect()
 }
