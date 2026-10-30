@@ -444,6 +444,36 @@
   }
 }
 
+/* A row whose work is running: a lighter band of grey sweeps across its words, left to right, once
+   every 2 seconds. The band is painted through the text, so the words never dim or move. */
+.text-shimmer {
+  background: linear-gradient(
+      90deg,
+      var(--text-subtle) 35%,
+      var(--text) 50%,
+      var(--text-subtle) 65%
+    )
+    0 0 / 300% 100%;
+  background-clip: text;
+  color: transparent;
+  animation: text-shimmer 2s linear infinite;
+}
+@keyframes text-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .text-shimmer {
+    animation: none;
+    background: none;
+    color: inherit;
+  }
+}
+
 /* A block that has just arrived in a reply settles into place. This is claude.ai's own keyframe and
    timing, step for step: for the first 30% of the 430ms (129ms) the block moves into place while it
    is still at zero opacity and still blurred, then it fades in and un-blurs with ease-out. The

@@ -1,5 +1,4 @@
 import { type ReactNode } from "react";
-import Spinner from "~/components/Spinner";
 
 /**
  * The parts every row of a turn is built from: the clickable row itself, the icon column, the
@@ -28,9 +27,9 @@ export function RowIcon({ children }: { children: ReactNode }) {
  * The text of a row that has an icon beside it, and the sign that its work is still running.
  *
  * Nothing here fades. A label that dims and brightens on a loop reads as text that cannot settle,
- * and beside an icon the icon looks like it is going with it. So the text is painted once at full
- * strength and a small ring-and-arc spinner carries the running cue, which leaves the words alone.
- * Only a row that has just arrived fades its text in; the rows that persist for a whole turn do not.
+ * and beside an icon the icon looks like it is going with it. So a running row's words keep their
+ * brightness and a grey band sweeps across them instead, with no spinner beside them. Only a row
+ * that has just arrived fades its text in; the rows that persist for a whole turn do not.
  */
 export function RowLabel({
   entering = false,
@@ -40,7 +39,7 @@ export function RowLabel({
 }: {
   /** The row has just arrived, so its text fades in. */
   entering?: boolean;
-  /** Its work is running, so the row carries a spinner. */
+  /** Its work is running, so a shimmer sweeps across its text. */
   running?: boolean;
   className?: string;
   children: ReactNode;
@@ -49,10 +48,7 @@ export function RowLabel({
     <span
       className={`flex min-w-0 flex-1 items-center gap-1.5 ${entering ? "timeline-status-enter" : ""} ${className}`}
     >
-      <span className="min-w-0 truncate">{children}</span>
-      {/* Centred on the line, the spinner sits level with the capitals and looks high beside
-          the lowercase letters most labels are made of, so it drops a pixel. */}
-      {running && <Spinner size={11} className="translate-y-px text-fg-subtle" />}
+      <span className={`min-w-0 truncate ${running ? "text-shimmer" : ""}`}>{children}</span>
     </span>
   );
 }
