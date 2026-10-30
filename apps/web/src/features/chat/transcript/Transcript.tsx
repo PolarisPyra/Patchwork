@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { ArrowDownIcon } from "@phosphor-icons/react";
 import { api, type FileChange, type Message, type Thread, type TokenSettings } from "~/api";
@@ -39,6 +39,10 @@ export interface TranscriptProps {
   tokens: TokenSettings;
 }
 
+function idsOf(messages: readonly Message[]): ReadonlySet<string> {
+  return new Set(messages.map((m) => m.id));
+}
+
 /**
  * A thread's transcript: its messages in order, and the control that returns to the newest one.
  *
@@ -53,7 +57,7 @@ export interface TranscriptProps {
  * - **Transcript** — the record of a thread's messages, in order. This component draws it, and the
  *   backend pages through it (`getTranscriptPage`) when a chat is longer than one screenful.
  * - **Timeline** — the inside of one reply: its text, reasoning and calls in order, drawn by
- *   `chat/turn/TurnTimeline`.
+ *   `chat/response/ResponseTimeline`.
  *
  * The list is virtual, so a long chat renders only the rows on screen. How a row is drawn lives in
  * `TranscriptRow`, how the list follows its end in `useTranscriptScroll`, and what a row is in
@@ -76,6 +80,9 @@ export default function Transcript({
   const messages = useMemo(() => visibleMessages(thread.messages), [thread.messages]);
   // One pass over the thread, so a compacted divider reads the size before it in constant time.
   const before = useMemo(() => contextBefore(messages), [messages]);
+  // The messages the chat opened with. A reply after them came in while it was on screen.
+  const [opened, setOpened] = useState(() => ({ id: thread.id, with: idsOf(messages) }));
+  if (opened.id !== thread.id) setOpened({ id: thread.id, with: idsOf(messages) });
   const listRef = useRef<LegendListRef>(null);
   const { atEnd, settled } = useTranscriptScroll(listRef, messages);
 
@@ -117,6 +124,7 @@ export default function Transcript({
       onRestore,
       onFork,
       onRevealMention,
+      openedWith: opened.with,
     }),
     [
       thread,
@@ -131,6 +139,7 @@ export default function Transcript({
       onRestore,
       onFork,
       onRevealMention,
+      opened.with,
     ],
   );
 

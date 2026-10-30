@@ -4,9 +4,9 @@ import { type AgentKind, type ToolCall } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
 import { isActive, STATUS, titleOf } from "~/features/chat/lib/toolCalls";
 import { fullElapsed } from "~/lib/util";
-import { Expander } from "~/features/chat/turn/components/Row";
-import { spanOf } from "~/features/chat/turn/lib/model";
-import { toolLabel } from "~/features/chat/turn/lib/tools";
+import Expander from "~/features/chat/response/components/Expander";
+import { spanOf } from "~/features/chat/response/lib/model";
+import { toolLabel } from "~/features/chat/response/lib/tools";
 import { useNow } from "~/features/chat/hooks/useNow";
 
 /**

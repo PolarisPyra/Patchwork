@@ -30,6 +30,8 @@ export interface RowContext {
   onFork: (message: Message) => void;
   /** Opens a project file mentioned in a user's message. */
   onRevealMention: (path: string) => void;
+  /** The messages in the chat when it was opened. */
+  openedWith: ReadonlySet<string>;
 }
 
 /** A message, framed for the transcript. */
@@ -47,7 +49,7 @@ export function TranscriptRow({
   /** Props shared by every row. */
   context: RowContext;
 }) {
-  const { thread, changes, busy, checkpoints, onRestore, ...handlers } = context;
+  const { thread, changes, busy, checkpoints, onRestore, openedWith, ...handlers } = context;
   const user = message.role === "user";
   return (
     <div className="px-6">
@@ -71,6 +73,7 @@ export function TranscriptRow({
             onShowChanges={handlers.onShowChanges}
             onRetry={handlers.onRetry}
             onFork={handlers.onFork}
+            arrived={!openedWith.has(message.id)}
           />
         )}
       </div>

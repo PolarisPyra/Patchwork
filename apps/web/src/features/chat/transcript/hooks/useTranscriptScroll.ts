@@ -88,6 +88,10 @@ function useFollowSentTurn(list: React.RefObject<ScrollList | null>, messages: r
     if (lastSent.current === sent && lastReply.current === reply) return;
     lastSent.current = sent;
     lastReply.current = reply;
+    // At the end, the list follows the new row itself. A jump started anyway was still under way
+    // as the reply grew, and in a chat too short to scroll the list moved every row by that growth
+    // for a frame.
+    if (list.current?.getState().isAtEnd) return;
     void list.current?.scrollToEnd();
   }, [list, sent, reply]);
 }

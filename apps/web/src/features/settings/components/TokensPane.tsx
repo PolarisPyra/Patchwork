@@ -117,7 +117,7 @@ export default function TokensPane({ settings, updateSettings }: PaneProps) {
       </TokenRow>
       <TokenRow
         title="Warn above"
-        desc="Shows an above-threshold context warning below Worked for and above the divider"
+        desc="Shows an above-threshold context warning below Thought for and above the divider"
       >
         <ContextLevels
           label="Warn above"

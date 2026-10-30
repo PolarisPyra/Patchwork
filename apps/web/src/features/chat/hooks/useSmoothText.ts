@@ -43,18 +43,19 @@ export interface SmoothText {
  * the reveal, is also dropped for a step that carries a burst of text.
  *
  * Text the row is first given is shown whole: opening a reply that is already streaming shows what
- * exists instead of replaying it.
+ * exists instead of replaying it. A `fresh` row arrived while the reply was on screen, so its first
+ * text is revealed too: a text and the call after it can land in the same batch.
  */
-export function useSmoothText(text: string, streaming: boolean): SmoothText {
+export function useSmoothText(text: string, streaming: boolean, fresh = false): SmoothText {
   const reducedMotion = usePrefersReducedMotion();
-  const [shown, setShown] = useState(text);
+  const [shown, setShown] = useState(fresh ? "" : text);
   const [fade, setFade] = useState(true);
   /** The arrived text, read by a step that is already waiting. */
   const target = useRef(text);
   /** The text on screen, which is always a prefix of `target`. */
-  const current = useRef(text);
+  const current = useRef(fresh ? "" : text);
   /** How fast the text is arriving, sampled as it grows. */
-  const arrival = useRef(arrivalStart(text.length, performance.now()));
+  const arrival = useRef(arrivalStart(current.current.length, performance.now()));
   const timer = useRef<number | null>(null);
 
   const stop = useCallback(() => {

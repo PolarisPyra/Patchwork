@@ -156,3 +156,32 @@ export function noteArrival(previous: Arrival, length: number, now: number): Arr
     tooFast: previous.tooFast && now - previous.fastAt < FAST_HOLD_MS,
   };
 }
+
+/**
+ * Text still arriving, with a code span or bold mark it has opened but not yet closed closed at
+ * its end. Without this the marks show as `` ` `` and `**` until their closing half arrives, then
+ * the words they hold change style. A mark with nothing after it yet is left out instead. Only the
+ * last paragraph can hold an open mark, and a fenced code block that is still open is left alone.
+ */
+export function closeOpenMarks(text: string): string {
+  if ((text.match(/^ {0,3}(```|~~~)/gm)?.length ?? 0) % 2 === 1) return text;
+  const start = text.lastIndexOf("\n\n") + 1;
+  // A mark closes on the word before it: `**bold **` is not bold, and a reveal ends after a space.
+  let out = text.trimEnd();
+  const space = text.slice(out.length);
+  const tail = () => out.slice(start);
+  if ((tail().match(/`/g)?.length ?? 0) % 2 === 1) {
+    out = out.endsWith("`") ? out.slice(0, -1) : `${out}\``;
+  }
+  // Asterisks inside code spans are not marks.
+  if (
+    (tail()
+      .replace(/`[^`]*`/g, "")
+      .match(/\*\*/g)?.length ?? 0) %
+      2 ===
+    1
+  ) {
+    out = out.endsWith("**") ? out.slice(0, -2) : `${out}**`;
+  }
+  return out + space;
+}

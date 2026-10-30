@@ -2,6 +2,7 @@ import { useDeferredValue, useRef } from "react";
 import Markdown from "~/features/chat/components/Markdown";
 import { useSmoothText } from "~/features/chat/hooks/useSmoothText";
 import { usePinnedToEnd } from "~/features/chat/hooks/usePinnedToEnd";
+import { closeOpenMarks } from "~/features/chat/lib/streamReveal";
 
 /**
  * A reply's text as it streams in: the arrived text is revealed a word at a time rather than
@@ -15,21 +16,25 @@ import { usePinnedToEnd } from "~/features/chat/hooks/usePinnedToEnd";
 export default function StreamedMarkdown({
   text,
   streaming,
+  fresh = false,
 }: {
   text: string;
   /** The reply is still arriving, so its text is revealed at a steady rate. */
   streaming: boolean;
+  /** The text arrived while the reply was on screen, so it is revealed from its first word. */
+  fresh?: boolean;
 }) {
   const arrived = useDeferredValue(text);
   // The reveal keeps draining after the turn ends, so the words still to appear fade in too.
-  const shown = useSmoothText(streaming ? arrived : text, streaming);
+  const shown = useSmoothText(streaming ? arrived : text, streaming, fresh);
   const row = useRef<HTMLDivElement>(null);
   usePinnedToEnd(row);
+  const streamed = streaming || shown.text !== (streaming ? arrived : text);
   return (
     <Markdown
       containerRef={row}
-      text={shown.text}
-      streamed={streaming || shown.text !== (streaming ? arrived : text)}
+      text={streamed ? closeOpenMarks(shown.text) : shown.text}
+      streamed={streamed}
       animate={shown.fade}
     />
   );

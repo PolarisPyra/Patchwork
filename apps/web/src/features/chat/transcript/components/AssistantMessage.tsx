@@ -6,7 +6,7 @@ import { FileCards } from "~/features/chat/components/FileCard";
 import { ACTION_CLASS, CopyButton } from "~/features/chat/components/CopyButton";
 import { Approvals } from "~/features/chat/transcript/components/Approvals";
 import { ChangeSummary } from "~/features/chat/transcript/components/ChangeSummary";
-import TurnTimeline from "~/features/chat/turn/TurnTimeline";
+import ResponseTimeline from "~/features/chat/response/ResponseTimeline";
 import { isCompactCommand, isGoalClearCommand } from "~/lib/composerActions";
 import { useReplyFiles } from "~/features/chat/hooks/useReplyFiles";
 import { formatClock } from "~/lib/util";
@@ -28,6 +28,8 @@ interface AssistantProps {
   onShowChanges: (messageId: string) => void;
   onRetry: (message: Message) => void;
   onFork: (message: Message) => void;
+  /** The reply came in while its chat was open. */
+  arrived?: boolean;
 }
 
 /**
@@ -48,6 +50,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   onShowChanges,
   onRetry,
   onFork,
+  arrived = false,
 }: AssistantProps) {
   const streaming = message.status === "streaming";
   const clearsGoal = retryMessage !== null && isGoalClearCommand(retryMessage.text);
@@ -66,11 +69,12 @@ export const AssistantMessage = memo(function AssistantMessage({
       ));
   return (
     <section className="flex min-w-0 flex-col gap-2.5">
-      <TurnTimeline
+      <ResponseTimeline
         message={message}
         agent={agent}
         clearsGoal={clearsGoal}
         compacts={compacts}
+        arrived={arrived}
         onOpenThread={onOpenThread}
         onOpenFile={openFile}
         renderApprovals={(ids) => (
@@ -117,10 +121,11 @@ export const AssistantMessage = memo(function AssistantMessage({
           {message.error}
         </div>
       )}
-      {/* Copy, Retry, and the time belong to a reply; a turn stopped before it wrote one has none. */}
-      {/* A cleared goal's status line has nothing to copy or retry. */}
-      {!streaming && !message.cutOff && message.text.trim() && !clearsGoal && (
-        <div className="flex gap-1">
+      {/* Copy, Retry, Fork and the time belong to a reply; a turn stopped before it wrote one has
+          none. Once the text starts the row holds its place, hidden, so it does not push the chat
+          up as the reply ends. A cleared goal's status line has nothing to copy or retry. */}
+      {!message.cutOff && message.text.trim() && !clearsGoal && (
+        <div className={`flex gap-1 ${streaming ? "invisible" : ""}`} aria-hidden={streaming}>
           <CopyButton text={message.text} />
           {retryMessage !== null && (
             <button className={ACTION_CLASS} disabled={busy} onClick={() => onRetry(retryMessage)}>

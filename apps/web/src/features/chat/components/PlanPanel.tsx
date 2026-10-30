@@ -23,11 +23,17 @@ function StepIcon({ status }: { status: StepStatus }) {
   }
 }
 
-/** The agent's plan above the composer: how far it has got, opening to the steps. */
+/** The agent's plan above the composer: how far it has got, opening to the steps. It arrives as
+ * its one line: arriving open took the height of every step from the chat and moved it up. */
 export default function PlanPanel({ steps }: { steps: PlanStep[] }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const done = steps.filter((s) => s.status === "done").length;
-  const current = steps.find((s) => s.status === "running");
+  const running = steps.find((s) => s.status === "running");
+  // A stopped turn puts its running step back to pending; the header keeps naming it, not
+  // whichever step it would otherwise fall back to.
+  const [last, setLast] = useState(running?.text);
+  if (running && running.text !== last) setLast(running.text);
+  const current = running ?? steps.find((s) => s.text === last && s.status === "pending");
   const Caret = open ? CaretDownIcon : CaretRightIcon;
   return (
     <div className="mb-1.5 rounded-[var(--radius)] border border-border bg-panel text-[length:var(--fs-sm)]">

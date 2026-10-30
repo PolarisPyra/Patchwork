@@ -539,7 +539,7 @@
 
    It goes on the text, never on the row: a row can hold an icon, and an icon that fades, blurs or
    scales reads as a smudge instead of as something arriving. Rows put this on their label span
-   (see RowLabel in TurnTimeline.tsx) and paint the icon at once. */
+   (see EntryText in WorkGroup.tsx) and paint the icon at once. */
 .timeline-status-enter {
   animation: 250ms ease-in-out timeline-fade-in;
 }

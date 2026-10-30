@@ -1,28 +1,20 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
-  BrainIcon,
   CaretDownIcon,
   CaretRightIcon,
   GitDiffIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react";
-import Markdown from "~/features/chat/components/Markdown";
-import {
-  DETAILS_CLASS,
-  Expander,
-  ROW_CLASS,
-  RowIcon,
-  RowLabel,
-} from "~/features/chat/turn/components/Row";
-import { actionIcon, entryIcon } from "~/features/chat/turn/components/ToolIcon";
-import { type Entry, entryActive, workKey } from "~/features/chat/turn/lib/model";
+import Expander from "~/features/chat/response/components/Expander";
+import { actionIcon, entryIcon } from "~/features/chat/response/components/ToolIcon";
+import { type Entry, entryActive, workKey } from "~/features/chat/response/lib/model";
 import {
   actionOf,
   detailsOf,
   editedFile,
   entryLabel,
   groupLabel,
-} from "~/features/chat/turn/lib/tools";
+} from "~/features/chat/response/lib/tools";
 
 /**
  * A run of work between two texts: one row, or a summary row over several that opens to list them.
@@ -49,7 +41,7 @@ export default function WorkGroup({
     );
   }
   const current = live ? [...entries].reverse().find(entryActive) : undefined;
-  const tools = entries.flatMap((entry) => (entry.kind === "tool" ? [entry.tool] : []));
+  const tools = entries.map((entry) => entry.tool);
   const failed = tools.some((tool) => tool.status === "error");
   const head = tools[0];
   return (
@@ -58,22 +50,20 @@ export default function WorkGroup({
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className={ROW_CLASS}
+        className={ENTRY_CLASS}
       >
-        <RowIcon>
+        <IconColumn>
           {current ? (
             entryIcon(current)
           ) : failed ? (
             <WarningCircleIcon size={15} className="text-danger" />
-          ) : head ? (
-            actionIcon(actionOf(head))
           ) : (
-            <BrainIcon size={15} />
+            head && actionIcon(actionOf(head))
           )}
-        </RowIcon>
-        <RowLabel entering={live} running={current !== undefined}>
+        </IconColumn>
+        <EntryText entering={live} running={current !== undefined}>
           {current ? entryLabel(current) : groupLabel(tools)}
-        </RowLabel>
+        </EntryText>
       </button>
       {open && (
         <Expander>
@@ -114,15 +104,15 @@ function EntryRow({
   if (file !== null && onOpenFile) {
     return (
       <div className="min-w-0">
-        <button type="button" title={file} onClick={() => onOpenFile(file)} className={ROW_CLASS}>
-          <RowIcon>{entryIcon(entry)}</RowIcon>
-          <RowLabel
+        <button type="button" title={file} onClick={() => onOpenFile(file)} className={ENTRY_CLASS}>
+          <IconColumn>{entryIcon(entry)}</IconColumn>
+          <EntryText
             entering={entering}
             running={active}
             className="underline-offset-2 group-hover:underline"
           >
             {entryLabel(entry)}
-          </RowLabel>
+          </EntryText>
           <GitDiffIcon
             size={13}
             className="flex-none text-fg-subtle opacity-0 group-hover:opacity-100"
@@ -139,12 +129,12 @@ function EntryRow({
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className={ROW_CLASS}
+        className={ENTRY_CLASS}
       >
-        <RowIcon>{entryIcon(entry)}</RowIcon>
-        <RowLabel entering={entering} running={active}>
+        <IconColumn>{entryIcon(entry)}</IconColumn>
+        <EntryText entering={entering} running={active}>
           {entryLabel(entry)}
-        </RowLabel>
+        </EntryText>
         <Caret size={12} className="flex-none text-fg-subtle opacity-0 group-hover:opacity-100" />
       </button>
       {open && (
@@ -156,20 +146,56 @@ function EntryRow({
   );
 }
 
-/** What a row opens to show: reasoning as Markdown, a call as the command and its output. */
+/** What a row opens to show: the command and its output. */
 function EntryDetails({ entry }: { entry: Entry }) {
-  if (entry.kind === "thinking") {
-    return (
-      <div className={DETAILS_CLASS}>
-        <Markdown text={entry.part.text} />
-      </div>
-    );
-  }
   return (
     <pre
       className={`${DETAILS_CLASS} m-0 font-[family-name:var(--font-mono)] break-words whitespace-pre-wrap`}
     >
       {detailsOf(entry)}
     </pre>
+  );
+}
+
+/** A row that can be opened: one line, full width, with room for an icon and a caret. */
+const ENTRY_CLASS =
+  "group flex min-h-6 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border-none bg-transparent px-0.5 py-0.5 text-left text-[length:var(--fs-md)] text-fg-muted hover:text-fg";
+
+/** The box a row opens into: a command and its output. */
+const DETAILS_CLASS =
+  "ms-7 mt-0.5 mb-1 max-h-64 overflow-auto rounded-[var(--radius-sm)] bg-editor px-2 py-1.5 text-[length:var(--fs-sm)] text-fg-muted selectable";
+
+/** The icon column. A fixed width keeps every label on the same left edge. */
+export function IconColumn({ children }: { children: ReactNode }) {
+  return <span className="grid w-6 flex-none place-items-center opacity-70">{children}</span>;
+}
+
+/**
+ * The text of a row that has an icon beside it, and the sign that its work is still running.
+ *
+ * Nothing here fades. A label that dims and brightens on a loop reads as text that cannot settle,
+ * and beside an icon the icon looks like it is going with it. So a running row's words keep their
+ * brightness and a grey band sweeps across them instead, with no spinner beside them. Only a row
+ * that has just arrived fades its text in; the rows that persist for a whole turn do not.
+ */
+function EntryText({
+  entering = false,
+  running = false,
+  className = "",
+  children,
+}: {
+  /** The row has just arrived, so its text fades in. */
+  entering?: boolean;
+  /** Its work is running, so a shimmer sweeps across its text. */
+  running?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <span
+      className={`flex min-w-0 flex-1 items-center gap-1.5 ${entering ? "timeline-status-enter" : ""} ${className}`}
+    >
+      <span className={`min-w-0 truncate ${running ? "text-shimmer" : ""}`}>{children}</span>
+    </span>
   );
 }

@@ -1,7 +1,6 @@
 import { type ReactNode } from "react";
 import {
   BooksIcon,
-  BrainIcon,
   EyeIcon,
   GlobeIcon,
   MagnifyingGlassIcon,
@@ -11,8 +10,8 @@ import {
   WarningCircleIcon,
   WrenchIcon,
 } from "@phosphor-icons/react";
-import type { Entry } from "~/features/chat/turn/lib/model";
-import { actionOf, type Action } from "~/features/chat/turn/lib/tools";
+import type { Entry } from "~/features/chat/response/lib/model";
+import { actionOf, type Action } from "~/features/chat/response/lib/tools";
 
 /** The glyph for each kind of work. One size, so icons line up down the column. */
 const GLYPH: Record<Action, ReactNode> = {
@@ -31,9 +30,8 @@ export function actionIcon(action: Action): ReactNode {
   return GLYPH[action];
 }
 
-/** The glyph for a row: its kind, its failure if it failed, or a brain for reasoning. */
+/** The glyph for a row: its kind, or its failure if it failed. */
 export function entryIcon(entry: Entry): ReactNode {
-  if (entry.kind === "thinking") return <BrainIcon size={15} />;
   if (entry.tool.status === "error") return <WarningCircleIcon size={15} className="text-danger" />;
   return actionIcon(actionOf(entry.tool));
 }

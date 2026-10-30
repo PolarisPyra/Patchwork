@@ -670,11 +670,24 @@ export default function Chat({
     }
   }
 
-  // Match T3's active-run scope: old plans must not leave a stale progress badge above the
-  // composer after the reply has finished.
+  // The plan of the reply running now. Once that reply ends its plan stays, until the next message
+  // is sent: the panel closing as the turn stopped took its height back from the chat, which moved
+  // every message down. Plans of replies that ended before the chat was opened are not shown.
   const lastMessage = thread?.messages.at(-1);
+  const livePlanId =
+    working &&
+    lastMessage?.role === "assistant" &&
+    lastMessage.status === "streaming" &&
+    lastMessage.plan.length > 0
+      ? lastMessage.id
+      : null;
+  const [keptPlanId, setKeptPlanId] = useState<string | null>(null);
+  useEffect(() => {
+    if (livePlanId !== null) setKeptPlanId(livePlanId);
+  }, [livePlanId]);
   const plan =
-    working && lastMessage?.role === "assistant" && lastMessage.status === "streaming"
+    lastMessage?.role === "assistant" &&
+    (lastMessage.id === livePlanId || lastMessage.id === keptPlanId)
       ? lastMessage.plan
       : [];
   // Choices the agent offered in its last finished reply, until the user answers or dismisses them.
@@ -899,7 +912,9 @@ export default function Chat({
             />
           )}
         </ComposerStripPresence>
-        {usage && tokens.showUsage && <UsageLine usage={usage} warnAbove={tokens.warnAbove} />}
+        {thread && tokens.showUsage && (
+          <UsageLine usage={usage || null} warnAbove={tokens.warnAbove} />
+        )}
         {/* Loaded with the chat, not on its own: a placeholder of another height moved the
             messages once the editor arrived. */}
         <Composer

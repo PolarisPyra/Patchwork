@@ -1,7 +1,6 @@
 import { type ToolCall } from "~/api";
 import { titleOf } from "~/features/chat/lib/toolCalls";
-import { fullElapsed } from "~/lib/util";
-import type { Entry } from "~/features/chat/turn/lib/model";
+import type { Entry } from "~/features/chat/response/lib/model";
 
 /**
  * What a call is, in the terms a reader thinks in — changed a file, ran a command, searched — and
@@ -152,18 +151,9 @@ export function groupLabel(tools: readonly ToolCall[]): string {
   return counts.map((text, i) => (i === 0 ? text : text.toLowerCase())).join(" and ");
 }
 
-/**
- * A row's label. Reasoning reads as how long it took once it has ended, never as its own text: the
- * text is a paragraph, and a paragraph truncated to one line says less than a duration does. It is
- * still one click away, in the row's details.
- */
+/** A row's label. */
 export function entryLabel(entry: Entry): string {
-  if (entry.kind === "tool") return toolLabel(entry.tool);
-  const { startedAt, endedAt } = entry.part;
-  if (endedAt === null) return "Thinking";
-  const took = endedAt - startedAt;
-  // Under a second there is no duration worth reading, so it is just "Thought".
-  return took >= 1000 ? `Thought for ${fullElapsed(took)}` : "Thought";
+  return toolLabel(entry.tool);
 }
 
 /** The one file an edit call changes, or null for other calls, failed edits, and edits of several
@@ -174,9 +164,8 @@ export function editedFile(entry: Entry): string | null {
   return status === "error" || !summary || summary.includes(", ") ? null : summary;
 }
 
-/** What a row opens to show: a command and its output, or the whole block of reasoning. */
+/** What a row opens to show: a command and its output. */
 export function detailsOf(entry: Entry): string {
-  if (entry.kind === "thinking") return entry.part.text;
   const { tool } = entry;
   const input = actionOf(tool) === "command" ? `$ ${tool.summary}` : tool.summary;
   return [input, tool.output].filter(Boolean).join("\n\n") || "No output";
