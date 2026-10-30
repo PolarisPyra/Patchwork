@@ -60,8 +60,9 @@ export function ChangeSummary({
           Show changes
         </button>
       </div>
-      {/* One grid for all rows, so every file's folder starts in the same column. */}
-      <div className="grid grid-cols-[minmax(0,max-content)_minmax(0,1fr)_auto_auto] gap-x-2">
+      {/* One grid for all rows, so every file's folder starts in the same column and every count ends
+          in the same column, against the right edge. */}
+      <div className="grid grid-cols-[minmax(0,max-content)_minmax(0,1fr)_auto_auto_auto] gap-x-2">
         {listed.map((path) => {
           const file = turnFiles?.find((f) => f.path === path);
           if (turn) {
@@ -118,6 +119,7 @@ function ChangedFile({
   onOpen: () => void;
 }) {
   const dir = dirName(path);
+  const counted = lines !== undefined && lines.additions + lines.deletions > 0;
   return (
     <button
       className="col-span-full grid min-h-6 min-w-0 cursor-pointer grid-cols-subgrid items-center rounded-[var(--radius-sm)] border-none bg-transparent px-1 text-left hover:bg-hover"
@@ -128,14 +130,23 @@ function ChangedFile({
         {baseName(path)}
       </span>
       <span className="truncate text-fg-subtle">{dir}</span>
-      {lines && lines.additions + lines.deletions > 0 && (
-        <span className="col-start-3 flex gap-1.5 text-[length:var(--fs-xs)] tabular-nums">
-          <span className="text-success">+{lines.additions}</span>
-          <span className="text-danger">−{lines.deletions}</span>
+      {note && (
+        // A note on a file with no counts takes their place at the right edge.
+        <span
+          className={`col-start-3 justify-self-end text-[length:var(--fs-xs)] text-fg-subtle ${counted ? "" : "col-span-3"}`}
+        >
+          {note}
         </span>
       )}
-      {note && (
-        <span className="col-start-4 text-[length:var(--fs-xs)] text-fg-subtle">{note}</span>
+      {counted && (
+        <>
+          <span className="col-start-4 justify-self-end text-[length:var(--fs-xs)] text-success tabular-nums">
+            +{lines.additions}
+          </span>
+          <span className="col-start-5 justify-self-end text-[length:var(--fs-xs)] text-danger tabular-nums">
+            −{lines.deletions}
+          </span>
+        </>
       )}
     </button>
   );
