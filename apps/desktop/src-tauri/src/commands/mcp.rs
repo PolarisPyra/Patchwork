@@ -26,11 +26,6 @@ pub(crate) async fn restart_mcp_server(name: String) -> Res<()> {
     blocking(move || provider::mcp::restart(&name)).await
 }
 
-#[tauri::command]
-pub(crate) fn mcp_config_file() -> String {
-    provider::mcp::path().display().to_string()
-}
-
 /// How many MCP tools an API turn may offer.
 #[tauri::command]
 pub(crate) fn mcp_tool_budget() -> usize {

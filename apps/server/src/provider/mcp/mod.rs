@@ -1,9 +1,9 @@
-//! MCP servers for API providers. The servers live in `mcp.json` in the config folder,
-//! in the `mcpServers` shape other MCP clients use, so a server's README snippet pastes in as
-//! is. Each enabled server starts once, when Patchwork opens, and stays up: every API turn
-//! gets its tools without waiting, and a server keeps its state (a browser, a login) between
-//! turns. A server runs as a command speaking JSON-RPC over stdio, or at a URL over MCP's
-//! streamable HTTP. Environment and header values go to the system credential store, as API
+//! MCP servers for API providers. Each server is a file in `mcp/` in the config folder, named
+//! after it, holding the entry other MCP clients list under `mcpServers`, so a server's README
+//! snippet pastes in as is. Each enabled server starts once, when Patchwork opens, and stays
+//! up: every API turn gets its tools without waiting, and a server keeps its state (a browser,
+//! a login) between turns. A server runs as a command speaking JSON-RPC over stdio, or at a URL
+//! over MCP's streamable HTTP. Environment and header values go to the system credential store, as API
 //! keys do, and the file keeps only their names; a value typed into the file by hand is used
 //! as is until the server is next saved.
 
@@ -15,7 +15,7 @@ mod http;
 mod relay;
 
 pub use config::{
-    McpServer, ServerView, ToolInfo, TurnTool, init, path, list, save, remove, restart,
+    McpServer, ServerView, ToolInfo, TurnTool, init, dir, list, save, remove, restart,
     shared_servers, identity, same_server,
 };
 use config::{read_config, resolved, restart_changed};
@@ -31,7 +31,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
-const CONFIG_FILE: &str = "mcp.json";
+const CONFIG_DIR: &str = "mcp";
 const PROTOCOL: &str = "2025-06-18";
 /// Starting a server and listing its tools; `npx` may download the server first.
 const START_TIMEOUT: Duration = Duration::from_secs(90);
@@ -47,5 +47,5 @@ const POLL: Duration = Duration::from_millis(200);
 
 static DIR: OnceLock<PathBuf> = OnceLock::new();
 static POOL: OnceLock<Mutex<HashMap<String, Arc<Entry>>>> = OnceLock::new();
-/// Serializes changes to the config file.
+/// Serializes changes to the config files.
 static WRITE: Mutex<()> = Mutex::new(());

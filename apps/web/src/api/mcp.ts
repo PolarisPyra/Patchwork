@@ -13,6 +13,8 @@ export interface McpServerView extends McpServer {
   error: string | null;
   /** Equal for the same server wherever it is configured; a CLI server's `key`. */
   identity: string;
+  /** The file it is configured in. */
+  file: string;
 }
 
 /** A server Claude Code or Codex runs, read from its own config. Mirrors `CliServer` in
@@ -51,7 +53,6 @@ export const mcpApi = {
     invoke<void>("save_mcp_server", { name, previous, server }),
   removeMcpServer: (name: string) => invoke<void>("remove_mcp_server", { name }),
   restartMcpServer: (name: string) => invoke<void>("restart_mcp_server", { name }),
-  mcpConfigFile: () => invoke<string>("mcp_config_file"),
   /** How many MCP tools an API turn may offer. */
   mcpToolBudget: () => invoke<number>("mcp_tool_budget"),
   listCliMcpServers: () => invoke<CliMcpGroup[]>("list_cli_mcp_servers"),

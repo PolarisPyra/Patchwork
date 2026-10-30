@@ -299,7 +299,6 @@ pub fn run() {
             commands::mcp::save_mcp_server,
             commands::mcp::remove_mcp_server,
             commands::mcp::restart_mcp_server,
-            commands::mcp::mcp_config_file,
             commands::mcp::mcp_tool_budget,
             commands::mcp::list_cli_mcp_servers,
             commands::mcp::refresh_cli_mcp_server,

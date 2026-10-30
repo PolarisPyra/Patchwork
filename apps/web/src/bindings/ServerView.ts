@@ -12,7 +12,11 @@ status: string, tools: Array<ToolInfo>, error: string | null,
 /**
  * See `identity`.
  */
-identity: string, command?: string | null, args?: Array<string>, env?: { [key in string]: string }, url?: string | null, headers?: { [key in string]: string }, disabled?: boolean, 
+identity: string, 
+/**
+ * The file it is configured in.
+ */
+file: string, command?: string | null, args?: Array<string>, env?: { [key in string]: string }, url?: string | null, headers?: { [key in string]: string }, disabled?: boolean, 
 /**
  * Tools left out of API turns, by name.
  */

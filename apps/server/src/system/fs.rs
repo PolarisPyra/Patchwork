@@ -34,6 +34,14 @@ pub fn resolve(root: &Path, path: &str) -> PathBuf {
     out
 }
 
+/// Whether `name` can be a file's name as it is: not hidden, and without a path separator or a
+/// character Windows refuses.
+pub fn is_plain_file_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name.starts_with('.')
+        && !name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|'])
+}
+
 /// Writes `text` through a temporary file, readable only by the user.
 pub fn write_private(path: &Path, text: &str) -> Result<(), String> {
     use std::io::Write;

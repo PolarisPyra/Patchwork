@@ -1,4 +1,4 @@
-//! The servers `mcp.json` lists: reading and saving them, their stored secrets, and matching a CLI's servers against them.
+//! The servers in `mcp/`: reading and saving them, their stored secrets, and matching a CLI's servers against them.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use ts_rs::TS;
 
-use super::{CONFIG_FILE, DIR, live_servers, pool, serve_relay, WRITE};
+use super::{CONFIG_DIR, DIR, live_servers, pool, serve_relay, WRITE};
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -44,10 +44,8 @@ struct Secrets {
     headers: BTreeMap<String, String>,
 }
 
-#[derive(Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub(super) struct Config {
-    #[serde(default)]
     pub(super) mcp_servers: BTreeMap<String, McpServer>,
 }
 
@@ -65,6 +63,8 @@ pub struct ServerView {
     pub error: Option<String>,
     /// See `identity`.
     pub identity: String,
+    /// The file it is configured in.
+    pub file: String,
 }
 
 /// A server's tool, as the settings list it.
@@ -102,13 +102,34 @@ pub fn init(config_dir: &Path) {
     });
 }
 
-/// Where Patchwork's own servers are configured.
-pub fn path() -> PathBuf {
-    DIR.get().cloned().unwrap_or_default().join(CONFIG_FILE)
+/// The folder Patchwork's own servers are configured in, a file each.
+pub fn dir() -> PathBuf {
+    DIR.get().cloned().unwrap_or_default().join(CONFIG_DIR)
 }
 
+fn file(name: &str) -> PathBuf {
+    dir().join(format!("{name}.json"))
+}
+
+/// Each `.json` file in `mcp/`, by its name without `.json`; a file that is not valid JSON is
+/// left out.
 pub(super) fn read_config() -> Config {
-    crate::system::fs::read_json_or_default(&path())
+    let mut mcp_servers = BTreeMap::new();
+    for entry in std::fs::read_dir(dir()).into_iter().flatten().flatten() {
+        let path = entry.path();
+        let Some(name) = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .and_then(|n| n.strip_suffix(".json"))
+            .filter(|n| crate::system::fs::is_plain_file_name(n))
+        else {
+            continue;
+        };
+        if let Some(server) = crate::system::fs::read_json_or_default::<Option<McpServer>>(&path) {
+            mcp_servers.insert(name.to_string(), server);
+        }
+    }
+    Config { mcp_servers }
 }
 
 pub fn list() -> Vec<ServerView> {
@@ -126,6 +147,7 @@ pub fn list() -> Vec<ServerView> {
         .map(|(name, mut server)| {
             let config = resolved(&name, &server);
             let identity = identity(&config);
+            let file = file(&name).display().to_string();
             let running = pool.get(&name).filter(|e| e.config == config);
             for value in server.env.values_mut().chain(server.headers.values_mut()) {
                 value.clear();
@@ -149,6 +171,7 @@ pub fn list() -> Vec<ServerView> {
                 tools,
                 error,
                 identity,
+                file,
             }
         })
         .collect()
@@ -160,6 +183,9 @@ pub fn save(name: String, previous: Option<String>, server: McpServer) -> Result
     if name.is_empty() {
         return Err("Give the server a name".into());
     }
+    if !crate::system::fs::is_plain_file_name(&name) {
+        return Err("The name cannot start with a dot or have any of / \\ : * ? \" < > |".into());
+    }
     match (&server.command, &server.url) {
         (Some(c), None) if !c.trim().is_empty() => {}
         (None, Some(u)) if u.starts_with("http://") || u.starts_with("https://") => {}
@@ -168,10 +194,9 @@ pub fn save(name: String, previous: Option<String>, server: McpServer) -> Result
     }
     {
         let _guard = WRITE.lock().unwrap_or_else(PoisonError::into_inner);
-        let mut config = read_config();
         let old = previous.clone().unwrap_or_else(|| name.clone());
         // An empty value keeps the one the server has now, from the store or the file.
-        let kept = config
+        let kept = read_config()
             .mcp_servers
             .get(&old)
             .map(|s| resolved(&old, s))
@@ -187,13 +212,12 @@ pub fn save(name: String, previous: Option<String>, server: McpServer) -> Result
             let text = serde_json::to_string(&secrets).map_err(|e| e.to_string())?;
             crate::provider::api::config::store_secret(&secret_name(&name), &text)?;
         }
+        write_server(&name, &server)?;
         if let Some(previous) = previous.filter(|p| *p != name) {
-            config.mcp_servers.remove(&previous);
+            remove_file(&previous)?;
             pool().remove(&previous);
             crate::provider::api::config::delete_secret(&secret_name(&previous));
         }
-        config.mcp_servers.insert(name, server);
-        write_config(&config)?;
     }
     restart_changed();
     Ok(())
@@ -256,11 +280,10 @@ pub(super) fn resolved(name: &str, server: &McpServer) -> McpServer {
 
 pub fn remove(name: &str) -> Result<(), String> {
     let _guard = WRITE.lock().unwrap_or_else(PoisonError::into_inner);
-    let mut config = read_config();
-    config.mcp_servers.remove(name);
+    remove_file(name)?;
     pool().remove(name);
     crate::provider::api::config::delete_secret(&secret_name(name));
-    write_config(&config)
+    Ok(())
 }
 
 /// Stops a server and starts it again, e.g. after it failed.
@@ -269,9 +292,16 @@ pub fn restart(name: &str) {
     restart_changed();
 }
 
-fn write_config(config: &Config) -> Result<(), String> {
-    let text = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
-    crate::system::fs::write_private(&path(), &text)
+fn write_server(name: &str, server: &McpServer) -> Result<(), String> {
+    let text = serde_json::to_string_pretty(server).map_err(|e| e.to_string())?;
+    crate::system::fs::write_private(&file(name), &text)
+}
+
+fn remove_file(name: &str) -> Result<(), String> {
+    match std::fs::remove_file(file(name)) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
+        _ => Ok(()),
+    }
 }
 
 /// Starts, in the background, each enabled server that is not running as configured.

@@ -122,6 +122,7 @@ impl Dirs {
                 failed.push(format!("{name}: {e}"));
             }
         }
+        self.split_mcp_file(&mut failed);
         for name in LEFT_BEHIND {
             let path = old.join(name);
             let _ = if path.is_dir() {
@@ -135,6 +136,50 @@ impl Dirs {
             let _ = std::fs::remove_file(old.join(RELAY_FILE));
         }
         failed
+    }
+
+    /// Splits the `mcp.json` older versions listed every MCP server in into one file per server
+    /// in `mcp/`, named after it. The old file stays when a server in it could not be written.
+    fn split_mcp_file(&self, failed: &mut Vec<String>) {
+        #[derive(serde::Deserialize)]
+        struct Old {
+            #[serde(default, rename = "mcpServers")]
+            servers: serde_json::Map<String, serde_json::Value>,
+        }
+        let old_file = self.config.join("mcp.json");
+        let dir = self.config.join("mcp");
+        if dir.exists() {
+            return;
+        }
+        let Ok(text) = std::fs::read_to_string(&old_file) else {
+            return;
+        };
+        let old: Old = match serde_json::from_str(&text) {
+            Ok(old) => old,
+            Err(e) => return failed.push(format!("mcp.json: {e}")),
+        };
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            return failed.push(format!("mcp: {e}"));
+        }
+        let mut all = true;
+        for (name, server) in old.servers {
+            let written = if super::fs::is_plain_file_name(&name) {
+                serde_json::to_string_pretty(&server)
+                    .map_err(|e| e.to_string())
+                    .and_then(|text| {
+                        super::fs::write_private(&dir.join(format!("{name}.json")), &text)
+                    })
+            } else {
+                Err("the name cannot be a file name".into())
+            };
+            if let Err(e) = written {
+                failed.push(format!("mcp.json: {name}: {e}"));
+                all = false;
+            }
+        }
+        if all {
+            let _ = std::fs::remove_file(&old_file);
+        }
     }
 }
 

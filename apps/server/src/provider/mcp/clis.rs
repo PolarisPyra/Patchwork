@@ -141,7 +141,7 @@ pub fn enable(key: &str, projects: &[Project]) -> Result<(), String> {
 
 /// Whether `path` is a config file a server was read from, which the settings may open.
 pub fn is_config_file(path: &Path, projects: &[Project]) -> bool {
-    path == mcp::path()
+    (path.parent() == Some(mcp::dir().as_path()) && path.extension().is_some_and(|e| e == "json"))
         || path == crate::provider::claude::settings_file()
         || path
             == crate::provider::codex::home()

@@ -86,7 +86,6 @@ function onTools(card: Card): McpTool[] {
 export default function McpServersPane({ appIcon }: { appIcon: string }) {
   const [servers, setServers] = useState<McpServerView[] | null>(null);
   const [clis, setClis] = useState<CliMcpGroup[]>([]);
-  const [file, setFile] = useState("");
   const [editing, setEditing] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Client | null>(null);
@@ -106,7 +105,6 @@ export default function McpServersPane({ appIcon }: { appIcon: string }) {
 
   useEffect(() => {
     void reload();
-    void api.mcpConfigFile().then(setFile);
     void api.mcpToolBudget().then(setBudget);
   }, []);
 
@@ -121,7 +119,7 @@ export default function McpServersPane({ appIcon }: { appIcon: string }) {
     return () => clearInterval(timer);
   }, [busy]);
 
-  const cards = useMemo(() => merge(servers ?? [], clis, file), [servers, clis, file]);
+  const cards = useMemo(() => merge(servers ?? [], clis), [servers, clis]);
   // Tools API turns would get; past the budget, the last ones are left out.
   const onCount = cards
     .filter((c) => c.own && c.own.status === "ready")
@@ -268,7 +266,7 @@ export default function McpServersPane({ appIcon }: { appIcon: string }) {
 
 /** Patchwork's servers and the CLIs', one card per server: the same command, arguments and
  * environment, or URL and headers, wherever it is configured. */
-function merge(own: McpServerView[], clis: CliMcpGroup[], file: string): Card[] {
+function merge(own: McpServerView[], clis: CliMcpGroup[]): Card[] {
   const cards = new Map<string, Card>();
   const add = (id: string, target: string, env: string[], tools: McpTool[], use: Use) => {
     const card = cards.get(id);
@@ -297,7 +295,7 @@ function merge(own: McpServerView[], clis: CliMcpGroup[], file: string): Card[] 
       client: "patchwork",
       name: s.name,
       scope: null,
-      file,
+      file: s.file,
       status: s.status,
       error: s.error,
       own: s,
