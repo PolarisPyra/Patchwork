@@ -63,14 +63,14 @@ export function ChangeRow({
   );
 }
 
-/** A file's added and removed lines, then the changed icon. The icon column has a fixed width, so
- * the icons line up across rows. */
+/** A file's added and removed lines, then the changed icon. Each count sits at the right of a
+ * fixed-width column, so the counts end against the icon and line up across rows, as the icon does. */
 export function ChangeCounts({ change }: { change: FileChange }) {
   return (
     <span className="flex flex-none items-center justify-self-end text-[length:var(--fs-xs)] tabular-nums">
       <span className="flex items-center gap-3">
         <span className="w-[var(--diff-col)] text-right text-success">+{change.additions}</span>
-        <span className="w-[var(--diff-col)] text-danger">−{change.deletions}</span>
+        <span className="w-[var(--diff-col)] text-right text-danger">−{change.deletions}</span>
       </span>
       <span className="flex w-7 justify-center">
         <GitDiffIcon size={14} className="text-fg-muted" aria-label="Changed" />
