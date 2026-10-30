@@ -3,6 +3,17 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.1.5] - 2026-10-29
+
+### Changed
+
+- The Usage popover at the bottom of the sidebar now always shows Claude Code, Codex and Antigravity when they are installed, so Antigravity no longer disappears, and it no longer lists API providers, which have no plan limits. Its refresh button refreshes only the provider you are looking at, and briefly shows "Up to date" when there is nothing new. When Anthropic is rate-limiting usage checks, Claude Code's panel shows a red "Rate limited" with the minutes left until it checks again.
+
+### Fixed
+
+- The Tasks list above the chat box now fills in for Claude Code, Codex and OpenCode as they plan and work through a task, not only for API providers such as DeepSeek. Their task updates no longer show up as separate steps in the reply, since the list already shows them.
+- While a reply is running, the spinner and text of the "Working for" line now line up with the steps below it, such as "Thinking". They used to sit a little to the left.
+
 ## [26.1.4] - 2026-10-29
 
 ### Fixed
