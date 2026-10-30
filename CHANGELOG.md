@@ -3,6 +3,22 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.1.1] - 2026-10-29
+
+### Added
+
+- The chat box has a new size next to Thinking that sets when the chat's context is summarized, from 128k up to 2m or only when full, shows how full it is, and can compact it now; each agent's default is in Settings → AI Tokenomics. API providers, Codex, OpenCode and Antigravity now compact on their own as well, and a local model, such as one in LM Studio, compacts before its loaded context fills up instead of losing the middle of the chat. While a chat compacts, its divider reads Compacting context and then Context compacted once it is done.
+
+### Changed
+
+- Patchwork is now free software under the GNU Affero General Public License, version 3 or later. Settings → Updates shows the license and links to it, and a commercial license is available for anyone the AGPL does not suit.
+- Settings → Hooks now shows each entry on its own row that says in plain words when it runs and what it does, such as "Before shell commands" and "Refuses waits with no time limit", instead of raw event names and patterns. Click a row to see its full command and timeout, and a row now says which agents skip it, such as OpenCode.
+
+### Fixed
+
+- A reply no longer bounces up and down while it streams in. New lines now appear where they belong and the chat moves only as much as the words that arrive, and if you scroll up during a reply it stays where you put it.
+- When an agent leaves a command running after its reply, such as a dev server, the chat box now shows Stop to end it. Before, only Send was there, so the chat looked stuck until the command ended on its own.
+
 ## [26.1.0] - 2026-10-29
 
 ### Changed
