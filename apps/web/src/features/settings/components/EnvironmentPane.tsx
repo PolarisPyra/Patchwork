@@ -29,7 +29,7 @@ export default function EnvironmentPane({ settings, updateSettings }: PaneProps)
           alignEnd
           trigger={({ open, toggle }) => (
             <button
-              className={CHIP_CLASS}
+              className={`${CHIP_CLASS} !bg-transparent !text-fg-muted`}
               aria-haspopup="menu"
               aria-expanded={open}
               aria-label={`Shell: ${shell ? baseName(shell) : "System default"}`}

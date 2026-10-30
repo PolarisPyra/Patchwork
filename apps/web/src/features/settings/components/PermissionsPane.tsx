@@ -99,7 +99,7 @@ export default function PermissionsPane({
         <Dropdown
           trigger={({ open: isOpen, toggle }) => (
             <button
-              className={CHIP_CLASS}
+              className={`${CHIP_CLASS} !bg-transparent !text-fg-muted`}
               aria-haspopup="menu"
               aria-expanded={isOpen}
               aria-label={`Rules for ${scopeName(scope, projects)}`}
@@ -205,12 +205,27 @@ export default function PermissionsPane({
       <div className={HEADING}>Computer use</div>
       <TokenRow
         title="Let the agent use the screen"
-        desc="Adds screenshot, click, type, key and scroll tools to Patchwork's own agent. Each use asks here unless a rule above allows the screen."
+        desc="Adds screenshot, click, type, key and scroll tools to Patchwork's own agent."
       >
         <TokenSwitch
           label="Computer use"
-          on={settings.computerUse}
-          onChange={(on) => void updateSettings((s) => ({ ...s, computerUse: on }))}
+          on={settings.computerUse && settings.permissions.everywhere.defaults.screen === "allow"}
+          onChange={(on) =>
+            void updateSettings((s) => {
+              const { screen: _, ...rest } = s.permissions.everywhere.defaults;
+              return {
+                ...s,
+                computerUse: on,
+                permissions: {
+                  ...s.permissions,
+                  everywhere: {
+                    ...s.permissions.everywhere,
+                    defaults: on ? { ...rest, screen: "allow" } : rest,
+                  },
+                },
+              };
+            })
+          }
         />
       </TokenRow>
     </>
@@ -260,7 +275,7 @@ function RuleRow({
         alignEnd
         trigger={({ open: isOpen, toggle }) => (
           <button
-            className="btn-icon"
+            className="btn-icon !bg-transparent !text-fg-muted"
             aria-haspopup="menu"
             aria-expanded={isOpen}
             aria-label={`Move ${rule.pattern}`}
@@ -296,7 +311,7 @@ function RuleRow({
 
 /** A row that adds an allow rule of any kind; folder rules can be picked with the folder dialog. */
 function AddRule({ onAdd }: { onAdd: (rule: PermissionRule) => void }) {
-  const [kind, setKind] = useState<PermissionKind>("folder");
+  const [kind, setKind] = useState<PermissionKind>("command");
   const [pattern, setPattern] = useState("");
   const current = PERMISSION_KINDS.find((k) => k.kind === kind) ?? PERMISSION_KINDS[0];
   const add = (value = pattern) => {
@@ -310,37 +325,18 @@ function AddRule({ onAdd }: { onAdd: (rule: PermissionRule) => void }) {
   };
   return (
     <div className="flex items-center gap-1.5 py-2.5">
-      <Dropdown
-        trigger={({ open: isOpen, toggle }) => (
-          <button
-            className="btn"
-            aria-haspopup="menu"
-            aria-expanded={isOpen}
-            aria-label="Kind of rule"
-            onClick={toggle}
-          >
-            {current.label}
-            <CaretDownIcon size={12} />
-          </button>
-        )}
+      <select
+        aria-label="Kind of rule"
+        className="h-7 rounded-[var(--radius-sm)] border border-border-strong bg-editor pl-2 pr-6 text-[length:var(--fs-sm)] text-fg"
+        value={kind}
+        onChange={(e) => setKind(e.target.value as PermissionKind)}
       >
-        {(close) =>
-          PERMISSION_KINDS.map((k) => (
-            <button
-              key={k.kind}
-              role="menuitemradio"
-              aria-checked={k.kind === kind}
-              className={`${MENU_ITEM} ${k.kind === kind ? "bg-selected-muted" : ""}`}
-              onClick={() => {
-                close();
-                setKind(k.kind);
-              }}
-            >
-              {k.label}
-            </button>
-          ))
-        }
-      </Dropdown>
+        {PERMISSION_KINDS.map((k) => (
+          <option key={k.kind} value={k.kind}>
+            {k.label}
+          </option>
+        ))}
+      </select>
       <input
         className="input min-w-0 flex-1 font-[family-name:var(--font-mono)] text-[length:var(--fs-sm)]"
         aria-label="Pattern"

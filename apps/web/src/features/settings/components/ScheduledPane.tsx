@@ -48,7 +48,7 @@ const DAYS: { day: Weekday; label: string }[] = [
 ];
 
 const SELECT =
-  "h-7 rounded-[var(--radius-sm)] border border-border-strong bg-editor px-2 text-[length:var(--fs-sm)] text-fg";
+  "h-7 rounded-[var(--radius-sm)] border border-border-strong bg-editor pl-2 pr-6 text-[length:var(--fs-sm)] text-fg";
 const RELATIVE_DAY = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 const DAY_MS = 86_400_000;
 

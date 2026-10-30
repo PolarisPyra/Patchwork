@@ -17,7 +17,8 @@ import {
   ProviderForm,
   syncAgents,
 } from "~/features/settings/components/ApiProvidersPane";
-import { Segmented, TEXTAREA } from "~/features/settings/components/controls";
+import { TEXTAREA, TokenRow } from "~/features/settings/components/controls";
+import { DefaultModel } from "~/features/settings/components/TokensPane";
 import type { PaneProps } from "~/features/settings/types";
 import { AGENT_KINDS, CLI_KINDS, describeAgent, errorText } from "~/lib/util";
 
@@ -329,19 +330,32 @@ export default function ProvidersPane({ settings, updateSettings }: PaneProps) {
           )}
         </Fragment>
       ))}
-      {connected.length > 1 && (
-        <div className="flex items-center gap-3 border-b border-border py-2.5">
-          <div className="min-w-0 flex-1 font-semibold">Default for new tasks</div>
-          <Segmented
-            label="Default for new tasks"
-            value={connected[0]}
-            options={AGENT_KINDS.filter((kind) => connected.includes(kind)).map((kind) => ({
-              value: kind,
-              label: AGENT_LABELS[kind],
-            }))}
-            onChange={makeDefault}
+      {connected.includes("api") && (
+        <TokenRow title="Vision model">
+          <DefaultModel
+            kind="api"
+            label="Vision model"
+            empty="Default"
+            value={settings.visionModel ?? undefined}
+            onChange={(id) => void updateSettings((s) => ({ ...s, visionModel: id ?? null }))}
           />
-        </div>
+        </TokenRow>
+      )}
+      {connected.length > 1 && (
+        <TokenRow title="Default for new tasks">
+          <select
+            aria-label="Default for new tasks"
+            className="h-7 w-[200px] rounded-[var(--radius-sm)] border border-border-strong bg-editor pl-2 pr-6 text-[length:var(--fs-sm)] text-fg"
+            value={connected[0]}
+            onChange={(e) => makeDefault(e.target.value as AgentKind)}
+          >
+            {AGENT_KINDS.filter((kind) => connected.includes(kind)).map((kind) => (
+              <option key={kind} value={kind}>
+                {AGENT_LABELS[kind]}
+              </option>
+            ))}
+          </select>
+        </TokenRow>
       )}
       <PresetGrid onPick={(preset) => setEditing(blank(preset))} />
       {error && <div className="text-[length:var(--fs-sm)] text-danger">{error}</div>}

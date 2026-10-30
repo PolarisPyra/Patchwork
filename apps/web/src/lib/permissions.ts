@@ -11,12 +11,7 @@ import type {
 } from "~/api";
 
 export const PERMISSION_KINDS: { kind: PermissionKind; label: string; placeholder: string }[] = [
-  { kind: "edit", label: "Edit files", placeholder: "~/Projects/site" },
   { kind: "command", label: "Run commands", placeholder: "git status" },
-  { kind: "folder", label: "Work outside the folder", placeholder: "~/Downloads" },
-  { kind: "web", label: "Use the web", placeholder: "github.com" },
-  { kind: "mcp", label: "MCP tools", placeholder: "server" },
-  { kind: "screen", label: "Use the screen", placeholder: "screen" },
 ];
 
 export const kindLabel = (kind: PermissionKind) =>

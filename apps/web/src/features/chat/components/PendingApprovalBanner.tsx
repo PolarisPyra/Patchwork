@@ -85,7 +85,7 @@ export default function PendingApprovalBanner({
               alignEnd
               trigger={({ open, toggle }) => (
                 <button
-                  className="btn btn-primary rounded-l-none border-l border-l-[color-mix(in_srgb,var(--text-on-accent),transparent_70%)] !px-1.5"
+                  className="btn btn-primary !bg-accent rounded-l-none border-l border-l-[color-mix(in_srgb,var(--text-on-accent),transparent_70%)] !px-1.5"
                   aria-haspopup="menu"
                   aria-expanded={open}
                   aria-label="More ways to allow"

@@ -41,7 +41,7 @@ function ContextLevels({
 }
 
 /** A model picked from one agent's models. The empty choice is `empty`, such as the CLI's own default. */
-function DefaultModel({
+export function DefaultModel({
   kind,
   label,
   empty,
@@ -72,7 +72,7 @@ function DefaultModel({
   return (
     <select
       aria-label={label}
-      className="h-7 w-[200px] rounded-[var(--radius-sm)] border border-border-strong bg-editor px-2 text-[length:var(--fs-sm)] text-fg"
+      className="h-7 w-[200px] rounded-[var(--radius-sm)] border border-border-strong bg-editor pl-2 pr-6 text-[length:var(--fs-sm)] text-fg"
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value || undefined)}
     >
@@ -175,23 +175,12 @@ export default function TokensPane({ settings, updateSettings }: PaneProps) {
           <DefaultModel
             kind={kind}
             label={`${AGENT_LABELS[kind]} model for new tasks`}
-            empty={kind === "api" ? "First model" : "CLI default"}
+            empty="Default"
             value={tokens.defaultModels[kind]}
             onChange={(id) => setDefaultModel(kind, id)}
           />
         </TokenRow>
       ))}
-      {connected.includes("api") && (
-        <TokenRow title="Vision model">
-          <DefaultModel
-            kind="api"
-            label="Vision model"
-            empty="Main model"
-            value={settings.visionModel ?? undefined}
-            onChange={(id) => void updateSettings((s) => ({ ...s, visionModel: id ?? null }))}
-          />
-        </TokenRow>
-      )}
     </>
   );
 }
