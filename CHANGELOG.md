@@ -3,6 +3,13 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.1.7] - 2026-10-30
+
+### Changed
+
+- Settings → Providers: each API provider, such as DeepSeek, now has a Prompt button next to Edit, like the agent CLIs, instead of its system prompt sitting in the Edit form. Prompt opens the field under the provider with Save and Cancel under it, and clicking away no longer saves.
+- In the Usage popover, "Up to date" now swaps back to the plan badge at once when it is done, instead of fading out slowly.
+
 ## [26.1.6] - 2026-10-29
 
 ### Fixed
