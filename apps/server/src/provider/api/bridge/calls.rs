@@ -8,6 +8,7 @@ use crate::threads::AccessMode;
 use super::{Agent, Call, ImageIn, emit};
 
 const DENIED: &str = "The user denied this. Do not retry it; ask what they would like instead, or carry on another way.";
+const PLAN_SHOWN: &str = "The plan is shown to the user. Call update_plan again with the whole list each time a step starts or finishes.";
 
 impl Agent {
     /// Runs one tool call and returns its result for the model, and whether the turn ends here.
@@ -47,11 +48,7 @@ impl Agent {
             match call.name.as_str() {
                 "update_plan" => {
                     emit(&json!({"type": "api.todos", "steps": args["steps"]}));
-                    (
-                        Ok("The plan is shown to the user.".to_string()),
-                        false,
-                        false,
-                    )
+                    (Ok(PLAN_SHOWN.to_string()), false, false)
                 }
                 "propose_plan" => {
                     let plan = args["plan"].as_str().unwrap_or_default();

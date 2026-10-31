@@ -29,19 +29,23 @@ pub(crate) fn system_prompt(settings: &Settings, agent: AgentKind) -> Option<&st
         .filter(|text| !text.is_empty())
 }
 
-/// The line that tells `agent` to keep a checklist with its own tool. Antigravity has no such
-/// tool, and Patchwork's own agent is told in its own guidance.
+/// The line that tells `agent` to keep a checklist with its own tools. Antigravity has no such
+/// tool, and Patchwork's own agent is told in its own guidance. Claude Code offers newer models
+/// `TaskCreate` and `TaskUpdate` instead of `TodoWrite`, and told of a tool it lacks it goes looking
+/// for it before every list.
 fn checklist_instructions(agent: AgentKind) -> Option<String> {
-    let tool = match agent {
-        AgentKind::Claude => "TodoWrite",
-        AgentKind::Codex => "update_plan",
-        AgentKind::OpenCode => "todowrite",
+    let tools = match agent {
+        AgentKind::Claude => {
+            "TaskCreate and TaskUpdate tools (TodoWrite if you have no TaskCreate)"
+        }
+        AgentKind::Codex => "update_plan tool",
+        AgentKind::OpenCode => "todowrite tool",
         AgentKind::Antigravity | AgentKind::Api => return None,
     };
     Some(format!(
-        "For any task with more than one step, keep a checklist with your {tool} tool: add every \
-         step before you start, mark one in progress at a time, and mark each done as soon as it \
-         is finished."
+        "For any task with more than one step, keep a checklist with your {tools}: add every step \
+         before you start, mark each one in progress before you work on it, and mark it done as \
+         soon as it is finished."
     ))
 }
 
@@ -88,16 +92,13 @@ mod tests {
     #[test]
     fn each_agent_is_told_to_keep_a_checklist_with_its_own_tool() {
         let settings = Settings::default();
-        for (agent, tool) in [
-            (AgentKind::Claude, "TodoWrite"),
-            (AgentKind::Codex, "update_plan"),
-            (AgentKind::OpenCode, "todowrite"),
+        for (agent, tools) in [
+            (AgentKind::Claude, "TaskCreate and TaskUpdate tools"),
+            (AgentKind::Codex, "update_plan tool"),
+            (AgentKind::OpenCode, "todowrite tool"),
         ] {
             let text = agent_instructions(&settings, agent);
-            assert!(
-                text.contains(&format!("your {tool} tool")),
-                "{agent:?}: {text}"
-            );
+            assert!(text.contains(&format!("your {tools}")), "{agent:?}: {text}");
         }
         for agent in [AgentKind::Antigravity, AgentKind::Api] {
             assert_eq!(checklist_instructions(agent), None, "{agent:?}");
