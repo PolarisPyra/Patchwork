@@ -277,7 +277,8 @@ impl Server {
         Ok(())
     }
 
-    /// Takes effect from the thread's next turn. None follows Settings → Tokens.
+    /// Takes effect from the thread's next turn, or the API agent's next step. None follows
+    /// Settings → Tokens.
     pub fn set_thread_compact_window(&self, id: &str, window: Option<u64>) -> Result<(), String> {
         let thread = self.store.thread(id).ok_or("Task not found")?;
         self.store
@@ -285,6 +286,11 @@ impl Server {
         // An idle agent was started with the old setting.
         if thread.compact_window != window {
             self.runner.retire_idle(id);
+            let tokens = self.store.settings().tokens;
+            self.runner.set_compact_window(
+                id,
+                window.unwrap_or_else(|| tokens.compact_window(thread.agent)),
+            );
         }
         Ok(())
     }

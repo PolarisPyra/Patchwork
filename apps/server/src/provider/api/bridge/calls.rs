@@ -275,6 +275,9 @@ impl Agent {
             match v["type"].as_str() {
                 Some("reply") if v["id"] == id => return Some(v),
                 Some("steer") => self.steers.push(v),
+                Some("compactWindow") => {
+                    self.request.compact_window = v["window"].as_u64().unwrap_or(0);
+                }
                 _ => {}
             }
         }

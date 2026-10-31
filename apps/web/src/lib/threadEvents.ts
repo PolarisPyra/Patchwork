@@ -43,7 +43,27 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
     case "goalChecking":
       return updateMessage(thread, event.messageId, (m) => ({ ...m, checkingGoal: true }));
     case "compacting":
-      return updateMessage(thread, event.messageId, (m) => ({ ...m, compacting: true }));
+      // One line per compaction where it happened (mirrors orchestration/output/stream.rs).
+      return updateMessage(thread, event.messageId, (m) => ({
+        ...m,
+        compacting: true,
+        parts:
+          m.parts.at(-1)?.type === "compaction"
+            ? m.parts
+            : [...endThinking(m.parts), { type: "compaction" }],
+      }));
+    case "compacted": {
+      // The summary goes on the compaction it ends (mirrors orchestration/output/stream.rs).
+      const { messageId, summary } = event;
+      return updateMessage(thread, messageId, (m) => {
+        const at = m.parts.map((p) => p.type).lastIndexOf("compaction");
+        return {
+          ...m,
+          compacting: false,
+          parts: m.parts.map((p, i) => (i === at ? { type: "compaction", summary } : p)),
+        };
+      });
+    }
     case "retrying": {
       const { messageId, reason, attempt, maxAttempts } = event;
       return updateMessage(thread, messageId, (m) => ({

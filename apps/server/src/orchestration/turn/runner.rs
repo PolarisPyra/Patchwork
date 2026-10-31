@@ -114,6 +114,18 @@ impl Runner {
         });
     }
 
+    /// Hands a new compact window to the API turn replying in `thread_id`, which compacts by it
+    /// from its next step. Other agents read it only when they start.
+    pub fn set_compact_window(&self, thread_id: &str, window: u64) {
+        let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(turn) = turns.get(thread_id)
+            && turn.agent == provider::AgentKind::Api
+            && !turn.idle.load(Ordering::SeqCst)
+        {
+            write_line(&turn.stdin, &provider::api::compact_window_line(window));
+        }
+    }
+
     /// Hands a message to the turn running in `thread_id`: written to the agent when it
     /// can take input mid-turn, otherwise kept to start the next turn.
     /// `subagents` are the subagent calls still running in the foreground.

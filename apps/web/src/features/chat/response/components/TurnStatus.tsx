@@ -1,5 +1,4 @@
 import { ArrowClockwiseIcon, TargetIcon } from "@phosphor-icons/react";
-import Spinner from "~/components/Spinner";
 import { LineGutter } from "~/features/chat/response/components/AgentStepDisplay";
 import { type Phase } from "~/features/chat/response/lib/model";
 import { useNow } from "~/features/chat/hooks/useNow";
@@ -27,17 +26,15 @@ export default function TurnStatus({ phase, since }: { phase: Phase; since: numb
   return (
     <div className="mb-1.5 border-b border-border pt-1 pb-2">
       <div className="flex h-6 min-w-0 items-center gap-1.5 text-[length:var(--fs-md)] text-fg-muted tabular-nums">
-        {phase.kind === "compacting" ? (
-          // In the line gutter, like a running row's spinner, so its words line up with the rows'.
-          <LineGutter>
-            <Spinner size={11} className="translate-y-px text-fg-subtle" />
-          </LineGutter>
-        ) : phase.kind !== "working" ? (
+        {/* Compacting is work too: it sweeps where "Working for" does, not behind a spinner. */}
+        {(phase.kind === "retry" || phase.kind === "checking-goal") && (
           <LineGutter>
             {phase.kind === "retry" ? <ArrowClockwiseIcon size={15} /> : <TargetIcon size={15} />}
           </LineGutter>
-        ) : null}
-        <span className={`min-w-0 truncate ${phase.kind === "working" ? "text-shimmer" : ""}`}>
+        )}
+        <span
+          className={`min-w-0 truncate ${phase.kind === "working" || phase.kind === "compacting" ? "text-shimmer" : ""}`}
+        >
           {label}
         </span>
       </div>

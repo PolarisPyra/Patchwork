@@ -148,6 +148,7 @@ pub(in crate::orchestration) fn event_message(event: &AgentEvent) -> Option<&str
         | AgentEvent::MessageCutOff { message_id }
         | AgentEvent::GoalChecking { message_id }
         | AgentEvent::Compacting { message_id }
+        | AgentEvent::Compacted { message_id, .. }
         | AgentEvent::Retrying { message_id, .. }
         | AgentEvent::Refused { message_id, .. }
         | AgentEvent::PlanProposed { message_id, .. }
@@ -222,7 +223,8 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
                     Part::Thinking { .. }
                     | Part::Tool { .. }
                     | Part::Plan { .. }
-                    | Part::Approval { .. },
+                    | Part::Approval { .. }
+                    | Part::Compaction { .. },
                 ) => msg.parts.push(Part::Text { text: text.clone() }),
             }
         }
@@ -278,6 +280,23 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
         AgentEvent::PlanProposed { text, .. } => {
             end_thinking(msg);
             msg.parts.push(Part::Plan { text: text.clone() });
+        }
+        // One line per compaction, however often the agent reports it is still at it.
+        AgentEvent::Compacting { .. } => {
+            end_thinking(msg);
+            if !matches!(msg.parts.last(), Some(Part::Compaction { .. })) {
+                msg.parts.push(Part::Compaction { summary: None });
+            }
+        }
+        AgentEvent::Compacted { summary, .. } => {
+            if let Some(Part::Compaction { summary: last }) = msg
+                .parts
+                .iter_mut()
+                .rev()
+                .find(|p| matches!(p, Part::Compaction { .. }))
+            {
+                last.clone_from(summary);
+            }
         }
         // A task stays on its message once it ends, with its final status; the strip shows only
         // the ones still live.
@@ -356,7 +375,6 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
         AgentEvent::MessageStarted { .. }
         | AgentEvent::GoalUpdated { .. }
         | AgentEvent::GoalChecking { .. }
-        | AgentEvent::Compacting { .. }
         | AgentEvent::Retrying { .. }
         | AgentEvent::SlashCommandsUpdated { .. }
         | AgentEvent::RoleChanged { .. }

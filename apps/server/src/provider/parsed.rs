@@ -70,6 +70,8 @@ pub enum Parsed {
     TurnStarted(String),
     /// The agent is summarizing the conversation to free up context.
     Compacting,
+    /// The agent finished compacting and goes on from this summary of the conversation.
+    Compacted(Option<String>),
     /// The agent is retrying a model request that failed or stalled.
     Retrying {
         reason: String,

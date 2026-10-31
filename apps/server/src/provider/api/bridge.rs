@@ -325,6 +325,9 @@ impl Agent {
         loop {
             match self.input.try_recv() {
                 Ok(v) if v["type"] == "steer" => self.steers.push(v),
+                Ok(v) if v["type"] == "compactWindow" => {
+                    self.request.compact_window = v["window"].as_u64().unwrap_or(0);
+                }
                 Ok(_) => {}
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {

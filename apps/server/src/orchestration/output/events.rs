@@ -96,10 +96,16 @@ pub enum AgentEvent {
     GoalChecking {
         message_id: String,
     },
-    /// The agent is summarizing the conversation to free up context. Streamed, not saved; the
-    /// message's next output ends it.
+    /// The agent is summarizing the conversation to free up context. Saved as a compaction part
+    /// where it happened; the message's next output ends it.
     Compacting {
         message_id: String,
+    },
+    /// The agent finished compacting, and goes on from `summary`, which its compaction part
+    /// keeps.
+    Compacted {
+        message_id: String,
+        summary: Option<String>,
     },
     /// The agent's model request failed or stalled and the agent is retrying it. Streamed, not
     /// saved; the message's next output ends it.

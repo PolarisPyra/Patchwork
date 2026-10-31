@@ -583,8 +583,15 @@ pub(in crate::orchestration) fn ingest(
                         .unwrap_or_else(PoisonError::into_inner) = Some(id);
                 }
                 Parsed::Compacting => {
-                    turn.emit(AgentEvent::Compacting {
+                    turn.save_text(&mut unsaved);
+                    turn.publish(AgentEvent::Compacting {
                         message_id: turn.message_id.clone(),
+                    });
+                }
+                Parsed::Compacted(summary) => {
+                    turn.publish(AgentEvent::Compacted {
+                        message_id: turn.message_id.clone(),
+                        summary,
                     });
                 }
                 Parsed::Retrying {

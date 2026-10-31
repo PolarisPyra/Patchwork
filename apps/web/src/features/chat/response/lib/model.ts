@@ -25,7 +25,9 @@ export type Step =
   /** A plan proposed in plan mode. */
   | { kind: "plan"; text: string; index: number }
   /** Approvals and questions asked one after another, by id. */
-  | { kind: "approvals"; ids: string[] };
+  | { kind: "approvals"; ids: string[] }
+  /** Where the agent compacted its context on its own. */
+  | { kind: "compaction"; index: number; summary: string | null };
 
 /** Calls that keep a plan the composer already shows, so the turn does not repeat it. */
 const HIDDEN_TOOLS = new Set(["TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet"]);
@@ -52,6 +54,10 @@ export function stepsOf(message: Message): Step[] {
     }
     if (part.type === "plan") {
       steps.push({ kind: "plan", text: part.text, index });
+      continue;
+    }
+    if (part.type === "compaction") {
+      steps.push({ kind: "compaction", index, summary: part.summary ?? null });
       continue;
     }
     if (part.type === "approval") {
@@ -141,6 +147,8 @@ export function sizeOf(step: Step): number {
     case "text":
     case "plan":
       return 1;
+    case "compaction":
+      return 0;
   }
 }
 
@@ -189,7 +197,8 @@ export function foldHeadOf(message: Message, actions: number, open: boolean): Fo
 
 /**
  * The steps a turn shows. A settled turn folds everything before its last text into one row; a
- * subagent still working and a question the agent asked stay in view, since they are live.
+ * subagent still working and a question the agent asked stay in view, since they are live, and
+ * so does a compaction, which says the agent's context changed there.
  */
 export function shownSteps(
   message: Message,
@@ -202,7 +211,9 @@ export function shownSteps(
     step.ids.some((id) => message.approvals.some((a) => a.id === id && a.questions?.length));
   const live = (step: Step) =>
     step.kind === "agents" && step.tools.some((tool) => entryActive({ kind: "tool", tool }));
-  return steps.filter((step, i) => i >= fold.hidden || live(step) || asked(step));
+  return steps.filter(
+    (step, i) => i >= fold.hidden || live(step) || asked(step) || step.kind === "compaction",
+  );
 }
 
 /** Whether a settled turn folds, how many steps it hides, and how many actions those hold. */

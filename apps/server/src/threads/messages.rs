@@ -117,6 +117,12 @@ pub enum Part {
     Approval {
         id: String,
     },
+    /// Where the agent compacted its context on its own, partway through the reply, with the
+    /// summary it went on from when the agent reports one.
+    Compaction {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        summary: Option<String>,
+    },
 }
 
 /// Where a task the agent started stands.

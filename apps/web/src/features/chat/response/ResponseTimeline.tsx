@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { type AgentKind, type Message } from "~/api";
 import { isGoalClearedReply } from "~/features/chat/lib/goalPresentation";
+import CompactionLine from "~/features/chat/response/components/CompactionLine";
 import FoldHead from "~/features/chat/response/components/FoldHead";
 import GoalClearedNotice from "~/features/chat/response/components/GoalClearedNotice";
 import TurnStatus from "~/features/chat/response/components/TurnStatus";
@@ -145,6 +146,23 @@ export default function ResponseTimeline({
                 calls={message.tools}
                 agent={agent}
                 onOpenThread={onOpenThread}
+              />
+            );
+          // Marked once it is done; while it runs the status line says so. One the reply ended on
+          // never finished. A /compact's reply already has the transcript's divider above it.
+          case "compaction":
+            return compacts || (streaming && message.compacting && step === last) ? null : (
+              <CompactionLine
+                key={`c${step.index}`}
+                label={
+                  step === last && message.status === "error"
+                    ? "Compaction failed"
+                    : step === last && message.status === "cancelled"
+                      ? "Compaction stopped"
+                      : "Context compacted"
+                }
+                summary={step.summary}
+                entering={step === arriving}
               />
             );
           case "work":

@@ -94,6 +94,11 @@ pub fn steer_line(text: &str, images: &[Image]) -> String {
     json!({"type": "steer", "text": text, "images": images}).to_string()
 }
 
+/// A new compact window for the turn under way, which it compacts by from its next step.
+pub fn compact_window_line(window: u64) -> String {
+    json!({"type": "compactWindow", "window": window}).to_string()
+}
+
 /// The result of an MCP tool call, for the agent.
 pub fn mcp_reply(id: &Value, result: Result<String, String>) -> String {
     let (output, error) = match result {
@@ -286,6 +291,7 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
             }]
         }
         Some("api.compacting") => vec![Parsed::Compacting],
+        Some("api.compacted") => vec![Parsed::Compacted(v["summary"].as_str().map(str::to_string))],
         Some("api.retry") => vec![Parsed::Retrying {
             reason: text("reason").into(),
             attempt: v["attempt"].as_u64().unwrap_or(1) as u32,

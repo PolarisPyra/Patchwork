@@ -3,4 +3,4 @@
 /**
  * One step of a reply, in the order it happened.
  */
-export type Part = { "type": "text", text: string, } | { "type": "thinking", text: string, startedAt: number, endedAt: number | null, } | { "type": "tool", id: string, } | { "type": "plan", text: string, } | { "type": "approval", id: string, };
+export type Part = { "type": "text", text: string, } | { "type": "thinking", text: string, startedAt: number, endedAt: number | null, } | { "type": "tool", id: string, } | { "type": "plan", text: string, } | { "type": "approval", id: string, } | { "type": "compaction", summary?: string | null, };
