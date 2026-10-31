@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.2.8] - 2026-10-30
+
+### Fixed
+
+- The Usage popover at the bottom of the sidebar now lists OpenCode when it is switched on in Settings. Before, OpenCode never appeared there. Its panel says OpenCode has no plan limits to show.
+
 ## [26.2.7] - 2026-10-30
 
 ### Changed
