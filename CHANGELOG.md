@@ -3,6 +3,19 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.2.9] - 2026-10-31
+
+### Changed
+
+- Once every step in the task list above the chat box is done, the list shows it complete for a moment and then folds away; a new list brings it back. Background tasks now sit above the task list instead of below it.
+
+### Fixed
+
+- The task list above the chat box now follows the agent's progress step by step. Claude Code agents on newer models keep it with the task tools they actually have, instead of looking for one they lack, and every agent is told to mark each step in progress and done as it goes.
+- Pasting a message of short lines, file paths, names or Markdown lists into the chat box keeps it as text with its line breaks, instead of turning it into a code block. Words quoted in backticks paste as inline code.
+- The model menu no longer fails with "GitHub answered 404 Not Found". Claude Code, Codex and Antigravity models now come straight from each agent's installed CLI, so the list matches what that agent can run, with Claude Code's older models still under their own heading.
+- Chats with API providers now compact their context when it fills up, also after you change the compact window while the agent is replying, and compacting a long chat takes seconds instead of minutes. While it runs, the line at the top of the reply says "Compacting context" with the same shimmer as "Working for"; afterwards a "Context compacted" line marks the spot, and clicking it shows the summary the agent carried on from.
+
 ## [26.2.8] - 2026-10-30
 
 ### Fixed

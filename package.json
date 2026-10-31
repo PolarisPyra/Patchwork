@@ -1,6 +1,6 @@
 {
   "name": "@patchwork/monorepo",
-  "version": "26.2.8",
+  "version": "26.2.9",
   "license": "AGPL-3.0-or-later",
   "private": true,
   "type": "module",
