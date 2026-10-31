@@ -32,6 +32,7 @@ import {
   isMonospaceHtml,
   isProse,
   labelPastedCode,
+  proseLine,
   vscodeLanguage,
 } from "~/features/chat/composer/lib/pastedText";
 import { useModels } from "~/features/chat/composer/hooks/useModels";
@@ -456,8 +457,8 @@ function Composer({
           return true;
         }
         const language = vscodeLanguage(data.getData("vscode-editor-data")) ?? htmlLanguage(html);
-        // Multi-line text from a page or document, or plain text that reads as sentences, keeps
-        // its paragraphs and line breaks.
+        // Multi-line text from a page or document, or plain text that does not look like code,
+        // keeps its paragraphs and line breaks.
         if ((html && !isMonospaceHtml(html)) || (!language && isProse(text))) {
           const paragraphs = text.split(/\n{2,}/).map((paragraph) =>
             state.schema.nodes.paragraph.create(
@@ -466,7 +467,7 @@ function Composer({
                 .split("\n")
                 .flatMap((line, i) => [
                   ...(i > 0 ? [state.schema.nodes.hardBreak.create()] : []),
-                  ...(line ? [state.schema.text(line)] : []),
+                  ...proseLine(state.schema, line),
                 ]),
             ),
           );

@@ -1,3 +1,4 @@
+import type { Node, Schema } from "@tiptap/pm/model";
 import type { EditorView } from "@tiptap/pm/view";
 import { api } from "~/api";
 import { detectLanguage, isTerminalOutput } from "~/features/chat/composer/lib/languageDetection";
@@ -15,27 +16,62 @@ export function isMonospaceHtml(html: string): boolean {
   return /<pre[\s>]|monospace|white-space:\s*pre/i.test(html);
 }
 
-/** Characters a line of prose is made of: letters, digits, spaces and sentence punctuation. */
-const PROSE_CHAR = /[\p{L}\p{N}\s.,!?'"’“”:()\-–—/]/u;
+/** Characters a line of prose is made of: letters, digits, spaces, sentence punctuation, and the
+ * underscores of a name written into it. */
+const PROSE_CHAR = /[\p{L}\p{N}\s.,!?'"’“”:()\-–—/_]/u;
+
+/** A `code` span written into prose, as Markdown and chat messages quote a command or a name. */
+const INLINE_CODE = /`([^`\n]+)`/g;
+
+/** The Markdown a message is written in, which is not code: a heading, quote or list marker, a
+ * task box, bold, struck text, and a link, which keeps its text. */
+const MARKDOWN: [RegExp, string][] = [
+  [/^\s*(#{1,6}|>|[-*+]|\d+[.)])\s+(\[[ xX]\]\s+)?/, ""],
+  [/\*\*|__|~~/g, ""],
+  [/\[([^\]\n]*)\]\([^)\s]*\)/g, "$1"],
+];
+
+/** A list item indented under another, which prose has too. */
+const NESTED_ITEM = /^\s+([-*+]|\d+[.)])\s/;
+
+/** Words lined up in columns with runs of spaces, as command output and tables are. */
+const COLUMNS = /[^\s.!?] {2,}\S/;
+
+/** Whether a line has the look of code: symbols prose does not use, or columns. */
+function codeLine(line: string): boolean {
+  if (COLUMNS.test(line.trim())) return true;
+  const text = MARKDOWN.reduce((out, [pattern, to]) => out.replace(pattern, to), line).replace(
+    INLINE_CODE,
+    "",
+  );
+  const chars = [...text];
+  return chars.filter((c) => PROSE_CHAR.test(c)).length < chars.length * 0.97;
+}
 
 /**
- * Whether plain text reads as sentences rather than code or output: no line is indented, symbol
- * heavy, or terminal output, and most lines are long or end like a sentence.
+ * Whether plain text goes in as prose: it is not terminal output, has no indented code, and at
+ * most a few of its lines look like code. Text is prose unless it shows it is not, so a message
+ * of short lines, paths or names keeps its lines rather than turning into a code block.
  */
 export function isProse(text: string): boolean {
   if (isTerminalOutput(text)) return false;
   const lines = text.split("\n").filter((line) => line.trim());
-  let sentences = 0;
-  let words = 0;
+  let code = 0;
   for (const line of lines) {
-    if (/^\s/.test(line)) return false;
-    const chars = [...line];
-    if (chars.filter((c) => PROSE_CHAR.test(c)).length < chars.length * 0.97) return false;
-    const count = line.split(/\s+/).filter((word) => /\p{L}/u.test(word)).length;
-    words += count;
-    if (count >= 8 || /[.!?:,]$/.test(line)) sentences++;
+    if (/^\s/.test(line) && !NESTED_ITEM.test(line)) return false;
+    if (/^(#!|\/\/|\/\*)/.test(line)) return false;
+    if (codeLine(line)) code++;
   }
-  return words >= 8 && sentences * 2 >= lines.length;
+  return code * 2 < lines.length;
+}
+
+/** A line of pasted prose as the composer's inline nodes, its `code` spans marked as code. */
+export function proseLine(schema: Schema, line: string): Node[] {
+  return line.split(INLINE_CODE).flatMap((part, i) => {
+    if (!part) return [];
+    // Split on a pattern with one group, every odd part is a span's code.
+    return [schema.text(part, i % 2 ? [schema.marks.code.create()] : null)];
+  });
 }
 
 /** VS Code language ids that code blocks name differently. */
