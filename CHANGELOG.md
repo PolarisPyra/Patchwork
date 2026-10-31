@@ -3,10 +3,11 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
-## [26.2.5] - 2026-10-30
+## [26.2.6] - 2026-10-30
 
 ### Changed
 
+- A reply's reasoning shows again as "Thinking" and "Thought" rows beside its tool calls; click one to read the full reasoning. The line at the top of a reply now says "Working for 12s" while the agent works and "Worked for 12s" when it is done, instead of "Thinking for" and "Thought for".
 - An HTML or SVG artifact that draws nothing — a bare broken image, or a script that failed before it changed the page — now shows "This artifact rendered nothing visible." in a tidy box instead of an empty frame with a broken-image icon.
 - Each of Patchwork's own MCP servers is now kept in its own file, named after the server, in an MCP folder inside Patchwork's config folder, instead of all in one shared file. Your servers move over on the next start, and Settings → MCP opens each server's own file.
 - The system prompt you give an API provider in Settings → Providers now comes after the project's own instructions file, so a project can no longer override it, as with the other agents.
@@ -20,6 +21,10 @@ Each release adds its notes at the top; see docs/release.md.
 - In the changed files card under a reply, each file's added and removed line counts now line up in columns against the right edge, and a note such as "No changes" sits at that same edge.
 - The icons on the steps in a reply now line up with the words of the line above them, instead of sitting indented to the right.
 - Claude's reply now streams in word by word after a long think, instead of appearing all at once when the thinking ends.
+
+### Removed
+
+- Long agent turns on API providers no longer stop with "Stopped after 400 model requests in one turn". A turn now runs until the agent finishes or you stop it.
 
 ## [26.2.0] - 2026-10-30
 
