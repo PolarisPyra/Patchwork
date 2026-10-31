@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.3.0] - 2026-10-31
+
+### Fixed
+
+- With a vision model set in Settings → API Providers, the model you chose for the task now does the work when you send an image. The vision model first describes the image, copying any text in it, and the task's model answers from that description; before, the whole reply went to the vision model and the task's model never saw the image.
+
 ## [26.2.9] - 2026-10-31
 
 ### Changed
