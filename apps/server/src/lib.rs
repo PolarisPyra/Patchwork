@@ -82,7 +82,6 @@ impl Server {
     /// which holds chat scratch folders.
     pub fn open(dirs: system::Dirs, data_dir: &Path, sink: EventSink) -> Res<Arc<Self>> {
         system::dirs::init(dirs.clone());
-        provider::model_manifest::start(&dirs.cache);
         crate::provider::api::config::init(&dirs.config);
         provider::mcp::init(&dirs.config);
         skills::init(&dirs.config);

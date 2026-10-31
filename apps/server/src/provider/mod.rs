@@ -43,4 +43,3 @@ pub mod antigravity;
 pub mod opencode;
 pub mod api;
 pub mod mcp;
-pub mod model_manifest;

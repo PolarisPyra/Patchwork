@@ -91,6 +91,8 @@ pub struct CodexModel {
     pub efforts: Vec<String>,
     pub speed_tiers: Vec<String>,
     pub multi_agent: Option<String>,
+    /// Whether the CLI's own model picker shows it; one it hides is for internal use.
+    pub listed: bool,
 }
 
 /// What the installed Codex CLI offers: its version, flags, and models.
@@ -129,6 +131,8 @@ pub struct ClaudeModel {
     pub efforts: Vec<String>,
     /// Whether the model offers fast mode.
     pub fast_mode: bool,
+    /// Whether the catalog lists it among the older models rather than the main ones.
+    pub legacy: bool,
 }
 
 /// What the installed Claude Code offers: its path and version, the feature gates it has cached,

@@ -13,7 +13,7 @@ use super::GoalUpdate;
 use crate::system::fs::home_dir;
 use super::goal_argument;
 use super::located_or;
-use super::model_manifest;
+use super::probe;
 use super::Parsed;
 use super::prompt;
 use super::relative;
@@ -53,9 +53,24 @@ pub fn auth(status: &mut AgentStatus) {
     };
 }
 
-/// Current models from the fetched model manifest.
+/// The models the CLI offers, from `agy models`, which prints each as its id and name.
 pub fn models() -> Vec<ModelOption> {
-    model_manifest::models("antigravity")
+    let Some(listed) = probe(AgentKind::Antigravity, &["models"]).filter(|p| p.success) else {
+        return Vec::new();
+    };
+    listed
+        .stdout
+        .lines()
+        .filter_map(|line| line.split_once('\t'))
+        .map(|(id, name)| ModelOption {
+            id: Some(id.trim().into()),
+            label: name.trim().into(),
+            default_model: None,
+            is_legacy: false,
+            efforts: None,
+            context_window: None,
+        })
+        .collect()
 }
 
 /// Antigravity without a way to ask: in "default" mode, actions that need approval are

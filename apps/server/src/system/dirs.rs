@@ -27,7 +27,7 @@ const DATABASE: [&str; 3] = ["patchwork.db", "patchwork.db-wal", "patchwork.db-s
 
 /// What older versions left in the config folder that nothing reads now: the files handed to the
 /// CLIs, rebuilt at each launch in the cache, and the leftovers of versions before those.
-const LEFT_BEHIND: [&str; 10] = [
+const LEFT_BEHIND: [&str; 11] = [
     "claude",
     "codex",
     "opencode",
@@ -38,6 +38,7 @@ const LEFT_BEHIND: [&str; 10] = [
     "settings.json.bak",
     "threads.json.bak",
     "hooks.log",
+    "model-manifest.json",
 ];
 
 /// The relay file, which each start rewrites in the state folder.
@@ -105,10 +106,6 @@ impl Dirs {
             ("api-sessions", self.data.join("api-sessions")),
             ("mcp-servers.json", self.config.join("mcp.json")),
             ("api-providers.json", self.config.join("providers.json")),
-            (
-                "model-manifest.json",
-                self.cache.join("model-manifest.json"),
-            ),
             ("mcp-cli-tools.json", self.cache.join("mcp-cli-tools.json")),
             ("screenshots", self.cache.join("screenshots")),
             ("logs", self.logs.clone()),

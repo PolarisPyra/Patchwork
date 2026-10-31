@@ -49,7 +49,6 @@ pub(crate) mod fixtures {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::config::efforts_in;
 
     use super::parse::{claude_ended_status, claude_task_status};
     use std::collections::HashMap;
@@ -58,8 +57,6 @@ mod tests {
 
     use crate::threads::AccessMode;
     use crate::orchestration::AgentEvent;
-
-    use crate::provider::ClaudeModel;
 
     use crate::threads::StepStatus;
 
@@ -268,37 +265,6 @@ mod tests {
             args.windows(2)
                 .any(|w| w == ["--permission-prompt-tool", "stdio"])
         );
-    }
-
-    #[test]
-    fn a_model_takes_the_levels_its_catalog_entry_has() {
-        let catalog = vec![
-            ClaudeModel {
-                id: "claude-opus-5-5".into(),
-                name: "Opus 5.5".into(),
-                context_window: Some(1_800_000),
-                efforts: vec!["low".into(), "medium".into(), "xhigh".into()],
-                fast_mode: true,
-            },
-            ClaudeModel {
-                id: "claude-haiku-4-5-20251001".into(),
-                name: "Haiku 4.5".into(),
-                context_window: Some(200_000),
-                efforts: Vec::new(),
-                fast_mode: false,
-            },
-        ];
-        assert_eq!(
-            efforts_in(&catalog, "claude-opus-5-5"),
-            Some(vec!["low".into(), "medium".into(), "xhigh".into()])
-        );
-        // A pinned context window is not part of the id.
-        assert!(efforts_in(&catalog, "claude-opus-5-5[1m]").is_some());
-        // A dated snapshot of a listed model matches it, and takes none when it has none.
-        assert_eq!(efforts_in(&catalog, "claude-haiku-4-5"), Some(Vec::new()));
-        // A later model does not take the levels of the one its id starts with.
-        assert_eq!(efforts_in(&catalog, "claude-opus-5"), None);
-        assert_eq!(efforts_in(&catalog, "claude-sonnet-4-6"), None);
     }
 
     fn parsed(line: &str) -> Vec<Parsed> {

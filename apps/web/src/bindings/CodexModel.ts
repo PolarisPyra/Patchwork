@@ -3,4 +3,8 @@
 /**
  * A model in the installed Codex CLI's catalog, from `codex debug models`.
  */
-export type CodexModel = { slug: string, displayName: string, contextWindow: number | null, efforts: Array<string>, speedTiers: Array<string>, multiAgent: string | null, };
+export type CodexModel = { slug: string, displayName: string, contextWindow: number | null, efforts: Array<string>, speedTiers: Array<string>, multiAgent: string | null, 
+/**
+ * Whether the CLI's own model picker shows it; one it hides is for internal use.
+ */
+listed: boolean, };

@@ -112,6 +112,7 @@ pub fn parse_models(text: &str) -> Vec<CodexModel> {
                     .get("multi_agent_version")
                     .and_then(|v| v.as_str())
                     .map(str::to_string),
+                listed: model.get("visibility").and_then(|v| v.as_str()) != Some("hide"),
             })
         })
         .collect()

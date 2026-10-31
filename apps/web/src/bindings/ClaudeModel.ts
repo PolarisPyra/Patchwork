@@ -7,4 +7,8 @@ export type ClaudeModel = { id: string, name: string, contextWindow: number | nu
 /**
  * Whether the model offers fast mode.
  */
-fastMode: boolean, };
+fastMode: boolean, 
+/**
+ * Whether the catalog lists it among the older models rather than the main ones.
+ */
+legacy: boolean, };

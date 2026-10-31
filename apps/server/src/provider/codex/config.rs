@@ -6,7 +6,6 @@ use crate::provider::AgentKind;
 use crate::provider::AgentStatus;
 use crate::provider::ModelOption;
 use crate::system::fs::home_dir;
-use crate::provider::model_manifest;
 use crate::provider::probe;
 
 /// `$CODEX_HOME`, else `~/.codex`.
@@ -46,22 +45,21 @@ pub fn configured_model() -> Option<String> {
     )
 }
 
-/// Current Codex models, from the fetched model manifest, each with the reasoning levels the
-/// CLI's own catalog gives it: `extra` and `ultra` are on newer models only.
+/// Current Codex models, the ones the CLI's own catalog shows in its picker, each with the
+/// reasoning levels it gives them: `extra` and `ultra` are on newer models only.
 pub fn models() -> Vec<ModelOption> {
-    let catalog = crate::provider::codex::cli::models();
-    let mut models = model_manifest::models("codex");
-    for model in &mut models {
-        if let Some(known) = model
-            .id
-            .as_deref()
-            .and_then(|id| catalog.iter().find(|known| known.slug == id))
-        {
-            model.efforts = Some(known.efforts.clone());
-            model.context_window = known.context_window;
-        }
-    }
-    models
+    crate::provider::codex::cli::models()
+        .into_iter()
+        .filter(|model| model.listed)
+        .map(|model| ModelOption {
+            id: Some(model.slug),
+            label: model.display_name,
+            default_model: None,
+            is_legacy: false,
+            efforts: Some(model.efforts),
+            context_window: model.context_window,
+        })
+        .collect()
 }
 
 /// `(modified time, path)` of every rollout file under `dir`.

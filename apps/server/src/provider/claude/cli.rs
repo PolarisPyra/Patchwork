@@ -141,6 +141,10 @@ fn parse_model(model: &Value) -> Option<ClaudeModel> {
             })
             .unwrap_or_default(),
         fast_mode: model.get("fast_mode").is_some_and(|mode| !mode.is_null()),
+        legacy: model
+            .get("section")
+            .and_then(Value::as_str)
+            .is_some_and(|section| section != "main"),
         id,
     })
 }
