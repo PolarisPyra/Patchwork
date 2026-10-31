@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowsClockwiseIcon, ChartBarIcon } from "@phosphor-icons/react";
 import { api, AGENT_LABELS, type AgentKind, type AgentStatus, type ProviderUsage } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
@@ -94,11 +94,16 @@ const PLAN_AGENTS: AgentKind[] = ["claude", "codex", "antigravity"];
 /** How long "Up to date" stands in for the plan badge before the badge comes back. */
 const UP_TO_DATE_MS = 1200;
 
-/** Sidebar footer button that opens subscription usage for each installed agent with a plan. */
-export default function UsagePopover() {
+/** Sidebar footer button that opens subscription usage for each installed agent with a plan, and
+ * for OpenCode while it is switched on. */
+export default function UsagePopover({ openCode }: { openCode: boolean }) {
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<Partial<Record<AgentKind, Entry>>>({});
-  const agents = PLAN_AGENTS.filter((kind) => entries[kind]?.status?.installed !== false);
+  const shown = useMemo<AgentKind[]>(
+    () => (openCode ? [...PLAN_AGENTS, "opencode"] : PLAN_AGENTS),
+    [openCode],
+  );
+  const agents = shown.filter((kind) => entries[kind]?.status?.installed !== false);
   /** Ticks while a rate limit counts down. */
   const [now, setNow] = useState(Date.now);
   const limited = agents.some((kind) => limitedUntil(entries[kind], now) != null);
@@ -160,8 +165,8 @@ export default function UsagePopover() {
   useEffect(() => {
     if (!open) return;
     setNow(Date.now());
-    load(false);
-  }, [open, load]);
+    load(false, shown);
+  }, [open, load, shown]);
   useEffect(() => {
     if (!open || !limited) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);

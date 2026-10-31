@@ -20,6 +20,8 @@ export const TASKS_GROUP_PREFIX = "tasks:";
 
 export interface SidebarProps {
   view: SidebarView;
+  /** Whether OpenCode is switched on, so the usage footer lists it. */
+  openCode: boolean;
   /** Project of the current context (null: a chat without a project). */
   project: Project | null;
   projects: Project[];

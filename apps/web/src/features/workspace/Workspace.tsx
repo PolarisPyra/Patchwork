@@ -427,6 +427,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
         {view && (
           <Sidebar
             view={view}
+            openCode={connectedAgents.includes("opencode")}
             project={project}
             projects={settings.projects}
             threads={sidebarThreads.live}
