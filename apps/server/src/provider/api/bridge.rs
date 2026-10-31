@@ -9,6 +9,7 @@ mod calls;
 mod context;
 mod prompt;
 mod request;
+mod vision;
 
 use context::CONTEXT_PHRASES;
 use prompt::system_prompt;
@@ -48,6 +49,10 @@ struct Request {
     /// Whether `model` reads images. When it does not, the images in the conversation are left
     /// out of the request, and the conversation keeps them for a turn that can read them.
     images_ok: bool,
+    /// The model that reads images for `model`: it describes each image the user sends, and
+    /// `model` gets the description in its place.
+    #[serde(default)]
+    vision: Option<Vision>,
     mode: AccessMode,
     plan: bool,
     effort: Option<String>,
@@ -81,6 +86,18 @@ struct McpTool {
     description: String,
     parameters: Value,
     read_only: bool,
+}
+
+/// The connection to the vision model.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Vision {
+    base_url: String,
+    api_key: Option<String>,
+    #[serde(default)]
+    headers: HashMap<String, String>,
+    model: String,
+    provider: String,
 }
 
 #[derive(Deserialize)]
@@ -307,11 +324,15 @@ impl Agent {
         }
     }
 
-    /// A user message's content: plain text, or text and images. A model that cannot read the
-    /// images refuses them, and `recover` sends the message again without them.
+    /// A user message's content: plain text, or text and images. With a vision model, the
+    /// images are its description of them. A model that cannot read the images refuses them,
+    /// and `recover` sends the message again without them.
     fn user_content(&self, text: &str, images: &[ImageIn]) -> Value {
         if images.is_empty() {
             return json!(text);
+        }
+        if let Some(vision) = &self.request.vision {
+            return json!(self.described(vision, text, images));
         }
         let mut parts = vec![json!({"type": "text", "text": text})];
         parts.extend(images.iter().map(|i| {
