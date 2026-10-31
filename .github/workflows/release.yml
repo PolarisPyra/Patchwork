@@ -113,10 +113,10 @@ jobs:
         run: scripts/release.sh ci-upload windows
 
   macos:
-    # macos-14 runs on Apple silicon, so the build is native arm64. Its minutes count ten times
+    # macos-15 runs on Apple silicon, so the build is native arm64. Its minutes count ten times
     # against the private repo's allowance, so its timeout is the tightest, and it builds only for a
     # release or a run by hand: its build is quick without a cache.
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 30
     if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
     outputs:

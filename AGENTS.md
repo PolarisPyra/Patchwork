@@ -548,8 +548,8 @@ jobs:
           path: ${{ steps.find.outputs.path }}
 
   macos:
-    # macos-14 runs on Apple silicon, so the build is native arm64.
-    runs-on: macos-14
+    # macos-15 runs on Apple silicon, so the build is native arm64.
+    runs-on: macos-15
 
     steps:
       - uses: actions/checkout@v4

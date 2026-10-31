@@ -185,7 +185,7 @@ same branch cancels an older one.
 | --- | --- | --- | --- |
 | appimage | `ubuntu-22.04` (older glibc, so the AppImage runs on newer distributions) | `ci-build linux`, `ci-upload linux` | `Patchwork_amd64.AppImage` |
 | windows | `windows-2025`, building on a Dev Drive | `ci-build windows`, `ci-upload windows` | `Patchwork_x64-setup.exe` |
-| macos | `macos-14` (Apple silicon) | `ci-build macos`, `ci-upload macos` | `Patchwork_aarch64.dmg`, `Patchwork.app.tar.gz` |
+| macos | `macos-15` (Apple silicon) | `ci-build macos`, `ci-upload macos` | `Patchwork_aarch64.dmg`, `Patchwork.app.tar.gz` |
 | release | `ubuntu-latest`, after the three above | `ci-release` | `latest.json`, the GitHub release and its installers |
 
 Each build job sets the tag's version first, so a tag pushed without the script still builds with
