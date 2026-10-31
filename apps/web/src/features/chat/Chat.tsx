@@ -690,6 +690,15 @@ export default function Chat({
     (lastMessage.id === livePlanId || lastMessage.id === keptPlanId)
       ? lastMessage.plan
       : [];
+  // A finished list stays a moment to show it complete, then folds away; a new list brings it back.
+  const planDone = plan.length > 0 && plan.every((step) => step.status === "done");
+  const [planCleared, setPlanCleared] = useState(false);
+  useEffect(() => {
+    setPlanCleared(false);
+    if (!planDone) return;
+    const timer = window.setTimeout(() => setPlanCleared(true), 1200);
+    return () => window.clearTimeout(timer);
+  }, [planDone]);
   // Choices the agent offered in its last finished reply, until the user answers or dismisses them.
   // A plan the last reply proposed in plan mode, ready to implement or refine.
   const proposed =
@@ -826,7 +835,13 @@ export default function Chat({
         </div>
       )}
       <div className={`w-full flex-none box-border px-6 pb-4 ${thread?.parent ? " hidden" : ""}`}>
-        {plan.length > 0 && <PlanPanel steps={plan} />}
+        <BackgroundTasks tasks={background} onStop={stopBackground} />
+        <ComposerStripPresence
+          key={`${key}-plan`}
+          present={plan.length > 0 && !(planDone && planCleared)}
+        >
+          {plan.length > 0 && <PlanPanel steps={plan} />}
+        </ComposerStripPresence>
         {readyPlan !== null && (
           <div
             title="Write feedback to refine the plan, or send nothing to implement it"
@@ -881,7 +896,6 @@ export default function Chat({
             onDismiss={dismissChoices}
           />
         )}
-        <BackgroundTasks tasks={background} onStop={stopBackground} />
         <ComposerStripPresence key={`${key}-queue`} present={queued.length > 0}>
           <QueuedMessages
             messages={queued}
