@@ -68,7 +68,6 @@ use crate::orchestration::goal;
 use crate::orchestration::turn::process::exit_error;
 use crate::orchestration::turn::process::last_lines;
 use crate::orchestration::turn::process::next_line;
-use crate::orchestration::turn::process::TURN_TIMEOUT;
 use crate::orchestration::turn::process::terminate;
 use crate::orchestration::turn::stuck::{LOOP_LIMIT, Repeats};
 use crate::orchestration::turn::process::write_line;
@@ -733,14 +732,6 @@ pub(in crate::orchestration) fn ingest(
     let cancelled = turn.cancelled.load(Ordering::SeqCst);
     let (status, error) = if cancelled {
         (MessageStatus::Cancelled, None)
-    } else if turn.timed_out.load(Ordering::SeqCst) {
-        let hours = TURN_TIMEOUT.as_secs() / 3600;
-        (
-            MessageStatus::Error,
-            Some(format!(
-                "The agent ran longer than {hours} hours and was stopped."
-            )),
-        )
     } else if stream_error.is_some() || !exit.is_some_and(|s| s.success()) {
         let error = stream_error
             .or_else(|| last_lines(&tail))

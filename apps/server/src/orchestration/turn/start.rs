@@ -11,7 +11,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 use std::sync::PoisonError;
-use std::time::Instant;
 
 use serde_json::Value;
 
@@ -43,9 +42,7 @@ use crate::orchestration::turn::process::Interrupts;
 use crate::orchestration::turn::process::close_stdin_unless_steered;
 use crate::orchestration::turn::process::read_stderr_tail;
 use crate::orchestration::turn::process::Stdin;
-use crate::orchestration::turn::process::terminate;
 use crate::orchestration::turn::process::IDLE_LIMIT;
-use crate::orchestration::turn::process::TURN_TIMEOUT;
 use crate::orchestration::turn::process::WATCH_EVERY;
 use crate::orchestration::turn::process::write_line;
 use crate::orchestration::messages::queue::Queue;
@@ -360,7 +357,6 @@ impl Runner {
         let message = assistant_message();
         let cancelled = Arc::new(AtomicBool::new(false));
         let interrupts = Arc::<Interrupts>::default();
-        let timed_out = Arc::new(AtomicBool::new(false));
         let exited = Arc::new(AtomicBool::new(false));
         let pending = Pending::default();
         let native_turn = NativeTurn::default();
@@ -376,7 +372,6 @@ impl Runner {
             agent,
             cancelled: cancelled.clone(),
             interrupts: interrupts.clone(),
-            timed_out: timed_out.clone(),
             exited: exited.clone(),
             attribution: attribution.clone(),
             scope,
@@ -446,10 +441,8 @@ impl Runner {
         let watched = Watched {
             server: server.clone(),
             thread_id: turn.thread_id.clone(),
-            pid: child.id(),
             exited: turn.exited.clone(),
             idle: turn.idle.clone(),
-            timed_out,
         };
         std::thread::spawn(move || watch(watched));
         std::thread::spawn(move || ingest(turn, child, stdout, stderr_tail));
@@ -461,32 +454,19 @@ impl Runner {
 struct Watched {
     server: Arc<Server>,
     thread_id: String,
-    pid: u32,
     exited: Arc<AtomicBool>,
     idle: Arc<AtomicBool>,
-    timed_out: Arc<AtomicBool>,
 }
 
-/// Stops the agent when one reply runs past `TURN_TIMEOUT`, and retires it once it has been
-/// idle for `IDLE_LIMIT` with no shell commands of its own still running. Ends with the agent.
+/// Retires the agent once it has been idle for `IDLE_LIMIT` with no shell commands of its own
+/// still running. A reply runs as long as it needs. Ends with the agent.
 fn watch(w: Watched) {
-    let mut busy_since = Instant::now();
-    let mut was_idle = false;
     loop {
         std::thread::sleep(WATCH_EVERY);
         if w.exited.load(Ordering::SeqCst) {
             return;
         }
         let idle = w.idle.load(Ordering::SeqCst);
-        if !idle && was_idle {
-            busy_since = Instant::now();
-        }
-        was_idle = idle;
-        if !idle && busy_since.elapsed() >= TURN_TIMEOUT {
-            w.timed_out.store(true, Ordering::SeqCst);
-            terminate(w.pid, w.exited);
-            return;
-        }
         // Idle time counts from the last reply, as idle compaction counts it.
         let retire = idle
             && w.server.store.thread(&w.thread_id).is_some_and(|t| {
@@ -512,8 +492,6 @@ pub(in crate::orchestration) struct Turn {
     pub(in crate::orchestration) agent: AgentKind,
     pub(in crate::orchestration) cancelled: Arc<AtomicBool>,
     pub(in crate::orchestration) interrupts: Arc<Interrupts>,
-    /// Set when the turn ran past `TURN_TIMEOUT` and the agent was stopped for it.
-    pub(in crate::orchestration) timed_out: Arc<AtomicBool>,
     pub(in crate::orchestration) exited: Arc<AtomicBool>,
     /// The files this reply changed, as far as they are known yet.
     pub(in crate::orchestration) attribution: SharedAttribution,
