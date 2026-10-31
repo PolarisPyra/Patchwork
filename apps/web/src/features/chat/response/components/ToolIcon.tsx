@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 import {
   BooksIcon,
+  BrainIcon,
   EyeIcon,
   GlobeIcon,
   MagnifyingGlassIcon,
@@ -30,8 +31,9 @@ export function actionIcon(action: Action): ReactNode {
   return GLYPH[action];
 }
 
-/** The glyph for a row: its kind, or its failure if it failed. */
+/** The glyph for a row: its kind, its failure if it failed, or a brain for reasoning. */
 export function entryIcon(entry: Entry): ReactNode {
+  if (entry.kind === "thinking") return <BrainIcon size={15} />;
   if (entry.tool.status === "error") return <WarningCircleIcon size={15} className="text-danger" />;
   return actionIcon(actionOf(entry.tool));
 }

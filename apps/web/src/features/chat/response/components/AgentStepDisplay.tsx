@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { CaretDownIcon, CaretRightIcon, GitDiffIcon } from "@phosphor-icons/react";
+import Markdown from "~/features/chat/components/Markdown";
 import Expander from "~/features/chat/response/components/Expander";
 import { entryIcon } from "~/features/chat/response/components/ToolIcon";
 import { type Entry, entryActive } from "~/features/chat/response/lib/model";
@@ -69,8 +70,15 @@ export default function AgentStepDisplay({
   );
 }
 
-/** What a row opens to show: the command and its output. */
+/** What a row opens to show: reasoning as Markdown, a call as the command and its output. */
 function EntryDetails({ entry }: { entry: Entry }) {
+  if (entry.kind === "thinking") {
+    return (
+      <div className={DETAILS_CLASS}>
+        <Markdown text={entry.part.text} />
+      </div>
+    );
+  }
   return (
     <pre
       className={`${DETAILS_CLASS} m-0 font-[family-name:var(--font-mono)] break-words whitespace-pre-wrap`}
@@ -84,7 +92,7 @@ function EntryDetails({ entry }: { entry: Entry }) {
 export const ENTRY_CLASS =
   "group flex min-h-6 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border-none bg-transparent px-0 py-0.5 text-left text-[length:var(--fs-md)] text-fg-muted hover:text-fg";
 
-/** The box a row opens into: a command and its output. */
+/** The box a row opens into: a command and its output, or a block of reasoning. */
 const DETAILS_CLASS =
   "ms-7 mt-0.5 mb-1 max-h-64 overflow-auto rounded-[var(--radius-sm)] bg-editor px-2 py-1.5 text-[length:var(--fs-sm)] text-fg-muted selectable";
 

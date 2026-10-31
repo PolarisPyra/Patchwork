@@ -9,8 +9,10 @@ import { fullElapsed } from "~/lib/util";
  * functions return.
  */
 
-/** A call: the smallest thing a row shows. */
-export type Entry = { kind: "tool"; tool: ToolCall };
+/** A call or a block of reasoning: the smallest thing a row shows. */
+export type Entry =
+  | { kind: "thinking"; part: Extract<Part, { type: "thinking" }>; index: number }
+  | { kind: "tool"; tool: ToolCall };
 
 /** One line of a turn, in the order it happened. */
 export type Step =
@@ -58,7 +60,7 @@ export function stepsOf(message: Message): Step[] {
       else steps.push({ kind: "approvals", ids: [part.id] });
       continue;
     }
-    const entry = entryOf(part, byId, shown);
+    const entry = entryOf(part, index, byId, shown);
     if (entry === null) continue;
     // A subagent is its own card, however many of them ran in a row.
     if (entry.kind === "tool" && entry.tool.subagent) {
@@ -74,13 +76,16 @@ export function stepsOf(message: Message): Step[] {
   return steps;
 }
 
-/** The entry a tool part becomes, or null when the part is not shown at all. Reasoning is not
- * shown: the status line already says the agent is thinking. */
+/** The entry a thinking or tool part becomes, or null when the part is not shown at all. */
 function entryOf(
   part: Part,
+  index: number,
   byId: Map<string, ToolCall>,
   shown: (tool: ToolCall | undefined) => tool is ToolCall,
 ): Entry | null {
+  if (part.type === "thinking") {
+    return part.text.trim() ? { kind: "thinking", part, index } : null;
+  }
   if (part.type !== "tool") return null;
   const tool = byId.get(part.id);
   return shown(tool) ? { kind: "tool", tool } : null;
@@ -88,12 +93,14 @@ function entryOf(
 
 /** Whether the work this entry stands for is still going. */
 export function entryActive(entry: Entry): boolean {
-  return entry.tool.status === "running" || entry.tool.status === "pending";
+  return entry.kind === "thinking"
+    ? entry.part.endedAt === null
+    : entry.tool.status === "running" || entry.tool.status === "pending";
 }
 
 /** A stable identity for a row, so it keeps its place as the reply grows. */
 export function workKey(entry: Entry): string {
-  return entry.tool.id;
+  return entry.kind === "thinking" ? `t${entry.index}` : entry.tool.id;
 }
 
 /** What the agent is doing at the moment, shown in the line at the head of a turn. */
@@ -153,7 +160,7 @@ export interface FoldLayout {
 
 /** What the line at the head of a settled turn says, and what opening it would do. */
 export interface FoldSummary {
-  /** "Thought for 1m 14s", "You stopped the response", "Thought". */
+  /** "Worked for 1m 14s", "You stopped the response", "Worked". */
   label: string;
   /** "4 steps", or "Hide steps" once the fold is open; null when there is nothing to open. */
   action: string | null;
@@ -163,7 +170,7 @@ export interface FoldSummary {
 
 /**
  * The head line of a turn that has finished. A turn under a second has no duration worth reading,
- * and "Thought for 0s" reads as a bug, so it says "Thought" instead.
+ * and "Worked for 0s" reads as a bug, so it says "Worked" instead.
  */
 export function foldHeadOf(message: Message, actions: number, open: boolean): FoldSummary {
   const action = actions === 0 ? null : open ? "Hide steps" : countOf(actions);
@@ -177,7 +184,7 @@ export function foldHeadOf(message: Message, actions: number, open: boolean): Fo
       superseded: false,
     };
   }
-  return { label: duration ? `Thought for ${duration}` : "Thought", action, superseded: false };
+  return { label: duration ? `Worked for ${duration}` : "Worked", action, superseded: false };
 }
 
 /**

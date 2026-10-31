@@ -534,7 +534,7 @@
   }
 }
 
-/* A status line — "Thinking", a retry, a tool row's label — fades in rather than popping into the
+/* A status line — "Working", a retry, a tool row's label — fades in rather than popping into the
    row it shares with the reply, so the row does not jump when the label changes.
 
    It goes on the text, never on the row: a row can hold an icon, and an icon that fades, blurs or

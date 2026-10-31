@@ -10,7 +10,7 @@ import { fullElapsed } from "~/lib/util";
  *
  * It is the same shape as the line that replaces it once the turn settles (see FoldHead), so a
  * finished turn reads as one line changing what it says rather than two lines swapping places:
- * "Thinking for 9s" becomes "Thought for 9s". While the agent thinks, a grey band sweeps across
+ * "Working for 9s" becomes "Worked for 9s". While the agent works, a grey band sweeps across
  * the words instead of a spinner beside them, so they sit where the settled line's words will.
  * `tabular-nums` keeps the digits from shifting as the count grows.
  */
@@ -23,7 +23,7 @@ export default function TurnStatus({ phase, since }: { phase: Phase; since: numb
         ? "Checking goal"
         : phase.kind === "compacting"
           ? "Compacting context"
-          : `Thinking for ${fullElapsed(Math.max(0, now - since))}`;
+          : `Working for ${fullElapsed(Math.max(0, now - since))}`;
   return (
     <div className="mb-1.5 border-b border-border pt-1 pb-2">
       <div className="flex h-6 min-w-0 items-center gap-1.5 text-[length:var(--fs-md)] text-fg-muted tabular-nums">

@@ -32,7 +32,7 @@ const drawn = new Set<string>();
  * A reply as it happened: text, reasoning and calls in order, under one line that says what the
  * turn is doing.
  *
- * While the reply streams, that line reports the current phase ("Thinking for 1m 14s", a retry, a
+ * While the reply streams, that line reports the current phase ("Working for 1m 14s", a retry, a
  * goal check) and stays at the top of the turn. Once it settles, the same line reports what it took
  * and opens the steps it folded away. The shape of the turn — its steps, its phase, its fold — is
  * worked out in `model.ts`; this component only decides what to draw and where.

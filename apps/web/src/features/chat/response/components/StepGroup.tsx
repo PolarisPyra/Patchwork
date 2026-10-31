@@ -35,7 +35,7 @@ export default function StepGroup({
     );
   }
   const current = live ? [...entries].reverse().find(entryActive) : undefined;
-  const tools = entries.map((entry) => entry.tool);
+  const tools = entries.flatMap((entry) => (entry.kind === "tool" ? [entry.tool] : []));
   const failed = tools.some((tool) => tool.status === "error");
   const head = tools[0];
   return (
@@ -51,8 +51,10 @@ export default function StepGroup({
             entryIcon(current)
           ) : failed ? (
             <WarningCircleIcon size={15} className="text-danger" />
+          ) : head ? (
+            actionIcon(actionOf(head))
           ) : (
-            head && actionIcon(actionOf(head))
+            first && entryIcon(first)
           )}
         </LineGutter>
         <EntryText entering={live} running={current !== undefined}>

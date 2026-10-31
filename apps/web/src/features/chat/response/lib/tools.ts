@@ -153,6 +153,7 @@ export function groupLabel(tools: readonly ToolCall[]): string {
 
 /** A row's label. */
 export function entryLabel(entry: Entry): string {
+  if (entry.kind === "thinking") return entry.part.endedAt === null ? "Thinking" : "Thought";
   return toolLabel(entry.tool);
 }
 
@@ -165,7 +166,7 @@ export function editedFile(entry: Entry): string | null {
 }
 
 /** What a row opens to show: a command and its output. */
-export function detailsOf(entry: Entry): string {
+export function detailsOf(entry: Extract<Entry, { kind: "tool" }>): string {
   const { tool } = entry;
   const input = actionOf(tool) === "command" ? `$ ${tool.summary}` : tool.summary;
   return [input, tool.output].filter(Boolean).join("\n\n") || "No output";
