@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.3.1] - 2026-10-31
+
+### Removed
+
+- A reply no longer stops with "The agent ran longer than 4 hours and was stopped." The agent now works until it finishes or you stop it.
+
 ## [26.3.0] - 2026-10-31
 
 ### Fixed
