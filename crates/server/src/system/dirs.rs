@@ -145,9 +145,6 @@ impl Dirs {
         }
         let old_file = self.config.join("mcp.json");
         let dir = self.config.join("mcp");
-        if dir.exists() {
-            return;
-        }
         let Ok(text) = std::fs::read_to_string(&old_file) else {
             return;
         };
@@ -160,6 +157,10 @@ impl Dirs {
         }
         let mut all = true;
         for (name, server) in old.servers {
+            // Split on an earlier start, and possibly edited since, so it is left as it is.
+            if super::fs::is_plain_file_name(&name) && dir.join(format!("{name}.json")).exists() {
+                continue;
+            }
             let written = if super::fs::is_plain_file_name(&name) {
                 serde_json::to_string_pretty(&server)
                     .map_err(|e| e.to_string())
