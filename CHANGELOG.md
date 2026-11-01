@@ -3,6 +3,13 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.3.8] - 2026-11-01
+
+### Fixed
+
+- Clicking Usage at the bottom of the sidebar no longer turns the whole window blank when no agent with plan limits is switched on, such as when you use only API providers. The Usage popover now lists only the agents switched on in Settings → Providers, and says "Unable to get usage stats" when the ones you use have none to show.
+- Errors in the Window log now say what went wrong, not only where it happened.
+
 ## [26.3.7] - 2026-11-01
 
 ### Fixed
