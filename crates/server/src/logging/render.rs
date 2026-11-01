@@ -83,11 +83,19 @@ fn to_text(json: &Json) -> String {
     serde_json::to_string(json).unwrap_or_default()
 }
 
+fn is_tool_result(fields: &[(String, Json)]) -> bool {
+    fields.iter().any(|(key, value)| {
+        matches!((key.as_str(), value), ("type", Json::String(s)) if s == "tool_result")
+    })
+}
+
 /// Whether a line says something failed: a `type`, `subtype` or `status` naming an error or
 /// a failure, or Claude's `is_error`.
 fn reports_error(json: &Json) -> bool {
     match json {
         Json::Array(items) => items.iter().any(reports_error),
+        // A command the agent ran that failed is its own result, not an error of the app.
+        Json::Object(fields) if is_tool_result(fields) => false,
         Json::Object(fields) => fields
             .iter()
             .any(|(key, value)| match (key.as_str(), value) {

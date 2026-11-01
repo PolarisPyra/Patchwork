@@ -86,8 +86,7 @@ fn run(
     let mut since: Option<Instant> = None;
     loop {
         let wait = match since {
-            Some(start) if start.elapsed() >= MAX_WAIT => Duration::ZERO,
-            Some(start) => SETTLE.min(MAX_WAIT - start.elapsed()),
+            Some(start) => MAX_WAIT.saturating_sub(start.elapsed()).min(SETTLE),
             None => Duration::from_secs(3600),
         };
         let received = if wait.is_zero() {
