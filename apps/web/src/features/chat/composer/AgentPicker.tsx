@@ -5,7 +5,7 @@ import Dropdown from "~/components/Dropdown";
 import { CHIP_CLASS } from "~/components/chip";
 import { errorText } from "~/lib/util";
 
-/** Every row and message in the menu has this width, so the menu keeps its size as it changes. */
+/** The menu's width, so it holds its size as the rows and messages in it change. */
 const MENU_WIDTH = "w-64";
 
 const ITEM_CLASS =
@@ -102,8 +102,9 @@ function AgentOptions({
         Loading agents…
       </div>
     );
+  // The list scrolls within the menu's height, so a long list stays inside the window.
   return (
-    <>
+    <div className="flex max-h-[min(50vh,24rem)] w-64 flex-col overflow-y-auto overscroll-contain">
       {editError && (
         <div
           role="alert"
@@ -115,7 +116,7 @@ function AgentOptions({
       <button
         role="menuitemradio"
         aria-checked={!role}
-        className={`${ITEM_CLASS} ${MENU_WIDTH} hover:bg-hover ${role ? "" : "bg-selected-muted"}`}
+        className={`${ITEM_CLASS} hover:bg-hover ${role ? "" : "bg-selected-muted"}`}
         onClick={() => onPick(null)}
       >
         No agent
@@ -125,7 +126,7 @@ function AgentOptions({
         // pencil sits beside the name button, not inside it, since a button cannot hold a button.
         <div
           key={agent.name}
-          className={`group flex items-center rounded-[var(--radius-sm)] hover:bg-hover ${MENU_WIDTH} ${agent.name === role ? "bg-selected-muted" : ""}`}
+          className={`group flex items-center rounded-[var(--radius-sm)] hover:bg-hover ${agent.name === role ? "bg-selected-muted" : ""}`}
         >
           <button
             role="menuitemradio"
@@ -149,6 +150,6 @@ function AgentOptions({
           </span>
         </div>
       ))}
-    </>
+    </div>
   );
 }
