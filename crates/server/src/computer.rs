@@ -207,15 +207,26 @@ pub fn perform(action: &Action) -> Result<(), String> {
                 .iter()
                 .map(|name| modifier(name))
                 .collect::<Result<_, _>>()?;
+            // Resolved before any modifier is held, so an unknown key name presses nothing.
+            let target = key(name)?;
+            let mut pressed = Vec::new();
+            let mut result = Ok(());
             for m in &held {
-                enigo
+                result = enigo
                     .key(*m, Direction::Press)
-                    .map_err(|e| format!("Could not hold a modifier: {e}"))?;
+                    .map_err(|e| format!("Could not hold a modifier: {e}"));
+                if result.is_err() {
+                    break;
+                }
+                pressed.push(*m);
             }
-            let result = enigo
-                .key(key(name)?, Direction::Click)
-                .map_err(|e| format!("Could not press {name}: {e}"));
-            for m in held.iter().rev() {
+            if result.is_ok() {
+                result = enigo
+                    .key(target, Direction::Click)
+                    .map_err(|e| format!("Could not press {name}: {e}"));
+            }
+            // Whatever went down comes back up, however the press went.
+            for m in pressed.iter().rev() {
                 let _ = enigo.key(*m, Direction::Release);
             }
             result
