@@ -286,7 +286,8 @@ export function useThreads(initialProjectId: string | null) {
       role: null,
     };
     setThreads((prev) => [draft, ...prev]);
-    setSelectedId(id);
+    // Through `select`, so a load still running for an earlier pick cannot open that one instead.
+    select(id);
     try {
       const thread = await api.createThread(
         id,
@@ -346,7 +347,7 @@ export function useThreads(initialProjectId: string | null) {
   async function forkThread(threadId: string, messageId: string): Promise<void> {
     const thread = await api.forkThread(threadId, messageId);
     setThreads((prev) => [thread, ...prev]);
-    setSelectedId(thread.id);
+    select(thread.id);
   }
 
   async function renameThread(id: string, title: string): Promise<void> {

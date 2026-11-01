@@ -276,7 +276,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   };
 
   const selectProject = (id: string) => {
-    select(threads.find((t) => t.projectId === id)?.id ?? null);
+    select(liveThreads.find((t) => t.projectId === id)?.id ?? null);
     attempt(() => rememberProject(id));
   };
 
