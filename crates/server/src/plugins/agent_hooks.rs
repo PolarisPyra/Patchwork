@@ -133,7 +133,11 @@ fn run_command(hook: &AgentHook, command: &str, input: &Value, root: &str) -> Op
             .map(|p| Box::new(p) as Box<dyn Read + Send>),
     );
     if let Some(mut stdin) = child.stdin.take() {
-        let _ = stdin.write_all(input.to_string().as_bytes());
+        // On its own thread, so a hook that does not read its input cannot hold off the timeout.
+        let input = input.to_string();
+        std::thread::spawn(move || {
+            let _ = stdin.write_all(input.as_bytes());
+        });
     }
     let deadline = Instant::now() + Duration::from_secs(hook.timeout_secs);
     let status = loop {
