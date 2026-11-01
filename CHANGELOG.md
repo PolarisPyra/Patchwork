@@ -3,7 +3,11 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
-## [26.3.8] - 2026-11-01
+## [26.3.9] - 2026-11-01
+
+### Changed
+
+- You can now switch off every agent and API provider in Settings → Providers, including the last one, instead of the last switch staying locked. A new chat started with nothing switched on can't be sent and says "No agents connected. Turn one on in Settings → Providers." instead of quietly using Claude Code.
 
 ### Fixed
 
