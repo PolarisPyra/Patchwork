@@ -23,9 +23,6 @@ function StepIcon({ status }: { status: StepStatus }) {
   }
 }
 
-/** How many steps the header shows as dots. */
-const DOTS = 8;
-
 /** The agent's plan above the composer: how far it has got, opening to the steps. It arrives as
  * its one line: arriving open took the height of every step from the chat and moved it up. */
 export default function PlanPanel({ steps }: { steps: PlanStep[] }) {
@@ -42,11 +39,6 @@ export default function PlanPanel({ steps }: { steps: PlanStep[] }) {
     running ??
     steps.find((s) => s.text === last && s.status === "pending") ??
     steps.find((s) => s.status === "pending");
-  // The dots show at most DOTS steps, slid so the current one is among them.
-  const at = current ? steps.indexOf(current) : steps.length - 1;
-  const start = Math.max(0, Math.min(at - (DOTS - 2), steps.length - DOTS));
-  const shown = steps.slice(start, start + DOTS);
-  const after = steps.length - start - shown.length;
   const Caret = open ? CaretDownIcon : CaretRightIcon;
   return (
     <div
@@ -67,34 +59,13 @@ export default function PlanPanel({ steps }: { steps: PlanStep[] }) {
         {current && <span className="min-w-0 flex-1 truncate">{current.text}</span>}
         {steps.length > 0 && (
           <span
-            className="ml-auto flex h-2 flex-none items-center gap-1"
-            role="img"
-            aria-label={`${done} of ${steps.length} tasks complete${current ? `; current task: ${current.text}` : ""}`}
-            title={`${done} of ${steps.length} tasks complete`}
+            aria-hidden="true"
+            className="ml-auto h-1.5 w-16 flex-none overflow-hidden rounded-full bg-fg-subtle/25"
           >
-            {start > 0 && (
-              <span className="mr-0.5 text-[length:var(--fs-xs)] text-fg-subtle">+{start}</span>
-            )}
-            {shown.map((step, i) => (
-              <span
-                key={start + i}
-                className={`h-1.5 w-3 rounded-full transition-colors ${
-                  step.status === "done"
-                    ? "bg-accent-text"
-                    : step === current && step.status === "running"
-                      ? "bg-accent shadow-[0_0_6px_var(--color-accent)]"
-                      : step.status === "running"
-                        ? "bg-accent"
-                        : step.status === "error"
-                          ? "bg-danger"
-                          : "bg-fg-subtle/25"
-                }`}
-                title={`${step.status}: ${step.text}`}
-              />
-            ))}
-            {after > 0 && (
-              <span className="ml-0.5 text-[length:var(--fs-xs)] text-fg-subtle">+{after}</span>
-            )}
+            <span
+              className="block h-full rounded-full bg-accent-text transition-[width]"
+              style={{ width: `${(done / steps.length) * 100}%` }}
+            />
           </span>
         )}
         <Caret size={12} className={`flex-none ${steps.length > 0 ? "" : "ml-auto"}`} />
