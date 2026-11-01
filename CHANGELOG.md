@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.3.2] - 2026-10-31
+
+### Fixed
+
+- A long reply no longer stops early when the agent condenses its conversation. The agent keeps its open task list through the condense, so it finishes those tasks instead of stopping with them unfinished.
+
 ## [26.3.1] - 2026-10-31
 
 ### Removed
