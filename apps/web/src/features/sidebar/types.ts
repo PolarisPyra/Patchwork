@@ -1,4 +1,4 @@
-import type { FileChange, Folder, Project, Thread } from "~/api";
+import type { AgentKind, FileChange, Folder, Project, Thread } from "~/api";
 
 /**
  * The sidebar's own vocabulary: which view it shows, what a row is, and what it is given. The
@@ -20,8 +20,8 @@ export const TASKS_GROUP_PREFIX = "tasks:";
 
 export interface SidebarProps {
   view: SidebarView;
-  /** Whether OpenCode is switched on, so the usage footer lists it. */
-  openCode: boolean;
+  /** The agents switched on in Settings → Providers; the usage footer lists only these. */
+  connectedAgents: AgentKind[];
   /** Project of the current context (null: a chat without a project). */
   project: Project | null;
   projects: Project[];

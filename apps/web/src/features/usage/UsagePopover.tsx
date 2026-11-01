@@ -89,20 +89,21 @@ type Entry = {
   status?: AgentStatus | null;
 };
 
-/** The agents with plan limits to show, whether or not they are switched on for new tasks. */
+/** The agents with plan limits to show, when they are connected in Settings → Providers. */
 const PLAN_AGENTS: AgentKind[] = ["claude", "codex", "antigravity"];
+/** Every agent the popover can show: the plan agents, then OpenCode. */
+const SHOWN_AGENTS: AgentKind[] = [...PLAN_AGENTS, "opencode"];
 
 /** How long "Up to date" stands in for the plan badge before the badge comes back. */
 const UP_TO_DATE_MS = 1200;
 
-/** Sidebar footer button that opens subscription usage for each installed agent with a plan, and
- * for OpenCode while it is switched on. */
-export default function UsagePopover({ openCode }: { openCode: boolean }) {
+/** Sidebar footer button that opens subscription usage for each connected agent with a plan. */
+export default function UsagePopover({ connectedAgents }: { connectedAgents: AgentKind[] }) {
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<Partial<Record<AgentKind, Entry>>>({});
   const shown = useMemo<AgentKind[]>(
-    () => (openCode ? [...PLAN_AGENTS, "opencode"] : PLAN_AGENTS),
-    [openCode],
+    () => SHOWN_AGENTS.filter((kind) => connectedAgents.includes(kind)),
+    [connectedAgents],
   );
   const agents = shown.filter((kind) => entries[kind]?.status?.installed !== false);
   /** Ticks while a rate limit counts down. */
@@ -124,7 +125,7 @@ export default function UsagePopover({ openCode }: { openCode: boolean }) {
   const [selected, setSelected] = useState<AgentKind | null>(null);
   const current = selected && agents.includes(selected) ? selected : agents[0];
   /** The refresh button belongs to the agent being looked at, and reads only that one. */
-  const currentDenied = denied?.kind === current ? denied.how : null;
+  const currentDenied = denied && denied.kind === current ? denied.how : null;
   const currentLimited = limitedUntil(current && entries[current], now) != null;
   const inFlight = useRef(new Set<AgentKind>());
   const ref = useRef<HTMLDivElement>(null);
@@ -163,10 +164,17 @@ export default function UsagePopover({ openCode }: { openCode: boolean }) {
     });
   }, []);
 
+  /** Whether an API provider is switched on and can run a task. Settings keeps the API agent
+   * connected when nothing else is, so the connected list alone can't tell. */
+  const [apiUsable, setApiUsable] = useState(false);
   useEffect(() => {
     if (!open) return;
     setNow(Date.now());
     load(false, shown);
+    api
+      .listApiProviders()
+      .then((providers) => setApiUsable(providers.some((p) => p.enabled && p.models.length > 0)))
+      .catch(() => setApiUsable(false));
   }, [open, load, shown]);
   useEffect(() => {
     if (!open || !limited) return;
@@ -194,7 +202,11 @@ export default function UsagePopover({ openCode }: { openCode: boolean }) {
           aria-label="Usage"
         >
           {agents.length === 0 ? (
-            <div className="p-3 text-fg-muted text-[length:var(--fs-sm)]">No agents connected</div>
+            <div className="p-3 text-fg-muted text-[length:var(--fs-sm)]">
+              {shown.length > 0 || (apiUsable && connectedAgents.includes("api"))
+                ? "Unable to get usage stats"
+                : "No agents connected"}
+            </div>
           ) : (
             <>
               <div

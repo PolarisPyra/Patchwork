@@ -107,7 +107,10 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   const archivedThreads = threads.filter((t) => t.archivedAt !== null && !t.parent);
   const defaultAgent = defaultAgentOf(settings);
   // Display order stays fixed; `settings.agents` order only marks the default.
-  const connectedAgents = AGENT_KINDS.filter((k) => settings.agents.includes(k));
+  const connectedAgents = useMemo(
+    () => AGENT_KINDS.filter((k) => settings.agents.includes(k)),
+    [settings.agents],
+  );
   // The sidebar shows where threads sit and their status, never message text. Its props keep
   // their identity until something it shows changes, so streamed text does not re-render it.
   const sidebarKey = threads.map(sidebarSignature).join("\n");
@@ -427,7 +430,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
         {view && (
           <Sidebar
             view={view}
-            openCode={connectedAgents.includes("opencode")}
+            connectedAgents={connectedAgents}
             project={project}
             projects={settings.projects}
             threads={sidebarThreads.live}

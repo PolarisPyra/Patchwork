@@ -117,7 +117,7 @@ export default memo(function Sidebar(props: SidebarProps) {
       {props.view === "tasks" && <TasksView {...props} />}
       {props.view === "changes" && <ChangesView {...props} />}
       {props.view === "archived" && <ArchivedView {...props} />}
-      <UsagePopover openCode={props.openCode} />
+      <UsagePopover connectedAgents={props.connectedAgents} />
     </aside>
   );
 });
