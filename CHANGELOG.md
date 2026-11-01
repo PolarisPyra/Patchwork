@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.3.6] - 2026-11-01
+
+### Added
+
+- The agent button in the chat box's toolbar lists the agents a chat can summon, including the project's own. Pick one to make it this chat's agent, or pick No agent to remove it. Each agent's pencil opens its file in your editor.
+
 ## [26.3.5] - 2026-11-01
 
 ### Changed
