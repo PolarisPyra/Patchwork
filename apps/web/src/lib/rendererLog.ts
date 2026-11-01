@@ -28,7 +28,12 @@ function log(at: Exclude<LogLevel, "off">, parts: unknown[]) {
 }
 
 function text(part: unknown): string {
-  if (part instanceof Error) return part.stack ?? `${part.name}: ${part.message}`;
+  if (part instanceof Error) {
+    // WebKit's stack holds only the frames, so the message goes first unless it is already there.
+    const head = `${part.name}: ${part.message}`;
+    if (!part.stack) return head;
+    return part.stack.startsWith(head) ? part.stack : `${head}\n${part.stack}`;
+  }
   if (typeof part === "string") return part;
   try {
     return JSON.stringify(part);
