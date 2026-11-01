@@ -196,12 +196,9 @@ impl Terminals {
 
     /// Ends the shell; its `on_exit` follows.
     pub fn kill(&self, id: u32) {
-        let shell = self
-            .open
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .remove(&id);
-        if let Some(mut shell) = shell {
+        // The shell stays in the map until its reader thread has reaped it.
+        let mut open = self.open.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(shell) = open.get_mut(&id) {
             let _ = shell.child.kill();
         }
     }
