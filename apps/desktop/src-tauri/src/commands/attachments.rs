@@ -64,6 +64,10 @@ pub(crate) async fn copy_text(text: String) -> Res<()> {
 /// so this runs again whenever a thumbnail is shown.
 #[tauri::command]
 pub(crate) fn allow_preview(app: tauri::AppHandle, path: String) -> Res<()> {
+    // A file deleted since it was attached has nothing to show, and the webview would log an error.
+    if !std::path::Path::new(&path).is_file() {
+        return Err(format!("{path} is no longer there"));
+    }
     app.asset_protocol_scope()
         .allow_file(&path)
         .map_err(|e| e.to_string())

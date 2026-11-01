@@ -6,6 +6,11 @@ import { api, type Attachment } from "~/api";
 // once instead of after another round trip, which also changed its row's height.
 const allowed = new Set<string>();
 
+/** Drops `path` once its image failed to load, so the next showing asks the backend again. */
+export function forgetPreview(path: string): void {
+  allowed.delete(path);
+}
+
 /**
  * The webview URL for an image attachment, or null for other kinds and while it loads.
  * Asks the backend to allow the file first, since the asset scope is not kept across restarts.

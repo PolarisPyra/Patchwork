@@ -1,7 +1,8 @@
 import { FileIcon, FolderIcon, ImageIcon, XIcon } from "@phosphor-icons/react";
+import { useState } from "react";
 
 import { type Attachment, type AttachmentKind } from "~/api";
-import { usePreviewSrc } from "~/hooks/useImageSrc";
+import { forgetPreview, usePreviewSrc } from "~/hooks/useImageSrc";
 
 const ICONS: Record<AttachmentKind, typeof FileIcon> = {
   image: ImageIcon,
@@ -19,13 +20,23 @@ interface AttachmentChipProps {
 export default function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
   const Icon = ICONS[attachment.kind];
   const src = usePreviewSrc(attachment);
+  // The path whose image failed to load, which then shows its icon.
+  const [failed, setFailed] = useState<string | null>(null);
   return (
     <span
       className="inline-flex max-w-[280px] items-center gap-1.5 rounded-[var(--radius)] border border-border-strong bg-panel py-0.5 pr-1 pl-2 text-[length:var(--fs-sm)] text-fg"
       title={attachment.path}
     >
-      {src ? (
-        <img src={src} alt="" className="h-5 w-5 flex-none rounded-sm object-cover" />
+      {src && failed !== attachment.path ? (
+        <img
+          src={src}
+          alt=""
+          className="h-5 w-5 flex-none rounded-sm object-cover"
+          onError={() => {
+            forgetPreview(attachment.path);
+            setFailed(attachment.path);
+          }}
+        />
       ) : (
         <Icon size={13} className="flex-none text-fg-muted" />
       )}
@@ -50,13 +61,18 @@ export default function AttachmentChip({ attachment, onRemove }: AttachmentChipP
 /** A sent image shown large, as a thumbnail; falls back to a chip until it loads. */
 export function AttachmentTile({ attachment }: { attachment: Attachment }) {
   const src = usePreviewSrc(attachment);
-  if (!src) return <AttachmentChip attachment={attachment} />;
+  const [failed, setFailed] = useState<string | null>(null);
+  if (!src || failed === attachment.path) return <AttachmentChip attachment={attachment} />;
   return (
     <img
       src={src}
       alt={attachment.name}
       title={attachment.path}
       className="max-h-[180px] max-w-[260px] rounded-[var(--radius)] border border-border object-cover"
+      onError={() => {
+        forgetPreview(attachment.path);
+        setFailed(attachment.path);
+      }}
     />
   );
 }
