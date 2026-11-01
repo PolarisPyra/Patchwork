@@ -78,10 +78,10 @@ pub struct Updates {
     /// Windows installs by running the installer, which closes the app, so the downloaded
     /// installer waits here for a restart or for the app to quit.
     #[cfg_attr(not(windows), allow(dead_code))]
-    pending: Mutex<Option<PathBuf>>,
+    pub(super) pending: Mutex<Option<PathBuf>>,
     /// The app is quitting to restart into the update, not because the user quit.
     #[cfg_attr(not(windows), allow(dead_code))]
-    restarting: AtomicBool,
+    pub(super) restarting: AtomicBool,
     pub(super) last_check: Mutex<Option<SystemTime>>,
     /// The notes of the newer release the last check found.
     notes: Mutex<Option<String>>,
