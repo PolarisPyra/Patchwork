@@ -3,6 +3,25 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.3.5] - 2026-11-01
+
+### Changed
+
+- The task list above the message box shows its progress as one bar that fills as tasks finish, instead of a strip of dots that slid along with the current task.
+
+### Fixed
+
+- Stopping a reply keeps your queued messages queued instead of marking them as sent. A message the agent never answered comes back as queued, and a message sent just as a reply starts is refused with a notice while your draft comes back.
+- If a message fails to send, your draft and attachments come back in that chat, where the error shows. Resuming a queued message keeps its pictures and dropped files, and restoring a checkpoint keeps a draft you have started writing.
+- Switching projects opens a chat from the project you picked, and a new chat is no longer replaced when an older chat finishes loading.
+- Tab and Space work on the buttons, links, and menu items that have focus. They no longer move focus to the message box or toggle the sidebar while one of those has focus.
+- An attached picture that can no longer be shown, because its file is gone or its preview fails, shows its file icon instead, and is tried again the next time it appears.
+- Closing a terminal now fully ends its shell, instead of leaving it behind as a finished process.
+- A key press the agent makes with an unknown key name no longer leaves Shift, Control, or Alt stuck down.
+- A scheduled task whose time falls in the hour the clocks jump forward now runs an hour late, instead of switching the schedule off. A chat started by a scheduled task shows the task's name in the sidebar right away.
+- A plugin hook that never reads its input now stops at its timeout, instead of holding the agent's tool call past it.
+- Servers from an older MCP settings file are moved over even when an earlier move was cut short or a server name is unusual.
+
 ## [26.3.4] - 2026-11-01
 
 ### Added
