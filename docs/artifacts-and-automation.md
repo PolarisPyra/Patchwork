@@ -5,7 +5,7 @@ them changes how a turn is run.
 
 ## Artifacts
 
-`apps/web/src/features/chat/components/Artifact.tsx` draws two kinds of fence in a reply:
+`apps/web/src/features/chat/Artifact.tsx` draws two kinds of fence in a reply:
 
 | Language | What happens |
 | --- | --- |
@@ -19,11 +19,11 @@ height arrives as a message from the artifact.
 
 ## Scheduled tasks
 
-`apps/server/src/scheduled/mod.rs` works out the next run from the shape of a schedule and the local
+`crates/server/src/scheduled.rs` works out the next run from the shape of a schedule and the local
 clock; there is no cron parser. The shapes are Codex's own: every few hours, every day, weekdays,
 or named days.
 
-- The row is in `scheduled_tasks` (`apps/server/src/persistence/scheduled.rs`), and saving a task
+- The row is in `scheduled_tasks` (`crates/server/src/persistence/scheduled.rs`), and saving a task
   reschedules it from now.
 - `Server::run_due_scheduled_tasks` starts the tasks whose time has come. The desktop shell calls it
   every 30 seconds from a thread of its own (`start_scheduled_tasks` in
@@ -45,7 +45,7 @@ plugins/patchwork/
 └── hooks.json   { "hooks": { "stop": [ { "hooks": [ { "type": "command", "command": "…" } ] } ] } }
 ```
 
-`apps/server/src/plugins/` reads the manifest from `.patchwork-plugin/plugin.json`,
+`crates/server/src/plugins/` reads the manifest from `.patchwork-plugin/plugin.json`,
 `.codex-plugin/plugin.json`, or a plain `plugin.json`, so a Codex bundle works as it is. A folder
 with none of those and a `hooks.json` is a plugin of hooks alone, named for its folder unless the
 file gives `name`. `hooks` and `apps` are each either inline or a path, relative to the bundle
@@ -79,7 +79,7 @@ Each agent gets the payload and tool names it uses itself:
 | OpenCode | none | it has no hooks of this kind |
 
 A `builtin` handler, `{ "type": "builtin", "name": "boundedWaits" }`, is a check Patchwork carries
-itself (`apps/server/src/plugins/builtin/`). An agent CLI runs it as `patchwork --hook <name>
+itself (`crates/server/src/plugins/builtin/`). An agent CLI runs it as `patchwork --hook <name>
 <agent>`, which reads the call in that agent's format and answers in it; Patchwork's own agent runs it
 in-process. A name this version does not carry is logged and skipped. A built-in in a group with no
 `matcher` gets the tools it is for, so `boundedWaits` needs none: it covers each agent's shell tool.
@@ -96,11 +96,11 @@ skip it, such as OpenCode for a tool hook.
 
 ## Computer use
 
-`apps/server/src/computer/mod.rs` gives Patchwork's own agent a screenshot and the pointer and keyboard
+`crates/server/src/computer.rs` gives Patchwork's own agent a screenshot and the pointer and keyboard
 under it. It is off until Settings → Permissions turns it on; `set_enabled` mirrors the setting so
 the tool list and the approval rules can ask without a database read.
 
-- `apps/server/src/computer/screen.rs` captures the primary monitor. On Windows and macOS that is `xcap`.
+- `crates/server/src/computer.rs` captures the primary monitor. On Windows and macOS that is `xcap`.
   On Linux it is the desktop portal under Wayland, cut to the primary monitor that XWayland
   reports, and the root window under X11. It uses `zbus` and `x11rb`, which the app already builds
   for notifications and the clipboard. `xcap` is not used on Linux, since it would also build

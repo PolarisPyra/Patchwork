@@ -85,7 +85,7 @@ release, so the first `26.x` release reaches every installed copy.
 
 The repo's version always matches the latest tag. The script writes it into `package.json`,
 `apps/web/package.json`, `apps/desktop/package.json`, and `apps/desktop/src-tauri/tauri.conf.json`.
-The Rust crates read it from `tauri.conf.json` when they build (`apps/server/build.rs`); their own
+The Rust crates read it from `tauri.conf.json` when they build (`crates/server/build.rs`); their own
 versions stay at `0.0.0`, so a release never changes a Cargo file. The app shows it next to the
 project name in the top left corner. To fix a mismatch, run
 `scripts/release.sh version 26.1.0`.
@@ -197,7 +197,7 @@ The release job is the only one with the signing key or write access to the repo
 of the project's dependencies. For each file, it downloads it back from the update server, checks
 it matches the SHA-256 its build job reported, signs it with the Tauri CLI version `pnpm-lock.yaml`
 pins, and checks the signature with `minisign` against the key built into the app (`SIGNING_KEY` in
-`updates.rs`), the way the updater will. Any mismatch stops the release before `latest.json`
+`updates/release.rs`), the way the updater will. Any mismatch stops the release before `latest.json`
 changes, so installed copies are never offered a file that won't install. It then uploads
 `latest.json` to `<tag>/latest.json` and to `latest.json` (last, so it never names a file that
 isn't there yet), purges Bunny's cached copy, and creates a GitHub release named `Patchwork v26.1.0`.
@@ -278,7 +278,7 @@ release's section of `CHANGELOG.md`:
 
 ### How copies update
 
-`apps/desktop/src-tauri/src/updates.rs` checks `latest.json` 30 seconds after launch and then as
+`apps/desktop/src-tauri/src/updates/` checks `latest.json` 30 seconds after launch and then as
 often as **Settings → Updates** says. When the tag is newer than the running version, it picks its
 platform's file (the AppImage, the `-setup.exe`, or `Patchwork.app.tar.gz`), downloads it, and
 installs it only if both its SHA-256 and its minisign signature check out. The signature is checked
@@ -316,7 +316,7 @@ The workflow reads four repository secrets. The release script stops if any is m
 Set one with `gh secret set <NAME>` and paste the value at the prompt. If a Bunny key leaks,
 regenerate it in Bunny and set it again.
 
-The signing key's public half is in `updates.rs` (`SIGNING_KEY`), which the app and the release job
+The signing key's public half is in `updates/release.rs` (`SIGNING_KEY`), which the app and the release job
 check signatures against. If `TAURI_SIGNING_PRIVATE_KEY` is ever set to a different key, the
 release job stops before publishing. Losing the private key means no installed copy can update
 again, so keep a copy outside GitHub. Changing it means every copy needs a manual reinstall.

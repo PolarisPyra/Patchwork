@@ -141,7 +141,7 @@ resolve_version() {
 }
 
 # Writes the version into the package.json files and the Tauri config, which the app shows and the
-# installers use; the Rust crates read it from the Tauri config (apps/server/build.rs), so a release
+# installers use; the Rust crates read it from the Tauri config (crates/server/build.rs), so a release
 # leaves Cargo.toml and Cargo.lock alone.
 set_version() {
   local version file

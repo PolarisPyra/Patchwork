@@ -14,7 +14,7 @@ Thanks for helping out. Bug reports, fixes, and new guides are all welcome.
 2. Keep the change focused. One fix or feature per pull request is easier to review.
 3. Run the checks that match what you changed:
    - Web (`apps/web`): `pnpm typecheck`, and `pnpm format:check` for TSX changes
-   - Rust (`apps/server`, `apps/desktop`): `cargo clippy --workspace --all-targets` and `cargo test --workspace`
+   - Rust (`crates/server`, `apps/desktop`): `cargo clippy --workspace --all-targets` and `cargo test --workspace`
 4. Open a pull request. Describe what changed and why, and include a screenshot for UI changes.
 
 ## Commit messages

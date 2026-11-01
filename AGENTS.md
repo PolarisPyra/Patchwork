@@ -1,6 +1,6 @@
 # Agent instructions
 
-Rules for coding agents working in the Rust code in this repo (`apps/server` and `apps/desktop/src-tauri`).
+Rules for coding agents working in the Rust code in this repo (`crates/server` and `apps/desktop/src-tauri`).
 
 ## Scratch files
 
@@ -92,22 +92,23 @@ Every Tauri app uses this pnpm + Cargo monorepo layout, the one Patchwork uses. 
 
 ```
 .
-├── Cargo.toml              # Cargo workspace: members = ["apps/server", "apps/desktop/src-tauri"]
+├── Cargo.toml              # Cargo workspace: members = ["crates/server", "apps/desktop/src-tauri"]
 ├── package.json            # root package `@<name>/monorepo`; its scripts forward to the apps
 ├── pnpm-workspace.yaml     # packages: ["apps/*"]
 ├── scripts/                # release.sh, build.sh, and other repo scripts
 ├── packaging/              # <bin_name>.desktop
-└── apps/
-    ├── desktop/            # <desktop_pkg>: owns @tauri-apps/cli; scripts dev, build, tauri
-    │   └── src-tauri/      # Tauri crate <bin_name>: window, plugins, and commands
-    ├── web/                # <name>-web: Vite frontend; scripts dev, build, typecheck
+├── apps/
+│   ├── desktop/            # <desktop_pkg>: owns @tauri-apps/cli; scripts dev, build, tauri
+│   │   └── src-tauri/      # Tauri crate <bin_name>: window, plugins, and commands
+│   └── web/                # <name>-web: Vite frontend; scripts dev, build, typecheck
+└── crates/
     └── server/             # <name>-server: Rust library crate with the app's logic
 ```
 
 - The frontend lives in `apps/web`, not inside `apps/desktop`. In `tauri.conf.json`, `frontendDist` is `../../web/dist`, `beforeDevCommand` is `pnpm --filter <name>-web dev`, and `beforeBuildCommand` is `pnpm --filter <name>-web build`.
-- The app's logic lives in the `apps/server` library crate. The Tauri crate depends on it by path (`<name>-server = { path = "../../server" }`) and only exposes it as Tauri commands.
+- The app's logic lives in the `crates/server` library crate. The Tauri crate depends on it by path (`<name>-server = { path = "../../../crates/server" }`) and only exposes it as Tauri commands.
 - Root scripts call the apps with `pnpm --filter`: `dev`, `dev:web`, `build`, `typecheck`, `tauri`, and `test` (`cargo test --workspace`). Run the app with `pnpm tauri dev`.
-- A new package or crate goes under `apps/`. Add each new crate to `members` in the root `Cargo.toml`.
+- `apps/` holds what ships, and `crates/` holds the Rust libraries it links. A new package goes under `apps/` and a new library crate under `crates/`. Add each new crate to `members` in the root `Cargo.toml`.
 
 ### Values to set
 
