@@ -268,6 +268,8 @@ export default function Chat({
   const checkpoints = useCheckpoints(thread?.id, projectId, working);
   // Before the first message any connected agent's models are offered.
   const offered = agents.includes(agent) ? agents : [agent, ...agents];
+  /** Every agent is switched off, so a new chat has nothing to run it. */
+  const noAgents = empty && agents.length === 0;
   // What the user sent in this chat, for Up/Down in the composer; repeats count once. It keeps
   // its identity while a reply streams, so the composer skips those renders.
   const historyRef = useRef<HistoryEntry[]>([]);
@@ -960,7 +962,9 @@ export default function Chat({
           backgroundRunning={background.some(
             (task) => task.status === "running" || task.status === "waiting",
           )}
-          error={error}
+          error={
+            error ?? (noAgents ? "No agents connected. Turn one on in Settings → Providers." : null)
+          }
           agent={agent}
           model={model}
           agents={stableComposerAgents}
@@ -985,7 +989,7 @@ export default function Chat({
           history={history}
           files={files}
           deferFocus={showChoices || showQuestion}
-          disabled={folderMissing}
+          disabled={folderMissing || noAgents}
           projectId={projectId}
           role={thread ? thread.role : (newOpts.role ?? null)}
           onPickRole={composerHandlers.onPickRole}

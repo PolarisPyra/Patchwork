@@ -199,8 +199,8 @@ function CliProviderRows({ settings, updateSettings }: PaneProps) {
         const on = connected.includes(kind);
         const path = settings.agentPaths[kind];
         const badge = s === undefined ? "Checking…" : s?.installed ? "Installed" : "Not installed";
-        // Keep at least one agent connected, and only connect installed ones.
-        const locked = on ? connected.length === 1 : !s?.installed;
+        // Only installed agents can be switched on; any agent can be switched off.
+        const locked = !on && !s?.installed;
         return (
           <Fragment key={kind}>
             <div className="flex items-center gap-3 border-b border-border py-2.5">

@@ -64,8 +64,7 @@ export function syncAgents(providers: ApiProviderView[], updateSettings: UpdateS
     const has = s.agents.includes("api");
     if (usable === has) return s;
     if (usable) return { ...s, agents: [...s.agents, "api"] };
-    const agents = s.agents.filter((k) => k !== "api");
-    return agents.length > 0 ? { ...s, agents } : s;
+    return { ...s, agents: s.agents.filter((k) => k !== "api") };
   });
 }
 
