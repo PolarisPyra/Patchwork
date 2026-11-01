@@ -32,6 +32,9 @@ pub enum Delivery {
 #[derive(Default)]
 pub struct Runner {
     pub(in crate::orchestration) turns: Mutex<HashMap<String, RunningTurn>>,
+    /// Threads whose turn is being started. Its agent is not in `turns` until it is spawned, so a
+    /// second start in that window would run a second agent beside the first.
+    pub(in crate::orchestration) starting: Mutex<HashSet<String>>,
     /// Messages this process has handed to a turn, whether steered or queued. Written under the
     /// `turns` lock, so a withdrawal sees it in the same order as the queue it checks.
     pub(in crate::orchestration) handed_over: Mutex<HashSet<String>>,
@@ -43,6 +46,14 @@ pub struct Runner {
 }
 
 impl Runner {
+    /// Whether a turn is being started in the thread, before its agent is in `turns`.
+    pub fn is_starting(&self, thread_id: &str) -> bool {
+        self.starting
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .contains(thread_id)
+    }
+
     /// Whether a reply is under way in the thread. An agent that is only kept up by shell
     /// commands it left running does not count.
     pub fn is_running(&self, thread_id: &str) -> bool {
@@ -216,11 +227,10 @@ impl Runner {
     /// to the agent first, with a moment to act on it. The agent's scope is stopped along
     /// with its process group, so a command it started in a session of its own, which
     /// could keep its output open, ends with it.
-    pub fn cancel(&self, thread_id: &str, last_line: Option<String>) -> Vec<String> {
+    pub fn cancel(&self, thread_id: &str, last_line: Option<String>) {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
-        let mut dropped = Vec::new();
         if let Some(turn) = turns.get(thread_id) {
-            dropped = stop_turn(turn);
+            stop_turn(turn);
             let (pid, exited, scope) = (turn.pid, turn.exited.clone(), turn.scope.clone());
             let grace = if last_line.is_some_and(|line| write_line(&turn.stdin, &line)) {
                 Duration::from_millis(300)
@@ -235,23 +245,17 @@ impl Runner {
                 }
             });
         }
-        dropped
     }
 
-    /// Stops the reply under way and drops the messages waiting for it, as `cancel` does, but
+    /// Stops the reply under way and leaves the messages waiting for it queued, as `cancel` does, but
     /// by interrupting the agent, which ends its turn cleanly in its session. Claude then stays
     /// up for the next message. An agent that cannot be interrupted, or that does not end its
     /// reply within `INTERRUPT_GRACE`, is stopped as `cancel` stops it. `session_id` is the
     /// thread's agent session, which Codex needs.
-    pub fn interrupt(
-        &self,
-        thread_id: &str,
-        session_id: Option<&str>,
-        last_line: Option<String>,
-    ) -> Vec<String> {
+    pub fn interrupt(&self, thread_id: &str, session_id: Option<&str>, last_line: Option<String>) {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(turn) = turns.get(thread_id) else {
-            return Vec::new();
+            return;
         };
         let turn_id = turn
             .native_turn
@@ -266,7 +270,7 @@ impl Runner {
             drop(turns);
             return self.cancel(thread_id, last_line);
         };
-        let dropped = stop_turn(turn);
+        stop_turn(turn);
         if let Some(last_line) = &last_line {
             write_line(&turn.stdin, last_line);
         }
@@ -291,7 +295,6 @@ impl Runner {
                 }
             }
         });
-        dropped
     }
 
     /// Stops every running agent, so none outlives the app when it quits. Agents that
@@ -321,13 +324,8 @@ impl Runner {
     }
 }
 
-/// Marks the turn stopped and takes back the messages waiting for it, returning their ids.
-fn stop_turn(turn: &RunningTurn) -> Vec<String> {
+/// Marks the turn stopped. The messages waiting for it stay queued, and the turn's end takes
+/// them off its queue.
+fn stop_turn(turn: &RunningTurn) {
     turn.cancelled.store(true, Ordering::SeqCst);
-    turn.queue
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .drain(..)
-        .map(|f| f.message_id)
-        .collect()
 }

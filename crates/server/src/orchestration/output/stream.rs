@@ -270,7 +270,13 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
         }
         AgentEvent::PlanUpdated { steps, .. } => msg.plan = steps.clone(),
         AgentEvent::Usage { usage, .. } => msg.usage = Some(*usage),
-        AgentEvent::MessageQueued { queued, .. } => msg.queued = *queued,
+        AgentEvent::MessageQueued { queued, .. } => {
+            msg.queued = *queued;
+            // A message waiting in the queue was not taken by the agent, so it is not a steer.
+            if *queued {
+                msg.steer = false;
+            }
+        }
         AgentEvent::MessageSteered { .. } => {
             msg.queued = false;
             msg.steer = true;

@@ -148,7 +148,11 @@ impl Server {
                 .steer(thread_id, input, thread.session_id.as_deref(), &[]),
             Delivery::NotRunning
         ) {
-            self.capture_checkpoint(thread_id, first);
+            // The reply answers the newest of the merged messages, which is the one a checkpoint
+            // is looked up under.
+            if let Some(last) = queued.last() {
+                self.capture_checkpoint(thread_id, &last.id);
+            }
             return Ok(());
         }
         if let Err(error) = self.runner.start_turn(

@@ -190,7 +190,11 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
       return updateMessage(thread, event.messageId, (m) => ({ ...m, refusal: event.refusal }));
     case "messageQueued": {
       const { messageId, queued } = event;
-      return updateMessage(thread, messageId, (m) => ({ ...m, queued }));
+      return updateMessage(thread, messageId, (m) => ({
+        ...m,
+        queued,
+        steer: queued ? false : m.steer,
+      }));
     }
     case "messageSteered":
       return updateMessage(thread, event.messageId, (m) => ({ ...m, queued: false, steer: true }));

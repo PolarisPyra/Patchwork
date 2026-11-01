@@ -102,6 +102,42 @@ pub struct TurnRequest {
     pub images: Vec<provider::Image>,
 }
 
+/// A thread's place in `Runner::starting`, held until its turn is in `turns` or has failed to start.
+struct Starting<'a> {
+    runner: &'a Runner,
+    thread_id: String,
+}
+
+impl<'a> Starting<'a> {
+    fn claim(runner: &'a Runner, thread_id: &str) -> Result<Self, String> {
+        let mut starting = runner
+            .starting
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if !starting.insert(thread_id.to_string()) {
+            return Err(STILL_STARTING.into());
+        }
+        Ok(Self {
+            runner,
+            thread_id: thread_id.to_string(),
+        })
+    }
+}
+
+impl Drop for Starting<'_> {
+    fn drop(&mut self) {
+        self.runner
+            .starting
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&self.thread_id);
+    }
+}
+
+/// Refuses a send to a thread whose turn is still starting, rather than starting a second agent.
+pub(crate) const STILL_STARTING: &str =
+    "This chat is still starting its turn; send again in a moment";
+
 impl Runner {
     pub fn start_turn(&self, server: &Arc<Server>, request: TurnRequest) -> Result<(), String> {
         let TurnRequest {
@@ -110,6 +146,7 @@ impl Runner {
             attachments,
             images,
         } = request;
+        let _starting = Starting::claim(self, &thread_id)?;
         // A turn of its own (a /goal, a compaction) replaces an idle agent process.
         self.retire_idle(&thread_id);
         let (

@@ -104,6 +104,10 @@ impl Server {
         queue: bool,
     ) -> Result<Message, String> {
         let images = provider::load_images(&attachments)?;
+        // Refused before anything is stored: a turn still starting has no agent to write to.
+        if self.runner.is_starting(&thread_id) {
+            return Err(crate::orchestration::turn::start::STILL_STARTING.into());
+        }
         if let Some(command) = provider::goal_command(&text) {
             if self.runner.is_running(&thread_id) {
                 return Err(
@@ -378,22 +382,12 @@ impl Server {
             let active = t.goal.is_some_and(|g| g.status == GoalStatus::Active);
             provider::goal_pause(t.agent, t.session_id.as_deref()?).filter(|_| active)
         });
-        let dropped = if interrupt {
+        if interrupt {
             self.runner
-                .interrupt(thread_id, session_id.as_deref(), pause)
+                .interrupt(thread_id, session_id.as_deref(), pause);
         } else {
-            self.runner.cancel(thread_id, pause)
-        };
-        dropped.into_iter().for_each(|message_id| {
-            orchestration::publish(
-                self,
-                thread_id,
-                AgentEvent::MessageQueued {
-                    message_id,
-                    queued: false,
-                },
-            );
-        });
+            self.runner.cancel(thread_id, pause);
+        }
     }
 
     pub fn stop_subagent(&self, thread_id: &str, tool_id: &str) -> Result<(), String> {

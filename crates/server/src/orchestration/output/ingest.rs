@@ -76,7 +76,7 @@ use crate::orchestration::output::stream::Unsaved;
 use crate::orchestration::tasks::subagents::finish_child;
 use crate::orchestration::tasks::subagents::open_child;
 use crate::orchestration::tasks::subagents::SubagentThread;
-use crate::orchestration::turn::end::{TurnEnd, finish, plugin_hooks, record_turn};
+use crate::orchestration::turn::end::{TurnEnd, finish, hold_unanswered, plugin_hooks, record_turn};
 use crate::orchestration::turn::start::{PendingApproval, Turn};
 use crate::orchestration::decide;
 use crate::orchestration::unasked;
@@ -226,15 +226,10 @@ pub(in crate::orchestration) fn ingest(
         }
         // A subagent's frames went to its own thread above.
         let routed = turn.agent == AgentKind::Claude && value["parent_tool_use_id"].is_string();
-        if parsed.is_empty() && !routed && AGENTS.logs(LogLevel::Warning) {
+        if parsed.is_empty() && !routed && AGENTS.logs(LogLevel::Debug) {
             let kind = line_kind(&value);
             if logged_kinds.insert(kind.clone()) {
-                AGENTS.write(
-                    LogLevel::Warning,
-                    "ignored",
-                    &source(&turn),
-                    Data::Text(kind),
-                );
+                AGENTS.write(LogLevel::Debug, "ignored", &source(&turn), Data::Text(kind));
             }
         }
         for item in parsed {
@@ -467,10 +462,17 @@ pub(in crate::orchestration) fn ingest(
                         .lock()
                         .unwrap_or_else(PoisonError::into_inner)
                         .pop_front();
-                    turn.queue
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .extend(refused);
+                    if let Some(refused) = refused {
+                        // Waits as a queued message, so the turn's end sends it on.
+                        turn.publish(AgentEvent::MessageQueued {
+                            message_id: refused.message_id.clone(),
+                            queued: true,
+                        });
+                        turn.queue
+                            .lock()
+                            .unwrap_or_else(PoisonError::into_inner)
+                            .push(refused);
+                    }
                     if ended && !goal_run {
                         turn.close_unless_steered();
                     }
@@ -714,7 +716,9 @@ pub(in crate::orchestration) fn ingest(
     }
     let exit = child.wait().ok();
     let status = exit.map_or("unknown".into(), |s| s.to_string());
-    let level = if exit.is_some_and(|s| s.success()) {
+    // A turn the user stopped, or the app quit, ends by signal: that is not a failure.
+    let stopped = turn.cancelled.load(Ordering::SeqCst);
+    let level = if stopped || exit.is_some_and(|s| s.success()) {
         LogLevel::Info
     } else {
         LogLevel::Error
@@ -892,10 +896,15 @@ fn go_idle(
                 let _ = waiter.send(false);
             });
         drop(hooks);
-        turn.steers
+        // Steers the agent never took are held as queued messages, as the turn's end holds them.
+        let unanswered: Vec<String> = turn
+            .steers
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .clear();
+            .drain(..)
+            .map(|f| f.message_id)
+            .collect();
+        hold_unanswered(turn, &unanswered);
         let (server, thread_id, root, agent) = (
             turn.server.clone(),
             turn.thread_id.clone(),

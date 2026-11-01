@@ -15,6 +15,7 @@ use crate::logging::{AGENTS, Data, Source};
 use crate::settings::LogLevel;
 use crate::orchestration::FollowUpInput;
 use crate::orchestration::changes::checkpoint;
+use crate::orchestration::goal::clear_command;
 use crate::orchestration::output::stream::publish;
 use crate::orchestration::turn::start::{Turn, TurnRequest};
 
@@ -62,6 +63,44 @@ pub(in crate::orchestration) fn record_turn(turn: &Turn, replies: &[String]) {
     }
 }
 
+/// Holds the steers a stopped turn never answered as queued messages, so they wait to be resumed
+/// instead of staying in the thread as sent. They were handed to the agent, but its turn is gone,
+/// so they can be taken back again.
+pub(in crate::orchestration) fn hold_unanswered(turn: &Turn, ids: &[String]) {
+    if ids.is_empty() {
+        return;
+    }
+    let saved = turn.server.store.update_thread(&turn.thread_id, |t| {
+        t.messages
+            .iter_mut()
+            .filter(|m| ids.contains(&m.id))
+            .for_each(|m| {
+                m.steer = false;
+                m.queued = true;
+            });
+    });
+    if let Err(e) = saved {
+        log::warn!("failed to hold the unanswered steering messages: {e}");
+        return;
+    }
+    turn.server
+        .runner
+        .handed_over
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .retain(|id| !ids.contains(id));
+    ids.iter().for_each(|id| {
+        publish(
+            &turn.server,
+            &turn.thread_id,
+            AgentEvent::MessageQueued {
+                message_id: id.clone(),
+                queued: true,
+            },
+        );
+    });
+}
+
 pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
     let TurnEnd {
         status,
@@ -73,7 +112,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
     // Forget the turn before announcing it. Queued messages remain persisted in the
     // thread until the user explicitly resumes them; unanswered steers were already
     // delivered to the agent and continue automatically if needed.
-    let unanswered = {
+    let mut unanswered = {
         let mut turns = turn
             .server
             .runner
@@ -89,7 +128,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         }
         // Queued messages stay in the thread as queued until the turn has finished.
         // Steering messages the agent never answered continue automatically unless
-        // the turn was stopped; messages sent after Stop still start the next turn.
+        // the turn was stopped; a stopped turn holds them as queued messages instead.
         let unanswered = turn
             .steers
             .lock()
@@ -107,8 +146,18 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         queued.iter().for_each(|message| {
             handed_over.remove(&message.message_id);
         });
-        if cancelled { Vec::new() } else { unanswered }
+        unanswered
     };
+    if cancelled {
+        hold_unanswered(
+            &turn,
+            &unanswered
+                .iter()
+                .map(|f| f.message_id.clone())
+                .collect::<Vec<_>>(),
+        );
+        unanswered.clear();
+    }
     if session_lost && unanswered.is_empty() {
         let server = &turn.server;
         let reset = server.store.update_thread(&turn.thread_id, |t| {
@@ -238,9 +287,13 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         ) {
             log::warn!("failed to start the turn for queued messages: {e}");
         }
-    } else if !cancelled && status == MessageStatus::Complete {
+    } else if !cancelled
+        && status == MessageStatus::Complete
+        && turn.text != clear_command(turn.agent)
+    {
         // Queued messages go once the turn has finished; after Stop or an error they wait for
-        // the user to send them.
+        // the user to send them. The turn that only drops the goal after a Stop is not a turn
+        // the user ended, so the messages it held keep waiting too.
         turn.server.send_queued_later(&turn.thread_id);
     }
 }
