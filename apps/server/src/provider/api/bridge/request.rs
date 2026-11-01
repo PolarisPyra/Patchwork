@@ -76,8 +76,6 @@ struct Body<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) tools: Option<&'a Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(super) tool_choice: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) reasoning_effort: Option<&'a str>,
 }
 
@@ -167,36 +165,20 @@ impl Agent {
     /// Sends the conversation and streams the reply, retrying a request that failed before
     /// any of it arrived.
     pub(super) fn complete(&self, with_tools: bool) -> Result<Reply, Failure> {
-        self.send(None, with_tools.then_some(&self.tools), None)
+        self.send(with_tools.then_some(&self.tools))
     }
 
-    /// Sends the conversation as the last request sent it, tools and all, so an endpoint that
-    /// caches prompts reads it from its cache, with `message` after it. The model answers in
-    /// text, since it may not call a tool.
-    pub(super) fn complete_after(&self, message: Value) -> Result<Reply, Failure> {
-        self.send(Some(message), Some(&self.tools), Some("none"))
-    }
-
-    fn send(
-        &self,
-        extra: Option<Value>,
-        tools: Option<&Value>,
-        tool_choice: Option<&str>,
-    ) -> Result<Reply, Failure> {
-        let mut history: Cow<[Value]> = if self.request.images_ok {
+    fn send(&self, tools: Option<&Value>) -> Result<Reply, Failure> {
+        let history: Cow<[Value]> = if self.request.images_ok {
             Cow::Borrowed(&self.messages[..])
         } else {
             Cow::Owned(self.without_images())
         };
-        // Taken before `extra`, so the conversation goes as it went without it.
         let last_user = self
             .messages
             .iter()
             .rposition(|m| m["role"] == "user")
             .unwrap_or(0);
-        if let Some(extra) = extra {
-            history.to_mut().push(extra);
-        }
         let body = Body {
             model: &self.request.model,
             messages: Messages {
@@ -207,7 +189,6 @@ impl Agent {
             stream: true,
             stream_options: json!({"include_usage": true}),
             tools,
-            tool_choice,
             reasoning_effort: self.request.effort.as_deref(),
         };
         let body = serde_json::to_string(&body).map_err(|e| e.to_string())?;

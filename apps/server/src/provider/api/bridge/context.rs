@@ -87,20 +87,12 @@ fn text_len(message: &Value) -> usize {
 const COMPACT_PROMPT: &str = "\
 Summarize the conversation below, between a user and a coding agent, so that the agent can continue \
 the work from the summary alone. Include the user's goals and instructions, decisions made, files \
-read or changed with what was learned or done, commands run and their results, and what is left to \
-do. Do not continue the work yourself. Reply with the summary only.";
+read or changed with what was learned or done, commands run and their results, the full task list \
+(update_plan steps), each with its status, and what is left to do. Do not continue the work \
+yourself. Reply with the summary only.";
 
-/// The request that follows the conversation itself, as it went, so the endpoint can read all
-/// before it from its prompt cache.
-const COMPACT_REQUEST: &str = "\
-Stop working on the task. Summarize this conversation so that you can continue the work from the \
-summary alone. Include the user's goals and instructions, decisions made, files read or changed \
-with what was learned or done, commands run and their results, and what is left to do. Do not call \
-any tool. Reply with the summary only.";
-
-/// The conversation as one transcript, quoted in a request to summarize it. Asked at the end of the
-/// conversation without its tools, a model partway through a task carries on with the task and
-/// replies with nothing, since it has no tools to call.
+/// The conversation as one transcript, quoted in a request to summarize it. The request is a message
+/// of its own, sent without tools, so the model summarizes the transcript instead of carrying on.
 fn summary_request(messages: &[Value]) -> Value {
     let transcript = messages
         .iter()
@@ -109,7 +101,10 @@ fn summary_request(messages: &[Value]) -> Value {
                 Value::String(text) => text.clone(),
                 Value::Array(parts) => parts
                     .iter()
-                    .filter_map(|p| p["text"].as_str())
+                    .filter_map(|p| match p["type"].as_str() {
+                        Some("image_url") => Some("[image]"),
+                        _ => p["text"].as_str(),
+                    })
                     .collect::<Vec<_>>()
                     .join("\n"),
                 _ => String::new(),
@@ -201,19 +196,9 @@ impl Agent {
             .flatten()
             .and_then(|m| m["content"].as_str())
             .map(str::to_string);
-        // Either attempt may fail after some of its reply arrived, so neither streams.
+        // A retry after a context error may follow part of a reply, so the summary does not stream.
         self.quiet = true;
-        let fits = self
-            .model_window()
-            .is_none_or(|window| self.estimate() <= window * 9 / 10);
-        let in_place =
-            fits.then(|| self.complete_after(json!({"role": "user", "content": COMPACT_REQUEST})));
-        let reply = match in_place {
-            Some(Ok(reply)) if reply.calls.is_empty() && !reply.content.trim().is_empty() => {
-                Ok(reply)
-            }
-            _ => self.summarize_transcript(),
-        };
+        let reply = self.summarize_transcript();
         self.quiet = false;
         let reply = reply?;
         if reply.content.trim().is_empty() {
@@ -238,9 +223,8 @@ impl Agent {
         Ok(())
     }
 
-    /// The model's summary of the conversation quoted as one transcript, the way to ask when the
-    /// conversation cannot go as it is. When even that does not fit, the oldest messages are left
-    /// out of it until it does.
+    /// The model's summary of the conversation, quoted as one transcript. When it does not fit the
+    /// model's window, the oldest messages are left out of it until it does.
     fn summarize_transcript(&mut self) -> Result<Reply, Failure> {
         // An endpoint that cuts a prompt to fit, as LM Studio does, would summarize only part of
         // the conversation, so when the model's window is known the oldest messages go first.
