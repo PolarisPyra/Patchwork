@@ -33,6 +33,8 @@ export interface NewThreadOptions {
   compactWindow: number | null;
   /** Start the thread in plan mode. */
   planMode?: boolean;
+  /** The custom agent the thread starts in the role of. */
+  role?: string | null;
 }
 
 /** How often streamed events are applied to the threads, in milliseconds. */
@@ -283,13 +285,14 @@ export function useThreads(initialProjectId: string | null) {
       slashCommands: [],
       importedFrom: null,
       contextPending: false,
-      role: null,
+      role: opts.role ?? null,
     };
     setThreads((prev) => [draft, ...prev]);
     // Through `select`, so a load still running for an earlier pick cannot open that one instead.
     select(id);
+    let thread: Thread;
     try {
-      const thread = await api.createThread(
+      thread = await api.createThread(
         id,
         projectId,
         opts.agent,
@@ -299,16 +302,19 @@ export function useThreads(initialProjectId: string | null) {
         opts.compactWindow,
         draft.planMode,
       );
-      setThreads((prev) =>
-        prev.map((t) => (t.id === id ? { ...thread, messages: t.messages } : t)),
-      );
-      return thread;
     } catch (e) {
       // The row was never saved, so it goes, and the error reaches the caller.
       setThreads((prev) => prev.filter((t) => t.id !== id));
       setSelectedId((current) => (current === id ? null : current));
       throw e;
     }
+    // The row is saved by now, so a role that fails to apply leaves the thread in place.
+    const role = opts.role ?? null;
+    if (role) await api.setThreadRole(id, role);
+    setThreads((prev) =>
+      prev.map((t) => (t.id === id ? { ...thread, role, messages: t.messages } : t)),
+    );
+    return { ...thread, role };
   }
 
   async function deleteThread(id: string): Promise<void> {

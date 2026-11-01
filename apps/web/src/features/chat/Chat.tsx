@@ -301,6 +301,8 @@ export default function Chat({
     setSending(true);
     try {
       await onSend(text, files, newOpts, queue);
+      // The role went into the chat that was started; the next new chat starts with none.
+      setPick((picked) => (picked ? { ...picked, role: null } : picked));
     } catch (e) {
       // A send from the new-task screen has opened its thread by now, if one was made. The error
       // and the text go back to that thread, where the composer now is.
@@ -764,8 +766,13 @@ export default function Chat({
     onAttachPaths: (paths: string[]) => void attach(paths),
     onRemoveAttachment: (i: number) =>
       setComposerAttachments(composerAttachments.filter((_, j) => j !== i)),
-    onClearRole: () => {
-      if (thread) api.setThreadRole(thread.id, null).catch((e: unknown) => setError(errorText(e)));
+    onPickRole: (next: string | null) => {
+      if (!thread) {
+        setPick({ ...newOpts, role: next });
+        return;
+      }
+      setError(null);
+      api.setThreadRole(thread.id, next).catch((e: unknown) => setError(errorText(e)));
     },
   });
 
@@ -980,8 +987,8 @@ export default function Chat({
           deferFocus={showChoices || showQuestion}
           disabled={folderMissing}
           projectId={projectId}
-          role={thread?.role ?? null}
-          onClearRole={composerHandlers.onClearRole}
+          role={thread ? thread.role : (newOpts.role ?? null)}
+          onPickRole={composerHandlers.onPickRole}
         />
       </div>
     </div>

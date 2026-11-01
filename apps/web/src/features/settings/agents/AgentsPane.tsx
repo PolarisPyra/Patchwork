@@ -159,7 +159,7 @@ export default function AgentsPane() {
               <button
                 className="btn flex-none"
                 aria-label={`Edit ${agent.name}`}
-                onClick={() => run(api.openAgent(agent.path))}
+                onClick={() => run(api.openAgent(agent.path, null))}
               >
                 Edit
               </button>

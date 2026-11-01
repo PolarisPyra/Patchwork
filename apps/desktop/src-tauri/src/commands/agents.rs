@@ -83,10 +83,20 @@ pub(crate) fn watch_agents(server: Srv, on_change: Channel<AgentsView>) -> Agent
     }
 }
 
-/// Opens a custom agent's file in the user's editor.
+/// Opens a custom agent's file in the user's editor. The agent is one a chat in the project can
+/// summon, so a project's own agents open too.
 #[tauri::command]
-pub(crate) async fn open_agent(app: AppHandle, server: Srv<'_>, path: String) -> Res<()> {
-    if !server.agents.list().iter().any(|a| a.path == path) {
+pub(crate) async fn open_agent(
+    app: AppHandle,
+    server: Srv<'_>,
+    path: String,
+    project_id: Option<String>,
+) -> Res<()> {
+    if !server
+        .project_agents(project_id.as_deref())
+        .iter()
+        .any(|a| a.path == path)
+    {
         return Err("That is not an agent".into());
     }
     let path = std::path::PathBuf::from(path);

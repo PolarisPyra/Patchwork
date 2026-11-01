@@ -6,7 +6,6 @@ import {
   FolderIcon,
   PaperclipIcon,
   SquareIcon,
-  XIcon,
 } from "@phosphor-icons/react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
@@ -44,7 +43,8 @@ import {
 } from "~/features/chat/lib/composerExtensions";
 import { keepTexEscapes, MARKDOWN_COPY_ATTR } from "~/features/chat/lib/markdownCopy";
 import { useAgents } from "~/lib/agents";
-import { DEFAULT_SIGILS, getSigils, useSigils } from "~/lib/sigils";
+import { DEFAULT_SIGILS, getSigils } from "~/lib/sigils";
+import AgentPicker from "~/features/chat/composer/AgentPicker";
 import FormatBar from "~/features/chat/composer/FormatBar";
 import ModelPicker from "~/features/chat/composer/ModelPicker";
 import type { DropMentions, HistoryEntry, MentionItem } from "~/features/chat/composer/types";
@@ -108,9 +108,9 @@ interface ComposerProps {
   disabled: boolean;
   /** The project, whose own custom agents can be summoned too. */
   projectId: string | null;
-  /** The primary custom agent the chat is in the role of. */
+  /** The custom agent the chat is in the role of. */
   role: string | null;
-  onClearRole: () => void;
+  onPickRole: (role: string | null) => void;
 }
 
 /** The recalled history entry, while the draft still holds it unchanged. */
@@ -202,7 +202,7 @@ function Composer({
   disabled,
   projectId,
   role,
-  onClearRole,
+  onPickRole,
 }: ComposerProps) {
   const models = useModels(agents);
   // The model's own effort levels, or null when its CLI does not report them.
@@ -234,7 +234,6 @@ function Composer({
       : null;
   const skillMenu = slash?.startsWith("$") ?? false;
   const agentMenu = slash?.startsWith("&") ?? false;
-  const sigils = useSigils();
   // The agents folder's agents are watched; the project's own are read again, with them, each
   // time the menu opens.
   const folderAgents = useAgents().agents;
@@ -864,23 +863,7 @@ function Composer({
           onCompactNow={onCompactNow}
         />
         <AccessPicker mode={accessMode} onPick={onPickAccess} />
-        {role && (
-          <span
-            className="inline-flex h-7 items-center gap-1 rounded-[var(--radius-sm)] bg-warning/15 pr-1 pl-2 font-[family-name:var(--font-mono)] text-[length:var(--fs-sm)] text-fg"
-            title="This chat's agent"
-          >
-            {sigils.agents}
-            {role}
-            <button
-              className="grid h-4 w-4 flex-none cursor-pointer place-items-center rounded-full border-none bg-transparent p-0 text-fg-muted hover:bg-hover hover:text-fg"
-              onClick={onClearRole}
-              title="Stop acting as this agent"
-              aria-label={`Stop acting as ${role}`}
-            >
-              <XIcon size={10} />
-            </button>
-          </span>
-        )}
+        <AgentPicker projectId={projectId} role={role} onPick={onPickRole} />
         <span className="flex-1" />
         {/* Hidden when the composer is too narrow for the pickers and the formatting buttons together. */}
         <div className={role ? "hidden @[780px]:block" : "hidden @[640px]:block"}>
