@@ -3,6 +3,20 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.3.3] - 2026-11-01
+
+### Added
+
+- Screen readers and desktop automation tools can now read and use every part of the app: every button and field has a name, menus, tabs and dialogs say whether they are open or selected, errors are announced, and the sidebar, file panel and terminal panel resize with the arrow keys. Buttons that appear on hover, file mentions in your messages, terminal tabs and subagent details can all be reached with the keyboard, and the loading indicators in onboarding, API provider settings and the usage popup now use the steady spinner.
+
+### Changed
+
+- Agents connected through an API provider hold up better on long tasks: condensing a long conversation keeps the most recent exchanges word for word, very long command output is saved to a file the agent can read back instead of filling the conversation, a request that fails for a moment is tried again, and an agent that keeps repeating the same call is told to stop. Sending /compact while a reply is running now condenses the conversation without ending the reply.
+
+### Fixed
+
+- The Tasks bar above the chat box now highlights the task the agent is working on, and its dots slide along so that task is always in view, with a count of the tasks before and after it. Before, it could highlight an earlier task, light up two tasks at once, or name the wrong task once a reply stopped.
+
 ## [26.3.2] - 2026-10-31
 
 ### Fixed
