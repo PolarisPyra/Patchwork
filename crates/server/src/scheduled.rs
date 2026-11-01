@@ -177,6 +177,12 @@ impl Server {
         // the naming a new thread gets from its first line cannot take the name back.
         self.store
             .update_thread(&thread.id, |t| t.title = task.name.clone())?;
+        self.emit(AgentEventEnvelope {
+            thread_id: thread.id.clone(),
+            event: AgentEvent::TitleUpdated {
+                title: task.name.clone(),
+            },
+        });
         let thread = self.store.thread(&thread.id).unwrap_or(thread);
         Ok(thread)
     }
@@ -327,12 +333,18 @@ fn day_allowed(schedule: &Schedule, day: NaiveDate) -> bool {
     }
 }
 
-/// The first run after `now`, as Unix milliseconds.
+/// The first run after `now`, as Unix milliseconds. A time the clocks jump over runs an hour
+/// later, once the clock has moved past it.
 pub fn next_run_at(schedule: &Schedule, now: DateTime<Local>) -> Option<i64> {
     let next = next_after(schedule, now.naive_local())?;
     Local
         .from_local_datetime(&next)
         .earliest()
+        .or_else(|| {
+            Local
+                .from_local_datetime(&(next + Duration::hours(1)))
+                .earliest()
+        })
         .map(|at| at.timestamp_millis())
 }
 
