@@ -302,9 +302,11 @@ export default function Chat({
     try {
       await onSend(text, files, newOpts, queue);
     } catch (e) {
-      // A send from the new-task screen has opened its thread by now, if one was made.
-      setErrorFor(sentKey === "new" ? keyRef.current : sentKey, errorText(e));
-      if (restoreOnError) restoreDraft(sentKey, text, draftWithout(text, files));
+      // A send from the new-task screen has opened its thread by now, if one was made. The error
+      // and the text go back to that thread, where the composer now is.
+      const errorKey = sentKey === "new" ? keyRef.current : sentKey;
+      setErrorFor(errorKey, errorText(e));
+      if (restoreOnError) restoreDraft(errorKey, text, draftWithout(text, files));
     } finally {
       setSending(false);
     }
@@ -338,8 +340,11 @@ export default function Chat({
     setError(null);
     try {
       await onRestoreCheckpoint(thread.id, message.id);
-      setDraft(message.text);
-      setAttachments(draftWithout(message.text, message.attachments));
+      // What is written in the composer now stays; the restored message only fills an empty one.
+      if (!draft.trim() && attachments.length === 0) {
+        setDraft(message.text);
+        setAttachments(draftWithout(message.text, message.attachments));
+      }
     } catch (e) {
       setError(errorText(e));
     }
@@ -469,9 +474,10 @@ export default function Chat({
       void dispatch("/compact", [], false);
       return;
     }
+    const text = draft.trim();
     setDraft("");
     setAttachments([]);
-    void dispatch(draft.trim(), attachments, true);
+    void dispatch(text, sentWith(text, attachments), true);
   }
 
   // Handed to a memoized Transcript, whose rows then skip the renders a stream causes.
