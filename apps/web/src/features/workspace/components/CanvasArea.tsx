@@ -1,4 +1,11 @@
-import { lazy, Suspense, useState, type MouseEvent, type RefObject } from "react";
+import {
+  lazy,
+  Suspense,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type RefObject,
+} from "react";
 import type { FileChange, Message } from "~/api";
 import type { CanvasTab } from "~/features/canvas/Canvas";
 
@@ -58,10 +65,32 @@ export default function CanvasArea({
     document.addEventListener("mouseup", onUp);
   }
 
+  function resizeByKey(e: KeyboardEvent) {
+    const body = bodyRef.current;
+    const step = e.key === "ArrowLeft" ? 16 : e.key === "ArrowRight" ? -16 : 0;
+    if (!body || !step) return;
+    e.preventDefault();
+    const current = e.currentTarget.nextElementSibling?.getBoundingClientRect().width ?? 0;
+    const max = body.clientWidth * CANVAS_MAX_FRACTION;
+    setWidth(Math.min(max, Math.max(CANVAS_MIN_PX, current + step)));
+  }
+
   if (!canvas) return null;
   return (
     <>
       <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize file panel"
+        aria-valuenow={width === null ? undefined : Math.round(width)}
+        aria-valuemin={CANVAS_MIN_PX}
+        aria-valuemax={
+          bodyRef.current
+            ? Math.round(bodyRef.current.clientWidth * CANVAS_MAX_FRACTION)
+            : undefined
+        }
+        tabIndex={0}
+        onKeyDown={resizeByKey}
         className="relative w-1 flex-none cursor-col-resize after:absolute after:top-0 after:bottom-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-border after:content-['']"
         onMouseDown={startResize}
       />

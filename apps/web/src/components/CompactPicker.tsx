@@ -100,6 +100,7 @@ export default function CompactPicker({
   return (
     <Dropdown
       up
+      label="Compact at"
       trigger={({ open, toggle }) => (
         <button
           className={CHIP_CLASS}

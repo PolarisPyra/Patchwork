@@ -11,8 +11,8 @@ import {
   WarningCircleIcon,
   WrenchIcon,
 } from "@phosphor-icons/react";
-import type { Entry } from "~/features/chat/response/lib/model";
-import { actionOf, type Action } from "~/features/chat/response/lib/tools";
+import type { Entry } from "~/features/chat/response/model";
+import { actionOf, type Action } from "~/features/chat/response/tools";
 
 /** The glyph for each kind of work. One size, so icons line up down the column. */
 const GLYPH: Record<Action, ReactNode> = {

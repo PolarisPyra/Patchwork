@@ -23,6 +23,8 @@ export default function Spinner({ size = 12, className }: { size?: number; class
       stroke="currentColor"
       strokeWidth={3}
       className={`flex-none ${className ?? ""}`}
+      role="img"
+      aria-label="Loading"
     >
       <circle cx={12} cy={12} r={9} opacity={0.25} />
       <circle

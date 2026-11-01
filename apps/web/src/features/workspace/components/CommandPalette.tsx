@@ -113,6 +113,7 @@ export default function CommandPalette({ items, onClose }: CommandPaletteProps) 
       <div
         className="flex max-h-[60vh] w-[600px] max-w-[calc(100vw_-_32px)] flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border-strong bg-elevated shadow-[var(--shadow-popup)]"
         role="dialog"
+        aria-modal="true"
         aria-label="Command palette"
         onMouseDown={(e) => e.stopPropagation()}
       >
@@ -122,6 +123,7 @@ export default function CommandPalette({ items, onClose }: CommandPaletteProps) 
             className="h-full min-w-0 flex-1 bg-transparent text-fg text-[length:var(--fs-lg)] outline-none select-text border-none"
             autoFocus
             placeholder="Search actions, tasks and projects…"
+            aria-label="Search actions, tasks and projects"
             value={query}
             onChange={(e) => {
               scrollOnActive.current = true;
@@ -133,6 +135,8 @@ export default function CommandPalette({ items, onClose }: CommandPaletteProps) 
         </div>
         <div
           ref={listRef}
+          role="listbox"
+          aria-label="Results"
           className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-2 [&::-webkit-scrollbar]:w-[6px]"
         >
           {filtered.length === 0 && (
@@ -141,7 +145,7 @@ export default function CommandPalette({ items, onClose }: CommandPaletteProps) 
             </div>
           )}
           {groups.map((group) => (
-            <div key={group.name}>
+            <div key={group.name} role="group" aria-label={group.name}>
               <div className="px-3 pt-3 pb-1.5 text-[length:var(--fs-xs)] font-medium tracking-[0.06em] text-fg-subtle uppercase">
                 {group.name}
               </div>
@@ -151,6 +155,9 @@ export default function CommandPalette({ items, onClose }: CommandPaletteProps) 
                   <button
                     key={item.id}
                     type="button"
+                    role="option"
+                    aria-selected={isActive}
+                    aria-label={item.label}
                     ref={isActive ? activeRow : undefined}
                     className={`flex h-9 w-full cursor-pointer items-center gap-3 rounded-[var(--radius)] border-none px-3 text-left text-[length:var(--fs-md)] text-fg ${isActive ? "bg-selected" : "bg-transparent hover:bg-hover"}`}
                     // mousemove, not mouseenter: rows scrolling under a resting pointer must not move the highlight.

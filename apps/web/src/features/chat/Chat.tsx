@@ -22,18 +22,18 @@ import { lastAccessMode } from "~/components/AccessPicker";
 import { COMPACT_SETTINGS, lastCompactWindow } from "~/components/CompactPicker";
 import { effortFor, lastEffort } from "~/components/EffortPicker";
 import { confirm } from "@tauri-apps/plugin-dialog";
-import ChoicePanel from "~/features/chat/components/ChoicePanel";
-import GoalBanner from "~/features/chat/components/GoalBanner";
+import ChoicePanel from "~/features/chat/prompts/ChoicePanel";
+import GoalBanner from "~/features/chat/prompts/GoalBanner";
 import { isGoalClearCommand, localCommand, type LocalCommand } from "~/lib/composerActions";
-import { ComposerStripPresence } from "~/features/chat/components/ComposerStrip";
-import BackgroundTasks from "~/features/chat/components/BackgroundTasks";
-import QueuedMessages from "~/features/chat/components/QueuedMessages";
+import { ComposerStripPresence } from "~/features/chat/ComposerStrip";
+import BackgroundTasks from "~/features/chat/BackgroundTasks";
+import QueuedMessages from "~/features/chat/composer/QueuedMessages";
 import LineageCard from "~/features/chat/lineage/LineageCard";
 import Composer from "~/features/chat/composer/Composer";
 import type { HistoryEntry } from "~/features/chat/composer/types";
 import Transcript from "~/features/chat/transcript/Transcript";
 import { UsageLine } from "~/features/chat/transcript/components/UsageLine";
-import PendingApprovalBanner from "~/features/chat/components/PendingApprovalBanner";
+import PendingApprovalBanner from "~/features/chat/prompts/PendingApprovalBanner";
 import {
   PermissionsContext,
   type PermissionsContextValue,
@@ -42,13 +42,13 @@ import {
   threadScope,
   withScopeRules,
 } from "~/lib/permissions";
-import PlanPanel from "~/features/chat/components/PlanPanel";
-import { planTitle } from "~/features/chat/components/ProposedPlanCard";
-import MissingFolderPrompt from "~/features/chat/components/MissingFolderPrompt";
-import ResumePrompt from "~/features/chat/components/ResumePrompt";
+import PlanPanel from "~/features/chat/plan/PlanPanel";
+import { planTitle } from "~/features/chat/plan/ProposedPlanCard";
+import MissingFolderPrompt from "~/features/chat/prompts/MissingFolderPrompt";
+import ResumePrompt from "~/features/chat/prompts/ResumePrompt";
 import { useCheckpoints } from "~/features/chat/hooks/useCheckpoints";
 import { useChoices } from "~/features/chat/hooks/useChoices";
-import { useComposerDraft } from "~/features/chat/composer/hooks/useComposerDraft";
+import { useComposerDraft } from "~/features/chat/composer/useComposerDraft";
 import { useGoalClear } from "~/features/chat/hooks/useGoalClear";
 import { useStableHandlers } from "~/hooks/useStableHandlers";
 import type { NewThreadOptions } from "~/hooks/useThreads";

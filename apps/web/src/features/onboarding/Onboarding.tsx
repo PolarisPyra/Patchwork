@@ -7,7 +7,7 @@ import DevicesStep from "~/features/onboarding/components/DevicesStep";
 import ImportsStep, { useImportScans } from "~/features/onboarding/components/ImportsStep";
 import ProjectsStep from "~/features/onboarding/components/ProjectsStep";
 import Stepper from "~/features/onboarding/components/Stepper";
-import { AGENT_KINDS, isReady, useAgentProbes } from "~/features/onboarding/lib/agentProbes";
+import { AGENT_KINDS, isReady, useAgentProbes } from "~/features/onboarding/agentProbes";
 import { errorText } from "~/lib/util";
 
 export interface OnboardingProps {
@@ -212,7 +212,8 @@ export default function Onboarding({
                 ? "Dark theme (switch to light)"
                 : "Light theme (switch to dark)"
             }
-            aria-label="Toggle theme"
+            aria-label="Dark theme"
+            aria-pressed={resolvedTheme === "dark"}
           >
             {resolvedTheme === "dark" ? <MoonIcon size={16} /> : <SunIcon size={16} />}
           </button>

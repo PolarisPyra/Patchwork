@@ -21,29 +21,27 @@ import {
   XIcon,
   type Icon,
 } from "@phosphor-icons/react";
-import AgentsPane from "~/features/settings/components/AgentsPane";
-import AppearancePane from "~/features/settings/components/AppearancePane";
-import ChatPane from "~/features/settings/components/ChatPane";
-import ClaudePane from "~/features/settings/components/ClaudePane";
-import CodexPane from "~/features/settings/components/CodexPane";
-import EnvironmentPane from "~/features/settings/components/EnvironmentPane";
-import ImportsPane from "~/features/settings/components/ImportsPane";
-import KeybindingsPane from "~/features/settings/components/KeybindingsPane";
-import LoggingPane from "~/features/settings/components/LoggingPane";
-import McpServersPane from "~/features/settings/components/McpServersPane";
-import NotificationsPane from "~/features/settings/components/NotificationsPane";
-import PermissionsPane, {
-  type PermissionsFocus,
-} from "~/features/settings/components/PermissionsPane";
-import PluginsPane from "~/features/settings/components/PluginsPane";
-import ProjectsPane from "~/features/settings/components/ProjectsPane";
-import ProvidersPane from "~/features/settings/components/ProvidersPane";
-import ScheduledPane from "~/features/settings/components/ScheduledPane";
-import SkillsPane from "~/features/settings/components/SkillsPane";
-import TerminalPane from "~/features/settings/components/TerminalPane";
-import TokensPane from "~/features/settings/components/TokensPane";
-import UpdatesPane from "~/features/settings/components/UpdatesPane";
-import { logoUrl } from "~/features/settings/lib/logo";
+import AgentsPane from "~/features/settings/agents/AgentsPane";
+import AppearancePane from "~/features/settings/app/AppearancePane";
+import ChatPane from "~/features/settings/app/ChatPane";
+import ClaudePane from "~/features/settings/providers/ClaudePane";
+import CodexPane from "~/features/settings/providers/CodexPane";
+import EnvironmentPane from "~/features/settings/system/EnvironmentPane";
+import ImportsPane from "~/features/settings/system/ImportsPane";
+import KeybindingsPane from "~/features/settings/app/KeybindingsPane";
+import LoggingPane from "~/features/settings/system/LoggingPane";
+import McpServersPane from "~/features/settings/providers/McpServersPane";
+import NotificationsPane from "~/features/settings/app/NotificationsPane";
+import PermissionsPane, { type PermissionsFocus } from "~/features/settings/system/PermissionsPane";
+import PluginsPane from "~/features/settings/agents/PluginsPane";
+import ProjectsPane from "~/features/settings/system/ProjectsPane";
+import ProvidersPane from "~/features/settings/providers/ProvidersPane";
+import ScheduledPane from "~/features/settings/agents/ScheduledPane";
+import SkillsPane from "~/features/settings/agents/SkillsPane";
+import TerminalPane from "~/features/settings/app/TerminalPane";
+import TokensPane from "~/features/settings/app/TokensPane";
+import UpdatesPane from "~/features/settings/system/UpdatesPane";
+import { logoUrl } from "~/features/settings/logo";
 import type { PaneProps } from "~/features/settings/types";
 
 /**
@@ -151,7 +149,10 @@ export default memo(function SettingsDialog({
         aria-label="Settings"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <nav className="flex w-[192px] flex-none flex-col overflow-y-scroll border-r border-border bg-panel px-2 py-2.5">
+        <nav
+          aria-label="Settings sections"
+          className="flex w-[192px] flex-none flex-col overflow-y-scroll border-r border-border bg-panel px-2 py-2.5"
+        >
           {GROUPS.map((group) => (
             <div key={group.label} className="flex flex-col gap-0.5 [&+&]:mt-3">
               <div className="px-2 pb-0.5 text-[length:var(--fs-xs)] font-semibold text-fg-subtle">
@@ -161,6 +162,7 @@ export default memo(function SettingsDialog({
                 <button
                   key={id}
                   className={`flex h-8 cursor-pointer items-center gap-2.5 rounded-[var(--radius-sm)] border-none px-2 text-left text-fg ${section === id ? "bg-selected hover:bg-[color-mix(in_srgb,var(--bg-selected),var(--text)_8%)]" : "bg-transparent hover:bg-hover"}`}
+                  aria-current={section === id ? "page" : undefined}
                   onClick={() => setSection(id)}
                 >
                   <Icon size={18} className="flex-none" />
@@ -177,7 +179,11 @@ export default memo(function SettingsDialog({
               <XIcon size={16} />
             </button>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+          <div
+            role="region"
+            aria-label={title}
+            className="min-h-0 flex-1 overflow-y-auto px-5 pb-5"
+          >
             {section === "appearance" && <AppearancePane {...paneProps} />}
             {section === "chat" && <ChatPane {...paneProps} />}
             {section === "providers" && <ProvidersPane {...paneProps} />}

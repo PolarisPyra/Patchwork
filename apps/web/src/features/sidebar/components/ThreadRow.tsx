@@ -6,7 +6,7 @@ import Spinner from "~/components/Spinner";
 import { useIsRowSelected } from "~/features/sidebar/lib/selectionState";
 import { isPlainPress, selectionFill, type PickModifiers } from "~/features/sidebar/lib/targets";
 import type { Target } from "~/features/sidebar/types";
-import type { RowDrag } from "~/features/sidebar/hooks/useRowReorder";
+import type { RowDrag } from "~/features/sidebar/useRowReorder";
 import { isWorking } from "~/lib/threadEvents";
 import { displayTitle, formatRelative } from "~/lib/util";
 
@@ -116,6 +116,11 @@ export const ThreadRow = memo(function ThreadRow({
     <div
       {...drag.attrs}
       data-thread-id={thread.id}
+      role="treeitem"
+      aria-level={depth + 1}
+      aria-selected={picked}
+      aria-current={selected ? "page" : undefined}
+      aria-label={editing ? undefined : displayTitle(thread.title)}
       onPointerDown={(e) => {
         drag.attrs.onPointerDown(e);
         if (!editing && isPlainPress(e)) onPick(e, target);
@@ -141,11 +146,16 @@ export const ThreadRow = memo(function ThreadRow({
       <span className="flex min-w-5 flex-none items-center justify-end">
         <span className="flex items-center group-hover:hidden">
           {needsApproval ? (
-            <span title="Waiting for approval" className="inline-flex flex-none text-warning">
+            <span
+              title="Waiting for approval"
+              role="img"
+              aria-label="Waiting for approval"
+              className="inline-flex flex-none text-warning"
+            >
               <ShieldWarningIcon size={15} />
             </span>
           ) : isWorking(thread) ? (
-            <span title="Working" className="inline-flex flex-none">
+            <span title="Working" role="img" aria-label="Working" className="inline-flex flex-none">
               <Spinner className="text-accent-text" />
             </span>
           ) : (
@@ -157,9 +167,9 @@ export const ThreadRow = memo(function ThreadRow({
           )}
         </span>
         <button
-          className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex hover:bg-border-strong"
+          className="btn-icon hover-reveal h-5 w-5 flex-none hover:bg-border-strong"
           title="Archive"
-          aria-label="Archive"
+          aria-label={`Archive ${displayTitle(thread.title)}`}
           onClick={(e) => {
             e.stopPropagation();
             onArchiveThread(thread);

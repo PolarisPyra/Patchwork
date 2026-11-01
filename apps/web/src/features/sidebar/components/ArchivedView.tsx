@@ -95,6 +95,9 @@ export default function ArchivedView({
    * Its menu deletes every archived chat or task under it. */
   const header = (key: string, name: ReactNode, folder: boolean, inside: Thread[]) => (
     <div
+      role="treeitem"
+      aria-level={folder ? 2 : 1}
+      aria-expanded={!collapsed.has(key)}
       className={`group mx-1 flex h-[22px] cursor-pointer items-center rounded-[var(--radius-sm)] select-none pr-1.5 text-left text-fg ${folder ? "pl-3" : "pl-1"} ${selectionFill(false)}`}
       onClick={() => toggle(key)}
       onContextMenu={(e) =>
@@ -121,6 +124,10 @@ export default function ArchivedView({
   const row = (t: Thread, nested: boolean) => (
     <div
       key={t.id}
+      role="treeitem"
+      aria-level={nested ? 3 : 2}
+      aria-selected={isPicked(t.id)}
+      aria-label={displayTitle(t.title)}
       className={`group mr-1 flex h-[22px] cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] select-none pr-2 pl-2 text-fg ${nested ? "ml-[38px]" : "ml-[30px]"} ${selectionFill(isPicked(t.id))}`}
       onClick={(e) => pick(e, t.id)}
       onContextMenu={(e) =>
@@ -144,9 +151,9 @@ export default function ArchivedView({
         {displayTitle(t.title)}
       </span>
       <button
-        className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex hover:bg-border-strong"
+        className="btn-icon hover-reveal h-5 w-5 flex-none hover:bg-border-strong"
         title="Restore"
-        aria-label="Restore"
+        aria-label={`Restore ${displayTitle(t.title)}`}
         onClick={(e) => {
           e.stopPropagation();
           onRestoreThread(t.id);
@@ -192,6 +199,9 @@ export default function ArchivedView({
       </div>
       <div
         tabIndex={-1}
+        role="tree"
+        aria-label="Archived"
+        aria-multiselectable="true"
         {...shortcutContext("archivedListFocus")}
         onClick={clearSelectionOnBlank}
         className="group/tree flex min-h-0 flex-1 flex-col gap-px overflow-y-scroll overflow-x-hidden p-2 *:shrink-0 focus:outline-none"

@@ -19,7 +19,10 @@ interface ActivityBarProps {
 function ActivityBar({ view, onSelect, onOpenSettings }: ActivityBarProps) {
   const { rules } = useKeybindings();
   return (
-    <nav className="flex w-[var(--activity-bar-w)] flex-none flex-col items-center gap-1 border-r border-border bg-app py-1.5">
+    <nav
+      aria-label="Views"
+      className="flex w-[var(--activity-bar-w)] flex-none flex-col items-center gap-1 border-r border-border bg-app py-1.5"
+    >
       {ACTIVITIES.map(({ view: v, label, Icon, command }) => (
         <button
           key={v}

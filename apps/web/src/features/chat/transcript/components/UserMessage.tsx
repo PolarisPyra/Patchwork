@@ -1,14 +1,14 @@
 import { memo, useMemo, useState } from "react";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react";
 import { type Message } from "~/api";
-import AttachmentChip, { AttachmentTile } from "~/features/chat/components/AttachmentChip";
-import { ACTION_CLASS } from "~/features/chat/components/CopyButton";
+import AttachmentChip, { AttachmentTile } from "~/features/chat/AttachmentChip";
+import { ACTION_CLASS } from "~/features/chat/markdown/CopyButton";
 import { withoutImageMarkdown } from "~/features/chat/lib/composerExtensions";
 import { formatClock } from "~/lib/util";
 
 // Markdown loads with the chat, not on first use: its plain-text placeholder had another height,
 // so swapping it in moved the messages.
-import Markdown from "~/features/chat/components/Markdown";
+import Markdown from "~/features/chat/markdown/Markdown";
 
 /** User messages longer than this, such as pasted logs, show their first lines until expanded:
  * laying out all of one stalled the chat for over 100ms each time it scrolled into view. */
@@ -82,13 +82,21 @@ export const UserMessage = memo(function UserMessage({
               .mention;
             if (path) onReveal(path);
           }}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            const path = (event.target as Element).closest<HTMLElement>("[data-mention]")?.dataset
+              .mention;
+            if (!path) return;
+            event.preventDefault();
+            onReveal(path);
+          }}
         >
           {/* A goal or skill shows the chip the composer showed for it, in line with the text. */}
           <Markdown text={text} typed chips />
         </div>
       )}
       {long && (
-        <button className={ACTION_CLASS} onClick={toggle}>
+        <button className={ACTION_CLASS} aria-expanded={expanded} onClick={toggle}>
           {expanded
             ? "Show less"
             : `Show full message (${Math.round(full.length / 1000)}k characters)`}

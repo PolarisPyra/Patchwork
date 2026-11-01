@@ -5,8 +5,8 @@ import ProviderLogos from "~/components/ProviderLogos";
 import { isActive, STATUS, titleOf } from "~/features/chat/lib/toolCalls";
 import { fullElapsed } from "~/lib/util";
 import Expander from "~/features/chat/response/components/Expander";
-import { spanOf } from "~/features/chat/response/lib/model";
-import { toolLabel } from "~/features/chat/response/lib/tools";
+import { spanOf } from "~/features/chat/response/model";
+import { toolLabel } from "~/features/chat/response/tools";
 import { useNow } from "~/features/chat/hooks/useNow";
 
 /**

@@ -1,6 +1,6 @@
 import { ArrowClockwiseIcon, TargetIcon } from "@phosphor-icons/react";
 import { LineGutter } from "~/features/chat/response/components/AgentStepDisplay";
-import { type Phase } from "~/features/chat/response/lib/model";
+import { type Phase } from "~/features/chat/response/model";
 import { useNow } from "~/features/chat/hooks/useNow";
 import { fullElapsed } from "~/lib/util";
 

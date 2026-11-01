@@ -5,7 +5,7 @@ import {
 } from "~/features/chat/transcript/components/AssistantMessage";
 import { UserMessage } from "~/features/chat/transcript/components/UserMessage";
 import Spinner from "~/components/Spinner";
-import { type CompactionState } from "~/features/chat/transcript/lib/rows";
+import { type CompactionState } from "~/features/chat/transcript/rows";
 import { formatTokens } from "~/lib/tokens";
 
 /**
@@ -52,7 +52,7 @@ export function TranscriptRow({
   const { thread, changes, busy, checkpoints, onRestore, openedWith, ...handlers } = context;
   const user = message.role === "user";
   return (
-    <div className="px-6">
+    <div className="px-6" role="article" aria-label={user ? "Your message" : "Reply"}>
       <div className={`flex flex-col pb-5${first ? " pt-6" : ""}${user ? "" : " max-w-[820px]"}`}>
         {user ? (
           <UserMessage

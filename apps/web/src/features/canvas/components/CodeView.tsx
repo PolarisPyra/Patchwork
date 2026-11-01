@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { columns, LineBlock, toBlocks } from "~/features/canvas/components/LineBlocks";
-import { highlightLinesAsync } from "~/features/canvas/lib/highlightAsync";
-import { SYNTAX_CLASSES } from "~/lib/syntaxClasses";
-import { describeFile, highlightLines, MAX_HIGHLIGHT_LINES, splitLines } from "~/lib/highlight";
+import { highlightLinesAsync } from "~/features/canvas/highlightAsync";
+import {
+  describeFile,
+  highlightLines,
+  MAX_HIGHLIGHT_LINES,
+  splitLines,
+  SYNTAX_CLASSES,
+} from "~/lib/highlight";
 
 /** Files up to this long are highlighted on the main thread; it takes a few milliseconds. */
 const INLINE_HIGHLIGHT_LINES = 1000;

@@ -34,6 +34,7 @@ export default function ContextMenu({
       ref={panel}
       className="fixed z-20 flex min-w-[160px] flex-col rounded-[var(--radius)] border border-border-strong bg-elevated p-1 shadow-[var(--shadow-popup)]"
       role="menu"
+      aria-label="Actions"
       style={{ left: x, top: y }}
     >
       {items.map(({ label, Icon, danger, onSelect }) => (

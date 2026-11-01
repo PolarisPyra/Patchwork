@@ -9,6 +9,8 @@ interface DropdownProps {
   up?: boolean;
   /** Line the menu's right edge up with the trigger's, for triggers near the right of a panel. */
   alignEnd?: boolean;
+  /** The menu's accessible name. */
+  label?: string;
 }
 
 /** Minimal popup menu. Closes on outside click, on Escape, or when an item calls `close`. */
@@ -17,6 +19,7 @@ export default function Dropdown({
   children,
   up = false,
   alignEnd = false,
+  label,
 }: DropdownProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -30,6 +33,7 @@ export default function Dropdown({
         <div
           className={`absolute z-20 flex min-w-[200px] flex-col rounded-[var(--radius)] border border-border-strong bg-elevated p-1 shadow-[var(--shadow-popup)] ${alignEnd ? "right-0" : "left-0"} ${up ? "bottom-[calc(100%_+_4px)]" : "top-[calc(100%_+_4px)]"}`}
           role="menu"
+          aria-label={label}
         >
           {children(() => setOpen(false))}
         </div>

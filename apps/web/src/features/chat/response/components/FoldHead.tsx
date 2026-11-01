@@ -1,5 +1,5 @@
 import { CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react";
-import { type FoldSummary } from "~/features/chat/response/lib/model";
+import { type FoldSummary } from "~/features/chat/response/model";
 
 /** The head line is a row that opens the folded work. As tall as the status line it replaces, so a
  * turn does not shift as it settles. */

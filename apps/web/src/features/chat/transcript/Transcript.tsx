@@ -13,8 +13,8 @@ import {
   contextBefore,
   rowKindOf,
   visibleMessages,
-} from "~/features/chat/transcript/lib/rows";
-import { useTranscriptScroll } from "~/features/chat/transcript/hooks/useTranscriptScroll";
+} from "~/features/chat/transcript/rows";
+import { useTranscriptScroll } from "~/features/chat/transcript/useTranscriptScroll";
 import { shortcutContext, useCommand } from "~/lib/shortcuts";
 
 // Markdown loads with the chat, not on first use: its plain-text placeholder had another height,
@@ -156,6 +156,9 @@ export default function Transcript({
       className="relative flex min-h-0 flex-1 flex-col outline-none"
       ref={rootRef}
       tabIndex={-1}
+      role="log"
+      aria-label="Conversation"
+      aria-live="off"
       {...shortcutContext("transcriptFocus")}
     >
       <LegendList

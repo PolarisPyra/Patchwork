@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react";
-import Markdown from "~/features/chat/components/Markdown";
+import Markdown from "~/features/chat/markdown/Markdown";
 import Expander from "~/features/chat/response/components/Expander";
 
 const ROW_CLASS =

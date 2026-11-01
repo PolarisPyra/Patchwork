@@ -11,16 +11,16 @@ import { api, type Settings } from "~/api";
 import type { UpdateSettings } from "~/api";
 import { CHIP_CLASS } from "~/components/chip";
 import LogLevelPicker from "~/components/LogLevelPicker";
-import OutputView from "~/features/panel/components/OutputView";
-import ScreenView from "~/features/panel/components/ScreenView";
-import { sortChannels, type Channel } from "~/features/panel/lib/logs";
+import OutputView from "~/features/panel/OutputView";
+import ScreenView from "~/features/panel/ScreenView";
+import { sortChannels, type Channel } from "~/features/panel/logs";
 import {
   applySettings,
   killShell,
   startShell,
   useShells,
   type Shell,
-} from "~/features/panel/lib/terminals";
+} from "~/features/panel/terminals";
 import ContextMenu from "~/components/ContextMenu";
 import Dropdown from "~/components/Dropdown";
 import { shortcutContext } from "~/lib/shortcuts";
@@ -153,7 +153,7 @@ export default function Panel({
       tabIndex={-1}
     >
       <header className="flex h-8 flex-none items-center gap-3 px-3">
-        <div className="flex h-full items-center gap-3" role="tablist">
+        <div className="flex h-full items-center gap-3" role="tablist" aria-label="Panel views">
           <button
             role="tab"
             aria-selected={tab === "terminal"}
@@ -214,6 +214,7 @@ export default function Panel({
             <>
               <Dropdown
                 alignEnd
+                label="Logs"
                 trigger={({ open, toggle }) => (
                   <button
                     className={CHIP_CLASS}
@@ -293,13 +294,17 @@ export default function Panel({
         />
       )}
       {error && (
-        <div className="flex-none px-3 pb-1 text-[length:var(--fs-sm)] text-danger">{error}</div>
+        <div role="alert" className="flex-none px-3 pb-1 text-[length:var(--fs-sm)] text-danger">
+          {error}
+        </div>
       )}
       <div className="flex min-h-0 flex-1">
         {tab === "terminal" ? (
           <>
             <div
               ref={host}
+              role="group"
+              aria-label="Terminal"
               className="h-full min-w-0 flex-1 overflow-hidden pl-3"
               {...shortcutContext("terminalFocus")}
             />
@@ -356,9 +361,9 @@ function ShellTab({
   onContextMenu: (e: MouseEvent) => void;
 }) {
   return (
+    // The tab is the label: a tab's children are left out of the accessibility tree, and the kill
+    // button beside it has to stay in.
     <div
-      role="tab"
-      aria-selected={active}
       className={`group flex h-[22px] flex-none cursor-pointer items-center gap-1.5 pr-0.5 pl-2 text-[length:var(--fs-sm)] ${active ? "bg-selected-muted text-fg" : "text-fg-muted hover:bg-hover hover:text-fg"}`}
       title={shell.exitCode !== undefined ? `Exited with code ${shell.exitCode}` : undefined}
       onClick={onSelect}
@@ -367,11 +372,21 @@ function ShellTab({
       onContextMenu={onContextMenu}
     >
       <TerminalWindowIcon size={14} className="flex-none" />
-      <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+      <span
+        role="tab"
+        aria-selected={active}
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key !== "Enter" && e.key !== " ") return;
+          e.preventDefault();
+          onSelect();
+        }}
+        className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
+      >
         {label}
       </span>
       <button
-        className={`btn-icon size-[18px] ${active ? "" : "invisible group-hover:visible"}`}
+        className={`btn-icon size-[18px] ${active ? "" : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"}`}
         aria-label={`Kill ${label}`}
         title="Kill terminal"
         onClick={(e) => {

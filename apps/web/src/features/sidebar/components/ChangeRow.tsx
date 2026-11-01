@@ -73,7 +73,7 @@ export function ChangeCounts({ change }: { change: FileChange }) {
         <span className="w-[var(--diff-col)] text-right text-danger">−{change.deletions}</span>
       </span>
       <span className="flex w-7 justify-center">
-        <GitDiffIcon size={14} className="text-fg-muted" aria-label="Changed" />
+        <GitDiffIcon size={14} className="text-fg-muted" role="img" aria-label="Changed" />
       </span>
     </span>
   );

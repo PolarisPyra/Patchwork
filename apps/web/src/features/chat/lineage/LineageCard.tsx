@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { CaretRightIcon } from "@phosphor-icons/react";
 import { type Thread, type ToolCall } from "~/api";
-import LineageMenu from "~/features/chat/lineage/components/LineageMenu";
-import SubagentRow from "~/features/chat/lineage/components/SubagentRow";
+import LineageMenu from "~/features/chat/lineage/LineageMenu";
+import SubagentRow from "~/features/chat/lineage/SubagentRow";
 import { currentTurnTools, isActive } from "~/features/chat/lib/toolCalls";
 import { useNow } from "~/features/chat/hooks/useNow";
 

@@ -2,13 +2,13 @@ import { ArrowClockwiseIcon, CheckIcon } from "@phosphor-icons/react";
 import Spinner from "~/components/Spinner";
 import { AGENT_LABELS, type AgentKind, type CliKind } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
-import { cx } from "~/features/onboarding/lib/classNames";
+import { cx } from "~/features/onboarding/classNames";
 import {
   AGENT_KINDS,
   isReady,
   type AgentProbe,
   type AgentProbes,
-} from "~/features/onboarding/lib/agentProbes";
+} from "~/features/onboarding/agentProbes";
 
 interface AgentStepProps {
   probes: AgentProbes;
@@ -35,7 +35,7 @@ export default function AgentStep({
           disabled={checking}
           onClick={onRecheck}
         >
-          <ArrowClockwiseIcon size={14} className={checking ? "spin" : undefined} />
+          {checking ? <Spinner size={14} /> : <ArrowClockwiseIcon size={14} />}
           Check again
         </button>
       </div>

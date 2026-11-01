@@ -230,7 +230,10 @@ export default function Canvas({
   }
 
   return (
-    <aside className="flex flex-col h-full min-h-0 bg-editor border-l border-border">
+    <aside
+      aria-label="File viewer"
+      className="flex flex-col h-full min-h-0 bg-editor border-l border-border"
+    >
       <header className="flex items-center gap-3 flex-none py-3.5 px-5 border-b border-border">
         <div className="flex items-center justify-center flex-none size-9 rounded-[8px] bg-accent-soft text-accent-text">
           <CodeIcon size={18} />
@@ -281,12 +284,14 @@ export default function Canvas({
       <nav
         className="flex items-center gap-1 flex-none h-10 px-3 border-b border-border overflow-x-auto"
         role="tablist"
+        aria-label="File views"
       >
         {tabs.map((t) => (
           <button
             key={t.id}
             role="tab"
             aria-selected={activeTab === t.id}
+            aria-label={t.count > 0 ? `${t.label} (${t.count})` : t.label}
             className="inline-flex items-center gap-1.5 h-7 px-2.5 border-none rounded-[var(--radius)] bg-transparent text-fg-muted! hover:text-fg! cursor-pointer whitespace-nowrap aria-selected:text-accent-text! aria-selected:bg-accent-soft"
             onClick={() => setTab(t.id)}
           >
@@ -296,7 +301,9 @@ export default function Canvas({
         ))}
       </nav>
 
-      <div className="flex-1 min-h-0 overflow-auto selectable">{renderBody()}</div>
+      <div role="tabpanel" className="flex-1 min-h-0 overflow-auto selectable">
+        {renderBody()}
+      </div>
 
       {actionError && (
         <div

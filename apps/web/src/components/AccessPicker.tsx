@@ -68,6 +68,7 @@ export default function AccessPicker({
   return (
     <Dropdown
       up
+      label="Access"
       trigger={({ open, toggle }) => (
         <button
           className={CHIP_CLASS}

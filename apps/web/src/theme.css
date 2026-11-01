@@ -311,6 +311,19 @@
   background: var(--bg-hover);
   color: var(--text);
 }
+/* A control shown only while its row is hovered. Out of hover it is clipped out of sight rather
+   than removed, so it stays in the accessibility tree where assistive tools and agents find it. */
+.group:not(:hover) .hover-reveal:not(:focus-visible) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border-width: 0;
+}
 
 .link {
   background: none;
@@ -420,18 +433,6 @@
 .toggle:disabled {
   opacity: 0.5;
   cursor: default;
-}
-
-/* Spinners turn at a steady rate, a full turn every 0.8 seconds. They used to step twelve times
-   per turn, which read as a stutter. */
-.spin,
-.animate-spin {
-  animation: spin 0.8s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 /* Spinner's arc runs once around its ring (circumference 2π × 9) per 0.8 seconds. */

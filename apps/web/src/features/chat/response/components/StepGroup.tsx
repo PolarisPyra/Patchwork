@@ -7,8 +7,8 @@ import AgentStepDisplay, {
 } from "~/features/chat/response/components/AgentStepDisplay";
 import Expander from "~/features/chat/response/components/Expander";
 import { actionIcon, entryIcon } from "~/features/chat/response/components/ToolIcon";
-import { type Entry, entryActive, workKey } from "~/features/chat/response/lib/model";
-import { actionOf, entryLabel, groupLabel } from "~/features/chat/response/lib/tools";
+import { type Entry, entryActive, workKey } from "~/features/chat/response/model";
+import { actionOf, entryLabel, groupLabel } from "~/features/chat/response/tools";
 
 /**
  * A run of work between two texts: one row, or a summary row over several that opens to list them.

@@ -2,8 +2,8 @@ import { memo } from "react";
 import { ArrowClockwiseIcon, GitForkIcon, ShieldWarningIcon } from "@phosphor-icons/react";
 import { type AgentKind, type FileChange, type Message } from "~/api";
 import type { CanvasTab } from "~/features/canvas/Canvas";
-import { FileCards } from "~/features/chat/components/FileCard";
-import { ACTION_CLASS, CopyButton } from "~/features/chat/components/CopyButton";
+import { FileCards } from "~/features/chat/FileCard";
+import { ACTION_CLASS, CopyButton } from "~/features/chat/markdown/CopyButton";
 import { Approvals } from "~/features/chat/transcript/components/Approvals";
 import { ChangeSummary } from "~/features/chat/transcript/components/ChangeSummary";
 import ResponseTimeline from "~/features/chat/response/ResponseTimeline";
@@ -107,7 +107,10 @@ export const AssistantMessage = memo(function AssistantMessage({
         </>
       )}
       {message.refusal && (
-        <div className="flex flex-col gap-1 rounded-[var(--radius)] border border-warning bg-[var(--warning-soft)] px-3 py-2 text-[length:var(--fs-sm)] [word-break:break-word]">
+        <div
+          role="alert"
+          className="flex flex-col gap-1 rounded-[var(--radius)] border border-warning bg-[var(--warning-soft)] px-3 py-2 text-[length:var(--fs-sm)] [word-break:break-word]"
+        >
           <p className="m-0 flex items-center gap-1.5 font-medium text-warning">
             <ShieldWarningIcon size={15} />
             Blocked by a safety classifier
@@ -117,7 +120,10 @@ export const AssistantMessage = memo(function AssistantMessage({
         </div>
       )}
       {message.error && (
-        <div className="rounded-[var(--radius)] bg-[var(--danger-soft)] px-3 py-2 text-[length:var(--fs-sm)] whitespace-pre-wrap text-danger [word-break:break-word]">
+        <div
+          role="alert"
+          className="rounded-[var(--radius)] bg-[var(--danger-soft)] px-3 py-2 text-[length:var(--fs-sm)] whitespace-pre-wrap text-danger [word-break:break-word]"
+        >
           {message.error}
         </div>
       )}

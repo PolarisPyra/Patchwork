@@ -28,7 +28,10 @@ function StatusBar({
   onOpenChanges,
 }: StatusBarProps) {
   return (
-    <footer className="flex min-w-0 items-center gap-3 border-t border-border bg-app px-2.5 text-[length:var(--fs-xs)] leading-4 text-fg-muted">
+    <footer
+      aria-label="Status bar"
+      className="flex min-w-0 items-center gap-3 border-t border-border bg-app px-2.5 text-[length:var(--fs-xs)] leading-4 text-fg-muted"
+    >
       <div className="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap">
         <span>{project?.name ?? "No project"}</span>
         {branch && (
@@ -49,6 +52,7 @@ function StatusBar({
       <button
         className="inline-flex h-5 cursor-pointer items-center gap-1 rounded-[3px] border-none bg-transparent px-1.5 hover:bg-hover hover:text-fg"
         onClick={onOpenChanges}
+        aria-label={`Open changes: ${changeCount}`}
       >
         {changeCount} changes
       </button>

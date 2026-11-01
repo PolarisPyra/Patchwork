@@ -63,7 +63,11 @@ export default function UpdateToast() {
           <XIcon size={14} />
         </button>
       </div>
-      {error && <div className="text-[length:var(--fs-sm)] text-danger">{error}</div>}
+      {error && (
+        <div role="alert" className="text-[length:var(--fs-sm)] text-danger">
+          {error}
+        </div>
+      )}
     </div>
   );
 }

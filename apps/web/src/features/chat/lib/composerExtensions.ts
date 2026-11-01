@@ -12,7 +12,7 @@ import { Plugin, Selection, TextSelection } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { api } from "~/api";
-import CodeBlockNodeView from "~/features/chat/components/CodeBlockNodeView";
+import CodeBlockNodeView from "~/features/chat/markdown/CodeBlockNodeView";
 import { codeHighlightPlugin } from "~/features/chat/lib/codeHighlight";
 import { getSigils, type SigilKind } from "~/lib/sigils";
 

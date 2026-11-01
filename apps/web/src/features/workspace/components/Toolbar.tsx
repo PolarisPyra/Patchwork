@@ -49,9 +49,13 @@ function Toolbar({ project, projects, onSelectProject, onOpenFolder }: ToolbarPr
     <header className="flex min-w-0 items-center gap-1.5 border-b border-border bg-app pr-2 pl-[calc((var(--activity-bar-w)_+_4px_-_20px)/2_-_6px)]">
       <div className="flex min-w-0 items-center gap-1.5">
         <Dropdown
-          trigger={({ toggle }) => (
+          label="Projects"
+          trigger={({ open, toggle }) => (
             <button
               className="inline-flex h-[26px] cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border-none bg-transparent py-0 pr-1.5 pl-1 hover:bg-hover"
+              aria-haspopup="menu"
+              aria-expanded={open}
+              aria-label={`Project: ${project?.name ?? "No project"}`}
               onClick={toggle}
             >
               {project ? (
@@ -78,6 +82,8 @@ function Toolbar({ project, projects, onSelectProject, onOpenFolder }: ToolbarPr
               {projects.map((p) => (
                 <button
                   key={p.id}
+                  role="menuitemradio"
+                  aria-checked={p.id === project?.id}
                   className="flex h-[26px] cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border-none bg-transparent px-2 text-left text-fg whitespace-nowrap hover:bg-hover"
                   onClick={() => {
                     close();
@@ -90,8 +96,9 @@ function Toolbar({ project, projects, onSelectProject, onOpenFolder }: ToolbarPr
                   {p.name}
                 </button>
               ))}
-              {projects.length > 0 && <div className="my-1 h-px bg-border" />}
+              {projects.length > 0 && <div role="separator" className="my-1 h-px bg-border" />}
               <button
+                role="menuitem"
                 className="flex h-[26px] cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border-none bg-transparent px-2 text-left text-fg whitespace-nowrap hover:bg-hover"
                 onClick={() => {
                   close();

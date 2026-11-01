@@ -68,15 +68,27 @@ export function TreeCollapse({ id, children }: { id: string; children: ReactNode
  * re-renders the rows it changes and not the whole tree. */
 export function PickRow({
   target,
+  expandId,
   className,
   ...rest
 }: HTMLAttributes<HTMLDivElement> & {
   target: Target;
+  /** The collapsed-set id of the rows it opens and closes, which its expanded state reads. */
+  expandId: string;
   className: string;
   ref?: Ref<HTMLDivElement>;
 }) {
   const picked = useIsRowSelected(target);
-  return <div {...rest} className={`${className} ${selectionFill(picked)}`} />;
+  const collapsed = useIsCollapsed(expandId);
+  return (
+    <div
+      role="treeitem"
+      aria-selected={picked}
+      aria-expanded={!collapsed}
+      {...rest}
+      className={`${className} ${selectionFill(picked)}`}
+    />
+  );
 }
 
 /** For projects that share a name, the end of each one's path that tells them apart, by project id.

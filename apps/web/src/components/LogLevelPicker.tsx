@@ -31,6 +31,7 @@ export default function LogLevelPicker({
     <Dropdown
       alignEnd
       up={up}
+      label={`${label} log level`}
       trigger={({ open, toggle }) => (
         <button
           className={CHIP_CLASS}

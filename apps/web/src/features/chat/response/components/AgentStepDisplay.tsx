@@ -1,10 +1,10 @@
 import { useState, type ReactNode } from "react";
 import { CaretDownIcon, CaretRightIcon, GitDiffIcon } from "@phosphor-icons/react";
-import Markdown from "~/features/chat/components/Markdown";
+import Markdown from "~/features/chat/markdown/Markdown";
 import Expander from "~/features/chat/response/components/Expander";
 import { entryIcon } from "~/features/chat/response/components/ToolIcon";
-import { type Entry, entryActive } from "~/features/chat/response/lib/model";
-import { detailsOf, editedFile, entryLabel } from "~/features/chat/response/lib/tools";
+import { type Entry, entryActive } from "~/features/chat/response/model";
+import { detailsOf, editedFile, entryLabel } from "~/features/chat/response/tools";
 
 /**
  * One call or block of reasoning. It opens to show the command and its output, or the whole block

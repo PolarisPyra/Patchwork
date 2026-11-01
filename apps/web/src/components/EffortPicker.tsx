@@ -87,6 +87,7 @@ export default function EffortPicker({
   return (
     <Dropdown
       up
+      label="Effort"
       trigger={({ open, toggle }) => (
         <button
           className={CHIP_CLASS}

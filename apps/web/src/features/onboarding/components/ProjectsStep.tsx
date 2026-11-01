@@ -4,7 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { api, type Settings, type UpdateSettings } from "~/api";
 import { syncProjects } from "~/lib/projects";
 import { errorText } from "~/lib/util";
-import { cx } from "~/features/onboarding/lib/classNames";
+import { cx } from "~/features/onboarding/classNames";
 
 interface ProjectsStepProps {
   settings: Settings;

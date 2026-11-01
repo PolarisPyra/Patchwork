@@ -130,6 +130,7 @@ function RuleMenu({ approval, count }: { approval: Approval; count: number }) {
     <Dropdown
       up
       alignEnd
+      label="Approval rule"
       trigger={({ open, toggle }) => (
         <button
           className="inline-flex cursor-pointer items-center gap-0.5 border-none bg-transparent p-0 text-inherit hover:underline"

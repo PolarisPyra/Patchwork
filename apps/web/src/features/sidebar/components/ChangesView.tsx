@@ -111,7 +111,11 @@ export default function ChangesView({
           // Shared columns, so every folder starts together. A name takes at most about half the
           // row and truncates past that; the folder takes what is left, and shrinks first as the
           // sidebar narrows.
-          <div className="grid grid-cols-[fit-content(55%)_minmax(0,1fr)_auto] gap-x-3 gap-y-px">
+          <div
+            role="group"
+            aria-label="From this reply"
+            className="grid grid-cols-[fit-content(55%)_minmax(0,1fr)_auto] gap-x-3 gap-y-px"
+          >
             <div className="col-span-full flex items-center gap-1.5 px-1.5 pt-1 text-[length:var(--fs-xs)] text-fg-subtle">
               <ChatCircleIcon size={14} />
               <span className="min-w-0 flex-1 truncate">From this reply</span>
@@ -165,7 +169,11 @@ export default function ChangesView({
               {files.map(row)}
             </div>
           ))}
-        {error && <div className="px-2 text-[length:var(--fs-sm)] text-danger">{error}</div>}
+        {error && (
+          <div role="alert" className="px-2 text-[length:var(--fs-sm)] text-danger">
+            {error}
+          </div>
+        )}
       </div>
     </>
   );

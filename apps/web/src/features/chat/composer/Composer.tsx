@@ -24,7 +24,7 @@ import {
 import AccessPicker from "~/components/AccessPicker";
 import CompactPicker from "~/components/CompactPicker";
 import EffortPicker, { modelEfforts } from "~/components/EffortPicker";
-import AttachmentChip from "~/features/chat/components/AttachmentChip";
+import AttachmentChip from "~/features/chat/AttachmentChip";
 import { commandScore, LOCAL_COMMANDS, SLASH_COMMANDS } from "~/lib/composerActions";
 import { commandToken, type CommandToken } from "~/features/chat/composer/lib/commandToken";
 import {
@@ -35,7 +35,7 @@ import {
   proseLine,
   vscodeLanguage,
 } from "~/features/chat/composer/lib/pastedText";
-import { useModels } from "~/features/chat/composer/hooks/useModels";
+import { useModels } from "~/features/chat/composer/useModels";
 import {
   composerExtensions,
   continueList,
@@ -45,8 +45,8 @@ import {
 import { keepTexEscapes, MARKDOWN_COPY_ATTR } from "~/features/chat/lib/markdownCopy";
 import { useAgents } from "~/lib/agents";
 import { DEFAULT_SIGILS, getSigils, useSigils } from "~/lib/sigils";
-import FormatBar from "~/features/chat/composer/components/FormatBar";
-import ModelPicker from "~/features/chat/components/ModelPicker";
+import FormatBar from "~/features/chat/composer/FormatBar";
+import ModelPicker from "~/features/chat/composer/ModelPicker";
 import type { DropMentions, HistoryEntry, MentionItem } from "~/features/chat/composer/types";
 
 interface ComposerProps {
@@ -428,7 +428,12 @@ function Composer({
     contentType: "markdown",
     immediatelyRender: false,
     editorProps: {
-      attributes: { class: EDITOR_CLASS },
+      attributes: {
+        class: EDITOR_CLASS,
+        role: "textbox",
+        "aria-label": "Message",
+        "aria-multiline": "true",
+      },
       handleKeyDown: (_view, event) => keyDown.current(event),
       // Pastes go in as plain text; copied HTML is only read to tell what was copied, never
       // parsed into the draft. A copy from this editor keeps its blocks and mentions.
@@ -802,7 +807,11 @@ function Composer({
         </div>
       )}
       {mention && (
-        <div className="absolute right-0 bottom-full left-0 mb-1.5 flex flex-col gap-px rounded-[var(--radius)] border border-border bg-panel p-1 shadow-[var(--shadow-popup)]">
+        <div
+          role="listbox"
+          aria-label="Files"
+          className="absolute right-0 bottom-full left-0 mb-1.5 flex flex-col gap-px rounded-[var(--radius)] border border-border bg-panel p-1 shadow-[var(--shadow-popup)]"
+        >
           {mention.items.length === 0 && (
             <div className="px-2 py-1.5 text-[length:var(--fs-sm)] text-fg-muted">
               No matching files
@@ -811,6 +820,8 @@ function Composer({
           {mention.items.map((item, i) => (
             <button
               key={item.id}
+              role="option"
+              aria-selected={i === mention.index}
               className={`flex w-full cursor-pointer items-baseline rounded-[var(--radius)] border-none px-2 py-1.5 text-left font-[family-name:var(--font-mono)] text-[length:var(--fs-sm)] text-fg ${i === mention.index ? "bg-selected" : "bg-transparent hover:bg-hover"}`}
               // Keeps the focus in the editor.
               onMouseDown={(e) => e.preventDefault()}
@@ -829,7 +840,11 @@ function Composer({
         </div>
       )}
       <EditorContent editor={editor} className={`composer-editor min-w-0 `} />
-      <div className="@container flex flex-wrap items-center gap-1.5">
+      <div
+        role="toolbar"
+        aria-label="Composer controls"
+        className="@container flex flex-wrap items-center gap-1.5"
+      >
         <ModelPicker
           agent={agent}
           model={model}
@@ -936,6 +951,7 @@ function Composer({
                   className="grid h-8 w-6 cursor-pointer place-items-center rounded-r-[var(--radius)] border-0 border-l border-l-on-accent/20 bg-accent text-on-accent hover:bg-accent-hover"
                   onClick={() => setDispatchMenuOpen((open) => !open)}
                   disabled={overBy > 0 || (!value.trim() && attachments.length === 0)}
+                  aria-haspopup="menu"
                   aria-expanded={dispatchMenuOpen}
                   aria-label="Choose queue or steer"
                   title="Choose queue or steer"
@@ -943,10 +959,15 @@ function Composer({
                   <CaretDownIcon size={12} />
                 </button>
                 {dispatchMenuOpen && (
-                  <div className="absolute right-0 bottom-full z-50 mb-1.5 flex min-w-48 flex-col gap-px rounded-[var(--radius)] border border-border bg-panel p-1 shadow-[var(--shadow-popup)]">
+                  <div
+                    role="menu"
+                    aria-label="Send mode"
+                    className="absolute right-0 bottom-full z-50 mb-1.5 flex min-w-48 flex-col gap-px rounded-[var(--radius)] border border-border bg-panel p-1 shadow-[var(--shadow-popup)]"
+                  >
                     <button
                       disabled={overBy > 0}
-                      aria-pressed={!queueNext}
+                      role="menuitemradio"
+                      aria-checked={!queueNext}
                       className="w-full cursor-pointer rounded-[var(--radius-sm)] border-none bg-transparent px-2.5 py-2 text-left text-fg hover:bg-hover disabled:cursor-default disabled:opacity-40"
                       onClick={() => chooseMode(false)}
                     >
@@ -962,7 +983,8 @@ function Composer({
                     </button>
                     <button
                       disabled={overBy > 0 || !canQueueFollowUp}
-                      aria-pressed={queueNext}
+                      role="menuitemradio"
+                      aria-checked={queueNext}
                       className="w-full cursor-pointer rounded-[var(--radius-sm)] border-none bg-transparent px-2.5 py-2 text-left text-fg hover:bg-hover disabled:cursor-default disabled:opacity-40"
                       onClick={() => chooseMode(true)}
                     >
@@ -985,7 +1007,11 @@ function Composer({
           </div>
         )}
       </div>
-      {error && <div className="text-[length:var(--fs-sm)] text-danger">{error}</div>}
+      {error && (
+        <div role="alert" className="text-[length:var(--fs-sm)] text-danger">
+          {error}
+        </div>
+      )}
       {overBy > 0 && (
         <div role="alert" className="text-[length:var(--fs-sm)] text-danger">
           {`Prompt is ${overBy.toLocaleString("en-US")} ${overBy === 1 ? "character" : "characters"} over the ${PROMPT_LIMIT.toLocaleString("en-US")}-character limit. Shorten or split it before sending.`}

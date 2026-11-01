@@ -1,4 +1,4 @@
-import { cx } from "~/features/onboarding/lib/classNames";
+import { cx } from "~/features/onboarding/classNames";
 
 interface StepperProps {
   labels: string[];

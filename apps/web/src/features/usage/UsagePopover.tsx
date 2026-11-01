@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { ArrowsClockwiseIcon, ChartBarIcon } from "@phosphor-icons/react";
 import { api, AGENT_LABELS, type AgentKind, type AgentStatus, type ProviderUsage } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
+import Spinner from "~/components/Spinner";
 import { describeAgent, errorText } from "~/lib/util";
 import { useDismiss } from "~/hooks/useDismiss";
 
@@ -179,6 +180,7 @@ export default function UsagePopover({ openCode }: { openCode: boolean }) {
       <button
         className={`flex items-center gap-1.5 w-full h-7 px-2 border-none rounded-[var(--radius-sm)] bg-transparent text-fg-muted text-[length:var(--fs-sm)] cursor-pointer hover:bg-hover hover:text-fg${open ? " bg-hover text-fg" : ""}`}
         aria-label="Usage"
+        aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
@@ -199,6 +201,7 @@ export default function UsagePopover({ openCode }: { openCode: boolean }) {
                 className="flex flex-none flex-col items-center gap-1.5 p-2 border-r border-border bg-app/40"
                 role="tablist"
                 aria-orientation="vertical"
+                aria-label="Agents"
               >
                 {agents.map((kind) => (
                   <AgentTab
@@ -220,10 +223,11 @@ export default function UsagePopover({ openCode }: { openCode: boolean }) {
                   onClick={() => current && load(true, [current])}
                   onAnimationEnd={() => setDenied(null)}
                 >
-                  <ArrowsClockwiseIcon
-                    size={14}
-                    className={current && pending.includes(current) ? "spin" : undefined}
-                  />
+                  {current && pending.includes(current) ? (
+                    <Spinner size={14} />
+                  ) : (
+                    <ArrowsClockwiseIcon size={14} />
+                  )}
                 </button>
               </div>
               {/* Every panel shares one grid cell, so the popover keeps the tallest

@@ -1,6 +1,6 @@
 import type { Integrations, Settings } from "~/api";
 import type { UpdateSettings } from "~/api";
-import { cx } from "~/features/onboarding/lib/classNames";
+import { cx } from "~/features/onboarding/classNames";
 
 interface PluginsStepProps {
   settings: Settings;

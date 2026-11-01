@@ -3,7 +3,7 @@ import { CheckIcon } from "@phosphor-icons/react";
 import Spinner from "~/components/Spinner";
 import { api, SOURCE_LABELS, type ImportScan, type ImportSource } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
-import { cx } from "~/features/onboarding/lib/classNames";
+import { cx } from "~/features/onboarding/classNames";
 
 export type ImportScans = Partial<Record<ImportSource, ImportScan | null>>;
 
@@ -105,7 +105,11 @@ export default function ImportsStep({
           );
         })}
       </div>
-      {error && <p className="m-0 text-[length:var(--fs-sm)] text-danger">{error}</p>}
+      {error && (
+        <p role="alert" className="m-0 text-[length:var(--fs-sm)] text-danger">
+          {error}
+        </p>
+      )}
     </>
   );
 }

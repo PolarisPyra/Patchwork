@@ -15,11 +15,11 @@ import {
   shownSteps,
   stepsOf,
   workKey,
-} from "~/features/chat/response/lib/model";
-import ProposedPlanCard from "~/features/chat/components/ProposedPlanCard";
+} from "~/features/chat/response/model";
+import ProposedPlanCard from "~/features/chat/plan/ProposedPlanCard";
 // Markdown loads with the chat, not on first use: its plain-text placeholder had another height,
 // so swapping it in moved the messages.
-import StreamedMarkdown from "~/features/chat/components/StreamedMarkdown";
+import StreamedMarkdown from "~/features/chat/markdown/StreamedMarkdown";
 
 /** Replies seen streaming in this window. The list remounts a turn scrolled away and back, so
  * this outlives the component. */

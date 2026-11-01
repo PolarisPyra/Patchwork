@@ -23,7 +23,7 @@ import {
 import { api, type Thread } from "~/api";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import ContextMenu, { type MenuItem } from "~/components/ContextMenu";
-import { useRowReorder } from "~/features/sidebar/hooks/useRowReorder";
+import { useRowReorder } from "~/features/sidebar/useRowReorder";
 import { useStableCallback } from "~/hooks/useStableHandlers";
 import { buildTreeRows } from "~/features/sidebar/lib/treeRows";
 import { getSelectedRows, setSelectedRows } from "~/features/sidebar/lib/selectionState";
@@ -433,6 +433,9 @@ export default function TasksView({
   return (
     <div
       ref={treeRef}
+      role="tree"
+      aria-label="Tasks"
+      aria-multiselectable="true"
       className="group/tree flex min-h-0 flex-1 flex-col gap-px overflow-y-scroll overflow-x-hidden p-2 *:shrink-0 focus:outline-none"
       tabIndex={-1}
       {...shortcutContext("sidebarTreeFocus")}
@@ -531,6 +534,9 @@ export default function TasksView({
             <div key={p.id}>
               <PickRow
                 target={row}
+                expandId={p.id}
+                aria-level={1}
+                aria-label={p.name}
                 {...drag.attrs}
                 ref={
                   flashId === p.id ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined
@@ -566,7 +572,7 @@ export default function TasksView({
                 )}
                 {projectFolders.some((f) => AGENT_FOLDER_NAMES.has(f.name)) && (
                   <button
-                    className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex"
+                    className="btn-icon hover-reveal h-5 w-5 flex-none"
                     title={`Undo sorting tasks in ${p.name} by provider`}
                     aria-label={`Undo sorting tasks in ${p.name} by provider`}
                     onClick={(e) => {
@@ -578,7 +584,7 @@ export default function TasksView({
                   </button>
                 )}
                 <button
-                  className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex"
+                  className="btn-icon hover-reveal h-5 w-5 flex-none"
                   title={`Sort tasks in ${p.name} into folders by provider`}
                   aria-label={`Sort tasks in ${p.name} into folders by provider`}
                   onClick={(e) => {
@@ -589,7 +595,7 @@ export default function TasksView({
                   <MagicWandIcon size={17} />
                 </button>
                 <button
-                  className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex"
+                  className="btn-icon hover-reveal h-5 w-5 flex-none"
                   title={`New folder in ${p.name}`}
                   aria-label={`New folder in ${p.name}`}
                   onClick={(e) => {
@@ -600,7 +606,7 @@ export default function TasksView({
                   <FolderPlusIcon size={17} />
                 </button>
                 <button
-                  className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex"
+                  className="btn-icon hover-reveal h-5 w-5 flex-none"
                   title={`New task in ${p.name}`}
                   aria-label={`New task in ${p.name}`}
                   onClick={(e) => {
@@ -635,6 +641,9 @@ export default function TasksView({
                       <div key={f.id}>
                         <PickRow
                           target={folderRow}
+                          expandId={key}
+                          aria-level={2}
+                          aria-label={f.name}
                           {...target.attrs}
                           onPointerDown={(e) => {
                             if (!folderEditing && isPlainPress(e)) pickRow(e, folderRow);
@@ -662,7 +671,7 @@ export default function TasksView({
                             </span>
                           )}
                           <button
-                            className="btn-icon hidden h-5 w-5 flex-none group-hover:inline-flex"
+                            className="btn-icon hover-reveal h-5 w-5 flex-none"
                             aria-label={`New task in ${f.name}`}
                             onClick={(e) => {
                               e.stopPropagation();

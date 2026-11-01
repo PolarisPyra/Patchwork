@@ -4,6 +4,7 @@ import {
   Suspense,
   useCallback,
   useState,
+  type KeyboardEvent,
   type MouseEvent,
   type RefObject,
 } from "react";
@@ -89,10 +90,33 @@ export default memo(function PanelArea({
     document.addEventListener("mouseup", onUp);
   }
 
+  function resizeByKey(e: KeyboardEvent) {
+    const column = columnRef.current;
+    const step = e.key === "ArrowUp" ? 16 : e.key === "ArrowDown" ? -16 : 0;
+    if (!column || !step) return;
+    e.preventDefault();
+    const max = column.clientHeight * PANEL_MAX_FRACTION;
+    const next = Math.min(max, Math.max(PANEL_MIN_PX, height + step));
+    localStorage.setItem(PANEL_HEIGHT_KEY, String(Math.round(next)));
+    setHeight(next);
+  }
+
   if (!panel.open) return null;
   return (
     <>
       <div
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize panel"
+        aria-valuenow={Math.round(height)}
+        aria-valuemin={PANEL_MIN_PX}
+        aria-valuemax={
+          columnRef.current
+            ? Math.round(columnRef.current.clientHeight * PANEL_MAX_FRACTION)
+            : undefined
+        }
+        tabIndex={0}
+        onKeyDown={resizeByKey}
         className="relative z-[1] -mb-1 h-1 flex-none cursor-row-resize"
         onMouseDown={startResize}
       />

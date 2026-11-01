@@ -1,4 +1,4 @@
-import { memo, useState, type MouseEvent } from "react";
+import { memo, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { LockOpenIcon, LockSimpleIcon, MagnifyingGlassIcon } from "@phosphor-icons/react";
 import ContextMenu from "~/components/ContextMenu";
 import ArchivedView from "~/features/sidebar/components/ArchivedView";
@@ -53,6 +53,14 @@ export default memo(function Sidebar(props: SidebarProps) {
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
   }
+  function resizeByKey(e: KeyboardEvent) {
+    const step = e.key === "ArrowLeft" ? -16 : e.key === "ArrowRight" ? 16 : 0;
+    if (!step || locked) return;
+    e.preventDefault();
+    const next = clampWidth(width + step);
+    localStorage.setItem(SIDEBAR_WIDTH_KEY, String(next));
+    setWidth(next);
+  }
   function resetWidth() {
     if (locked) return;
     localStorage.removeItem(SIDEBAR_WIDTH_KEY);
@@ -60,6 +68,7 @@ export default memo(function Sidebar(props: SidebarProps) {
   }
   return (
     <aside
+      aria-label="Sidebar"
       className="relative flex min-h-0 flex-none flex-col border-r border-border bg-panel text-[length:var(--fs-md)] [--fs-xs:12px] [--fs-sm:13px] [--fs-md:13px]"
       style={{ width, flex: `0 0 ${width}px` }}
       onContextMenu={(e) => {
@@ -73,6 +82,12 @@ export default memo(function Sidebar(props: SidebarProps) {
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize sidebar"
+        aria-valuenow={width}
+        aria-valuemin={SIDEBAR_MIN}
+        aria-valuemax={SIDEBAR_MAX}
+        aria-disabled={locked || undefined}
+        tabIndex={0}
+        onKeyDown={resizeByKey}
         className={`absolute top-0 -right-[3px] bottom-0 z-10 w-1.5 ${locked ? "" : "cursor-col-resize hover:bg-accent/40"}`}
         onMouseDown={startResize}
         onDoubleClick={resetWidth}
