@@ -1,13 +1,6 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "~/api/invoke";
-
-/** A shell the terminal started. */
-export interface StartedTerminal {
-  id: number;
-  /** The shell's file name, such as "zsh". */
-  name: string;
-  cwd: string;
-}
+import type { StartedTerminal, TerminalExit, TerminalOutput } from "~/api/types";
 
 export const terminalApi = {
   terminalSpawn: (cwd: string | null, cols: number, rows: number) =>
@@ -18,14 +11,10 @@ export const terminalApi = {
   terminalKill: (id: number) => invoke<void>("terminal_kill", { id }),
 };
 
-export function onTerminalOutput(
-  cb: (e: { id: number; data: string }) => void,
-): Promise<UnlistenFn> {
-  return listen<{ id: number; data: string }>("terminal-output", (e) => cb(e.payload));
+export function onTerminalOutput(cb: (e: TerminalOutput) => void): Promise<UnlistenFn> {
+  return listen<TerminalOutput>("terminal-output", (e) => cb(e.payload));
 }
 
-export function onTerminalExit(
-  cb: (e: { id: number; code: number | null }) => void,
-): Promise<UnlistenFn> {
-  return listen<{ id: number; code: number | null }>("terminal-exit", (e) => cb(e.payload));
+export function onTerminalExit(cb: (e: TerminalExit) => void): Promise<UnlistenFn> {
+  return listen<TerminalExit>("terminal-exit", (e) => cb(e.payload));
 }

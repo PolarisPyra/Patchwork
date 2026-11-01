@@ -1,0 +1,158 @@
+//! Running a tool by name, and capping what it returns to the model.
+
+use std::path::Path;
+
+use super::files::{READ_LINES, edit_file, glob, grep, list_dir, read_file, write_file};
+use super::shell::{BASH_TIMEOUT, MAX_BASH_TIMEOUT, bash};
+use super::web::fetch_url;
+
+use serde_json::Value;
+
+use crate::system::fs::resolve;
+use crate::computer;
+
+/// Longest tool result sent back to the model. The agent saves a longer one whole to a file, and
+/// the model gets its start and end with the file's path.
+pub const MAX_RESULT: usize = 40_000;
+
+/// An integer argument.
+fn number(args: &Value, key: &str) -> Result<i32, String> {
+    args[key]
+        .as_i64()
+        .map(|n| n.clamp(i32::MIN as i64, i32::MAX as i64) as i32)
+        .ok_or_else(|| format!("{key} is required"))
+}
+
+/// Takes a screenshot and returns its path, for the model to read as an image.
+fn computer_screenshot() -> Result<String, String> {
+    let dir = crate::system::dirs().cache.join("screenshots");
+    let path = crate::computer::screenshot_to_file(&dir)?;
+    Ok(format!(
+        "Screenshot written to {}. Read it with read_file to see the screen.",
+        path.display()
+    ))
+}
+
+/// Runs a file, search, shell, or web tool. Ok carries the result for the model; Err a failure
+/// the model is told about. Neither is cut to `MAX_RESULT` yet.
+pub fn run(name: &str, args: &Value, root: &Path) -> Result<String, String> {
+    let path = || {
+        args["path"]
+            .as_str()
+            .filter(|p| !p.trim().is_empty())
+            .map(|p| resolve(root, p))
+            .ok_or_else(|| "path is required".to_string())
+    };
+    let text = |key: &str| {
+        args[key]
+            .as_str()
+            .map(String::from)
+            .ok_or_else(|| format!("{key} is required"))
+    };
+    let result = match name {
+        "read_file" => read_file(
+            &path()?,
+            args["offset"].as_u64().unwrap_or(1).max(1) as usize,
+            args["limit"].as_u64().map_or(READ_LINES, |l| l as usize),
+        ),
+        "write_file" => write_file(&path()?, &text("content")?, root),
+        "edit_file" => edit_file(
+            &path()?,
+            &text("old_string")?,
+            &text("new_string")?,
+            args["replace_all"] == true,
+            root,
+        ),
+        "list_dir" => list_dir(&path().unwrap_or_else(|_| root.to_path_buf()), root),
+        "glob" => glob(
+            &text("pattern")?,
+            &path().unwrap_or_else(|_| root.to_path_buf()),
+            root,
+        ),
+        "grep" => grep(
+            &text("pattern")?,
+            &path().unwrap_or_else(|_| root.to_path_buf()),
+            args["glob"].as_str(),
+            args["case_insensitive"] == true,
+            root,
+        ),
+        "bash" => bash(
+            &text("command")?,
+            args["timeout"]
+                .as_u64()
+                .unwrap_or(BASH_TIMEOUT)
+                .clamp(1, MAX_BASH_TIMEOUT),
+            root,
+        ),
+        "fetch_url" => fetch_url(&text("url")?),
+        "computer_screenshot" => computer_screenshot(),
+        "computer_move" => computer::perform(&computer::Action::Move {
+            x: number(args, "x")?,
+            y: number(args, "y")?,
+        })
+        .map(|()| "Moved the pointer".to_string()),
+        "computer_click" => {
+            let action = computer::Action::Click {
+                x: number(args, "x")?,
+                y: number(args, "y")?,
+                button: args["button"].as_str().unwrap_or("left").to_string(),
+                double: args["double"] == true,
+            };
+            computer::perform(&action).map(|()| computer::describe(&action))
+        }
+        "computer_type" => {
+            let action = computer::Action::Type {
+                text: text("text")?,
+            };
+            computer::perform(&action).map(|()| computer::describe(&action))
+        }
+        "computer_key" => {
+            let action = computer::Action::Key {
+                key: text("key")?,
+                modifiers: args["modifiers"]
+                    .as_array()
+                    .map(|list| {
+                        list.iter()
+                            .filter_map(|m| m.as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+            };
+            computer::perform(&action).map(|()| computer::describe(&action))
+        }
+        "computer_scroll" => {
+            let action = computer::Action::Scroll {
+                amount: number(args, "amount")?,
+                horizontal: args["horizontal"] == true,
+            };
+            computer::perform(&action).map(|()| computer::describe(&action))
+        }
+        other => Err(format!("There is no tool named {other}")),
+    }?;
+    Ok(result)
+}
+
+/// Cuts a long result to its start and end. `saved` is the file the whole of it was written to,
+/// which the note in its middle points the model at.
+pub fn cap(text: String, saved: Option<&Path>) -> String {
+    if text.len() <= MAX_RESULT {
+        return text;
+    }
+    let mut head = MAX_RESULT * 3 / 4;
+    while !text.is_char_boundary(head) {
+        head -= 1;
+    }
+    let mut tail = text.len() - MAX_RESULT / 4;
+    while !text.is_char_boundary(tail) {
+        tail += 1;
+    }
+    let cut = text[head..tail].lines().count();
+    let note = match saved {
+        Some(path) => format!(
+            "[… {cut} lines cut. The whole output is saved in {}: read it with read_file and an offset, or search it with grep …]",
+            path.display()
+        ),
+        None => format!("[… {cut} lines cut …]"),
+    };
+    format!("{}\n\n{note}\n\n{}", &text[..head], &text[tail..])
+}

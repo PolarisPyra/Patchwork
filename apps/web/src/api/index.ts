@@ -1,4 +1,4 @@
-// Typed bridge to the Rust backend. Mirrors apps/server/src/types/ and the
+// Typed bridge to the Rust backend. Mirrors the wire types in crates/server/src and the
 // commands registered in apps/desktop/src-tauri/src/lib.rs — keep all three in sync.
 //
 // One module per area, each with its commands, the events it listens to, and the shapes they carry
@@ -39,7 +39,7 @@ export {
 } from "~/api/models";
 export { onProjectChanged } from "~/api/projects";
 export type { SkillsView } from "~/api/skills";
-export { onTerminalExit, onTerminalOutput, type StartedTerminal } from "~/api/terminal";
+export { onTerminalExit, onTerminalOutput } from "~/api/terminal";
 export { onAgentEvent } from "~/api/threads";
 export {
   onUpdateStatus,

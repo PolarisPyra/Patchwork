@@ -9,10 +9,8 @@ fn main() {
         std::process::exit(patchwork_server::provider::opencode::bridge::run());
     }
     // An API provider's turn starts this binary as Patchwork's own agent, without the app.
-    if std::env::args().nth(1).as_deref()
-        == Some(patchwork_server::provider::api::bridge::BRIDGE_ARG)
-    {
-        std::process::exit(patchwork_server::provider::api::bridge::run());
+    if std::env::args().nth(1).as_deref() == Some(patchwork_server::harness::BRIDGE_ARG) {
+        std::process::exit(patchwork_server::harness::run());
     }
     // Codex and Antigravity start this binary as a hook that checks a tool call against the
     // permission rules.

@@ -4,7 +4,6 @@
 mod activation;
 mod clipboard;
 mod logo;
-mod terminal;
 mod updates;
 mod commands;
 
@@ -251,7 +250,6 @@ pub fn run() {
             app.manage(logo::LogoChanges::default());
             logo::apply(app.handle(), logo.as_deref());
             app.manage(updates::Updates::default());
-            app.manage(terminal::Terminals::default());
             updates::start(app.handle());
             Ok(())
         })
@@ -286,10 +284,10 @@ pub fn run() {
             commands::logs::log_channels,
             commands::logs::read_log,
             commands::logs::log_renderer,
-            terminal::terminal_spawn,
-            terminal::terminal_write,
-            terminal::terminal_resize,
-            terminal::terminal_kill,
+            commands::terminal::terminal_spawn,
+            commands::terminal::terminal_write,
+            commands::terminal::terminal_resize,
+            commands::terminal::terminal_kill,
             commands::logs::export_logs,
             commands::models::list_models,
             commands::models::list_api_providers,

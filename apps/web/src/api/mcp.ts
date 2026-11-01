@@ -18,7 +18,7 @@ export interface McpServerView extends McpServer {
 }
 
 /** A server Claude Code or Codex runs, read from its own config. Mirrors `CliServer` in
- * apps/server/src/provider/mcp_clis.rs; environment and header values stay out. */
+ * crates/server/src/provider/mcp/clis.rs; environment and header values stay out. */
 export interface CliMcpServer {
   /** Names it for a refresh; equal for the same server wherever it is configured. */
   key: string;

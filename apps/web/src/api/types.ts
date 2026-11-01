@@ -1,76 +1,81 @@
-import type { AccessMode } from "~/bindings/AccessMode";
-import type { AgentEvent } from "~/bindings/AgentEvent";
-import type { AgentEventEnvelope } from "~/bindings/AgentEventEnvelope";
-import type { AgentKind } from "~/bindings/AgentKind";
-import type { AgentStatus } from "~/bindings/AgentStatus";
-import type { ApiModel } from "~/bindings/ApiModel";
-import type { ApiProvider } from "~/bindings/ApiProvider";
-import type { Approval } from "~/bindings/Approval";
-import type { ApprovalStatus } from "~/bindings/ApprovalStatus";
-import type { Attachment } from "~/bindings/Attachment";
-import type { AttachmentKind } from "~/bindings/AttachmentKind";
-import type { BackgroundTask } from "~/bindings/BackgroundTask";
-import type { ClaudeInfo } from "~/bindings/ClaudeInfo";
-import type { CodexFeature } from "~/bindings/CodexFeature";
-import type { CodexInfo } from "~/bindings/CodexInfo";
-import type { CodexModel } from "~/bindings/CodexModel";
-import type { Effect } from "~/bindings/Effect";
-import type { FileChange } from "~/bindings/FileChange";
-import type { FileMedia } from "~/bindings/FileMedia";
-import type { Folder } from "~/bindings/Folder";
-import type { Goal } from "~/bindings/Goal";
-import type { GoalStatus } from "~/bindings/GoalStatus";
-import type { ImportScan } from "~/bindings/ImportScan";
-import type { ImportSource } from "~/bindings/ImportSource";
-import type { Integrations } from "~/bindings/Integrations";
-import type { LogChunk } from "~/bindings/LogChunk";
-import type { LoggingSettings } from "~/bindings/LoggingSettings";
-import type { LogLevel } from "~/bindings/LogLevel";
-import type { McpServer } from "~/bindings/McpServer";
-import type { Message as WireMessage } from "~/bindings/Message";
-import type { MessageStatus } from "~/bindings/MessageStatus";
-import type { ModelOption } from "~/bindings/ModelOption";
-import type { NotificationSettings } from "~/bindings/NotificationSettings";
-import type { Part } from "~/bindings/Part";
-import type { PermissionKind } from "~/bindings/PermissionKind";
-import type { PermissionRule } from "~/bindings/PermissionRule";
-import type { PermissionScope } from "~/bindings/PermissionScope";
-import type { PermissionSettings } from "~/bindings/PermissionSettings";
-import type { PlanStep } from "~/bindings/PlanStep";
-import type { Plugin } from "~/bindings/Plugin";
-import type { PluginApp } from "~/bindings/PluginApp";
-import type { PluginHook } from "~/bindings/PluginHook";
-import type { PluginHookHandler } from "~/bindings/PluginHookHandler";
-import type { Project } from "~/bindings/Project";
-import type { ProjectChanged } from "~/bindings/ProjectChanged";
-import type { ProviderSlashCommand } from "~/bindings/ProviderSlashCommand";
-import type { ProviderUsage } from "~/bindings/ProviderUsage";
-import type { Question } from "~/bindings/Question";
-import type { Refusal } from "~/bindings/Refusal";
-import type { Role } from "~/bindings/Role";
-import type { RuleRef } from "~/bindings/RuleRef";
-import type { RunOutcome } from "~/bindings/RunOutcome";
-import type { Schedule } from "~/bindings/Schedule";
-import type { ScheduledRun } from "~/bindings/ScheduledRun";
-import type { ScheduledTask } from "~/bindings/ScheduledTask";
-import type { ScopeRules } from "~/bindings/ScopeRules";
-import type { Screenshot } from "~/bindings/Screenshot";
-import type { Settings } from "~/bindings/Settings";
-import type { ShellChoices } from "~/bindings/ShellChoices";
-import type { Skill } from "~/bindings/Skill";
-import type { StepStatus } from "~/bindings/StepStatus";
-import type { SubAgent } from "~/bindings/SubAgent";
-import type { TerminalSettings } from "~/bindings/TerminalSettings";
-import type { Theme } from "~/bindings/Theme";
-import type { Thread as WireThread } from "~/bindings/Thread";
-import type { TokenSettings } from "~/bindings/TokenSettings";
-import type { TokenUsage } from "~/bindings/TokenUsage";
-import type { ToolCall } from "~/bindings/ToolCall";
-import type { TurnFile } from "~/bindings/TurnFile";
-import type { TurnFileState } from "~/bindings/TurnFileState";
-import type { TurnTrees } from "~/bindings/TurnTrees";
-import type { UsageWindow } from "~/bindings/UsageWindow";
-import type { Weekday } from "~/bindings/Weekday";
+import type { Screenshot } from "~/bindings/computer";
+import type { ImportScan, ImportSource } from "~/bindings/import";
+import type { LogChunk } from "~/bindings/logging";
+import type {
+  AgentEvent,
+  AgentEventEnvelope,
+  TurnFile,
+  TurnFileState,
+} from "~/bindings/orchestration";
+import type {
+  Effect,
+  PermissionKind,
+  PermissionRule,
+  PermissionScope,
+  PermissionSettings,
+  RuleRef,
+  ScopeRules,
+} from "~/bindings/permissions";
+import type { Plugin, PluginApp, PluginHook, PluginHookHandler } from "~/bindings/plugins";
+import type { Folder, Project } from "~/bindings/projects";
+import type {
+  AgentKind,
+  AgentStatus,
+  ApiModel,
+  ApiProvider,
+  ClaudeInfo,
+  CodexFeature,
+  CodexInfo,
+  CodexModel,
+  McpServer,
+  ModelOption,
+  ProviderSlashCommand,
+} from "~/bindings/provider";
+import type {
+  RunOutcome,
+  Schedule,
+  ScheduledRun,
+  ScheduledTask,
+  Weekday,
+} from "~/bindings/scheduled";
+import type {
+  Integrations,
+  LoggingSettings,
+  LogLevel,
+  NotificationSettings,
+  Settings,
+  ShellChoices,
+  TerminalSettings,
+  Theme,
+  TokenSettings,
+} from "~/bindings/settings";
+import type { Skill } from "~/bindings/skills";
+import type { StartedTerminal, TerminalExit, TerminalOutput } from "~/bindings/terminal";
+import type {
+  AccessMode,
+  Approval,
+  ApprovalStatus,
+  Attachment,
+  AttachmentKind,
+  BackgroundTask,
+  Goal,
+  GoalStatus,
+  Message as WireMessage,
+  MessageStatus,
+  Part,
+  PlanStep,
+  Question,
+  Refusal,
+  Role,
+  StepStatus,
+  SubAgent,
+  Thread as WireThread,
+  TokenUsage,
+  ToolCall,
+  TurnTrees,
+} from "~/bindings/threads";
+import type { ProviderUsage, UsageWindow } from "~/bindings/usage";
+import type { FileChange, FileMedia, ProjectChanged } from "~/bindings/workspace";
 export type {
   AccessMode,
   AgentEvent,
@@ -131,8 +136,11 @@ export type {
   Settings,
   ShellChoices,
   Skill,
+  StartedTerminal,
   StepStatus,
   SubAgent,
+  TerminalExit,
+  TerminalOutput,
   TerminalSettings,
   Theme,
   TokenSettings,

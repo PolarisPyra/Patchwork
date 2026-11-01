@@ -1,7 +1,7 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "~/api/invoke";
 
-/** Where updating Patchwork stands. Mirrors `UpdateState` in apps/desktop/src-tauri/src/updates.rs. */
+/** Where updating Patchwork stands. Mirrors `UpdateState` in apps/desktop/src-tauri/src/updates/state.rs. */
 export type UpdateState =
   | { status: "idle" }
   | { status: "checking" }
