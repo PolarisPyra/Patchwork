@@ -120,6 +120,10 @@ const inTextField = (el: Element) =>
   el instanceof HTMLElement &&
   (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
 
+/** Focus stops that act on Enter and Space, so keys meant for the app do not take them over. */
+const CONTROL =
+  'a[href], button, summary, select, [role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="switch"], [role="tab"], [role="option"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="treeitem"], [role="combobox"], [role="slider"], [tabindex]:not([tabindex="-1"])';
+
 function contextOf(target: Element): Lookup {
   const flags = new Set<string>();
   const selector = `[${CONTEXT_ATTR}]`;
@@ -129,6 +133,7 @@ function contextOf(target: Element): Lookup {
       .forEach((flag) => flags.add(flag));
   }
   if (inTextField(target)) flags.add("textInputFocus");
+  if (target.closest(CONTROL)) flags.add("controlFocus");
   const selection = window.getSelection();
   if (selection && !selection.isCollapsed) flags.add("hasTextSelection");
   return (flag) => flags.has(flag) || !!reporters.get(flag)?.some((r) => r.current());
