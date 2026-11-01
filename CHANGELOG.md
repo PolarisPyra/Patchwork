@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.3.7] - 2026-11-01
+
+### Fixed
+
+- The agent menu in the chat box no longer runs off the top of the window when a project has many agents. It shows about a dozen at a time and scrolls the rest.
+
 ## [26.3.6] - 2026-11-01
 
 ### Added
