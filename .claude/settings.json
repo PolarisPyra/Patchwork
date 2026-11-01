@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command // empty' | grep -qE '(^|[;&|][[:space:]]*)(pip3?|python3?[[:space:]]+-m[[:space:]]+pip)[[:space:]]|pkill[^;&|]*[[:space:]]-[a-zA-Z]*f|git[[:space:]]+(reset[[:space:]]+--hard|checkout[[:space:]]+--|restore|stash|clean[[:space:]]+-[a-zA-Z]*f|push.*(--force|[[:space:]]-f([[:space:]]|$)|--tags))' && { echo 'Blocked by .claude/settings.json: use uv (not pip or python -m pip), pkill -x (not pkill -f), and no destructive git (reset --hard, checkout --, restore, stash, clean -f, force or tag push). Ask the user first.' >&2; exit 2; }; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}
