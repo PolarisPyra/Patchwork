@@ -2,37 +2,41 @@
 # Everything that releases Patchwork, on your machine and in the Release workflow
 # (.github/workflows/release.yml). docs/release.md explains how it all fits together.
 #
-# On your machine:
-#   scripts/release.sh YY.N.P           Cut a release, with no questions asked: check, write the
-#                                       notes from the commits' Changelog: paragraphs, set the
-#                                       version, add the notes to CHANGELOG.md, commit, tag, and
-#                                       push, then print the build's link and end. Run it only
-#                                       when a release was asked for.
-#   scripts/release.sh bump [release|patch]
-#                                       Cut the next release without working the number out, from
-#                                       the newest tag. Versions are CalVer, YY.N.P: `bump` is this
-#                                       year's next release, so it counts the release number up and
-#                                       starts at patch 0 (26.1.3 -> 26.2.0), and a new year starts
-#                                       at 1 (26.3.0 -> 27.1.0); `bump patch` fixes the release it
-#                                       follows (26.2.0 -> 26.2.1). `bump` with no level is the
-#                                       default, and `scripts/release.sh release` and `patch` on
-#                                       their own do the same as the matching form.
-#   scripts/release.sh next [release|patch]
-#                                       Print the version that bump gives, and change nothing.
-#   scripts/release.sh watch YY.N.P     Follow YY.N.P's build to the end, then check that
-#                                       latest.json names it.
-#   scripts/release.sh version YY.N.P   Write a version into every file that names it. A bump
-#                                       level works here too.
-#   scripts/release.sh notes YY.N.P     Publish YY.N.P's section of CHANGELOG.md again, after a
-#                                       fix: to its GitHub release, and to latest.json when YY.N.P
-#                                       is the latest release and the Bunny keys are set.
-#   scripts/release.sh pull YY.N.P      Withdraw YY.N.P when it went wrong: point latest.json back
-#                                       at the release before it. Needs the Bunny keys.
+# The Release workflow cuts a release by itself every hour there is something for users, so these
+# are for when one can't wait.
 #
-# In the Release workflow:
+# On your machine:
+#   scripts/release.sh bump             Cut the next release now, with no questions asked: check,
+#                                       write the notes from the commits' Changelog: paragraphs,
+#                                       set the version, add the notes to CHANGELOG.md, commit,
+#                                       tag, and push, then print the build's link and end. The
+#                                       version is CalVer, YY.M.N, counted from the newest tag:
+#                                       the next N this month (26.11.4 -> 26.11.5), or N 0 in a
+#                                       new month (26.11.5 -> 26.12.0).
+#   scripts/release.sh YY.M.N           The same, for exactly that version.
+#   scripts/release.sh next             Print the version that bump gives, and change nothing.
+#   scripts/release.sh watch YY.M.N     Follow YY.M.N's build to the end, then check that
+#                                       latest.json names it.
+#   scripts/release.sh version YY.M.N   Write a version into every file that names it. `next`
+#                                       works here too.
+#   scripts/release.sh notes YY.M.N     Publish YY.M.N's section of CHANGELOG.md again, after a
+#                                       fix: to its GitHub release, and to latest.json when YY.M.N
+#                                       is the latest release and the Bunny keys are set.
+#   scripts/release.sh pull YY.M.N      Withdraw YY.M.N when it went wrong: point latest.json back
+#                                       at the release before it, and send copies already on
+#                                       YY.M.N back to it unless YY.M.N changed the database.
+#                                       Needs the Bunny keys.
+#
+# In the Release workflow, where $RELEASE_TAG names the tag being published:
+#   scripts/release.sh ci-plan          Write the next version to the step's `version` output when
+#                                       a commit since the last tag has a Changelog: paragraph for
+#                                       users, and nothing when none has.
+#   scripts/release.sh ci-cut YY.M.N    Write the notes, set the version, add the notes to
+#                                       CHANGELOG.md, commit, tag, and push main and the tag
+#                                       together, then write the tag to the step's `tag` output.
 #   scripts/release.sh ci-build linux|windows|macos
 #                                       Build this platform's files, unsigned, with the tag's
-#                                       version on a tag.
+#                                       version when there is one.
 #   scripts/release.sh ci-upload linux|windows|macos
 #                                       Upload them under the tag's folder, and write a JSON list
 #                                       of them (name, SHA-256) to the step's `assets` output.
@@ -53,6 +57,8 @@ source "$repo_root/scripts/bundle-names.sh"
 PUBLIC=https://updates.patchworkeditor.com
 STORAGE=https://ny.storage.bunnycdn.com/patchwork-releases
 WORKFLOW=release.yml
+# A release that changed these can't be rolled back to the one before it: see withdrawn_tags.
+MIGRATIONS=crates/server/src/persistence/migrations
 SECRETS=(BUNNY_STORAGE_PASSWORD BUNNY_API_KEY TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD)
 
 die() {
@@ -66,16 +72,17 @@ step() {
 usage() {
   sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed '$d' | sed 's/^# \{0,1\}//'
 }
-# A version is CalVer, YY.N.P: the two-digit year, the release number within that year, and the
-# patch. The year is two digits and the release number has no leading zero, which tells a CalVer
-# version apart from the old MAJOR.MINOR.PATCH scheme (`0.11.3` has a one-digit first part).
+# A version is CalVer, YY.M.N: the two-digit year, the month, and which release of that month it
+# is, from 0. The year is two digits, which tells a CalVer version apart from the old
+# MAJOR.MINOR.PATCH scheme (`0.11.3` has a one-digit first part). The YY.N.P releases before it
+# (26.1.0 to 26.3.9) read as January to March 2026, so they still sort below every new one.
 is_release_version() {
-  [[ "$1" =~ ^[0-9]{2}\.[1-9][0-9]*\.[0-9]+$ ]]
+  [[ "$1" =~ ^[0-9]{2}\.([1-9]|1[0-2])\.(0|[1-9][0-9]*)$ ]]
 }
 
 check_version() {
   is_release_version "$1" \
-    || die "Not a version: $1 (expected YY.N.P, for example $(date +%y).1.0)."
+    || die "Not a version: $1 (expected YY.M.N, for example $(date -u +%y.%-m).0)."
 }
 
 # The newest release, from the tags. A release follows the latest tag, so the next version comes
@@ -87,52 +94,37 @@ latest_version() {
   echo "${tag#v}"
 }
 
-# Prints the version the given bump gives the latest release: a release counts the release number
-# up and starts the patch again at 0, and a patch fixes the release before it. Until the first
-# CalVer release exists, the newest tag is from the old scheme, which has no release to count from
-# or to fix, so both give this year's first release.
+# Prints the version after the latest release: the next N in the same month, or N 0 in a new one.
+# The month is UTC's, so a release cut here and one cut by the workflow count the same way.
 next_version() {
-  local level="${1:-release}" current year count patch
-  case "$level" in
-    release | patch | minor | major) ;;
-    *) die "Not a bump level: $level (expected release or patch)." ;;
-  esac
+  local current year month count
   current=$(latest_version)
-  year=$(date +%y)
-  # minor and major are the levels of the scheme this replaced: CalVer has neither.
+  read -r year month <<< "$(date -u '+%y %-m')"
+  # The newest tag from the old scheme has no month to count from.
   if ! is_release_version "$current"; then
-    case "$level" in
-      release | patch) echo "$year.1.0" ;;
-      *) die "CalVer has no $level: \`bump\` is the next release of the year, and \`bump patch\` fixes the last one." ;;
-    esac
+    echo "$year.$month.0"
     return
   fi
-  IFS=. read -r _ count patch <<< "$current"
-  case "$level" in
-    release)
-      if ((10#${current%%.*} > 10#$year)); then
-        die "The newest release, $current, is from a later year than this machine's clock ($year)."
-      elif ((10#${current%%.*} < 10#$year)); then
-        echo "$year.1.0"
-      else
-        echo "$year.$((10#$count + 1)).0"
-      fi
-      ;;
-    patch) echo "${current%.*}.$((10#$patch + 1))" ;;
-    *) die "CalVer has no $level: \`bump\` is the next release of the year, and \`bump patch\` fixes the last one." ;;
-  esac
+  IFS=. read -r _ _ count <<< "$current"
+  local was=$((10#${current%%.*} * 100 + $(cut -d. -f2 <<< "$current")))
+  local now=$((10#$year * 100 + month))
+  if ((was > now)); then
+    die "The newest release, $current, is from a later month than this machine's clock ($year.$month)."
+  elif ((was < now)); then
+    echo "$year.$month.0"
+  else
+    echo "$year.$month.$((count + 1))"
+  fi
 }
 
-# The version to release: a bump level counted from the latest tag, or the YY.N.P given. A leading
-# `v` is accepted, as in the tags themselves.
+# The version to release: `next`, or `bump`, counted from the latest tag, or the YY.M.N given. A
+# leading `v` is accepted, as in the tags themselves.
 resolve_version() {
   local version="${1:-}"
-  [[ -n "$version" ]] || die "Usage: scripts/release.sh [bump] [release|patch] | YY.N.P"
+  [[ -n "$version" ]] || die "Usage: scripts/release.sh bump | YY.M.N"
   version="${version#v}"
   case "$version" in
-    # minor and major are the levels of the scheme this replaced; next_version explains that CalVer
-    # has neither.
-    release | patch | minor | major) next_version "$version" ;;
+    next | bump) next_version ;;
     *)
       check_version "$version"
       echo "$version"
@@ -160,8 +152,30 @@ set_version() {
   echo "Set the version to $version."
 }
 
+# Writes and checks the release notes, sets the version, adds the notes to CHANGELOG.md, commits,
+# and tags, all on the current commit. Pushing is up to the caller.
+tag_release() {
+  local version="$1" tag="v$1"
+  # Kept until the release is pushed, so an edit to it, or a second run, is used as it is.
+  local notes=".release-notes/$tag.md"
+  step "Release notes for $tag"
+  scripts/changelog.sh draft "$tag" "$notes"
+  echo
+  cat "$notes"
+  echo
+  scripts/changelog.sh check "$notes" "$version"
+
+  step "Tagging $tag"
+  set_version "$version"
+  scripts/changelog.sh insert "$notes" "$version"
+  git add CHANGELOG.md package.json apps/web/package.json apps/desktop/package.json \
+    apps/desktop/src-tauri/tauri.conf.json
+  git commit -m "Release $tag"
+  git tag -a "$tag" -m "Patchwork $version"
+}
+
 cut_release() {
-  local asked="${1:-release}" version previous
+  local asked="${1:-bump}" version previous
   version=$(resolve_version "$asked")
   check_version "$version"
   previous=$(latest_version)
@@ -194,30 +208,15 @@ cut_release() {
   cargo test --workspace
   [[ -z "$(git status --porcelain)" ]] || die "pnpm check changed files. Commit them, then release again."
 
-  step "Release notes for $tag"
-  # Kept until the release is pushed, so an edit to it, or a second run, is used as it is.
-  local notes=".release-notes/$tag.md"
-  scripts/changelog.sh draft "$tag" "$notes"
-  echo
-  cat "$notes"
-  echo
-  scripts/changelog.sh check "$notes" "$version"
-
-  step "Tagging $tag"
   # Commits not on origin yet go up on their own first: GitHub matches the Release workflow's paths
   # against every commit in a push, so one that changes a Cargo file would otherwise start a cache
   # build beside the tag's run.
   if [[ -n "$(git rev-list origin/main..HEAD)" ]]; then
     git push origin main
   fi
-  set_version "$version"
-  scripts/changelog.sh insert "$notes" "$version"
-  git add CHANGELOG.md package.json apps/web/package.json apps/desktop/package.json \
-    apps/desktop/src-tauri/tauri.conf.json
-  git commit -m "Release $tag"
-  git tag -a "$tag" -m "Patchwork $version"
+  tag_release "$version"
   git push origin main "$tag"
-  rm -f "$notes"
+  rm -f ".release-notes/$tag.md"
 
   # The build runs on GitHub from here; `scripts/release.sh watch` follows it.
   local run=""
@@ -295,11 +294,42 @@ platform_files() {
   [[ -f "${files[0]}" ]] || die "The $1 build has no file at ${files[0]}."
 }
 
+# The hourly run's first step: it releases only when users have something new to read about.
+ci_plan() {
+  local version=""
+  if scripts/changelog.sh pending; then
+    version=$(next_version)
+    echo "Commits since $(latest_version) have notes for users, so this run releases $version."
+  else
+    echo "No commit since $(latest_version) has notes for users, so there is nothing to release."
+  fi
+  echo "version=$version" >> "${GITHUB_OUTPUT:-/dev/stdout}"
+}
+
+# Tags the checked-out commit, which the checks passed on. main and the tag go up in one atomic
+# push, so if main moved since the run started, neither does: the run ends without a tag, and the
+# next one releases it all.
+ci_cut() {
+  local version="${1#v}"
+  check_version "$version"
+  local tag="v$version" checked
+  checked=$(git rev-parse HEAD)
+  ! git rev-parse --quiet --verify "refs/tags/$tag" > /dev/null || die "$tag already exists."
+  tag_release "$version"
+  if ! git push --atomic origin "HEAD:refs/heads/main" "refs/tags/$tag"; then
+    git fetch --quiet origin main
+    [[ "$(git rev-parse FETCH_HEAD)" != "$checked" ]] || die "Could not push main and $tag."
+    echo "main moved while this run checked it, so nothing was released. The next run releases it."
+    return
+  fi
+  echo "tag=$tag" >> "${GITHUB_OUTPUT:-/dev/stdout}"
+}
+
 ci_build() {
   local platform="${1:-}" files=() file version stable was i dir
   check_platform "$platform"
   # A tag pushed without `scripts/release.sh` still builds with its own version.
-  if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then set_version "${GITHUB_REF_NAME#v}"; fi
+  if [[ -n "${RELEASE_TAG:-}" ]]; then set_version "${RELEASE_TAG#v}"; fi
   case "$platform" in
     linux) tauri_build appimage ;;
     windows) tauri_build nsis ;;
@@ -334,9 +364,9 @@ ci_build() {
 # to the step's `assets` output. A separate step from the build, so the storage password is not in
 # the environment while the dependencies' build scripts run.
 ci_upload() {
-  local platform="${1:-}" tag="${GITHUB_REF_NAME:?Run ci-upload from the Release workflow.}"
+  local platform="${1:-}" tag="${RELEASE_TAG:-}"
   local files=() assets='[]' file name digest
-  [[ "${GITHUB_REF:-}" == refs/tags/v* ]] || die "ci-upload only runs on a version tag."
+  [[ "$tag" == v* ]] || die "ci-upload only runs for a version tag, in the Release workflow."
   platform_files "$platform"
   for file in "${files[@]}"; do
     [[ -f "$file" ]] || die "Expected $file after the build."
@@ -366,7 +396,7 @@ tauri_cli_version() {
 }
 
 ci_release() {
-  local tag="${GITHUB_REF_NAME:?Run ci-release from the Release workflow.}"
+  local tag="${RELEASE_TAG:?Run ci-release from the Release workflow.}"
   local version="${tag#v}" key cli dir=release-check name digest asset assets='[]'
   local built="${LINUX:?} ${WINDOWS:?} ${MACOS:?}"
   [[ -n "${BUNNY_API_KEY:-}" ]] || die "BUNNY_API_KEY is not set."
@@ -426,8 +456,23 @@ ci_release() {
     "${files_to_upload[@]}"
 }
 
+# The tags latest.json withdraws once it names $previous again: those it withdrew already, and
+# $tag. A tag that changed the database schema since $previous is left out, since $previous can't
+# open a database it migrated, so copies on that tag keep it until a fix ships.
+withdrawn_tags() {
+  local manifest="$1" previous="$2" tag="$3" t
+  for t in $(jq -r '.withdrawn // [] | .[]' <<< "$manifest") "$tag"; do
+    if git diff --quiet "$previous" "$t" -- "$MIGRATIONS"; then
+      echo "$t"
+    else
+      echo "$t changed the database since $previous, which can't open it, so copies on $t keep it until a fix ships." >&2
+    fi
+  done
+}
+
 # Withdraws a release that went wrong: latest.json goes back to the release before it, so copies
-# that have not updated yet stop being offered it. Copies already on it keep it.
+# that have not updated yet stop being offered it, and lists it as withdrawn, so copies already on
+# it go back to the release before it at their next check (unless its database changes rule it out).
 pull_release() {
   local version="${1#v}"
   check_version "$version"
@@ -447,10 +492,18 @@ pull_release() {
     if [[ "$candidate" == "$tag" ]]; then found=1; fi
   done
   [[ -n "$previous" ]] || die "No release before $tag has its own copy of latest.json to go back to."
+  local withdrawn
+  withdrawn=$(withdrawn_tags "$manifest" "$previous" "$tag")
+  jq --arg tags "$withdrawn" '.withdrawn = ($tags | split("\n") | map(select(. != "")))' \
+    .release-notes/latest.json > .release-notes/latest.json.new
+  mv .release-notes/latest.json.new .release-notes/latest.json
   upload .release-notes/latest.json latest.json
   curl -fsS -X POST -H "AccessKey: $BUNNY_API_KEY" "https://api.bunny.net/purge?url=$PUBLIC/latest.json"
   rm -f .release-notes/latest.json
   echo "latest.json names $previous again, so $tag is no longer offered as an update."
+  if grep -qx "$tag" <<< "$withdrawn"; then
+    echo "Copies already on $tag go back to $previous at their next update check."
+  fi
 }
 
 # Publishes a release's notes again from CHANGELOG.md, for a fix made after the release.
@@ -482,8 +535,8 @@ republish_notes() {
 }
 
 case "${1:-}" in
-  bump) cut_release "${2:-release}" ;;
-  next) resolve_version "${2:-release}" ;;
+  bump) cut_release bump ;;
+  next) next_version ;;
   version)
     requested=$(resolve_version "${2:-}") || exit 1
     set_version "$requested"
@@ -491,11 +544,13 @@ case "${1:-}" in
   notes) republish_notes "${2:-}" ;;
   pull) pull_release "${2:-}" ;;
   watch) watch_release "${2:-}" ;;
+  ci-plan) ci_plan ;;
+  ci-cut) ci_cut "${2:-}" ;;
   ci-build) ci_build "${2:-}" ;;
   ci-upload) ci_upload "${2:-}" ;;
   ci-release) ci_release ;;
   -h | --help) usage ;;
   "") usage >&2 && exit 1 ;;
-  # A YY.N.P, or a bump level: `scripts/release.sh release` and `patch` cut that bump.
+  # A YY.M.N.
   *) cut_release "$1" ;;
 esac

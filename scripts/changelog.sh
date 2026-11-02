@@ -9,6 +9,8 @@
 #   scripts/changelog.sh check FILE VERSION Checks a release section for VERSION.
 #   scripts/changelog.sh draft TAG FILE     Writes TAG's section into FILE from the Changelog:
 #                                           paragraphs since the last tag, unless FILE exists.
+#   scripts/changelog.sh pending            Succeeds when a commit since the last tag has a
+#                                           Changelog: paragraph other than `none`.
 #   scripts/changelog.sh insert FILE VERSION
 #                                           Adds VERSION's section in FILE to the top of CHANGELOG.md,
 #                                           merging in the sections of tags that never published.
@@ -188,6 +190,18 @@ entries() {
   awk '/^### / { group = substr($0, 5); next } /^- / { print group "\t" substr($0, 3) }'
 }
 
+# The Changelog: paragraphs since the last tag, other than `none`, as "group<TAB>entry" lines.
+unreleased() {
+  local since hash text group
+  since=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD) || die "No earlier release tag."
+  while IFS= read -r hash; do
+    text=$(paragraph "$(git show -s --format=%B "$hash")")
+    [[ -z "$text" ]] || is_none "$text" && continue
+    group=$(group_of "$text")
+    printf '%s\t%s\n' "${group:-Changed}" "${text#"${group:+$group: }"}"
+  done < <(app_commits "$since")
+}
+
 draft() {
   local tag="$1" file="$2" version="${1#v}"
   if [[ -s "$file" ]]; then
@@ -195,16 +209,16 @@ draft() {
     check "$file" "$version"
     return
   fi
-  local since hash text group
-  since=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD) || die "No earlier release tag."
   mkdir -p "$(dirname "$file")"
-  while IFS= read -r hash; do
-    text=$(paragraph "$(git show -s --format=%B "$hash")")
-    [[ -z "$text" ]] || is_none "$text" && continue
-    group=$(group_of "$text")
-    printf '%s\t%s\n' "${group:-Changed}" "${text#"${group:+$group: }"}"
-  done < <(app_commits "$since") | render "$version" > "$file"
+  unreleased | render "$version" > "$file"
   check "$file" "$version"
+}
+
+# Succeeds when a commit since the last tag has a Changelog: paragraph for users.
+pending() {
+  local entries
+  entries=$(unreleased)
+  [[ -n "$entries" ]]
 }
 
 # The version of the newest release that published, from its GitHub release, which the Release
@@ -251,6 +265,7 @@ case "${1:-}" in
   lint) lint ;;
   check) check "${2:?}" "${3:?}" ;;
   draft) draft "${2:?}" "${3:?}" ;;
+  pending) pending ;;
   insert) insert "${2:?}" "${3:?}" ;;
   section) section "${2:?}" ;;
   *) sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed '$d' | sed 's/^# \{0,1\}//' >&2 && exit 1 ;;

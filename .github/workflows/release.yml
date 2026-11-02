@@ -1,15 +1,18 @@
 name: Release
 
-# Builds the Linux AppImage, the Windows installer, and the macOS (Apple silicon) disk image and app
-# bundle for a version tag (v26.1.0, v26.2.0, ...), publishes them to updates.patchworkeditor.com,
-# and creates the GitHub release with the tag's notes. scripts/release.sh does the work, and
-# docs/release.md explains it.
+# Releases Patchwork every hour, when main has a commit with a Changelog: paragraph for users since
+# the last release: it checks main with the CI workflow, cuts the next YY.M.N version, tags it, then
+# builds the Linux AppImage, the Windows installer, and the macOS (Apple silicon) disk image and app
+# bundle, publishes them to updates.patchworkeditor.com, and creates the GitHub release with the
+# tag's notes. A tag pushed by `scripts/release.sh` is built and published the same way.
+# scripts/release.sh does the work, and docs/release.md explains it.
 #
-# Run it by hand (Actions → Release → Run workflow) to build every platform without publishing
-# anything, to try a change to the build before tagging. Only a pushed tag publishes.
+# Run it by hand (Actions → Release → Run workflow) with "Release now" ticked to cut that release
+# without waiting for the hour's run. Unticked, it builds every platform without publishing
+# anything, to try a change to the build before releasing.
 #
-# A run by hand on main also saves the dependency caches, which a tag's run can restore: a cold
-# build costs about 70 of the private repo's counted minutes. Pushes to main start no run.
+# A run on main also saves the dependency caches, which a tag's run can restore: a cold build costs
+# about 70 of the private repo's counted minutes. Pushes to main start no run.
 #
 # Actions are pinned to commits, so a moved tag can't change what runs next to the secrets. The
 # comment after each names the version it was.
@@ -18,7 +21,16 @@ on:
   push:
     tags:
       - "v*"
+  # At 17 minutes past each hour: GitHub delays or drops scheduled runs at the top of the hour.
+  # A run that finds nothing for users ends after its first job, about a minute.
+  schedule:
+    - cron: "17 * * * *"
   workflow_dispatch:
+    inputs:
+      release:
+        description: Release now, if main has changes for users since the last release
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -31,12 +43,64 @@ env:
   # Pinned: a cache is only reused by the same compiler, and the CI workflow checks with this one.
   # Raising it rebuilds the caches on the next run by hand from main.
   RUST_TOOLCHAIN: "1.99.0"
-  PUBLISH: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
 
 jobs:
+  # Whether this run releases, and as which version.
+  plan:
+    if: github.event_name == 'schedule' || inputs.release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Look for changes for users
+        id: plan
+        run: scripts/release.sh ci-plan
+
+  check:
+    needs: plan
+    if: needs.plan.outputs.version != ''
+    uses: ./.github/workflows/ci.yml
+
+  # Commits the version and notes on top of the commit the checks passed on, tags it, and pushes
+  # both. A tag pushed with the workflow's token starts no second run, so this run builds it.
+  cut:
+    needs: [plan, check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.cut.outputs.tag }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Tag ${{ needs.plan.outputs.version }}
+        id: cut
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          scripts/release.sh ci-cut "$VERSION"
+
   appimage:
     # Built on the oldest Ubuntu runner still available, so the AppImage links against an older
     # glibc and runs on newer distributions too.
+    needs: cut
+    # A tag, the hour's release, or a build by hand without publishing.
+    if: >-
+      !cancelled() && !failure() && (github.event_name == 'push'
+      || (github.event_name == 'workflow_dispatch' && !inputs.release)
+      || needs.cut.outputs.tag != '')
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     outputs:
@@ -44,8 +108,12 @@ jobs:
     env:
       # linuxdeploy is itself an AppImage; this lets it run without FUSE.
       APPIMAGE_EXTRACT_AND_RUN: 1
+      # The tag being published, or nothing for a build by hand.
+      RELEASE_TAG: ${{ needs.cut.outputs.tag || (github.ref_type == 'tag' && github.ref_name || '') }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.cut.outputs.tag || github.ref }}
 
       - uses: ./.github/actions/setup
         with:
@@ -61,22 +129,31 @@ jobs:
 
       - name: Upload
         id: upload
-        if: env.PUBLISH == 'true'
+        if: env.RELEASE_TAG != ''
         env:
           BUNNY_STORAGE_PASSWORD: ${{ secrets.BUNNY_STORAGE_PASSWORD }}
         run: scripts/release.sh ci-upload linux
 
   windows:
     # A Dev Drive is needed for the Windows 2025 image's native ReFS support.
+    needs: cut
+    if: >-
+      !cancelled() && !failure() && (github.event_name == 'push'
+      || (github.event_name == 'workflow_dispatch' && !inputs.release)
+      || needs.cut.outputs.tag != '')
     runs-on: windows-2025
     timeout-minutes: 45
     outputs:
       assets: ${{ steps.upload.outputs.assets }}
+    env:
+      RELEASE_TAG: ${{ needs.cut.outputs.tag || (github.ref_type == 'tag' && github.ref_name || '') }}
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.cut.outputs.tag || github.ref }}
 
       # Cargo writes tens of thousands of files, and Defender scans each on C:. A trusted Dev
       # Drive skips that, so the checkout, the Rust toolchain, and cargo's files all live on one.
@@ -106,7 +183,7 @@ jobs:
 
       - name: Upload
         id: upload
-        if: env.PUBLISH == 'true'
+        if: env.RELEASE_TAG != ''
         working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
         env:
           BUNNY_STORAGE_PASSWORD: ${{ secrets.BUNNY_STORAGE_PASSWORD }}
@@ -116,13 +193,21 @@ jobs:
     # macos-15 runs on Apple silicon, so the build is native arm64. Its minutes count ten times
     # against the private repo's allowance, so its timeout is the tightest, and it builds only for a
     # release or a run by hand: its build is quick without a cache.
+    needs: cut
+    if: >-
+      !cancelled() && !failure() && (github.event_name == 'push'
+      || (github.event_name == 'workflow_dispatch' && !inputs.release)
+      || needs.cut.outputs.tag != '')
     runs-on: macos-15
     timeout-minutes: 30
-    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
     outputs:
       assets: ${{ steps.upload.outputs.assets }}
+    env:
+      RELEASE_TAG: ${{ needs.cut.outputs.tag || (github.ref_type == 'tag' && github.ref_name || '') }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.cut.outputs.tag || github.ref }}
 
       - uses: ./.github/actions/setup
         with:
@@ -133,7 +218,7 @@ jobs:
 
       - name: Upload
         id: upload
-        if: env.PUBLISH == 'true'
+        if: env.RELEASE_TAG != ''
         env:
           BUNNY_STORAGE_PASSWORD: ${{ secrets.BUNNY_STORAGE_PASSWORD }}
         run: scripts/release.sh ci-upload macos
@@ -142,14 +227,19 @@ jobs:
   # it fetches each published file back, checks it, signs it with the Tauri CLI the lockfile pins,
   # checks the signature against the key built into the app, and only then publishes latest.json.
   release:
-    needs: [appimage, windows, macos]
-    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [cut, appimage, windows, macos]
+    if: >-
+      !cancelled() && !failure() && (github.ref_type == 'tag' || needs.cut.outputs.tag != '')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
+    env:
+      RELEASE_TAG: ${{ needs.cut.outputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.cut.outputs.tag || github.ref }}
 
       - name: Install minisign
         run: |

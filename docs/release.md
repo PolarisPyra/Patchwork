@@ -7,10 +7,11 @@ For local builds, see [Development](development.md).
 ## Overview
 
 ```
-pnpm release bump                       your machine: checks, notes, version, CHANGELOG.md, commit, tag, push
-        │
-        ▼
-Release workflow (GitHub Actions)       on the v26.1.0 tag
+Release workflow (GitHub Actions)       every hour, or Run workflow with "Release now"
+  ├─ plan         anything for users since the last tag? if not, stop here
+  ├─ check        the CI workflow's checks on main
+  ├─ cut          notes, version, CHANGELOG.md, commit, v26.11.0 tag, push main and the tag
+  │                 (or: pnpm release bump on your machine, which pushes a tag and starts the steps below)
   ├─ appimage  ─┐
   ├─ windows   ─┼─ build (no secrets), upload → updates.patchworkeditor.com/v26.1.0/<file>
   ├─ macos     ─┘
@@ -30,9 +31,9 @@ These files do all of it:
 
 | File | What it does |
 | --- | --- |
-| `scripts/release.sh` | Cuts the release on your machine, and does the build and publish steps in CI |
-| `.github/workflows/release.yml` | Builds each platform with `scripts/release.sh`, and publishes a tag |
-| `.github/workflows/ci.yml` | Checks every pull request, and runs by hand |
+| `scripts/release.sh` | Cuts a release, in CI or on your machine, and does the build and publish steps in CI |
+| `.github/workflows/release.yml` | Cuts the day's release, builds each platform with `scripts/release.sh`, and publishes a tag |
+| `.github/workflows/ci.yml` | Checks every pull request and each automatic release, and runs by hand |
 | `.github/actions/setup` | The runner setup both workflows share: Linux packages, Rust, pnpm, Node |
 | `scripts/changelog.sh` | Checks commit messages, writes each release's notes from them, and reads and writes `CHANGELOG.md` |
 | `docs/changelog-style.md` | The rules for changelog entries |
@@ -41,41 +42,29 @@ These files do all of it:
 
 ## Versions
 
-Versions are CalVer, `YY.N.P`: the two-digit calendar year, the release number within that year, and
-the patch. So `26.` is 2026, `27.` is 2027, and the year rolls over on its own — `26.3.0` → `27.1.0`
-on the first release of 2027. Nobody works the next one out by hand: the release commands take a
-bump level and count it from the newest tag, so the number is always the one after the last release.
+Versions are CalVer, `YY.M.N`: the two-digit calendar year, the month, and which release of that
+month it is, counting from 0. Nobody works the next one out by hand: the Release workflow, and
+`scripts/release.sh bump`, count it from the newest tag and the UTC calendar.
 
-The three parts are read as a calendar date, not as a growth counter. This is the one thing to keep
-straight when a number looks odd, so it is spelled out:
+| Part | Meaning | Starts at |
+| --- | --- | --- |
+| `YY` | The two-digit calendar year of the release. `26` is 2026. | The clock |
+| `M` | The month of the release, `1` to `12`, with no leading zero. | The clock |
+| `N` | Which release of that month this is. A fix is just the next one. | `0` |
 
-| Part | Meaning | Starts at | Stands in for |
-| --- | --- | --- | --- |
-| `YY` | The two-digit calendar year of the release. `26` is 2026. | The clock | SemVer's major: it takes the place of the number bumped once a year |
-| `N` | Which release of that year this is, counting releases and not fixes. | `1` | SemVer's minor: the feature number |
-| `P` | Which patch on that release, for fixes to it. | `0` | SemVer's patch: the bugfix number |
+So `26.11.4` is "the fifth release of November 2026". The next release in the same month counts `N`
+up (`26.11.4` → `26.11.5`); the first in a new month starts at 0 (`26.11.5` → `26.12.0`), and a new
+year rolls over the same way (`26.12.3` → `27.1.0`). There are no levels to pick: a fix and a
+feature both take the next number.
 
-So in `26.2.1` you can read off "2026, the second release that year, its first patch". The mapping
-in the last column is by role only: it explains why there is no `major` or `minor` command, not that
-the numbers move the same way. `YY` does not count up from a number someone chose — it comes from the
-calendar, so it stays put all year and only moves when January does.
+A release's tag is `v` and the whole version, such as `v26.11.0`. An explicit version, as in
+`pnpm release 26.11.7`, cuts exactly that one. `scripts/release.sh next` prints what a bump gives
+and changes nothing.
 
-- **Release**: `pnpm release bump` cuts the year's next release, counting the release number up and
-  starting again at patch 0 (`26.1.3` → `26.2.0`). A new year starts at 1 (`26.3.0` → `27.1.0`).
-- **Patch**: `pnpm release bump patch` fixes the release it follows, keeping that release's year
-  and number (`26.2.0` → `26.2.1`). A patch after the year has turned over still patches the
-  release before it, so `25.4.0` → `25.4.1`.
-
-A release's tag is `v` and the whole version, such as `v26.2.0`. An explicit version, as in
-`pnpm release 26.3.0`, cuts exactly that one. `scripts/release.sh next` and `next patch` print what
-a bump gives and change nothing.
-
-There is no minor or major level: the year and the release number carry what those used to say.
-Passing `minor` or `major` stops with a message saying so.
-
-The release number counts releases, not fixes: a fix goes in the patch, so it never uses up a
-release number. Each part is compared as a whole number, so `26.1.0` sorts below `26.2.0`, and
-`26.2.10` sorts above `26.2.9`, which keeps update ordering right.
+Each part is compared as a whole number, so `26.11.10` sorts above `26.11.9`, and `26.12.0` above
+both. `N` has no practical ceiling: Windows installers allow up to 65535 for it. The releases before
+this scheme, `26.1.0` to `26.3.9`, were `YY.N.P` (year, release number, patch); they read as January
+to March 2026 and sort below every `26.11.x`, so copies on them update as usual.
 
 Three parts are also what the tools read. `tauri-codegen` parses `tauri.conf.json` with
 `semver::Version` and stops the build on anything else, and the updater compares a release's tag
@@ -117,8 +106,8 @@ that only touches `.github/`, `scripts/`, `docs/`, or `*.md` is internal and nee
 `pnpm install` turns the hook on (`git config core.hooksPath scripts/hooks`).
 
 No hook stops a push. Pushing is the user's call, and only their asking for it is what pushes:
-an agent commits and says the work is unpushed. `scripts/release.sh` pushes the release and its tag
-in one step, because a release was asked for.
+an agent commits and says the work is unpushed. Once pushed, a commit with a paragraph for users
+goes out in the next hourly release by itself.
 
 **2. At release.** `scripts/release.sh` writes the release's section from the `Changelog:`
 paragraphs of the app commits since the last tag, each under its group, each entry once. A
@@ -143,12 +132,30 @@ set. Copies already installed show the fix once they update past it.
 
 ## Cut a release
 
-From a clean `main` that is up to date with `origin/main`:
+Releases cut themselves. Every hour, at 17 minutes past, the Release workflow looks at the commits on `main`
+since the last tag. If any has a `Changelog:` paragraph other than `none`, it:
+
+1. Runs the CI workflow's checks on that commit (see [The CI workflow](#the-ci-workflow)), and stops
+   if they fail.
+2. Writes the release notes (see [Changelog](#changelog)) and checks them, writes the next version,
+   adds the notes to the top of `CHANGELOG.md`, commits both as `Release v26.11.0` on top of the
+   checked commit, and creates the annotated tag (`scripts/release.sh ci-cut`).
+3. Pushes `main` and the tag together, in one atomic push. If `main` moved while the checks ran,
+   neither goes up and the run ends without releasing; the next hour's run releases everything.
+4. Builds, uploads, signs, and publishes, as below.
+
+A day with only internal commits, or `Changelog: none`, releases nothing, so a run that finds
+nothing costs a minute.
+
+**When a release can't wait**, run it now from the Actions tab: Release → **Run workflow**, with
+**Release now** ticked, or `gh workflow run release.yml -f release=true`. It does the same as the
+hourly run.
+
+**From your machine**, on a clean `main` that is up to date with `origin/main`:
 
 ```sh
-pnpm release bump          # the year's next release, 26.1.0 -> 26.2.0
-pnpm release bump patch    # a fix to the last release, 26.2.0 -> 26.2.1
-pnpm release 26.3.0        # exactly this version
+pnpm release bump          # the next version, 26.11.4 -> 26.11.5
+pnpm release 26.11.7       # exactly this version
 ```
 
 It needs `git`, `pnpm`, `cargo`, `gh` (signed in), `jq`, and `curl`. The script:
@@ -159,43 +166,48 @@ It needs `git`, `pnpm`, `cargo`, `gh` (signed in), `jq`, and `curl`. The script:
    change a file, such as wire types that were not regenerated.
 3. Writes the release notes (see [Changelog](#changelog)), checks them, and prints them.
 4. Pushes commits not on `origin` yet, writes the version, adds the notes to the top of
-   `CHANGELOG.md`, commits both as `Release v26.1.0`, creates the annotated tag, and pushes `main` and
-   the tag. It asks no questions.
+   `CHANGELOG.md`, commits both as `Release v26.11.0`, creates the annotated tag, and pushes `main`
+   and the tag. It asks no questions.
 5. Prints the link to the Release workflow's run and ends. The build carries on on GitHub.
 
-To follow the build, run `scripts/release.sh watch 26.1.0`. It waits for the run to end, stops with
+To follow the build, run `scripts/release.sh watch 26.11.0`. It waits for the run to end, stops with
 the failed jobs' errors if it fails, then checks that `latest.json` names the new version and
 prints the download links. Ctrl-C stops only the watching, not the build.
 
 ## The CI workflow
 
-`.github/workflows/ci.yml` checks every pull request, and runs when started by hand, on the
-`ubuntu-22.04` runner the AppImage is built on: it builds the web app, runs `pnpm check` and
-`cargo test --workspace`, and fails if the generated wire types differ from the committed ones.
-These are the checks `scripts/release.sh` runs before a release. Pushes to `main` start no run, so a
-plain push costs no Actions minutes. Its Rust cache is saved only from `main`. A newer run on the
-same branch cancels an older one.
+`.github/workflows/ci.yml` checks every pull request, each automatic release (the Release workflow calls
+it), and runs when started by hand, on the `ubuntu-22.04` runner the AppImage is built on: it builds
+the web app, runs `pnpm check` and `cargo test --workspace`, and fails if the generated wire types
+differ from the committed ones. These are the checks `scripts/release.sh` runs before a release.
+Pushes to `main` start no run, so a plain push costs no Actions minutes. Its Rust cache is saved only
+from `main`. A newer run on the same branch cancels an older one.
 
 ## The Release workflow
 
-`.github/workflows/release.yml` runs on a `v*` tag, and when started by hand (see
-[Caches](#caches)). Pushes to `main` build nothing.
+`.github/workflows/release.yml` runs every hour, on a `v*` tag, and when started by hand
+(see [Cut a release](#cut-a-release) and [Caches](#caches)). Pushes to `main` build nothing.
 
 | Job | Runner | Commands | Publishes |
 | --- | --- | --- | --- |
+| plan | `ubuntu-latest`, hourly or with Release now | `ci-plan` | Nothing: the version to cut, or nothing to release |
+| check | The CI workflow, when plan found something | | Nothing |
+| cut | `ubuntu-latest`, after check, with write access | `ci-cut` | The release commit on `main` and its tag |
 | appimage | `ubuntu-22.04` (older glibc, so the AppImage runs on newer distributions) | `ci-build linux`, `ci-upload linux` | `Patchwork_amd64.AppImage` |
 | windows | `windows-2025`, building on a Dev Drive | `ci-build windows`, `ci-upload windows` | `Patchwork_x64-setup.exe` |
 | macos | `macos-15` (Apple silicon) | `ci-build macos`, `ci-upload macos` | `Patchwork_aarch64.dmg`, `Patchwork.app.tar.gz` |
 | release | `ubuntu-latest`, after the three above | `ci-release` | `latest.json`, the GitHub release and its installers |
 
-Each build job sets the tag's version first, so a tag pushed without the script still builds with
-its own version. It builds with no secrets in its environment, then a separate step uploads the
-files to `updates.patchworkeditor.com/<tag>/` and passes each file's name and SHA-256 to the release
+The build jobs and the release job take the tag from `$RELEASE_TAG`: the one cut made, or the one
+pushed. cut pushes with the workflow's own token, which starts no second run, so the same run builds
+the tag it made. Each build job sets the tag's version first, so a tag pushed without the script
+still builds with its own version. It builds with no secrets in its environment, then a separate
+step uploads the files to `updates.patchworkeditor.com/<tag>/` and passes each file's name and SHA-256 to the release
 job as a job output.
 
-The release job is the only one with the signing key or write access to the repo, and it runs none
-of the project's dependencies. For each file, it downloads it back from the update server, checks
-it matches the SHA-256 its build job reported, signs it with the Tauri CLI version `pnpm-lock.yaml`
+The release job is the only one with the signing key. It and cut are the only ones with write
+access to the repo, and neither runs the project's dependencies. For each file, the release job
+downloads it back from the update server, checks it matches the SHA-256 its build job reported, signs it with the Tauri CLI version `pnpm-lock.yaml`
 pins, and checks the signature with `minisign` against the key built into the app (`SIGNING_KEY` in
 `updates/release.rs`), the way the updater will. Any mismatch stops the release before `latest.json`
 changes, so installed copies are never offered a file that won't install. It then uploads
@@ -207,8 +219,8 @@ Every action is pinned to a commit, with the version it was in a comment, so a m
 can't change what runs. To update one, look up the commit of its new release and replace both.
 
 To check the build without releasing, run the workflow by hand from the Actions tab
-(**Run workflow**). It builds all three platforms and publishes nothing, even when run on a tag:
-only a pushed tag uploads files or creates a release.
+(**Run workflow**) with **Release now** unticked. It builds all three platforms and publishes
+nothing, even when run on a tag.
 
 ### Caches
 
@@ -236,7 +248,8 @@ The workflow is built to stay inside the free plan's Actions limits, whichever p
   so about 70 counted minutes. A change to the Rust dependencies costs one cache build of Linux and
   Windows. Each job has a timeout (macOS 30 minutes, Linux and Windows 45, release 10). A second
   run for the same ref waits for the first, so a release is never stopped halfway through
-  publishing.
+  publishing. The hourly run's first job counts as a minute even when it finds nothing, so the
+  schedule alone costs about 720 minutes a month, and each release adds its checks and builds.
 
 Check usage at github.com → Settings → Billing and plans.
 
@@ -279,7 +292,9 @@ release's section of `CHANGELOG.md`:
 ### How copies update
 
 `apps/desktop/src-tauri/src/updates/` checks `latest.json` 30 seconds after launch and then as
-often as **Settings → Updates** says. When the tag is newer than the running version, it picks its
+often as **Settings → Updates** says. When the tag is newer than the running version, or
+`withdrawn` lists the running version (see [When a release goes wrong](#when-a-release-goes-wrong)),
+it picks its
 platform's file (the AppImage, the `-setup.exe`, or `Patchwork.app.tar.gz`), downloads it, and
 installs it only if both its SHA-256 and its minisign signature check out. The signature is checked
 against the public key built into the app, so a changed file on the server, or a changed
@@ -337,14 +352,21 @@ file name stays the same. The release script prints the links for the release it
 ## When a release goes wrong
 
 - **The workflow failed.** Read the errors the script printed, or `gh run view <id> --log-failed`.
-  Fix the cause on `main` and release the next patch version. Never reuse, move, or delete a pushed
+  Fix the cause on `main`; the next release carries it. Never reuse, move, or delete a pushed
   tag. The next release's notes take in the failed one's section (see [Changelog](#changelog)), so
   nothing it said is lost. To try a fix to the build first, run the workflow by hand.
-- **A release went out broken.** Run `scripts/release.sh pull YY.N.P` with `BUNNY_STORAGE_PASSWORD`
-  and `BUNNY_API_KEY` set. It points `latest.json` back at the release before YY.N.P, using the copy
-  each release keeps in its own folder, so copies that haven't updated stop being offered it. Copies
-  already on it keep it until the fix ships as the next patch. Releases before v0.10.18 have no
-  copy, so they can't be gone back to.
+- **A release went out broken.** Run `scripts/release.sh pull YY.M.N` with `BUNNY_STORAGE_PASSWORD`
+  and `BUNNY_API_KEY` set. It points `latest.json` back at the release before YY.M.N, using the copy
+  each release keeps in its own folder, so copies that haven't updated stop being offered it. It
+  also lists YY.M.N under `withdrawn` in `latest.json`, and copies already on it go back to the
+  release before it at their next update check, like any update. Pulling a second release in a row
+  keeps the first on the list. Releases before v0.10.18 have no copy, so they can't be gone back to.
+
+  A release that changed the database schema (`crates/server/src/persistence/migrations/`) is left
+  off the list, because the release before it refuses a database a newer build migrated. The script
+  says so, and copies on it keep it until the fix ships; tick **Release now** to ship the fix
+  without waiting for the hour's run. Copies running a release from before rollbacks existed never
+  read `withdrawn`, so they too wait for the fix.
 - **"Artifact storage quota has been hit."** Something is still uploading GitHub artifacts. The
   workflow above uses none; check that no step calls `actions/upload-artifact`.
 - **A job hit its timeout or the minutes ran out.** Wait for the monthly reset, or rerun the
@@ -361,27 +383,18 @@ file name stays the same. The release script prints the links for the release it
 - Don't change version numbers by hand.
 - Tags start with `v` followed by a digit, such as `v26.1.0`, because the scripts and the workflow
   match that pattern.
-- Never reuse, move, or delete a pushed tag. A broken release is followed by the next patch.
+- Never reuse, move, or delete a pushed tag. A broken release is followed by the next one.
 
 ### For agents
 
-- Push only when the user asks. A push to `main` builds only when it changes the Rust
-  dependencies or the workflow.
-- Cut a release only when the user asks, with `scripts/release.sh <version>` or
-  `scripts/release.sh bump [release|patch]` in the foreground. It asks nothing and ends once the
-  tag is pushed and the run's link is printed. Run `watch` only when the user asks to follow the
-  build.
-- "Push to git bump ver", "push to git bump version", "bump version" and "bump ver" all mean cut
-  the year's next release now, so run `scripts/release.sh bump` and never compute the version by
-  hand: it counts the release number up from the newest tag (26.1.3 → 26.2.0), and starts at 1 in
-  a new year (26.3.0 → 27.1.0). "Bump ver patch" is `scripts/release.sh bump patch`, a fix to the
-  release before it (26.2.0 → 26.2.1). The scheme has no minor or major level, so the script
-  stops with a message if one is passed. Those phrasings are the user asking, so the script
-  committing, tagging, and pushing is covered.
-- A version is `YY.N.P`, always with all three parts and the current year: `26.2.0`, `26.2.1`.
-  Don't drop the patch part (`26.2`) and don't use a version from the old scheme: Tauri and the
-  updater both read a version as SemVer and turn `26.2` down.
-- **Discord changelog**: every time the version is bumped and pushed, write Discord release notes
+- Push only when the user asks. A push to `main` starts no run; the next hourly release picks it up.
+- Releases are automatic, so "push" is only ever a plain push. Never run `scripts/release.sh bump`
+  or cut a version yourself unless the user asks to release right now, and then run it in the
+  foreground. It asks nothing and ends once the tag is pushed and the run's link is printed. Run
+  `watch` only when the user asks to follow the build.
+- A version is `YY.M.N`, always with all three parts: `26.11.0`, `26.11.1`. Never work one out by
+  hand; `scripts/release.sh next` prints it.
+- **Discord changelog**: every time you cut a release, write Discord release notes
   and end the reply with them in one fenced `markdown` code block, so the formatting survives
   copying. They come in addition to `CHANGELOG.md`, not instead of it. Write them from the
   release's section of `CHANGELOG.md` (`scripts/changelog.sh section <version>`), in this shape:

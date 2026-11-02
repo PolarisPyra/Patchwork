@@ -1,22 +1,25 @@
 name: CI
 
-# Checks every pull request, and a run started by hand, with what `scripts/release.sh` checks
-# before a release: the web app's types and formatting, rustfmt, clippy, the Rust tests, and that
-# the generated wire types are committed. It runs on the Ubuntu the AppImage is built on, so a
-# Linux build problem shows here rather than at release. A push to main starts no run.
+# Checks every pull request, a run started by hand, and each automatic release before it is tagged
+# (the Release workflow calls it), with what `scripts/release.sh` checks before a release: the web
+# app's types and formatting, rustfmt, clippy, the Rust tests, and that the generated wire types
+# are committed. It runs on the Ubuntu the AppImage is built on, so a Linux build problem shows here
+# rather than at release. A push to main starts no run.
 #
 # Actions are pinned to commits; the comment after each names the version it was.
 
 on:
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
-# A newer push to the same branch makes an older run's result moot.
+# A newer push to the same branch makes an older run's result moot. The workflow's name keeps a
+# release's checks, which run as part of the Release workflow, apart from a run by hand on main.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
