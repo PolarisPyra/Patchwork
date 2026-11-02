@@ -21,20 +21,25 @@ export function usePreviewSrc(attachment: Attachment): string | null {
 
 /** The webview URL for an image file at `path`, or null for no path and while it loads. */
 export function useImageSrc(path: string | null): string | null {
-  const [src, setSrc] = useState<string | null>(() =>
-    path && allowed.has(path) ? convertFileSrc(path) : null,
+  // The URL is kept with the path it was made for: a card reused for another file must not show
+  // the last one's picture, which reads as a file from another reply.
+  const [shown, setShown] = useState<{ path: string; src: string } | null>(() =>
+    path && allowed.has(path) ? { path, src: convertFileSrc(path) } : null,
   );
   useEffect(() => {
-    if (!path) return;
+    if (!path) {
+      setShown(null);
+      return;
+    }
     if (allowed.has(path)) {
-      setSrc(convertFileSrc(path));
+      setShown({ path, src: convertFileSrc(path) });
       return;
     }
     let cancelled = false;
     api.allowPreview(path).then(
       () => {
         allowed.add(path);
-        if (!cancelled) setSrc(convertFileSrc(path));
+        if (!cancelled) setShown({ path, src: convertFileSrc(path) });
       },
       () => {},
     );
@@ -42,5 +47,5 @@ export function useImageSrc(path: string | null): string | null {
       cancelled = true;
     };
   }, [path]);
-  return src;
+  return shown && shown.path === path ? shown.src : null;
 }
