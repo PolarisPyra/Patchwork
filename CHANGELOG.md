@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.0] - 2026-11-02
+
+### Added
+
+- When a release turns out to be broken and is withdrawn, Patchwork now goes back to the previous version at its next update check, the same way it installs an update.
+
+### Fixed
+
+- While a chat is compacting its context, the send button now waits until compacting ends, and you can keep typing in the meantime. If a queued message you are editing gets sent first, what you typed stays in the message box as a draft instead of being lost.
+
 ## [26.3.9] - 2026-11-01
 
 ### Changed
