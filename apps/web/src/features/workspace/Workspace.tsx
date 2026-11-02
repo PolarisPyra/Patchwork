@@ -168,6 +168,14 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
       void updateSettings((s) => ({ ...s, permissions: change(s.permissions) })),
     [updateSettings],
   );
+  const setProjectChecks = useCallback(
+    (id: string, on: boolean) =>
+      void updateSettings((s) => ({
+        ...s,
+        checks: { ...s.checks, projects: { ...s.checks.projects, [id]: on } },
+      })),
+    [updateSettings],
+  );
   const [canvas, setCanvas] = useState<CanvasState | null>(null);
   const columnRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -194,6 +202,16 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     setError(null);
     fn().catch((e: unknown) => setError(errorText(e)));
   }
+
+  // The reply the checks are for: the last one the open task got.
+  const checkable =
+    project && selected
+      ? (selected.messages
+          .filter((m) => m.role === "assistant" && m.status !== "streaming")
+          .at(-1) ?? null)
+      : null;
+  const runChecks =
+    checkable && selected ? () => attempt(() => api.runChecks(selected.id, checkable.id)) : null;
 
   /** A folder that is already a project flashes that project in the sidebar instead. */
   const addingFolders = (add: () => Promise<string[]>) =>
@@ -498,6 +516,8 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
                 projects={settings.projects}
                 onUpdatePermissions={updatePermissions}
                 onOpenPermissions={openPermissions}
+                checkSettings={settings.checks}
+                onSetProjectChecks={setProjectChecks}
               />
             </main>
 
@@ -548,6 +568,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
               revealThread(id);
             },
             openProject: selectProject,
+            runChecks,
           })}
           onClose={() => setPaletteOpen(false)}
         />

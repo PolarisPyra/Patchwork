@@ -36,7 +36,7 @@ Everything the sidebar shows comes from one SQLite database, `patchwork.db`, in 
 | `projects` | One row per project folder: `name`, `path` (unique), and `position` for sidebar order. |
 | `folders` | Sub-folders inside a project: `project_id`, `name`, `position`. Organisation only; no directory is created on disk. |
 | `threads` | Tasks and chats. `project_id` NULL makes it a chat. `folder_id` NULL puts it at the top level of its project. `session_id` lets the agent resume. |
-| `messages` | The messages of each thread, with text, tool calls, plan, file changes, approvals, and attachments. |
+| `messages` | The messages of each thread, with text, tool calls, plan, file changes, approvals, attachments, and what the project's checks made of the turn. |
 | `scheduled_tasks` | Prompts that start a task on a schedule: its shape as JSON, the project, agent and access mode to run with, and when it last and next runs. |
 | `app_state` | Small key/value state that is not settings, such as the thread that was open last. |
 
@@ -62,14 +62,44 @@ The open project is watched for changes, and the UI never polls git.
     - A read or search call writes nothing.
     - An edit writes only the files it names.
     - A shell command can write anything, and a background command keeps that window open until it ends. Each window gets 1 s of grace after it closes, because FSEvents can report late.
-  - **Two replies at once.** A file that two replies could claim goes to the reply whose call named it: an edit of that file, or a command that mentions its path or name.
+  - **Two replies at once.** A file that two replies could claim goes to the reply whose call named it: an edit of that file, or a command that mentions its path or name. When two shell commands could both have written it and neither names it, it goes to neither rather than to both: one file under two replies reads as work each of them did. It still shows in the sidebar's Changes view, which lists the project as git sees it.
   - **Late reports.** Some agents report a call only after it finishes. OpenCode in `run` mode is one, and it gives the call's real start time. A change that no call covers yet is held until one does, or until the reply ends.
   - **Projects that are not open.** Their files are not watched, so their replies are settled by the `git status` comparison alone when the turn ends.
 - **What attribution still cannot separate.** These cases would need the writing process's ID:
   - A file the user saves while the agent's shell command is running.
-  - A file that two replies' concurrent shell commands both could have written, when neither command names it.
+  - Which of two replies' concurrent shell commands wrote a file when neither names it, so neither reply lists it.
   - Writes from a process an agent left running outside a tool call and outside a background task it reported.
 - **Deleted files.** The reply's file list and the Changes view strike these through. A file with a git status of `deleted` shows its line counts. A deleted file git never tracked has no status, so the UI asks `missing_files` and labels it "Deleted".
+
+## Checks
+
+A reply can say whether the project's own tests still pass, so a change is judged by something
+other than how it reads. It is off by default and turned on in Settings → Checks
+(`Settings::checks`), because running a test suite after every task is the user's call, not the
+app's. There is one default for projects that have not answered, and a project can answer for
+itself: a suite too slow to run every time can be off while the others are on.
+
+- **What runs** (`crates/server/src/checks/detect.rs`). The first of: a `check` script in `package.json`, else its `test` script, run with the package manager the lockfile names when that tool is installed; `cargo test`; `python -m pytest`; `go test ./...`; a Makefile's `check` or `test` target; `mix test`. A project with none of them has nothing to check, and its replies show no card at all.
+- **When** (`crates/server/src/orchestration/turn/end.rs`). When a turn finishes with `Complete` and its reply changed at least one file. A stopped or failed turn changed nothing to judge.
+- **How** (`crates/server/src/checks/run.rs`). Through the same shell an agent's commands run in, in the project folder, with `CI=1` and colour off. Output keeps its last 16 KB; the process group is killed at 5 minutes, and that is never a pass.
+- **What it means** (`TurnChecks` in `crates/server/src/threads/messages.rs`). `passed`, `failed`, `timedOut`, or `notRun`, with the command, how long it took, one `CheckFailure` per thing that failed (`crates/server/src/checks/parse.rs` reads cargo's, Node's, Jest's, Vitest's, pytest's and Go's shapes), and the tail of the output. A check that did not finish is `timedOut` or `notRun`, never `passed`. A check left running when the app closed is `notRun` at the next start (`turn/recovery.rs`).
+- **What a reply shows** (`ChecksCard.tsx`). Under the files a reply changed: the outcome, each failure by name, and the output behind a disclosure. Its button runs the command again; its footer turns the project's checks on or off without leaving the chat. A reply shows a card only when checks ran or are running for it, so with them off there is no card at all: the switch is in Settings → Checks, which is one place to look rather than a card in every reply saying it did not check. The result arrives as a `checksRecorded` event, saved on the message like an approval.
+- **Asking another way**. The command palette's "Run checks for the open task" runs them for the reply on screen, whether or not the project has them on, and the card it produces is where they can be turned on.
+
+## Approvals and questions
+
+An agent that wants permission, or an answer, sends a request the turn then waits on
+(`crates/server/src/orchestration/approvals/`). The user's answer normally goes back down the
+process's stdin, or through the hook waiter, and the turn carries on.
+
+- **When no turn is waiting** (`answer.rs`, `answer_in_new_turn`). The app closed under the request,
+  or the reply it belonged to was stopped, and the request is still on screen above the composer.
+  The answer is recorded on the stored approval either way, so the card stops asking. For a
+  question, its answer is also sent as a message from the user — "My answer to …: …" — which starts
+  a new turn. The agent it reaches may be a new session, which is why the answer repeats the
+  question it belongs to.
+- **A permission request is not resent.** There is no call left to allow, so answering one only
+  records the answer.
 
 ## Config location
 

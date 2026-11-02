@@ -2,6 +2,7 @@
 //! that were cut off end with an error, and goals are dismissed or paused.
 
 use crate::persistence::Store;
+use crate::threads::CheckStatus;
 use crate::threads::GoalStatus;
 use crate::threads::MessageStatus;
 use crate::orchestration::goal;
@@ -32,7 +33,13 @@ pub(crate) fn recover(store: &Store) -> Result<(), String> {
             .messages
             .iter()
             .any(|m| m.status == MessageStatus::Streaming);
-        if dismissed || goal_active || streaming {
+        // A check that was running when the app closed never finished, so it is not a pass.
+        let checking = thread.messages.iter().any(|m| {
+            m.checks
+                .as_ref()
+                .is_some_and(|c| c.status == CheckStatus::Running)
+        });
+        if dismissed || goal_active || streaming || checking {
             store.update_thread(&thread.id, |t| {
                 if dismissed {
                     t.goal = None;
@@ -46,6 +53,15 @@ pub(crate) fn recover(store: &Store) -> Result<(), String> {
                         message.status = MessageStatus::Error;
                         message.error =
                             Some("Patchwork closed while this reply was running.".into());
+                    }
+                    if let Some(checks) = message
+                        .checks
+                        .as_mut()
+                        .filter(|c| c.status == CheckStatus::Running)
+                    {
+                        checks.status = CheckStatus::NotRun;
+                        checks.note =
+                            Some("Patchwork closed while the checks were running.".into());
                     }
                 }
             })?;

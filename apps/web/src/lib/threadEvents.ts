@@ -214,6 +214,10 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
           : [...m.background, task],
       }));
     }
+    case "checksRecorded": {
+      const { messageId, checks } = event;
+      return updateMessage(thread, messageId, (m) => ({ ...m, checks }));
+    }
     case "turnRecorded": {
       const { messageId, turn } = event;
       return updateMessage(thread, messageId, (m) => ({ ...m, turn }));

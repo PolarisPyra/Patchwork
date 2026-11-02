@@ -100,6 +100,25 @@ summary: string | null,
 output: string | null, };
 
 /**
+ * One thing the check command reported as failing: a test, a check, a build step.
+ */
+export type CheckFailure = { 
+/**
+ * What failed, as it reads in the output ("tests::it_works", "FAIL src/app.test.ts").
+ */
+name: string, 
+/**
+ * The line or two that says why, when the output gave one.
+ */
+detail: string, };
+
+/**
+ * How a turn's check command stands. `NotRun` is not a pass: a reply whose checks were never
+ * run says so, rather than looking like one that passed.
+ */
+export type CheckStatus = "running" | "passed" | "failed" | "timedOut" | "notRun";
+
+/**
  * A condition the agent keeps working toward until it is met (`/goal`).
  */
 export type Goal = { objective: string, status: GoalStatus, 
@@ -172,7 +191,12 @@ usage: TokenUsage | null,
  * The project before and after the turn that wrote the reply, so its changes can be shown
  * after they are committed or edited again. None outside git projects and for older replies.
  */
-turn: TurnTrees | null, };
+turn: TurnTrees | null, 
+/**
+ * What the project's own check command made of the turn, for a reply whose turn changed
+ * files. None for older replies, and for projects with nothing to run.
+ */
+checks?: TurnChecks | null, };
 
 export type MessageStatus = "streaming" | "complete" | "error" | "cancelled";
 
@@ -348,6 +372,46 @@ output?: string | null,
  * The thread holding the subagent's own transcript, for a call that started one.
  */
 childThreadId?: string | null, };
+
+/**
+ * What a project's check command made of the turn that wrote a reply.
+ */
+export type TurnChecks = { status: CheckStatus, 
+/**
+ * The command that ran, as the person would type it in the project's folder. None when
+ * there was nothing to run.
+ */
+command?: string | null, 
+/**
+ * How long it ran, in milliseconds. Zero while it runs, and when nothing ran.
+ */
+durationMs: number, 
+/**
+ * How many tests the output said ran. None when it did not say, as a type check's output
+ * does not. `Some(0)` is a command that ran none at all, which is not a pass.
+ */
+tests?: number | null, 
+/**
+ * The things that failed, each named on its own. Empty when it passed or didn't run.
+ */
+failures: Array<CheckFailure>, 
+/**
+ * The end of what it printed, for the reply's Checks card.
+ */
+output?: string | null, 
+/**
+ * Why nothing ran, or that it ran past its limit.
+ */
+note?: string | null, 
+/**
+ * Whether this project runs its checks after every task, as it stood when this ran. Off, a
+ * run was asked for, and the card offers to turn them on.
+ */
+enabled: boolean, 
+/**
+ * When it started, in Unix epoch milliseconds.
+ */
+at: number, };
 
 /**
  * Snapshots of a project's files as git tree ids, kept alive by refs under `refs/patchwork`.

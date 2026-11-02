@@ -355,6 +355,7 @@ pub fn run() {
             commands::turns::resume_queued,
             commands::turns::steer_queued,
             commands::turns::respond_approval,
+            commands::turns::run_checks,
             commands::imports::scan_imports,
             commands::imports::import_threads,
             commands::files::read_file,

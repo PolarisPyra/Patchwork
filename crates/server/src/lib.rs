@@ -5,6 +5,7 @@
 pub const VERSION: &str = env!("PATCHWORK_VERSION");
 
 pub mod agents;
+pub mod checks;
 pub mod computer;
 pub mod error;
 pub mod harness;

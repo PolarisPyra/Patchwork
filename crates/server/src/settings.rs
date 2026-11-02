@@ -80,6 +80,33 @@ pub struct Settings {
     pub disabled_plugins: Vec<String>,
     /// Whether the agent may look at the screen and drive the pointer and keyboard.
     pub computer_use: bool,
+    /// Whether a project's own check command runs after every task.
+    pub checks: CheckSettings,
+}
+
+/// A project's checks: the command its `package.json`, manifest or Makefile names, run after a
+/// task that changed files, so a reply says whether the project's tests still pass.
+///
+/// Off for every project until it is turned on: running a test suite after every task is the
+/// person's call, not the app's. A reply shows what the checks made of it only when they ran.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "settings.ts")]
+#[serde(rename_all = "camelCase", default)]
+pub struct CheckSettings {
+    /// What a project does unless it says otherwise.
+    pub after_every_task: bool,
+    /// Projects that answer for themselves, by project id.
+    pub projects: HashMap<String, bool>,
+}
+
+impl CheckSettings {
+    /// Whether `project_id` runs its checks after every task.
+    pub fn on(&self, project_id: &str) -> bool {
+        self.projects
+            .get(project_id)
+            .copied()
+            .unwrap_or(self.after_every_task)
+    }
 }
 
 /// The integrated terminal, as VS Code's `terminal.integrated.*` settings set it up, with its
@@ -370,7 +397,7 @@ impl Server {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 
-    pub fn save_settings(&self, settings: Settings) -> Result<(), String> {
+    pub fn save_settings(self: &Arc<Self>, settings: Settings) -> Result<(), String> {
         follow_log_levels(&settings);
         let old = self.store.settings();
         let guards_changed = !permissions::same_guards(&old.permissions, &settings.permissions);

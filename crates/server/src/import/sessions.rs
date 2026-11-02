@@ -176,6 +176,7 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
                 finished_at: None,
                 usage: None,
                 turn: None,
+                checks: None,
             })
             .collect(),
         goal: None,

@@ -39,6 +39,7 @@ import type {
   Weekday,
 } from "~/bindings/scheduled";
 import type {
+  CheckSettings,
   Integrations,
   LoggingSettings,
   LogLevel,
@@ -58,6 +59,8 @@ import type {
   Attachment,
   AttachmentKind,
   BackgroundTask,
+  CheckFailure,
+  CheckStatus,
   Goal,
   GoalStatus,
   Message as WireMessage,
@@ -72,6 +75,7 @@ import type {
   Thread as WireThread,
   TokenUsage,
   ToolCall,
+  TurnChecks,
   TurnTrees,
 } from "~/bindings/threads";
 import type { ProviderUsage, UsageWindow } from "~/bindings/usage";
@@ -89,6 +93,9 @@ export type {
   Attachment,
   AttachmentKind,
   BackgroundTask,
+  CheckFailure,
+  CheckSettings,
+  CheckStatus,
   ClaudeInfo,
   CodexFeature,
   CodexInfo,
@@ -146,6 +153,7 @@ export type {
   TokenSettings,
   TokenUsage,
   ToolCall,
+  TurnChecks,
   TurnFile,
   TurnFileState,
   TurnTrees,

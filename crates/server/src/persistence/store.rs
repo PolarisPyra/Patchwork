@@ -246,6 +246,15 @@ impl Store {
         Ok(())
     }
 
+    /// Forgets a stored value, so `state` answers None for it again.
+    pub fn clear_state(&self, key: &str) -> Result<(), String> {
+        self.lock()
+            .conn
+            .execute("DELETE FROM app_state WHERE key = ?1", [key])
+            .map_err(err)?;
+        Ok(())
+    }
+
     pub fn folders(&self) -> Vec<Folder> {
         self.lock().folders.clone()
     }

@@ -6,6 +6,7 @@ import {
   type AgentKind,
   type Attachment,
   type BackgroundTask,
+  type CheckSettings,
   type FileChange,
   type Approval,
   type Message,
@@ -38,6 +39,10 @@ import Composer from "~/features/chat/composer/Composer";
 import type { HistoryEntry } from "~/features/chat/composer/types";
 import Transcript from "~/features/chat/transcript/Transcript";
 import { UsageLine } from "~/features/chat/transcript/components/UsageLine";
+import {
+  ChecksContext,
+  type ChecksContextValue,
+} from "~/features/chat/transcript/components/ChecksCard";
 import PendingApprovalBanner from "~/features/chat/prompts/PendingApprovalBanner";
 import {
   PermissionsContext,
@@ -121,6 +126,9 @@ interface ChatProps {
   onUpdatePermissions: (change: (p: PermissionSettings) => PermissionSettings) => void;
   /** Opens Settings → Permissions on a scope, with one of its rules picked out. */
   onOpenPermissions: (scope: PermissionScope, ruleId?: string) => void;
+  /** Settings → Checks, for the switch on a reply's Checks card. */
+  checkSettings: CheckSettings;
+  onSetProjectChecks: (projectId: string, on: boolean) => void;
 }
 
 // A fallback that keeps one identity, so the memoized composer sees no change.
@@ -157,6 +165,8 @@ export default function Chat({
   projects,
   onUpdatePermissions,
   onOpenPermissions,
+  checkSettings,
+  onSetProjectChecks,
 }: ChatProps) {
   // Errors by the chat they happened in ("new" for the new-task screen), so one never shows in
   // another chat.
@@ -661,6 +671,10 @@ export default function Chat({
     }),
     [permissionSettings, projects, scope, onUpdatePermissions, onOpenPermissions],
   );
+  const checksContext = useMemo<ChecksContextValue>(
+    () => ({ settings: checkSettings, setProject: onSetProjectChecks }),
+    [checkSettings, onSetProjectChecks],
+  );
   /** Answers a permission request; `always` also saves its rules there, so the next ones like
    * it are answered without asking. The rules are saved after the answer, so the server answers
    * the other waiting requests they cover rather than this one. */
@@ -815,19 +829,21 @@ export default function Chat({
       <div className={`flex min-h-0 flex-col ${isNew ? "flex-none overflow-y-auto" : "flex-1"}`}>
         {!isNew ? (
           <PermissionsContext.Provider value={permissionsContext}>
-            <Transcript
-              thread={thread}
-              onOpenThread={onOpenThread}
-              changes={changes}
-              busy={working}
-              onOpenCanvas={project ? transcriptHandlers.onOpenCanvas : undefined}
-              onShowChanges={transcriptHandlers.onShowChanges}
-              onRetry={transcriptHandlers.onRetry}
-              checkpoints={checkpoints}
-              onRestore={transcriptHandlers.onRestore}
-              onFork={transcriptHandlers.onFork}
-              tokens={tokens}
-            />
+            <ChecksContext.Provider value={checksContext}>
+              <Transcript
+                thread={thread}
+                onOpenThread={onOpenThread}
+                changes={changes}
+                busy={working}
+                onOpenCanvas={project ? transcriptHandlers.onOpenCanvas : undefined}
+                onShowChanges={transcriptHandlers.onShowChanges}
+                onRetry={transcriptHandlers.onRetry}
+                checkpoints={checkpoints}
+                onRestore={transcriptHandlers.onRestore}
+                onFork={transcriptHandlers.onFork}
+                tokens={tokens}
+              />
+            </ChecksContext.Provider>
           </PermissionsContext.Provider>
         ) : (
           <div className="flex h-auto flex-col items-center justify-center gap-4 p-6 text-center">

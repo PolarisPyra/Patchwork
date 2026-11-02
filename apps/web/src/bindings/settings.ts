@@ -3,6 +3,23 @@ import type { PermissionSettings } from "./permissions";
 import type { Project } from "./projects";
 import type { AgentKind } from "./provider";
 
+/**
+ * A project's checks: the command its `package.json`, manifest or Makefile names, run after a
+ * task that changed files, so a reply says whether the project's tests still pass.
+ *
+ * Off for every project until it is turned on: running a test suite after every task is the
+ * person's call, not the app's. A reply shows what the checks made of it only when they ran.
+ */
+export type CheckSettings = { 
+/**
+ * What a project does unless it says otherwise.
+ */
+afterEveryTask: boolean, 
+/**
+ * Projects that answer for themselves, by project id.
+ */
+projects: { [key in string]: boolean }, };
+
 export type CursorStyle = "block" | "line" | "underline";
 
 export type DetectLocale = "auto" | "off" | "on";
@@ -109,7 +126,11 @@ disabledPlugins: Array<string>,
 /**
  * Whether the agent may look at the screen and drive the pointer and keyboard.
  */
-computerUse: boolean, };
+computerUse: boolean, 
+/**
+ * Whether a project's own check command runs after every task.
+ */
+checks: CheckSettings, };
 
 /**
  * The shells the Settings dropdown offers, and the one "System default" resolves to.

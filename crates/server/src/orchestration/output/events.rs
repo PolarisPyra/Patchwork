@@ -9,7 +9,7 @@ use crate::permissions::RuleRef;
 use crate::provider::ProviderSlashCommand;
 use crate::threads::{
     Approval, BackgroundTask, Goal, Message, MessageStatus, PlanStep, Refusal, Thread, TokenUsage,
-    ToolCall, TurnTrees,
+    ToolCall, TurnChecks, TurnTrees,
 };
 
 /// Emitted on the Tauri event channel `"agent-event"`.
@@ -182,6 +182,11 @@ pub enum AgentEvent {
     TurnRecorded {
         message_id: String,
         turn: TurnTrees,
+    },
+    /// The project's check command started, or came to something, for the reply it checks.
+    ChecksRecorded {
+        message_id: String,
+        checks: TurnChecks,
     },
     /// Terminal event for a turn. `status` is complete | error | cancelled.
     TurnCompleted {

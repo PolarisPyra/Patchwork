@@ -393,6 +393,10 @@ pub struct Message {
     /// after they are committed or edited again. None outside git projects and for older replies.
     #[serde(default)]
     pub turn: Option<TurnTrees>,
+    /// What the project's own check command made of the turn, for a reply whose turn changed
+    /// files. None for older replies, and for projects with nothing to run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checks: Option<TurnChecks>,
 }
 
 /// Snapshots of a project's files as git tree ids, kept alive by refs under `refs/patchwork`.
@@ -402,4 +406,65 @@ pub struct Message {
 pub struct TurnTrees {
     pub before: String,
     pub after: String,
+}
+
+/// How a turn's check command stands. `NotRun` is not a pass: a reply whose checks were never
+/// run says so, rather than looking like one that passed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "threads.ts")]
+#[serde(rename_all = "camelCase")]
+pub enum CheckStatus {
+    Running,
+    Passed,
+    Failed,
+    /// It ran past its time limit, so what it would have said is unknown.
+    TimedOut,
+    /// Nothing ran; `TurnChecks::note` says why.
+    NotRun,
+}
+
+/// What a project's check command made of the turn that wrote a reply.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "threads.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct TurnChecks {
+    pub status: CheckStatus,
+    /// The command that ran, as the person would type it in the project's folder. None when
+    /// there was nothing to run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    /// How long it ran, in milliseconds. Zero while it runs, and when nothing ran.
+    #[serde(default)]
+    pub duration_ms: u64,
+    /// How many tests the output said ran. None when it did not say, as a type check's output
+    /// does not. `Some(0)` is a command that ran none at all, which is not a pass.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tests: Option<u32>,
+    /// The things that failed, each named on its own. Empty when it passed or didn't run.
+    #[serde(default)]
+    pub failures: Vec<CheckFailure>,
+    /// The end of what it printed, for the reply's Checks card.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<String>,
+    /// Why nothing ran, or that it ran past its limit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    /// Whether this project runs its checks after every task, as it stood when this ran. Off, a
+    /// run was asked for, and the card offers to turn them on.
+    #[serde(default)]
+    pub enabled: bool,
+    /// When it started, in Unix epoch milliseconds.
+    pub at: u64,
+}
+
+/// One thing the check command reported as failing: a test, a check, a build step.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "threads.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct CheckFailure {
+    /// What failed, as it reads in the output ("tests::it_works", "FAIL src/app.test.ts").
+    pub name: String,
+    /// The line or two that says why, when the output gave one.
+    #[serde(default)]
+    pub detail: String,
 }

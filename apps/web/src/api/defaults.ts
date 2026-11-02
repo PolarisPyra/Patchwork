@@ -76,6 +76,7 @@ export const DEFAULT_SETTINGS: Settings = {
   pluginsDir: null,
   disabledPlugins: [],
   computerUse: false,
+  checks: { afterEveryTask: false, projects: {} },
 };
 
 /** Agent used for new tasks: the first connected one, else Claude Code. */

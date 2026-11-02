@@ -37,6 +37,7 @@ fn user_message(text: &str, attachments: Vec<Attachment>) -> Message {
         finished_at: None,
         usage: None,
         turn: None,
+        checks: None,
     }
 }
 

@@ -34,6 +34,7 @@ fn message(text: &str, status: MessageStatus) -> Message {
         finished_at: None,
         usage: None,
         turn: None,
+        checks: None,
     }
 }
 
@@ -270,5 +271,41 @@ fn a_task_without_a_name_or_a_time_is_refused() {
     assert!(store.save_scheduled_task(task("", "09:00")).is_err());
     assert!(store.save_scheduled_task(task("n", "nine")).is_err());
     assert!(store.scheduled_tasks().is_empty());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A reply's checks are part of the reply: they survive a restart, and a reply whose checks did
+/// not run keeps saying so.
+#[test]
+fn a_replys_checks_survive_reopen() {
+    let dir = temp_dir();
+    let store = Store::open(dir.clone()).unwrap();
+    let mut t = thread(vec![message("done", MessageStatus::Complete)]);
+    t.messages[0].checks = Some(crate::threads::TurnChecks {
+        status: crate::threads::CheckStatus::Failed,
+        command: Some("cargo test".into()),
+        duration_ms: 1234,
+        tests: Some(3),
+        failures: vec![crate::threads::CheckFailure {
+            name: "math::subtracts".into(),
+            detail: "assertion `left == right` failed".into(),
+        }],
+        output: Some("test result: FAILED. 2 passed; 1 failed".into()),
+        note: None,
+        enabled: true,
+        at: 42,
+    });
+    store.insert_threads(vec![t.clone()]).unwrap();
+    drop(store);
+
+    let store = Store::open(dir.clone()).unwrap();
+    let loaded = store.thread(&t.id).unwrap();
+    let checks = loaded.messages[0].checks.clone().expect("kept");
+    assert_eq!(checks.status, crate::threads::CheckStatus::Failed);
+    assert_eq!(checks.command.as_deref(), Some("cargo test"));
+    assert_eq!(checks.failures[0].name, "math::subtracts");
+    assert!(checks.enabled);
+    assert_eq!(checks.tests, Some(3));
+    assert_eq!(checks.at, 42);
     let _ = std::fs::remove_dir_all(&dir);
 }

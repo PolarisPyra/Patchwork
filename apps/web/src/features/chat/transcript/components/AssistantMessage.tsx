@@ -6,6 +6,7 @@ import { FileCards } from "~/features/chat/FileCard";
 import { ACTION_CLASS, CopyButton } from "~/features/chat/markdown/CopyButton";
 import { Approvals } from "~/features/chat/transcript/components/Approvals";
 import { ChangeSummary } from "~/features/chat/transcript/components/ChangeSummary";
+import { ChecksCard } from "~/features/chat/transcript/components/ChecksCard";
 import ResponseTimeline from "~/features/chat/response/ResponseTimeline";
 import { isCompactCommand, isGoalClearCommand } from "~/lib/composerActions";
 import { useReplyFiles } from "~/features/chat/hooks/useReplyFiles";
@@ -18,6 +19,7 @@ export type OpenCanvas = (path: string, message: Message | null, tab: CanvasTab)
 
 interface AssistantProps {
   message: Message;
+  threadId: string;
   agent: AgentKind;
   projectId: string | null;
   onOpenThread: (id: string) => void;
@@ -40,6 +42,7 @@ interface AssistantProps {
  */
 export const AssistantMessage = memo(function AssistantMessage({
   message,
+  threadId,
   agent,
   projectId,
   onOpenThread,
@@ -105,6 +108,16 @@ export const AssistantMessage = memo(function AssistantMessage({
             onShow={() => onShowChanges(message.id)}
           />
         </>
+      )}
+      {/* A reply carries checks only when the project's checks ran for it: with them off there
+          is no card at all, and Settings is where they are turned on. */}
+      {projectId && message.checks && (
+        <ChecksCard
+          threadId={threadId}
+          projectId={projectId}
+          messageId={message.id}
+          checks={message.checks}
+        />
       )}
       {message.refusal && (
         <div

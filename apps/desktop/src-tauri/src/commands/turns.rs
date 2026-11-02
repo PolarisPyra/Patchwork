@@ -87,3 +87,10 @@ pub(crate) fn respond_approval(
         rule,
     )
 }
+
+/// Runs the project's check command again for a reply, on a thread of its own: the result
+/// arrives as a `checksRecorded` event.
+#[tauri::command]
+pub(crate) fn run_checks(server: Srv<'_>, thread_id: String, message_id: String) -> Res<()> {
+    server.inner().clone().run_checks(&thread_id, &message_id)
+}

@@ -203,6 +203,11 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
             status,
             error,
         });
+        // The project's own checks, once the reply reads as finished. Not every reply deserves
+        // them: a stopped turn, or one that changed nothing, leaves the project as it was.
+        if crate::checks::worth_checking(&turn.server.store, &turn.thread_id, last, status) {
+            turn.server.check_after_turn(&turn.thread_id, last);
+        }
     }
     // On a thread of its own, so a slow hook does not hold up the next turn.
     {

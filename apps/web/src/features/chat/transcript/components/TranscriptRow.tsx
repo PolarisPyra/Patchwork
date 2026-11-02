@@ -63,6 +63,7 @@ export function TranscriptRow({
         ) : (
           <AssistantMessage
             message={message}
+            threadId={thread.id}
             agent={thread.agent}
             projectId={thread.projectId}
             onOpenThread={handlers.onOpenThread}

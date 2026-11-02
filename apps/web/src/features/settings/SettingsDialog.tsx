@@ -3,6 +3,7 @@ import {
   ArrowCircleUpIcon,
   BellIcon,
   BooksIcon,
+  CheckCircleIcon,
   ChatCircleIcon,
   ClockIcon,
   DownloadSimpleIcon,
@@ -24,6 +25,7 @@ import {
 import AgentsPane from "~/features/settings/agents/AgentsPane";
 import AppearancePane from "~/features/settings/app/AppearancePane";
 import ChatPane from "~/features/settings/app/ChatPane";
+import ChecksPane from "~/features/settings/system/ChecksPane";
 import ClaudePane from "~/features/settings/providers/ClaudePane";
 import CodexPane from "~/features/settings/providers/CodexPane";
 import EnvironmentPane from "~/features/settings/system/EnvironmentPane";
@@ -67,6 +69,7 @@ type Section =
   | "codex"
   | "custom-agents"
   | "projects"
+  | "checks"
   | "shortcuts"
   | "logging"
   | "updates";
@@ -101,6 +104,7 @@ const GROUPS: { label: string; sections: { id: Section; label: string; Icon: Ico
     label: "Projects",
     sections: [
       { id: "projects", label: "Projects", Icon: FolderSimpleIcon },
+      { id: "checks", label: "Checks", Icon: CheckCircleIcon },
       { id: "scheduled", label: "Scheduled", Icon: ClockIcon },
       { id: "imports", label: "Imports", Icon: DownloadSimpleIcon },
     ],
@@ -201,6 +205,7 @@ export default memo(function SettingsDialog({
             {section === "scheduled" && <ScheduledPane {...paneProps} />}
             {section === "custom-agents" && <AgentsPane />}
             {section === "projects" && <ProjectsPane {...paneProps} />}
+            {section === "checks" && <ChecksPane {...paneProps} />}
             {section === "shortcuts" && <KeybindingsPane />}
             {section === "logging" && <LoggingPane {...paneProps} />}
             {section === "updates" && <UpdatesPane {...paneProps} />}

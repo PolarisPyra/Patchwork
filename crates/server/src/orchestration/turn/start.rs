@@ -668,5 +668,6 @@ pub(in crate::orchestration) fn assistant_message() -> Message {
         finished_at: None,
         usage: None,
         turn: None,
+        checks: None,
     }
 }

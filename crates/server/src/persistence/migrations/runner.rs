@@ -119,6 +119,11 @@ const MIGRATIONS: &[Migration] = &[
         name: "scheduled_task_runs",
         sql: include_str!("0022_scheduled_task_runs.sql"),
     },
+    Migration {
+        id: 23,
+        name: "message_checks",
+        sql: include_str!("0023_message_checks.sql"),
+    },
 ];
 
 fn fail(m: &Migration, e: impl std::fmt::Display) -> String {

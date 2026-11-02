@@ -18,6 +18,8 @@ interface PaletteSource {
   /** Shows the thread in the task list and opens it. */
   openThread: (id: string) => void;
   openProject: (id: string) => void;
+  /** Runs the project's checks for the reply on screen; null when there is no reply to check. */
+  runChecks: (() => void) | null;
 }
 
 /** What search lists: actions, then every chat and task by project, then the projects. */
@@ -33,6 +35,7 @@ export function paletteItems({
   openFolder,
   openThread,
   openProject,
+  runChecks,
 }: PaletteSource): PaletteItem[] {
   return [
     {
@@ -50,6 +53,16 @@ export function paletteItems({
             label: `New task in ${project.name}`,
             hint: keyLabel(rules, "chat.new"),
             run: () => newTask(project.id),
+          },
+        ]
+      : []),
+    ...(runChecks
+      ? [
+          {
+            id: "run-checks",
+            group: "Actions",
+            label: "Run checks for the open task",
+            run: runChecks,
           },
         ]
       : []),

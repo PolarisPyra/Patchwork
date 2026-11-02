@@ -19,6 +19,9 @@ export const turnsApi = {
     invoke<void>("steer_queued", { threadId, messageId }),
   /** Clears the goal, in the agent's session too. Refused while a turn runs. */
   stopGoal: (threadId: string) => invoke<void>("stop_goal", { threadId }),
+  /** Runs the project's check command again for a reply; the result arrives as a `checksRecorded` event. */
+  runChecks: (threadId: string, messageId: string) =>
+    invoke<void>("run_checks", { threadId, messageId }),
   respondApproval: (
     threadId: string,
     approvalId: string,
