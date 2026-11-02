@@ -5,12 +5,12 @@ import { useImageSrc } from "~/hooks/useImageSrc";
 import type { ReplyFiles } from "~/features/chat/hooks/useReplyFiles";
 import { baseName, formatBytes } from "~/lib/util";
 
-/** Most cards a reply shows, as the summary lists most of its files; the rest are in the Changes view. */
-const SHOWN_CARDS = 4;
+/** Most files the list shows, as the summary lists most of its files; the rest are in the Changes view. */
+const SHOWN_CARDS = 3;
 
 /**
- * The cards for a reply's produced files: a thumbnail for each image, and a card with its type and
- * size for the rest. Text files get no card; the reply's summary still lists every file.
+ * The list of a reply's produced files, one row each with its type and size, and a small thumbnail
+ * for an image. Text files get no row; the reply's summary still lists every file.
  */
 export function FileCards({
   projectId,
@@ -28,9 +28,15 @@ export function FileCards({
   const { media, turnFiles, missing } = files;
   const cards = media?.filter((file) => file.kind !== "text") ?? [];
   if (!projectId || cards.length === 0) return null;
-  const shown = cards.slice(0, SHOWN_CARDS);
+  // One file over the limit is shown rather than hidden behind "1 more".
+  const shown = cards.length > SHOWN_CARDS + 1 ? cards.slice(0, SHOWN_CARDS) : cards;
   return (
-    <div className="flex flex-wrap items-start gap-2">
+    // One grid for all rows, as in the summary below, so every type, size and button sits in the
+    // same column; the last column keeps its width on a deleted file, which has no button.
+    <ul
+      className="m-0 grid list-none grid-cols-[auto_minmax(0,1fr)_auto_auto_1.5rem] gap-x-2 rounded-[var(--radius)] border border-border bg-panel px-3 py-2 text-[length:var(--fs-sm)]"
+      aria-label="Files from this reply"
+    >
       {shown.map((file) => {
         const deleted =
           turnFiles?.some((f) => f.path === file.path && f.state === "deleted") === true ||
@@ -47,20 +53,22 @@ export function FileCards({
         );
       })}
       {cards.length > shown.length && (
-        <button
-          className="flex min-h-6 cursor-pointer items-center rounded-[var(--radius-sm)] border-none bg-transparent px-1 text-[length:var(--fs-sm)] text-fg-muted hover:bg-hover hover:text-fg"
-          onClick={onShow}
-        >
-          +{cards.length - shown.length} more
-        </button>
+        <li className="col-span-full">
+          <button
+            className="flex min-h-6 w-full cursor-pointer items-center rounded-[var(--radius-sm)] border-none bg-transparent px-1 text-left text-fg-muted hover:bg-hover hover:text-fg"
+            onClick={onShow}
+          >
+            {cards.length - shown.length} more
+          </button>
+        </li>
       )}
-    </div>
+    </ul>
   );
 }
 
 /**
- * One produced file. An image shows its thumbnail, opened in the canvas on click; a file the turn
- * deleted, or that is gone, shows as a placeholder with `Deleted` and never as a broken image.
+ * One produced file, opened in the canvas on click. An image shows a small thumbnail; a file the
+ * turn deleted, or that is gone, shows `Deleted` and never a broken image.
  */
 function ProducedFile({
   projectId,
@@ -80,52 +88,48 @@ function ProducedFile({
   const dot = name.lastIndexOf(".");
   const type = dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
   return (
-    <div className="flex min-w-0 max-w-[288px] flex-col overflow-hidden rounded-[var(--radius)] border border-border bg-panel text-[length:var(--fs-sm)]">
-      {showImage && (
-        // A neutral backing keeps a transparent image visible on both themes.
-        <button
-          className="grid cursor-pointer place-items-center border-none bg-hover p-0"
-          title={file.path}
-          aria-label={`Open ${file.path}`}
-          onClick={onOpen}
-        >
+    <li className="col-span-full grid min-w-0 grid-cols-subgrid items-center">
+      <button
+        className={`col-span-4 grid min-h-7 min-w-0 grid-cols-subgrid items-center rounded-[var(--radius-sm)] border-none bg-transparent px-1 text-left ${deleted ? "cursor-default" : "cursor-pointer hover:bg-hover"}`}
+        title={file.path}
+        disabled={deleted}
+        onClick={onOpen}
+      >
+        {showImage ? (
+          // A neutral backing keeps a transparent image visible on both themes.
           <img
             src={src}
             alt=""
-            className="max-h-[320px] max-w-[288px] object-contain"
+            className="h-6 w-6 rounded-[var(--radius-sm)] bg-hover object-cover"
             onError={() => setBroken(true)}
           />
-        </button>
-      )}
-      <div className="flex min-w-0 items-center gap-2 px-2.5 py-1.5">
-        {!showImage && <FileIcon size={15} className="flex-none text-fg-muted" />}
-        <button
-          className={`min-w-0 flex-1 truncate border-none bg-transparent p-0 text-left ${deleted ? "cursor-default text-fg-muted line-through" : "cursor-pointer text-fg hover:underline"}`}
-          title={file.path}
-          disabled={deleted}
-          onClick={onOpen}
-        >
+        ) : (
+          <span className="grid h-6 w-6 place-items-center">
+            <FileIcon size={15} className="text-fg-muted" />
+          </span>
+        )}
+        <span className={`min-w-0 truncate ${deleted ? "text-fg-muted line-through" : "text-fg"}`}>
           {name}
-        </button>
+        </span>
         {type && (
-          <span className="flex-none rounded-[var(--radius-sm)] bg-hover px-1 text-[length:var(--fs-xs)] text-fg-muted">
+          <span className="col-start-3 max-w-[12ch] justify-self-end truncate rounded-[var(--radius-sm)] bg-hover px-1 text-[length:var(--fs-xs)] text-fg-muted">
             {type}
           </span>
         )}
-        <span className="flex-none text-[length:var(--fs-xs)] whitespace-nowrap text-fg-subtle tabular-nums">
+        <span className="col-start-4 justify-self-end text-[length:var(--fs-xs)] whitespace-nowrap text-fg-subtle tabular-nums">
           {deleted ? "Deleted" : formatBytes(file.size)}
         </span>
-        {!deleted && (
-          <button
-            className="grid h-6 w-6 flex-none cursor-pointer place-items-center rounded-[var(--radius-sm)] border-none bg-transparent p-0 text-fg-muted hover:bg-hover hover:text-fg"
-            title="Open in its app"
-            aria-label={`Open ${name} in its app`}
-            onClick={() => api.openFile(projectId, file.path).catch(() => {})}
-          >
-            <ArrowSquareOutIcon size={14} />
-          </button>
-        )}
-      </div>
-    </div>
+      </button>
+      {!deleted && (
+        <button
+          className="grid h-6 w-6 cursor-pointer place-items-center rounded-[var(--radius-sm)] border-none bg-transparent p-0 text-fg-muted hover:bg-hover hover:text-fg"
+          title="Open in its app"
+          aria-label={`Open ${name} in its app`}
+          onClick={() => api.openFile(projectId, file.path).catch(() => {})}
+        >
+          <ArrowSquareOutIcon size={14} />
+        </button>
+      )}
+    </li>
   );
 }
