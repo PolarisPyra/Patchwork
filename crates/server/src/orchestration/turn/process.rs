@@ -147,6 +147,34 @@ pub(in crate::orchestration) fn exit_error(exit: Option<ExitStatus>) -> String {
     "Agent exited unexpectedly".into()
 }
 
+/// `error` with the fix for it on a line of its own, when it is one the person makes outside the
+/// app: Claude Code signed out, or too old for the model it was asked to use. Claude's own words
+/// say to run `/login`, which `claude -p` cannot do, so the fix says where to do it.
+pub(in crate::orchestration) fn with_remedy(agent: AgentKind, error: String) -> String {
+    if agent != AgentKind::Claude {
+        return error;
+    }
+    let lower = error.to_lowercase();
+    let remedy = if lower.contains("does not support this model") {
+        "Update Claude Code: run `claude update` in a terminal, then try again, or pick another model."
+    } else if [
+        "not logged in",
+        "/login",
+        "invalid api key",
+        "oauth token",
+        "authentication_error",
+        "authentication failed",
+    ]
+    .iter()
+    .any(|said| lower.contains(said))
+    {
+        "Sign in to Claude Code: run `claude` in a terminal and type /login, then try again."
+    } else {
+        return error;
+    };
+    format!("{error}\n\n{remedy}")
+}
+
 /// Closes stdin, which lets the agent exit, unless it still owes an answer to a steering message.
 pub(in crate::orchestration) fn close_stdin_unless_steered(stdin: &Stdin, steers: &Steers) {
     let mut stdin = stdin.lock().unwrap_or_else(PoisonError::into_inner);

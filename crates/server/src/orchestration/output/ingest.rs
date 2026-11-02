@@ -69,6 +69,7 @@ use crate::orchestration::turn::process::exit_error;
 use crate::orchestration::turn::process::last_lines;
 use crate::orchestration::turn::process::next_line;
 use crate::orchestration::turn::process::terminate;
+use crate::orchestration::turn::process::with_remedy;
 use crate::orchestration::turn::stuck::{LOOP_LIMIT, Repeats};
 use crate::orchestration::turn::process::write_line;
 use crate::orchestration::output::stream::publish;
@@ -740,7 +741,7 @@ pub(in crate::orchestration) fn ingest(
         let error = stream_error
             .or_else(|| last_lines(&tail))
             .unwrap_or_else(|| exit_error(exit));
-        (MessageStatus::Error, Some(error))
+        (MessageStatus::Error, Some(with_remedy(turn.agent, error)))
     } else {
         (MessageStatus::Complete, None)
     };
