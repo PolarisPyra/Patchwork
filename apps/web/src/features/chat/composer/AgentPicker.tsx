@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { CaretDownIcon, PencilSimpleIcon, RobotIcon } from "@phosphor-icons/react";
+import { CaretDownIcon, IdentificationBadgeIcon, PencilSimpleIcon } from "@phosphor-icons/react";
 import { api, type CustomAgent } from "~/api";
 import Dropdown from "~/components/Dropdown";
 import { CHIP_CLASS } from "~/components/chip";
 import { errorText } from "~/lib/util";
 
 /** The menu's width, so it holds its size as the rows and messages in it change. */
-const MENU_WIDTH = "w-64";
+const MENU_WIDTH = "w-[300px]";
 
 const ITEM_CLASS =
   "flex min-w-[200px] cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border-none bg-transparent px-2 py-[5px] text-left whitespace-nowrap text-fg";
@@ -33,7 +33,7 @@ export default function AgentPicker({
           aria-label={role ? `Agent: ${role}` : "Agent: none"}
           onClick={toggle}
         >
-          <RobotIcon size={16} />
+          <IdentificationBadgeIcon size={16} />
           <span>{role ?? "Agent"}</span>
           <CaretDownIcon size={14} />
         </button>
@@ -102,9 +102,12 @@ function AgentOptions({
         Loading agents…
       </div>
     );
-  // The list scrolls within the menu's height, so a long list stays inside the window.
+  // The list scrolls within the menu's height, so a long list stays inside the window. The
+  // scrollbar's space is held from the start, so the text does not shift once the bar shows.
   return (
-    <div className="flex max-h-[min(50vh,24rem)] w-64 flex-col overflow-y-auto overscroll-contain">
+    <div
+      className={`flex max-h-[min(50vh,24rem)] flex-col overflow-y-auto overscroll-contain [scrollbar-gutter:stable] ${MENU_WIDTH}`}
+    >
       {editError && (
         <div
           role="alert"
@@ -131,13 +134,13 @@ function AgentOptions({
           <button
             role="menuitemradio"
             aria-checked={agent.name === role}
-            title={agent.name}
-            className={`${ITEM_CLASS} min-w-0 flex-1 flex-col items-start! gap-0`}
+            title={agent.description ? `${agent.name}: ${agent.description}` : agent.name}
+            className={`${ITEM_CLASS} min-w-0 flex-1 flex-col items-start! gap-0.5`}
             onClick={() => onPick(agent.name)}
           >
             <span className="w-full min-w-0 truncate">{agent.name}</span>
             {agent.description && (
-              <span className="line-clamp-2 w-full text-[length:var(--fs-sm)] whitespace-normal text-fg-muted">
+              <span className="w-full min-w-0 truncate text-[length:var(--fs-sm)] text-fg-muted">
                 {agent.description}
               </span>
             )}
