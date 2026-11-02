@@ -41,6 +41,13 @@ fn main() {
     if std::env::var_os("APPIMAGE").is_none() || installed_launcher() {
         glib::set_prgname(Some("dev.patchwork.ade"));
     }
+    // File and folder pickers go through the desktop's portal, so they are its own dialogs (KDE's
+    // on Plasma) rather than GTK's. Without a portal, GTK shows its own.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("GTK_USE_PORTAL").is_none() {
+        // SAFETY: no other thread has started yet, so none reads the environment meanwhile.
+        unsafe { std::env::set_var("GTK_USE_PORTAL", "1") };
+    }
     patchwork_lib::run();
 }
 
