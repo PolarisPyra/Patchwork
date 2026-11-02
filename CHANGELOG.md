@@ -3,6 +3,27 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.1] - 2026-11-02
+
+### Added
+
+- The Agent picker in the composer now shows each agent's description under its name, the same text the & menu shows. Long descriptions stop after two lines.
+- A reply can now show whether your project's own tests still pass. Turn it on for every project or one at a time in Settings → Checks, and the project's check or test command runs after each task that changed files, with a Checks card under the reply showing what passed or failed and a way to run it again.
+
+### Changed
+
+- On Linux, choosing a file or folder (adding a project, Change folder, exporting a chat, and the like) now opens your desktop's own file dialog, such as KDE's on Plasma, instead of a GTK one.
+- Agents that run through an API key, such as DeepSeek, now carry on when a reply is cut off at the model's output limit instead of stopping mid-sentence, and try longer before giving up on a busy server. They also no longer write over a file you changed while they were working, edit files with Windows line endings, and read several files at once.
+- When Claude Code is signed out, or too old for the model you picked, the error in the chat now says how to fix it: sign in again from a terminal, or update Claude Code.
+
+### Fixed
+
+- After Change folder on a project, the branch, the Changes list and the files @ offers now switch to the new folder right away, and edits there show up as they happen. Before, they kept showing the old folder for a while.
+- Opening Patchwork from inside a Claude Code session no longer makes its Claude agents and terminals act as part of that session, or refuse to start as a nested one. Your own sign-in and provider choices still carry over.
+- A question an agent asked still works after Patchwork restarted or the reply was stopped: your answer is sent to the agent as your next message, instead of nothing happening.
+- When two chats work in the same project at once, a file neither of them named is no longer listed under both replies' changes, which made one reply's pictures show up in the other's.
+- Switching between chats no longer briefly shows the previous reply's files and thumbnails under a reply whose own are still loading.
+
 ## [26.11.0] - 2026-11-02
 
 ### Added
