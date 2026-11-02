@@ -79,6 +79,14 @@ pub(super) fn edit_file(
         std::fs::write(path, new).map_err(|e| format!("{}: {e}", path.display()))?;
         return Ok(format!("Edited {}", shown(path, root)));
     }
+    // A file with Windows line endings still matches text the model wrote with plain ones, and
+    // keeps its line endings.
+    let (old, new) = if !old.contains('\r') && text.contains("\r\n") && !text.contains(old) {
+        (old.replace('\n', "\r\n"), new.replace('\n', "\r\n"))
+    } else {
+        (old.to_string(), new.to_string())
+    };
+    let (old, new) = (old.as_str(), new.as_str());
     let count = text.matches(old).count();
     let updated = match count {
         0 => {

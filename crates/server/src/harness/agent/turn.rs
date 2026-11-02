@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -16,6 +16,11 @@ use crate::threads::AccessMode;
 
 /// The argument that starts Patchwork's own binary as the API agent.
 pub const BRIDGE_ARG: &str = "--api-bridge";
+
+/// Times a turn goes on with a reply the output limit cut off.
+const MAX_CONTINUES: u32 = 3;
+
+const CONTINUE: &str = "(Your reply reached the output limit and was cut off. Continue exactly where it stopped, without repeating what you already wrote.)";
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -163,6 +168,13 @@ pub(super) struct Agent {
     pub(super) closed: bool,
     /// The last tool call, as its name and arguments, and how many times in a row it was made.
     pub(super) last_call: (String, u32),
+    /// The step's reply stopped at the output limit, which is why a call's arguments can be cut off.
+    pub(super) cut_off: bool,
+    /// Each file the model read or wrote this turn, as its modified time and length then, so a
+    /// write over a file that changed since is refused.
+    pub(super) seen: HashMap<PathBuf, (SystemTime, u64)>,
+    /// Results of the step's reads, run together ahead of the step's calls, by call id.
+    pub(super) prefetched: HashMap<String, Result<String, String>>,
     pub(super) http: ureq::Agent,
     pub(super) tools: Value,
     /// Built once per turn, so every request starts the same and the provider's prompt cache
@@ -212,6 +224,9 @@ impl Agent {
             read_images: Vec::new(),
             closed: false,
             last_call: (String::new(), 0),
+            cut_off: false,
+            seen: HashMap::new(),
+            prefetched: HashMap::new(),
             http,
             tools,
             system,
@@ -237,6 +252,7 @@ impl Agent {
             .push(json!({"role": "user", "content": content}));
         self.save()?;
 
+        let mut continued = 0;
         loop {
             self.compact_if_full()?;
             let reply = match self.complete(true) {
@@ -266,6 +282,8 @@ impl Agent {
             // Saved once the step's calls are done: a turn stopped midway leaves the file at
             // the previous step, which the model can continue from.
             let mut proposed = false;
+            self.cut_off = reply.cut_off;
+            self.prefetch(&reply.calls);
             for call in &reply.calls {
                 let (result, stop) = self.call(call);
                 proposed |= stop;
@@ -311,6 +329,15 @@ impl Agent {
                 emit(&json!({"type": "api.steered"}));
             }
             if steered {
+                self.save()?;
+                continue;
+            }
+            // A reply the output limit stopped mid-text goes on from where it stopped, a few times
+            // a turn, so a model that always runs long still ends.
+            if reply.cut_off && reply.calls.is_empty() && continued < MAX_CONTINUES {
+                continued += 1;
+                self.messages
+                    .push(json!({"role": "user", "content": CONTINUE}));
                 self.save()?;
                 continue;
             }

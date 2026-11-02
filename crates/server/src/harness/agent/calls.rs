@@ -21,8 +21,13 @@ impl Agent {
         }) {
             Ok(args) => args,
             Err(e) => {
-                let message =
-                    format!("The arguments were not valid JSON ({e}); call the tool again");
+                let message = if self.cut_off {
+                    format!(
+                        "Your reply reached the output limit, so these arguments were cut off ({e}). Make the call again with less in it, such as a shorter file written first and the rest added with edit_file."
+                    )
+                } else {
+                    format!("The arguments were not valid JSON ({e}); call the tool again")
+                };
                 emit(&json!({"type": "api.tool", "id": call.id, "name": call.name, "summary": ""}));
                 emit(
                     &json!({"type": "api.tool_done", "id": call.id, "error": true, "output": message}),
@@ -65,23 +70,33 @@ impl Agent {
                     Err(e) => (Err(e), true, false),
                 },
                 name => {
+                    // A write that would be refused anyway is not put to the user first.
+                    let stale = self.stale(name, &args);
                     let approval =
                         crate::harness::tools::approval(name, &args, self.request.mode, &self.root)
-                            .filter(|_| !self.reads_saved_output(name, &args));
+                            .filter(|_| stale.is_none() && !self.reads_saved_output(name, &args));
                     let allowed = match approval {
                         Some((title, detail, target, asks)) => {
                             self.approve(&call.id, &title, &detail, target, asks)
                         }
                         None => true,
                     };
-                    if allowed
+                    if let Some(stale) = stale {
+                        (Err(stale), true, false)
+                    } else if allowed
                         && name == "read_file"
                         && let Some(image) = self.read_image(&args)
                     {
                         let error = image.is_err();
                         (image, error, false)
                     } else if allowed {
-                        let result = crate::harness::tools::run(name, &args, &self.root);
+                        let result = self
+                            .prefetched
+                            .remove(&call.id)
+                            .unwrap_or_else(|| crate::harness::tools::run(name, &args, &self.root));
+                        if result.is_ok() {
+                            self.saw(name, &args);
+                        }
                         let error = result.is_err();
                         (result, error, false)
                     } else {
@@ -144,6 +159,77 @@ impl Agent {
             input["hook_event_name"] = Value::from(hook.event.cli_name());
             crate::plugins::run_tool_hook(hook, &input, &self.request.root)
         })
+    }
+
+    /// Runs the reads the step starts with all at once, since they change nothing, so a model
+    /// that reads several files waits for the slowest rather than for each in turn. Only reads
+    /// that run without asking anyone are run early; the rest wait for their turn in `call`.
+    pub(super) fn prefetch(&mut self, calls: &[Call]) {
+        let reads: Vec<(&Call, Value)> = calls
+            .iter()
+            .map_while(|call| {
+                let args: Value = serde_json::from_str(&call.arguments).ok()?;
+                self.reads_alone(&call.name, &args).then_some((call, args))
+            })
+            .collect();
+        if reads.len() < 2 {
+            return;
+        }
+        let root = &self.root;
+        let results: Vec<(String, Result<String, String>)> = std::thread::scope(|s| {
+            let running: Vec<_> = reads
+                .iter()
+                .map(|(call, args)| {
+                    s.spawn(move || crate::harness::tools::run(&call.name, args, root))
+                })
+                .collect();
+            running
+                .into_iter()
+                .zip(&reads)
+                .filter_map(|(run, (call, _))| Some((call.id.clone(), run.join().ok()?)))
+                .collect()
+        });
+        self.prefetched.extend(results);
+    }
+
+    /// Whether a call only reads the project, with no hook, approval, or permission rule to ask.
+    fn reads_alone(&self, name: &str, args: &Value) -> bool {
+        matches!(name, "read_file" | "list_dir" | "glob" | "grep")
+            && !self.request.mcp_tools.iter().any(|t| t.name == name)
+            && !self.request.hooks.iter().any(|h| h.matches(name))
+            && crate::harness::tools::approval(name, args, self.request.mode, &self.root).is_none()
+            && !(name == "read_file"
+                && args["path"]
+                    .as_str()
+                    .is_some_and(|p| crate::threads::image_media_type(p).is_some()))
+    }
+
+    /// Why a write would undo a change made to the file since the model last read or wrote it,
+    /// as by the user meanwhile.
+    fn stale(&self, name: &str, args: &Value) -> Option<String> {
+        if name != "write_file" {
+            return None;
+        }
+        let path = crate::system::fs::resolve(&self.root, args["path"].as_str()?);
+        let seen = self.seen.get(&path)?;
+        (version(&path)? != *seen).then(|| {
+            format!(
+                "{} changed since you last read it, and writing it would undo that change. Read it again, then make your change.",
+                crate::harness::tools::shown(&path, &self.root)
+            )
+        })
+    }
+
+    /// Notes the file a read or write left, for `stale`.
+    fn saw(&mut self, name: &str, args: &Value) {
+        if matches!(name, "read_file" | "write_file" | "edit_file")
+            && let Some(path) = args["path"].as_str()
+        {
+            let path = crate::system::fs::resolve(&self.root, path);
+            if let Some(version) = version(&path) {
+                self.seen.insert(path, version);
+            }
+        }
     }
 
     /// A reminder for a model making the same call again and again, as one stuck in a loop does:
@@ -334,4 +420,10 @@ impl Agent {
         self.closed = true;
         None
     }
+}
+
+/// A file's modified time and length, which change whenever it is written.
+fn version(path: &std::path::Path) -> Option<(std::time::SystemTime, u64)> {
+    let meta = std::fs::metadata(path).ok()?;
+    Some((meta.modified().ok()?, meta.len()))
 }

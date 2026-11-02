@@ -10,11 +10,15 @@ use serde_json::{Value, json};
 use super::context::CONTEXT_PHRASES;
 use super::{Agent, emit};
 
-/// Attempts at a request that failed for a reason worth retrying.
-const MAX_ATTEMPTS: u32 = 4;
+/// Attempts at a request that failed for a reason worth retrying. A busy endpoint, as DeepSeek's
+/// is at peak hours, can take most of a minute to answer again.
+const MAX_ATTEMPTS: u32 = 6;
 
 /// The longest wait a provider's `Retry-After` gets before a retry.
 const MAX_RETRY_AFTER: u64 = 60;
+
+/// The longest wait between attempts when the provider does not say how long.
+const MAX_BACKOFF: u64 = 30;
 
 /// Why a streamed reply failed, and whether any of it was shown, which rules out sending the
 /// request again.
@@ -101,6 +105,8 @@ pub(super) struct Reply {
     /// Tokens of the request and the reply, which the next request starts from; 0 when the
     /// endpoint reported none.
     pub(super) context: u64,
+    /// The reply stopped at the model's output limit, so its text or its last call is cut off.
+    pub(super) cut_off: bool,
 }
 
 impl Reply {
@@ -137,13 +143,24 @@ fn emit_usage(usage: &Value) -> u64 {
     prompt + count(&usage["completion_tokens"])
 }
 
+/// The seconds a `Retry-After` header asks to wait, given as seconds or as an HTTP date.
+fn parse_retry_after(value: &str) -> Option<u64> {
+    let value = value.trim();
+    if let Ok(seconds) = value.parse::<u64>() {
+        return Some(seconds);
+    }
+    let at = chrono::DateTime::parse_from_rfc2822(value).ok()?;
+    let seconds = (at.timestamp_millis() - crate::system::now_ms() as i64) / 1000;
+    Some(seconds.max(0) as u64)
+}
+
 /// How long to wait before attempt `attempt + 1`: what the provider asked for in `Retry-After`, up
-/// to a minute, or else 2, 4, then 8 s. Up to a second more at random keeps tasks that failed
-/// together from retrying together.
+/// to a minute, or else 2, 4, 8, 16, then 30 s. Up to a second more at random keeps tasks that
+/// failed together from retrying together.
 fn retry_delay(attempt: u32, retry_after: Option<u64>) -> Duration {
     let base = retry_after
         .map(|s| s.min(MAX_RETRY_AFTER))
-        .unwrap_or(2u64.pow(attempt));
+        .unwrap_or(2u64.pow(attempt).min(MAX_BACKOFF));
     let jitter = (uuid::Uuid::new_v4().as_u128() % 1000) as u64;
     Duration::from_millis(base * 1000 + jitter)
 }
@@ -277,7 +294,7 @@ impl Agent {
                         .headers()
                         .get("retry-after")
                         .and_then(|v| v.to_str().ok())
-                        .and_then(|v| v.trim().parse::<u64>().ok());
+                        .and_then(parse_retry_after);
                     let status = response.status().as_u16();
                     let text = response.body_mut().read_to_string().unwrap_or_default();
                     let parsed = serde_json::from_str(&text).unwrap_or(Value::Null);
@@ -379,6 +396,9 @@ impl Agent {
             let Some(choice) = chunk["choices"].get(0) else {
                 continue;
             };
+            if choice["finish_reason"] == "length" {
+                reply.cut_off = true;
+            }
             let delta = &choice["delta"];
             if let Some(text) = delta["reasoning_content"]
                 .as_str()
