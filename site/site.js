@@ -8,6 +8,11 @@ for (const link of document.querySelectorAll("[data-download]")) {
 
 const nameFor = { linux: "Linux", windows: "Windows", macos: "macOS" };
 
+// The footer's year is written into the page too, for a visitor without JavaScript.
+for (const year of document.querySelectorAll("[data-year]")) {
+  year.textContent = String(new Date().getFullYear());
+}
+
 function hostPlatform() {
   const platform = navigator.userAgentData?.platform ?? navigator.platform ?? "";
   const agent = navigator.userAgent;

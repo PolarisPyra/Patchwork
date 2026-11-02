@@ -45,16 +45,10 @@ if (missing.length > 0) {
 }
 
 const before = await readFile(page, "utf8");
-const after = before
-  .replace(/updates\.patchworkeditor\.com\/v\d+\.\d+\.\d+\//g, `updates.patchworkeditor.com/${tag}/`)
-  // "// latest release v26.11.0" and "v26.11.0 · AGPL-3.0-or-later" keep their words.
-  .replace(/(data-release>)([^<]*)(<)/g, (_, open, text, close) => {
-    return open + text.replace(/v\d+\.\d+\.\d+/, tag) + close;
-  })
-  // A bare version number, like "Version 26.11.0, for macOS, Windows and Linux".
-  .replace(/(data-release-version>)([^<]*)(<)/g, (_, open, _text, close) => {
-    return open + tag.slice(1) + close;
-  });
+const after = before.replace(
+  /updates\.patchworkeditor\.com\/v\d+\.\d+\.\d+\//g,
+  `updates.patchworkeditor.com/${tag}/`,
+);
 
 if (before === after) {
   console.log(`index.html already points at ${tag}`);

@@ -6,7 +6,7 @@
     <title>Patchwork — a desktop workspace for coding agents</title>
     <meta
       name="description"
-      content="Patchwork runs Claude Code, Codex, Antigravity and OpenCode from one window, and shows you the diff before anything lands. Free on macOS, Windows and Linux."
+      content="Patchwork runs Claude Code, Codex, Antigravity, OpenCode and your API keys side by side in one window, all sharing the same agents and skills. Free on macOS, Windows and Linux."
     />
     <meta name="theme-color" content="#131314" />
     <link rel="canonical" href="https://patchworkeditor.com/" />
@@ -14,7 +14,7 @@
     <meta property="og:title" content="Patchwork — a desktop workspace for coding agents" />
     <meta
       property="og:description"
-      content="Run Claude Code, Codex, Antigravity and OpenCode from one window. Review every change before you keep it."
+      content="Run Claude Code, Codex, Antigravity, OpenCode and your API keys side by side, all sharing the same agents and skills."
     />
     <meta property="og:url" content="https://patchworkeditor.com/" />
     <meta property="og:image" content="https://patchworkeditor.com/img/og.png" />
@@ -80,11 +80,10 @@
       <section class="hero">
         <div class="wrap hero-grid">
           <div class="hero-copy">
-            <p class="eyebrow" data-release>// latest release v26.11.0</p>
             <h1>One workspace for every coding agent</h1>
             <p class="lede">
-              Patchwork drives Claude Code, Codex, Antigravity and OpenCode from one window, then
-              shows you the diff before anything lands.
+              Every CLI you're signed in to and every API key you have, side by side in one window,
+              all sharing the same agents and skills.
             </p>
             <div class="hero-actions">
               <a
@@ -96,182 +95,17 @@
               >
               <a class="btn btn-secondary" href="#inside">See it working</a>
             </div>
-            <p class="hero-meta">Runs on your machine · no account, no telemetry</p>
           </div>
 
           <div class="hero-visual">
-            <div
-              class="window"
-              role="img"
-              aria-label="A task in Patchwork: the agent reads a file, changes the cart page and runs the tests, then lists the three files it changed with their line counts"
-            >
-              <div class="win-bar">
-                <img class="win-mark" src="favicon.svg" alt="" width="16" height="16" />
-                <span class="win-project">acme-storefront</span>
-                <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
-                <span class="win-access">
-                  <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                    <rect x="4" y="10" width="16" height="10" rx="2" />
-                    <path d="M8 10V7a4 4 0 0 1 8 0v3" />
-                  </svg>
-                  Supervised
-                </span>
-              </div>
-
-              <div class="win-body">
-                <aside class="win-side">
-                  <div class="win-search">
-                    <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                      <circle cx="11" cy="11" r="7" />
-                      <path d="M20 20l-4.2-4.2" />
-                    </svg>
-                    <span>Search…</span>
-                    <kbd>Ctrl K</kbd>
-                  </div>
-                  <p class="win-label">Projects</p>
-
-                  <div class="win-proj">
-                    <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
-                    acme-storefront
-                  </div>
-                  <div class="win-task is-active">
-                    <span class="dot dot-claude"></span>
-                    <span class="task-name">Add a promo code field</span>
-                    <span class="task-time">42s</span>
-                  </div>
-                  <div class="win-task">
-                    <span class="dot dot-claude"></span>
-                    <span class="task-name">Speed up product search</span>
-                    <span class="task-time">40m</span>
-                  </div>
-                  <div class="win-task">
-                    <span class="dot dot-claude"></span>
-                    <span class="task-name">Fix the pay button in Safari</span>
-                    <span class="task-time">40m</span>
-                  </div>
-
-                  <div class="win-proj">
-                    <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
-                    acme-api
-                  </div>
-                  <div class="win-task">
-                    <span class="dot dot-codex"></span>
-                    <span class="task-name">Unknown ids should 404</span>
-                    <span class="task-time">1d</span>
-                  </div>
-
-                  <div class="win-proj">
-                    <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
-                    acme-docs
-                  </div>
-                  <div class="win-task is-empty">No tasks yet</div>
-
-                  <div class="win-usage">
-                    <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M5 20V10M12 20V4M19 20v-7" />
-                    </svg>
-                    Usage
-                  </div>
-                </aside>
-
-                <div class="win-main">
-                  <p class="msg-user">
-                    Can you add a promo code field to the cart? It should tell people straight away
-                    if a code is wrong.
-                  </p>
-
-                  <div class="trace">
-                    <p class="trace-line">Working for 42s</p>
-                    <p class="trace-row">
-                      <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M4 17l6-6-6-6M12 19h8" />
-                      </svg>
-                      Running npm
-                    </p>
-                    <p class="trace-row">
-                      <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="12" cy="12" r="8" />
-                        <path d="M12 8v4l3 2" />
-                      </svg>
-                      Thought for 3s
-                    </p>
-                    <p class="trace-row">
-                      <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-                        <path d="M14 3v5h5" />
-                      </svg>
-                      Read app/cart/page.tsx
-                    </p>
-                    <p class="trace-row">
-                      <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="11" cy="11" r="7" />
-                        <path d="M20 20l-4.2-4.2" />
-                      </svg>
-                      Searched discounts
-                    </p>
-                    <p class="trace-row">
-                      <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M12 20h9" />
-                        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
-                      </svg>
-                      Changed app/cart/page.tsx
-                    </p>
-                  </div>
-
-                  <p class="win-text">
-                    The cart now checks a code as it is typed, so a wrong one shows an inline error
-                    rather than waiting for checkout.
-                  </p>
-
-                  <div class="diff">
-                    <div class="diff-head">
-                      <span class="diff-sum">
-                        <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-                          <path d="M14 3v5h5" />
-                        </svg>
-                        3 files changed
-                        <span class="add">+73</span>
-                        <span class="del">−33</span>
-                      </span>
-                      <span class="diff-btn">Show changes</span>
-                    </div>
-                    <div class="diff-row">
-                      <span class="mono">checkout.ts</span><span class="path">app/cart</span>
-                    </div>
-                    <div class="diff-row">
-                      <span class="mono">promo.ts</span><span class="path">app/cart</span>
-                    </div>
-                    <div class="diff-row">
-                      <span class="mono">0042_coupon.sql</span><span class="path">db/migrations</span>
-                    </div>
-                  </div>
-
-                  <div class="composer">
-                    <p class="composer-text">Reply or describe the next change…</p>
-                    <div class="composer-foot">
-                      <span class="chip">Default</span>
-                      <span class="chip">Default</span>
-                      <span class="chip">
-                        <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-                          <rect x="4" y="10" width="16" height="10" rx="2" />
-                          <path d="M8 10V7a4 4 0 0 1 8 0v3" />
-                        </svg>
-                        Supervised
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <img
+              class="hero-shot"
+              src="img/grid-1.webp"
+              alt="A task in Patchwork: the agent runs npm, reads the cart page, searches for discounts and changes the page, then explains the promo code field it added"
+              width="1600"
+              height="960"
+              fetchpriority="high"
+            />
           </div>
         </div>
       </section>
@@ -280,7 +114,7 @@
       <section class="section" id="inside">
         <div class="wrap">
           <header class="section-head">
-            <p class="eyebrow">// one task, from prompt to diff</p>
+            <p class="eyebrow">// one task, start to finish</p>
             <h2>Inside the app</h2>
             <p class="section-lede">
               Every task keeps its work in one place: what the agent read, what it ran, and the files
@@ -354,10 +188,10 @@
               </p>
             </li>
             <li>
-              <h3>Nothing lands until you say so</h3>
+              <h3>Your agents work with every CLI</h3>
               <p>
-                Each task has a canvas of Plan, Code and Diff. Stage the files you want with
-                <code>git add</code>, and reject a file to restore it.
+                Write a custom agent or a skill once, and every CLI and API model can use it.
+                Summon one with <code>&amp;name</code> in any chat.
               </p>
             </li>
             <li>
@@ -384,7 +218,7 @@
             <li>
               <h3>It reads what your agent already wrote</h3>
               <p>
-                Import past conversations from Claude Code, Codex, the Gemini CLI or T3 Code. Each
+                Import past conversations from Claude Code, Codex or the Gemini CLI. Each
                 becomes a task whose follow-ups resume the original session.
               </p>
             </li>
@@ -469,9 +303,8 @@
             <p class="eyebrow">// signed updates, free</p>
             <h2>Download Patchwork</h2>
             <p class="section-lede">
-              Version <span data-release-version>26.11.0</span>, for macOS, Windows and Linux. Once
-              installed, Patchwork updates
-              itself, and checks each update's signature before installing it.
+              For macOS, Windows and Linux. Once installed, Patchwork updates itself, and checks
+              each update's signature before installing it.
             </p>
           </header>
 
@@ -517,7 +350,7 @@
 
           <p class="note">
             Tasks run directly in your project folder, and chats run in a scratch folder that is
-            deleted with the chat. Nothing is sent anywhere except to the agent's own service.
+            deleted with the chat.
           </p>
         </div>
       </section>
@@ -529,7 +362,7 @@
           <img class="brand-mark" src="favicon.svg" alt="" width="20" height="20" />
           <span>Patchwork</span>
         </div>
-        <p class="footer-line" data-release>v26.11.0 · AGPL-3.0-or-later</p>
+        <p class="footer-line">© <span data-year>2026</span> Patchwork · AGPL-3.0-or-later</p>
       </div>
     </footer>
   </body>
