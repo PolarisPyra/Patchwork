@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Patchwork — a desktop workspace for coding agents</title>
+    <meta
+      name="description"
+      content="Patchwork runs Claude Code, Codex, Antigravity and OpenCode from one window, and shows you the diff before anything lands. Free on macOS, Windows and Linux."
+    />
+    <meta name="theme-color" content="#131314" />
+    <link rel="canonical" href="https://patchworkeditor.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Patchwork — a desktop workspace for coding agents" />
+    <meta
+      property="og:description"
+      content="Run Claude Code, Codex, Antigravity and OpenCode from one window. Review every change before you keep it."
+    />
+    <meta property="og:url" content="https://patchworkeditor.com/" />
+    <meta property="og:image" content="https://patchworkeditor.com/img/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link
+      rel="preload"
+      href="fonts/jetbrains-mono-latin-wght-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="site.js" defer></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="nav">
+      <div class="wrap nav-inner">
+        <a class="brand" href="/" aria-label="Patchwork, home">
+          <img class="brand-mark" src="favicon.svg" alt="" width="22" height="22" />
+          <span>Patchwork</span>
+        </a>
+        <nav class="nav-links" id="nav-links" aria-label="Main">
+          <a href="#inside">Inside the app</a>
+          <a href="#features">Features</a>
+          <a href="#agents">Agents</a>
+          <a href="#download">Download</a>
+        </nav>
+        <div class="nav-actions">
+          <a
+            class="btn btn-primary btn-small"
+            href="https://updates.patchworkeditor.com/v26.11.0/Patchwork_amd64.AppImage"
+            data-download="linux"
+            >Download</a
+          >
+          <button
+            class="nav-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="nav-links"
+            aria-label="Open menu"
+            data-nav-toggle
+          >
+            <svg class="i i-menu" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+            <svg class="i i-close" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main id="main">
+      <!-- Hero -->
+      <section class="hero">
+        <div class="wrap hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow" data-release>// latest release v26.11.0</p>
+            <h1>One workspace for every coding agent</h1>
+            <p class="lede">
+              Patchwork drives Claude Code, Codex, Antigravity and OpenCode from one window, then
+              shows you the diff before anything lands.
+            </p>
+            <div class="hero-actions">
+              <a
+                class="btn btn-primary"
+                href="https://updates.patchworkeditor.com/v26.11.0/Patchwork_amd64.AppImage"
+                data-download="linux"
+                data-download-label
+                >Download for Linux</a
+              >
+              <a class="btn btn-secondary" href="#inside">See it working</a>
+            </div>
+            <p class="hero-meta">Runs on your machine · no account, no telemetry</p>
+          </div>
+
+          <div class="hero-visual">
+            <div
+              class="window"
+              role="img"
+              aria-label="A task in Patchwork: the agent reads a file, changes the cart page and runs the tests, then lists the three files it changed with their line counts"
+            >
+              <div class="win-bar">
+                <img class="win-mark" src="favicon.svg" alt="" width="16" height="16" />
+                <span class="win-project">acme-storefront</span>
+                <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+                <span class="win-access">
+                  <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="4" y="10" width="16" height="10" rx="2" />
+                    <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                  </svg>
+                  Supervised
+                </span>
+              </div>
+
+              <div class="win-body">
+                <aside class="win-side">
+                  <div class="win-search">
+                    <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="M20 20l-4.2-4.2" />
+                    </svg>
+                    <span>Search…</span>
+                    <kbd>Ctrl K</kbd>
+                  </div>
+                  <p class="win-label">Projects</p>
+
+                  <div class="win-proj">
+                    <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                    acme-storefront
+                  </div>
+                  <div class="win-task is-active">
+                    <span class="dot dot-claude"></span>
+                    <span class="task-name">Add a promo code field</span>
+                    <span class="task-time">42s</span>
+                  </div>
+                  <div class="win-task">
+                    <span class="dot dot-claude"></span>
+                    <span class="task-name">Speed up product search</span>
+                    <span class="task-time">40m</span>
+                  </div>
+                  <div class="win-task">
+                    <span class="dot dot-claude"></span>
+                    <span class="task-name">Fix the pay button in Safari</span>
+                    <span class="task-time">40m</span>
+                  </div>
+
+                  <div class="win-proj">
+                    <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                    acme-api
+                  </div>
+                  <div class="win-task">
+                    <span class="dot dot-codex"></span>
+                    <span class="task-name">Unknown ids should 404</span>
+                    <span class="task-time">1d</span>
+                  </div>
+
+                  <div class="win-proj">
+                    <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                    acme-docs
+                  </div>
+                  <div class="win-task is-empty">No tasks yet</div>
+
+                  <div class="win-usage">
+                    <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M5 20V10M12 20V4M19 20v-7" />
+                    </svg>
+                    Usage
+                  </div>
+                </aside>
+
+                <div class="win-main">
+                  <p class="msg-user">
+                    Can you add a promo code field to the cart? It should tell people straight away
+                    if a code is wrong.
+                  </p>
+
+                  <div class="trace">
+                    <p class="trace-line">Working for 42s</p>
+                    <p class="trace-row">
+                      <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 17l6-6-6-6M12 19h8" />
+                      </svg>
+                      Running npm
+                    </p>
+                    <p class="trace-row">
+                      <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="8" />
+                        <path d="M12 8v4l3 2" />
+                      </svg>
+                      Thought for 3s
+                    </p>
+                    <p class="trace-row">
+                      <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+                        <path d="M14 3v5h5" />
+                      </svg>
+                      Read app/cart/page.tsx
+                    </p>
+                    <p class="trace-row">
+                      <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="M20 20l-4.2-4.2" />
+                      </svg>
+                      Searched discounts
+                    </p>
+                    <p class="trace-row">
+                      <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+                      </svg>
+                      Changed app/cart/page.tsx
+                    </p>
+                  </div>
+
+                  <p class="win-text">
+                    The cart now checks a code as it is typed, so a wrong one shows an inline error
+                    rather than waiting for checkout.
+                  </p>
+
+                  <div class="diff">
+                    <div class="diff-head">
+                      <span class="diff-sum">
+                        <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+                          <path d="M14 3v5h5" />
+                        </svg>
+                        3 files changed
+                        <span class="add">+73</span>
+                        <span class="del">−33</span>
+                      </span>
+                      <span class="diff-btn">Show changes</span>
+                    </div>
+                    <div class="diff-row">
+                      <span class="mono">checkout.ts</span><span class="path">app/cart</span>
+                    </div>
+                    <div class="diff-row">
+                      <span class="mono">promo.ts</span><span class="path">app/cart</span>
+                    </div>
+                    <div class="diff-row">
+                      <span class="mono">0042_coupon.sql</span><span class="path">db/migrations</span>
+                    </div>
+                  </div>
+
+                  <div class="composer">
+                    <p class="composer-text">Reply or describe the next change…</p>
+                    <div class="composer-foot">
+                      <span class="chip">Default</span>
+                      <span class="chip">Default</span>
+                      <span class="chip">
+                        <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+                          <rect x="4" y="10" width="16" height="10" rx="2" />
+                          <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                        </svg>
+                        Supervised
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Inside the app -->
+      <section class="section" id="inside">
+        <div class="wrap">
+          <header class="section-head">
+            <p class="eyebrow">// one task, from prompt to diff</p>
+            <h2>Inside the app</h2>
+            <p class="section-lede">
+              Every task keeps its work in one place: what the agent read, what it ran, and the files
+              it changed.
+            </p>
+          </header>
+
+          <div class="shots">
+            <figure class="shot">
+              <img
+                src="img/grid-1.webp"
+                alt="A task in progress: the agent reads a file, searches for a table, edits a page and runs the tests, then explains the change"
+                width="1600"
+                height="960"
+                loading="lazy"
+              />
+              <figcaption>
+                <span class="mono">01</span> A task runs, and the agent says what it did and why
+              </figcaption>
+            </figure>
+            <figure class="shot">
+              <img
+                src="img/grid-2.webp"
+                alt="A new task in a project, with the prompt box and a few suggestions for getting started"
+                width="1600"
+                height="960"
+                loading="lazy"
+              />
+              <figcaption><span class="mono">02</span> A new task, with a prompt and an access mode</figcaption>
+            </figure>
+            <figure class="shot">
+              <img
+                src="img/grid-3.webp"
+                alt="Settings on Appearance, with the Light, Dark and System theme toggle and a grid of app icons"
+                width="1600"
+                height="960"
+                loading="lazy"
+              />
+              <figcaption><span class="mono">03</span> Themes and app icons, if you want them</figcaption>
+            </figure>
+            <figure class="shot">
+              <img
+                src="img/grid-4.webp"
+                alt="A finished task listing the three files it changed, with the Usage panel open showing the 5-hour session and weekly limits"
+                width="1600"
+                height="960"
+                loading="lazy"
+              />
+              <figcaption>
+                <span class="mono">04</span> The files it changed, and the limits you have left
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <!-- Features -->
+      <section class="section" id="features">
+        <div class="wrap">
+          <header class="section-head">
+            <p class="eyebrow">// the parts that keep you in control</p>
+            <h2>What it does</h2>
+          </header>
+
+          <ul class="features">
+            <li>
+              <h3>One interface for every agent</h3>
+              <p>
+                Claude Code, Codex, Antigravity, OpenCode and API models share the same chat, plan
+                and code views. Switch agents without switching apps.
+              </p>
+            </li>
+            <li>
+              <h3>Nothing lands until you say so</h3>
+              <p>
+                Each task has a canvas of Plan, Code and Diff. Stage the files you want with
+                <code>git add</code>, and reject a file to restore it.
+              </p>
+            </li>
+            <li>
+              <h3>You decide how much rope</h3>
+              <p>
+                Supervised, auto-accept edits, auto or full access, chosen per task. Approval
+                requests arrive in the chat, where the work is.
+              </p>
+            </li>
+            <li>
+              <h3>Goals and steering</h3>
+              <p>
+                Give the agent a <code>/goal</code> to work toward, or send a message mid-turn to
+                steer it. An afternoon of babysitting becomes one instruction and one review.
+              </p>
+            </li>
+            <li>
+              <h3>Bring your own key</h3>
+              <p>
+                Add DeepSeek or any OpenAI-compatible endpoint under Settings → Providers. Keys live
+                in your system keychain, not in the app's database.
+              </p>
+            </li>
+            <li>
+              <h3>It reads what your agent already wrote</h3>
+              <p>
+                Import past conversations from Claude Code, Codex, the Gemini CLI or T3 Code. Each
+                becomes a task whose follow-ups resume the original session.
+              </p>
+            </li>
+            <li>
+              <h3>Artifacts, drawn in place</h3>
+              <p>
+                A Mermaid diagram, an HTML mock or an SVG chart in a reply renders in the chat, in a
+                sandboxed frame that cannot reach the rest of the app.
+              </p>
+            </li>
+            <li>
+              <h3>The long tail, handled</h3>
+              <p>
+                Scheduled tasks, plugin bundles with skills and MCP servers, a subscription Usage
+                view, and an optional screen tool that asks before it clicks anything.
+              </p>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Agents -->
+      <section class="section" id="agents">
+        <div class="wrap">
+          <header class="section-head">
+            <p class="eyebrow">// bring your own CLI</p>
+            <h2>Agents you already use</h2>
+            <p class="section-lede">
+              Patchwork does not replace the CLIs you trust, it drives them. Install one and sign in
+              with its own login command, and Patchwork uses it as it is.
+            </p>
+          </header>
+
+          <ul class="agents">
+            <li>
+              <svg class="agent-logo" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z" fill="#D97757" fill-rule="nonzero"></path>
+              </svg>
+              <span class="agent-name">Claude Code</span>
+              <span class="agent-vendor">Anthropic</span>
+              <code>claude</code>
+            </li>
+            <li>
+              <svg class="agent-logo" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path
+                  d="M9.205 8.658v-2.26c0-.19.072-.333.238-.428l4.543-2.616c.619-.357 1.356-.523 2.117-.523 2.854 0 4.662 2.212 4.662 4.566 0 .167 0 .357-.024.547l-4.71-2.759a.797.797 0 00-.856 0l-5.97 3.473zm10.609 8.8V12.06c0-.333-.143-.57-.429-.737l-5.97-3.473 1.95-1.118a.433.433 0 01.476 0l4.543 2.617c1.309.76 2.189 2.378 2.189 3.948 0 1.808-1.07 3.473-2.76 4.163zM7.802 12.703l-1.95-1.142c-.167-.095-.239-.238-.239-.428V5.899c0-2.545 1.95-4.472 4.591-4.472 1 0 1.927.333 2.712.928L8.23 5.067c-.285.166-.428.404-.428.737v6.898zM12 15.128l-2.795-1.57v-3.33L12 8.658l2.795 1.57v3.33L12 15.128zm1.796 7.23c-1 0-1.927-.332-2.712-.927l4.686-2.712c.285-.166.428-.404.428-.737v-6.898l1.974 1.142c.167.095.238.238.238.428v5.233c0 2.545-1.974 4.472-4.614 4.472zm-5.637-5.303l-4.544-2.617c-1.308-.761-2.188-2.378-2.188-3.948A4.482 4.482 0 014.21 6.327v5.423c0 .333.143.571.428.738l5.947 3.449-1.95 1.118a.432.432 0 01-.476 0zm-.262 3.9c-2.688 0-4.662-2.021-4.662-4.519 0-.19.024-.38.047-.57l4.686 2.71c.286.167.571.167.856 0l5.97-3.448v2.26c0 .19-.07.333-.237.428l-4.543 2.616c-.619.357-1.356.523-2.117.523zm5.899 2.83a5.947 5.947 0 005.827-4.756C22.287 18.339 24 15.84 24 13.296c0-1.665-.713-3.282-1.998-4.448.119-.5.19-.999.19-1.498 0-3.401-2.759-5.947-5.946-5.947-.642 0-1.26.095-1.88.31A5.962 5.962 0 0010.205 0a5.947 5.947 0 00-5.827 4.757C1.713 5.447 0 7.945 0 10.49c0 1.666.713 3.283 1.998 4.448-.119.5-.19 1-.19 1.499 0 3.401 2.759 5.946 5.946 5.946.642 0 1.26-.095 1.88-.309a5.96 5.96 0 004.162 1.713z"
+                />
+              </svg>
+              <span class="agent-name">Codex</span>
+              <span class="agent-vendor">OpenAI</span>
+              <code>codex</code>
+            </li>
+            <li>
+              <svg class="agent-logo" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z" fill="#3186FF"></path><path d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z" fill="url(#lobe-icons-gemini-0-_R_0_)"></path><path d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z" fill="url(#lobe-icons-gemini-1-_R_0_)"></path><path d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z" fill="url(#lobe-icons-gemini-2-_R_0_)"></path><defs><linearGradient gradientUnits="userSpaceOnUse" id="lobe-icons-gemini-0-_R_0_" x1="7" x2="11" y1="15.5" y2="12"><stop stop-color="#08B962"></stop><stop offset="1" stop-color="#08B962" stop-opacity="0"></stop></linearGradient><linearGradient gradientUnits="userSpaceOnUse" id="lobe-icons-gemini-1-_R_0_" x1="8" x2="11.5" y1="5.5" y2="11"><stop stop-color="#F94543"></stop><stop offset="1" stop-color="#F94543" stop-opacity="0"></stop></linearGradient><linearGradient gradientUnits="userSpaceOnUse" id="lobe-icons-gemini-2-_R_0_" x1="3.5" x2="17.5" y1="13.5" y2="12"><stop stop-color="#FABC12"></stop><stop offset=".46" stop-color="#FABC12" stop-opacity="0"></stop></linearGradient></defs>
+              </svg>
+              <span class="agent-name">Antigravity</span>
+              <span class="agent-vendor">Google</span>
+              <code>agy</code>
+            </li>
+            <li>
+              <svg class="agent-logo" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M16 6H8v12h8V6zm4 16H4V2h16v20z" />
+              </svg>
+              <span class="agent-name">OpenCode</span>
+              <span class="agent-vendor">Open source</span>
+              <code>opencode</code>
+            </li>
+          </ul>
+
+          <p class="note">
+            No CLI? Add an API provider under Settings → Providers and Patchwork's built-in agent
+            reads, searches, edits and runs commands itself.
+          </p>
+        </div>
+      </section>
+
+      <!-- Download -->
+      <section class="section" id="download">
+        <div class="wrap">
+          <header class="section-head">
+            <p class="eyebrow">// signed updates, free</p>
+            <h2>Download Patchwork</h2>
+            <p class="section-lede">
+              Version <span data-release-version>26.11.0</span>, for macOS, Windows and Linux. Once
+              installed, Patchwork updates
+              itself, and checks each update's signature before installing it.
+            </p>
+          </header>
+
+          <div class="downloads">
+            <article class="dl">
+              <h3>Linux</h3>
+              <p class="dl-file">Patchwork_amd64.AppImage</p>
+              <p class="dl-note">x86-64. Make it executable and run it.</p>
+              <pre><code>chmod +x Patchwork_amd64.AppImage
+./Patchwork_amd64.AppImage</code></pre>
+              <a
+                class="btn btn-secondary"
+                href="https://updates.patchworkeditor.com/v26.11.0/Patchwork_amd64.AppImage"
+                data-download="linux"
+                >Download the AppImage</a
+              >
+            </article>
+
+            <article class="dl">
+              <h3>Windows</h3>
+              <p class="dl-file">Patchwork_x64-setup.exe</p>
+              <p class="dl-note">Installs for your user, with a Start menu shortcut.</p>
+              <a
+                class="btn btn-secondary"
+                href="https://updates.patchworkeditor.com/v26.11.0/Patchwork_x64-setup.exe"
+                data-download="windows"
+                >Download the installer</a
+              >
+            </article>
+
+            <article class="dl">
+              <h3>macOS</h3>
+              <p class="dl-file">Patchwork_aarch64.dmg</p>
+              <p class="dl-note">Apple silicon. Open the disk image and drag Patchwork to Applications.</p>
+              <a
+                class="btn btn-secondary"
+                href="https://updates.patchworkeditor.com/v26.11.0/Patchwork_aarch64.dmg"
+                data-download="macos"
+                >Download the disk image</a
+              >
+            </article>
+          </div>
+
+          <p class="note">
+            Tasks run directly in your project folder, and chats run in a scratch folder that is
+            deleted with the chat. Nothing is sent anywhere except to the agent's own service.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <div class="footer-brand">
+          <img class="brand-mark" src="favicon.svg" alt="" width="20" height="20" />
+          <span>Patchwork</span>
+        </div>
+        <p class="footer-line" data-release>v26.11.0 · AGPL-3.0-or-later</p>
+      </div>
+    </footer>
+  </body>
+</html>
