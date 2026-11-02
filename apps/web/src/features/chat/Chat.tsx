@@ -192,9 +192,10 @@ export default function Chat({
     onError: setErrorFor,
   });
 
-  // Files the @ mention menu offers; they follow the project.
+  // Files the @ mention menu offers; they follow the project and its folder.
   const [files, setFiles] = useState<string[]>([]);
   const projectId = project?.id ?? null;
+  const projectPath = project?.path ?? null;
   useEffect(() => {
     if (!projectId) {
       setFiles([]);
@@ -212,11 +213,10 @@ export default function Chat({
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, projectPath]);
 
   // A project whose folder was moved or deleted cannot run its agent until it is pointed
   // elsewhere.
-  const projectPath = project?.path ?? null;
   const [folderMissing, setFolderMissing] = useState(false);
   useEffect(() => {
     setFolderMissing(false);

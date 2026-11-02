@@ -4,6 +4,7 @@ import { errorText } from "~/lib/util";
 
 interface GitState {
   projectId: string;
+  root: string | null;
   branch: string | null;
   changes: FileChange[];
 }
@@ -12,18 +13,23 @@ interface GitState {
 const NO_CHANGES: FileChange[] = [];
 
 /** The open project's branch and uncommitted changes, kept current as anything changes its
- * files, and a way to read them again. */
-export function useProjectGit(projectId: string | null, onError: (message: string) => void) {
+ * files, and a way to read them again. `root` is the project's folder: when it changes, they are
+ * read and watched there. */
+export function useProjectGit(
+  projectId: string | null,
+  root: string | null,
+  onError: (message: string) => void,
+) {
   const [git, setGit] = useState<GitState | null>(null);
-  const current = git && git.projectId === projectId ? git : null;
+  const current = git && git.projectId === projectId && git.root === root ? git : null;
 
   const refreshGit = useCallback(() => {
     if (!projectId) return Promise.resolve();
     return Promise.all([
       api.gitBranch(projectId).catch(() => null),
       api.gitChanges(projectId).catch(() => []),
-    ]).then(([branch, changes]) => setGit({ projectId, branch, changes }));
-  }, [projectId]);
+    ]).then(([branch, changes]) => setGit({ projectId, root, branch, changes }));
+  }, [projectId, root]);
 
   useEffect(() => {
     void refreshGit();
@@ -36,11 +42,11 @@ export function useProjectGit(projectId: string | null, onError: (message: strin
     api.watchProject(projectId).catch((e: unknown) => onError(errorText(e)));
     const unlisten = onProjectChanged((e) => {
       if (e.projectId === projectId && e.changes) {
-        setGit({ projectId, branch: e.branch, changes: e.changes });
+        setGit({ projectId, root, branch: e.branch, changes: e.changes });
       }
     });
     return () => void unlisten.then((stop) => stop());
-  }, [projectId, onError]);
+  }, [projectId, root, onError]);
 
   return {
     changes: current?.changes ?? NO_CHANGES,

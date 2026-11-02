@@ -146,6 +146,15 @@ impl Server {
             Ok(moved)
         })??;
         if moved {
+            // A watch on the old folder ends, so the next `watch_project` starts one on the new.
+            let mut watch = self
+                .project_watch
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if watch.as_ref().is_some_and(|(watched, _)| watched == id) {
+                *watch = None;
+            }
+            drop(watch);
             for thread_id in &threads {
                 // An idle agent still runs in the old folder.
                 self.runner.retire_idle(thread_id);

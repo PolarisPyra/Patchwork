@@ -180,7 +180,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     return () => clearTimeout(timer);
   }, [flashId]);
   const [error, setError] = useState<string | null>(null);
-  const { changes, branch, refreshGit } = useProjectGit(projectId, setError);
+  const { changes, branch, refreshGit } = useProjectGit(projectId, project?.path ?? null, setError);
 
   // A canvas belongs to the project it was opened in; it is hidden after a project switch.
   const openCanvas = canvas && canvas.projectId === projectId ? canvas : null;
