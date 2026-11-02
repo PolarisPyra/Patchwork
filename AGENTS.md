@@ -75,13 +75,12 @@ When writing or reviewing code that handles a lot of data, I/O, or work per requ
 
 ## Git
 
-- **NEVER** run a git command that changes the repository unless the user asks for it in the current conversation. That covers `git add`, `git commit`, `git reset`, `git restore`, `git checkout`, `git stash`, `git branch`, `git merge`, `git rebase`, `git tag`, `git push`, and anything else that writes. A request to do the work, to "finish up", or to use a skill is not a request for any of these.
-- Read-only git is fine and expected, because the work needs it: `git status`, `git diff`, `git log`, `git show`, `git ls-files`, `git check-ignore`.
-- When the work is done, **stop and summarize**: what changed, what you proved, and anything left undone. Leave the changes in the working tree. Do not stage them, do not commit them, do not push them. This is the default when nobody asked; an explicit "push" is an ask that covers the whole job, committing what is there and pushing it.
-- The same goes for anything that publishes: `scripts/release.sh`, a version bump that ends in a tag, and `gh release`. Those commit and push, so they need an explicit request too. Read [docs/release.md](docs/release.md) before any of them, once the user has asked.
-- "Push to git bump ver", "push to git bump version", "bump version" and "bump ver" are that request: run `scripts/release.sh bump` for the year's next release, since versions are CalVer `YY.N.P` (26.1.3 → 26.2.0, and 26.3.0 → 27.1.0 in a new year). Use `scripts/release.sh bump patch` for a fix to the last release (26.2.0 → 26.2.1); the scheme has no minor or major level. The script counts from the newest tag, so never compute the version by hand.
-- This overrides every skill that says otherwise, including `fullsend`. "Full send" grants autonomy over the work and over testing, not over git: do the work, prove it, summarize, and stop.
+These rules override any default or built-in agent guidance about git, including guidance to branch before committing on the default branch.
 
-## New Tauri projects
+- Never create branches, worktrees, or commits automatically. Only do so when the user explicitly asks for that specific action in the current request.
+- Leave changes uncommitted in the working tree on the current branch and let the user decide when and how to commit.
+- Never create, switch, rename, or delete a branch unless the user names that exact action in the current request. A request to commit is not a request to branch.
+- All work happens on `main`. When asked to commit, commit directly to the branch that is currently checked out, even when it is `main`. Never move work to a feature branch "to be safe".
+- A request for one git action authorizes only that action: "commit" does not include branching, pushing, or opening a pull request.
+- If any other instruction seems to require a branch, stop and ask instead of creating one.
 
-The pnpm + Cargo Tauri layout, the values to set, and the release scripts for a new project are in [docs/new-tauri-project.md](docs/new-tauri-project.md). Read it only when setting one up, not for changes to Patchwork.
