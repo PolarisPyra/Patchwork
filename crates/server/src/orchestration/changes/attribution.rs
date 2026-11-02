@@ -4,8 +4,10 @@
 //! reply's only when it happened while one of its calls that could write it ran: a read or a
 //! search writes nothing, an edit only the files it names, a shell command (or a background one,
 //! until it ends) anything. Edits the user makes meanwhile, and a commit, stay out of the list.
-//! When two replies could claim a file, those whose call named it get it. A change no call covers
-//! yet waits, since some agents report a call only once it is done.
+//! When two replies could claim a file, those whose call named it get it, and a file both could
+//! have written with neither naming it goes to neither: one file in two replies' lists is worse
+//! than a file in none, since the Changes view still lists it. A change no call covers yet waits,
+//! since some agents report a call only once it is done.
 
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -263,7 +265,7 @@ impl Attribution {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Outcome {
     Claimed,
     Waits,
@@ -296,11 +298,50 @@ pub(in crate::orchestration) fn changed_paths(
     changed.chain(gone).map(|c| c.path.clone()).collect()
 }
 
+/// What each reply may claim from one burst of changes. A path a reply's call named is that
+/// reply's, whoever else could have written it. A path more than one reply could have written,
+/// with none of them naming it, is nobody's: which reply wrote it is a coin toss, and a file
+/// listed under the wrong reply reads as that reply's work.
+fn claims(replies: &[&[Candidate]]) -> Vec<Vec<Outcome>> {
+    let mut named: HashSet<&str> = HashSet::new();
+    let mut claimants: HashMap<&str, usize> = HashMap::new();
+    for candidates in replies {
+        for candidate in *candidates {
+            match candidate.cover {
+                Cover::Named => {
+                    named.insert(&candidate.path);
+                }
+                Cover::Yes => *claimants.entry(&candidate.path).or_default() += 1,
+                Cover::No => {}
+            }
+        }
+    }
+    replies
+        .iter()
+        .map(|candidates| {
+            candidates
+                .iter()
+                .map(|candidate| match candidate.cover {
+                    Cover::No => Outcome::Waits,
+                    Cover::Named => Outcome::Claimed,
+                    Cover::Yes if named.contains(candidate.path.as_str()) => Outcome::Taken,
+                    Cover::Yes
+                        if claimants.get(candidate.path.as_str()).copied().unwrap_or(0) > 1 =>
+                    {
+                        Outcome::Taken
+                    }
+                    Cover::Yes => Outcome::Claimed,
+                })
+                .collect()
+        })
+        .collect()
+}
+
 impl Server {
     /// Adds what a settled burst of changes in the project changed to each reply under way
     /// there, so a reply lists its files as they change, deletions made through the shell
     /// included. `changes` is the project's `git status` after the burst. A file two replies
-    /// could claim goes to those whose call named it, and to all of them when none did.
+    /// could claim goes to those whose call named it, and to neither when none did.
     pub(crate) fn note_project_changes(
         &self,
         project_id: &str,
@@ -324,21 +365,18 @@ impl Server {
             let candidates = lock(&attribution).candidates(changes, burst, &reply.files);
             replies.push((thread_id, reply.id.clone(), attribution, candidates));
         }
-        let named: HashSet<String> = replies
-            .iter()
-            .flat_map(|(.., candidates)| candidates)
-            .filter(|c| c.cover == Cover::Named)
-            .map(|c| c.path.clone())
-            .collect();
-        for (thread_id, message_id, attribution, candidates) in replies {
+        let decided = claims(
+            &replies
+                .iter()
+                .map(|(.., candidates)| candidates.as_slice())
+                .collect::<Vec<_>>(),
+        );
+        for ((thread_id, message_id, attribution, candidates), outcomes) in
+            replies.into_iter().zip(decided)
+        {
             let mut claimed = Vec::new();
             let mut attribution = lock(&attribution);
-            for candidate in candidates {
-                let outcome = match candidate.cover {
-                    Cover::No => Outcome::Waits,
-                    Cover::Yes if named.contains(&candidate.path) => Outcome::Taken,
-                    Cover::Yes | Cover::Named => Outcome::Claimed,
-                };
+            for (candidate, outcome) in candidates.into_iter().zip(outcomes) {
                 if matches!(outcome, Outcome::Claimed) {
                     claimed.push(candidate.path.clone());
                 }
@@ -353,5 +391,55 @@ impl Server {
                 publish(self, &thread_id, touched);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn candidate(path: &str, cover: Cover) -> Candidate {
+        Candidate {
+            path: path.into(),
+            times: Vec::new(),
+            cover,
+        }
+    }
+
+    /// Two replies running in one project, each having run a shell command that could have
+    /// written anything. A file neither named is nobody's: listing it under both is how one
+    /// reply's pictures turned up in another's, as if it had made them.
+    #[test]
+    fn a_file_two_replies_could_have_written_goes_to_neither() {
+        let one = vec![candidate("site/img/grid-1.webp", Cover::Yes)];
+        let two = vec![candidate("site/img/grid-1.webp", Cover::Yes)];
+        let decided = claims(&[&one, &two]);
+        assert_eq!(decided[0], vec![Outcome::Taken], "neither claims it");
+        assert_eq!(decided[1], vec![Outcome::Taken], "neither claims it");
+    }
+
+    /// A file only one reply could have written is that reply's.
+    #[test]
+    fn a_file_one_reply_could_have_written_is_its_own() {
+        let one = vec![candidate("site/img/grid-1.webp", Cover::Yes)];
+        let two = vec![candidate("site/fonts/inter.woff2", Cover::Yes)];
+        assert_eq!(claims(&[&one, &two]), vec![vec![Outcome::Claimed]; 2]);
+    }
+
+    /// A call that named the file settles it, whoever else could have written it.
+    #[test]
+    fn a_named_file_beats_a_competing_shell_command() {
+        let shell = vec![candidate("site/img/grid-1.webp", Cover::Yes)];
+        let edited = vec![candidate("site/img/grid-1.webp", Cover::Named)];
+        let decided = claims(&[&shell, &edited]);
+        assert_eq!(decided[0], vec![Outcome::Taken]);
+        assert_eq!(decided[1], vec![Outcome::Claimed]);
+    }
+
+    /// A change no call covers yet waits, since an agent may report its call once it is done.
+    #[test]
+    fn a_change_no_call_covers_waits() {
+        let one = vec![candidate("site/img/grid-1.webp", Cover::No)];
+        assert_eq!(claims(&[&one]), vec![vec![Outcome::Waits]]);
     }
 }
