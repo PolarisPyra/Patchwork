@@ -132,10 +132,15 @@ function AgentOptions({
             role="menuitemradio"
             aria-checked={agent.name === role}
             title={agent.name}
-            className={`${ITEM_CLASS} min-w-0 flex-1`}
+            className={`${ITEM_CLASS} min-w-0 flex-1 flex-col items-start! gap-0`}
             onClick={() => onPick(agent.name)}
           >
-            <span className="min-w-0 truncate">{agent.name}</span>
+            <span className="w-full min-w-0 truncate">{agent.name}</span>
+            {agent.description && (
+              <span className="line-clamp-2 w-full text-[length:var(--fs-sm)] whitespace-normal text-fg-muted">
+                {agent.description}
+              </span>
+            )}
           </button>
           {/* Its space is kept while the pencil is hidden, so the menu does not resize on hover. */}
           <span className="relative mr-1 grid h-6 w-6 flex-none place-items-center">
