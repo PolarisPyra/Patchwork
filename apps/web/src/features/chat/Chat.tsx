@@ -24,7 +24,12 @@ import { effortFor, lastEffort } from "~/components/EffortPicker";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import ChoicePanel from "~/features/chat/prompts/ChoicePanel";
 import GoalBanner from "~/features/chat/prompts/GoalBanner";
-import { isGoalClearCommand, localCommand, type LocalCommand } from "~/lib/composerActions";
+import {
+  isCompactCommand,
+  isGoalClearCommand,
+  localCommand,
+  type LocalCommand,
+} from "~/lib/composerActions";
 import { ComposerStripPresence } from "~/features/chat/ComposerStrip";
 import BackgroundTasks from "~/features/chat/BackgroundTasks";
 import QueuedMessages from "~/features/chat/composer/QueuedMessages";
@@ -253,6 +258,16 @@ export default function Chat({
   };
   const empty = !thread || thread.messages.length === 0;
   const queued = useMemo(() => thread?.messages.filter((m) => m.queued) ?? [], [thread?.messages]);
+  // A queued message can be sent while it is being edited: the agent took it, or it was steered.
+  // What was typed stays in the composer as an ordinary draft, to send or queue again.
+  useEffect(() => {
+    if (!queuedEdit || queuedEdit.chat !== key || queued.some((m) => m.id === queuedEdit.id)) {
+      return;
+    }
+    setDraft(queuedEdit.text);
+    setAttachments(queuedEdit.attachments);
+    setQueuedEdit(null);
+  }, [queued, queuedEdit, key]);
   const background = useMemo(
     () => thread?.messages.flatMap((m) => m.background) ?? [],
     [thread?.messages],
@@ -263,6 +278,15 @@ export default function Chat({
   const effort = thread ? thread.effort : newOpts.effort;
   const compactWindow = thread ? thread.compactWindow : newOpts.compactWindow;
   const working = sending || isWorking(thread);
+  // The reply under way is compacting, or a /compact was sent and its reply has not started.
+  const compacting = useMemo(() => {
+    if (!working) return false;
+    const last = thread?.messages.filter((m) => !m.queued).at(-1);
+    return (
+      last !== undefined &&
+      (last.compacting === true || (last.role === "user" && isCompactCommand(last.text)))
+    );
+  }, [working, thread?.messages]);
   const usage = thread && threadUsage(thread.messages);
   const { clearOfGoal, clearGoal } = useGoalClear(thread, working);
   const checkpoints = useCheckpoints(thread?.id, projectId, working);
@@ -434,6 +458,7 @@ export default function Chat({
     if (!thread) return;
     if (edit) {
       setQueuedEdit({
+        chat: thread.id,
         id: message.id,
         text: message.text,
         attachments: draftWithout(message.text, message.attachments),
@@ -446,8 +471,9 @@ export default function Chat({
   function editLatestQueued() {
     if (queuedEdit || composerDraft.trim() || composerAttachments.length) return;
     const latestQueued = queued.at(-1);
-    if (latestQueued)
+    if (thread && latestQueued)
       setQueuedEdit({
+        chat: thread.id,
         id: latestQueued.id,
         text: latestQueued.text,
         attachments: draftWithout(latestQueued.text, latestQueued.attachments),
@@ -990,6 +1016,7 @@ export default function Chat({
           files={files}
           deferFocus={showChoices || showQuestion}
           disabled={folderMissing || noAgents}
+          compacting={compacting}
           projectId={projectId}
           role={thread ? thread.role : (newOpts.role ?? null)}
           onPickRole={composerHandlers.onPickRole}

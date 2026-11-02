@@ -106,6 +106,8 @@ interface ComposerProps {
   deferFocus: boolean;
   /** Nothing can be written or sent, such as while the project's folder is missing. */
   disabled: boolean;
+  /** The chat is compacting its context: a message can be written, but not sent until it ends. */
+  compacting: boolean;
   /** The project, whose own custom agents can be summoned too. */
   projectId: string | null;
   /** The custom agent the chat is in the role of. */
@@ -200,6 +202,7 @@ function Composer({
   files,
   deferFocus,
   disabled,
+  compacting,
   projectId,
   role,
   onPickRole,
@@ -740,6 +743,7 @@ function Composer({
 
   function sendDraft(alternate = false) {
     const queue = working && (alternate ? !queueNext : queueNext);
+    if (compacting && !editingQueued) return;
     if (queue && !canQueueFollowUp && !editingQueued) return;
     onSubmit(queue);
     setQueueNext(true);
@@ -904,25 +908,30 @@ function Composer({
                 disabled ||
                 (!value.trim() && attachments.length === 0) ||
                 overBy > 0 ||
+                (compacting && !editingQueued) ||
                 (working && queueNext && !canQueueFollowUp && !editingQueued)
               }
               title={
                 editingQueued
                   ? "Update queued message"
-                  : working
-                    ? queueNext
-                      ? "Queue for after the turn"
-                      : "Steer the running turn"
-                    : "Send"
+                  : compacting
+                    ? "Compacting context"
+                    : working
+                      ? queueNext
+                        ? "Queue for after the turn"
+                        : "Steer the running turn"
+                      : "Send"
               }
               aria-label={
                 editingQueued
                   ? "Update queued message"
-                  : working
-                    ? queueNext
-                      ? "Queue message"
-                      : "Steer message"
-                    : "Send"
+                  : compacting
+                    ? "Compacting context"
+                    : working
+                      ? queueNext
+                        ? "Queue message"
+                        : "Steer message"
+                      : "Send"
               }
             >
               {editingQueued ? <CheckIcon size={16} /> : <ArrowUpIcon size={16} />}

@@ -16,6 +16,8 @@ const PASTE_ATTACH_CHARS = 10_000;
 
 /** A queued message being edited in the composer, in place of the draft. */
 export interface QueuedEdit {
+  /** The chat the message is queued in. */
+  chat: string;
   id: string;
   text: string;
   attachments: Attachment[];
