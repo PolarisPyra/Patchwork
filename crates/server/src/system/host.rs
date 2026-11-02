@@ -160,5 +160,31 @@ fn host_env_changes() -> Vec<(std::ffi::OsString, Option<String>)> {
     for key in ["APPDIR", "APPIMAGE", "ARGV0", "OWD"] {
         changes.push((key.into(), None));
     }
+    changes.extend(
+        claude_session_vars(std::env::vars_os().map(|(key, _)| key.to_string_lossy().into_owned()))
+            .into_iter()
+            .map(|key| (key.into(), None)),
+    );
     changes
+}
+
+/// The variables a Claude Code session sets for the programs it starts, when Patchwork was itself
+/// started from one. Inherited, they make an agent's `claude` act as part of that session (its
+/// compact window, effort and session id) or refuse to start as a nested session, and a terminal
+/// opened in Patchwork the same. The person's own choices stay: `CLAUDE_CODE_USE_*` (which provider),
+/// `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CONFIG_DIR` and `ANTHROPIC_*`.
+fn claude_session_vars(keys: impl Iterator<Item = String>) -> Vec<String> {
+    let keys: Vec<String> = keys.collect();
+    if !keys.iter().any(|key| key == "CLAUDECODE") {
+        return Vec::new();
+    }
+    keys.into_iter()
+        .filter(|key| {
+            matches!(key.as_str(), "CLAUDECODE" | "CLAUDE_PID" | "CLAUDE_EFFORT")
+                || key.starts_with("CLAUDE_AGENT_SDK_")
+                || (key.starts_with("CLAUDE_CODE_")
+                    && !key.starts_with("CLAUDE_CODE_USE_")
+                    && key != "CLAUDE_CODE_OAUTH_TOKEN")
+        })
+        .collect()
 }
