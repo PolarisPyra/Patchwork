@@ -21,6 +21,10 @@ pub(super) struct Release {
     /// The release's notes; releases before 0.10.16 have none.
     #[serde(default)]
     pub(super) body: Option<String>,
+    /// Tags pulled after they went out broken. A copy running one of them goes back to this
+    /// release, even though it is older.
+    #[serde(default)]
+    pub(super) withdrawn: Vec<String>,
     assets: Vec<Asset>,
 }
 

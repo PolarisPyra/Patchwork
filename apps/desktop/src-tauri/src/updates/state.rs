@@ -125,10 +125,10 @@ impl Updates {
         let _ = app.emit("update-status", self.status(app));
     }
 
-    /// Checks for a newer release, then downloads and installs it. Blocks, so it runs on its own
-    /// thread. A check the user asked for shows its progress and its errors; a background one
-    /// changes the pane only when it finds something, so going offline does not hide an update
-    /// already found.
+    /// Checks for a newer release, or an older one when the running version was withdrawn, then
+    /// downloads and installs it. Blocks, so it runs on its own thread. A check the user asked for
+    /// shows its progress and its errors; a background one changes the pane only when it finds
+    /// something, so going offline does not hide an update already found.
     pub fn check(&self, app: &AppHandle, manual: bool) {
         if manual {
             self.watched.store(true, Ordering::SeqCst);
@@ -169,9 +169,14 @@ impl Updates {
         };
         let watched = self.watched.swap(false, Ordering::SeqCst);
         let version = release.tag_name.trim_start_matches('v').to_string();
+        let current = app.package_info().version.to_string();
         let newer = semver::Version::parse(&version)
             .is_ok_and(|latest| latest > app.package_info().version);
-        if !newer {
+        let withdrawn = release
+            .withdrawn
+            .iter()
+            .any(|tag| tag.trim_start_matches('v') == current);
+        if !newer && !withdrawn {
             let shown = self.state();
             if watched || matches!(shown, None | Some(UpdateState::Failed { .. })) {
                 self.set(app, UpdateState::UpToDate);
