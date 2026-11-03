@@ -373,7 +373,14 @@ pub(in crate::orchestration) fn ingest(
                             turn.interrupts.answer();
                             // An error in the stopped reply does not carry over to the next one.
                             stream_error = None;
-                            go_idle(&mut turn, &segments, &mut completed, &mut unsaved, true);
+                            go_idle(
+                                &mut turn,
+                                &segments,
+                                &mut completed,
+                                &mut unsaved,
+                                true,
+                                None,
+                            );
                         } else if turn.agent == AgentKind::Codex {
                             turn.stdin
                                 .lock()
@@ -424,9 +431,29 @@ pub(in crate::orchestration) fn ingest(
                     // are not set up again for each one. It takes messages meanwhile, including
                     // while a task it started keeps running.
                     if can_idle(&turn, &goal, &stream_error) {
-                        go_idle(&mut turn, &segments, &mut completed, &mut unsaved, false);
+                        go_idle(
+                            &mut turn,
+                            &segments,
+                            &mut completed,
+                            &mut unsaved,
+                            false,
+                            None,
+                        );
                     } else if !background.keeps_stdin_open() {
                         end_input(&turn, goal_run, &goal_round);
+                    } else if can_idle(&turn, &goal, &None) {
+                        // A reply that failed while a command it started runs on ends now, with its
+                        // error. Claude stays up with the command, as after a reply that did not fail,
+                        // since the command would otherwise hold the reply open until it ends.
+                        let error = stream_error.take().map(|e| with_remedy(turn.agent, e));
+                        go_idle(
+                            &mut turn,
+                            &segments,
+                            &mut completed,
+                            &mut unsaved,
+                            false,
+                            error,
+                        );
                     }
                 }
                 Parsed::ControlResponse(id) => {
@@ -520,7 +547,14 @@ pub(in crate::orchestration) fn ingest(
                             .is_some_and(|g| g.status == GoalStatus::Active);
                     if ended && can_idle(&turn, &goal, &stream_error) {
                         if completed < segments.len() {
-                            go_idle(&mut turn, &segments, &mut completed, &mut unsaved, false);
+                            go_idle(
+                                &mut turn,
+                                &segments,
+                                &mut completed,
+                                &mut unsaved,
+                                false,
+                                None,
+                            );
                         }
                     } else if ended && !background.keeps_stdin_open() {
                         end_input(&turn, goal_run, &goal_round);
@@ -551,7 +585,14 @@ pub(in crate::orchestration) fn ingest(
                     // A reply that has ended goes idle, or closes stdin, once no task holds it open.
                     if ended && can_idle(&turn, &goal, &stream_error) {
                         if completed < segments.len() {
-                            go_idle(&mut turn, &segments, &mut completed, &mut unsaved, false);
+                            go_idle(
+                                &mut turn,
+                                &segments,
+                                &mut completed,
+                                &mut unsaved,
+                                false,
+                                None,
+                            );
                         }
                     } else if ended && !background.keeps_stdin_open() {
                         end_input(&turn, goal_run, &goal_round);
@@ -827,13 +868,15 @@ fn publish_event(
 /// Completes the replies not yet completed, with the files they changed, and marks the turn
 /// idle: the agent stays up and takes the next message as a new reply, starting with the
 /// messages queued meanwhile. `stopped` when Stop interrupted the last reply: it ends as
-/// stopped, its unanswered requests lapse, and the queued messages wait for the user.
+/// stopped, its unanswered requests lapse, and the queued messages wait for the user. `error`
+/// when the last reply failed: it ends as failed, with it.
 fn go_idle(
     turn: &mut Turn,
     segments: &[String],
     completed: &mut usize,
     unsaved: &mut Unsaved,
     stopped: bool,
+    error: Option<String>,
 ) {
     turn.save_text(unsaved);
     let after = workspace::git_changes(&turn.root).unwrap_or_default();
@@ -862,15 +905,17 @@ fn go_idle(
         .enumerate()
         .skip(*completed)
         .for_each(|(at, id)| {
-            let status = if stopped && at == last {
-                MessageStatus::Cancelled
+            let (status, error) = if stopped && at == last {
+                (MessageStatus::Cancelled, None)
+            } else if at == last && error.is_some() {
+                (MessageStatus::Error, error.clone())
             } else {
-                MessageStatus::Complete
+                (MessageStatus::Complete, None)
             };
             turn.publish(AgentEvent::TurnCompleted {
                 message_id: id.clone(),
                 status,
-                error: None,
+                error,
             });
         });
     *completed = segments.len();
