@@ -190,9 +190,29 @@ export default function Onboarding({
     <div className="flex h-full flex-col bg-app text-fg">
       <header className="flex-none grid grid-cols-[1fr_auto_1fr] items-center h-[88px] px-6 border-b border-border bg-app">
         <div className="flex items-center gap-3">
-          <span className="inline-flex items-center justify-center w-9 h-9 rounded-[8px] bg-accent text-on-accent text-[length:var(--fs-lg)] font-bold">
-            P
-          </span>
+          {/* Patchwork's logo, as in site/favicon.svg. */}
+          <svg className="w-9 h-9 flex-none" viewBox="0 0 512 512" fill="none" aria-hidden="true">
+            <g strokeWidth="26" strokeLinejoin="round">
+              <polygon points="256,256 63.7,145 256,34 448.3,145" fill="#FF7EB3" stroke="#FF7EB3" />
+              <polygon
+                points="256,256 448.3,145 448.3,367 256,478"
+                fill="#9B5DE5"
+                stroke="#9B5DE5"
+              />
+              <polygon points="256,256 256,478 63.7,367 63.7,145" fill="#5BC0EB" stroke="#5BC0EB" />
+            </g>
+            <g
+              stroke="#FFFFFF"
+              strokeOpacity="0.75"
+              strokeWidth="8"
+              strokeDasharray="18 12"
+              strokeLinecap="round"
+            >
+              <path d="M256 256 L421.3 160.5" />
+              <path d="M256 256 L256 446.9" />
+              <path d="M256 256 L90.7 160.5" />
+            </g>
+          </svg>
           <span className="text-[length:var(--fs-xl)] font-semibold">Patchwork</span>
         </div>
 
