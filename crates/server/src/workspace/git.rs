@@ -12,6 +12,11 @@ use crate::workspace::FileChange;
 
 /// Runs `git <args>` in `root` and returns its raw output.
 fn git_raw(root: &str, args: &[&str]) -> Result<Output, Error> {
+    git_output(root, args).map_err(git_failed)
+}
+
+/// `git_raw` with the error from starting git as it came, so a caller can tell git is missing.
+fn git_output(root: &str, args: &[&str]) -> std::io::Result<Output> {
     crate::system::host_command("git")
         .args(args)
         .current_dir(root)
@@ -20,7 +25,10 @@ fn git_raw(root: &str, args: &[&str]) -> Result<Output, Error> {
         .env("GIT_OPTIONAL_LOCKS", "0")
         .stdin(Stdio::null())
         .output()
-        .map_err(|e| Error::Git(format!("Failed to run git: {e}")))
+}
+
+fn git_failed(e: std::io::Error) -> Error {
+    Error::Git(format!("Failed to run git: {e}"))
 }
 
 /// Runs `git <args>` in `root` and returns stdout; a non-zero exit becomes an error carrying stderr.
@@ -149,10 +157,15 @@ pub fn list_files(root: &str) -> Result<Vec<String>, Error> {
 /// The project's uncommitted changes with their line counts: `git status`, plus one
 /// `git diff HEAD` for the counts when a tracked file changed.
 pub fn git_changes(root: &str) -> Result<Vec<FileChange>, Error> {
-    let out = git_raw(
+    let out = match git_output(
         root,
         &["status", "--porcelain=v1", "-z", "--untracked-files=all"],
-    )?;
+    ) {
+        Ok(out) => out,
+        // Without git installed, a folder has no changes, as one that is not a repository.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
+        Err(e) => return Err(git_failed(e)),
+    };
     if !out.status.success() {
         let err = String::from_utf8_lossy(&out.stderr);
         // A folder that is not a git repository has no changes.
