@@ -22,9 +22,8 @@ pub(super) const KEEP_SESSIONS: usize = 10;
 /// The log files of versions before session folders, which could hold API keys.
 const OLD_LOGS: [&str; 3] = ["agents.log", "imports.log", "app.log"];
 
-/// How a chat's own files are named in a launch's folder: its log, `thread-<thread id>.log`, and
-/// the reports its Open logs writes beside it.
-pub(super) const THREAD_PREFIX: &str = "thread-";
+/// How a chat's file is named in a launch's folder: `chat-<thread id>.log`.
+pub(super) const CHAT_PREFIX: &str = "chat-";
 
 /// How much of a log the Output panel shows when it opens it.
 const MAX_READ_BYTES: u64 = 1024 * 1024;
@@ -109,7 +108,7 @@ fn files_under(dir: &Path) -> Vec<PathBuf> {
 }
 
 /// This launch's logs, as paths from its folder, for the Output panel. Older files a log has
-/// moved aside (`<name>.1.log`), the chats' own logs and their reports are left out.
+/// moved aside (`<name>.1.log`), and the chats' files are left out.
 pub fn channels() -> Vec<String> {
     let Some(dir) = SESSION.get() else {
         return Vec::new();
@@ -121,7 +120,7 @@ pub fn channels() -> Vec<String> {
         .filter(|name| {
             let stem = name.trim_end_matches(".log");
             name.ends_with(".log")
-                && !name.starts_with(THREAD_PREFIX)
+                && !name.starts_with(CHAT_PREFIX)
                 && !stem
                     .rsplit('.')
                     .next()

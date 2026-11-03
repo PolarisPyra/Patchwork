@@ -232,7 +232,7 @@ pub struct LoggingSettings {
     pub agents: LogLevel,
     /// `imports.log`: each scan and import of saved conversations.
     pub imports: LogLevel,
-    /// `thread-<id>.log`: each chat's events and its agent's traffic.
+    /// `chat-<id>.log`: the events and agent traffic of each chat with a warning or an error.
     pub threads: LogLevel,
     /// A chat's right-click menu has Open logs.
     pub thread_menu: bool,

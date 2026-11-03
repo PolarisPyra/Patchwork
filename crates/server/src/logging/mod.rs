@@ -10,11 +10,9 @@
 //! ├─ imports.log              scans and imports of saved conversations
 //! ├─ window.log               the window's errors and warnings
 //! ├─ agent-claude.log         one log per agent: its processes and their traffic
-//! ├─ thread-<id>.log          one log per chat used in this launch (see `thread_log`)
-//! └─ thread-<id>-report-<time>.log
-//!                             what a chat's Open logs writes: the system, the chat's settings
-//!                             and replies, its logs from every kept launch, and this launch's
-//!                             warnings and errors, in one file to send
+//! └─ chat-<id>.log            one file per chat with a warning or an error in this launch, or
+//!                             whose Open logs was used: its log, under the report Open logs
+//!                             writes at the top (see `thread_log` and `report`)
 //! ```
 //!
 //! Each line reads `2026-10-26 12:17:29.562 [info] message`, and each log is set to Trace,

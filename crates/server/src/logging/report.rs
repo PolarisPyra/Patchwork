@@ -1,6 +1,6 @@
-//! A chat's report, which its Open logs writes to the launch's folder beside the chat's log, as
-//! `thread-<id>-report-<time>.log`: what Patchwork runs on, the chat's settings, each reply's
-//! outcome, the chat's own logs from every kept launch, and this launch's warnings and errors.
+//! A chat's report, which its Open logs writes at the top of the chat's file in the launch's
+//! folder, above its log: what Patchwork runs on, the chat's settings, each reply's outcome, this
+//! launch's warnings and errors, and the chat's logs from the kept launches before this one.
 //! One file holds what it takes to work out what went wrong in the chat, and like the logs it has
 //! no secrets and names no user.
 
@@ -15,7 +15,7 @@ use crate::{Res, Server};
 use super::render::local_time;
 use super::scrub::{cut, redact, scrubbed};
 use super::system::{report, shown};
-use super::thread_log::report_path;
+use super::thread_log::log_part;
 use super::{session, Json, THREAD_LOG};
 
 /// This launch's warning and error lines past this many are left out, oldest first.
@@ -45,9 +45,12 @@ impl Server {
         section(&mut text, "System", &pretty(report().clone()));
         section(&mut text, "Chat", &chat(&thread, project));
         section(&mut text, "Replies", &replies(&thread.messages));
-        section(&mut text, "Chat log", &chat_log(thread_id));
         section(&mut text, "This launch's warnings and errors", &problems());
         section(&mut text, "Settings", &pretty(settings));
+        let earlier = earlier(thread_id);
+        if !earlier.is_empty() {
+            section(&mut text, "Earlier launches", &earlier);
+        }
         // Settings, logs and errors name folders in full; the report names no user.
         if let Some(home) = home_dir().map(|home| home.display().to_string())
             && home.len() > 1
@@ -55,11 +58,7 @@ impl Server {
             text = text.replace(&home, "~");
         }
 
-        let dir = session().ok_or("There are no logs yet")?;
-        let stamp = chrono::Local::now().format("%Y%m%dT%H%M%S");
-        let path = report_path(dir, &thread.id, stamp);
-        std::fs::write(&path, text)
-            .map_err(|e| format!("Could not write {}: {e}", path.display()))?;
+        let path = THREAD_LOG.report(&thread.id, text)?;
         log::info!("wrote a chat's report: {}", path.display());
         Ok(path)
     }
@@ -202,17 +201,21 @@ fn replies(messages: &[Message]) -> String {
     redact(&text)
 }
 
-/// The chat's log, oldest first.
-fn chat_log(thread_id: &str) -> String {
-    let files = THREAD_LOG.files(thread_id);
-    if files.is_empty() {
-        return "empty: nothing was logged for this chat yet, or Chats is Off in Settings → Logging"
-            .into();
+/// The chat's logs from the kept launches before this one, oldest first, each under its launch.
+fn earlier(thread_id: &str) -> String {
+    let mut text = String::new();
+    for path in THREAD_LOG.earlier(thread_id) {
+        let Ok(file) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let launch = path
+            .parent()
+            .and_then(Path::file_name)
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let _ = write!(text, "-- {launch} --\n{}", log_part(&file));
     }
-    files
-        .iter()
-        .filter_map(|path| std::fs::read_to_string(path).ok())
-        .collect()
+    text
 }
 
 /// The warning and error lines of this launch's own log and the window's.
