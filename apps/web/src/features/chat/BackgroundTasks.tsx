@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { SquareIcon } from "@phosphor-icons/react";
 import Spinner from "~/components/Spinner";
 import type { BackgroundTask } from "~/api";
+import { isLiveTask } from "~/lib/threadEvents";
 
 /** What each kind of task the agents report is called here. Any other kind is shown as it comes. */
 const KIND_LABELS: Record<string, string> = {
@@ -37,7 +38,7 @@ export default function BackgroundTasks({
   tasks: BackgroundTask[];
   onStop: (task: BackgroundTask) => void;
 }) {
-  const live = tasks.filter((task) => task.status === "running" || task.status === "waiting");
+  const live = tasks.filter(isLiveTask);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (live.length === 0) return;

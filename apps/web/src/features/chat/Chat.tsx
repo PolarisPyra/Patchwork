@@ -63,7 +63,7 @@ import { useGoalClear } from "~/features/chat/hooks/useGoalClear";
 import { copySelection } from "~/features/chat/lib/textSelection";
 import { useStableHandlers } from "~/hooks/useStableHandlers";
 import type { NewThreadOptions } from "~/hooks/useThreads";
-import { isWorking } from "~/lib/threadEvents";
+import { isLiveTask, isWorking } from "~/lib/threadEvents";
 import { coldLargeSession, threadUsage } from "~/lib/tokens";
 import { displayTitle, errorText } from "~/lib/util";
 
@@ -1037,9 +1037,7 @@ export default function Chat({
           onStop={composerHandlers.onStop}
           goalActive={thread?.goal?.status === "active"}
           working={working}
-          backgroundRunning={background.some(
-            (task) => task.status === "running" || task.status === "waiting",
-          )}
+          backgroundRunning={background.some(isLiveTask)}
           error={
             error ?? (noAgents ? "No agents connected. Turn one on in Settings → Providers." : null)
           }

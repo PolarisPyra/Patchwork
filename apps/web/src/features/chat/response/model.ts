@@ -1,5 +1,6 @@
 import { type Message, type Part, type ToolCall } from "~/api";
 import { fullElapsed } from "~/lib/util";
+import { isLiveTask } from "~/lib/threadEvents";
 
 /**
  * What a turn holds, derived from its message.
@@ -174,6 +175,8 @@ export interface FoldSummary {
   action: string | null;
   /** The turn was cut short by a steer, so it reads as a superseded attempt. */
   superseded: boolean;
+  /** The reply has ended, but tasks it left running, such as background subagents, still are. */
+  waiting: boolean;
 }
 
 /**
@@ -182,7 +185,17 @@ export interface FoldSummary {
  */
 export function foldHeadOf(message: Message, actions: number, open: boolean): FoldSummary {
   const action = actions === 0 ? null : open ? "Hide steps" : countOf(actions);
-  if (message.cutOff) return { label: "Superseded attempt", action, superseded: true };
+  if (message.cutOff) {
+    return { label: "Superseded attempt", action, superseded: true, waiting: false };
+  }
+  // The agent is not done while tasks the reply started still run, so the turn does not read as over.
+  const live = message.background.filter(isLiveTask);
+  if (live.length > 0) {
+    const agents = live.every((t) => t.kind === "agent" || t.kind === "local_agent");
+    const noun = agents ? "subagent" : "background task";
+    const label = `Waiting for ${live.length} ${noun}${live.length === 1 ? "" : "s"}`;
+    return { label, action, superseded: false, waiting: true };
+  }
   const took = message.finishedAt === null ? null : message.finishedAt - message.createdAt;
   const duration = took !== null && took >= 1000 ? fullElapsed(took) : null;
   if (message.status === "cancelled") {
@@ -190,9 +203,15 @@ export function foldHeadOf(message: Message, actions: number, open: boolean): Fo
       label: duration ? `You stopped after ${duration}` : "You stopped the response",
       action,
       superseded: false,
+      waiting: false,
     };
   }
-  return { label: duration ? `Worked for ${duration}` : "Worked", action, superseded: false };
+  return {
+    label: duration ? `Worked for ${duration}` : "Worked",
+    action,
+    superseded: false,
+    waiting: false,
+  };
 }
 
 /**

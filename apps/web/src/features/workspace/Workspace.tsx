@@ -39,7 +39,7 @@ import { useProjectGit } from "~/features/workspace/useProjectGit";
 import { useStableHandlers } from "~/hooks/useStableHandlers";
 import { setRendererLogLevel } from "~/lib/rendererLog";
 import { useThreads } from "~/hooks/useThreads";
-import { isWorking } from "~/lib/threadEvents";
+import { isBusy } from "~/lib/threadEvents";
 import { useCommand, useContextKey, useKeybindings } from "~/lib/shortcuts";
 import { AGENT_KINDS, displayTitle, errorText } from "~/lib/util";
 
@@ -560,7 +560,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
         threadTitle={selected ? displayTitle(selected.title) : null}
         changeCount={changes.length}
         agent={selected?.agent ?? defaultAgent}
-        working={isWorking(selected)}
+        working={isBusy(selected)}
         planMode={selected?.planMode ?? false}
         onOpenChanges={barHandlers.openChanges}
       />

@@ -1,4 +1,11 @@
-import { type AgentEvent, type Message, type Part, type StepStatus, type Thread } from "~/api";
+import {
+  type AgentEvent,
+  type BackgroundTask,
+  type Message,
+  type Part,
+  type StepStatus,
+  type Thread,
+} from "~/api";
 
 /**
  * How a thread changes as its agent streams: one event in, a new thread out. Pure and React-free,
@@ -24,6 +31,19 @@ function endThinking(parts: Part[]): Part[] {
 export function isWorking(thread: Thread | null): boolean {
   if (!thread) return false;
   return thread.messages.some((m) => m.status === "streaming");
+}
+
+/** Whether a task a reply left running, such as a background subagent, is still going. */
+export function isLiveTask(task: BackgroundTask): boolean {
+  return task.status === "running" || task.status === "waiting";
+}
+
+/** True while the agent is at work in the thread: a reply is streaming, or tasks a finished reply
+ * left running, such as background subagents, still are. */
+export function isBusy(thread: Thread | null): boolean {
+  return (
+    isWorking(thread) || (thread?.messages.some((m) => m.background.some(isLiveTask)) ?? false)
+  );
 }
 
 function updateMessage(thread: Thread, messageId: string, fn: (m: Message) => Message): Thread {

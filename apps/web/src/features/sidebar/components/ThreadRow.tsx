@@ -7,7 +7,7 @@ import { useIsRowSelected } from "~/features/sidebar/lib/selectionState";
 import { isPlainPress, selectionFill, type PickModifiers } from "~/features/sidebar/lib/targets";
 import type { Target } from "~/features/sidebar/types";
 import type { RowDrag } from "~/features/sidebar/useRowReorder";
-import { isWorking } from "~/lib/threadEvents";
+import { isBusy } from "~/lib/threadEvents";
 import { displayTitle, formatRelative } from "~/lib/util";
 
 /**
@@ -154,7 +154,7 @@ export const ThreadRow = memo(function ThreadRow({
             >
               <ShieldWarningIcon size={15} />
             </span>
-          ) : isWorking(thread) ? (
+          ) : isBusy(thread) ? (
             <span title="Working" role="img" aria-label="Working" className="inline-flex flex-none">
               <Spinner className="text-accent-text" />
             </span>

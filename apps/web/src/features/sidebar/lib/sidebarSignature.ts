@@ -1,5 +1,5 @@
 import type { Thread } from "~/api";
-import { isWorking } from "~/lib/threadEvents";
+import { isBusy } from "~/lib/threadEvents";
 
 /** Signatures by thread object: a change makes a new object, so each is computed once, not on
  * every streamed update for every thread. */
@@ -29,6 +29,6 @@ function computeSidebarSignature(t: Thread): string {
     t.goal?.status,
     last?.createdAt,
     needsApproval,
-    isWorking(t),
+    isBusy(t),
   ].join("|");
 }

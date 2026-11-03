@@ -19,7 +19,7 @@ export default function FoldHead({
   open: boolean;
   onToggle: () => void;
 }) {
-  const { label, action, superseded } = summary;
+  const { label, action, superseded, waiting } = summary;
   const Caret = open ? CaretDownIcon : CaretRightIcon;
   const closable = action !== null;
   return (
@@ -33,7 +33,8 @@ export default function FoldHead({
         aria-label={closable ? `${label}, ${action}` : undefined}
         className={`${FOLD_CLASS} tabular-nums`}
       >
-        <span>{label}</span>
+        {/* Work still going sweeps the same band a running turn does. */}
+        <span className={waiting ? "text-shimmer" : undefined}>{label}</span>
         {closable && (
           <>
             <span className="text-fg-subtle">{action}</span>

@@ -34,8 +34,8 @@ fn note(id: &str, text: String) {
 /// `app_state` key for the thread the user had open last.
 const LAST_THREAD_KEY: &str = "last_thread_id";
 
-/// `thread` with only its last message and those still streaming, queued, or waiting on an
-/// approval, so listing every thread does not send each one's whole history.
+/// `thread` with only its last message and those still streaming, running background tasks,
+/// queued, or waiting on an approval, so listing every thread does not send each one's whole history.
 fn thread_summary(thread: &Thread) -> Thread {
     let last = thread.messages.len().saturating_sub(1);
     let messages = thread
@@ -45,6 +45,7 @@ fn thread_summary(thread: &Thread) -> Thread {
         .filter(|(i, m)| {
             *i == last
                 || m.status == MessageStatus::Streaming
+                || m.background.iter().any(|task| task.status.is_live())
                 || m.queued
                 || m.approvals
                     .iter()
@@ -60,7 +61,7 @@ fn thread_summary(thread: &Thread) -> Thread {
 
 impl Server {
     /// Every thread, each with only the messages the task list reads: the last one, and any
-    /// still streaming, queued, or waiting on an approval. `thread` returns one in full.
+    /// still streaming, running background tasks, queued, or waiting on an approval. `thread` returns one in full.
     pub fn list_threads(&self) -> Vec<Thread> {
         let mut ts: Vec<Thread> = self
             .store
