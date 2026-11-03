@@ -8,6 +8,9 @@ import { errorText } from "~/lib/util";
 /** The menu's width, so it holds its size as the rows and messages in it change. */
 const MENU_WIDTH = "w-[300px]";
 
+/** The list's width: the menu's, less the 10px scrollbar from `theme.css`. */
+const LIST_WIDTH = "w-[290px]";
+
 const ITEM_CLASS =
   "flex min-w-[200px] cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border-none bg-transparent px-2 py-[5px] text-left whitespace-nowrap text-fg";
 
@@ -103,61 +106,62 @@ function AgentOptions({
       </div>
     );
   // The list scrolls within the menu's height, so a long list stays inside the window. The
-  // scrollbar's space is held from the start, so the text does not shift once the bar shows.
+  // scrollbar's space is held from the start, so the text does not shift once the bar shows. The
+  // rows sit in a column of fixed width: WebKit sizes rows that fill the scroller before its
+  // scrollbar shows and fits them beside it only on the first hover, which moved every ellipsis.
   return (
     <div
-      className={`flex max-h-[min(50vh,24rem)] flex-col overflow-y-auto overscroll-contain [scrollbar-gutter:stable] ${MENU_WIDTH}`}
+      className={`max-h-[min(50vh,24rem)] overflow-y-auto overscroll-contain overflow-x-hidden [scrollbar-gutter:stable] ${MENU_WIDTH}`}
     >
-      {editError && (
-        <div
-          role="alert"
-          className={`px-2 py-1.5 text-[length:var(--fs-sm)] text-danger ${MENU_WIDTH}`}
+      <div className={`flex flex-col ${LIST_WIDTH}`}>
+        {editError && (
+          <div role="alert" className="px-2 py-1.5 text-[length:var(--fs-sm)] text-danger">
+            {editError}
+          </div>
+        )}
+        <button
+          role="menuitemradio"
+          aria-checked={!role}
+          className={`${ITEM_CLASS} hover:bg-hover ${role ? "" : "bg-selected-muted"}`}
+          onClick={() => onPick(null)}
         >
-          {editError}
-        </div>
-      )}
-      <button
-        role="menuitemradio"
-        aria-checked={!role}
-        className={`${ITEM_CLASS} hover:bg-hover ${role ? "" : "bg-selected-muted"}`}
-        onClick={() => onPick(null)}
-      >
-        No agent
-      </button>
-      {agents.map((agent) => (
-        // The row is the hover and selection target, so the pencil lights up with its name. The
-        // pencil sits beside the name button, not inside it, since a button cannot hold a button.
-        <div
-          key={agent.name}
-          className={`group flex items-center rounded-[var(--radius-sm)] hover:bg-hover ${agent.name === role ? "bg-selected-muted" : ""}`}
-        >
-          <button
-            role="menuitemradio"
-            aria-checked={agent.name === role}
-            title={agent.description ? `${agent.name}: ${agent.description}` : agent.name}
-            className={`${ITEM_CLASS} min-w-0 flex-1 flex-col items-start! gap-0.5`}
-            onClick={() => onPick(agent.name)}
+          No agent
+        </button>
+        {agents.map((agent) => (
+          // The row is the hover and selection target, so the pencil lights up with its name. The
+          // pencil sits beside the name button, not inside it, since a button cannot hold a button.
+          <div
+            key={agent.name}
+            className={`group flex items-center rounded-[var(--radius-sm)] hover:bg-hover ${agent.name === role ? "bg-selected-muted" : ""}`}
           >
-            <span className="w-full min-w-0 truncate">{agent.name}</span>
-            {agent.description && (
-              <span className="w-full min-w-0 truncate text-[length:var(--fs-sm)] text-fg-muted">
-                {agent.description}
-              </span>
-            )}
-          </button>
-          {/* Its space is kept while the pencil is hidden, so the menu does not resize on hover. */}
-          <span className="relative mr-1 grid h-6 w-6 flex-none place-items-center">
             <button
-              type="button"
-              className="hover-reveal grid h-6 w-6 cursor-pointer place-items-center rounded-[var(--radius-sm)] border-none bg-transparent p-0 text-fg-muted hover:text-fg"
-              aria-label={`Edit ${agent.name}`}
-              onClick={() => edit(agent)}
+              role="menuitemradio"
+              aria-checked={agent.name === role}
+              title={agent.description ? `${agent.name}: ${agent.description}` : agent.name}
+              className={`${ITEM_CLASS} min-w-0 flex-1 flex-col items-start! gap-0.5`}
+              onClick={() => onPick(agent.name)}
             >
-              <PencilSimpleIcon size={14} />
+              <span className="w-full min-w-0 truncate">{agent.name}</span>
+              {agent.description && (
+                <span className="w-full min-w-0 truncate text-[length:var(--fs-sm)] text-fg-muted">
+                  {agent.description}
+                </span>
+              )}
             </button>
-          </span>
-        </div>
-      ))}
+            {/* Its space is kept while the pencil is hidden, so the menu does not resize on hover. */}
+            <span className="relative mr-1 grid h-6 w-6 flex-none place-items-center">
+              <button
+                type="button"
+                className="hover-reveal grid h-6 w-6 cursor-pointer place-items-center rounded-[var(--radius-sm)] border-none bg-transparent p-0 text-fg-muted hover:text-fg"
+                aria-label={`Edit ${agent.name}`}
+                onClick={() => edit(agent)}
+              >
+                <PencilSimpleIcon size={14} />
+              </button>
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
