@@ -2,7 +2,7 @@
 //!
 //! Every runner prints failing tests its own way, so this knows the shapes of the common ones —
 //! cargo's `failures:` list, pytest's `FAILED` lines, Node's, Jest's and Vitest's `✖`/`FAIL`
-//! lines, Go's `--- FAIL:` — and falls back to the last lines that look like an error. It names
+//! lines, TAP's `not ok`, Go's `--- FAIL:` — and falls back to the last lines that look like an error. It names
 //! what failed and, when the output says why on the next line, keeps that too; the whole output is
 //! kept beside it, so a person can see the rest.
 
@@ -70,6 +70,22 @@ pub fn failures(output: &str) -> Vec<CheckFailure> {
             let rest = rest.trim();
             if !rest.ends_with(':') {
                 push(&mut found, &mut seen, rest);
+                names_failure = true;
+            }
+        } else if let Some(rest) = trimmed.strip_prefix("not ok ") {
+            // TAP, which Node 22's runner prints when its output is not a terminal, as tape and
+            // node-tap do: `not ok 2 - counts a discount`, then a YAML block that says why. A
+            // `# TODO` or `# SKIP` test is not a failure.
+            let name = rest
+                .trim_start_matches(|c: char| c.is_ascii_digit())
+                .trim_start();
+            let name = name.strip_prefix("- ").unwrap_or(name);
+            let directive = name.rsplit_once(" # ").is_some_and(|(_, d)| {
+                let d = d.to_ascii_uppercase();
+                d.starts_with("TODO") || d.starts_with("SKIP")
+            });
+            if !directive {
+                push_with(&mut found, &mut seen, name, tap_reason(&lines[i + 1..]));
                 names_failure = true;
             }
         } else if let Some(rest) = trimmed.strip_prefix("--- FAIL: ") {
@@ -143,8 +159,11 @@ pub fn tests_ran(output: &str) -> Option<u32> {
     let mut said = false;
     for line in output.lines() {
         let line = line.trim();
-        if let Some(rest) = line.strip_prefix("ℹ tests ") {
-            // Node's own runner: `ℹ tests 3`.
+        if let Some(rest) = line
+            .strip_prefix("ℹ tests ")
+            .or_else(|| line.strip_prefix("# tests "))
+        {
+            // Node's own runner: `ℹ tests 3`, or `# tests 3` when it prints TAP.
             ran += number(rest).unwrap_or(0);
             said = true;
         } else if let Some(rest) = line.strip_prefix("test result: ") {
@@ -226,6 +245,41 @@ fn push_with(
         detail: detail.map(|d| cut(&d)).unwrap_or_default(),
     });
     true
+}
+
+/// Why a TAP test failed, from the YAML block under its `not ok` line: the error's name and the
+/// first line of its message, as `AssertionError: Expected values to be strictly equal:`.
+fn tap_reason(below: &[&str]) -> Option<String> {
+    if below.first().map(|l| l.trim()) != Some("---") {
+        return None;
+    }
+    let unquote = |v: &str| v.trim().trim_matches(['\'', '"']).to_string();
+    let (mut kind, mut message) = (None, None);
+    for (j, line) in below.iter().enumerate().skip(1) {
+        let line = line.trim();
+        if line == "..." {
+            break;
+        }
+        if let Some(value) = line.strip_prefix("name: ") {
+            kind = Some(unquote(value));
+        } else if let Some(value) = line.strip_prefix("error: ") {
+            // A block value (`|-`) starts on the next line.
+            message = if value.starts_with('|') || value.starts_with('>') {
+                below
+                    .get(j + 1)
+                    .map(|l| unquote(l))
+                    .filter(|m| !m.is_empty())
+            } else {
+                Some(unquote(value))
+            };
+        }
+    }
+    match (kind, message) {
+        (Some(kind), Some(message)) if !message.starts_with(&kind) => {
+            Some(format!("{kind}: {message}"))
+        }
+        (kind, message) => message.or(kind),
+    }
 }
 
 /// A runner's wrap-up line, which repeats that something failed without saying what: cargo's
