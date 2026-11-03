@@ -39,7 +39,8 @@ pub(crate) fn log_renderer(
     RENDERER.write(level, "", &source, Data::Text(message));
 }
 
-/// Writes the report of a chat (see `logging::report`) and opens it in the default app.
+/// Writes the report of a chat (see `logging::report`) and shows it selected in the file manager,
+/// in front, among the other logs.
 #[tauri::command]
 pub(crate) async fn open_thread_logs(
     app: AppHandle,
@@ -48,7 +49,8 @@ pub(crate) async fn open_thread_logs(
 ) -> Res<()> {
     let server = server.inner().clone();
     let path = blocking(move || server.thread_report(&thread_id)).await??;
-    open_in_viewer(&app, &path).await
+    let token = activation::token(&app).await;
+    blocking(move || reveal_in_file_manager(&app, &path, token.as_deref())).await?
 }
 
 /// Saves the kept sessions' logs as a zip at `path`, with `system.json`: what Patchwork runs on
