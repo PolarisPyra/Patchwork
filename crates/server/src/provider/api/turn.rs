@@ -258,7 +258,7 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
                 usage: TokenUsage {
                     input: count("input"),
                     cache_read: count("cacheRead"),
-                    cache_write: 0,
+                    cache_write: count("cacheWrite"),
                     output: count("output"),
                     context: count("context"),
                 },

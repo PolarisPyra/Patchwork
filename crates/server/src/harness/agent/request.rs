@@ -61,24 +61,65 @@ struct Messages<'a> {
     pub(super) system: &'a str,
     pub(super) history: &'a [Value],
     pub(super) last_user: usize,
+    /// The cache mark, when the model caches only up to marked points: it goes on the system
+    /// prompt and on the latest message with text.
+    pub(super) mark: Option<&'a Value>,
 }
 
 impl Serialize for Messages<'_> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut seq = serializer.serialize_seq(Some(self.history.len() + 1))?;
-        seq.serialize_element(&json!({"role": "system", "content": self.system}))?;
+        let system = match self.mark {
+            Some(mark) => json!([{"type": "text", "text": self.system, "cache_control": mark}]),
+            None => json!(self.system),
+        };
+        seq.serialize_element(&json!({"role": "system", "content": system}))?;
+        let marked = self
+            .mark
+            .and_then(|_| self.history.iter().rposition(has_text));
         for (i, m) in self.history.iter().enumerate() {
-            if i < self.last_user && m.get("reasoning_content").is_some() {
-                let mut m = m.clone();
-                if let Some(obj) = m.as_object_mut() {
-                    obj.remove("reasoning_content");
-                }
-                seq.serialize_element(&m)?;
-            } else {
+            let strip = i < self.last_user && m.get("reasoning_content").is_some();
+            if !strip && Some(i) != marked {
                 seq.serialize_element(m)?;
+                continue;
             }
+            let mut m = m.clone();
+            if strip && let Some(obj) = m.as_object_mut() {
+                obj.remove("reasoning_content");
+            }
+            if Some(i) == marked
+                && let Some(mark) = self.mark
+            {
+                mark_text(&mut m, mark);
+            }
+            seq.serialize_element(&m)?;
         }
         seq.end()
+    }
+}
+
+/// Whether a message has text a cache mark can go on.
+fn has_text(message: &Value) -> bool {
+    match &message["content"] {
+        Value::String(text) => !text.is_empty(),
+        Value::Array(parts) => parts.iter().any(|p| p["type"] == "text"),
+        _ => false,
+    }
+}
+
+/// Puts the cache mark on a message's last text, turning plain text into a text part to hold it.
+fn mark_text(message: &mut Value, mark: &Value) {
+    let Some(content) = message.get_mut("content") else {
+        return;
+    };
+    if let Some(text) = content.as_str().filter(|t| !t.is_empty()) {
+        *content = json!([{"type": "text", "text": text, "cache_control": mark}]);
+    } else if let Some(part) = content
+        .as_array_mut()
+        .and_then(|parts| parts.iter_mut().rev().find(|p| p["type"] == "text"))
+        .and_then(Value::as_object_mut)
+    {
+        part.insert("cache_control".into(), mark.clone());
     }
 }
 
@@ -89,9 +130,12 @@ struct Body<'a> {
     pub(super) stream: bool,
     pub(super) stream_options: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(super) tools: Option<&'a Value>,
+    pub(super) tools: Option<Cow<'a, Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) reasoning_effort: Option<&'a str>,
+    /// Routes the conversation's requests to the machine that holds its cached prefix.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) prompt_cache_key: Option<&'a str>,
 }
 
 /// One reply of the model.
@@ -123,20 +167,25 @@ pub(super) struct Call {
     pub(super) arguments: String,
 }
 
-/// Reports a request's tokens: OpenAI's cached-token details, or DeepSeek's cache hit count.
-/// Returns the tokens of the request and its reply.
+/// Reports a request's tokens. Cache hits are OpenAI's and OpenRouter's cached-token details,
+/// DeepSeek's hit count, or Kimi's top-level count; OpenRouter also counts the tokens a request
+/// wrote to the cache. The prompt's count includes both. Returns the tokens of the request and
+/// its reply.
 fn emit_usage(usage: &Value) -> u64 {
     let count = |v: &Value| v.as_u64().unwrap_or(0);
     let prompt = count(&usage["prompt_tokens"]);
     let cached = usage["prompt_tokens_details"]["cached_tokens"]
         .as_u64()
         .or_else(|| usage["prompt_cache_hit_tokens"].as_u64())
+        .or_else(|| usage["cached_tokens"].as_u64())
         .unwrap_or(0);
+    let written = count(&usage["prompt_tokens_details"]["cache_write_tokens"]);
     emit(&json!({
         "type": "api.usage",
         "id": uuid::Uuid::new_v4().to_string(),
-        "input": prompt.saturating_sub(cached),
+        "input": prompt.saturating_sub(cached + written),
         "cacheRead": cached,
+        "cacheWrite": written,
         "output": count(&usage["completion_tokens"]),
         "context": prompt,
     }));
@@ -166,6 +215,20 @@ fn retry_delay(attempt: u32, retry_after: Option<u64>) -> Duration {
 }
 
 impl Agent {
+    /// Whether the endpoint is on `host`, such as `openrouter.ai`.
+    fn on_host(&self, host: &str) -> bool {
+        self.request.base_url.to_lowercase().contains(host)
+    }
+
+    /// The mark a model that caches only up to marked points needs, as Claude models through
+    /// OpenRouter do; None for the rest, which cache the longest prefix a request shares with
+    /// earlier ones on their own. Requests here only append to the conversation, so that prefix
+    /// is everything up to the latest message.
+    fn cache_mark(&self) -> Option<Value> {
+        (self.on_host("openrouter.ai") && self.request.model.starts_with("anthropic/"))
+            .then(|| json!({"type": "ephemeral"}))
+    }
+
     /// The model's context window as the endpoint reports it: the size LM Studio loaded the model
     /// with, which can be far below its maximum, or what `/models` lists for it (vLLM's
     /// `max_model_len`, OpenRouter's `context_length`, Groq's `context_window`). None when the
@@ -232,17 +295,36 @@ impl Agent {
                 .rposition(|m| m["role"] == "user")
                 .unwrap_or(0)
         });
+        let mark = self.cache_mark();
+        let tools = tools.map(|tools| match &mark {
+            Some(mark) => {
+                let mut tools = tools.clone();
+                if let Some(last) = tools
+                    .as_array_mut()
+                    .and_then(|list| list.last_mut())
+                    .and_then(Value::as_object_mut)
+                {
+                    last.insert("cache_control".into(), mark.clone());
+                }
+                Cow::Owned(tools)
+            }
+            None => Cow::Borrowed(tools),
+        });
         let body = Body {
             model: &self.request.model,
             messages: Messages {
                 system: &self.system,
                 history: &history,
                 last_user,
+                mark: mark.as_ref(),
             },
             stream: true,
             stream_options: json!({"include_usage": true}),
             tools,
             reasoning_effort: self.request.effort.as_deref(),
+            prompt_cache_key: self
+                .on_host("api.openai.com")
+                .then_some(self.session_id.as_str()),
         };
         let body = serde_json::to_string(&body).map_err(|e| e.to_string())?;
         let has_images = self.messages.iter().any(|m| {
@@ -262,6 +344,10 @@ impl Agent {
                 .header("Content-Type", "application/json");
             if let Some(key) = &self.request.api_key {
                 request = request.header("Authorization", &format!("Bearer {key}"));
+            }
+            // OpenRouter routes a session's requests to the provider that holds its cache.
+            if self.on_host("openrouter.ai") {
+                request = request.header("x-session-id", &self.session_id);
             }
             for (name, value) in &self.request.headers {
                 request = request.header(name, value);
