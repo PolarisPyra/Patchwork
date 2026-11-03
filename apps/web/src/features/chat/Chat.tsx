@@ -115,7 +115,7 @@ interface ChatProps {
   onUpdatePermissions: (change: (p: PermissionSettings) => PermissionSettings) => void;
   /** Opens Settings → Permissions on a scope, with one of its rules picked out. */
   onOpenPermissions: (scope: PermissionScope, ruleId?: string) => void;
-  /** Settings → Checks, for the switch on a reply's Checks card. */
+  /** Settings → Projects, for the switch on a reply's Checks card. */
   checkSettings: CheckSettings;
   onSetProjectChecks: (projectId: string, on: boolean) => void;
 }

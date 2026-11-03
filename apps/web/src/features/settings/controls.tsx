@@ -65,6 +65,15 @@ export function TokenRow({
   );
 }
 
+/** A heading over a run of rows, for a pane that holds more than one kind of setting. */
+export function SectionHeading({ children }: { children: ReactNode }) {
+  return (
+    <h3 className="m-0 mt-4 mb-0.5 text-[length:var(--fs-sm)] font-medium text-fg-subtle first:mt-0">
+      {children}
+    </h3>
+  );
+}
+
 export function TokenSwitch({
   label,
   on,

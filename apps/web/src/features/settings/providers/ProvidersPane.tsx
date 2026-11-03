@@ -52,8 +52,6 @@ function CliInstall({ kind, onInstalled }: { kind: CliKind; onInstalled: () => v
   );
 }
 
-/** One row per CLI: whether it is installed, where it is, and whether Patchwork connects to it. */
-
 /** A provider's system prompt, with Save and Cancel under the field. Save waits for `onSave`
  * and shows its error here; the parent closes the editor once it has saved. */
 function PromptEditor({
@@ -137,6 +135,7 @@ function SystemPrompt({
   );
 }
 
+/** One row per CLI: whether it is installed, where it is, and whether Patchwork connects to it. */
 function CliProviderRows({ settings, updateSettings }: PaneProps) {
   const [prompting, setPrompting] = useState<AgentKind | null>(null);
   const [status, setStatus] = useState<Partial<Record<AgentKind, AgentStatus | null>>>({});

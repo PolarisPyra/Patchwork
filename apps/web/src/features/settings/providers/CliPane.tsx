@@ -1,35 +1,94 @@
 import { useEffect, useState } from "react";
 import { MagnifyingGlassIcon, StethoscopeIcon } from "@phosphor-icons/react";
-import { api, type ClaudeInfo, type Settings } from "~/api";
-import type { UpdateSettings } from "~/api";
-import { INPUT, chip, TokenRow } from "~/features/settings/controls";
+import { api } from "~/api";
+import { INPUT, Segmented, chip } from "~/features/settings/controls";
 import { errorText, tildify } from "~/lib/util";
 
+/** The CLIs whose flags and model catalog Patchwork can read. */
+type DetailsKind = "claude" | "codex";
+
+/** Claude Code's and Codex's readings in one shape, so one view draws both. */
+interface Details {
+  path: string;
+  version: string;
+  /** `kept` is whether the filter chip keeps the flag. */
+  features: { name: string; detail: string; enabled: boolean | null; kept: boolean }[];
+  models: {
+    id: string;
+    name: string;
+    contextWindow: number | null;
+    efforts: string[];
+    tag: string | null;
+  }[];
+}
+
 /**
- * Settings → Claude CLI: what the installed Claude Code offers. Claude Code prints neither its
- * feature gates nor its model catalog, so the pane shows the gates the CLI itself has cached in
- * `.claude.json` and the catalog it has fetched into `~/.claude/cache`, so a newer Claude Code
- * shows up as it is rather than as a copy of a list from an older release.
+ * Claude Code prints neither its feature gates nor its model catalog, so its reading is the gates
+ * the CLI itself has cached in `.claude.json` and the catalog it has fetched into
+ * `~/.claude/cache`. Codex's flags and catalog are read from the binary itself. Either way a newer
+ * CLI shows up as it is rather than as a copy of a list from an older release.
  */
-export default function ClaudePane({
-  settings,
-}: {
-  settings: Settings;
-  updateSettings: UpdateSettings;
-}) {
-  const [info, setInfo] = useState<ClaudeInfo | null>(null);
+const CLIS: Record<
+  DetailsKind,
+  {
+    name: string;
+    read: () => Promise<Details>;
+    command: (kind: "doctor" | "mcp" | "plugins") => Promise<string>;
+    filter: string;
+    empty: string;
+  }
+> = {
+  claude: {
+    name: "claude",
+    read: async () => {
+      const info = await api.claudeInfo();
+      return {
+        ...info,
+        features: info.features.map((f) => ({ ...f, detail: f.value, kept: f.enabled === true })),
+        models: info.models.map((m) => ({ ...m, tag: m.fastMode ? "fast" : null })),
+      };
+    },
+    command: api.claudeCommand,
+    filter: "On only",
+    empty: "Claude Code has not cached its feature gates yet. Start it once, then read again.",
+  },
+  codex: {
+    name: "codex",
+    read: async () => {
+      const info = await api.codexInfo();
+      return {
+        ...info,
+        features: info.features.map((f) => ({ ...f, detail: f.stage, kept: f.stage === "stable" })),
+        models: info.models.map((m) => ({
+          ...m,
+          id: m.slug,
+          name: m.displayName,
+          tag: m.multiAgent,
+        })),
+      };
+    },
+    command: api.codexCommand,
+    filter: "Stable only",
+    empty: "Nothing matches.",
+  },
+};
+
+/** What the installed CLI offers: its version, its flags, its models, and its own diagnostics. */
+function CliDetails({ kind }: { kind: DetailsKind }) {
+  const cli = CLIS[kind];
+  const [info, setInfo] = useState<Details | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [onOnly, setOnOnly] = useState(false);
+  const [filtered, setFiltered] = useState(false);
   const [output, setOutput] = useState<{ title: string; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    api
-      .claudeInfo()
+    cli
+      .read()
       .then(setInfo)
       .catch((e: unknown) => setError(errorText(e)));
-  }, []);
+  }, [cli]);
 
   function run(action: () => Promise<unknown>) {
     setError(null);
@@ -39,12 +98,12 @@ export default function ClaudePane({
       .finally(() => setBusy(false));
   }
 
-  function command(kind: "doctor" | "mcp" | "plugins", title: string) {
+  function command(which: "doctor" | "mcp" | "plugins", title: string) {
     setOutput(null);
     run(async () =>
       setOutput({
-        title,
-        text: (await api.claudeCommand(kind)) || "Nothing to report.",
+        title: `${cli.name} ${title}`,
+        text: (await cli.command(which)) || "Nothing to report.",
       }),
     );
   }
@@ -53,15 +112,26 @@ export default function ClaudePane({
   const all = info?.features ?? [];
   const features = all.filter(
     (feature) =>
-      (!onOnly || feature.enabled === true) &&
-      (!q || `${feature.name} ${feature.value}`.toLowerCase().includes(q)),
+      (!filtered || feature.kept) &&
+      (!q || `${feature.name} ${feature.detail}`.toLowerCase().includes(q)),
   );
   const enabled = all.filter((feature) => feature.enabled === true).length;
 
   return (
     <>
       {info === null && (
-        <div className="py-2.5 text-fg-muted">{error ?? "Reading Claude Code…"}</div>
+        <div className="flex items-center gap-2 text-fg-muted">
+          {error ?? "Reading…"}
+          {error && (
+            <button
+              className="btn"
+              disabled={busy}
+              onClick={() => run(async () => setInfo(await cli.read()))}
+            >
+              Read again
+            </button>
+          )}
+        </div>
       )}
       {info && (
         <>
@@ -75,11 +145,11 @@ export default function ClaudePane({
 
           <div className="flex flex-wrap items-center gap-1.5 pb-2">
             <button
-              className={chip(onOnly)}
-              aria-pressed={onOnly}
-              onClick={() => setOnOnly(!onOnly)}
+              className={chip(filtered)}
+              aria-pressed={filtered}
+              onClick={() => setFiltered(!filtered)}
             >
-              On only
+              {cli.filter}
             </button>
             <label className="relative w-52">
               <MagnifyingGlassIcon
@@ -96,27 +166,26 @@ export default function ClaudePane({
               />
             </label>
             <span className="ml-auto flex gap-1.5">
-              <button
-                className="btn"
-                disabled={busy}
-                onClick={() => command("doctor", "claude doctor")}
-              >
+              <button className="btn" disabled={busy} onClick={() => command("doctor", "doctor")}>
                 <StethoscopeIcon size={13} />
                 Doctor
               </button>
-              <button
-                className="btn"
-                disabled={busy}
-                onClick={() => command("mcp", "claude mcp list")}
-              >
+              <button className="btn" disabled={busy} onClick={() => command("mcp", "mcp list")}>
                 MCP servers
               </button>
               <button
                 className="btn"
                 disabled={busy}
-                onClick={() => command("plugins", "claude plugin list")}
+                onClick={() => command("plugins", "plugin list")}
               >
                 Plugins
+              </button>
+              <button
+                className="btn"
+                disabled={busy}
+                onClick={() => run(async () => setInfo(await cli.read()))}
+              >
+                Read again
               </button>
             </span>
           </div>
@@ -145,9 +214,9 @@ export default function ClaudePane({
                     </td>
                     <td
                       className="max-w-[260px] truncate px-2 py-1 text-right font-[family-name:var(--font-mono)] text-[11px] text-fg-muted"
-                      title={feature.value}
+                      title={feature.detail}
                     >
-                      {feature.value}
+                      {feature.detail}
                     </td>
                     <td className="w-8 px-2 py-1 text-right whitespace-nowrap">
                       {feature.enabled === true && <span className="text-accent-text">on</span>}
@@ -159,9 +228,7 @@ export default function ClaudePane({
             </table>
             {features.length === 0 && (
               <div className="px-3 py-4 text-center text-fg-muted">
-                {all.length === 0
-                  ? "Claude Code has not cached its feature gates yet. Start it once, then read again."
-                  : "Nothing matches."}
+                {all.length === 0 ? cli.empty : "Nothing matches."}
               </div>
             )}
           </div>
@@ -177,9 +244,9 @@ export default function ClaudePane({
                   <span className="flex-none text-[length:var(--fs-xs)] text-fg-muted">
                     {model.efforts.join(" · ")}
                   </span>
-                  {model.fastMode && (
+                  {model.tag && (
                     <span className="flex-none rounded-[var(--radius-sm)] bg-selected-muted px-1.5 text-[length:var(--fs-xs)] text-fg-muted">
-                      fast
+                      {model.tag}
                     </span>
                   )}
                 </div>
@@ -194,21 +261,24 @@ export default function ClaudePane({
           {error}
         </div>
       )}
+    </>
+  );
+}
 
-      <div className="mt-3">
-        <TokenRow
-          title="The CLI in use"
-          desc={
-            settings.agentPaths.claude
-              ? "The Claude Code you located under Providers."
-              : "Claude Code on PATH. Set a path under Providers to use another copy."
-          }
-        >
-          <button className="btn" onClick={() => run(async () => setInfo(await api.claudeInfo()))}>
-            Read again
-          </button>
-        </TokenRow>
+const KINDS: { value: DetailsKind; label: string }[] = [
+  { value: "claude", label: "Claude Code" },
+  { value: "codex", label: "Codex" },
+];
+
+/** Settings → CLIs: Claude Code's or Codex's reading, one at a time. */
+export default function CliPane() {
+  const [kind, setKind] = useState<DetailsKind>("claude");
+  return (
+    <>
+      <div className="pb-3">
+        <Segmented label="CLI" value={kind} options={KINDS} onChange={setKind} />
       </div>
+      <CliDetails key={kind} kind={kind} />
     </>
   );
 }

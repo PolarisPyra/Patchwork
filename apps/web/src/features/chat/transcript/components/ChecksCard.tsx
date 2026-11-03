@@ -10,7 +10,7 @@ import { api, type CheckSettings, type CheckStatus, type TurnChecks } from "~/ap
 import Spinner from "~/components/Spinner";
 import { errorText, fullElapsed } from "~/lib/util";
 
-/** Settings → Checks as the app holds it, so the card's switch saves through the same settings
+/** The checks settings as the app holds them, so the card's switch saves through the same settings
  * and the next save of any other setting keeps it. */
 export interface ChecksContextValue {
   settings: CheckSettings;
@@ -23,7 +23,7 @@ export const ChecksContext = createContext<ChecksContextValue | null>(null);
  * What the project's own checks made of a reply's turn, under the files it changed.
  *
  * Shown only for a reply whose checks ran, or that the person asked to check: a project with its
- * checks off leaves no card at all, and Settings → Checks is where they are turned on. The footer
+ * checks off leaves no card at all, and Settings → Projects is where they are turned on. The footer
  * turns them on or off for the project's next replies, through `ChecksContext`.
  *
  * "Passed" is only ever a command that exited zero having run something: one stopped at its time

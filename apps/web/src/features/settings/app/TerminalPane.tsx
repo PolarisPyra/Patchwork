@@ -1,30 +1,97 @@
-import { XIcon } from "@phosphor-icons/react";
-import { defaultTerminalSettings, type TerminalSettings } from "~/api";
+import { useEffect, useState } from "react";
+import { CaretDownIcon, XIcon } from "@phosphor-icons/react";
+import { api, defaultTerminalSettings, type ShellChoices, type TerminalSettings } from "~/api";
+import { CHIP_CLASS } from "~/components/chip";
+import Dropdown from "~/components/Dropdown";
 import {
   NumberField,
+  SectionHeading,
   Segmented,
   TextField,
   TokenRow,
   TokenSwitch,
 } from "~/features/settings/controls";
 import type { PaneProps } from "~/features/settings/types";
+import { baseName, errorText } from "~/lib/util";
 
 const isMacPlatform = /Mac|iPhone|iPad/.test(navigator.platform);
 
-/** The integrated terminal, with VS Code's `terminal.integrated.*` settings. The shell is the
- * Environment pane's. */
+/** The shell agents and the terminal run commands in. Shells come from /etc/shells, or on Windows
+ * the installed Git Bash, PowerShell, and cmd; a saved shell that is no longer listed stays in the
+ * menu so the choice is still visible. */
+function ShellPicker({ settings, updateSettings }: PaneProps) {
+  const [choices, setChoices] = useState<ShellChoices>({ shells: [], default: null });
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.listShells().then(setChoices, (e) => setError(errorText(e)));
+  }, []);
+
+  const { shells, default: fallback } = choices;
+  const shell = settings.shell ?? "";
+  const options = shell && !shells.includes(shell) ? [shell, ...shells] : shells;
+  const choose = (path: string | null) => void updateSettings((s) => ({ ...s, shell: path }));
+  return (
+    <>
+      <TokenRow title="Shell" desc="The shell agents and the terminal run commands in">
+        <Dropdown
+          alignEnd
+          label="Shell"
+          trigger={({ open, toggle }) => (
+            <button
+              className={`${CHIP_CLASS} !bg-transparent !text-fg-muted`}
+              aria-haspopup="menu"
+              aria-expanded={open}
+              aria-label={`Shell: ${shell ? baseName(shell) : "System default"}`}
+              title={shell || `Follows your login shell${fallback ? ` (${fallback})` : ""}`}
+              onClick={toggle}
+            >
+              <span>{shell ? baseName(shell) : "System default"}</span>
+              <CaretDownIcon size={14} />
+            </button>
+          )}
+        >
+          {(close) => (
+            <div className="max-h-[240px] overflow-y-auto">
+              {[null, ...options].map((path) => (
+                <button
+                  key={path ?? "default"}
+                  role="menuitemradio"
+                  aria-checked={path === (shell || null)}
+                  title={path ?? undefined}
+                  className={`flex w-full min-w-[160px] cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border-none bg-transparent px-2 py-[5px] text-left whitespace-nowrap text-fg hover:bg-hover ${path === (shell || null) ? "bg-selected-muted" : ""}`}
+                  onClick={() => {
+                    close();
+                    choose(path);
+                  }}
+                >
+                  {path
+                    ? baseName(path)
+                    : `System default${fallback ? ` (${baseName(fallback)})` : ""}`}
+                </button>
+              ))}
+            </div>
+          )}
+        </Dropdown>
+      </TokenRow>
+      {error && (
+        <div role="alert" className="text-[length:var(--fs-sm)] text-danger">
+          {error}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** The shell, and how the integrated terminal starts, looks, and behaves. */
 export default function TerminalPane({ settings, updateSettings }: PaneProps) {
   const t = settings.terminal;
   const set = (patch: Partial<TerminalSettings>) =>
     void updateSettings((s) => ({ ...s, terminal: { ...s.terminal, ...patch } }));
-  const heading = (text: string) => (
-    <h3 className="m-0 mt-4 mb-0.5 text-[length:var(--fs-sm)] font-medium text-fg-subtle first:mt-0">
-      {text}
-    </h3>
-  );
   return (
     <>
-      {heading("Shell")}
+      <SectionHeading>Shell</SectionHeading>
+      <ShellPicker settings={settings} updateSettings={updateSettings} />
       <TokenRow title="Shell arguments">
         <TextField
           label="Shell arguments"
@@ -62,7 +129,7 @@ export default function TerminalPane({ settings, updateSettings }: PaneProps) {
       </TokenRow>
       <EnvEditor env={t.env} onChange={(env) => set({ env })} />
 
-      {heading("Appearance")}
+      <SectionHeading>Appearance</SectionHeading>
       <TokenRow title="Font">
         <TextField
           label="Font"
@@ -160,7 +227,7 @@ export default function TerminalPane({ settings, updateSettings }: PaneProps) {
         />
       </TokenRow>
 
-      {heading("Behavior")}
+      <SectionHeading>Behavior</SectionHeading>
       <TokenRow title="Scrollback" desc="Lines kept above the screen">
         <NumberField
           label="Scrollback"
