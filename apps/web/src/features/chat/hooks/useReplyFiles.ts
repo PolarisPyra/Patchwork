@@ -13,16 +13,18 @@ export interface ReplyFiles {
   media: FileMedia[] | null;
 }
 
-/** The state of a reply's `paths`, loaded once for the whole reply. */
+/** The state of a reply's `paths`, loaded once for the whole reply. While its files change, as
+ * they do all through a turn, the last state shows until the next one loads. */
 export function useReplyFiles(
+  replyId: string,
   projectId: string | null,
   turn: TurnTrees | null | undefined,
   paths: string[],
   changes: FileChange[],
 ): ReplyFiles {
   return {
-    turnFiles: useTurnFiles(projectId, turn, paths, changes),
-    missing: useMissingFiles(projectId, paths, changes),
-    media: useFileMedia(projectId, paths, changes),
+    turnFiles: useTurnFiles(projectId, turn, paths, changes, replyId),
+    missing: useMissingFiles(projectId, paths, changes, replyId),
+    media: useFileMedia(projectId, paths, changes, replyId),
   };
 }

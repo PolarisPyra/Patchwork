@@ -5,6 +5,9 @@ export interface AsyncCache<T> {
   store: Map<string, T>;
   /** Names everything `load` reads, as the deps do. */
   key: string;
+  /** What the result is about, such as one reply. While it stays the same, the last result shows
+   * until the next one loads, so a reply's files do not blink out each time they change. */
+  subject?: string;
 }
 
 // How many versions of the changes a hook keeps results for: enough to go back and forth between
@@ -32,9 +35,10 @@ export function cachePerChanges<T>(): (changes: object) => Map<string, T> {
   };
 }
 
-/** A result and the deps it was loaded for. */
+/** A result, and the deps and subject it was loaded for. */
 interface Loaded<T> {
   deps: readonly unknown[];
+  subject?: string;
   value: T;
 }
 
@@ -48,18 +52,20 @@ function sameInputs(a: readonly unknown[], b: readonly unknown[]): boolean {
  * `load` is null. A load that settles after its inputs changed is dropped, and with a `cache` a
  * result already kept there is used instead of loading.
  *
- * A result is only ever returned for the inputs it was loaded for. That matters because the
- * transcript's list outlives the chat it shows: a row reused for another reply would otherwise
- * keep the last one's files and thumbnails on screen until its own load settled.
+ * A result is only ever returned for the inputs it was loaded for, or, while the next one loads,
+ * for the same `cache.subject`. That matters because the transcript's list outlives the chat it
+ * shows: a row reused for another reply would otherwise keep the last one's files and thumbnails
+ * on screen until its own load settled.
  */
 export function useAsync<T>(
   load: (() => Promise<T>) | null,
   deps: readonly unknown[],
   cache?: AsyncCache<T>,
 ): T | null {
+  const subject = cache?.subject;
   const [loaded, setLoaded] = useState<Loaded<T> | null>(() => {
     const kept = load && cache ? cache.store.get(cache.key) : undefined;
-    return kept === undefined ? null : { deps, value: kept };
+    return kept === undefined ? null : { deps, subject, value: kept };
   });
   useEffect(() => {
     if (!load) {
@@ -68,14 +74,14 @@ export function useAsync<T>(
     }
     const kept = cache?.store.get(cache.key);
     if (kept !== undefined) {
-      setLoaded({ deps, value: kept });
+      setLoaded({ deps, subject, value: kept });
       return;
     }
     let live = true;
     load().then(
       (found) => {
         cache?.store.set(cache.key, found);
-        if (live) setLoaded({ deps, value: found });
+        if (live) setLoaded({ deps, subject, value: found });
       },
       () => {},
     );
@@ -85,8 +91,12 @@ export function useAsync<T>(
     // The caller lists what `load` reads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
+  if (!load) return null;
   // Read during render as well, so a remount shows a kept result without a frame of nothing.
-  const kept = load && cache ? cache.store.get(cache.key) : undefined;
+  const kept = cache?.store.get(cache.key);
   if (kept !== undefined) return kept;
-  return loaded && sameInputs(loaded.deps, deps) ? loaded.value : null;
+  if (!loaded) return null;
+  const same =
+    sameInputs(loaded.deps, deps) || (subject !== undefined && loaded.subject === subject);
+  return same ? loaded.value : null;
 }

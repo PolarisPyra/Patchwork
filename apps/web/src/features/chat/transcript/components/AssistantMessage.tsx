@@ -59,7 +59,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   const clearsGoal = retryMessage !== null && isGoalClearCommand(retryMessage.text);
   // The compacted divider above already says how a /compact is going.
   const compacts = retryMessage !== null && isCompactCommand(retryMessage.text);
-  const replyFiles = useReplyFiles(projectId, message.turn, message.files, changes);
+  const replyFiles = useReplyFiles(message.id, projectId, message.turn, message.files, changes);
   // A file with nothing left to diff opens on its contents instead.
   const openFile =
     onOpenCanvas &&
