@@ -209,12 +209,17 @@ pub fn without_leading_attachments(text: &str, is_file: impl Fn(&str) -> bool) -
 }
 
 /// A thread title from the first line of a message that is not a code fence, without a
-/// leading `/goal`.
+/// leading `/goal`. A line of only punctuation, such as the `{` pasted JSON opens with, is
+/// passed over for the first line with a letter or digit.
 pub fn title_from(text: &str) -> String {
-    let line = text
+    let mut lines = text
         .lines()
         .map(str::trim)
-        .find(|l| !l.is_empty() && !l.starts_with("```"))
+        .filter(|l| !l.is_empty() && !l.starts_with("```"));
+    let line = lines
+        .clone()
+        .find(|l| l.chars().any(char::is_alphanumeric))
+        .or_else(|| lines.next())
         .unwrap_or("");
     let objective = provider::goal_argument(line).unwrap_or(line);
     let title = if objective.is_empty() {
