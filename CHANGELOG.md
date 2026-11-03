@@ -3,6 +3,33 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.2] - 2026-11-03
+
+### Added
+
+- Each chat now keeps its own log, and a chat's right-click menu in the sidebar has Open logs, which opens a report of what Patchwork runs on, the chat's settings, how each reply went and the chat's log, with secrets and your name left out, ready to send when something goes wrong. Settings → Logging lists the chat logs and has a switch to hide Open logs from the menu.
+
+### Changed
+
+- The images and other files a reply made now sit in a neat list above the changed files, one row each with a small preview, its type and its size, instead of cards of different sizes scattered across the chat. It shows the first three, and the rest are a click away in the changes view.
+- The Agent chip in the chat box, and the Agents entry in Settings, show the robot again instead of an identity card.
+- Each launch's log folder now holds only files, with no folders inside, so it zips up and sends as it is, and a chat's own log and the report its Open logs writes sit side by side. Settings → Chats and threads is now Settings → Chats, and a chat or task that no longer exists is reported as "Chat not found" everywhere.
+- Chats with API providers such as OpenRouter, DeepSeek, OpenAI and Kimi now reuse the part of the conversation the provider has already seen, so long chats cost less and answer sooner. The token counts under a reply now include what was read from the cache and written to it.
+
+### Fixed
+
+- A Claude reply that fails while a command it started keeps running in the background, such as a dev server, now ends right away with its error instead of looking like it is still working until the command stops. Your next message gets an answer as usual, and the command's result still shows when it ends.
+- In the chat box's agent menu, each agent's description now stays cut off at the same spot. Moving the mouse over the menu no longer shifts where the dots fall.
+- Copying text from a chat and pasting it into a terminal or another app now gives just the words you see, without the backticks, asterisks and other formatting marks it used to carry. Pasting it into the chat box still keeps its code, bold text, lists and tables.
+- The Checks card under a reply now names the test that failed, and why, for projects tested with Node 22's built-in test runner. Before, it listed stray lines from the test output instead, and a run that found no tests counted as a pass.
+- The files a reply changed, and the pictures and file cards in the chat, no longer blink out and back each time the reply updates while it is still working. They stay in place until the new list is ready.
+- Sending, queueing and stopping in a chat are more dependable: a new chat shows as working until its first reply begins, a queued message is no longer lost when a reply ends at the same moment, and Stop no longer freezes when an agent stops responding or is pressed before a reply starts. A scheduled task that cannot start no longer leaves an empty chat in the sidebar, a terminal you close always ends, and failed saves in Settings now go back to what was there and say so.
+- A chat whose reply has finished but left subagents or other background tasks running now shows as working: the status bar no longer says Idle, the sidebar shows its spinner, and the reply's top line reads "Waiting for 3 subagents" with the moving highlight until they finish.
+- Check again on the setup screen now finds an agent you installed after opening Patchwork. Before, it kept showing the agent as not installed until Patchwork restarted.
+- On Windows, Patchwork now finds an agent or tool whose install folder uses a setting the installer created while Patchwork was open, such as the folders nvm for Windows adds. Before, it was only found after restarting Patchwork.
+- A reply that edits the same file several times in a row is no longer stopped with "the agent called Edit 8 times in a row without getting anywhere". Each change to a file now counts as progress, so only calls that really repeat with the same result stop the reply.
+- The task list above the chat box now folds away a moment after a reply ends, also when the reply stopped or failed partway. Before, a list left half done stayed on screen with its progress bar until you sent another message, so the chat looked busy when nothing was running.
+
 ## [26.11.1] - 2026-11-02
 
 ### Added
