@@ -1,19 +1,23 @@
 name: Release
 
-# Releases Patchwork every hour, when main has a commit with a Changelog: paragraph for users since
-# the last release: it checks main with the CI workflow, cuts the next YY.M.N version, tags it, then
-# builds the Linux AppImage, the Windows installer, and the macOS (Apple silicon) disk image and app
-# bundle, publishes them to updates.patchworkeditor.com, and creates the GitHub release with the
-# tag's notes, then points the website at the new release and deploys it. A tag pushed by
-# `scripts/release.sh` is built and published the same way.
-# scripts/release.sh does the work, and docs/release.md explains it.
+# Runs after each push to main that passes the CI workflow. While a commit since the last release
+# has a Changelog: paragraph for users, it keeps one "Release vYY.M.N" pull request up to date: the
+# next version and its notes, one commit on top of the commit the checks passed on. Merging that
+# pull request with a merge commit releases it: the run after the merge tags it, then builds the
+# Linux AppImage, the Windows installer, and the macOS (Apple silicon) disk image and app bundle,
+# publishes them to updates.patchworkeditor.com, and creates the GitHub release with the tag's
+# notes, then points the website at the new release and deploys it. A tag pushed by
+# `scripts/release.sh` is built and published the same way. scripts/release.sh does the work, and
+# docs/release.md explains it.
 #
-# Run it by hand (Actions → Release → Run workflow) with "Release now" ticked to cut that release
-# without waiting for the hour's run. Unticked, it builds every platform without publishing
+# A push that fails the checks changes nothing; the next push that passes brings the pull request
+# up to date.
+#
+# Run it by hand (Actions → Release → Run workflow) to build every platform without publishing
 # anything, to try a change to the build before releasing.
 #
 # A run on main also saves the dependency caches, which a tag's run can restore: a cold build costs
-# about 70 of the private repo's counted minutes. Pushes to main start no run.
+# about 70 of the private repo's counted minutes.
 #
 # Actions are pinned to commits, so a moved tag can't change what runs next to the secrets. The
 # comment after each names the version it was.
@@ -22,16 +26,12 @@ on:
   push:
     tags:
       - "v*"
-  # At 17 minutes past each hour: GitHub delays or drops scheduled runs at the top of the hour.
-  # A run that finds nothing for users ends after its first job, about a minute.
-  schedule:
-    - cron: "17 * * * *"
+  # Each run of the CI workflow on main. Only a push that passed goes on; see the plan job.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      release:
-        description: Release now, if main has changes for users since the last release
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -46,9 +46,12 @@ env:
   RUST_TOOLCHAIN: "1.99.0"
 
 jobs:
-  # Whether this run releases, and as which version.
+  # Whether a release pull request was just merged, and as which version. A CI run started by hand,
+  # or one that failed or was cancelled for a newer push, changes nothing.
   plan:
-    if: github.event_name == 'schedule' || inputs.release
+    if: >-
+      github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -56,21 +59,18 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
-      - name: Look for changes for users
+      - name: Look for a merged release
         id: plan
         run: scripts/release.sh ci-plan
 
-  check:
+  # Tags the merged release. A tag pushed with the workflow's token starts no second run, so this
+  # run builds it.
+  cut:
     needs: plan
     if: needs.plan.outputs.version != ''
-    uses: ./.github/workflows/ci.yml
-
-  # Commits the version and notes on top of the commit the checks passed on, tags it, and pushes
-  # both. A tag pushed with the workflow's token starts no second run, so this run builds it.
-  cut:
-    needs: [plan, check]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -80,28 +80,47 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
       - name: Tag ${{ needs.plan.outputs.version }}
         id: cut
         env:
-          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.plan.outputs.version }}
+        run: scripts/release.sh ci-tag "$VERSION"
+
+  # Opens, updates, or closes the release pull request. After a merge it runs once the tag is up,
+  # so commits pushed before the merge that the release left out get a pull request of their own.
+  pr:
+    needs: [plan, cut]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.cut.result != 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Update the release pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          scripts/release.sh ci-cut "$VERSION"
+          scripts/release.sh ci-pr
 
   appimage:
     # Built on the oldest Ubuntu runner still available, so the AppImage links against an older
     # glibc and runs on newer distributions too.
     needs: cut
-    # A tag, the hour's release, or a build by hand without publishing.
+    # A tag, a release this run tagged, or a build by hand without publishing.
     if: >-
       !cancelled() && !failure() && (github.event_name == 'push'
-      || (github.event_name == 'workflow_dispatch' && !inputs.release)
-      || needs.cut.outputs.tag != '')
+      || github.event_name == 'workflow_dispatch' || needs.cut.outputs.tag != '')
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     outputs:
@@ -140,8 +159,7 @@ jobs:
     needs: cut
     if: >-
       !cancelled() && !failure() && (github.event_name == 'push'
-      || (github.event_name == 'workflow_dispatch' && !inputs.release)
-      || needs.cut.outputs.tag != '')
+      || github.event_name == 'workflow_dispatch' || needs.cut.outputs.tag != '')
     runs-on: windows-2025
     timeout-minutes: 45
     outputs:
@@ -197,8 +215,7 @@ jobs:
     needs: cut
     if: >-
       !cancelled() && !failure() && (github.event_name == 'push'
-      || (github.event_name == 'workflow_dispatch' && !inputs.release)
-      || needs.cut.outputs.tag != '')
+      || github.event_name == 'workflow_dispatch' || needs.cut.outputs.tag != '')
     runs-on: macos-15
     timeout-minutes: 30
     outputs:

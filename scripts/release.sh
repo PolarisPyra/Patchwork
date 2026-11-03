@@ -2,8 +2,9 @@
 # Everything that releases Patchwork, on your machine and in the Release workflow
 # (.github/workflows/release.yml). docs/release.md explains how it all fits together.
 #
-# The Release workflow cuts a release by itself every hour there is something for users, so these
-# are for when one can't wait.
+# After each push to main that passes the checks, the Release workflow keeps a "Release vYY.M.N"
+# pull request up to date with what users would get; merging it releases. These are for releasing
+# from your machine instead.
 #
 # On your machine:
 #   scripts/release.sh bump             Cut the next release now, with no questions asked: check,
@@ -28,12 +29,16 @@
 #                                       Needs the Bunny keys.
 #
 # In the Release workflow, where $RELEASE_TAG names the tag being published:
-#   scripts/release.sh ci-plan          Write the next version to the step's `version` output when
-#                                       a commit since the last tag has a Changelog: paragraph for
-#                                       users, and nothing when none has.
-#   scripts/release.sh ci-cut YY.M.N    Write the notes, set the version, add the notes to
-#                                       CHANGELOG.md, commit, tag, and push main and the tag
-#                                       together, then write the tag to the step's `tag` output.
+#   scripts/release.sh ci-plan          Write the version main carries to the step's `version`
+#                                       output when it has no tag yet, because a release pull
+#                                       request was merged, and nothing when it has one.
+#   scripts/release.sh ci-pr            When a commit since the last tag has a Changelog:
+#                                       paragraph for users, write the notes, set the next version,
+#                                       add the notes to CHANGELOG.md, commit that on top of the
+#                                       checked commit, force-push it to the release branch, and
+#                                       open or update its pull request. Close it when none has.
+#   scripts/release.sh ci-tag YY.M.N    Tag the commit that set YY.M.N, push the tag, and write it
+#                                       to the step's `tag` output.
 #   scripts/release.sh ci-build linux|windows|macos
 #                                       Build this platform's files, unsigned, with the tag's
 #                                       version when there is one.
@@ -57,6 +62,9 @@ source "$repo_root/scripts/bundle-names.sh"
 PUBLIC=https://updates.patchworkeditor.com
 STORAGE=https://ny.storage.bunnycdn.com/patchwork-releases
 WORKFLOW=release.yml
+# The branch the Release workflow keeps the next release on, for its pull request. Only it writes
+# there.
+RELEASE_BRANCH=release
 # A release that changed these can't be rolled back to the one before it: see withdrawn_tags.
 MIGRATIONS=crates/server/src/persistence/migrations
 SECRETS=(BUNNY_STORAGE_PASSWORD BUNNY_API_KEY TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD)
@@ -152,9 +160,9 @@ set_version() {
   echo "Set the version to $version."
 }
 
-# Writes and checks the release notes, sets the version, adds the notes to CHANGELOG.md, commits,
-# and tags, all on the current commit. Pushing is up to the caller.
-tag_release() {
+# Writes and checks the release notes, sets the version, adds the notes to CHANGELOG.md, and
+# commits, all on the current commit. Pushing is up to the caller.
+commit_release() {
   local version="$1" tag="v$1"
   # Kept until the release is pushed, so an edit to it, or a second run, is used as it is.
   local notes=".release-notes/$tag.md"
@@ -165,13 +173,18 @@ tag_release() {
   echo
   scripts/changelog.sh check "$notes" "$version"
 
-  step "Tagging $tag"
+  step "Committing $tag"
   set_version "$version"
   scripts/changelog.sh insert "$notes" "$version"
   git add CHANGELOG.md package.json apps/web/package.json apps/desktop/package.json \
     apps/desktop/src-tauri/tauri.conf.json
   git commit -m "Release $tag"
-  git tag -a "$tag" -m "Patchwork $version"
+}
+
+# commit_release, then the annotated tag on that commit.
+tag_release() {
+  commit_release "$1"
+  git tag -a "v$1" -m "Patchwork $1"
 }
 
 cut_release() {
@@ -294,34 +307,65 @@ platform_files() {
   [[ -f "${files[0]}" ]] || die "The $1 build has no file at ${files[0]}."
 }
 
-# The hourly run's first step: it releases only when users have something new to read about.
+# A release run's first step, after a push to main passed the checks. When main carries a version
+# with no tag yet, a release pull request was merged, and this run tags and publishes it; otherwise
+# it updates the release pull request.
 ci_plan() {
-  local version=""
-  if scripts/changelog.sh pending; then
-    version=$(next_version)
-    echo "Commits since $(latest_version) have notes for users, so this run releases $version."
+  local version
+  version=$(node -p 'require("./package.json").version')
+  if git rev-parse --quiet --verify "refs/tags/v$version" > /dev/null; then
+    echo "v$version is released already, so this run updates the release pull request."
+    version=""
   else
-    echo "No commit since $(latest_version) has notes for users, so there is nothing to release."
+    echo "main carries v$version, which has no tag yet, so this run releases it."
   fi
   echo "version=$version" >> "${GITHUB_OUTPUT:-/dev/stdout}"
 }
 
-# Tags the checked-out commit, which the checks passed on. main and the tag go up in one atomic
-# push, so if main moved since the run started, neither does: the run ends without a tag, and the
-# next one releases it all.
-ci_cut() {
-  local version="${1#v}"
-  check_version "$version"
-  local tag="v$version" checked
-  checked=$(git rev-parse HEAD)
-  ! git rev-parse --quiet --verify "refs/tags/$tag" > /dev/null || die "$tag already exists."
-  tag_release "$version"
-  if ! git push --atomic origin "HEAD:refs/heads/main" "refs/tags/$tag"; then
-    git fetch --quiet origin main
-    [[ "$(git rev-parse FETCH_HEAD)" != "$checked" ]] || die "Could not push main and $tag."
-    echo "main moved while this run checked it, so nothing was released. The next run releases it."
+# Puts the next release on the release branch, one commit on top of the checked commit, and opens
+# or updates its pull request, so it always shows what merging would release. A commit pushed while
+# it is open joins it once its own checks pass. Merged with a merge commit, one that had not yet
+# keeps its notes for the next release.
+ci_pr() {
+  local pr version body
+  pr=$(gh pr list --head "$RELEASE_BRANCH" --base main --state open --json number -q '.[0].number // empty')
+  if ! scripts/changelog.sh pending; then
+    echo "No commit since $(latest_version) has notes for users, so there is nothing to release."
+    if [[ -n "$pr" ]]; then
+      gh pr close "$pr" --delete-branch --comment "Nothing for users is waiting any more."
+    fi
     return
   fi
+  version=$(next_version)
+  commit_release "$version"
+  git push --force origin "HEAD:refs/heads/$RELEASE_BRANCH"
+  body="$(cat ".release-notes/v$version.md")
+
+---
+
+Merging this releases v$version: these notes and the version, on top of $(git rev-parse --short HEAD^), which passed the checks. Merge it with **Create a merge commit**, so commits pushed since keep their notes for the next release."
+  if [[ -n "$pr" ]]; then
+    gh pr edit "$pr" --title "Release v$version" --body "$body"
+  else
+    gh pr create --base main --head "$RELEASE_BRANCH" --title "Release v$version" --body "$body"
+  fi
+}
+
+# Tags the commit that set VERSION: the release pull request's own commit when it was merged with
+# a merge commit, else the one the merge made. A tag pushed with the workflow's token starts no
+# second run, so this run builds it.
+ci_tag() {
+  local version="${1#v}" tag commit set
+  check_version "$version"
+  tag="v$version"
+  ! git rev-parse --quiet --verify "refs/tags/$tag" > /dev/null || die "$tag already exists."
+  commit=$(git log -1 --format=%H -G '"version": ' "v$(latest_version)..HEAD" -- package.json)
+  [[ -n "$commit" ]] || die "No commit since v$(latest_version) changes the version."
+  set=$(git show "$commit:package.json" | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')
+  [[ "$set" == "$version" ]] || die "The newest commit that changes the version sets $set, not $version."
+  git tag -a "$tag" -m "Patchwork $version" "$commit"
+  git push origin "refs/tags/$tag"
+  echo "Tagged $tag on $(git log -1 --format='%h %s' "$commit")."
   echo "tag=$tag" >> "${GITHUB_OUTPUT:-/dev/stdout}"
 }
 
@@ -545,7 +589,8 @@ case "${1:-}" in
   pull) pull_release "${2:-}" ;;
   watch) watch_release "${2:-}" ;;
   ci-plan) ci_plan ;;
-  ci-cut) ci_cut "${2:-}" ;;
+  ci-pr) ci_pr ;;
+  ci-tag) ci_tag "${2:-}" ;;
   ci-build) ci_build "${2:-}" ;;
   ci-upload) ci_upload "${2:-}" ;;
   ci-release) ci_release ;;

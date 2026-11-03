@@ -7,10 +7,14 @@ For local builds, see [Development](development.md).
 ## Overview
 
 ```
-Release workflow (GitHub Actions)       every hour, or Run workflow with "Release now"
-  ├─ plan         anything for users since the last tag? if not, stop here
-  ├─ check        the CI workflow's checks on main
-  ├─ cut          notes, version, CHANGELOG.md, commit, v26.11.0 tag, push main and the tag
+CI workflow (GitHub Actions)            every push to main: the checks
+        │ passed
+        ▼
+Release workflow                        after each push to main that passed
+  ├─ plan         does main carry a version with no tag yet, from a merged release pull request?
+  ├─ pr           no: notes, version, CHANGELOG.md as one commit on the release branch → "Release v26.11.0" pull request
+  │                 (you merge it with a merge commit; that push starts this workflow again)
+  ├─ cut          yes: tag v26.11.0 on the release commit, push the tag
   │                 (or: pnpm release bump on your machine, which pushes a tag and starts the steps below)
   ├─ appimage  ─┐
   ├─ windows   ─┼─ build (no secrets), upload → updates.patchworkeditor.com/v26.1.0/<file>
@@ -32,8 +36,8 @@ These files do all of it:
 | File | What it does |
 | --- | --- |
 | `scripts/release.sh` | Cuts a release, in CI or on your machine, and does the build and publish steps in CI |
-| `.github/workflows/release.yml` | Cuts the day's release, builds each platform with `scripts/release.sh`, and publishes a tag |
-| `.github/workflows/ci.yml` | Checks every pull request and each automatic release, and runs by hand |
+| `.github/workflows/release.yml` | Keeps the release pull request up to date after a push that passed, tags it once merged, builds each platform with `scripts/release.sh`, and publishes a tag |
+| `.github/workflows/ci.yml` | Checks every push to `main` and every pull request, and runs by hand |
 | `.github/actions/setup` | The runner setup both workflows share: Linux packages, Rust, pnpm, Node |
 | `scripts/changelog.sh` | Checks commit messages, writes each release's notes from them, and reads and writes `CHANGELOG.md` |
 | `docs/changelog-style.md` | The rules for changelog entries |
@@ -107,7 +111,7 @@ that only touches `.github/`, `scripts/`, `docs/`, or `*.md` is internal and nee
 
 No hook stops a push. Pushing is the user's call, and only their asking for it is what pushes:
 an agent commits and says the work is unpushed. Once pushed, a commit with a paragraph for users
-goes out in the next hourly release by itself.
+joins the release pull request once its push passes the checks, and goes out when that is merged.
 
 **2. At release.** `scripts/release.sh` writes the release's section from the `Changelog:`
 paragraphs of the app commits since the last tag, each under its group, each entry once. A
@@ -121,9 +125,11 @@ release merges every such section, the ones above the newest published release, 
 drops them, so its notes cover everything since the last version users have. The newest published
 release is the newest GitHub release, which the Release workflow creates only once every file is up.
 
-The notes wait in `.release-notes/<tag>.md` (ignored by git) until the release is pushed. To change
-them before releasing, edit that file and run the release again; it is used as it is, once it
-passes the style checks.
+On your machine, the notes wait in `.release-notes/<tag>.md` (ignored by git) until the release is
+pushed. To change them before releasing, edit that file and run the release again; it is used as it
+is, once it passes the style checks. The release pull request's notes are its `CHANGELOG.md`
+section; the next push that passes writes them again from the commits, so fix a paragraph in a new
+commit rather than in the pull request.
 
 **Fixing notes after a release.** `CHANGELOG.md` is the source. Edit the release's section, commit
 it, and run `scripts/release.sh notes 26.1.0` to publish it to the GitHub release, and to
@@ -132,26 +138,46 @@ set. Copies already installed show the fix once they update past it.
 
 ## Cut a release
 
-Releases cut themselves. Every hour, at 17 minutes past, the Release workflow looks at the commits on `main`
-since the last tag. If any has a `Changelog:` paragraph other than `none`, it:
+A release is a pull request you merge. Every push to `main` runs the CI workflow's checks (see
+[The CI workflow](#the-ci-workflow)). When they pass, the Release workflow starts and looks at the
+commits since the last tag, up to the commit the checks passed on. If any has a `Changelog:`
+paragraph other than `none`, it (`scripts/release.sh ci-pr`):
 
-1. Runs the CI workflow's checks on that commit (see [The CI workflow](#the-ci-workflow)), and stops
-   if they fail.
-2. Writes the release notes (see [Changelog](#changelog)) and checks them, writes the next version,
-   adds the notes to the top of `CHANGELOG.md`, commits both as `Release v26.11.0` on top of the
-   checked commit, and creates the annotated tag (`scripts/release.sh ci-cut`).
-3. Pushes `main` and the tag together, in one atomic push. If `main` moved while the checks ran,
-   neither goes up and the run ends without releasing; the next hour's run releases everything.
-4. Builds, uploads, signs, and publishes, as below.
+1. Writes the release notes (see [Changelog](#changelog)) and checks them, writes the next version,
+   adds the notes to the top of `CHANGELOG.md`, and commits both as `Release v26.11.0` on top of the
+   checked commit.
+2. Force-pushes that one commit to the `release` branch, and opens the **Release v26.11.0** pull
+   request into `main`, or updates its title and notes when it is open already.
 
-A day with only internal commits, or `Changelog: none`, releases nothing, so a run that finds
-nothing costs a minute.
+So the pull request always shows what merging would release: every push that passes rebuilds it on
+top of `main`. A push with only internal commits, or `Changelog: none`, changes nothing, and when
+nothing for users is waiting the pull request is closed. A push that fails the checks changes
+nothing either; the next push that passes brings the pull request up to date.
 
-**When a release can't wait**, run it now from the Actions tab: Release → **Run workflow**, with
-**Release now** ticked, or `gh workflow run release.yml -f release=true`. It does the same as the
-hourly run.
+**To release**, merge the pull request with **Create a merge commit**, or run
+`gh pr merge release --merge`. Squash and rebase merges are turned off for the repo, because the
+release would then also cover commits pushed after the pull request was last updated, without their
+notes. The merge is a push to `main`, so the checks run on it, and when they pass the Release
+workflow sees that `main` carries a version with no tag yet (`ci-plan`) and:
 
-**From your machine**, on a clean `main` that is up to date with `origin/main`:
+1. Tags the commit that set that version, the release pull request's own commit, and pushes the tag
+   (`scripts/release.sh ci-tag`).
+2. Builds, uploads, signs, and publishes, as below.
+3. Opens a new release pull request for anything pushed before the merge that the release did not
+   include.
+
+The pull request is opened with the workflow's own token, so the CI workflow does not run on it;
+the checks run on the merge instead, before anything is tagged. If they fail, nothing is tagged
+yet: fix it on `main`, and the next push that passes tags the release. What it tags is still the
+pull request's commit, the commit that passed plus the version and notes; the fix goes out in the
+next release. A merge made while a release builds waits for it.
+
+The repo lets the workflow open pull requests (Settings → Actions → General → **Allow GitHub
+Actions to create and approve pull requests**) and allows only merge commits (Settings → General →
+Pull Requests).
+
+**From your machine**, on a clean `main` that is up to date with `origin/main`, for a release that
+skips the pull request:
 
 ```sh
 pnpm release bump          # the next version, 26.11.4 -> 26.11.5
@@ -176,23 +202,25 @@ prints the download links. Ctrl-C stops only the watching, not the build.
 
 ## The CI workflow
 
-`.github/workflows/ci.yml` checks every pull request, each automatic release (the Release workflow calls
-it), and runs when started by hand, on the `ubuntu-22.04` runner the AppImage is built on: it builds
-the web app, runs `pnpm check` and `cargo test --workspace`, and fails if the generated wire types
-differ from the committed ones. These are the checks `scripts/release.sh` runs before a release.
-Pushes to `main` start no run, so a plain push costs no Actions minutes. Its Rust cache is saved only
-from `main`. A newer run on the same branch cancels an older one.
+`.github/workflows/ci.yml` checks every push to `main` and every pull request, and runs when
+started by hand, on the `ubuntu-22.04` runner the AppImage is built on: it builds the web app, runs
+`pnpm check` and `cargo test --workspace`, and fails if the generated wire types differ from the
+committed ones. These are the checks `scripts/release.sh` runs before a release. A push to `main`
+that passes starts the Release workflow. Its Rust cache is saved only from `main`. A newer run on
+the same branch cancels an older one. What the workflows push or open with their own token, such as
+the release pull request or the website's links, starts no run.
 
 ## The Release workflow
 
-`.github/workflows/release.yml` runs every hour, on a `v*` tag, and when started by hand
-(see [Cut a release](#cut-a-release) and [Caches](#caches)). Pushes to `main` build nothing.
+`.github/workflows/release.yml` runs after each run of the CI workflow on `main`, on a `v*` tag, and
+when started by hand (see [Cut a release](#cut-a-release) and [Caches](#caches)). Of the CI runs,
+only a push that passed the checks does anything.
 
 | Job | Runner | Commands | Publishes |
 | --- | --- | --- | --- |
-| plan | `ubuntu-latest`, hourly or with Release now | `ci-plan` | Nothing: the version to cut, or nothing to release |
-| check | The CI workflow, when plan found something | | Nothing |
-| cut | `ubuntu-latest`, after check, with write access | `ci-cut` | The release commit on `main` and its tag |
+| plan | `ubuntu-latest`, after a push passed | `ci-plan` | Nothing: the merged version to tag, or none |
+| cut | `ubuntu-latest`, with write access, when plan found a version | `ci-tag` | The tag |
+| pr | `ubuntu-latest`, with write access to the repo and pull requests, after cut or in its place | `ci-pr` | The `release` branch and its pull request |
 | appimage | `ubuntu-22.04` (older glibc, so the AppImage runs on newer distributions) | `ci-build linux`, `ci-upload linux` | `Patchwork_amd64.AppImage` |
 | windows | `windows-2025`, building on a Dev Drive | `ci-build windows`, `ci-upload windows` | `Patchwork_x64-setup.exe` |
 | macos | `macos-15` (Apple silicon) | `ci-build macos`, `ci-upload macos` | `Patchwork_aarch64.dmg`, `Patchwork.app.tar.gz` |
@@ -205,8 +233,8 @@ still builds with its own version. It builds with no secrets in its environment,
 step uploads the files to `updates.patchworkeditor.com/<tag>/` and passes each file's name and SHA-256 to the release
 job as a job output.
 
-The release job is the only one with the signing key. It and cut are the only ones with write
-access to the repo, and neither runs the project's dependencies. For each file, the release job
+The release job is the only one with the signing key. It, cut, pr, and site are the only ones with
+write access to the repo, and none of them runs the project's dependencies. For each file, the release job
 downloads it back from the update server, checks it matches the SHA-256 its build job reported, signs it with the Tauri CLI version `pnpm-lock.yaml`
 pins, and checks the signature with `minisign` against the key built into the app (`SIGNING_KEY` in
 `updates/release.rs`), the way the updater will. Any mismatch stops the release before `latest.json`
@@ -219,16 +247,16 @@ Every action is pinned to a commit, with the version it was in a comment, so a m
 can't change what runs. To update one, look up the commit of its new release and replace both.
 
 To check the build without releasing, run the workflow by hand from the Actions tab
-(**Run workflow**) with **Release now** unticked. It builds all three platforms and publishes
-nothing, even when run on a tag.
+(**Run workflow**). It builds all three platforms and publishes nothing, even when run on a tag.
 
 ### Caches
 
 Most of each build is compiling the Rust dependencies. A tag's run can restore caches saved on
 `main`, but not ones saved by another tag, so the dependency caches are saved only on `main`:
 
-- A run by hand on `main` builds Linux and Windows without publishing anything, and saves their
-  caches. Run it after a change to a Cargo file, before the next tag. Pushes to `main` start no run.
+- A release after a push runs on `main`, so it saves the Linux and Windows caches as it builds. A
+  run by hand on `main` builds them without publishing anything, to save them before a tag from
+  your machine after a change to a Cargo file.
 - Tag runs restore those caches and save none.
 - The Rust toolchain is pinned (`RUST_TOOLCHAIN` in the workflow), because a cache is only reused by
   the same compiler. Raising it rebuilds the caches on that push.
@@ -248,8 +276,9 @@ The workflow is built to stay inside the free plan's Actions limits, whichever p
   so about 70 counted minutes. A change to the Rust dependencies costs one cache build of Linux and
   Windows. Each job has a timeout (macOS 30 minutes, Linux and Windows 45, release 10). A second
   run for the same ref waits for the first, so a release is never stopped halfway through
-  publishing. The hourly run's first job counts as a minute even when it finds nothing, so the
-  schedule alone costs about 720 minutes a month, and each release adds its checks and builds.
+  publishing. Each push to `main` costs its CI run, about 5 minutes with the cache, plus a minute
+  for the Release run's first job and another to update the release pull request. Each release
+  adds its builds.
 
 Check usage at github.com → Settings → Billing and plans.
 
@@ -364,8 +393,8 @@ file name stays the same. The release script prints the links for the release it
 
   A release that changed the database schema (`crates/server/src/persistence/migrations/`) is left
   off the list, because the release before it refuses a database a newer build migrated. The script
-  says so, and copies on it keep it until the fix ships; tick **Release now** to ship the fix
-  without waiting for the hour's run. Copies running a release from before rollbacks existed never
+  says so, and copies on it keep it until the fix ships; merge the release pull request as
+  soon as it carries the fix. Copies running a release from before rollbacks existed never
   read `withdrawn`, so they too wait for the fix.
 - **"Artifact storage quota has been hit."** Something is still uploading GitHub artifacts. The
   workflow above uses none; check that no step calls `actions/upload-artifact`.
@@ -387,10 +416,12 @@ file name stays the same. The release script prints the links for the release it
 
 ### For agents
 
-- Push only when the user asks. A push to `main` starts no run; the next hourly release picks it up.
-- Releases are automatic, so "push" is only ever a plain push. Never run `scripts/release.sh bump`
-  or cut a version yourself unless the user asks to release right now, and then run it in the
-  foreground. It asks nothing and ends once the tag is pushed and the run's link is printed. Run
+- Push only when the user asks. A push to `main` with a paragraph for users joins the release pull
+  request once it passes the checks; it ships when that pull request is merged.
+- "push" is only ever a plain push. Merge the release pull request (`gh pr merge release --merge`,
+  never squash or rebase) only when the user asks to release. Never run `scripts/release.sh bump`
+  or cut a version yourself unless the user asks for a release that skips the pull request, and
+  then run it in the foreground. It asks nothing and ends once the tag is pushed and the run's link is printed. Run
   `watch` only when the user asks to follow the build.
 - A version is `YY.M.N`, always with all three parts: `26.11.0`, `26.11.1`. Never work one out by
   hand; `scripts/release.sh next` prints it.
