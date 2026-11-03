@@ -87,7 +87,11 @@ jobs:
         id: cut
         env:
           VERSION: ${{ needs.plan.outputs.version }}
-        run: scripts/release.sh ci-tag "$VERSION"
+        # An annotated tag records who made it.
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          scripts/release.sh ci-tag "$VERSION"
 
   # Opens, updates, or closes the release pull request. After a merge it runs once the tag is up,
   # so commits pushed before the merge that the release left out get a pull request of their own.
