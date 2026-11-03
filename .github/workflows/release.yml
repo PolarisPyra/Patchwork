@@ -4,7 +4,8 @@ name: Release
 # the last release: it checks main with the CI workflow, cuts the next YY.M.N version, tags it, then
 # builds the Linux AppImage, the Windows installer, and the macOS (Apple silicon) disk image and app
 # bundle, publishes them to updates.patchworkeditor.com, and creates the GitHub release with the
-# tag's notes. A tag pushed by `scripts/release.sh` is built and published the same way.
+# tag's notes, then points the website at the new release and deploys it. A tag pushed by
+# `scripts/release.sh` is built and published the same way.
 # scripts/release.sh does the work, and docs/release.md explains it.
 #
 # Run it by hand (Actions → Release → Run workflow) with "Release now" ticked to cut that release
@@ -257,3 +258,48 @@ jobs:
           WINDOWS: ${{ needs.windows.outputs.assets }}
           MACOS: ${{ needs.macos.outputs.assets }}
         run: scripts/release.sh ci-release
+
+  # Points the website's download links at the release just published, deploys the site to
+  # Cloudflare Pages, and commits the new links to main with "Changelog: none", so the site never
+  # needs a refresh by hand. It runs once latest.json is up, which site/refresh-downloads.mjs reads.
+  # The deploy needs the CLOUDFLARE_API_TOKEN (Account → Cloudflare Pages: Edit) and
+  # CLOUDFLARE_ACCOUNT_ID secrets; without them it only commits. It holds no signing secrets.
+  site:
+    needs: [cut, release]
+    if: ${{ !cancelled() && needs.release.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ needs.cut.outputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+
+      - name: Point the downloads at ${{ env.RELEASE_TAG }}
+        run: node site/refresh-downloads.mjs
+
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN is not set, so the website was not deployed."
+            exit 0
+          fi
+          npx --yes wrangler@4.156.2 pages deploy site --project-name patchwork-site \
+            --branch main --commit-dirty=true
+
+      - name: Commit the new links to main
+        run: |
+          git diff --quiet -- site/index.html && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "Point the website's downloads at $RELEASE_TAG" -m "Changelog: none" \
+            -- site/index.html
+          # main can move while the release builds; the links commit goes on top of it.
+          git pull -q --rebase origin main
+          git push origin HEAD:main

@@ -41,7 +41,14 @@ DNS-only record.
 ## After a release
 
 The page links into the per-tag folder on the update server (`/v26.11.0/Patchwork_amd64.AppImage`,
-and so on), which never changes once published. Point the page at the new tag:
+and so on), which never changes once published. The Release workflow's `site` job points the page
+at the new tag, deploys it to the `patchwork-site` Pages project, and commits the new links to main,
+so nothing is done by hand. It needs two repository secrets, set once:
+
+- `CLOUDFLARE_API_TOKEN`: a token with the **Account → Cloudflare Pages → Edit** permission.
+- `CLOUDFLARE_ACCOUNT_ID`: the account the Pages project is on (`npx wrangler whoami` shows it).
+
+Without the token the job still commits the links but does not deploy. To do it by hand:
 
 ```sh
 node site/refresh-downloads.mjs          # rewrite index.html with the newest tag
