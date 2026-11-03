@@ -1,15 +1,16 @@
 /**
- * Copying from a rendered reply puts the selection on the clipboard as the Markdown it was
- * rendered from, so headings, lists, code and links survive a paste into the composer or another
- * app. The browser would copy only the rendered text.
+ * The Markdown a selection inside one rendered Markdown block was rendered from, so headings,
+ * lists, code and links survive a paste into the composer. It travels in the copy's HTML, on
+ * `COPIED_MARKDOWN_ATTR`, while the copy's plain text stays the text the reader sees
+ * (`textSelection.ts`), so a paste into a terminal carries no Markdown.
  *
- * The HTML is the one `Markdown.tsx` renders, which marks what the tags lose: a heading's level
- * (`data-depth`), a code block's language (`data-code`), a formula's TeX (`data-tex`), and the parts
- * that are only chrome (`data-copy-skip`).
+ * The HTML is the one `Markdown.tsx` renders, which marks what the tags lose: the block's root
+ * (`data-markdown`), a heading's level (`data-depth`), a code block's language (`data-code`), a
+ * formula's TeX (`data-tex`), and the parts that are only chrome (`data-text-exclude`).
  */
 
-/** The attribute on a copy's HTML that says it came from a reply, as Markdown in its text. */
-export const MARKDOWN_COPY_ATTR = "data-patchwork-markdown";
+/** The attribute on a copy's HTML that holds the Markdown the selection was rendered from. */
+const COPIED_MARKDOWN_ATTR = "data-patchwork-markdown";
 
 const BLOCK_TAGS = new Set([
   "P",
@@ -29,6 +30,10 @@ const BLOCK_TAGS = new Set([
   "DIV",
 ]);
 
+/** Chrome, and the screen-reader copy a streamed block draws beside its animated words. */
+const skipped = (el: HTMLElement) =>
+  el.hasAttribute("data-text-exclude") || el.classList.contains("sr-only");
+
 /** A display formula sits among the blocks as a span; it copies as a block of its own. */
 const isBlock = (node: Node) =>
   node instanceof HTMLElement &&
@@ -42,7 +47,7 @@ function inline(nodes: Iterable<Node>): string {
       out += node.textContent ?? "";
       continue;
     }
-    if (!(node instanceof HTMLElement) || node.hasAttribute("data-copy-skip")) continue;
+    if (!(node instanceof HTMLElement) || skipped(node)) continue;
     // KaTeX draws a formula twice, as MathML and as HTML; it copies once, as the TeX it came from.
     const tex = node.getAttribute("data-tex");
     if (tex !== null) {
@@ -126,7 +131,7 @@ function fence(code: string, info: string): string {
 }
 
 function block(el: HTMLElement): string {
-  if (el.hasAttribute("data-copy-skip")) return "";
+  if (skipped(el)) return "";
   if (el.hasAttribute("data-tex")) return inline([el]);
   if (el.hasAttribute("data-code")) {
     const code = (el.querySelector("pre")?.textContent ?? "").replace(/\n$/, "");
@@ -201,25 +206,34 @@ function block(el: HTMLElement): string {
 const isCodeBlock = (node: Node): node is HTMLElement =>
   node instanceof HTMLElement && node.hasAttribute("data-code");
 
-/** The Markdown of the selection inside `root`, a rendered reply, or null when the browser's own
- * copy is better: a selection that leaves the reply, or one inside a code block, whose text is
- * already exact. */
-export function selectionMarkdown(root: HTMLElement): { markdown: string; html: string } | null {
-  const selection = window.getSelection();
-  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
-  const range = selection.getRangeAt(0);
+/** `rendered` as a copy's HTML, holding `markdown` for the composer. */
+function withMarkdown(markdown: string, rendered: Node): string {
+  const div = document.createElement("div");
+  div.setAttribute(COPIED_MARKDOWN_ATTR, markdown);
+  div.append(rendered);
+  return div.outerHTML;
+}
+
+/** The Markdown a copy's HTML holds, when it came from a selection in the chat, or null. */
+export function copiedMarkdown(html: string): string | null {
+  if (!html.includes(COPIED_MARKDOWN_ATTR)) return null;
+  const body = new DOMParser().parseFromString(html, "text/html").body;
+  const el = body.querySelector(`[${COPIED_MARKDOWN_ATTR}]`);
+  return el?.getAttribute(COPIED_MARKDOWN_ATTR) ?? null;
+}
+
+/** The Markdown of `range` and the HTML that carries it, when the range sits inside one rendered
+ * Markdown block, or null. The range comes from `readTextSelection`, so it is not inside a code
+ * block. */
+export function selectionMarkdown(range: Range): { markdown: string; html: string } | null {
   const common = range.commonAncestorContainer;
   const container = common instanceof HTMLElement ? common : common.parentElement;
-  if (!container || !root.contains(container) || container.closest("pre, [data-code]")) {
-    return null;
-  }
+  if (!container?.closest("[data-markdown]")) return null;
   // Part of a formula copies as the whole formula.
   const formula = container.closest("[data-tex]");
   if (formula) {
-    return {
-      markdown: inline([formula]),
-      html: `<div ${MARKDOWN_COPY_ATTR}="">${formula.outerHTML}</div>`,
-    };
+    const markdown = inline([formula]);
+    return { markdown, html: withMarkdown(markdown, formula.cloneNode(true)) };
   }
   // The selection keeps the element it sits in, so a list item keeps its list and a cell its table.
   const wrapper = container.cloneNode(false) as HTMLElement;
@@ -241,7 +255,7 @@ export function selectionMarkdown(root: HTMLElement): { markdown: string; html: 
     ? inline(wrapper.childNodes)
     : block(wrapper);
   if (!markdown.trim()) return null;
-  return { markdown, html: `<div ${MARKDOWN_COPY_ATTR}="">${wrapper.outerHTML}</div>` };
+  return { markdown, html: withMarkdown(markdown, wrapper) };
 }
 
 /** A formula as a copy writes it, `$$tex$$`, inline or over lines of its own. */

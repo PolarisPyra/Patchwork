@@ -60,6 +60,7 @@ import { useCheckpoints } from "~/features/chat/hooks/useCheckpoints";
 import { useChoices } from "~/features/chat/hooks/useChoices";
 import { useComposerDraft } from "~/features/chat/composer/useComposerDraft";
 import { useGoalClear } from "~/features/chat/hooks/useGoalClear";
+import { copySelection } from "~/features/chat/lib/textSelection";
 import { useStableHandlers } from "~/hooks/useStableHandlers";
 import type { NewThreadOptions } from "~/hooks/useThreads";
 import { isWorking } from "~/lib/threadEvents";
@@ -818,10 +819,12 @@ export default function Chat({
     },
   });
 
+  // One copy handler for everything the chat renders: replies, messages, tool output, prompts.
   return (
     <div
       className={`relative flex min-h-0 min-w-0 flex-1 flex-col${isNew ? " justify-center" : ""}`}
       ref={rootRef}
+      onCopy={copySelection}
     >
       {thread && (
         <LineageCard thread={thread} working={working} onDisconnect={stop} onError={setError} />

@@ -6,7 +6,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type ClipboardEvent,
   type ReactElement,
   type ReactNode,
   type Ref,
@@ -28,7 +27,6 @@ import {
   MENTION_CLASS,
   SKILL_CLASS,
 } from "~/features/chat/lib/composerExtensions";
-import { selectionMarkdown } from "~/features/chat/lib/markdownCopy";
 import { ANIMATED_LIMIT, wordDelay } from "~/features/chat/lib/streamReveal";
 
 /** Links open in the system browser only with one of these protocols; others are shown as text. */
@@ -136,15 +134,6 @@ const components: Components = {
   img: ({ alt }) => <span className="text-fg-muted">{alt || "Image"}</span>,
 };
 
-/** Copies the selection as the Markdown it was rendered from, rather than its plain text. */
-function copyMarkdown(event: ClipboardEvent<HTMLDivElement>) {
-  const copy = selectionMarkdown(event.currentTarget);
-  if (!copy) return;
-  event.preventDefault();
-  event.clipboardData.setData("text/plain", copy.markdown);
-  event.clipboardData.setData("text/html", copy.html);
-}
-
 /** Highlighting waits this long after a block last changed, so a block still streaming is not re-highlighted every frame. */
 const HIGHLIGHT_DELAY_MS = 150;
 
@@ -177,11 +166,12 @@ export default memo(function Markdown({
   const from = !streamed || revealed.current < 0 ? text.length : revealed.current;
   const blocks = splitBlocks(text);
   // Each block parses on its own, so a streaming reply re-parses only its last block.
+  // `data-markdown` marks where a copy can read the Markdown back (`lib/selectionMarkdown.ts`).
   return (
     <div
       ref={containerRef}
+      data-markdown
       className="md-blocks min-w-0 leading-[1.6] [word-break:break-word] selectable [&>:last-child]:mb-0 [&_p]:mt-0 [&_p]:mb-2 [&_.katex-display]:my-2 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex-display]:py-1"
-      onCopy={copyMarkdown}
     >
       {blocks.map((block, i) => (
         <MarkdownBlock
@@ -622,7 +612,7 @@ function CodeBlock({ lang, code, title }: { lang: string; code: string; title: s
       className="my-2 overflow-hidden rounded-[var(--radius)] border border-border bg-panel"
     >
       <div
-        data-copy-skip
+        data-text-exclude
         className="flex items-center justify-between border-b border-border py-0.5 pr-1 pl-2.5 text-[length:var(--fs-xs)] text-fg-subtle"
       >
         <span className="min-w-0 truncate">{title || lang || "text"}</span>

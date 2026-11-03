@@ -41,7 +41,7 @@ import {
   keepDraftText,
   type MentionSuggestion,
 } from "~/features/chat/lib/composerExtensions";
-import { keepTexEscapes, MARKDOWN_COPY_ATTR } from "~/features/chat/lib/markdownCopy";
+import { copiedMarkdown, keepTexEscapes } from "~/features/chat/lib/selectionMarkdown";
 import { useAgents } from "~/lib/agents";
 import { DEFAULT_SIGILS, getSigils } from "~/lib/sigils";
 import AgentPicker from "~/features/chat/composer/AgentPicker";
@@ -446,15 +446,14 @@ function Composer({
         if (html.includes("data-pm-slice")) return false;
         const text = data.getData("text/plain").replace(/\r\n?/g, "\n").replace(/\n+$/, "");
         if (!text) return true;
-        // A copy from a reply carries its Markdown, which goes in as the draft would load it:
-        // lists and code as blocks, headings and quotes as the lines they were typed as.
-        if (
-          html.includes(MARKDOWN_COPY_ATTR) &&
-          !view.state.selection.$from.parent.type.spec.code
-        ) {
+        // A copy from a reply carries its Markdown in its HTML, which goes in as the draft would
+        // load it: lists and code as blocks, headings and quotes as the lines they were typed as.
+        const markdown = copiedMarkdown(html);
+        if (markdown !== null && !view.state.selection.$from.parent.type.spec.code) {
           return (
-            editor?.commands.insertContent(keepTexEscapes(text), { contentType: "markdown" }) ??
-            false
+            editor?.commands.insertContent(keepTexEscapes(markdown), {
+              contentType: "markdown",
+            }) ?? false
           );
         }
         const { state } = view;

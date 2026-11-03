@@ -169,7 +169,7 @@ export default function Artifact({
       data-artifact-source={code}
     >
       <div
-        data-copy-skip
+        data-text-exclude
         className="flex items-center justify-between border-b border-border py-0.5 pr-1 pl-2.5 text-[length:var(--fs-xs)] text-fg-subtle"
       >
         <span className="min-w-0 truncate">{title || (diagram ? "Diagram" : "Artifact")}</span>
