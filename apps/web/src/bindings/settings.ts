@@ -51,7 +51,15 @@ agents: LogLevel,
 /**
  * `imports.log`: each scan and import of saved conversations.
  */
-imports: LogLevel, };
+imports: LogLevel, 
+/**
+ * `logs/threads/<id>.log`: each chat's events and its agent's traffic, kept across launches.
+ */
+threads: LogLevel, 
+/**
+ * A chat's right-click menu has Open logs.
+ */
+threadMenu: boolean, };
 
 /**
  * Desktop notifications shown while Patchwork is not the focused window.

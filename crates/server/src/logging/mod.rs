@@ -5,10 +5,16 @@
 //! ```text
 //! 20261026T121729/
 //! ├─ main.log                 Patchwork's own messages (written by the desktop shell)
+//! ├─ system.json              what Patchwork runs on (see `system`)
 //! ├─ imports.log              scans and imports of saved conversations
 //! ├─ window/renderer.log     the window's errors and warnings
 //! └─ agents/claude.log        one log per agent: its processes and their traffic
 //! ```
+//!
+//! Beside the launch folders, `threads/<thread id>.log` is each chat's own log, kept across
+//! launches (see `threads`), and `reports/` holds the reports a chat's Open logs writes: the
+//! system, the chat's settings and replies, its log, and this launch's warnings and errors, in
+//! one file to send.
 //!
 //! Each line reads `2026-10-26 12:17:29.562 [info] message`, and each log is set to Trace,
 //! Debug, Info, Warning, Error or Off in Settings → Logging, or from the Output panel. A full
@@ -27,11 +33,16 @@
 
 mod files;
 mod render;
+mod report;
 mod scrub;
+pub mod system;
+mod threads;
 
+use files::session;
 pub use files::{session_dir, channels, LogChunk, read, export};
 pub use render::{now_text};
 pub use scrub::{Json};
+pub use threads::{THREADS, ThreadLogs};
 
 mod debug_log;
 

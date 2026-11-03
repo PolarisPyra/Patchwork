@@ -2,12 +2,12 @@ import { useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { api, type LoggingSettings } from "~/api";
 import LogLevelPicker from "~/components/LogLevelPicker";
-import { TokenRow } from "~/features/settings/controls";
+import { TokenRow, TokenSwitch } from "~/features/settings/controls";
 import type { PaneProps } from "~/features/settings/types";
 import { errorText } from "~/lib/util";
 
-/** The log files each launch writes, and what each one holds. */
-const LOGS: { key: keyof LoggingSettings; title: string; desc: string }[] = [
+/** The log files Patchwork writes, and what each one holds. */
+const LOGS: { key: Exclude<keyof LoggingSettings, "threadMenu">; title: string; desc: string }[] = [
   { key: "app", title: "Main", desc: "Patchwork's own messages, in main.log" },
   {
     key: "window",
@@ -16,6 +16,11 @@ const LOGS: { key: keyof LoggingSettings; title: string; desc: string }[] = [
   },
   { key: "agents", title: "Agents", desc: "Each agent's runs, in agents/" },
   { key: "imports", title: "Imports", desc: "Each scan and import, in imports.log" },
+  {
+    key: "threads",
+    title: "Chats",
+    desc: "Each chat's own log, in threads/, kept across launches",
+  },
 ];
 
 /** The logs each launch writes to its own folder in the config folder's `logs`, as VS Code's,
@@ -55,6 +60,15 @@ export default function LoggingPane({ settings, updateSettings }: PaneProps) {
           />
         </TokenRow>
       ))}
+      <TokenRow title="Open logs in chat menus">
+        <TokenSwitch
+          label="Open logs in chat menus"
+          on={settings.logging.threadMenu}
+          onChange={(on) =>
+            void updateSettings((s) => ({ ...s, logging: { ...s.logging, threadMenu: on } }))
+          }
+        />
+      </TokenRow>
       <TokenRow title="Log folder">
         <button className="btn" disabled={exporting} onClick={() => void exportLogs()}>
           {exporting ? "Exporting…" : "Export…"}

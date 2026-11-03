@@ -12,6 +12,7 @@ use crate::system::now_ms;
 
 use super::files::LogFile;
 use super::render::render;
+use super::THREADS;
 
 /// The agent logs, `agents/<agent>.log`.
 pub static AGENTS: DebugLog = DebugLog::new("agents/agents.log");
@@ -48,6 +49,7 @@ pub struct DebugLog {
 }
 
 /// What a record carries, made into text on the writer thread.
+#[derive(Clone)]
 pub enum Data {
     /// A line an agent sent or printed, in full.
     Line(String),
@@ -135,8 +137,17 @@ impl DebugLog {
         level != LogLevel::Off && level as u8 <= self.level.load(Ordering::Relaxed)
     }
 
-    /// Logs `data` at `level`. `event` names what happened, or is empty for a plain message.
+    /// Logs `data` at `level`, and to the log of the chat it is about, if any, at that log's own
+    /// level. `event` names what happened, or is empty for a plain message.
     pub fn write(&self, level: LogLevel, event: &'static str, source: &Source, data: Data) {
+        if source.thread.is_some() && THREADS.logs(level) {
+            THREADS.write(level, event, source, data.clone());
+        }
+        self.send(level, event, source, data);
+    }
+
+    /// Logs `data` at `level` to this log alone.
+    fn send(&self, level: LogLevel, event: &'static str, source: &Source, data: Data) {
         if !self.logs(level) {
             return;
         }
@@ -153,15 +164,30 @@ impl DebugLog {
     }
 
     /// Logs a line an agent sent or printed: in full at Trace, as an outline at Debug, and
-    /// below that only when it may report an error. Copies the line only when it is logged.
+    /// below that only when it may report an error. The chat's log takes it the same way at its
+    /// own level. Copies the line only when it is logged.
     pub fn line(&self, event: &'static str, source: &Source, line: &str) {
-        if self.logs(LogLevel::Trace) {
-            self.write(LogLevel::Trace, event, source, Data::Line(line.into()));
-        } else if self.logs(LogLevel::Debug) {
-            self.write(LogLevel::Debug, event, source, Data::Outline(line.into()));
-        } else if self.logs(LogLevel::Error) && may_report_error(line) {
-            self.write(LogLevel::Error, event, source, Data::Outline(line.into()));
+        if let Some((level, data)) = line_record(|level| self.logs(level), line) {
+            self.send(level, event, source, data);
         }
+        if source.thread.is_some()
+            && let Some((level, data)) = line_record(|level| THREADS.logs(level), line)
+        {
+            THREADS.write(level, event, source, data);
+        }
+    }
+}
+
+/// How a log at the levels `logs` accepts records an agent's line, if at all.
+fn line_record(logs: impl Fn(LogLevel) -> bool, line: &str) -> Option<(LogLevel, Data)> {
+    if logs(LogLevel::Trace) {
+        Some((LogLevel::Trace, Data::Line(line.into())))
+    } else if logs(LogLevel::Debug) {
+        Some((LogLevel::Debug, Data::Outline(line.into())))
+    } else if logs(LogLevel::Error) && may_report_error(line) {
+        Some((LogLevel::Error, Data::Outline(line.into())))
+    } else {
+        None
     }
 }
 

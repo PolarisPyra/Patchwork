@@ -4,6 +4,8 @@ use crate::provider::AgentKind;
 use crate::system::{now_ms, new_id};
 use crate::threads::{MessageStatus, AccessMode, ApprovalStatus, Message, Thread};
 use crate::threads::title::clean_name;
+use crate::logging::THREADS;
+use crate::settings::LogLevel;
 use crate::Server;
 
 /// The options for a new task or chat, as the desktop app sends them.
@@ -22,6 +24,11 @@ pub struct NewThread {
     #[serde(default)]
     pub compact_window: Option<u64>,
     pub plan_mode: bool,
+}
+
+/// Notes a change to the chat `id` in its log.
+fn note(id: &str, text: String) {
+    THREADS.text(LogLevel::Info, id, "chat", text);
 }
 
 /// `app_state` key for the thread the user had open last.
@@ -129,6 +136,22 @@ impl Server {
             role_pending: false,
         };
         self.store.insert_threads(vec![thread.clone()])?;
+        note(
+            &thread.id,
+            format!(
+                "created: {:?}, model {}, {:?} access, effort {}, plan mode {}, {}",
+                thread.agent,
+                thread.model.as_deref().unwrap_or("default"),
+                thread.access_mode,
+                thread.effort.as_deref().unwrap_or("default"),
+                thread.plan_mode,
+                if thread.project_id.is_some() {
+                    "in a project"
+                } else {
+                    "a chat"
+                },
+            ),
+        );
         Ok(thread)
     }
 
@@ -171,13 +194,19 @@ impl Server {
             ..source
         };
         self.store.insert_threads(vec![thread.clone()])?;
+        note(
+            &thread.id,
+            format!("forked from {thread_id} at message {message_id}"),
+        );
         Ok(thread)
     }
 
     pub fn rename_thread(&self, id: &str, title: &str) -> Result<(), String> {
         let title = clean_name(title)?;
         self.store.thread(id).ok_or("Task not found")?;
-        self.store.update_thread(id, |t| t.title = title)
+        self.store.update_thread(id, |t| t.title = title)?;
+        note(id, "renamed".into());
+        Ok(())
     }
 
     /// Moves a thread to the archive, or back to the task list. Archiving stops its running turn.
@@ -187,7 +216,9 @@ impl Server {
             self.runner.cancel(id, None);
         }
         self.store
-            .update_thread(id, |t| t.archived_at = archived.then(now_ms))
+            .update_thread(id, |t| t.archived_at = archived.then(now_ms))?;
+        note(id, if archived { "archived" } else { "unarchived" }.into());
+        Ok(())
     }
 
     /// Permanently deletes a thread and its messages.
@@ -232,12 +263,17 @@ impl Server {
             return Err("The agent can't change after the conversation has started".into());
         }
         let changed = thread.agent != agent || thread.model != model;
+        let shown = format!(
+            "agent {agent:?}, model {}",
+            model.as_deref().unwrap_or("default")
+        );
         self.store.update_thread(id, |t| {
             t.agent = agent;
             t.model = model;
         })?;
         // An idle agent was started with the old model.
         if changed {
+            note(id, shown);
             self.runner.retire_idle(id);
         }
         Ok(())
@@ -249,6 +285,7 @@ impl Server {
         self.store.update_thread(id, |t| t.access_mode = mode)?;
         // An idle agent was started with the old setting.
         if thread.access_mode != mode {
+            note(id, format!("{mode:?} access"));
             self.runner.retire_idle(id);
         }
         Ok(())
@@ -260,6 +297,7 @@ impl Server {
         self.store.update_thread(id, |t| t.plan_mode = on)?;
         // An idle agent was started with the old setting.
         if thread.plan_mode != on {
+            note(id, format!("plan mode {on}"));
             self.runner.retire_idle(id);
         }
         Ok(())
@@ -272,6 +310,10 @@ impl Server {
             .update_thread(id, |t| t.effort = effort.clone())?;
         // An idle agent was started with the old setting.
         if thread.effort != effort {
+            note(
+                id,
+                format!("effort {}", effort.as_deref().unwrap_or("default")),
+            );
             self.runner.retire_idle(id);
         }
         Ok(())
@@ -285,6 +327,7 @@ impl Server {
             .update_thread(id, |t| t.compact_window = window)?;
         // An idle agent was started with the old setting.
         if thread.compact_window != window {
+            note(id, format!("compact window {window:?}"));
             self.runner.retire_idle(id);
             let tokens = self.store.settings().tokens;
             self.runner.set_compact_window(
@@ -302,7 +345,12 @@ impl Server {
         self.stop_turn(thread_id, false);
         self.remove_checkpoints(thread_id);
         self.remove_api_session(thread_id);
-        self.store.clear_thread(thread_id)
+        self.store.clear_thread(thread_id)?;
+        note(
+            thread_id,
+            "cleared: its messages and agent session were deleted".into(),
+        );
+        Ok(())
     }
 
     /// Deletes the saved conversation of an API task, which Patchwork keeps itself, and the tool

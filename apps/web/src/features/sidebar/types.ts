@@ -76,4 +76,6 @@ export interface SidebarProps {
   onClearChangeFocus: () => void;
   /** Opens the command palette. */
   onOpenPalette: () => void;
+  /** Chat menus have Open logs (Settings → Logging). */
+  threadLogsMenu: boolean;
 }

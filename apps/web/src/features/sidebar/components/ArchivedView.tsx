@@ -3,9 +3,10 @@ import {
   ArrowCounterClockwiseIcon,
   ArrowsInLineVerticalIcon,
   ExportIcon,
+  FileTextIcon,
   TrashIcon,
 } from "@phosphor-icons/react";
-import { AGENT_LABELS, type Thread } from "~/api";
+import { AGENT_LABELS, api, type Thread } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
 import ContextMenu, { type MenuItem } from "~/components/ContextMenu";
 import { setSelectedRows, useSelectedRows } from "~/features/sidebar/lib/selectionState";
@@ -30,6 +31,7 @@ export default function ArchivedView({
   onSelectThread,
   onRestoreThread,
   onDeleteArchived,
+  threadLogsMenu,
 }: SidebarProps) {
   const picked = useSelectedRows();
   const setPicked = setSelectedRows;
@@ -138,6 +140,15 @@ export default function ArchivedView({
             onSelect: () => onRestoreThread(t.id),
           },
           { label: "Export to…", Icon: ExportIcon, onSelect: () => void exportThread(t.id) },
+          ...(threadLogsMenu
+            ? [
+                {
+                  label: "Open logs",
+                  Icon: FileTextIcon,
+                  onSelect: () => void api.openThreadLogs(t.id).catch(() => {}),
+                },
+              ]
+            : []),
           {
             label: "Delete permanently",
             Icon: TrashIcon,

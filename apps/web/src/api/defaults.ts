@@ -64,7 +64,14 @@ export const DEFAULT_SETTINGS: Settings = {
   notifications: { goalComplete: true, taskComplete: true },
   updates: { checkEveryMinutes: 10 },
   logo: null,
-  logging: { app: "info", window: "info", agents: "info", imports: "info" },
+  logging: {
+    app: "info",
+    window: "info",
+    agents: "info",
+    imports: "info",
+    threads: "debug",
+    threadMenu: true,
+  },
   terminal: defaultTerminalSettings(),
   permissions: {
     everywhere: { defaults: {}, rules: [] },

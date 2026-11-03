@@ -24,37 +24,41 @@ pub(crate) async fn read_log(
     blocking(move || patchwork_server::logging::read(&channel, offset)).await?
 }
 
-/// A message from the window for `window/renderer.log`.
+/// A message from the window for `window/renderer.log`, and for the log of the chat it is about.
 #[tauri::command]
-pub(crate) fn log_renderer(level: patchwork_server::settings::LogLevel, message: String) {
+pub(crate) fn log_renderer(
+    level: patchwork_server::settings::LogLevel,
+    message: String,
+    thread_id: Option<String>,
+) {
     use patchwork_server::logging::{Data, RENDERER, Source};
-    RENDERER.write(level, "", &Source::default(), Data::Text(message));
+    let source = Source {
+        thread: thread_id,
+        ..Source::default()
+    };
+    RENDERER.write(level, "", &source, Data::Text(message));
 }
 
-/// Saves the kept sessions' logs as a zip at `path`, with `system.json`: the app's version,
-/// the platform, the connected agents' CLI versions, and the settings, secrets removed.
+/// Writes the report of a chat (see `logging::report`) and opens it in the default app.
 #[tauri::command]
-pub(crate) async fn export_logs(app: AppHandle, server: Srv<'_>, path: String) -> Res<()> {
+pub(crate) async fn open_thread_logs(
+    app: AppHandle,
+    server: Srv<'_>,
+    thread_id: String,
+) -> Res<()> {
     let server = server.inner().clone();
-    let version = app.package_info().version.to_string();
+    let path = blocking(move || server.thread_report(&thread_id)).await??;
+    open_in_viewer(&app, &path).await
+}
+
+/// Saves the kept sessions' logs as a zip at `path`, with `system.json`: what Patchwork runs on
+/// (see `logging::system`) and the settings, secrets removed.
+#[tauri::command]
+pub(crate) async fn export_logs(server: Srv<'_>, path: String) -> Res<()> {
+    let server = server.inner().clone();
     blocking(move || {
-        let settings = server.store.settings();
-        let agents: serde_json::Map<String, serde_json::Value> = settings
-            .agents
-            .iter()
-            .map(|&kind| {
-                let version = provider::cli_version(kind);
-                (format!("{kind:?}"), serde_json::json!(version))
-            })
-            .collect();
-        let system = serde_json::json!({
-            "app": "Patchwork",
-            "version": version,
-            "os": std::env::consts::OS,
-            "arch": std::env::consts::ARCH,
-            "agents": agents,
-            "settings": settings,
-        });
+        let mut system = patchwork_server::logging::system::report().clone();
+        system["settings"] = serde_json::json!(server.store.settings());
         patchwork_server::logging::export(std::path::Path::new(&path), &system)
     })
     .await?

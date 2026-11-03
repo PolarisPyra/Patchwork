@@ -6,7 +6,9 @@ use std::sync::Arc;
 use crate::orchestration::{ApprovalDecision, Delivery, FollowUpInput, TurnRequest};
 
 use crate::orchestration::{AgentEventEnvelope, AgentEvent};
+use crate::logging::{Data, Source, THREADS};
 use crate::provider::AgentKind;
+use crate::settings::LogLevel;
 use crate::system::{now_ms, new_id};
 use crate::threads::{Role, MessageStatus, StepStatus, Attachment, Message, GoalStatus};
 use crate::{orchestration, provider, skills};
@@ -294,6 +296,19 @@ impl Server {
         {
             self.told_role(&thread_id, switched);
         }
+        let delivered = match delivery {
+            Delivery::Steered => "steered into the running reply",
+            Delivery::Queued => "queued behind the running reply",
+            Delivery::Resumed => "sent to the idle agent",
+            Delivery::NotRunning => "starting a reply",
+        };
+        let source = Source {
+            thread: Some(thread_id.clone()),
+            message: Some(msg.id.clone()),
+            ..Source::default()
+        };
+        let note = format!("{delivered}, {} attachments", attachments.len());
+        THREADS.write(LogLevel::Info, "message sent", &source, Data::Text(note));
         match delivery {
             Delivery::Steered => {
                 msg.steer = true;
@@ -371,6 +386,12 @@ impl Server {
     /// agent that can stays up for the next message. Codex is first told to pause the goal it is
     /// pursuing, so it does not carry on with it later.
     pub fn cancel_turn(&self, thread_id: &str) {
+        THREADS.text(
+            LogLevel::Info,
+            thread_id,
+            "chat",
+            "stopped by the person".into(),
+        );
         self.stop_turn(thread_id, true);
     }
 

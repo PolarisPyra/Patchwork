@@ -5,7 +5,7 @@ export interface Channel {
   /** Its path in the launch's log folder, such as "agents/claude.log". */
   id: string;
   name: string;
-  setting: keyof LoggingSettings;
+  setting: Exclude<keyof LoggingSettings, "threadMenu">;
 }
 
 const NAMED: Record<string, Omit<Channel, "id">> = {

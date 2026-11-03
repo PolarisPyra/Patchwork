@@ -460,6 +460,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
             changeFocus={focusFiles}
             folders={folders}
             flashId={flashId}
+            threadLogsMenu={settings.logging.threadMenu}
             {...sidebarHandlers}
           />
         )}

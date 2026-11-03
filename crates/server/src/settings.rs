@@ -221,7 +221,7 @@ pub enum RightClickBehavior {
 }
 
 /// How much each log in `logs/<launch>/` records, as VS Code sets each of its logs.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "settings.ts")]
 #[serde(rename_all = "camelCase", default)]
 pub struct LoggingSettings {
@@ -233,6 +233,25 @@ pub struct LoggingSettings {
     pub agents: LogLevel,
     /// `imports.log`: each scan and import of saved conversations.
     pub imports: LogLevel,
+    /// `logs/threads/<id>.log`: each chat's events and its agent's traffic, kept across launches.
+    pub threads: LogLevel,
+    /// A chat's right-click menu has Open logs.
+    pub thread_menu: bool,
+}
+
+impl Default for LoggingSettings {
+    fn default() -> Self {
+        Self {
+            app: LogLevel::Info,
+            window: LogLevel::Info,
+            agents: LogLevel::Info,
+            imports: LogLevel::Info,
+            // A chat's log is what gets sent when something goes wrong in it, so it keeps what
+            // each tool call and error said.
+            threads: LogLevel::Debug,
+            thread_menu: true,
+        }
+    }
 }
 
 /// How much a log records; each level includes the ones before it. Below Trace, no
@@ -404,7 +423,11 @@ impl Server {
         // The system prompts and the shell are what an agent's launch instructions are made of.
         let prompt_changed =
             old.system_prompts != settings.system_prompts || old.shell != settings.shell;
+        let changed = changed_sections(&old, &settings);
         self.store.update_settings(|s| *s = settings)?;
+        if !changed.is_empty() {
+            log::info!("settings changed: {}", changed.join(", "));
+        }
         // A rule the user just added may answer requests already waiting.
         self.runner.apply_rules(self);
         // Idle agents were told the old deny and ask rules, or launched with the old system
@@ -414,4 +437,18 @@ impl Server {
         }
         Ok(())
     }
+}
+
+/// The top-level sections of the settings that differ, for `main.log`. Values are left out, since
+/// some hold keys.
+fn changed_sections(old: &Settings, new: &Settings) -> Vec<String> {
+    let (Ok(serde_json::Value::Object(old)), Ok(serde_json::Value::Object(new))) =
+        (serde_json::to_value(old), serde_json::to_value(new))
+    else {
+        return Vec::new();
+    };
+    new.iter()
+        .filter(|(key, value)| old.get(*key) != Some(value))
+        .map(|(key, _)| key.clone())
+        .collect()
 }

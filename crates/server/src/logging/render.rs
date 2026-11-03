@@ -57,7 +57,9 @@ pub(super) fn render(record: Record) -> Option<String> {
     }
     if !record.event.is_empty() {
         line.push_str(record.event);
-        line.push_str(": ");
+        if !body.is_empty() {
+            line.push_str(": ");
+        }
     }
     // One record stays on one line.
     line.push_str(&body.replace('\n', "\\n"));
@@ -70,7 +72,7 @@ pub fn now_text() -> String {
 }
 
 /// `2026-10-26 12:17:29.562`, local time.
-fn local_time(ms: u64) -> String {
+pub(super) fn local_time(ms: u64) -> String {
     Local
         .timestamp_millis_opt(ms as i64)
         .single()

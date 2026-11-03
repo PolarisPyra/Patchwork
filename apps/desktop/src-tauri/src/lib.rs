@@ -225,6 +225,10 @@ pub fn run() {
                     report(info);
                 }));
             }
+            match tauri::webview_version() {
+                Ok(version) => patchwork_server::logging::system::set_webview(version),
+                Err(e) => log::warn!("could not read the webview's version: {e}"),
+            }
             for problem in not_moved {
                 log::warn!("could not move to Patchwork's new folders: {problem}");
             }
@@ -284,6 +288,7 @@ pub fn run() {
             commands::logs::log_channels,
             commands::logs::read_log,
             commands::logs::log_renderer,
+            commands::logs::open_thread_logs,
             commands::terminal::terminal_spawn,
             commands::terminal::terminal_write,
             commands::terminal::terminal_resize,

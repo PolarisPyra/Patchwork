@@ -12,6 +12,7 @@ import {
   ArrowCounterClockwiseIcon,
   ArrowsInLineVerticalIcon,
   ExportIcon,
+  FileTextIcon,
   FolderIcon,
   FolderOpenIcon,
   FolderPlusIcon,
@@ -80,6 +81,7 @@ export default function TasksView({
   onOpenFolder,
   onDropFolders,
   flashId,
+  threadLogsMenu,
 }: SidebarProps) {
   // Collapsed state is restored before the lists show, so nothing animates shut on launch.
   const [loaded, setLoaded] = useState(false);
@@ -211,6 +213,15 @@ export default function TasksView({
               Icon: ExportIcon,
               onSelect: () => void exportThread(targets[0].id),
             },
+            ...(threadLogsMenu
+              ? [
+                  {
+                    label: "Open logs",
+                    Icon: FileTextIcon,
+                    onSelect: () => void api.openThreadLogs(targets[0].id).catch(() => {}),
+                  },
+                ]
+              : []),
           ]
         : []),
       ...(targets.length === 1 && targets[0].kind === "project"
