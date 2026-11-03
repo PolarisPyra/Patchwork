@@ -35,20 +35,23 @@ or named days.
 
 ## Plugins
 
-A bundle is a folder in the plugins folder (`<config>/plugins` unless Settings chooses another)
-with a `plugin.json`. A plugin carries hooks and apps; skills belong in the skills folder and MCP
-servers in Settings → MCP Servers. The app ships no plugins. Patchwork's own hooks live in a
-`patchwork` bundle there, switched on and off like any other:
+A bundle is a folder in the plugins folder (`<config>/plugins` unless Settings chooses another).
+A plugin carries hooks and apps; skills belong in the skills folder and MCP servers in Settings →
+MCP Servers. The app ships no plugins. Patchwork's own hooks live in a `patchwork` bundle there,
+switched on and off like any other, and are one file:
 
 ```
 plugins/patchwork/
-└── hooks.json   { "hooks": { "stop": [ { "hooks": [ { "type": "command", "command": "…" } ] } ] } }
+└── hooks.json   { "name": "Patchwork", "hooks": { "preToolUse": [ … ] } }
 ```
 
+A plugin that runs hooks alone is that one file. A bundle that also carries apps has a
+`plugin.json` beside it, with its hooks inline or in a `hooks.json` the manifest names.
+
 `crates/server/src/plugins/` reads the manifest from `.patchwork-plugin/plugin.json`,
-`.codex-plugin/plugin.json`, or a plain `plugin.json`, so a Codex bundle works as it is. A folder
-with none of those and a `hooks.json` is a plugin of hooks alone, named for its folder unless the
-file gives `name`. `hooks` and `apps` are each either inline or a path, relative to the bundle
+`.codex-plugin/plugin.json`, or a plain `plugin.json`, so a Codex bundle works as it is, and from
+a `hooks.json` for a folder with none of those. A bundle's name is its folder's unless the file
+gives `name`. `hooks` and `apps` are each either inline or a path, relative to the bundle
 folder, to a file holding them, and may be nested under their own key as Codex writes them
 (`{ "hooks": { … } }`, `{ "apps": { … } }`). Each part is read on its own: one this version cannot
 read is left empty, and the rest of the bundle still loads.

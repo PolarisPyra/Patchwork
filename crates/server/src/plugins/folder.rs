@@ -265,6 +265,44 @@ mod tests {
         assert!(failures[0].starts_with("Slow: "));
     }
 
+    /// A bundle of hooks alone is one `hooks.json`, which names itself and holds its hooks, so
+    /// there is no `plugin.json` beside it to keep in step.
+    #[test]
+    fn reads_a_hooks_only_bundle() {
+        let root = temp_dir();
+        write(
+            &root.join("patchwork/hooks.json"),
+            r#"{"name":"Patchwork","description":"Patchwork's own hooks.","hooks":{
+                "preToolUse":[{"hooks":[{"type":"builtin","name":"boundedWaits","timeoutSec":10}]}]
+            }}"#,
+        );
+        let plugins = list(&settings_with(root, &[]));
+        assert_eq!(plugins.len(), 1);
+        let plugin = &plugins[0];
+        assert_eq!(plugin.id, "patchwork");
+        assert_eq!(plugin.name, "Patchwork");
+        assert_eq!(
+            plugin.description.as_deref(),
+            Some("Patchwork's own hooks.")
+        );
+        assert_eq!(plugin.hooks.len(), 1);
+        let hook = &plugin.hooks[0];
+        assert_eq!(hook.event, HookEvent::PreToolUse);
+        // A built-in this version carries gets the tools it is for.
+        assert_eq!(
+            hook.matcher.as_deref(),
+            Some(crate::provider::hooks::SHELL_TOOLS)
+        );
+        assert_eq!(
+            hook.handler,
+            PluginHookHandler::Builtin {
+                name: "boundedWaits".into(),
+                description: Some("Refuses waits with no time limit".into()),
+                timeout_secs: 10,
+            }
+        );
+    }
+
     #[test]
     fn a_folder_without_a_manifest_is_not_a_plugin() {
         let root = temp_dir();
