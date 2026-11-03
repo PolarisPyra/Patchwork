@@ -47,6 +47,7 @@ const STEPS = [
 ];
 
 const IMPORTS_STEP = 1;
+const PROJECTS_STEP = 2;
 const LAST_STEP = STEPS.length - 1;
 
 export default function Onboarding({
@@ -233,7 +234,14 @@ export default function Onboarding({
             {current.title}
           </h1>
           <p className="mt-2 mb-0 text-[length:var(--fs-lg)] text-fg-muted">{current.subtitle}</p>
-          <section className="card mt-6 flex min-h-[520px] flex-col gap-4 bg-editor p-6">
+          {/* The projects step is two buttons and a list, which need no box around them. */}
+          <section
+            className={
+              step === PROJECTS_STEP
+                ? "mt-6 flex flex-col gap-4"
+                : "card mt-6 flex min-h-[520px] flex-col gap-4 bg-editor p-6"
+            }
+          >
             {renderStep()}
           </section>
         </div>
@@ -246,6 +254,18 @@ export default function Onboarding({
             {step > 0 && (
               <button type="button" className="btn btn-lg" onClick={() => goTo(step - 1)}>
                 Back
+              </button>
+            )}
+            {/* Moves on without importing, also while the scans are still running, or without
+                adding a project. */}
+            {(step === IMPORTS_STEP || step === PROJECTS_STEP) && (
+              <button
+                type="button"
+                className="btn btn-lg"
+                disabled={saving}
+                onClick={() => goTo(step + 1)}
+              >
+                Skip
               </button>
             )}
             <button
