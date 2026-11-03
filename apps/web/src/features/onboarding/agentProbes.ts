@@ -21,7 +21,8 @@ const CHECKING: AgentProbe = { checking: true, status: null, failed: false };
 
 const allChecking = () => Object.fromEntries(AGENT_KINDS.map((k) => [k, CHECKING])) as AgentProbes;
 
-/** Detects all agents in parallel on mount; `check` re-runs detection. */
+/** Detects all agents in parallel on mount; `check` re-runs detection, skipping the cache, so a
+ * CLI installed during setup shows at once. */
 export function useAgentProbes() {
   const [probes, setProbes] = useState<AgentProbes>(allChecking);
 
@@ -31,7 +32,7 @@ export function useAgentProbes() {
         Object.fromEntries(AGENT_KINDS.map((k) => [k, { ...p[k], checking: true }])) as AgentProbes,
     );
     for (const kind of AGENT_KINDS) {
-      api.detectAgent(kind).then(
+      api.detectAgent(kind, true).then(
         (status) =>
           setProbes((p) => ({ ...p, [kind]: { checking: false, status, failed: false } })),
         () => setProbes((p) => ({ ...p, [kind]: { checking: false, status: null, failed: true } })),
