@@ -34,11 +34,6 @@ if (primary) {
     primary.textContent = "Choose your download";
     primary.setAttribute("href", "#download");
   }
-
-  const navDownload = document.querySelector(".nav a[data-download]");
-  if (navDownload && platform && downloads.has(platform)) {
-    navDownload.setAttribute("href", downloads.get(platform));
-  }
 }
 
 const nav = document.querySelector(".nav");

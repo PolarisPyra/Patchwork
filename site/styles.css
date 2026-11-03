@@ -140,6 +140,7 @@ pre,
 }
 
 .nav-inner {
+  max-width: none;
   display: flex;
   align-items: center;
   gap: 32px;
@@ -165,7 +166,7 @@ pre,
   display: flex;
   align-items: center;
   gap: 28px;
-  margin-right: auto;
+  margin-left: auto;
   font-size: 14px;
   color: var(--fg-2);
 }
@@ -176,12 +177,6 @@ pre,
 
 .nav-links a:hover {
   color: var(--fg);
-}
-
-.nav-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .nav-toggle {
@@ -264,12 +259,6 @@ pre,
 
 .btn-secondary:hover {
   background: #2b2b2e;
-}
-
-.btn-small {
-  height: 34px;
-  padding: 0 14px;
-  font-size: 14px;
 }
 
 /* ---------- Hero ---------- */
@@ -650,6 +639,7 @@ pre,
 
   .nav-toggle {
     display: inline-flex;
+    margin-left: auto;
   }
 
   .nav-links {
@@ -674,10 +664,6 @@ pre,
     padding: 12px 0;
     font-size: 15px;
     color: var(--fg);
-  }
-
-  .nav-actions {
-    margin-left: auto;
   }
 
   .section {
