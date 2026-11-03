@@ -65,30 +65,38 @@ pub fn hide_console(cmd: &mut std::process::Command) {
 }
 
 /// The system's PATH, then the user's, from the registry, then the one Patchwork started with.
+/// The `%NAME%` references in them are read from the registry too, so a variable an installer
+/// added after Patchwork started, such as nvm's `NVM_HOME`, still resolves.
 #[cfg(windows)]
 fn windows_path() -> Option<std::ffi::OsString> {
     use winreg::RegKey;
     use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
-    let read = |root, key: &str| {
-        let value: String = RegKey::predef(root)
-            .open_subkey(key)
-            .ok()?
-            .get_value("Path")
-            .ok()?;
-        Some(expand_windows_vars(&value))
+    let keys = [
+        RegKey::predef(HKEY_LOCAL_MACHINE)
+            .open_subkey(r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment")
+            .ok(),
+        RegKey::predef(HKEY_CURRENT_USER)
+            .open_subkey("Environment")
+            .ok(),
+    ];
+    let process_var = |name: &str| std::env::var(name).ok();
+    // The user's variables win over the system's, as they do at sign-in. Variables Windows sets
+    // per session, such as APPDATA, are only in Patchwork's own environment.
+    let var = |name: &str| {
+        keys.iter()
+            .rev()
+            .flatten()
+            .find_map(|key| key.get_value::<String, _>(name).ok())
+            .map(|value| expand_windows_vars(&value, &process_var))
+            .or_else(|| process_var(name))
     };
     let mut paths: Vec<PathBuf> = Vec::new();
-    for value in [
-        read(
-            HKEY_LOCAL_MACHINE,
-            r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
-        ),
-        read(HKEY_CURRENT_USER, "Environment"),
-    ]
-    .into_iter()
-    .flatten()
+    for value in keys
+        .iter()
+        .flatten()
+        .filter_map(|key| key.get_value::<String, _>("Path").ok())
     {
-        paths.extend(std::env::split_paths(&value));
+        paths.extend(std::env::split_paths(&expand_windows_vars(&value, &var)));
     }
     if let Some(existing) = std::env::var_os("PATH") {
         paths.extend(std::env::split_paths(&existing));
@@ -98,9 +106,9 @@ fn windows_path() -> Option<std::ffi::OsString> {
     std::env::join_paths(paths).ok()
 }
 
-/// `%NAME%` references in a registry value, replaced with the variables' values.
+/// `%NAME%` references in a registry value, replaced with the values `var` gives them.
 #[cfg(windows)]
-fn expand_windows_vars(value: &str) -> String {
+fn expand_windows_vars(value: &str, var: &dyn Fn(&str) -> Option<String>) -> String {
     let mut out = String::new();
     let mut rest = value;
     while let Some(start) = rest.find('%') {
@@ -109,8 +117,8 @@ fn expand_windows_vars(value: &str) -> String {
         match after.find('%') {
             Some(end) => {
                 let name = &after[..end];
-                match std::env::var(name) {
-                    Ok(v) if !name.is_empty() => out.push_str(&v),
+                match var(name) {
+                    Some(v) if !name.is_empty() => out.push_str(&v),
                     _ => out.push_str(&rest[start..start + end + 2]),
                 }
                 rest = &after[end + 1..];
