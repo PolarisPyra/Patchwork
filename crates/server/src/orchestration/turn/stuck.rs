@@ -17,9 +17,18 @@ pub(in crate::orchestration) struct Repeats {
     /// What the latest finished call came to, and how many in a row came to the same.
     last: Option<String>,
     count: usize,
+    /// A file changed since the latest finished call. Providers report it as the call starts or
+    /// just after it ends, so it is taken up by the next call that finishes.
+    changed: bool,
 }
 
 impl Repeats {
+    /// A call changed a file. Edits to one file all look alike, the same path and the same
+    /// "updated" answer, yet each is progress.
+    pub(in crate::orchestration) fn changed_file(&mut self) {
+        self.changed = true;
+    }
+
     /// Codex reports a call when it starts and again when it completes; the first counts.
     pub(in crate::orchestration) fn started(&mut self, tool: &ToolCall) {
         let call = format!("{}\0{}", tool.name, tool.summary);
@@ -31,7 +40,7 @@ impl Repeats {
     /// Records a finished call. Returns its tool's name once the agent has made the same call
     /// with the same result, or had the same call fail whatever the error said, `LOOP_LIMIT`
     /// times in a row. Different calls that fail, such as searches that find nothing, do not
-    /// count as a loop.
+    /// count as a loop, and neither does a call that succeeded after a file changed.
     pub(in crate::orchestration) fn finished(
         &mut self,
         id: &str,
@@ -39,6 +48,11 @@ impl Repeats {
         output: Option<&str>,
     ) -> Option<String> {
         let (name, call) = self.calls.remove(id)?;
+        if std::mem::take(&mut self.changed) && !failed {
+            self.last = None;
+            self.count = 0;
+            return None;
+        }
         let outcome = if failed {
             format!("{call}\0failed")
         } else {

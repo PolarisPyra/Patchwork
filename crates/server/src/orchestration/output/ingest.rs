@@ -722,6 +722,7 @@ pub(in crate::orchestration) fn ingest(
                                 continue;
                             }
                         }
+                        AgentEvent::FileTouched { .. } => repeats.changed_file(),
                         _ => {}
                     }
                     last_was_text = matches!(event, AgentEvent::TextDelta { .. });
