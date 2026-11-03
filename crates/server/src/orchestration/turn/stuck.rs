@@ -12,8 +12,9 @@ pub(in crate::orchestration) const LOOP_LIMIT: usize = 8;
 /// The calls of one turn, and how the latest ones repeat.
 #[derive(Default)]
 pub(in crate::orchestration) struct Repeats {
-    /// Calls under way: their tool's name, and that name with what the call was given.
-    calls: HashMap<String, (String, String)>,
+    /// Calls under way: their tool's name, that name with what the call was given, and whether a
+    /// file changed while it ran.
+    calls: HashMap<String, (String, String, bool)>,
     /// What the latest finished call came to, and how many in a row came to the same.
     last: Option<String>,
     count: usize,
@@ -24,9 +25,11 @@ pub(in crate::orchestration) struct Repeats {
 
 impl Repeats {
     /// A call changed a file. Edits to one file all look alike, the same path and the same
-    /// "updated" answer, yet each is progress.
+    /// "updated" answer, yet each is progress. Every call under way is marked, since a batch of
+    /// edits made at once all start before the first one finishes.
     pub(in crate::orchestration) fn changed_file(&mut self) {
         self.changed = true;
+        self.calls.values_mut().for_each(|call| call.2 = true);
     }
 
     /// Codex reports a call when it starts and again when it completes; the first counts.
@@ -34,7 +37,7 @@ impl Repeats {
         let call = format!("{}\0{}", tool.name, tool.summary);
         self.calls
             .entry(tool.id.clone())
-            .or_insert((tool.name.clone(), call));
+            .or_insert((tool.name.clone(), call, false));
     }
 
     /// Records a finished call. Returns its tool's name once the agent has made the same call
@@ -47,8 +50,9 @@ impl Repeats {
         failed: bool,
         output: Option<&str>,
     ) -> Option<String> {
-        let (name, call) = self.calls.remove(id)?;
-        if std::mem::take(&mut self.changed) && !failed {
+        let (name, call, changed_while_running) = self.calls.remove(id)?;
+        let changed = std::mem::take(&mut self.changed) || changed_while_running;
+        if changed && !failed {
             self.last = None;
             self.count = 0;
             return None;
