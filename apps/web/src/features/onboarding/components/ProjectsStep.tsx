@@ -6,6 +6,12 @@ import { syncProjects } from "~/lib/projects";
 import { errorText } from "~/lib/util";
 import { cx } from "~/features/onboarding/classNames";
 
+// The two ways in: large plain tiles, each with an icon.
+const ACTION =
+  "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--radius-lg)] border-none px-6 py-7 text-[length:var(--fs-lg)] font-semibold text-fg not-disabled:hover:bg-hover disabled:cursor-default disabled:opacity-60";
+const ICON =
+  "inline-flex h-12 w-12 items-center justify-center rounded-[var(--radius)] bg-selected-muted text-fg-muted";
+
 interface ProjectsStepProps {
   settings: Settings;
   updateSettings: UpdateSettings;
@@ -61,28 +67,34 @@ export default function ProjectsStep({ settings, updateSettings }: ProjectsStepP
 
   return (
     <>
-      <div className="flex gap-2">
+      <div className="grid grid-cols-2 gap-3">
         <button
           type="button"
-          className="btn btn-lg flex-1"
+          className={cx(ACTION, "bg-panel")}
           disabled={busy}
           onClick={() => void openExisting()}
         >
-          <FolderOpenIcon size={16} /> Open a folder
+          <span className={ICON}>
+            <FolderOpenIcon size={22} />
+          </span>
+          Open a folder
         </button>
         <button
           type="button"
-          className="btn btn-lg flex-1"
+          className={cx(ACTION, creating ? "choice-selected" : "bg-panel")}
           disabled={busy}
           aria-expanded={creating}
           onClick={() => setCreating((c) => !c)}
         >
-          <PlusIcon size={16} /> New project
+          <span className={ICON}>
+            <PlusIcon size={22} />
+          </span>
+          New project
         </button>
       </div>
 
       {creating && (
-        <div className="flex gap-2">
+        <div className="flex gap-2 rounded-[var(--radius-lg)] bg-panel p-3">
           <input
             className="input min-w-0 flex-1"
             aria-label="Project name"
@@ -121,13 +133,13 @@ export default function ProjectsStep({ settings, updateSettings }: ProjectsStepP
                 <button
                   type="button"
                   className={cx(
-                    "flex w-full cursor-pointer items-center gap-3 rounded-[var(--radius-sm)] border-none px-3 py-2 text-left transition-[background-color] duration-[0.12s] ease-[ease]",
-                    active ? "bg-accent-soft" : "bg-transparent hover:bg-hover",
+                    "flex w-full cursor-pointer items-center gap-3 rounded-[var(--radius-sm)] border border-transparent px-3 py-2 text-left",
+                    active ? "choice-selected" : "bg-transparent hover:bg-hover",
                   )}
                   aria-pressed={active}
                   onClick={() => setActive(p.id)}
                 >
-                  <span className="inline-flex w-3.5 flex-none text-accent-text">
+                  <span className="inline-flex w-3.5 flex-none text-fg">
                     {active && <CheckIcon size={14} weight="bold" />}
                   </span>
                   <span className="flex-none font-medium text-fg">{p.name}</span>

@@ -1,13 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRightIcon, MoonIcon, SunIcon } from "@phosphor-icons/react";
 import { api, importSourcesFor, type AgentKind, type ImportSource, type Settings } from "~/api";
 import type { UpdateSettings } from "~/api";
+import Spinner from "~/components/Spinner";
 import AgentStep from "~/features/onboarding/components/AgentStep";
-import DevicesStep from "~/features/onboarding/components/DevicesStep";
-import ImportsStep, { useImportScans } from "~/features/onboarding/components/ImportsStep";
+import ImportsStep, {
+  useImportScans,
+  type ImportProgress,
+} from "~/features/onboarding/components/ImportsStep";
 import ProjectsStep from "~/features/onboarding/components/ProjectsStep";
+import ReadyStep, { type ImportResult } from "~/features/onboarding/components/ReadyStep";
 import Stepper from "~/features/onboarding/components/Stepper";
 import { AGENT_KINDS, isReady, useAgentProbes } from "~/features/onboarding/agentProbes";
+import { cx } from "~/features/onboarding/classNames";
 import { errorText } from "~/lib/util";
 
 export interface OnboardingProps {
@@ -39,10 +44,10 @@ const STEPS = [
     helper: "Projects are optional. You can add more later.",
   },
   {
-    label: "Devices",
-    title: "Configure your devices",
-    subtitle: "Choose where tasks run and how Patchwork connects to your development environments.",
-    helper: "More devices can be added later.",
+    label: "Ready",
+    title: "You're all set",
+    subtitle: "Check your choices, then start your first task.",
+    helper: "You can change any of this later in Settings.",
   },
 ];
 
@@ -67,6 +72,13 @@ export default function Onboarding({
   // Providers to import from; defaults to every one with something new.
   const [importKinds, setImportKinds] = useState<ImportSource[] | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importing, setImporting] = useState<ImportProgress | null>(null);
+  // Threads imported so far, and the project count before the first import, so a retry after
+  // a failure still counts everything.
+  const importTally = useRef<{ threads: number; projectsBefore: number } | null>(null);
+  const [imported, setImported] = useState<ImportResult | null>(null);
+  // The agent new tasks start with; saved first in `settings.agents`, which is what marks it.
+  const [defaultKind, setDefaultKind] = useState<AgentKind | null>(settings.agents[0] ?? null);
 
   useEffect(() => {
     if (step !== IMPORTS_STEP || scanning || importKinds !== null) return;
@@ -98,32 +110,57 @@ export default function Onboarding({
       return AGENT_KINDS.filter((k) => next.includes(k));
     });
 
+  const defaultAgent =
+    agents && defaultKind && agents.includes(defaultKind) ? defaultKind : (agents?.[0] ?? null);
+  const orderedAgents = (agents ?? []).filter((k) => k !== defaultAgent);
+  if (defaultAgent) orderedAgents.unshift(defaultAgent);
+
   const canContinue =
     !saving && (step !== 0 || (agents?.length ?? 0) > 0) && (step !== IMPORTS_STEP || !scanning);
   const isLast = step === LAST_STEP;
   const current = STEPS[step];
 
+  // Which way the last move went, so the step slides in from that side.
+  const [back, setBack] = useState(false);
+
   const goTo = (index: number) => {
+    setBack(index < step);
     setStep(index);
     setReached((r) => Math.max(r, index));
   };
 
   const complete = () => updateSettings((s) => ({ ...s, onboarded: true }));
 
-  /** Imports the chosen providers' conversations; false if it failed. */
+  /** Imports the chosen providers' conversations, one provider at a time so the step can
+   *  say which one is running; false if it failed. A conversation two providers both hold is
+   *  still imported once, since each run skips what the last one saved. */
   const importSelected = async () => {
     const kinds = (importKinds ?? []).filter((k) => (scans[k]?.new ?? 0) > 0);
     if (kinds.length === 0) return true;
     setImportError(null);
+    const tally = (importTally.current ??= {
+      threads: 0,
+      projectsBefore: settings.projects.length,
+    });
     try {
-      await api.importThreads(kinds);
+      for (const [index, kind] of kinds.entries()) {
+        setImporting({ kind, index, total: kinds.length });
+        tally.threads += await api.importThreads([kind]);
+      }
       // Importing adds projects on the backend; pick them up before saving settings again.
-      await updateSettings(await api.getSettings());
+      const fresh = await api.getSettings();
+      await updateSettings(fresh);
+      setImported({
+        threads: tally.threads,
+        projects: fresh.projects.length - tally.projectsBefore,
+      });
       setImportKinds(null);
       return true;
     } catch (e) {
       setImportError(errorText(e));
       return false;
+    } finally {
+      setImporting(null);
     }
   };
 
@@ -134,7 +171,7 @@ export default function Onboarding({
       if (isLast) {
         await complete();
       } else {
-        if (step === 0 && agents) await updateSettings((s) => ({ ...s, agents }));
+        if (step === 0 && agents) await updateSettings((s) => ({ ...s, agents: orderedAgents }));
         if (step === IMPORTS_STEP && !(await importSelected())) return;
         goTo(step + 1);
       }
@@ -142,6 +179,11 @@ export default function Onboarding({
       setSaving(false);
     }
   };
+
+  // Each step's heading takes focus when it shows, so screen readers and agents hear that the
+  // page changed and start reading from the top of it.
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => heading.current?.focus(), [step]);
 
   // Enter continues from anywhere that is not a text field or button, so it
   // never hijacks the project name input or a focused control.
@@ -166,6 +208,8 @@ export default function Onboarding({
             checking={checking}
             selected={agents ?? []}
             onToggle={toggleAgent}
+            defaultAgent={defaultAgent}
+            onDefault={setDefaultKind}
             onRecheck={check}
           />
         );
@@ -176,13 +220,14 @@ export default function Onboarding({
             scans={scans}
             selected={importKinds ?? []}
             onToggle={toggleImport}
+            importing={importing}
             error={importError}
           />
         );
-      case 2:
+      case PROJECTS_STEP:
         return <ProjectsStep settings={settings} updateSettings={updateSettings} />;
       default:
-        return <DevicesStep />;
+        return <ReadyStep agents={orderedAgents} imported={imported} settings={settings} />;
     }
   };
 
@@ -249,8 +294,16 @@ export default function Onboarding({
       </header>
 
       <main className="flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable_both-edges] py-10">
-        <div className="w-full max-w-[820px] mx-auto px-6">
-          <h1 className="m-0 text-[length:var(--fs-xxl)] font-semibold leading-[1.25]">
+        {/* Keyed by step, so each step plays its entrance when it shows. */}
+        <div
+          key={step}
+          className={cx("step-enter w-full max-w-[820px] mx-auto px-6", back && "step-enter-back")}
+        >
+          <h1
+            ref={heading}
+            tabIndex={-1}
+            className="m-0 text-[length:var(--fs-xxl)] font-semibold leading-[1.25] outline-none"
+          >
             {current.title}
           </h1>
           <p className="mt-2 mb-0 text-[length:var(--fs-lg)] text-fg-muted">{current.subtitle}</p>
@@ -259,7 +312,7 @@ export default function Onboarding({
             className={
               step === PROJECTS_STEP
                 ? "mt-6 flex flex-col gap-4"
-                : "card mt-6 flex min-h-[520px] flex-col gap-4 bg-editor p-6"
+                : "mt-6 flex min-h-[520px] flex-col gap-4 rounded-[var(--radius-lg)] bg-editor p-6"
             }
           >
             {renderStep()}
@@ -269,7 +322,9 @@ export default function Onboarding({
 
       <footer className="flex-none h-[84px] border-t border-border bg-app">
         <div className="w-full max-w-[820px] mx-auto px-6 h-full flex items-center justify-between gap-4">
-          <span className="text-[length:var(--fs-sm)] text-fg-muted">{current.helper}</span>
+          <span key={step} className="step-fade-in text-[length:var(--fs-sm)] text-fg-muted">
+            {current.helper}
+          </span>
           <div className="flex gap-2">
             {step > 0 && (
               <button type="button" className="btn btn-lg" onClick={() => goTo(step - 1)}>
@@ -290,17 +345,12 @@ export default function Onboarding({
             )}
             <button
               type="button"
-              className="btn btn-primary btn-lg w-[190px]"
+              className="btn btn-primary btn-lg min-w-[190px]"
               disabled={!canContinue}
               onClick={() => void next()}
             >
-              {isLast ? (
-                "Finish setup"
-              ) : (
-                <>
-                  Continue <ArrowRightIcon size={16} />
-                </>
-              )}
+              {isLast ? "Start your first task" : "Continue"}
+              {saving ? <Spinner size={16} /> : <ArrowRightIcon size={16} />}
             </button>
           </div>
         </div>

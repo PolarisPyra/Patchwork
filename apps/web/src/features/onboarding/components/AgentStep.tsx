@@ -1,3 +1,4 @@
+import { useId, type KeyboardEvent } from "react";
 import { ArrowClockwiseIcon, CheckIcon } from "@phosphor-icons/react";
 import Spinner from "~/components/Spinner";
 import { AGENT_LABELS, type AgentKind, type CliKind } from "~/api";
@@ -15,6 +16,9 @@ interface AgentStepProps {
   checking: boolean;
   selected: AgentKind[];
   onToggle: (kind: AgentKind) => void;
+  /** The agent new tasks start with; one of `selected`. */
+  defaultAgent: AgentKind | null;
+  onDefault: (kind: AgentKind) => void;
   onRecheck: () => void;
 }
 
@@ -23,6 +27,8 @@ export default function AgentStep({
   checking,
   selected,
   onToggle,
+  defaultAgent,
+  onDefault,
   onRecheck,
 }: AgentStepProps) {
   return (
@@ -50,7 +56,72 @@ export default function AgentStep({
           />
         ))}
       </div>
+      {selected.length > 0 && (
+        <DefaultAgent selected={selected} value={defaultAgent} onChange={onDefault} />
+      )}
     </>
+  );
+}
+
+/** Picks which connected agent new tasks start with. */
+function DefaultAgent({
+  selected,
+  value,
+  onChange,
+}: {
+  selected: AgentKind[];
+  value: AgentKind | null;
+  onChange: (kind: AgentKind) => void;
+}) {
+  const label = useId();
+  // Arrow keys pick the next or previous agent, as in any radio group.
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const at = value ? selected.indexOf(value) : 0;
+    const next = (at + step + selected.length) % selected.length;
+    onChange(selected[next]);
+    e.currentTarget.querySelectorAll<HTMLElement>("[role=radio]")[next]?.focus();
+  };
+  return (
+    <div className="mt-2 flex flex-col gap-4">
+      <span id={label} className="text-[length:var(--fs-md)] font-semibold">
+        Default agent
+      </span>
+      {/* One tile per connected agent, as many to a row as fit. */}
+      <div
+        role="radiogroup"
+        aria-labelledby={label}
+        className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2"
+        onKeyDown={onKeyDown}
+      >
+        {selected.map((kind) => {
+          const checked = kind === value;
+          return (
+            <button
+              key={kind}
+              type="button"
+              role="radio"
+              aria-checked={checked}
+              tabIndex={checked ? 0 : -1}
+              className={cx(
+                "flex cursor-pointer flex-col items-center gap-2.5 rounded-[var(--radius)] border px-3 pt-4 pb-3 text-[length:var(--fs-sm)] transition-[background-color,border-color,color] duration-[0.12s] ease-[ease]",
+                checked
+                  ? "choice-selected font-semibold text-fg"
+                  : "border-border bg-transparent text-fg-muted hover:bg-hover hover:text-fg",
+              )}
+              onClick={() => onChange(kind)}
+            >
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius)] bg-selected-muted">
+                <ProviderLogos kind={kind} size={22} />
+              </span>
+              {AGENT_LABELS[kind]}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -73,8 +144,8 @@ function AgentRow({
       aria-checked={selected}
       disabled={!ready}
       className={cx(
-        "flex w-full items-center gap-4 rounded-[var(--radius)] border p-4 text-left text-fg transition-[background-color,border-color] duration-[0.12s] ease-[ease] not-disabled:cursor-pointer not-disabled:hover:bg-hover",
-        selected ? "border-accent bg-accent-soft" : "border-border bg-transparent",
+        "flex w-full items-center gap-4 rounded-[var(--radius)] border p-4 text-left text-fg transition-[background-color,border-color] duration-[0.12s] ease-[ease] not-disabled:cursor-pointer",
+        selected ? "choice-selected" : "border-border bg-transparent not-disabled:hover:bg-hover",
       )}
       onClick={() => onToggle(kind)}
     >
@@ -104,21 +175,24 @@ function AgentRow({
   );
 }
 
+// Every badge is as wide as the longest usual one, so they line up from row to row.
+const BADGE = "badge min-w-[112px] justify-center tabular-nums";
+
 function StatusBadge({ probe }: { probe: AgentProbe }) {
   if (probe.checking) {
     return (
-      <span className="badge">
+      <span className={BADGE}>
         <Spinner />
         Checking…
       </span>
     );
   }
   const { status } = probe;
-  if (!status) return <span className="badge">Check failed</span>;
-  if (!status.installed) return <span className="badge">Not installed</span>;
-  if (!status.signedIn) return <span className="badge badge-danger">Not signed in</span>;
+  if (!status) return <span className={BADGE}>Check failed</span>;
+  if (!status.installed) return <span className={BADGE}>Not installed</span>;
+  if (!status.signedIn) return <span className={`${BADGE} badge-danger`}>Not signed in</span>;
   return (
-    <span className="badge badge-success">
+    <span className={`${BADGE} badge-success`}>
       {status.version ? `Ready · v${status.version}` : "Ready"}
     </span>
   );

@@ -658,6 +658,120 @@
 @media (prefers-reduced-motion: reduce) {
   .update-card-in { animation: none; }
 }
+/* The setup steps: moving on, the line to the next step fills, then that step's circle pops in
+   with a soft ring, and the step left behind turns into a check. Going back undoes it at once. */
+.step-line-fill {
+  /* The logo's colours flow along the line. */
+  background: linear-gradient(90deg, #5bc0eb, #9b5de5, #ff7eb3, #5bc0eb) 0 0 / 300% 100%;
+  transform-origin: left;
+  transition: transform 380ms cubic-bezier(0.65, 0, 0.35, 1);
+  animation: step-line-flow 4s linear infinite;
+}
+@keyframes step-line-flow {
+  to { background-position: 150% 0; }
+}
+.step-dot {
+  transition: background-color 200ms ease, color 200ms ease;
+}
+.step-dot-filled {
+  background: linear-gradient(135deg, #5bc0eb, #9b5de5 55%, #ff7eb3);
+  color: #fff;
+}
+/* A picked setup choice: a plain, slightly lighter fill and a stronger border, no colour. It sets
+   the background outright, so hovering a picked choice changes nothing. */
+.choice-selected {
+  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--text) 6%, var(--bg-editor));
+}
+.step-dot-current {
+  animation: step-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) 220ms both;
+}
+/* Around the current step's circle: a breathing ring in the logo's colours, a few bubbles that
+   bob, and two sparkles that twinkle. Nothing turns, so it never reads as loading. */
+.step-halo {
+  position: absolute;
+  inset: -8px;
+  pointer-events: none;
+  animation: step-halo-in 520ms cubic-bezier(0.34, 1.56, 0.64, 1) 260ms both;
+}
+.step-halo-ring {
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  padding: 1.5px;
+  background: conic-gradient(#5bc0eb, #9b5de5, #ff7eb3, #5bc0eb);
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: step-breathe 2.6s ease-in-out infinite;
+}
+.step-bubble {
+  position: absolute;
+  border-radius: 50%;
+  animation: step-bob 2.2s ease-in-out infinite alternate;
+}
+.step-bubble-1 { top: -1px; right: 0; width: 6px; height: 6px; background: #ff7eb3; }
+.step-bubble-2 { bottom: 1px; left: -2px; width: 5px; height: 5px; background: #5bc0eb; animation-delay: -0.8s; }
+.step-bubble-3 { bottom: -3px; right: 5px; width: 3px; height: 3px; background: #9b5de5; animation-delay: -1.5s; }
+.step-sparkle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  animation: step-twinkle 1.9s ease-in-out infinite;
+}
+.step-sparkle-1 { top: -3px; left: 0; fill: #ffd86b; }
+.step-sparkle-2 { top: 9px; right: -6px; width: 6px; height: 6px; fill: #ffc2dc; animation-delay: -0.95s; }
+@keyframes step-halo-in {
+  from { opacity: 0; transform: scale(0.5); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes step-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.08); opacity: 0.55; }
+}
+@keyframes step-bob {
+  from { transform: translateY(0) scale(1); }
+  to { transform: translateY(-2.5px) scale(1.15); }
+}
+@keyframes step-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.3) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(45deg); }
+}
+.step-check-in {
+  animation: step-check-in 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes step-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+@keyframes step-check-in {
+  from { opacity: 0; transform: scale(0.4) rotate(-30deg); }
+  to { opacity: 1; transform: none; }
+}
+/* A setup step's title, text and box slide in a few pixels from the side the step comes from,
+   one just after another, and its footer text fades in. */
+.step-enter > * {
+  animation: step-enter 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.step-enter > :nth-child(2) { animation-delay: 30ms; }
+.step-enter > :nth-child(3) { animation-delay: 70ms; }
+.step-enter-back > * { --step-from: -16px; }
+@keyframes step-enter {
+  from { opacity: 0; transform: translateX(var(--step-from, 16px)); }
+  to { opacity: 1; transform: none; }
+}
+.step-fade-in {
+  animation: step-fade-in 260ms ease both;
+}
+@keyframes step-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .step-line-fill, .step-dot { transition: none; }
+  .step-line-fill, .step-dot-current, .step-check-in, .step-enter > *, .step-fade-in { animation: none; }
+  .step-halo, .step-halo-ring, .step-bubble { animation: none; }
+  .step-sparkle { display: none; }
+}
 /* A project whose folder was dropped on the sidebar again flashes, to show it is already there. */
 .project-flash {
   animation: project-flash 900ms ease-out;

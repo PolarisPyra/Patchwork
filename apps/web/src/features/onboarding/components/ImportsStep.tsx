@@ -30,11 +30,19 @@ export function useImportScans(sources: ImportSource[], enabled: boolean) {
   return { scans, scanning };
 }
 
+/** The provider being imported now, and where it falls in the run. */
+export interface ImportProgress {
+  kind: ImportSource;
+  index: number;
+  total: number;
+}
+
 interface ImportsStepProps {
   sources: ImportSource[];
   scans: ImportScans;
   selected: ImportSource[];
   onToggle: (kind: ImportSource) => void;
+  importing: ImportProgress | null;
   error: string | null;
 }
 
@@ -43,6 +51,7 @@ export default function ImportsStep({
   scans,
   selected,
   onToggle,
+  importing,
   error,
 }: ImportsStepProps) {
   return (
@@ -65,10 +74,12 @@ export default function ImportsStep({
               type="button"
               role="checkbox"
               aria-checked={isSelected}
-              disabled={!importable}
+              disabled={!importable || !!importing}
               className={cx(
-                "flex w-full items-center gap-4 rounded-[var(--radius)] border p-4 text-left text-fg transition-[background-color,border-color] duration-[0.12s] ease-[ease] not-disabled:cursor-pointer not-disabled:hover:bg-hover",
-                isSelected ? "border-accent bg-accent-soft" : "border-border bg-transparent",
+                "flex w-full items-center gap-4 rounded-[var(--radius)] border p-4 text-left text-fg transition-[background-color,border-color] duration-[0.12s] ease-[ease] not-disabled:cursor-pointer",
+                isSelected
+                  ? "choice-selected"
+                  : "border-border bg-transparent not-disabled:hover:bg-hover",
               )}
               onClick={() => onToggle(kind)}
             >
@@ -105,6 +116,18 @@ export default function ImportsStep({
           );
         })}
       </div>
+      {/* Always present, so screen readers announce each provider as it starts. */}
+      <p
+        role="status"
+        className="m-0 flex items-center gap-2 text-[length:var(--fs-sm)] text-fg-muted"
+      >
+        {importing && (
+          <>
+            <Spinner />
+            {describeProgress(importing, scans[importing.kind])}
+          </>
+        )}
+      </p>
       {error && (
         <p role="alert" className="m-0 text-[length:var(--fs-sm)] text-danger">
           {error}
@@ -112,6 +135,12 @@ export default function ImportsStep({
       )}
     </>
   );
+}
+
+function describeProgress({ kind, index, total }: ImportProgress, scan?: ImportScan | null) {
+  const count = scan?.new ? `${scan.new} ` : "";
+  const of = total > 1 ? ` (${index + 1} of ${total})` : "";
+  return `Importing ${count}${SOURCE_LABELS[kind]} conversations${of}…`;
 }
 
 function describeScan(scan: ImportScan | null | undefined): string {
