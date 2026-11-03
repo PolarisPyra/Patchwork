@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CaretDownIcon, IdentificationBadgeIcon, PencilSimpleIcon } from "@phosphor-icons/react";
+import { CaretDownIcon, PencilSimpleIcon, RobotIcon } from "@phosphor-icons/react";
 import { api, type CustomAgent } from "~/api";
 import Dropdown from "~/components/Dropdown";
 import { CHIP_CLASS } from "~/components/chip";
@@ -36,7 +36,7 @@ export default function AgentPicker({
           aria-label={role ? `Agent: ${role}` : "Agent: none"}
           onClick={toggle}
         >
-          <IdentificationBadgeIcon size={16} />
+          <RobotIcon size={16} />
           <span>{role ?? "Agent"}</span>
           <CaretDownIcon size={14} />
         </button>
