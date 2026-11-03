@@ -3,6 +3,22 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.3] - 2026-11-03
+
+### Added
+
+- Select text in a reply and press Quote, or R, to add it to the chat box as a quote. Commands such as /goal at the start of a message become chips like mentions do: the first Backspace or Delete selects a chip and the second removes it. Typing @ now lists folders too, and Tab opens one to pick a file inside; clicking a file in the chat box opens it in the file panel. Unsent messages are kept per chat when Patchwork is reloaded or restarted. Settings → Chat has a new switch, Enter steers a running reply, so Enter steers and Ctrl+Enter queues instead of the other way round. The model button shows only its icon when the chat box is narrow, and Enter with Alt or with two modifiers no longer sends.
+
+### Changed
+
+- The Projects step of setup is now two buttons, Open a folder and New project, with the projects you add listed below them. New project asks for a name, then Create in… picks where its folder goes. The Imports and Projects steps both have a Skip button, so you can move on while conversations are still being scanned, or without adding a project.
+- The setup screen now shows the Patchwork logo, the three-coloured cube, at its top left instead of a plain "P" square.
+- Setup now ends with a Ready step instead of Devices: it lists your agents, how many conversations were imported and into how many new projects, and your active project, with where tasks run below, and its button is Start your first task. On the Agent step you can pick the default agent from tiles under the list, also when only one agent is connected. Imports show which provider is being imported and how far along it is, and Continue shows a spinner while it saves. Moving between steps slides the new step in from the side you came from, the timeline fills with the logo's colours, and the current step has a small animated ring. The Projects step's two buttons are now large plain tiles. Picked choices have a plain grey highlight. Screen readers hear each new step's heading and which steps are done.
+
+### Fixed
+
+- An agent that edits several parts of one file in a single step, such as eight edits sent together, is no longer stopped as if it were stuck repeating itself. Each of those edits now counts as progress, as edits made one after another already did.
+
 ## [26.11.2] - 2026-11-03
 
 ### Added
