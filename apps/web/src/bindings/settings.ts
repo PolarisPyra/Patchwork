@@ -53,7 +53,7 @@ agents: LogLevel,
  */
 imports: LogLevel, 
 /**
- * `logs/threads/<id>.log`: each chat's events and its agent's traffic, kept across launches.
+ * `threads/<id>.log`: each chat's events and its agent's traffic.
  */
 threads: LogLevel, 
 /**

@@ -1,10 +1,10 @@
-//! Each event a chat streams, as a line in its own log (see `logging::THREADS`). Info has what a
+//! Each event a chat streams, as a line in its own log (see `logging::THREAD_LOG`). Info has what a
 //! reply did: its start and end, approvals, retries, goals, compactions, checks and background
 //! tasks; Warning, what went wrong in it; Debug adds each tool call, plan, file and token count;
 //! and Trace, the text the person and the agent wrote. Streamed text is left to the agent's own
 //! traffic, which the chat's log also takes.
 
-use crate::logging::{Data, Source, THREADS};
+use crate::logging::{Data, Source, THREAD_LOG};
 use crate::settings::LogLevel;
 use crate::threads::{MessageStatus, Role, StepStatus};
 
@@ -12,7 +12,7 @@ use super::events::{AgentEvent, AgentEventEnvelope};
 
 /// Logs `envelope` to its chat's log.
 pub(crate) fn log_event(envelope: &AgentEventEnvelope) {
-    if !THREADS.logs(LogLevel::Error) {
+    if !THREAD_LOG.logs(LogLevel::Error) {
         return;
     }
     let Some((level, event, message, text)) = describe(&envelope.event) else {
@@ -23,13 +23,13 @@ pub(crate) fn log_event(envelope: &AgentEventEnvelope) {
         message: message.map(String::from),
         ..Source::default()
     };
-    THREADS.write(level, event, &source, Data::Text(text));
+    THREAD_LOG.write(level, event, &source, Data::Text(text));
 }
 
 /// The level, name, reply and text of an event's line, or None for one the log leaves out.
 fn describe(event: &AgentEvent) -> Option<(LogLevel, &'static str, Option<&str>, String)> {
     use LogLevel::{Debug, Error, Info, Warning};
-    let trace = THREADS.logs(LogLevel::Trace);
+    let trace = THREAD_LOG.logs(LogLevel::Trace);
     // The person's and the agent's own words are logged only at Trace.
     let words = |text: &str| {
         if trace {

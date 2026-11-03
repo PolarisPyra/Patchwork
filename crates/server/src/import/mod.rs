@@ -17,16 +17,10 @@ mod sessions;
 
 pub use sessions::*;
 
-use crate::logging::DebugLog;
-
-/// The import debug log, `imports.log` in the session's log folder: where each scan looked, what it found,
-/// what it skipped and why, and what an import added. Set in Settings → Logging.
-pub static LOG: DebugLog = DebugLog::new("imports.log");
-
-/// `format!`s a line into the import log.
+/// `format!`s a line into the import log, `logging::IMPORT_LOG`.
 macro_rules! ilog {
     ($($arg:tt)*) => {
-        $crate::import::LOG.write(
+        $crate::logging::IMPORT_LOG.write(
             $crate::settings::LogLevel::Info,
             "",
             &$crate::logging::Source::default(),

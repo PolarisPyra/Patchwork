@@ -4,7 +4,7 @@ use crate::provider::AgentKind;
 use crate::system::{now_ms, new_id};
 use crate::threads::{MessageStatus, AccessMode, ApprovalStatus, Message, Thread};
 use crate::threads::title::clean_name;
-use crate::logging::THREADS;
+use crate::logging::THREAD_LOG;
 use crate::settings::LogLevel;
 use crate::Server;
 
@@ -28,7 +28,7 @@ pub struct NewThread {
 
 /// Notes a change to the chat `id` in its log.
 fn note(id: &str, text: String) {
-    THREADS.text(LogLevel::Info, id, "chat", text);
+    THREAD_LOG.text(LogLevel::Info, id, "chat", text);
 }
 
 /// `app_state` key for the thread the user had open last.

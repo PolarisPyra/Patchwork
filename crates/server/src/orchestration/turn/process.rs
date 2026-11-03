@@ -14,7 +14,7 @@ use std::sync::Mutex;
 use std::sync::PoisonError;
 use std::time::Duration;
 
-use crate::logging::{AGENTS, Data, Source};
+use crate::logging::{AGENT_LOG, Data, Source};
 use crate::provider::AgentKind;
 use crate::settings::LogLevel;
 use crate::workspace;
@@ -75,11 +75,11 @@ pub(in crate::orchestration) fn write_to(stdin: &mut Option<AgentStdin>, line: &
     let Some(AgentStdin { pipe, source }) = stdin.as_mut() else {
         return false;
     };
-    AGENTS.line("in", source, line);
+    AGENT_LOG.line("in", source, line);
     match writeln!(pipe, "{line}").and_then(|()| pipe.flush()) {
         Ok(()) => true,
         Err(e) => {
-            AGENTS.write(
+            AGENT_LOG.write(
                 LogLevel::Error,
                 "write_failed",
                 source,
@@ -233,7 +233,7 @@ pub(in crate::orchestration) fn read_stderr_tail(stderr: ChildStderr, source: So
     let mut line = Vec::new();
     while reader.read_until(b'\n', &mut line).unwrap_or(0) > 0 {
         let text = String::from_utf8_lossy(&line);
-        AGENTS.write(
+        AGENT_LOG.write(
             LogLevel::Debug,
             "stderr",
             &source,

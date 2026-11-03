@@ -6,7 +6,6 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::follow_log_levels;
 use crate::permissions::PermissionSettings;
 use crate::projects::Project;
 use crate::provider::AgentKind;
@@ -233,7 +232,7 @@ pub struct LoggingSettings {
     pub agents: LogLevel,
     /// `imports.log`: each scan and import of saved conversations.
     pub imports: LogLevel,
-    /// `logs/threads/<id>.log`: each chat's events and its agent's traffic, kept across launches.
+    /// `threads/<id>.log`: each chat's events and its agent's traffic.
     pub threads: LogLevel,
     /// A chat's right-click menu has Open logs.
     pub thread_menu: bool,
@@ -417,7 +416,7 @@ impl Server {
     }
 
     pub fn save_settings(self: &Arc<Self>, settings: Settings) -> Result<(), String> {
-        follow_log_levels(&settings);
+        crate::logging::follow(&settings.logging);
         let old = self.store.settings();
         let guards_changed = !permissions::same_guards(&old.permissions, &settings.permissions);
         // The system prompts and the shell are what an agent's launch instructions are made of.

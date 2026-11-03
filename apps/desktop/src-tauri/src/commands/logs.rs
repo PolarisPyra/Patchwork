@@ -31,12 +31,12 @@ pub(crate) fn log_renderer(
     message: String,
     thread_id: Option<String>,
 ) {
-    use patchwork_server::logging::{Data, RENDERER, Source};
+    use patchwork_server::logging::{Data, WINDOW_LOG, Source};
     let source = Source {
         thread: thread_id,
         ..Source::default()
     };
-    RENDERER.write(level, "", &source, Data::Text(message));
+    WINDOW_LOG.write(level, "", &source, Data::Text(message));
 }
 
 /// Writes the report of a chat (see `logging::report`) and shows it selected in the file manager,

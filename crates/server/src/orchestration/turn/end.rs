@@ -11,7 +11,7 @@ use crate::orchestration::AgentEvent;
 use crate::provider::AgentKind;
 use crate::threads::MessageStatus;
 use crate::threads::Role;
-use crate::logging::{AGENTS, Data, Source};
+use crate::logging::{AGENT_LOG, Data, Source};
 use crate::settings::LogLevel;
 use crate::orchestration::FollowUpInput;
 use crate::orchestration::changes::checkpoint;
@@ -357,7 +357,7 @@ pub(in crate::orchestration) fn log_cli_version(agent: AgentKind) {
             agent: Some(agent),
             ..Source::default()
         };
-        AGENTS.write(
+        AGENT_LOG.write(
             LogLevel::Info,
             "cli",
             &source,

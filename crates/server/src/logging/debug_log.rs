@@ -1,7 +1,7 @@
 //! The debug log: what is recorded, for which agent, and writing it.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::OnceLock;
@@ -12,18 +12,33 @@ use crate::system::now_ms;
 
 use super::files::LogFile;
 use super::render::render;
-use super::THREADS;
+use super::{LaunchLog, THREAD_LOG};
 
-/// The agent logs, `agents/<agent>.log`.
-pub static AGENTS: DebugLog = DebugLog::new("agents/agents.log");
+/// The agent logs, `agents/<agent>.log`. A record about a chat goes to its thread log too.
+pub static AGENT_LOG: DebugLog = DebugLog::new("agents/agents.log");
+
+/// The window's errors and warnings, `window/renderer.log`.
+pub static WINDOW_LOG: DebugLog = DebugLog::new("window/renderer.log");
+
+/// `imports.log`: where each scan looked, what it found, what it skipped and why, and what an
+/// import added. Written with `import::ilog!`.
+pub static IMPORT_LOG: DebugLog = DebugLog::new("imports.log");
 
 /// How much `main.log` records. The desktop shell's logger checks it for every message, since
 /// the logger sets the `log` crate's own maximum when it starts.
 static APP_LEVEL: AtomicU8 = AtomicU8::new(LogLevel::Info as u8);
 
 /// Follows the setting for `main.log`.
-pub fn set_app_level(level: LogLevel) {
+pub(super) fn set_app_level(level: LogLevel) {
     APP_LEVEL.store(level as u8, Ordering::Relaxed);
+    log::set_max_level(match level {
+        LogLevel::Off => log::LevelFilter::Off,
+        LogLevel::Error => log::LevelFilter::Error,
+        LogLevel::Warning => log::LevelFilter::Warn,
+        LogLevel::Info => log::LevelFilter::Info,
+        LogLevel::Debug => log::LevelFilter::Debug,
+        LogLevel::Trace => log::LevelFilter::Trace,
+    });
 }
 
 /// Whether `main.log` records a message at `level`.
@@ -37,9 +52,6 @@ pub fn app_logs(level: log::Level) -> bool {
     };
     level as u8 <= APP_LEVEL.load(Ordering::Relaxed)
 }
-
-/// The window's errors and warnings, `window/renderer.log`.
-pub static RENDERER: DebugLog = DebugLog::new("window/renderer.log");
 
 pub struct DebugLog {
     writer: OnceLock<Sender<Record>>,
@@ -98,22 +110,13 @@ fn agent_file(agent: AgentKind) -> &'static str {
     }
 }
 
-impl DebugLog {
-    pub const fn new(file: &'static str) -> Self {
-        Self {
-            writer: OnceLock::new(),
-            level: AtomicU8::new(LogLevel::Off as u8),
-            file,
-        }
-    }
-
-    /// Starts the writer thread for the log in the launch's folder `dir`. Called once when
-    /// the server opens.
-    pub fn init(&self, dir: PathBuf) {
+impl LaunchLog for DebugLog {
+    fn init(&self, session: &Path) {
         let (tx, rx) = mpsc::channel::<Record>();
         if self.writer.set(tx).is_err() {
             return;
         }
+        let dir = session.to_path_buf();
         std::thread::spawn(move || {
             let mut files: HashMap<&'static str, LogFile> = HashMap::new();
             // Waits for a record, writes it and every one queued behind it, then flushes.
@@ -127,9 +130,18 @@ impl DebugLog {
         });
     }
 
-    /// Follows the setting.
-    pub fn set_level(&self, level: LogLevel) {
+    fn set_level(&self, level: LogLevel) {
         self.level.store(level as u8, Ordering::Relaxed);
+    }
+}
+
+impl DebugLog {
+    const fn new(file: &'static str) -> Self {
+        Self {
+            writer: OnceLock::new(),
+            level: AtomicU8::new(LogLevel::Off as u8),
+            file,
+        }
     }
 
     /// Whether a record at `level` is written.
@@ -140,8 +152,8 @@ impl DebugLog {
     /// Logs `data` at `level`, and to the log of the chat it is about, if any, at that log's own
     /// level. `event` names what happened, or is empty for a plain message.
     pub fn write(&self, level: LogLevel, event: &'static str, source: &Source, data: Data) {
-        if source.thread.is_some() && THREADS.logs(level) {
-            THREADS.write(level, event, source, data.clone());
+        if source.thread.is_some() && THREAD_LOG.logs(level) {
+            THREAD_LOG.write(level, event, source, data.clone());
         }
         self.send(level, event, source, data);
     }
@@ -171,9 +183,9 @@ impl DebugLog {
             self.send(level, event, source, data);
         }
         if source.thread.is_some()
-            && let Some((level, data)) = line_record(|level| THREADS.logs(level), line)
+            && let Some((level, data)) = line_record(|level| THREAD_LOG.logs(level), line)
         {
-            THREADS.write(level, event, source, data);
+            THREAD_LOG.write(level, event, source, data);
         }
     }
 }

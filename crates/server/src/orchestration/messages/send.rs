@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::orchestration::{ApprovalDecision, Delivery, FollowUpInput, TurnRequest};
 
 use crate::orchestration::{AgentEventEnvelope, AgentEvent};
-use crate::logging::{Data, Source, THREADS};
+use crate::logging::{Data, Source, THREAD_LOG};
 use crate::provider::AgentKind;
 use crate::settings::LogLevel;
 use crate::system::{now_ms, new_id};
@@ -308,7 +308,7 @@ impl Server {
             ..Source::default()
         };
         let note = format!("{delivered}, {} attachments", attachments.len());
-        THREADS.write(LogLevel::Info, "message sent", &source, Data::Text(note));
+        THREAD_LOG.write(LogLevel::Info, "message sent", &source, Data::Text(note));
         match delivery {
             Delivery::Steered => {
                 msg.steer = true;
@@ -386,7 +386,7 @@ impl Server {
     /// agent that can stays up for the next message. Codex is first told to pause the goal it is
     /// pursuing, so it does not carry on with it later.
     pub fn cancel_turn(&self, thread_id: &str) {
-        THREADS.text(
+        THREAD_LOG.text(
             LogLevel::Info,
             thread_id,
             "chat",

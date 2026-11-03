@@ -22,6 +22,12 @@ pub(super) const KEEP_SESSIONS: usize = 10;
 /// The log files of versions before session folders, which could hold API keys.
 const OLD_LOGS: [&str; 3] = ["agents.log", "imports.log", "app.log"];
 
+/// The folder of a launch's folder that holds the chats' own logs.
+pub(super) const THREADS_DIR: &str = "threads/";
+
+/// The folder of a launch's folder that holds the reports a chat's Open logs writes.
+pub(super) const REPORTS_DIR: &str = "reports/";
+
 /// How much of a log the Output panel shows when it opens it.
 const MAX_READ_BYTES: u64 = 1024 * 1024;
 
@@ -65,6 +71,19 @@ pub fn session_dir(logs: &Path) -> PathBuf {
         .clone()
 }
 
+/// The kept launch folders in the logs folder `root`, oldest first.
+pub(super) fn sessions(root: &Path) -> Vec<PathBuf> {
+    let mut sessions: Vec<PathBuf> = std::fs::read_dir(root)
+        .map(|list| list.flatten().collect::<Vec<_>>())
+        .unwrap_or_default()
+        .iter()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()) && is_session(&e.file_name()))
+        .map(|e| e.path())
+        .collect();
+    sessions.sort();
+    sessions
+}
+
 /// `YYYYMMDDTHHMMSS`.
 fn is_session(name: &std::ffi::OsStr) -> bool {
     let name = name.to_string_lossy();
@@ -92,7 +111,7 @@ fn files_under(dir: &Path) -> Vec<PathBuf> {
 }
 
 /// This launch's logs, as paths from its folder, for the Output panel. Older files a log has
-/// moved aside (`<name>.1.log`) are left out.
+/// moved aside (`<name>.1.log`), the chats' own logs and their reports are left out.
 pub fn channels() -> Vec<String> {
     let Some(dir) = SESSION.get() else {
         return Vec::new();
@@ -104,6 +123,8 @@ pub fn channels() -> Vec<String> {
         .filter(|name| {
             let stem = name.trim_end_matches(".log");
             name.ends_with(".log")
+                && !name.starts_with(THREADS_DIR)
+                && !name.starts_with(REPORTS_DIR)
                 && !stem
                     .rsplit('.')
                     .next()
@@ -186,14 +207,7 @@ pub fn export(dest: &Path, system: &serde_json::Value) -> Result<(), String> {
     zip.start_file("system.json", options)
         .map_err(|e| failed(&e))?;
     zip.write_all(system.as_bytes()).map_err(|e| failed(&e))?;
-    let mut sessions: Vec<PathBuf> = std::fs::read_dir(root)
-        .map_err(|e| failed(&e))?
-        .flatten()
-        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()) && is_session(&e.file_name()))
-        .map(|e| e.path())
-        .collect();
-    sessions.sort();
-    for session in sessions {
+    for session in sessions(root) {
         for path in files_under(&session) {
             let Ok(name) = path.strip_prefix(root) else {
                 continue;

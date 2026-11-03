@@ -34,29 +34,10 @@ use orchestration::Runner;
 use persistence::Store;
 
 use crate::orchestration::AgentEventEnvelope;
-use crate::settings::{Settings, LogLevel};
 
 pub use error::Error;
 
 pub type Res<T> = Result<T, String>;
-
-/// Sets how much each log records. The desktop shell installs the logger of the app's own.
-fn follow_log_levels(settings: &Settings) {
-    let levels = &settings.logging;
-    logging::AGENTS.set_level(levels.agents);
-    logging::THREADS.set_level(levels.threads);
-    logging::RENDERER.set_level(levels.window);
-    import::LOG.set_level(levels.imports);
-    logging::set_app_level(levels.app);
-    log::set_max_level(match levels.app {
-        LogLevel::Off => log::LevelFilter::Off,
-        LogLevel::Error => log::LevelFilter::Error,
-        LogLevel::Warning => log::LevelFilter::Warn,
-        LogLevel::Info => log::LevelFilter::Info,
-        LogLevel::Debug => log::LevelFilter::Debug,
-        LogLevel::Trace => log::LevelFilter::Trace,
-    });
-}
 
 /// Receives every agent event, e.g. to forward it to the UI.
 pub type EventSink = Box<dyn Fn(AgentEventEnvelope) + Send + Sync>;
@@ -94,16 +75,9 @@ impl Server {
         let agents = agents::Library::open(&dirs.config);
         std::thread::spawn(system::scope::prepare);
         let logs = logging::session_dir(&dirs.logs);
-        import::LOG.init(logs.clone());
-        logging::RENDERER.init(logs.clone());
-        logging::AGENTS.init(logs.clone());
-        logging::THREADS.init(dirs.logs.join("threads"));
         let store = Store::open(dirs.data)?;
-        follow_log_levels(&store.settings());
+        logging::start(&logs, &store.settings().logging);
         logging::system::record(&logs);
-        let ids: std::collections::HashSet<String> =
-            store.with_threads(|threads| threads.iter().map(|t| t.id.clone()).collect());
-        std::thread::spawn(move || logging::THREADS.prune(&ids));
         orchestration::turn::recovery::recover(&store)?;
         let server = Arc::new(Self {
             store,

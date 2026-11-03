@@ -1,10 +1,9 @@
-//! Each chat's own log, `logs/threads/<thread id>.log`. Unlike the launch folders, it is kept
-//! across launches, so one file tells a chat's whole story: what the agent was sent and did, each
-//! reply's end, and the agent's own traffic, at the level set for Chats in Settings → Logging.
-//! A log moves to `<id>.1.log` past `MAX_BYTES`, and the log of a chat that no longer exists is
-//! deleted at the next launch.
+//! Each chat's own log, `threads/<thread id>.log` in the launch's folder, beside its other logs:
+//! what the agent was sent and did, each reply's end, and the agent's own traffic, at the level
+//! set for Chats in Settings → Logging. A chat used over several launches has a log in each, and
+//! its report joins them. A log moves to `<id>.1.log` past `MAX_BYTES`, and goes with its launch.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::mpsc::{self, Sender};
@@ -13,9 +12,9 @@ use std::sync::OnceLock;
 use crate::settings::LogLevel;
 use crate::system::now_ms;
 
-use super::files::LogFile;
+use super::files::{LogFile, THREADS_DIR, sessions};
 use super::render::render;
-use super::{Data, Record, Source};
+use super::{Data, LaunchLog, Record, Source};
 
 /// A chat's log moves aside past this, so a chat keeps at most twice as much.
 const MAX_BYTES: u64 = 2 * 1024 * 1024;
@@ -23,27 +22,18 @@ const MAX_BYTES: u64 = 2 * 1024 * 1024;
 /// Open chat logs past this many are closed, so a long session holds few files open.
 const MAX_OPEN: usize = 32;
 
-/// The chats' logs.
-pub static THREADS: ThreadLogs = ThreadLogs::new();
+/// The chats' logs. A record about a chat in the agent log reaches here too, at this log's level.
+pub static THREAD_LOG: ThreadLog = ThreadLog::new();
 
-pub struct ThreadLogs {
+pub struct ThreadLog {
     writer: OnceLock<Sender<Record>>,
     dir: OnceLock<PathBuf>,
     level: AtomicU8,
 }
 
-impl ThreadLogs {
-    const fn new() -> Self {
-        Self {
-            writer: OnceLock::new(),
-            dir: OnceLock::new(),
-            level: AtomicU8::new(LogLevel::Off as u8),
-        }
-    }
-
-    /// Starts the writer thread for the logs in `dir`, `logs/threads`. Called once when the
-    /// server opens.
-    pub fn init(&self, dir: PathBuf) {
+impl LaunchLog for ThreadLog {
+    fn init(&self, session: &Path) {
+        let dir = session.join(THREADS_DIR);
         let (tx, rx) = mpsc::channel::<Record>();
         if self.writer.set(tx).is_err() {
             return;
@@ -64,9 +54,18 @@ impl ThreadLogs {
         });
     }
 
-    /// Follows the setting.
-    pub fn set_level(&self, level: LogLevel) {
+    fn set_level(&self, level: LogLevel) {
         self.level.store(level as u8, Ordering::Relaxed);
+    }
+}
+
+impl ThreadLog {
+    const fn new() -> Self {
+        Self {
+            writer: OnceLock::new(),
+            dir: OnceLock::new(),
+            level: AtomicU8::new(LogLevel::Off as u8),
+        }
     }
 
     /// Whether a record at `level` is written.
@@ -103,34 +102,23 @@ impl ThreadLogs {
         self.write(level, event, &source, Data::Text(text));
     }
 
-    /// The files of `thread`'s log, oldest first: what moved aside, then the current one.
+    /// The files of `thread`'s log in every kept launch, oldest first: in each, what moved aside,
+    /// then the current one.
     pub fn files(&self, thread: &str) -> Vec<PathBuf> {
-        let Some(dir) = self.dir.get() else {
+        let Some(root) = self.dir.get().and_then(|dir| dir.parent()?.parent()) else {
             return Vec::new();
         };
-        [
-            log_path(dir, thread).with_extension("1.log"),
-            log_path(dir, thread),
-        ]
-        .into_iter()
-        .filter(|path| path.is_file())
-        .collect()
-    }
-
-    /// Deletes the logs of chats not in `threads`, which were deleted while the app was closed
-    /// or before it kept chat logs.
-    pub fn prune(&self, threads: &HashSet<String>) {
-        let Some(dir) = self.dir.get() else { return };
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let name = entry.file_name().to_string_lossy().into_owned();
-            let id = name.split('.').next().unwrap_or_default();
-            if name.ends_with(".log") && !threads.contains(id) {
-                let _ = std::fs::remove_file(entry.path());
-            }
-        }
+        sessions(root)
+            .iter()
+            .map(|session| session.join(THREADS_DIR))
+            .flat_map(|dir| {
+                [
+                    log_path(&dir, thread).with_extension("1.log"),
+                    log_path(&dir, thread),
+                ]
+            })
+            .filter(|path| path.is_file())
+            .collect()
     }
 }
 

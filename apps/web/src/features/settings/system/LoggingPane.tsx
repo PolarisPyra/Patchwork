@@ -19,7 +19,7 @@ const LOGS: { key: Exclude<keyof LoggingSettings, "threadMenu">; title: string; 
   {
     key: "threads",
     title: "Chats",
-    desc: "Each chat's own log, in threads/, kept across launches",
+    desc: "Each chat's own log, in threads/",
   },
 ];
 

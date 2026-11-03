@@ -8,13 +8,12 @@
 //! ├─ system.json              what Patchwork runs on (see `system`)
 //! ├─ imports.log              scans and imports of saved conversations
 //! ├─ window/renderer.log     the window's errors and warnings
-//! └─ agents/claude.log        one log per agent: its processes and their traffic
+//! ├─ agents/claude.log        one log per agent: its processes and their traffic
+//! ├─ threads/<id>.log         one log per chat used in this launch (see `thread_log`)
+//! └─ reports/                 what a chat's Open logs writes: the system, the chat's settings
+//!                             and replies, its logs from every kept launch, and this launch's
+//!                             warnings and errors, in one file to send
 //! ```
-//!
-//! Beside the launch folders, `threads/<thread id>.log` is each chat's own log, kept across
-//! launches (see `threads`), and `reports/` holds the reports a chat's Open logs writes: the
-//! system, the chat's settings and replies, its log, and this launch's warnings and errors, in
-//! one file to send.
 //!
 //! Each line reads `2026-10-26 12:17:29.562 [info] message`, and each log is set to Trace,
 //! Debug, Info, Warning, Error or Off in Settings → Logging, or from the Output panel. A full
@@ -36,14 +35,54 @@ mod render;
 mod report;
 mod scrub;
 pub mod system;
-mod threads;
+mod thread_log;
 
 use files::session;
 pub use files::{session_dir, channels, LogChunk, read, export};
 pub use render::{now_text};
 pub use scrub::{Json};
-pub use threads::{THREADS, ThreadLogs};
+pub use thread_log::{THREAD_LOG, ThreadLog};
 
 mod debug_log;
 
 pub use debug_log::*;
+
+use std::path::Path;
+
+use crate::settings::{LogLevel, LoggingSettings};
+
+/// A log written to the launch's folder at the level set for it in Settings → Logging.
+trait LaunchLog {
+    /// Starts the log's writer thread in `session`, the launch's folder.
+    fn init(&self, session: &Path);
+    /// Follows the setting.
+    fn set_level(&self, level: LogLevel);
+}
+
+/// Every log but `main.log`, which the desktop shell writes, with its level in `levels`. A new
+/// log is a row here, its field in `LoggingSettings`, and its row in Settings → Logging.
+fn launch_logs(levels: &LoggingSettings) -> [(&'static dyn LaunchLog, LogLevel); 4] {
+    [
+        (&AGENT_LOG, levels.agents),
+        (&WINDOW_LOG, levels.window),
+        (&IMPORT_LOG, levels.imports),
+        (&THREAD_LOG, levels.threads),
+    ]
+}
+
+/// Starts every log in `session`, this launch's folder, at the levels set. Called once when the
+/// server opens.
+pub fn start(session: &Path, levels: &LoggingSettings) {
+    for (log, _) in launch_logs(levels) {
+        log.init(session);
+    }
+    follow(levels);
+}
+
+/// Sets how much each log records.
+pub fn follow(levels: &LoggingSettings) {
+    for (log, level) in launch_logs(levels) {
+        log.set_level(level);
+    }
+    set_app_level(levels.app);
+}

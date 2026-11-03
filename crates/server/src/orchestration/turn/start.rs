@@ -32,7 +32,7 @@ use crate::threads::MessageStatus;
 use crate::system::new_id;
 use crate::system::now_ms;
 use crate::threads::Role;
-use crate::logging::{AGENTS, Data, Source};
+use crate::logging::{AGENT_LOG, Data, Source};
 use crate::settings::LogLevel;
 use crate::workspace;
 use crate::orchestration::changes::checkpoint;
@@ -343,9 +343,9 @@ impl Runner {
             .spawn()
             .map_err(|e| format!("Failed to start agent: {e}"))?;
         let pid = child.id();
-        if AGENTS.logs(LogLevel::Info) {
+        if AGENT_LOG.logs(LogLevel::Info) {
             // Below Trace only flags are kept, since an argument can be the prompt.
-            let trace = AGENTS.logs(LogLevel::Trace);
+            let trace = AGENT_LOG.logs(LogLevel::Trace);
             let args: Vec<String> = args
                 .iter()
                 .map(|a| {
@@ -367,7 +367,7 @@ impl Runner {
                 },
             );
             let source = Source::agent(agent, pid, &thread_id, None);
-            AGENTS.write(
+            AGENT_LOG.write(
                 LogLevel::Info,
                 "start",
                 &source,

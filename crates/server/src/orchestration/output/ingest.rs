@@ -55,7 +55,7 @@ use crate::threads::Goal;
 use crate::threads::GoalStatus;
 use crate::threads::MessageStatus;
 use crate::system::new_id;
-use crate::logging::{AGENTS, Data, Source};
+use crate::logging::{AGENT_LOG, Data, Source};
 use crate::settings::LogLevel;
 use crate::workspace;
 
@@ -156,12 +156,12 @@ pub(in crate::orchestration) fn ingest(
     while let Some(line) = next_line(&mut stdout) {
         let source =
             |turn: &Turn| Source::agent(turn.agent, pid, &turn.thread_id, Some(&turn.message_id));
-        if AGENTS.logs(LogLevel::Error) {
-            AGENTS.line("out", &source(&turn), &line);
+        if AGENT_LOG.logs(LogLevel::Error) {
+            AGENT_LOG.line("out", &source(&turn), &line);
         }
         let Ok(value) = serde_json::from_str::<Value>(&line) else {
             if logged_kinds.insert("unparsed".into()) {
-                AGENTS.write(
+                AGENT_LOG.write(
                     LogLevel::Warning,
                     "unparsed",
                     &source(&turn),
@@ -227,10 +227,10 @@ pub(in crate::orchestration) fn ingest(
         }
         // A subagent's frames went to its own thread above.
         let routed = turn.agent == AgentKind::Claude && value["parent_tool_use_id"].is_string();
-        if parsed.is_empty() && !routed && AGENTS.logs(LogLevel::Debug) {
+        if parsed.is_empty() && !routed && AGENT_LOG.logs(LogLevel::Debug) {
             let kind = line_kind(&value);
             if logged_kinds.insert(kind.clone()) {
-                AGENTS.write(LogLevel::Debug, "ignored", &source(&turn), Data::Text(kind));
+                AGENT_LOG.write(LogLevel::Debug, "ignored", &source(&turn), Data::Text(kind));
             }
         }
         for item in parsed {
@@ -766,7 +766,7 @@ pub(in crate::orchestration) fn ingest(
         LogLevel::Error
     };
     let source = Source::agent(turn.agent, pid, &turn.thread_id, Some(&turn.message_id));
-    AGENTS.write(level, "exit", &source, Data::Text(status));
+    AGENT_LOG.write(level, "exit", &source, Data::Text(status));
     // Whatever the agent left running in its group or scope (MCP servers, background
     // commands) would otherwise outlive the turn and keep its memory in the agents' slice.
     workspace::signal_process_group(pid, workspace::SIGKILL);

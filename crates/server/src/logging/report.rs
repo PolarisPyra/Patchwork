@@ -1,7 +1,7 @@
-//! A chat's report, the file its Open logs writes to `logs/reports/`: what Patchwork runs on, the
-//! chat's settings, each reply's outcome, the chat's own log, and this launch's warnings and
-//! errors. One file holds what it takes to work out what went wrong in the chat, and like the
-//! logs it has no secrets and names no user.
+//! A chat's report, the file its Open logs writes to `reports/` in the launch's folder: what
+//! Patchwork runs on, the chat's settings, each reply's outcome, the chat's own logs from every
+//! kept launch, and this launch's warnings and errors. One file holds what it takes to work out
+//! what went wrong in the chat, and like the logs it has no secrets and names no user.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -14,10 +14,8 @@ use crate::{Res, Server};
 use super::render::local_time;
 use super::scrub::{cut, redact, scrubbed};
 use super::system::{report, shown};
-use super::{session, Json, THREADS};
-
-/// Reports past this many are deleted, oldest first.
-const KEEP_REPORTS: usize = 20;
+use super::files::REPORTS_DIR;
+use super::{session, Json, THREAD_LOG};
 
 /// This launch's warning and error lines past this many are left out, oldest first.
 const MAX_PROBLEMS: usize = 300;
@@ -56,7 +54,7 @@ impl Server {
             text = text.replace(&home, "~");
         }
 
-        let dir = crate::system::dirs().logs.join("reports");
+        let dir = session().ok_or("There are no logs yet")?.join(REPORTS_DIR);
         std::fs::create_dir_all(&dir)
             .map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
         let stamp = chrono::Local::now().format("%Y%m%dT%H%M%S");
@@ -64,7 +62,6 @@ impl Server {
         let path = dir.join(format!("chat-{short}-{stamp}.log"));
         std::fs::write(&path, text)
             .map_err(|e| format!("Could not write {}: {e}", path.display()))?;
-        prune(&dir);
         log::info!("wrote the report of thread {short}: {}", path.display());
         Ok(path)
     }
@@ -209,7 +206,7 @@ fn replies(messages: &[Message]) -> String {
 
 /// The chat's log, oldest first.
 fn chat_log(thread_id: &str) -> String {
-    let files = THREADS.files(thread_id);
+    let files = THREAD_LOG.files(thread_id);
     if files.is_empty() {
         return "empty: nothing was logged for this chat yet, or Chats is Off in Settings → Logging"
             .into();
@@ -248,22 +245,4 @@ fn problems() -> String {
 fn time_of(line: &str) -> &str {
     line.split_once(": ")
         .map_or(line, |(_, rest)| rest.get(..23).unwrap_or(rest))
-}
-
-/// Deletes all but the newest `KEEP_REPORTS` reports.
-fn prune(dir: &Path) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    let mut reports: Vec<PathBuf> = entries
-        .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "log"))
-        .collect();
-    // Names start with the chat, so they sort by when they were written instead.
-    reports.sort_by_key(|path| std::fs::metadata(path).and_then(|m| m.modified()).ok());
-    let excess = reports.len().saturating_sub(KEEP_REPORTS);
-    for path in &reports[..excess] {
-        let _ = std::fs::remove_file(path);
-    }
 }
