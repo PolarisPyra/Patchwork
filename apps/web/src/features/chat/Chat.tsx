@@ -749,9 +749,9 @@ export default function Chat({
     }
   }
 
-  // The plan of the reply running now. Once that reply ends its plan stays, until the next message
-  // is sent: the panel closing as the turn stopped took its height back from the chat, which moved
-  // every message down. Plans of replies that ended before the chat was opened are not shown.
+  // The plan of the reply running now. Once that reply ends, finished or not, its plan stays a
+  // moment and then folds away, so nothing looks under way when nothing is. Plans of replies that
+  // ended before the chat was opened are not shown.
   const lastMessage = thread?.messages.at(-1);
   const livePlanId =
     working &&
@@ -769,15 +769,17 @@ export default function Chat({
     (lastMessage.id === livePlanId || lastMessage.id === keptPlanId)
       ? lastMessage.plan
       : [];
-  // A finished list stays a moment to show it complete, then folds away; a new list brings it back.
-  const planDone = plan.length > 0 && plan.every((step) => step.status === "done");
+  // A finished list, or one whose reply ended, stays a moment, then folds away; a new list brings
+  // it back.
+  const planOver =
+    plan.length > 0 && (livePlanId === null || plan.every((step) => step.status === "done"));
   const [planCleared, setPlanCleared] = useState(false);
   useEffect(() => {
     setPlanCleared(false);
-    if (!planDone) return;
+    if (!planOver) return;
     const timer = window.setTimeout(() => setPlanCleared(true), 1200);
     return () => window.clearTimeout(timer);
-  }, [planDone]);
+  }, [planOver]);
   // Choices the agent offered in its last finished reply, until the user answers or dismisses them.
   // A plan the last reply proposed in plan mode, ready to implement or refine.
   const proposed =
@@ -931,7 +933,7 @@ export default function Chat({
         <BackgroundTasks tasks={background} onStop={stopBackground} />
         <ComposerStripPresence
           key={`${key}-plan`}
-          present={plan.length > 0 && !(planDone && planCleared)}
+          present={plan.length > 0 && !(planOver && planCleared)}
         >
           {plan.length > 0 && <PlanPanel steps={plan} />}
         </ComposerStripPresence>
