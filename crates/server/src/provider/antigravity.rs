@@ -13,6 +13,7 @@ use super::GoalUpdate;
 use crate::system::fs::home_dir;
 use super::goal_argument;
 use super::located_or;
+use super::one_line;
 use super::probe;
 use super::Parsed;
 use super::prompt;
@@ -131,11 +132,12 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
             if let Some(name) = tool["name"].as_str().or_else(|| step["tool_name"].as_str()) {
                 let id = format!("step-{}", step["step_index"]);
                 let params = &tool["parameters"];
-                // Antigravity names a file `Path`.
-                let summary = params["Path"].as_str().map_or_else(
-                    || summarize(params, spec.root),
-                    |path| relative(spec.root, path),
-                );
+                // Antigravity names a file `Path` and a shell command `CommandLine`.
+                let summary = match (params["Path"].as_str(), params["CommandLine"].as_str()) {
+                    (Some(path), _) => relative(spec.root, path),
+                    (None, Some(command)) => one_line(command),
+                    (None, None) => summarize(params, spec.root),
+                };
                 out.push(tool_started(
                     message_id,
                     ToolStart {
@@ -148,7 +150,8 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                 ));
                 if step["state"] == "DONE" {
                     let failed = tool["error"].as_str().is_some_and(|e| !e.is_empty());
-                    out.push(tool_finished(message_id, &id, failed, ""));
+                    let output = tool["output"].as_str().unwrap_or_default();
+                    out.push(tool_finished(message_id, &id, failed, output));
                 }
             }
             // A step's usage is its one model request; `input_tokens` is the whole prompt, the
