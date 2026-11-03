@@ -77,6 +77,12 @@ export const COMMANDS: CommandInfo[] = [
     description: "Unselects highlighted chat text",
   },
   {
+    id: "transcript.quoteSelection",
+    page: "Chat",
+    title: "Quote in reply",
+    description: "Adds highlighted chat text to the message box as a quote",
+  },
+  {
     id: "sidebar.selectAll",
     page: "Sidebar",
     fixed: true,
@@ -149,6 +155,11 @@ export const DEFAULT_RULES: Rule[] = [
     key: "escape",
     command: "transcript.clearSelection",
     when: "transcriptFocus && hasTextSelection",
+  },
+  {
+    key: "r",
+    command: "transcript.quoteSelection",
+    when: "transcriptFocus && hasTextSelection && !textInputFocus",
   },
   { key: "escape", command: "settings.close", when: "settingsOpen" },
   { key: "escape", command: "palette.close", when: "paletteOpen" },

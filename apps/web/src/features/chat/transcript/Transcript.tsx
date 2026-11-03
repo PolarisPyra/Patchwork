@@ -14,6 +14,9 @@ import {
   rowKindOf,
   visibleMessages,
 } from "~/features/chat/transcript/rows";
+import QuoteSelection, {
+  quotedSelection,
+} from "~/features/chat/transcript/components/QuoteSelection";
 import { useTranscriptScroll } from "~/features/chat/transcript/useTranscriptScroll";
 import { shortcutContext, useCommand } from "~/lib/shortcuts";
 
@@ -36,6 +39,8 @@ export interface TranscriptProps {
   onRestore: (message: Message) => void;
   /** Starts a new thread from a reply. */
   onFork: (message: Message) => void;
+  /** Adds selected text to the draft as a quote, given as its lines. */
+  onQuote: (lines: string[]) => void;
   tokens: TokenSettings;
 }
 
@@ -74,6 +79,7 @@ export default function Transcript({
   checkpoints,
   onRestore,
   onFork,
+  onQuote,
   tokens,
 }: TranscriptProps) {
   // Queued messages wait above the composer until the turn ends, so they are not shown here.
@@ -150,6 +156,10 @@ export default function Transcript({
     if (rootRef.current) window.getSelection()?.selectAllChildren(rootRef.current);
   });
   useCommand("transcript.clearSelection", () => window.getSelection()?.removeAllRanges());
+  useCommand("transcript.quoteSelection", () => {
+    const lines = rootRef.current && quotedSelection(rootRef.current);
+    if (lines) onQuote(lines);
+  });
 
   return (
     <div
@@ -193,6 +203,7 @@ export default function Transcript({
           );
         }}
       />
+      <QuoteSelection root={rootRef} onQuote={onQuote} />
       {!atEnd && (
         <button
           type="button"

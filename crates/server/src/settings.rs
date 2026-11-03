@@ -73,6 +73,8 @@ pub struct Settings {
     pub permissions: PermissionSettings,
     /// Answering an agent's question takes a second click on the picked answer.
     pub confirm_answers: bool,
+    /// Enter steers a running reply instead of queueing the message for after it.
+    pub steer_while_working: bool,
     /// Folder of plugin bundles. None uses `plugins` in the config folder.
     pub plugins_dir: Option<String>,
     /// Plugins switched off in Settings, by folder name.

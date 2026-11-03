@@ -8,12 +8,14 @@ import Mention, { type MentionOptions } from "@tiptap/extension-mention";
 import { TableKit } from "@tiptap/extension-table";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { Plugin, Selection, TextSelection } from "@tiptap/pm/state";
+import type { Node as PMNode } from "@tiptap/pm/model";
+import { type EditorState, Plugin, Selection, TextSelection } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { api } from "~/api";
 import CodeBlockNodeView from "~/features/chat/markdown/CodeBlockNodeView";
 import { codeHighlightPlugin } from "~/features/chat/lib/codeHighlight";
+import { ChipKeys } from "~/features/chat/lib/composerChips";
 import { getSigils, type SigilKind } from "~/lib/sigils";
 
 // Chips sit inside a line of text, so they keep its height: no vertical padding, the mono face a
@@ -79,6 +81,53 @@ export const GoalCommand = Node.create({
           const from = range.from + (match.data?.lead ?? 0);
           if (from !== 1) return;
           state.tr.replaceWith(from, range.to, [type.create(), state.schema.text(" ")]);
+        },
+      }),
+    ];
+  },
+});
+
+/**
+ * One of the agent's own slash commands, picked from the menu or typed as `/name ` at the start of
+ * the draft, sent as `/name`. Like the goal, it only counts at the start, so a command with text
+ * typed before it turns back into text (see composerChips).
+ */
+export const SlashCommand = Node.create<{ isCommand: (name: string) => boolean }>({
+  name: "slashCommand",
+  addOptions() {
+    return { isCommand: () => false };
+  },
+  group: "inline",
+  inline: true,
+  atom: true,
+  selectable: false,
+  addAttributes() {
+    return {
+      name: {
+        default: "",
+        parseHTML: (element) => element.getAttribute("data-slash-command") ?? "",
+        renderHTML: (attributes) => ({ "data-slash-command": attributes.name }),
+      },
+    };
+  },
+  parseHTML() {
+    return [{ tag: "span[data-slash-command]" }];
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    return ["span", mergeAttributes(HTMLAttributes, { class: GOAL_CLASS }), `/${node.attrs.name}`];
+  },
+  renderMarkdown: (node: { attrs?: { name?: string } }) => `/${node.attrs?.name ?? ""}`,
+  addInputRules() {
+    const type = this.type;
+    const isCommand = this.options.isCommand;
+    return [
+      new InputRule({
+        find: typedSigil("commands", "[A-Za-z][A-Za-z0-9]*(?:[-_:.][A-Za-z0-9]+)*"),
+        handler: ({ state, range, match }) => {
+          const { name, lead } = match.data ?? {};
+          const from = range.from + lead;
+          if (from !== 1 || name === "goal" || !isCommand(name)) return null;
+          state.tr.replaceWith(from, range.to, [type.create({ name }), state.schema.text(" ")]);
         },
       }),
     ];
@@ -256,9 +305,46 @@ const InlineImage = Node.create({
     imageMarkdown(node.attrs?.label ?? "", node.attrs?.id ?? ""),
 });
 
+// Inline Markdown spans: group 1 is the opening marker, which the span also closes with. Code
+// comes first, since nothing inside a code span is formatting.
+const INLINE_SPANS: { find: RegExp; className: string }[] = [
+  { find: /(`)[^`\n]+`/g, className: "composer-md-code" },
+  { find: /(\*\*|__)(?=\S).+?(?<=\S)\1/g, className: "composer-md-bold" },
+  {
+    find: /(?<![*\w])([*_])(?=[^\s*_]).*?(?<=[^\s*_])\1(?![*\w])/g,
+    className: "composer-md-italic",
+  },
+  { find: /(~~)(?=\S).+?(?<=\S)~~/g, className: "composer-md-strike" },
+];
+
+/** Styles the bold, italic, strikethrough and code spans in a paragraph, markers kept and faint. */
+function inlineSpanDecorations(paragraph: PMNode, pos: number): Decoration[] {
+  // One character per inline atom, so an offset in the text is an offset in the paragraph.
+  const text = paragraph.textBetween(0, paragraph.content.size, undefined, "￼");
+  const decorations: Decoration[] = [];
+  const code: [number, number][] = [];
+  for (const { find, className } of INLINE_SPANS) {
+    for (const match of text.matchAll(find)) {
+      const start = match.index;
+      const end = start + match[0].length;
+      if (code.some(([a, b]) => start < b && end > a)) continue;
+      if (className === "composer-md-code") code.push([start, end]);
+      const marker = match[1].length;
+      const at = pos + 1;
+      decorations.push(
+        Decoration.inline(at + start, at + start + marker, { class: "composer-md-marker" }),
+        Decoration.inline(at + start + marker, at + end - marker, { class: className }),
+        Decoration.inline(at + end - marker, at + end, { class: "composer-md-marker" }),
+      );
+    }
+  }
+  return decorations;
+}
+
 /**
- * Styles a line that starts with `#`, `##`, `###` or `>` as soon as the marker is typed. The text
- * stays a plain paragraph with its markers, so the line does not break and the draft keeps its Markdown.
+ * Styles Markdown as it is typed, keeping every marker: a line that starts with `#`, `##`, `###`
+ * or `>`, and `**bold**`, `*italic*`, `~~strikethrough~~` and `` `code` `` spans. The text stays a
+ * plain paragraph with its markers, so the line does not break and the draft is sent as typed.
  */
 const MarkdownLine = Extension.create({
   name: "markdownLine",
@@ -288,6 +374,7 @@ const MarkdownLine = Extension.create({
                   }),
                 );
               }
+              decorations.push(...inlineSpanDecorations(node, pos));
               return false;
             });
             return DecorationSet.create(state.doc, decorations);
@@ -313,6 +400,85 @@ const MarkdownTextBlocks = ["heading", "blockquote"].map((tokenName) =>
         ),
   }),
 );
+
+// Bold, italic, strikethrough and code also stay as typed, markers and all, so a recalled draft
+// shows what was written. Text inside them is still read, so a link or image in one keeps working.
+const MarkdownTextSpans = ["strong", "em", "del", "codespan"].map((tokenName) =>
+  Extension.create({
+    name: `composerText${tokenName}`,
+    markdownTokenName: tokenName,
+    parseMarkdown: (token, helpers) => {
+      const raw = token.raw ?? "";
+      if (tokenName === "codespan" || !token.tokens) return helpers.createTextNode(raw);
+      const length =
+        tokenName === "strong" ? 2 : tokenName === "em" ? 1 : (/^~+/.exec(raw)?.[0].length ?? 0);
+      return [
+        helpers.createTextNode(raw.slice(0, length)),
+        ...helpers.parseInline(token.tokens),
+        helpers.createTextNode(raw.slice(raw.length - length)),
+      ];
+    },
+  }),
+);
+
+/** A Markdown marker the format bar and its shortcuts write around the selection. */
+export type InlineMarker = "**" | "*" | "~~" | "`";
+
+/**
+ * Whether the selection sits between a pair of `marker`. Inside `***`, it is both bold and italic;
+ * inside `**`, it is bold and not italic.
+ */
+export function hasMarker(state: EditorState, marker: InlineMarker): boolean {
+  const { from, to, $from, $to } = state.selection;
+  const before = state.doc.textBetween(Math.max($from.start(), from - 3), from, undefined, "￼");
+  const after = state.doc.textBetween(to, Math.min($to.end(), to + 3), undefined, "￼");
+  const run = (text: string) =>
+    text.length - text.replace(new RegExp(`^\\${marker[0]}+`), "").length;
+  const pair = Math.min(run([...before].reverse().join("")), run(after));
+  return marker === "*" ? pair % 2 === 1 : pair >= marker.length;
+}
+
+/**
+ * Writes `marker` around the selection, or takes it away when the selection already has it. The
+ * draft is the Markdown that is sent, so formatting is the text it is written with.
+ */
+export function toggleMarker(editor: Editor, marker: InlineMarker) {
+  const { state } = editor;
+  if (state.selection.$from.parent.type.spec.code) return;
+  const { from, to } = state.selection;
+  const n = marker.length;
+  const on = hasMarker(state, marker);
+  editor
+    .chain()
+    .focus()
+    .command(({ tr }) => {
+      if (on) {
+        tr.delete(to, to + n).delete(from - n, from);
+      } else {
+        tr.insertText(marker, to).insertText(marker, from);
+        tr.setSelection(TextSelection.create(tr.doc, from + n, to + n));
+      }
+      return true;
+    })
+    .run();
+}
+
+/** The usual shortcuts for bold, italic, strikethrough and code, writing their markers. */
+const MarkerShortcuts = Extension.create({
+  name: "markerShortcuts",
+  addKeyboardShortcuts() {
+    const toggle = (marker: InlineMarker) => () => {
+      toggleMarker(this.editor, marker);
+      return true;
+    };
+    return {
+      "Mod-b": toggle("**"),
+      "Mod-i": toggle("*"),
+      "Mod-Shift-s": toggle("~~"),
+      "Mod-e": toggle("`"),
+    };
+  },
+});
 
 /**
  * Ctrl+A selects the draft as text from its first character to its last. WebKitGTK does not paint
@@ -350,17 +516,23 @@ export function composerExtensions(
   mentionSuggestion: MentionSuggestion,
   isSkill: (name: string) => boolean,
   isAgent: (name: string) => boolean,
+  isCommand: (name: string) => boolean,
 ) {
   return [
     // Links keep their Markdown form; clicking one in a draft does not open it. Text dropped in
     // only links URLs with a protocol, so file names such as start.sh or main.rs stay plain text.
     // Dropped files become attachments (see Chat.tsx), so the drop cursor would point at a
     // place nothing is inserted.
-    // Headings and quotes stay as typed text (see MarkdownLine), so they do not become block nodes.
+    // Headings, quotes, bold, italic, strikethrough and inline code stay as typed text (see
+    // MarkdownLine), so they do not become nodes or marks that hide their markers.
     StarterKit.configure({
       codeBlock: false,
       blockquote: false,
       heading: false,
+      bold: false,
+      italic: false,
+      strike: false,
+      code: false,
       dropcursor: false,
       trailingNode: false,
       link: {
@@ -385,12 +557,16 @@ export function composerExtensions(
     Placeholder.configure({ placeholder }),
     Markdown,
     GoalCommand,
+    SlashCommand.configure({ isCommand }),
+    ChipKeys,
     SkillCommand.configure({ isSkill }),
     AgentCommand.configure({ isAgent }),
     InlineImage,
     MarkdownLine,
     SelectAllText,
+    MarkerShortcuts,
     ...MarkdownTextBlocks,
+    ...MarkdownTextSpans,
     FileMention.configure({
       HTMLAttributes: { class: MENTION_CLASS },
       renderText: ({ node }) => `@${node.attrs.label ?? node.attrs.id}`,

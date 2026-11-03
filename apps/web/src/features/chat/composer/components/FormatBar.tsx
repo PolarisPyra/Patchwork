@@ -10,56 +10,45 @@ import {
   TextStrikethroughIcon,
   type Icon,
 } from "@phosphor-icons/react";
+import { hasMarker, toggleMarker, type InlineMarker } from "~/features/chat/lib/composerExtensions";
 
 interface FormatButtonSpec {
   label: string;
-  /** The mark or node this button toggles, so its pressed state can be read. */
-  name: string;
   Icon: Icon;
+  /** Whether the selection already has this formatting, for the button's pressed state. */
+  active: (editor: Editor) => boolean;
   toggle: (editor: Editor) => void;
 }
 
+/** Bold, italic and the like are the Markdown markers written around the selection. */
+const marker = (label: string, Icon: Icon, text: InlineMarker): FormatButtonSpec => ({
+  label,
+  Icon,
+  active: (e) => hasMarker(e.state, text),
+  toggle: (e) => toggleMarker(e, text),
+});
+
 const BUTTONS: FormatButtonSpec[] = [
-  {
-    label: "Bold",
-    name: "bold",
-    Icon: TextBIcon,
-    toggle: (e) => e.chain().focus().toggleBold().run(),
-  },
-  {
-    label: "Italic",
-    name: "italic",
-    Icon: TextItalicIcon,
-    toggle: (e) => e.chain().focus().toggleItalic().run(),
-  },
-  {
-    label: "Strikethrough",
-    name: "strike",
-    Icon: TextStrikethroughIcon,
-    toggle: (e) => e.chain().focus().toggleStrike().run(),
-  },
-  {
-    label: "Inline code",
-    name: "code",
-    Icon: CodeIcon,
-    toggle: (e) => e.chain().focus().toggleCode().run(),
-  },
+  marker("Bold", TextBIcon, "**"),
+  marker("Italic", TextItalicIcon, "*"),
+  marker("Strikethrough", TextStrikethroughIcon, "~~"),
+  marker("Inline code", CodeIcon, "`"),
   {
     label: "Code block",
-    name: "codeBlock",
     Icon: CodeBlockIcon,
+    active: (e) => e.isActive("codeBlock"),
     toggle: (e) => e.chain().focus().toggleCodeBlock().run(),
   },
   {
     label: "Bullet list",
-    name: "bulletList",
     Icon: ListBulletsIcon,
+    active: (e) => e.isActive("bulletList"),
     toggle: (e) => e.chain().focus().toggleBulletList().run(),
   },
   {
     label: "Numbered list",
-    name: "orderedList",
     Icon: ListNumbersIcon,
+    active: (e) => e.isActive("orderedList"),
     toggle: (e) => e.chain().focus().toggleOrderedList().run(),
   },
 ];
@@ -67,7 +56,7 @@ const BUTTONS: FormatButtonSpec[] = [
 function FormatButton({ editor, spec }: { editor: Editor | null; spec: FormatButtonSpec }) {
   const active = !!useEditorState({
     editor,
-    selector: ({ editor: current }) => !!current?.isActive(spec.name),
+    selector: ({ editor: current }) => (current ? spec.active(current) : false),
   });
   const { Icon } = spec;
   return (
@@ -94,7 +83,7 @@ export default function FormatBar({ editor }: { editor: Editor | null }) {
   return (
     <div role="toolbar" aria-label="Formatting" className="flex items-center gap-0.5">
       {BUTTONS.map((spec) => (
-        <FormatButton key={spec.name} editor={editor} spec={spec} />
+        <FormatButton key={spec.label} editor={editor} spec={spec} />
       ))}
     </div>
   );

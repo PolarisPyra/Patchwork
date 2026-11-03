@@ -926,6 +926,11 @@
   color: var(--text-subtle);
   pointer-events: none;
 }
+/* Text being composed with an input method is not in the document yet, so the placeholder would
+   sit under it. */
+.composer-editor[data-composing] .ProseMirror p.is-editor-empty:first-child::before {
+  content: none;
+}
 /* Only the composer that has focus shows its caret. */
 .composer-editor .ProseMirror:not(.ProseMirror-focused) {
   caret-color: transparent;
@@ -969,9 +974,35 @@
   caret-color: var(--text);
   letter-spacing: -0.4em;
 }
+/* Bold, italic, strikethrough and code spans keep their markers, shown faint. */
+.composer-editor .ProseMirror .composer-md-marker {
+  color: var(--text-subtle);
+}
+.composer-editor .ProseMirror .composer-md-bold {
+  font-weight: 600;
+}
+.composer-editor .ProseMirror .composer-md-italic {
+  font-style: italic;
+}
+.composer-editor .ProseMirror .composer-md-strike {
+  text-decoration: line-through;
+}
+.composer-editor .ProseMirror .composer-md-code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
 .composer-editor ul[data-type="taskList"] li {
   display: flex;
   gap: 6px;
+}
+/* A file chip opens the file beside the chat. */
+.composer-editor .ProseMirror [data-type="mention"] {
+  cursor: pointer;
+}
+/* A chip the first Backspace or Delete picked out; the next press removes it. */
+.composer-editor .ProseMirror .ProseMirror-selectednode {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
 }
 
 /* The dev session (`pnpm tauri dev`) is framed in yellow and black hazard stripes, so it cannot

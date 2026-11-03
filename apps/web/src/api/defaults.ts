@@ -80,6 +80,7 @@ export const DEFAULT_SETTINGS: Settings = {
     seeded: false,
   },
   confirmAnswers: false,
+  steerWhileWorking: false,
   pluginsDir: null,
   disabledPlugins: [],
   computerUse: false,

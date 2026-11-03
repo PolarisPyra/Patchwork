@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FolderPlusIcon, ListChecksIcon } from "@phosphor-icons/react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { ListChecksIcon } from "@phosphor-icons/react";
 import {
   api,
   type AccessMode,
@@ -8,7 +8,6 @@ import {
   type BackgroundTask,
   type CheckSettings,
   type FileChange,
-  type Approval,
   type Message,
   type PermissionScope,
   type PermissionSettings,
@@ -17,11 +16,8 @@ import {
   type Thread,
   type TokenSettings,
 } from "~/api";
-import ProviderLogos from "~/components/ProviderLogos";
 import type { CanvasTab } from "~/features/canvas/Canvas";
-import { lastAccessMode } from "~/components/AccessPicker";
-import { COMPACT_SETTINGS, lastCompactWindow } from "~/components/CompactPicker";
-import { effortFor, lastEffort } from "~/components/EffortPicker";
+import { COMPACT_SETTINGS } from "~/components/CompactPicker";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import ChoicePanel from "~/features/chat/prompts/ChoicePanel";
 import GoalBanner from "~/features/chat/prompts/GoalBanner";
@@ -33,7 +29,8 @@ import {
 } from "~/lib/composerActions";
 import { ComposerStripPresence } from "~/features/chat/ComposerStrip";
 import BackgroundTasks from "~/features/chat/BackgroundTasks";
-import QueuedMessages from "~/features/chat/composer/QueuedMessages";
+import EmptyChat from "~/features/chat/EmptyChat";
+import QueuedMessages from "~/features/chat/composer/components/QueuedMessages";
 import LineageCard from "~/features/chat/lineage/LineageCard";
 import Composer from "~/features/chat/composer/Composer";
 import type { HistoryEntry } from "~/features/chat/composer/types";
@@ -44,40 +41,27 @@ import {
   type ChecksContextValue,
 } from "~/features/chat/transcript/components/ChecksCard";
 import PendingApprovalBanner from "~/features/chat/prompts/PendingApprovalBanner";
-import {
-  PermissionsContext,
-  type PermissionsContextValue,
-  scopeName,
-  suggestedRules,
-  threadScope,
-  withScopeRules,
-} from "~/lib/permissions";
+import { useApprovals } from "~/features/chat/prompts/useApprovals";
+import { PermissionsContext, scopeName } from "~/lib/permissions";
 import PlanPanel from "~/features/chat/plan/PlanPanel";
 import { planTitle } from "~/features/chat/plan/ProposedPlanCard";
+import { usePlan } from "~/features/chat/plan/usePlan";
 import MissingFolderPrompt from "~/features/chat/prompts/MissingFolderPrompt";
 import ResumePrompt from "~/features/chat/prompts/ResumePrompt";
+import { useChatOptions } from "~/features/chat/hooks/useChatOptions";
 import { useCheckpoints } from "~/features/chat/hooks/useCheckpoints";
 import { useChoices } from "~/features/chat/hooks/useChoices";
-import { useComposerDraft } from "~/features/chat/composer/useComposerDraft";
+import { useComposerDraft } from "~/features/chat/composer/hooks/useComposerDraft";
 import { useGoalClear } from "~/features/chat/hooks/useGoalClear";
+import { useProjectFolder } from "~/features/chat/hooks/useProjectFolder";
+import { useQueue } from "~/features/chat/hooks/useQueue";
+import { useSends } from "~/features/chat/hooks/useSends";
 import { copySelection } from "~/features/chat/lib/textSelection";
 import { useStableHandlers } from "~/hooks/useStableHandlers";
 import type { NewThreadOptions } from "~/hooks/useThreads";
 import { isLiveTask, isWorking } from "~/lib/threadEvents";
 import { coldLargeSession, threadUsage } from "~/lib/tokens";
 import { displayTitle, errorText } from "~/lib/util";
-
-const SUGGESTIONS = [
-  { label: "Explain this codebase", prefill: "Explain this codebase" },
-  { label: "Find and fix a bug", prefill: "Find and fix a bug" },
-  { label: "Write tests for…", prefill: "Write tests for " },
-];
-
-const CHAT_SUGGESTIONS = [
-  { label: "Explain a concept", prefill: "Explain " },
-  { label: "Draft a script", prefill: "Write a script that " },
-  { label: "Review a snippet", prefill: "Review this code:\n" },
-];
 
 interface ChatProps {
   project: Project | null;
@@ -125,6 +109,8 @@ interface ChatProps {
   permissionSettings: PermissionSettings;
   /** Answers to the agent's questions take a second click. */
   confirmAnswers: boolean;
+  /** Enter steers a running reply rather than queueing the message. */
+  steerWhileWorking: boolean;
   projects: Project[];
   onUpdatePermissions: (change: (p: PermissionSettings) => PermissionSettings) => void;
   /** Opens Settings → Permissions on a scope, with one of its rules picked out. */
@@ -136,6 +122,18 @@ interface ChatProps {
 
 // A fallback that keeps one identity, so the memoized composer sees no change.
 const NO_COMMANDS: ProviderSlashCommand[] = [];
+
+/** Longest gap between the two Escape presses that stop a running turn. */
+const STOP_SEQUENCE_MS = 500;
+
+/** A large, cold session asking before a message is sent to it. It asks about the thread as it
+ * was then: a turn that starts while it waits, such as a queued message going out, has resumed
+ * the session already. */
+interface ResumeAsk {
+  threadId: string;
+  /** The thread's last message that was not queued, when it asked. */
+  after: string | undefined;
+}
 
 export default function Chat({
   project,
@@ -165,6 +163,7 @@ export default function Chat({
   onSetCompactWindow,
   permissionSettings,
   confirmAnswers,
+  steerWhileWorking,
   projects,
   onUpdatePermissions,
   onOpenPermissions,
@@ -178,8 +177,14 @@ export default function Chat({
     (chat: string, text: string | null) => setErrors((prev) => ({ ...prev, [chat]: text })),
     [],
   );
+  const key = thread?.id ?? "new";
+  const error = errors[key] ?? null;
+  const setError = (text: string | null) => setErrorFor(key, text);
 
+  const projectId = project?.id ?? null;
+  const projectPath = project?.path ?? null;
   // The composer's text and files for this chat, and the files dropped or pasted into them.
+  const composer = useComposerDraft({ threadKey: key, projectPath, onError: setErrorFor });
   const {
     draft,
     setDraft,
@@ -193,116 +198,80 @@ export default function Chat({
     setComposerAttachments,
     sentWith,
     draftWithout,
-    restoreDraft,
     attach,
     dropping,
     dropMentions,
     rootRef,
-  } = useComposerDraft({
-    threadKey: thread?.id ?? "new",
-    projectPath: project?.path ?? null,
-    onError: setErrorFor,
+  } = composer;
+  const { files, folderMissing } = useProjectFolder(projectId, projectPath);
+  const options = useChatOptions({
+    thread,
+    defaultAgent,
+    tokens,
+    setError,
+    onSetModel,
+    onSetAccessMode,
+    onSetPlanMode,
+    onSetEffort,
+    onSetCompactWindow,
   });
+  const { agent, newOpts } = options;
+  const sends = useSends({
+    chat: key,
+    options: newOpts,
+    draft: composer,
+    onSend,
+    onSent: options.dropPickedRole,
+    setErrorFor,
+  });
+  const { dispatch } = sends;
+  const working = sends.working || isWorking(thread);
+  const queue = useQueue({ thread, working, draft: composer, setError });
+  const { queued } = queue;
+  const approvals = useApprovals({
+    thread,
+    project,
+    permissionSettings,
+    projects,
+    onUpdatePermissions,
+    onOpenPermissions,
+    setErrorFor,
+  });
+  const { asking, question, scope } = approvals;
+  const showQuestion = question !== undefined && !approvals.answerInComposer;
+  const plan = usePlan({
+    thread,
+    working,
+    asking: asking !== undefined,
+    send: (text) => dispatch(text, [], false),
+    onStartThread,
+    onSetPlanMode,
+    setError,
+  });
+  const { readyPlan, implementPlan } = plan;
+  const { choices, showChoices, answerChoice, dismissChoices } = useChoices(
+    thread,
+    working,
+    (option) => void dispatch(option, [], true),
+  );
 
-  // Files the @ mention menu offers; they follow the project and its folder.
-  const [files, setFiles] = useState<string[]>([]);
-  const projectId = project?.id ?? null;
-  const projectPath = project?.path ?? null;
-  useEffect(() => {
-    if (!projectId) {
-      setFiles([]);
-      return;
-    }
-    let cancelled = false;
-    api.listFiles(projectId).then(
-      (list) => {
-        if (!cancelled) setFiles(list);
-      },
-      () => {
-        if (!cancelled) setFiles([]);
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, projectPath]);
-
-  // A project whose folder was moved or deleted cannot run its agent until it is pointed
-  // elsewhere.
-  const [folderMissing, setFolderMissing] = useState(false);
-  useEffect(() => {
-    setFolderMissing(false);
-    if (!projectPath) return;
-    let cancelled = false;
-    api.isFolder(projectPath).then(
-      (found) => {
-        if (!cancelled) setFolderMissing(!found);
-      },
-      () => undefined,
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [projectPath]);
-
-  // Agent/model/access chosen for the next thread; null means the defaults.
-  const [pick, setPick] = useState<NewThreadOptions | null>(null);
   const [modelPickerRequest, setModelPickerRequest] = useState(0);
-  // Sends still on their way, counted by the chat they belong to. A send from the new-task screen
-  // moves to its thread once that is made, so the new thread shows as working until it answers.
-  const [sendsIn, setSendsIn] = useState<Record<string, number>>({});
-  const countSend = (chat: string, by: number) =>
-    setSendsIn((s) => ({ ...s, [chat]: (s[chat] ?? 0) + by }));
-  // The thread whose large, cold session is asking before a message is sent to it.
-  const [resumeAsk, setResumeAsk] = useState<string | null>(null);
-  // Kept here so Ctrl+Enter in the composer can tell whether the queued strip is expanded.
-  const [queueOpen, setQueueOpen] = useState(true);
-  // Ctrl+Enter shows the Steer button as pressed for a moment, as a mouse click would.
-  const [steerPressed, setSteerPressed] = useState(false);
-  const steerPressedTimer = useRef(0);
+  const [resumeAsk, setResumeAsk] = useState<ResumeAsk | null>(null);
+  const settledId = thread?.messages.filter((m) => !m.queued).at(-1)?.id;
+  const asksResume =
+    thread !== null &&
+    !working &&
+    resumeAsk?.threadId === thread.id &&
+    resumeAsk.after === settledId;
+  // Set by the composer: adds text quoted from a reply to the draft.
+  const quoteInto = useRef<((lines: string[]) => void) | null>(null);
 
-  const key = thread?.id ?? "new";
-  const error = errors[key] ?? null;
-  const setError = (text: string | null) => setErrorFor(key, text);
-
-  const newOpts: NewThreadOptions = pick ?? {
-    agent: defaultAgent,
-    model: tokens.defaultModels[defaultAgent] ?? null,
-    accessMode: lastAccessMode(),
-    effort: lastEffort(defaultAgent),
-    compactWindow: lastCompactWindow(defaultAgent),
-  };
   const empty = !thread || thread.messages.length === 0;
-  const queued = useMemo(() => thread?.messages.filter((m) => m.queued) ?? [], [thread?.messages]);
-  // A queued message can be sent while it is being edited: the agent took it, or it was steered.
-  // What was typed stays in the composer as an ordinary draft, to send or queue again, after the
-  // draft the edit had set aside.
-  useEffect(() => {
-    if (!queuedEdit || queuedEdit.chat !== key || queued.some((m) => m.id === queuedEdit.id)) {
-      return;
-    }
-    setDraft(draft.trim() ? `${draft}\n\n${queuedEdit.text}` : queuedEdit.text);
-    setAttachments([
-      ...attachments,
-      ...queuedEdit.attachments.filter((a) => !attachments.some((c) => c.path === a.path)),
-    ]);
-    setQueuedEdit(null);
-  }, [queued, queuedEdit, key]);
+  const isNew = !thread || empty;
   const background = useMemo(
     () => thread?.messages.flatMap((m) => m.background) ?? [],
     [thread?.messages],
   );
-  const agent = thread?.agent ?? newOpts.agent;
-  const model = thread ? thread.model : newOpts.model;
-  const accessMode = thread?.accessMode ?? newOpts.accessMode;
-  const effort = thread ? thread.effort : newOpts.effort;
-  const compactWindow = thread ? thread.compactWindow : newOpts.compactWindow;
-  const working = (sendsIn[key] ?? 0) > 0 || isWorking(thread);
-  // A turn that starts while the resume prompt waits, such as a queued message going out, has
-  // resumed the session already.
-  useEffect(() => {
-    if (working) setResumeAsk(null);
-  }, [working]);
   // The reply under way is compacting, or a /compact was sent and its reply has not started.
   const compacting = useMemo(() => {
     if (!working) return false;
@@ -340,33 +309,10 @@ export default function Chat({
   const composerAgents = empty || thread?.contextPending ? offered : [agent];
   const composerAgentsKey = composerAgents.join();
   const stableComposerAgents = useMemo(() => composerAgents, [composerAgentsKey]);
-
-  async function dispatch(
-    text: string,
-    files: Attachment[],
-    restoreOnError: boolean,
-    queue = false,
-  ) {
-    let sentKey = key;
-    setError(null);
-    countSend(sentKey, 1);
-    try {
-      await onSend(text, files, newOpts, queue, (threadId) => {
-        countSend(sentKey, -1);
-        countSend(threadId, 1);
-        sentKey = threadId;
-      });
-      // The role went into the chat that was started; the next new chat starts with none.
-      setPick((picked) => (picked ? { ...picked, role: null } : picked));
-    } catch (e) {
-      // A send from the new-task screen has moved to its thread, if one was made. The error and
-      // the text go back there.
-      setErrorFor(sentKey, errorText(e));
-      if (restoreOnError) restoreDraft(sentKey, text, draftWithout(text, files));
-    } finally {
-      countSend(sentKey, -1);
-    }
-  }
+  const checksContext = useMemo<ChecksContextValue>(
+    () => ({ settings: checkSettings, setProject: onSetProjectChecks }),
+    [checkSettings, onSetProjectChecks],
+  );
 
   // /clear asks first: the messages are deleted and cannot be recovered.
   async function clearChat() {
@@ -429,7 +375,7 @@ export default function Chat({
     void dispatch("/compact", [], true);
   }
 
-  function submit(queue: boolean) {
+  function submit(toQueue: boolean) {
     const text = composerDraft.trim();
     if (folderMissing) return;
     if (queuedEdit) {
@@ -446,10 +392,10 @@ export default function Chat({
       return;
     }
     // An answer written in the composer goes to the agent's question, not into the chat.
-    if (asking && ownAnswer === asking.id) {
+    if (asking && approvals.answerInComposer) {
       if (!text) return;
       setDraft("");
-      answerQuestion(text);
+      approvals.answerQuestion(text);
       return;
     }
     const command = attachments.length === 0 ? localCommand(text) : null;
@@ -472,50 +418,10 @@ export default function Chat({
       tokens.askBeforeResume &&
       coldLargeSession(thread, Date.now(), tokens.warnAbove)
     ) {
-      setResumeAsk(thread.id);
+      setResumeAsk({ threadId: thread.id, after: settledId });
       return;
     }
-    setDraft("");
-    setAttachments([]);
-    void dispatch(text, sentWith(text, attachments), true, queue);
-  }
-
-  // Takes a queued message back from the agent's queue. Editing puts its text and attachments in
-  // the composer; it only does so once the server has taken the message back.
-  function takeBack(message: Message, edit: boolean) {
-    if (!thread) return;
-    if (edit) {
-      setQueuedEdit({
-        chat: thread.id,
-        id: message.id,
-        text: message.text,
-        attachments: draftWithout(message.text, message.attachments),
-      });
-      return;
-    }
-    api.removeQueued(thread.id, message.id).catch((e: unknown) => setError(errorText(e)));
-  }
-
-  function editLatestQueued() {
-    if (queuedEdit || composerDraft.trim() || composerAttachments.length) return;
-    const latestQueued = queued.at(-1);
-    if (thread && latestQueued)
-      setQueuedEdit({
-        chat: thread.id,
-        id: latestQueued.id,
-        text: latestQueued.text,
-        attachments: draftWithout(latestQueued.text, latestQueued.attachments),
-      });
-  }
-
-  function resumeQueued() {
-    if (!thread || working) return;
-    api.resumeQueued(thread.id).catch((e: unknown) => setError(errorText(e)));
-  }
-
-  function steerQueued(message: Message) {
-    if (!thread || !working) return;
-    api.steerQueued(thread.id, message.id).catch((e: unknown) => setError(errorText(e)));
+    void sends.sendHeld(toQueue);
   }
 
   function stopBackground(task: BackgroundTask) {
@@ -550,6 +456,7 @@ export default function Chat({
     onShowChanges: (messageId: string) => onShowChanges(messageId),
     onRestore: (message: Message) => void restoreCheckpoint(message),
     onFork: (message: Message) => void forkThread(message),
+    onQuote: (lines: string[]) => quoteInto.current?.(lines),
   });
 
   // Stops the running turn, goal or not. A goal it was pursuing is cleared once the agent has
@@ -560,6 +467,30 @@ export default function Chat({
     onCancel(thread.id).catch((e: unknown) => setError(errorText(e)));
   }
 
+  // Escape pressed twice in the chat or its composer stops the running turn, as Stop does; queued
+  // messages stay. The presses are read before anything handles them, so an open menu, dialog or
+  // approval takes them instead, and a held key, a composition or a new turn starts again.
+  const lastEscape = useRef(0);
+  useEffect(() => {
+    lastEscape.current = 0;
+  }, [working, key]);
+  function stopOnEscapeTwice(e: KeyboardEvent) {
+    if (e.key !== "Escape") return;
+    const popup = document.querySelector(
+      '[role="menu"], [role="listbox"], [role="dialog"], [aria-label="Approval request"]',
+    );
+    if (!working || e.repeat || e.nativeEvent.isComposing || popup) {
+      lastEscape.current = 0;
+      return;
+    }
+    if (e.timeStamp - lastEscape.current < STOP_SEQUENCE_MS) {
+      lastEscape.current = 0;
+      stop();
+    } else {
+      lastEscape.current = e.timeStamp;
+    }
+  }
+
   // Codex takes /goal resume; Claude and Antigravity have no such command, so a message carries
   // the goal on.
   function resumeGoal() {
@@ -567,51 +498,6 @@ export default function Chat({
     void dispatch(thread.agent === "codex" ? "/goal resume" : "Continue the goal.", [], false);
   }
 
-  function pickModel(nextAgent: AgentKind, nextModel: string | null) {
-    if (!thread) {
-      const same = nextAgent === agent;
-      setPick({
-        ...newOpts,
-        agent: nextAgent,
-        model: nextModel,
-        effort: same ? newOpts.effort : lastEffort(nextAgent),
-        compactWindow: same ? newOpts.compactWindow : lastCompactWindow(nextAgent),
-      });
-      return;
-    }
-    setError(null);
-    onSetModel(thread.id, nextAgent, nextModel).catch((e: unknown) => setError(errorText(e)));
-    // A level the new agent does not accept would make its CLI refuse the turn.
-    if (thread.effort !== effortFor(nextAgent, thread.effort)) pickEffort(null);
-  }
-
-  function pickEffort(next: string | null) {
-    if (!thread) {
-      setPick({ ...newOpts, effort: next });
-      return;
-    }
-    setError(null);
-    onSetEffort(thread.id, next).catch((e: unknown) => setError(errorText(e)));
-  }
-
-  function pickCompactWindow(next: number | null) {
-    if (!thread) {
-      setPick({ ...newOpts, compactWindow: next });
-      return;
-    }
-    setError(null);
-    onSetCompactWindow(thread.id, next).catch((e: unknown) => setError(errorText(e)));
-  }
-
-  const planSupported = agent !== "antigravity";
-  function setPlanMode(enabled: boolean) {
-    if (!thread) {
-      setPick({ ...newOpts, planMode: enabled });
-      return;
-    }
-    setError(null);
-    onSetPlanMode(thread.id, enabled).catch((e: unknown) => setError(errorText(e)));
-  }
   function runLocalCommand(command: LocalCommand) {
     switch (command.name) {
       case "/clear":
@@ -626,8 +512,8 @@ export default function Chat({
         return;
       case "/plan":
       case "/default":
-        if (!planSupported) setError("Plan mode is not supported by Antigravity.");
-        else setPlanMode(command.name === "/plan");
+        if (!options.planSupported) setError("Plan mode is not supported by Antigravity.");
+        else options.setPlanMode(command.name === "/plan");
         setDraft("");
         return;
       // /new starts a fresh chat; the current one is kept in the sidebar.
@@ -643,215 +529,25 @@ export default function Chat({
     runLocalCommand(command);
     return true;
   }
-  function pickAccess(mode: AccessMode) {
-    if (!thread) {
-      setPick({ ...newOpts, accessMode: mode });
-      return;
-    }
-    setError(null);
-    onSetAccessMode(thread.id, mode).catch((e: unknown) => setError(errorText(e)));
-  }
 
-  const threadId = thread?.id;
-  // Requests answered and not yet resolved, so a double click answers once. The server turns a
-  // second answer down, which would show as an error.
-  const answering = useRef(new Set<string>());
-  const respond = useCallback(
-    (approvalId: string, allow: boolean, answers?: Record<string, string[]>) => {
-      if (!threadId || answering.current.has(approvalId)) return;
-      answering.current.add(approvalId);
-      setError(null);
-      api.respondApproval(threadId, approvalId, allow, answers).catch((e: unknown) => {
-        answering.current.delete(approvalId);
-        setError(errorText(e));
-      });
-    },
-    [threadId],
-  );
-  const scopeProjectId = thread ? thread.projectId : (project?.id ?? null);
-  const scope = useMemo(() => threadScope(scopeProjectId), [scopeProjectId]);
-  const permissionsContext = useMemo<PermissionsContextValue>(
-    () => ({
-      permissions: permissionSettings,
-      projects,
-      scope,
-      addRules: (to, rules) =>
-        onUpdatePermissions((p) =>
-          withScopeRules(p, to, (s) => ({
-            ...s,
-            // A rule with the same pattern is replaced, so saving one twice keeps one.
-            rules: [
-              ...s.rules.filter(
-                (r) => !rules.some((n) => n.kind === r.kind && n.pattern === r.pattern),
-              ),
-              ...rules,
-            ],
-          })),
-        ),
-      removeRule: (from, ruleId) =>
-        onUpdatePermissions((p) =>
-          withScopeRules(p, from, (s) => ({ ...s, rules: s.rules.filter((r) => r.id !== ruleId) })),
-        ),
-      openRule: onOpenPermissions,
-    }),
-    [permissionSettings, projects, scope, onUpdatePermissions, onOpenPermissions],
-  );
-  const checksContext = useMemo<ChecksContextValue>(
-    () => ({ settings: checkSettings, setProject: onSetProjectChecks }),
-    [checkSettings, onSetProjectChecks],
-  );
-  /** Answers a permission request; `always` also saves its rules there, so the next ones like
-   * it are answered without asking. The rules are saved after the answer, so the server answers
-   * the other waiting requests they cover rather than this one. */
-  const respondPermission = useCallback(
-    (approval: Approval, allow: boolean, always?: PermissionScope) => {
-      if (!threadId || answering.current.has(approval.id)) return;
-      answering.current.add(approval.id);
-      setError(null);
-      const rules = always ? suggestedRules(approval) : [];
-      const rule = always && rules[0] ? { scope: always, ruleId: rules[0].id } : undefined;
-      api
-        .respondApproval(threadId, approval.id, allow, undefined, rule)
-        .then(() => {
-          if (always && rules.length > 0) permissionsContext.addRules(always, rules);
-        })
-        .catch((e: unknown) => {
-          answering.current.delete(approval.id);
-          setError(errorText(e));
-        });
-    },
-    [threadId, permissionsContext],
-  );
-  const pendingApprovals =
-    thread?.messages.flatMap((m) => m.approvals).filter((a) => a.status === "pending") ?? [];
-  // Questions the agent asks wait in a choice panel, one at a time; permission requests wait in
-  // the banner.
-  const asking = pendingApprovals.find((a) => a.questions?.length);
-  const permissions = pendingApprovals.filter((a) => !a.questions?.length);
-  const [picks, setPicks] = useState<{ id: string; answers: Record<string, string[]> } | null>(
-    null,
-  );
-  // The question the user is answering in the composer, by its approval's id.
-  const [ownAnswer, setOwnAnswer] = useState<string | null>(null);
-  const answered = asking && picks?.id === asking.id ? picks.answers : {};
-  const question = asking?.questions?.find((q) => !(q.id in answered));
-  const showQuestion = question !== undefined && ownAnswer !== asking?.id;
-  // Records the answer to the shown question, and sends them all once the last is answered.
-  function answerQuestion(answer: string) {
-    if (!asking?.questions || !question) return;
-    const answers = { ...answered, [question.id]: [answer] };
-    setOwnAnswer(null);
-    if (asking.questions.every((q) => q.id in answers)) {
-      setPicks(null);
-      respond(asking.id, true, answers);
-    } else {
-      setPicks({ id: asking.id, answers });
-    }
-  }
-
-  // The plan of the reply running now. Once that reply ends, finished or not, its plan stays a
-  // moment and then folds away, so nothing looks under way when nothing is. Plans of replies that
-  // ended before the chat was opened are not shown.
-  const lastMessage = thread?.messages.at(-1);
-  const livePlanId =
-    working &&
-    lastMessage?.role === "assistant" &&
-    lastMessage.status === "streaming" &&
-    lastMessage.plan.length > 0
-      ? lastMessage.id
-      : null;
-  const [keptPlanId, setKeptPlanId] = useState<string | null>(null);
-  useEffect(() => {
-    if (livePlanId !== null) setKeptPlanId(livePlanId);
-  }, [livePlanId]);
-  const plan =
-    lastMessage?.role === "assistant" &&
-    (lastMessage.id === livePlanId || lastMessage.id === keptPlanId)
-      ? lastMessage.plan
-      : [];
-  // A finished list, or one whose reply ended, stays a moment, then folds away; a new list brings
-  // it back.
-  const planOver =
-    plan.length > 0 && (livePlanId === null || plan.every((step) => step.status === "done"));
-  const [planCleared, setPlanCleared] = useState(false);
-  useEffect(() => {
-    setPlanCleared(false);
-    if (!planOver) return;
-    const timer = window.setTimeout(() => setPlanCleared(true), 1200);
-    return () => window.clearTimeout(timer);
-  }, [planOver]);
-  // Choices the agent offered in its last finished reply, until the user answers or dismisses them.
-  // A plan the last reply proposed in plan mode, ready to implement or refine.
-  const proposed =
-    thread?.planMode && !working && !asking && lastMessage?.role === "assistant"
-      ? [...lastMessage.parts].reverse().find((p) => p.type === "plan")
-      : undefined;
-  const readyPlan = proposed?.type === "plan" ? proposed.text : null;
-  const IMPLEMENT = "PLEASE IMPLEMENT THIS PLAN:\n";
-  // Set while a plan is being implemented, so a second click or Enter does not send it again.
-  const implementing = useRef(false);
-  // Implementing leaves plan mode, in this thread or a new one named after the plan.
-  async function implementPlan(newThread: boolean) {
-    if (!thread || readyPlan === null || implementing.current) return;
-    implementing.current = true;
-    const text = IMPLEMENT + readyPlan.trim();
-    setError(null);
-    try {
-      if (newThread) {
-        const opts: NewThreadOptions = {
-          agent: thread.agent,
-          model: thread.model,
-          accessMode: thread.accessMode,
-          effort: thread.effort,
-          compactWindow: thread.compactWindow,
-        };
-        await onStartThread(opts, `Implement ${planTitle(readyPlan)}`.slice(0, 60), text);
-      } else {
-        await onSetPlanMode(thread.id, false);
-        await dispatch(text, [], false);
-      }
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      implementing.current = false;
-    }
-  }
-  const { choices, showChoices, answerChoice, dismissChoices } = useChoices(
-    thread,
-    working,
-    (option) => void dispatch(option, [], true),
-  );
-  const isNew = !thread || empty;
   // The composer is memoized; these keep their identity across the renders a stream causes.
   const composerHandlers = useStableHandlers({
+    onOpenFile: (path: string) => onOpenCanvas(path, null, "code"),
     onChange: setComposerDraft,
     onSubmit: submit,
-    onEditLatestQueued: editLatestQueued,
-    onSteerQueued: () => {
-      if (!queued[0]) return;
-      setSteerPressed(true);
-      window.clearTimeout(steerPressedTimer.current);
-      steerPressedTimer.current = window.setTimeout(() => setSteerPressed(false), 150);
-      steerQueued(queued[0]);
-    },
+    onEditLatestQueued: queue.editLatest,
+    onSteerQueued: queue.steerFirst,
     onStop: stop,
-    onPickModel: pickModel,
+    onPickModel: options.pickModel,
     onSelectSlashCommand: selectSlashCommand,
-    onPickAccess: pickAccess,
-    onPickEffort: pickEffort,
-    onPickCompactWindow: pickCompactWindow,
+    onPickAccess: options.pickAccess,
+    onPickEffort: options.pickEffort,
+    onPickCompactWindow: options.pickCompactWindow,
     onCompactNow: compactNow,
     onAttachPaths: (paths: string[]) => void attach(paths),
     onRemoveAttachment: (i: number) =>
       setComposerAttachments(composerAttachments.filter((_, j) => j !== i)),
-    onPickRole: (next: string | null) => {
-      if (!thread) {
-        setPick({ ...newOpts, role: next });
-        return;
-      }
-      setError(null);
-      api.setThreadRole(thread.id, next).catch((e: unknown) => setError(errorText(e)));
-    },
+    onPickRole: options.pickRole,
   });
 
   // One copy handler for everything the chat renders: replies, messages, tool output, prompts.
@@ -860,13 +556,14 @@ export default function Chat({
       className={`relative flex min-h-0 min-w-0 flex-1 flex-col${isNew ? " justify-center" : ""}`}
       ref={rootRef}
       onCopy={copySelection}
+      onKeyDownCapture={stopOnEscapeTwice}
     >
       {thread && (
         <LineageCard thread={thread} working={working} onDisconnect={stop} onError={setError} />
       )}
       <div className={`flex min-h-0 flex-col ${isNew ? "flex-none overflow-y-auto" : "flex-1"}`}>
         {!isNew ? (
-          <PermissionsContext.Provider value={permissionsContext}>
+          <PermissionsContext.Provider value={approvals.permissionsContext}>
             <ChecksContext.Provider value={checksContext}>
               <Transcript
                 thread={thread}
@@ -879,39 +576,18 @@ export default function Chat({
                 checkpoints={checkpoints}
                 onRestore={transcriptHandlers.onRestore}
                 onFork={transcriptHandlers.onFork}
+                onQuote={transcriptHandlers.onQuote}
                 tokens={tokens}
               />
             </ChecksContext.Provider>
           </PermissionsContext.Provider>
         ) : (
-          <div className="flex h-auto flex-col items-center justify-center gap-4 p-6 text-center">
-            <ProviderLogos kind={agent} size={40} />
-            <h2 className="m-0 text-[length:var(--fs-xl)] font-semibold">
-              {project ? `What should we build in ${project.name}?` : "What's on your mind?"}
-            </h2>
-            {!project && (
-              <>
-                <p className="-mt-1.5 mb-0 text-fg-muted">
-                  This chat has no project; the agent works in a private scratch folder.
-                </p>
-                <button className="btn my-2 h-8 !px-4" onClick={onOpenFolder}>
-                  <FolderPlusIcon size={14} />
-                  Open a project
-                </button>
-              </>
-            )}
-            <div className="flex max-w-[560px] flex-wrap justify-center gap-2">
-              {(project ? SUGGESTIONS : CHAT_SUGGESTIONS).map((s) => (
-                <button
-                  key={s.label}
-                  className="h-7 cursor-pointer rounded-[14px] border border-border-strong bg-panel px-3 text-fg hover:bg-hover"
-                  onClick={() => setDraft(s.prefill)}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <EmptyChat
+            agent={agent}
+            project={project}
+            onOpenFolder={onOpenFolder}
+            onPrefill={setDraft}
+          />
         )}
       </div>
       {/* A subagent's thread is its transcript; it takes no messages. */}
@@ -931,11 +607,8 @@ export default function Chat({
       )}
       <div className={`w-full flex-none box-border px-6 pb-4 ${thread?.parent ? " hidden" : ""}`}>
         <BackgroundTasks tasks={background} onStop={stopBackground} />
-        <ComposerStripPresence
-          key={`${key}-plan`}
-          present={plan.length > 0 && !(planOver && planCleared)}
-        >
-          {plan.length > 0 && <PlanPanel steps={plan} />}
+        <ComposerStripPresence key={`${key}-plan`} present={plan.stepsShown}>
+          {plan.steps.length > 0 && <PlanPanel steps={plan.steps} />}
         </ComposerStripPresence>
         {readyPlan !== null && (
           <div
@@ -953,30 +626,30 @@ export default function Chat({
             </button>
           </div>
         )}
-        {permissions.length > 0 && (
+        {approvals.permissions.length > 0 && (
           <PendingApprovalBanner
-            approvals={permissions}
+            approvals={approvals.permissions}
             scope={scope}
             scopeName={scopeName(scope, projects)}
-            onRespond={respondPermission}
+            onRespond={approvals.respondPermission}
           />
         )}
-        {asking && question && showQuestion && (
+        {question && showQuestion && (
           <ChoicePanel
             key={question.id}
             question={question.question}
             options={question.options.map((o) => o.label)}
             descriptions={question.options.map((o) => o.description)}
-            onPick={answerQuestion}
+            onPick={approvals.answerQuestion}
             confirm={confirmAnswers}
-            onOwn={() => setOwnAnswer(asking.id)}
-            onDismiss={() => respond(asking.id, false)}
+            onOwn={approvals.writeOwnAnswer}
+            onDismiss={approvals.dismissQuestion}
           />
         )}
         {folderMissing && projectPath && (
           <MissingFolderPrompt path={projectPath} onChangeFolder={onChangeFolder} />
         )}
-        {thread && resumeAsk === thread.id && (
+        {thread && asksResume && (
           <ResumePrompt
             idleMs={Date.now() - (thread.messages.at(-1)?.finishedAt ?? Date.now())}
             context={thread.messages.at(-1)?.usage?.context ?? 0}
@@ -996,13 +669,13 @@ export default function Chat({
             messages={queued}
             canEdit={true}
             canSteer={working}
-            steerPressed={steerPressed}
-            open={queueOpen}
-            onToggle={() => setQueueOpen((value) => !value)}
-            onEdit={(message) => takeBack(message, true)}
-            onRemove={(message) => takeBack(message, false)}
-            onSteer={steerQueued}
-            onResume={resumeQueued}
+            steerPressed={queue.steerPressed}
+            open={queue.open}
+            onToggle={queue.toggle}
+            onEdit={queue.edit}
+            onRemove={queue.remove}
+            onSteer={queue.steer}
+            onResume={queue.resume}
             editingId={queuedEdit?.id ?? null}
             onCancelEdit={() => setQueuedEdit(null)}
           />
@@ -1044,17 +717,17 @@ export default function Chat({
             error ?? (noAgents ? "No agents connected. Turn one on in Settings → Providers." : null)
           }
           agent={agent}
-          model={model}
+          model={options.model}
           agents={stableComposerAgents}
           onPickModel={composerHandlers.onPickModel}
           modelPickerRequest={modelPickerRequest}
           providerSlashCommands={thread?.slashCommands ?? NO_COMMANDS}
           onSelectSlashCommand={composerHandlers.onSelectSlashCommand}
-          accessMode={accessMode}
+          accessMode={options.accessMode}
           onPickAccess={composerHandlers.onPickAccess}
-          effort={effort}
+          effort={options.effort}
           onPickEffort={composerHandlers.onPickEffort}
-          compactWindow={compactWindow}
+          compactWindow={options.compactWindow}
           defaultCompactWindow={tokens[COMPACT_SETTINGS[agent]]}
           context={usage?.context ?? null}
           onPickCompactWindow={composerHandlers.onPickCompactWindow}
@@ -1066,11 +739,15 @@ export default function Chat({
           dropMentions={dropMentions}
           history={history}
           files={files}
+          onOpenFile={project ? composerHandlers.onOpenFile : null}
+          quoteInto={quoteInto}
           deferFocus={showChoices || showQuestion}
           disabled={folderMissing || noAgents}
+          sending={sends.holding}
+          steerWhileWorking={steerWhileWorking}
           compacting={compacting}
           projectId={projectId}
-          role={thread ? thread.role : (newOpts.role ?? null)}
+          role={options.role}
           onPickRole={composerHandlers.onPickRole}
         />
       </div>

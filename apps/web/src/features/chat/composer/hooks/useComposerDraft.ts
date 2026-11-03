@@ -26,6 +26,23 @@ export interface QueuedEdit {
 // Fallbacks that keep one identity, so the memoized composer sees no change.
 const NO_ATTACHMENTS: Attachment[] = [];
 
+const DRAFTS_KEY = "patchwork.drafts";
+
+/** The unsent drafts, by chat, kept across reloads and restarts. */
+function savedDrafts(): Record<string, string> {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(DRAFTS_KEY) ?? "{}");
+    if (!saved || typeof saved !== "object") return {};
+    return Object.fromEntries(
+      Object.entries(saved).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
+
 /**
  * The text and files being composed for one chat, and everything that puts files into them:
  * attachments picked or dropped, files and images pasted, and the draft's per-chat memory.
@@ -44,7 +61,11 @@ export function useComposerDraft({
   /** Reports a failed attach against the chat it was meant for. */
   onError: (chat: string, text: string) => void;
 }) {
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [drafts, setDrafts] = useState<Record<string, string>>(savedDrafts);
+  useEffect(() => {
+    const unsent = Object.entries(drafts).filter(([, text]) => text.trim());
+    localStorage.setItem(DRAFTS_KEY, JSON.stringify(Object.fromEntries(unsent)));
+  }, [drafts]);
   const [pending, setPending] = useState<Record<string, Attachment[]>>({});
   const [heldEdit, setQueuedEdit] = useState<QueuedEdit | null>(null);
   // An edit shows only in its own chat, so a switch never hands it to the next chat's composer.
@@ -92,6 +113,12 @@ export function useComposerDraft({
   const restoreDraft = (chat: string, text: string, files: Attachment[]) => {
     setDrafts((d) => (d[chat] ? d : { ...d, [chat]: text }));
     setPending((p) => (p[chat]?.length ? p : { ...p, [chat]: files }));
+  };
+
+  /** Empties a chat's draft once its message is sent, keeping files attached to it since. */
+  const clearSent = (chat: string, files: Attachment[]) => {
+    setDrafts((d) => ({ ...d, [chat]: "" }));
+    setPending((p) => ({ ...p, [chat]: (p[chat] ?? []).filter((f) => !files.includes(f)) }));
   };
 
   /** What the draft keeps once the message leaves: the files its text no longer holds. */
@@ -267,6 +294,7 @@ export function useComposerDraft({
     sentWith,
     draftWithout,
     restoreDraft,
+    clearSent,
     attach,
     dropping,
     dropMentions,

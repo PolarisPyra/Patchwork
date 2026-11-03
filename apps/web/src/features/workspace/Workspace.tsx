@@ -528,6 +528,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
                 onSetCompactWindow={setCompactWindow}
                 permissionSettings={settings.permissions}
                 confirmAnswers={settings.confirmAnswers}
+                steerWhileWorking={settings.steerWhileWorking}
                 projects={settings.projects}
                 onUpdatePermissions={updatePermissions}
                 onOpenPermissions={openPermissions}

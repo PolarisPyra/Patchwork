@@ -124,6 +124,10 @@ importLogDisabled: boolean, logging: LoggingSettings, terminal: TerminalSettings
  */
 confirmAnswers: boolean, 
 /**
+ * Enter steers a running reply instead of queueing the message for after it.
+ */
+steerWhileWorking: boolean, 
+/**
  * Folder of plugin bundles. None uses `plugins` in the config folder.
  */
 pluginsDir: string | null, 
