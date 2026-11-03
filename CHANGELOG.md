@@ -3,6 +3,14 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.4] - 2026-11-03
+
+### Fixed
+
+- Commands an Antigravity agent runs now show in the chat with the command line and its output, where each one showed only an empty "$" before. A reply that ran several different commands is no longer stopped as if the agent were stuck repeating the same command.
+- On a computer without Git, the changes list stays empty quietly instead of writing "Failed to run git: program not found" to the log each time the project changes.
+- A chat whose title is taken from its first message, as when no Claude or Codex is installed to write one, no longer gets a title such as "{" when the message starts with pasted JSON or code. It uses the first line with a letter or digit instead.
+
 ## [26.11.3] - 2026-11-03
 
 ### Added
