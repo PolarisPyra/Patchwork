@@ -1,7 +1,7 @@
 {
   "name": "patchwork-web",
   "private": true,
-  "version": "26.11.1",
+  "version": "26.11.2",
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
