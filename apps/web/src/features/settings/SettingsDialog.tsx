@@ -80,7 +80,7 @@ const GROUPS: { label: string; sections: { id: Section; label: string; Icon: Ico
     label: "General",
     sections: [
       { id: "appearance", label: "Appearance", Icon: PaletteIcon },
-      { id: "chat", label: "Chats and threads", Icon: ChatCircleIcon },
+      { id: "chat", label: "Chats", Icon: ChatCircleIcon },
       { id: "notifications", label: "Notifications", Icon: BellIcon },
       { id: "shortcuts", label: "Shortcuts", Icon: KeyboardIcon },
       { id: "updates", label: "Updates", Icon: ArrowCircleUpIcon },

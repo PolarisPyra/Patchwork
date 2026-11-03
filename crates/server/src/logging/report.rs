@@ -1,7 +1,8 @@
-//! A chat's report, the file its Open logs writes to `reports/` in the launch's folder: what
-//! Patchwork runs on, the chat's settings, each reply's outcome, the chat's own logs from every
-//! kept launch, and this launch's warnings and errors. One file holds what it takes to work out
-//! what went wrong in the chat, and like the logs it has no secrets and names no user.
+//! A chat's report, which its Open logs writes to the launch's folder beside the chat's log, as
+//! `thread-<id>-report-<time>.log`: what Patchwork runs on, the chat's settings, each reply's
+//! outcome, the chat's own logs from every kept launch, and this launch's warnings and errors.
+//! One file holds what it takes to work out what went wrong in the chat, and like the logs it has
+//! no secrets and names no user.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -14,7 +15,7 @@ use crate::{Res, Server};
 use super::render::local_time;
 use super::scrub::{cut, redact, scrubbed};
 use super::system::{report, shown};
-use super::files::REPORTS_DIR;
+use super::thread_log::report_path;
 use super::{session, Json, THREAD_LOG};
 
 /// This launch's warning and error lines past this many are left out, oldest first.
@@ -29,7 +30,7 @@ impl Server {
         let thread = self
             .store
             .thread(thread_id)
-            .ok_or_else(|| format!("No chat {thread_id}"))?;
+            .ok_or(crate::threads::NOT_FOUND)?;
         let project = thread
             .project_id
             .as_deref()
@@ -54,15 +55,12 @@ impl Server {
             text = text.replace(&home, "~");
         }
 
-        let dir = session().ok_or("There are no logs yet")?.join(REPORTS_DIR);
-        std::fs::create_dir_all(&dir)
-            .map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
+        let dir = session().ok_or("There are no logs yet")?;
         let stamp = chrono::Local::now().format("%Y%m%dT%H%M%S");
-        let short: String = thread.id.chars().take(8).collect();
-        let path = dir.join(format!("chat-{short}-{stamp}.log"));
+        let path = report_path(dir, &thread.id, stamp);
         std::fs::write(&path, text)
             .map_err(|e| format!("Could not write {}: {e}", path.display()))?;
-        log::info!("wrote the report of thread {short}: {}", path.display());
+        log::info!("wrote a chat's report: {}", path.display());
         Ok(path)
     }
 }
@@ -223,7 +221,7 @@ fn problems() -> String {
         return String::new();
     };
     let mut lines: Vec<String> = Vec::new();
-    for name in ["main.log", "window/renderer.log"] {
+    for name in ["main.log", "window.log"] {
         let Ok(text) = std::fs::read_to_string(dir.join(name)) else {
             continue;
         };

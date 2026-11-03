@@ -1,16 +1,18 @@
 //! Debug logs, laid out and written the way VS Code writes its own, for people to send with a
 //! bug report. Each launch writes a folder, `<config>/logs/<YYYYMMDDTHHMMSS>` in local time,
-//! and the newest `KEEP_SESSIONS` are kept:
+//! and the newest `KEEP_SESSIONS` are kept. The folder holds only files, so it zips and reads
+//! as it is:
 //!
 //! ```text
 //! 20261026T121729/
 //! ├─ main.log                 Patchwork's own messages (written by the desktop shell)
 //! ├─ system.json              what Patchwork runs on (see `system`)
 //! ├─ imports.log              scans and imports of saved conversations
-//! ├─ window/renderer.log     the window's errors and warnings
-//! ├─ agents/claude.log        one log per agent: its processes and their traffic
-//! ├─ threads/<id>.log         one log per chat used in this launch (see `thread_log`)
-//! └─ reports/                 what a chat's Open logs writes: the system, the chat's settings
+//! ├─ window.log               the window's errors and warnings
+//! ├─ agent-claude.log         one log per agent: its processes and their traffic
+//! ├─ thread-<id>.log          one log per chat used in this launch (see `thread_log`)
+//! └─ thread-<id>-report-<time>.log
+//!                             what a chat's Open logs writes: the system, the chat's settings
 //!                             and replies, its logs from every kept launch, and this launch's
 //!                             warnings and errors, in one file to send
 //! ```

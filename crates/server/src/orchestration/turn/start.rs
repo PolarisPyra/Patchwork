@@ -162,7 +162,7 @@ impl Runner {
             project_id,
             checkpoint,
         ) = {
-            let thread = server.store.thread(&thread_id).ok_or("Task not found")?;
+            let thread = server.thread(&thread_id)?;
             // The message being sent is the newest user message; the transcript is what came before.
             let context = thread.context_pending.then(|| {
                 let end = thread

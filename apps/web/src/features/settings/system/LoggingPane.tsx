@@ -12,14 +12,14 @@ const LOGS: { key: Exclude<keyof LoggingSettings, "threadMenu">; title: string; 
   {
     key: "window",
     title: "Window",
-    desc: "The window's errors and warnings, in window/renderer.log",
+    desc: "The window's errors and warnings, in window.log",
   },
-  { key: "agents", title: "Agents", desc: "Each agent's runs, in agents/" },
+  { key: "agents", title: "Agents", desc: "Each agent's runs, in agent-<agent>.log" },
   { key: "imports", title: "Imports", desc: "Each scan and import, in imports.log" },
   {
     key: "threads",
     title: "Chats",
-    desc: "Each chat's own log, in threads/",
+    desc: "Each chat's own log, in thread-<id>.log",
   },
 ];
 

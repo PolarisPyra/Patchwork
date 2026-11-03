@@ -226,13 +226,13 @@ pub enum RightClickBehavior {
 pub struct LoggingSettings {
     /// `main.log`: Patchwork's own messages.
     pub app: LogLevel,
-    /// `window/renderer.log`: the window's errors and warnings.
+    /// `window.log`: the window's errors and warnings.
     pub window: LogLevel,
-    /// `agents/<agent>.log`: each agent's processes and their traffic.
+    /// `agent-<agent>.log`: each agent's processes and their traffic.
     pub agents: LogLevel,
     /// `imports.log`: each scan and import of saved conversations.
     pub imports: LogLevel,
-    /// `threads/<id>.log`: each chat's events and its agent's traffic.
+    /// `thread-<id>.log`: each chat's events and its agent's traffic.
     pub threads: LogLevel,
     /// A chat's right-click menu has Open logs.
     pub thread_menu: bool,

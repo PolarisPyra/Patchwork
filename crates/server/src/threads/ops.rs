@@ -71,7 +71,7 @@ impl Server {
 
     /// One thread with all its messages.
     pub fn thread(&self, id: &str) -> Result<Thread, String> {
-        Ok(self.store.thread(id).ok_or("Task not found")?)
+        Ok(self.store.thread(id).ok_or(super::NOT_FOUND)?)
     }
 
     /// Puts `ids` in `folder_id` (None: the top level) in their new order.
@@ -203,7 +203,7 @@ impl Server {
 
     pub fn rename_thread(&self, id: &str, title: &str) -> Result<(), String> {
         let title = clean_name(title)?;
-        self.store.thread(id).ok_or("Task not found")?;
+        self.thread(id)?;
         self.store.update_thread(id, |t| t.title = title)?;
         note(id, "renamed".into());
         Ok(())
@@ -211,7 +211,7 @@ impl Server {
 
     /// Moves a thread to the archive, or back to the task list. Archiving stops its running turn.
     pub fn set_thread_archived(&self, id: &str, archived: bool) -> Result<(), String> {
-        self.store.thread(id).ok_or("Task not found")?;
+        self.thread(id)?;
         if archived {
             self.runner.cancel(id, None);
         }
@@ -258,7 +258,7 @@ impl Server {
         agent: AgentKind,
         model: Option<String>,
     ) -> Result<(), String> {
-        let thread = self.store.thread(id).ok_or("Task not found")?;
+        let thread = self.thread(id)?;
         if thread.agent != agent && !thread.messages.is_empty() && !thread.context_pending {
             return Err("The agent can't change after the conversation has started".into());
         }
@@ -281,7 +281,7 @@ impl Server {
 
     /// Takes effect from the thread's next turn.
     pub fn set_thread_access_mode(&self, id: &str, mode: AccessMode) -> Result<(), String> {
-        let thread = self.store.thread(id).ok_or("Task not found")?;
+        let thread = self.thread(id)?;
         self.store.update_thread(id, |t| t.access_mode = mode)?;
         // An idle agent was started with the old setting.
         if thread.access_mode != mode {
@@ -293,7 +293,7 @@ impl Server {
 
     /// Takes effect from the thread's next turn.
     pub fn set_thread_plan_mode(&self, id: &str, on: bool) -> Result<(), String> {
-        let thread = self.store.thread(id).ok_or("Task not found")?;
+        let thread = self.thread(id)?;
         self.store.update_thread(id, |t| t.plan_mode = on)?;
         // An idle agent was started with the old setting.
         if thread.plan_mode != on {
@@ -305,7 +305,7 @@ impl Server {
 
     /// Takes effect from the thread's next turn.
     pub fn set_thread_effort(&self, id: &str, effort: Option<String>) -> Result<(), String> {
-        let thread = self.store.thread(id).ok_or("Task not found")?;
+        let thread = self.thread(id)?;
         self.store
             .update_thread(id, |t| t.effort = effort.clone())?;
         // An idle agent was started with the old setting.
@@ -322,7 +322,7 @@ impl Server {
     /// Takes effect from the thread's next turn, or the API agent's next step. None follows
     /// Settings → Tokens.
     pub fn set_thread_compact_window(&self, id: &str, window: Option<u64>) -> Result<(), String> {
-        let thread = self.store.thread(id).ok_or("Task not found")?;
+        let thread = self.thread(id)?;
         self.store
             .update_thread(id, |t| t.compact_window = window)?;
         // An idle agent was started with the old setting.

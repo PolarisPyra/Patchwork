@@ -13,9 +13,7 @@ use crate::Server;
 impl Server {
     /// Takes back a message sent mid-turn that has not started yet, so it can be edited.
     pub fn remove_queued(&self, thread_id: &str, message_id: &str) -> Result<(), String> {
-        let Some(thread) = self.store.thread(thread_id) else {
-            return Err("Thread not found".into());
-        };
+        let thread = self.thread(thread_id)?;
         let Some(message) = thread.messages.iter().find(|m| m.id == message_id) else {
             // Makes startup cleanup safe to retry if an app refresh overlaps another cleanup.
             return Ok(());
@@ -47,7 +45,7 @@ impl Server {
         attachments: Vec<Attachment>,
     ) -> Result<(), String> {
         let images = provider::load_images(&attachments)?;
-        let thread = self.store.thread(thread_id).ok_or("Thread not found")?;
+        let thread = self.thread(thread_id)?;
         let original = thread
             .messages
             .iter()
@@ -108,7 +106,7 @@ impl Server {
         if self.runner.is_running(thread_id) {
             return Err("This turn is already running".into());
         }
-        let thread = self.store.thread(thread_id).ok_or("Thread not found")?;
+        let thread = self.thread(thread_id)?;
         let queued: Vec<_> = thread.messages.into_iter().filter(|m| m.queued).collect();
         if queued.is_empty() {
             return Err("There are no queued messages to resume".into());
@@ -187,7 +185,7 @@ impl Server {
 
     /// Promotes an existing queued message into the running turn.
     pub fn steer_queued(&self, thread_id: &str, message_id: &str) -> Result<(), String> {
-        let thread = self.store.thread(thread_id).ok_or("Thread not found")?;
+        let thread = self.thread(thread_id)?;
         if !thread.messages.iter().any(|m| m.id == message_id) {
             return Err("Message not found".into());
         }

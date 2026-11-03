@@ -1,7 +1,7 @@
 import { api, type LogLevel } from "~/api";
 
 /**
- * The window's log, `window/renderer.log`, as VS Code's renderer log: uncaught errors, rejected
+ * The window's log, `window.log`, as VS Code's renderer log: uncaught errors, rejected
  * promises, and the console. A message below the log's level is dropped here, so it never
  * crosses to the backend.
  */

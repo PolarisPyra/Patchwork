@@ -1,9 +1,10 @@
-//! Each chat's own log, `threads/<thread id>.log` in the launch's folder, beside its other logs:
+//! Each chat's own log, `thread-<thread id>.log` in the launch's folder, beside its other logs:
 //! what the agent was sent and did, each reply's end, and the agent's own traffic, at the level
 //! set for Chats in Settings → Logging. A chat used over several launches has a log in each, and
 //! its report joins them. A log moves to `<id>.1.log` past `MAX_BYTES`, and goes with its launch.
 
 use std::collections::HashMap;
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::mpsc::{self, Sender};
@@ -12,7 +13,7 @@ use std::sync::OnceLock;
 use crate::settings::LogLevel;
 use crate::system::now_ms;
 
-use super::files::{LogFile, THREADS_DIR, sessions};
+use super::files::{LogFile, THREAD_PREFIX, sessions};
 use super::render::render;
 use super::{Data, LaunchLog, Record, Source};
 
@@ -33,7 +34,7 @@ pub struct ThreadLog {
 
 impl LaunchLog for ThreadLog {
     fn init(&self, session: &Path) {
-        let dir = session.join(THREADS_DIR);
+        let dir = session.to_path_buf();
         let (tx, rx) = mpsc::channel::<Record>();
         if self.writer.set(tx).is_err() {
             return;
@@ -105,16 +106,15 @@ impl ThreadLog {
     /// The files of `thread`'s log in every kept launch, oldest first: in each, what moved aside,
     /// then the current one.
     pub fn files(&self, thread: &str) -> Vec<PathBuf> {
-        let Some(root) = self.dir.get().and_then(|dir| dir.parent()?.parent()) else {
+        let Some(root) = self.dir.get().and_then(|dir| dir.parent()) else {
             return Vec::new();
         };
         sessions(root)
             .iter()
-            .map(|session| session.join(THREADS_DIR))
-            .flat_map(|dir| {
+            .flat_map(|session| {
                 [
-                    log_path(&dir, thread).with_extension("1.log"),
-                    log_path(&dir, thread),
+                    log_path(session, thread).with_extension("1.log"),
+                    log_path(session, thread),
                 ]
             })
             .filter(|path| path.is_file())
@@ -123,7 +123,13 @@ impl ThreadLog {
 }
 
 fn log_path(dir: &Path, thread: &str) -> PathBuf {
-    dir.join(format!("{thread}.log"))
+    dir.join(format!("{THREAD_PREFIX}{thread}.log"))
+}
+
+/// Where the report of `thread` made at `stamp` goes in `session`, this launch's folder: beside
+/// its log, as `thread-<id>-report-<stamp>.log`.
+pub(super) fn report_path(session: &Path, thread: &str, stamp: impl fmt::Display) -> PathBuf {
+    session.join(format!("{THREAD_PREFIX}{thread}-report-{stamp}.log"))
 }
 
 fn write_record(dir: &Path, files: &mut HashMap<String, LogFile>, record: Record) {

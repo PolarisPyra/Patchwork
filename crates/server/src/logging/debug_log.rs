@@ -14,11 +14,12 @@ use super::files::LogFile;
 use super::render::render;
 use super::{LaunchLog, THREAD_LOG};
 
-/// The agent logs, `agents/<agent>.log`. A record about a chat goes to its thread log too.
-pub static AGENT_LOG: DebugLog = DebugLog::new("agents/agents.log");
+/// The agent logs, `agent-<agent>.log`, with `agents.log` for records from no agent. A record
+/// about a chat goes to its thread log too.
+pub static AGENT_LOG: DebugLog = DebugLog::new("agents.log");
 
-/// The window's errors and warnings, `window/renderer.log`.
-pub static WINDOW_LOG: DebugLog = DebugLog::new("window/renderer.log");
+/// The window's errors and warnings, `window.log`.
+pub static WINDOW_LOG: DebugLog = DebugLog::new("window.log");
 
 /// `imports.log`: where each scan looked, what it found, what it skipped and why, and what an
 /// import added. Written with `import::ilog!`.
@@ -102,11 +103,11 @@ impl Source {
 /// Each agent's log in the launch's folder.
 fn agent_file(agent: AgentKind) -> &'static str {
     match agent {
-        AgentKind::Claude => "agents/claude.log",
-        AgentKind::Codex => "agents/codex.log",
-        AgentKind::Antigravity => "agents/antigravity.log",
-        AgentKind::OpenCode => "agents/opencode.log",
-        AgentKind::Api => "agents/api.log",
+        AgentKind::Claude => "agent-claude.log",
+        AgentKind::Codex => "agent-codex.log",
+        AgentKind::Antigravity => "agent-antigravity.log",
+        AgentKind::OpenCode => "agent-opencode.log",
+        AgentKind::Api => "agent-api.log",
     }
 }
 

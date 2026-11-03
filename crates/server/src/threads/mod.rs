@@ -15,3 +15,6 @@ pub use messages::{
 pub use ops::NewThread;
 pub use title::{title_from, without_leading_attachments};
 pub use types::{AccessMode, Goal, GoalStatus, Thread, ThreadParent};
+
+/// The error for a chat or task that no longer exists. People see chat for either.
+pub(crate) const NOT_FOUND: &str = "Chat not found";

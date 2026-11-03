@@ -140,7 +140,7 @@ impl Store {
             .threads
             .iter()
             .position(|thread| thread.id == id)
-            .ok_or("Thread not found")?;
+            .ok_or(crate::threads::NOT_FOUND)?;
         let tx = inner.conn.transaction().map_err(err)?;
         tx.execute(
             "INSERT INTO app_state (key, value) VALUES (?1, ?2)

@@ -8,7 +8,7 @@ export const invoke = <T>(cmd: string, args?: InvokeArgs) =>
   });
 
 /**
- * A command that failed goes to `window/renderer.log` and, when it names a chat, to that chat's
+ * A command that failed goes to `window.log` and, when it names a chat, to that chat's
  * log, so a chat's log has what the person was told went wrong.
  */
 function logFailure(cmd: string, args: InvokeArgs | undefined, error: unknown) {

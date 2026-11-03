@@ -41,11 +41,11 @@ export type LoggingSettings = {
  */
 app: LogLevel, 
 /**
- * `window/renderer.log`: the window's errors and warnings.
+ * `window.log`: the window's errors and warnings.
  */
 window: LogLevel, 
 /**
- * `agents/<agent>.log`: each agent's processes and their traffic.
+ * `agent-<agent>.log`: each agent's processes and their traffic.
  */
 agents: LogLevel, 
 /**
@@ -53,7 +53,7 @@ agents: LogLevel,
  */
 imports: LogLevel, 
 /**
- * `threads/<id>.log`: each chat's events and its agent's traffic.
+ * `thread-<id>.log`: each chat's events and its agent's traffic.
  */
 threads: LogLevel, 
 /**

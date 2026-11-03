@@ -24,7 +24,7 @@ pub(crate) async fn read_log(
     blocking(move || patchwork_server::logging::read(&channel, offset)).await?
 }
 
-/// A message from the window for `window/renderer.log`, and for the log of the chat it is about.
+/// A message from the window for `window.log`, and for the log of the chat it is about.
 #[tauri::command]
 pub(crate) fn log_renderer(
     level: patchwork_server::settings::LogLevel,
