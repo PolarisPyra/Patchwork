@@ -36,11 +36,20 @@ export default function App() {
   settingsRef.current = settings;
 
   const updateSettings = useCallback<UpdateSettings>(async (next) => {
-    const resolved =
-      typeof next === "function" ? next(settingsRef.current ?? DEFAULT_SETTINGS) : next;
+    const previous = settingsRef.current;
+    const resolved = typeof next === "function" ? next(previous ?? DEFAULT_SETTINGS) : next;
     settingsRef.current = resolved;
     setSettings(resolved);
-    await api.saveSettings(resolved);
+    try {
+      await api.saveSettings(resolved);
+    } catch (e) {
+      // A change that was not saved is taken back, unless a later one has replaced it already.
+      if (settingsRef.current === resolved && previous) {
+        settingsRef.current = previous;
+        setSettings(previous);
+      }
+      throw e;
+    }
   }, []);
 
   const toggleTheme = useCallback(() => {

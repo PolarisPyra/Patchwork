@@ -212,6 +212,8 @@ export function useThreads(initialProjectId: string | null) {
           if (event.type === "threadCreated") {
             return threads.some((t) => t.id === threadId) ? threads : [...threads, event.thread];
           }
+          // One it made and took back, such as a scheduled task's that could not start, leaves.
+          if (event.type === "threadDeleted") return threads.filter((t) => t.id !== threadId);
           return threads.some((t) => t.id === threadId)
             ? threads.map((t) => (t.id === threadId ? applyAgentEvent(t, event) : t))
             : threads;
@@ -311,8 +313,11 @@ export function useThreads(initialProjectId: string | null) {
     // The row is saved by now, so a role that fails to apply leaves the thread in place.
     const role = opts.role ?? null;
     if (role) await api.setThreadRole(id, role);
+    // A list read before the row was saved may have dropped it meanwhile; it goes back in.
     setThreads((prev) =>
-      prev.map((t) => (t.id === id ? { ...thread, role, messages: t.messages } : t)),
+      prev.some((t) => t.id === id)
+        ? prev.map((t) => (t.id === id ? { ...thread, role, messages: t.messages } : t))
+        : [{ ...thread, role }, ...prev],
     );
     return { ...thread, role };
   }
@@ -412,7 +417,14 @@ export function useThreads(initialProjectId: string | null) {
         await api.reorderThreads(ids, folder.id);
       }
     } finally {
-      const before = tasks.map((t) => ({ id: t.id, folderId: t.folderId }));
+      // A task sorted before keeps the place it had then, not the agent folder it is in now.
+      const kept = sortUndo[projectId] ?? [];
+      const before = [
+        ...kept,
+        ...tasks
+          .filter((t) => !kept.some((k) => k.id === t.id))
+          .map((t) => ({ id: t.id, folderId: t.folderId })),
+      ];
       setSortUndo((prev) => ({ ...prev, [projectId]: before }));
       const list = await api.listThreads();
       setThreads((prev) => mergeListed(prev, list));
@@ -444,7 +456,6 @@ export function useThreads(initialProjectId: string | null) {
       const to = destination(t);
       lists.set(to, [...(lists.get(to) ?? []), t]);
     }
-    setSortUndo(({ [projectId]: _, ...rest }) => rest);
     try {
       for (const [folderId, list] of lists) {
         if (list.every((t) => t.folderId === folderId)) continue;
@@ -457,6 +468,8 @@ export function useThreads(initialProjectId: string | null) {
       for (const id of agentFolderIds) {
         if (!all.some((t) => t.folderId === id)) await api.removeFolder(id);
       }
+      // Kept until the undo is done, so one that failed partway can be tried again.
+      setSortUndo(({ [projectId]: _, ...rest }) => rest);
     } finally {
       setFolders(await api.listFolders());
       const list = await api.listThreads();
@@ -496,8 +509,10 @@ export function useThreads(initialProjectId: string | null) {
     draft: NewThreadOptions,
     projectId: string | null,
     queue: boolean,
+    onThread: (threadId: string) => void = () => {},
   ): Promise<void> {
     const thread = selected ?? (await createThread(projectId, draft));
+    onThread(thread.id);
     const message = await api.sendMessage(thread.id, text, attachments, queue);
     setThreads((prev) =>
       prev.map((t) =>

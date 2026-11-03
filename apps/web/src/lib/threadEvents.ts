@@ -178,6 +178,7 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
       }));
     }
     case "threadCreated":
+    case "threadDeleted":
       return thread;
     case "planProposed":
       return updateMessage(thread, event.messageId, (m) => ({

@@ -108,6 +108,10 @@ impl UsageCache {
         }
         let result = fetch();
         let mut entries = lock();
+        // Numbers the agent reported while this fetched are newer than anything it brought back.
+        if let Some(e) = entries.get(&kind).filter(|e| e.reported && e.fetched > now) {
+            return e.usage.clone();
+        }
         let entry = match result {
             Ok(usage) => Entry {
                 fetched: now,

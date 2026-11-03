@@ -171,7 +171,17 @@ impl Server {
                 thread: thread.clone(),
             },
         });
-        self.send_message(thread.id.clone(), task.prompt.clone(), Vec::new(), false)?;
+        // A task that cannot start leaves no empty chat behind; the task records why it failed.
+        if let Err(error) =
+            self.send_message(thread.id.clone(), task.prompt.clone(), Vec::new(), false)
+        {
+            self.delete_thread(&thread.id);
+            self.emit(AgentEventEnvelope {
+                thread_id: thread.id.clone(),
+                event: AgentEvent::ThreadDeleted,
+            });
+            return Err(error);
+        }
         // Named after the task, not after its prompt: the first message is what the schedule says,
         // and the task's own name is what the list should show. This comes after the message so
         // the naming a new thread gets from its first line cannot take the name back.

@@ -12,6 +12,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 use std::sync::PoisonError;
+use std::sync::mpsc;
 use std::time::Duration;
 
 use crate::logging::{AGENT_LOG, Data, Source};
@@ -46,9 +47,12 @@ pub(in crate::orchestration) const WATCH_EVERY: Duration = Duration::from_secs(6
 /// The agent's stdin; None once the turn has finished.
 pub(in crate::orchestration) type Stdin = Arc<Mutex<Option<AgentStdin>>>;
 
-/// The agent's stdin pipe, with where its lines come from for the agent log.
+/// The agent's stdin, with where its lines come from for the agent log. Lines go to a thread of
+/// its own that writes them to the pipe, so an agent that stops reading never holds up whoever
+/// wrote to it, such as Stop, nor the locks they hold. Dropping it closes the pipe once the lines
+/// already sent are written.
 pub(in crate::orchestration) struct AgentStdin {
-    pipe: ChildStdin,
+    lines: mpsc::Sender<String>,
     source: Source,
 }
 
@@ -59,7 +63,11 @@ impl AgentStdin {
         thread_id: &str,
     ) -> Option<Self> {
         let source = Source::agent(agent, child.id(), thread_id, None);
-        child.stdin.take().map(|pipe| Self { pipe, source })
+        let pipe = child.stdin.take()?;
+        let (lines, queued) = mpsc::channel();
+        let writer = source.clone();
+        std::thread::spawn(move || write_all(pipe, &queued, &writer));
+        Some(Self { lines, source })
     }
 }
 
@@ -71,14 +79,19 @@ pub(in crate::orchestration) fn write_line(stdin: &Mutex<Option<AgentStdin>>, li
     )
 }
 
+/// Hands one line to the agent's stdin. False once stdin is closed or a write to it has failed.
 pub(in crate::orchestration) fn write_to(stdin: &mut Option<AgentStdin>, line: &str) -> bool {
-    let Some(AgentStdin { pipe, source }) = stdin.as_mut() else {
+    let Some(AgentStdin { lines, source }) = stdin.as_mut() else {
         return false;
     };
     AGENT_LOG.line("in", source, line);
-    match writeln!(pipe, "{line}").and_then(|()| pipe.flush()) {
-        Ok(()) => true,
-        Err(e) => {
+    lines.send(line.to_string()).is_ok()
+}
+
+/// Writes the lines handed to the agent's stdin until it is closed or a write fails.
+fn write_all(mut pipe: ChildStdin, lines: &mpsc::Receiver<String>, source: &Source) {
+    for line in lines {
+        if let Err(e) = writeln!(pipe, "{line}").and_then(|()| pipe.flush()) {
             AGENT_LOG.write(
                 LogLevel::Error,
                 "write_failed",
@@ -86,7 +99,7 @@ pub(in crate::orchestration) fn write_to(stdin: &mut Option<AgentStdin>, line: &
                 Data::Text(e.to_string()),
             );
             log::warn!("failed to write to agent: {e}");
-            false
+            return;
         }
     }
 }

@@ -58,6 +58,8 @@ struct Shell {
 /// How long output gathers before it is sent, and the most sent at once.
 const BATCH: Duration = Duration::from_millis(8);
 const BATCH_BYTES: usize = 256 * 1024;
+/// How often a shell whose output has ended is checked for having exited.
+const REAP_EVERY: Duration = Duration::from_millis(50);
 
 impl Terminals {
     /// Starts a shell in `cwd` (the project folder, or None for the home folder) at the size of
@@ -147,13 +149,23 @@ impl Terminals {
                     on_output(TerminalOutput { id, data });
                 }
             }
-            let shell = open
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .remove(&id);
-            let code = shell
-                .and_then(|mut s| s.child.wait().ok())
-                .map(|status| status.exit_code());
+            // The shell stays in the map, where `kill` reaches it, until it has exited: its
+            // output can end before it does.
+            let code = loop {
+                let mut shells = open.lock().unwrap_or_else(PoisonError::into_inner);
+                let Some(shell) = shells.get_mut(&id) else {
+                    break None;
+                };
+                match shell.child.try_wait() {
+                    Ok(None) => {}
+                    exited => {
+                        shells.remove(&id);
+                        break exited.ok().flatten().map(|status| status.exit_code());
+                    }
+                }
+                drop(shells);
+                std::thread::sleep(REAP_EVERY);
+            };
             log::info!("terminal {id}: exited with {code:?}");
             on_exit(TerminalExit { id, code });
         });

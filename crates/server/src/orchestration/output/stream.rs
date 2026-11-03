@@ -83,6 +83,7 @@ impl Turn {
 
 /// Saves `event` onto the stored message, then streams it to the frontend.
 pub(crate) fn publish(server: &Server, thread_id: &str, event: AgentEvent) {
+    let event = settle_late(server, thread_id, event);
     if let Err(e) = save_event(server, thread_id, &event) {
         log::warn!("failed to save agent event: {e}");
     }
@@ -90,6 +91,32 @@ pub(crate) fn publish(server: &Server, thread_id: &str, event: AgentEvent) {
         thread_id: thread_id.into(),
         event,
     });
+}
+
+/// A tool that starts after its reply has ended is settled as the end settles the others, rather
+/// than left running. A late question stays open: the agent is waiting on it, and it can still be
+/// answered.
+fn settle_late(server: &Server, thread_id: &str, mut event: AgentEvent) -> AgentEvent {
+    let AgentEvent::ToolStarted { message_id, tool } = &mut event else {
+        return event;
+    };
+    let ended = server.store.with_threads(|threads| {
+        threads
+            .iter()
+            .find(|t| t.id == thread_id)
+            .and_then(|t| t.messages.iter().find(|m| m.id == *message_id))
+            .filter(|m| m.finished_at.is_some())
+            .map(|m| m.status)
+    });
+    if let Some(status) = ended {
+        tool.status = if status == MessageStatus::Complete {
+            StepStatus::Done
+        } else {
+            StepStatus::Error
+        };
+        tool.ended_at = Some(now_ms());
+    }
+    event
 }
 
 /// Streamed output not yet stored: text, or a block of reasoning and when it started.
@@ -130,6 +157,7 @@ pub(in crate::orchestration) fn event_message(event: &AgentEvent) -> Option<&str
         | AgentEvent::RoleChanged { .. }
         | AgentEvent::ModelChanged { .. }
         | AgentEvent::ThreadCreated { .. }
+        | AgentEvent::ThreadDeleted
         | AgentEvent::TitleUpdated { .. }
         | AgentEvent::MessageRemoved { .. } => None,
         AgentEvent::MessageEdited { message } => Some(&message.id),
@@ -388,6 +416,7 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
         | AgentEvent::RoleChanged { .. }
         | AgentEvent::ModelChanged { .. }
         | AgentEvent::ThreadCreated { .. }
+        | AgentEvent::ThreadDeleted
         | AgentEvent::TitleUpdated { .. }
         | AgentEvent::MessageRemoved { .. }
         | AgentEvent::MessageEdited { .. } => {}

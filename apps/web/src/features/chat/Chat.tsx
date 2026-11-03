@@ -100,6 +100,8 @@ interface ChatProps {
     attachments: Attachment[],
     draft: NewThreadOptions,
     queue: boolean,
+    // Called with the thread the message goes to, once a send from the new-task screen has made it.
+    onThread: (threadId: string) => void,
   ) => Promise<void>;
   onCancel: (threadId: string) => Promise<void>;
   onSetModel: (threadId: string, agent: AgentKind, model: string | null) => Promise<void>;
@@ -196,7 +198,6 @@ export default function Chat({
     dropping,
     dropMentions,
     rootRef,
-    keyRef,
   } = useComposerDraft({
     threadKey: thread?.id ?? "new",
     projectPath: project?.path ?? null,
@@ -247,7 +248,11 @@ export default function Chat({
   // Agent/model/access chosen for the next thread; null means the defaults.
   const [pick, setPick] = useState<NewThreadOptions | null>(null);
   const [modelPickerRequest, setModelPickerRequest] = useState(0);
-  const [sending, setSending] = useState(false);
+  // Sends still on their way, counted by the chat they belong to. A send from the new-task screen
+  // moves to its thread once that is made, so the new thread shows as working until it answers.
+  const [sendsIn, setSendsIn] = useState<Record<string, number>>({});
+  const countSend = (chat: string, by: number) =>
+    setSendsIn((s) => ({ ...s, [chat]: (s[chat] ?? 0) + by }));
   // The thread whose large, cold session is asking before a message is sent to it.
   const [resumeAsk, setResumeAsk] = useState<string | null>(null);
   // Kept here so Ctrl+Enter in the composer can tell whether the queued strip is expanded.
@@ -270,13 +275,17 @@ export default function Chat({
   const empty = !thread || thread.messages.length === 0;
   const queued = useMemo(() => thread?.messages.filter((m) => m.queued) ?? [], [thread?.messages]);
   // A queued message can be sent while it is being edited: the agent took it, or it was steered.
-  // What was typed stays in the composer as an ordinary draft, to send or queue again.
+  // What was typed stays in the composer as an ordinary draft, to send or queue again, after the
+  // draft the edit had set aside.
   useEffect(() => {
     if (!queuedEdit || queuedEdit.chat !== key || queued.some((m) => m.id === queuedEdit.id)) {
       return;
     }
-    setDraft(queuedEdit.text);
-    setAttachments(queuedEdit.attachments);
+    setDraft(draft.trim() ? `${draft}\n\n${queuedEdit.text}` : queuedEdit.text);
+    setAttachments([
+      ...attachments,
+      ...queuedEdit.attachments.filter((a) => !attachments.some((c) => c.path === a.path)),
+    ]);
     setQueuedEdit(null);
   }, [queued, queuedEdit, key]);
   const background = useMemo(
@@ -288,7 +297,12 @@ export default function Chat({
   const accessMode = thread?.accessMode ?? newOpts.accessMode;
   const effort = thread ? thread.effort : newOpts.effort;
   const compactWindow = thread ? thread.compactWindow : newOpts.compactWindow;
-  const working = sending || isWorking(thread);
+  const working = (sendsIn[key] ?? 0) > 0 || isWorking(thread);
+  // A turn that starts while the resume prompt waits, such as a queued message going out, has
+  // resumed the session already.
+  useEffect(() => {
+    if (working) setResumeAsk(null);
+  }, [working]);
   // The reply under way is compacting, or a /compact was sent and its reply has not started.
   const compacting = useMemo(() => {
     if (!working) return false;
@@ -333,21 +347,24 @@ export default function Chat({
     restoreOnError: boolean,
     queue = false,
   ) {
-    const sentKey = key;
+    let sentKey = key;
     setError(null);
-    setSending(true);
+    countSend(sentKey, 1);
     try {
-      await onSend(text, files, newOpts, queue);
+      await onSend(text, files, newOpts, queue, (threadId) => {
+        countSend(sentKey, -1);
+        countSend(threadId, 1);
+        sentKey = threadId;
+      });
       // The role went into the chat that was started; the next new chat starts with none.
       setPick((picked) => (picked ? { ...picked, role: null } : picked));
     } catch (e) {
-      // A send from the new-task screen has opened its thread by now, if one was made. The error
-      // and the text go back to that thread, where the composer now is.
-      const errorKey = sentKey === "new" ? keyRef.current : sentKey;
-      setErrorFor(errorKey, errorText(e));
-      if (restoreOnError) restoreDraft(errorKey, text, draftWithout(text, files));
+      // A send from the new-task screen has moved to its thread, if one was made. The error and
+      // the text go back there.
+      setErrorFor(sentKey, errorText(e));
+      if (restoreOnError) restoreDraft(sentKey, text, draftWithout(text, files));
     } finally {
-      setSending(false);
+      countSend(sentKey, -1);
     }
   }
 
@@ -516,6 +533,8 @@ export default function Chat({
       return;
     }
     const text = draft.trim();
+    // The draft may have been cleared while the prompt waited.
+    if (!text && attachments.length === 0) return;
     setDraft("");
     setAttachments([]);
     void dispatch(text, sentWith(text, attachments), true);
@@ -634,13 +653,18 @@ export default function Chat({
   }
 
   const threadId = thread?.id;
+  // Requests answered and not yet resolved, so a double click answers once. The server turns a
+  // second answer down, which would show as an error.
+  const answering = useRef(new Set<string>());
   const respond = useCallback(
     (approvalId: string, allow: boolean, answers?: Record<string, string[]>) => {
-      if (!threadId) return;
+      if (!threadId || answering.current.has(approvalId)) return;
+      answering.current.add(approvalId);
       setError(null);
-      api
-        .respondApproval(threadId, approvalId, allow, answers)
-        .catch((e: unknown) => setError(errorText(e)));
+      api.respondApproval(threadId, approvalId, allow, answers).catch((e: unknown) => {
+        answering.current.delete(approvalId);
+        setError(errorText(e));
+      });
     },
     [threadId],
   );
@@ -681,7 +705,8 @@ export default function Chat({
    * the other waiting requests they cover rather than this one. */
   const respondPermission = useCallback(
     (approval: Approval, allow: boolean, always?: PermissionScope) => {
-      if (!threadId) return;
+      if (!threadId || answering.current.has(approval.id)) return;
+      answering.current.add(approval.id);
       setError(null);
       const rules = always ? suggestedRules(approval) : [];
       const rule = always && rules[0] ? { scope: always, ruleId: rules[0].id } : undefined;
@@ -690,7 +715,10 @@ export default function Chat({
         .then(() => {
           if (always && rules.length > 0) permissionsContext.addRules(always, rules);
         })
-        .catch((e: unknown) => setError(errorText(e)));
+        .catch((e: unknown) => {
+          answering.current.delete(approval.id);
+          setError(errorText(e));
+        });
     },
     [threadId, permissionsContext],
   );
@@ -758,27 +786,32 @@ export default function Chat({
       : undefined;
   const readyPlan = proposed?.type === "plan" ? proposed.text : null;
   const IMPLEMENT = "PLEASE IMPLEMENT THIS PLAN:\n";
+  // Set while a plan is being implemented, so a second click or Enter does not send it again.
+  const implementing = useRef(false);
   // Implementing leaves plan mode, in this thread or a new one named after the plan.
   async function implementPlan(newThread: boolean) {
-    if (!thread || readyPlan === null) return;
+    if (!thread || readyPlan === null || implementing.current) return;
+    implementing.current = true;
     const text = IMPLEMENT + readyPlan.trim();
     setError(null);
-    if (newThread) {
-      const opts: NewThreadOptions = {
-        agent: thread.agent,
-        model: thread.model,
-        accessMode: thread.accessMode,
-        effort: thread.effort,
-        compactWindow: thread.compactWindow,
-      };
-      await onStartThread(opts, `Implement ${planTitle(readyPlan)}`.slice(0, 60), text);
-      return;
-    }
     try {
-      await onSetPlanMode(thread.id, false);
-      await dispatch(text, [], false);
+      if (newThread) {
+        const opts: NewThreadOptions = {
+          agent: thread.agent,
+          model: thread.model,
+          accessMode: thread.accessMode,
+          effort: thread.effort,
+          compactWindow: thread.compactWindow,
+        };
+        await onStartThread(opts, `Implement ${planTitle(readyPlan)}`.slice(0, 60), text);
+      } else {
+        await onSetPlanMode(thread.id, false);
+        await dispatch(text, [], false);
+      }
     } catch (e) {
       setError(errorText(e));
+    } finally {
+      implementing.current = false;
     }
   }
   const { choices, showChoices, answerChoice, dismissChoices } = useChoices(

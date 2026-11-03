@@ -190,8 +190,22 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   const [error, setError] = useState<string | null>(null);
   const { changes, branch, refreshGit } = useProjectGit(projectId, project?.path ?? null, setError);
 
+  // The reply a canvas was opened from, as it is now, since it may still be streaming.
+  const canvasMessageId = canvas?.message?.id;
+  const liveMessage =
+    canvasMessageId === undefined
+      ? undefined
+      : threads
+          .find((t) => t.messages.some((m) => m.id === canvasMessageId))
+          ?.messages.find((m) => m.id === canvasMessageId);
   // A canvas belongs to the project it was opened in; it is hidden after a project switch.
-  const openCanvas = canvas && canvas.projectId === projectId ? canvas : null;
+  const openCanvas = useMemo(
+    () =>
+      canvas && canvas.projectId === projectId
+        ? { ...canvas, message: liveMessage ?? canvas.message }
+        : null,
+    [canvas, projectId, liveMessage],
+  );
   const focusFiles = changeFocus
     ? (threads
         .find((t) => t.id === changeFocus.threadId)
@@ -489,8 +503,8 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
                   if (selected) setChangeFocus({ threadId: selected.id, messageId });
                   setView("changes");
                 }}
-                onSend={(text, attachments, draft, queue) =>
-                  send(text, attachments, draft, projectId, queue)
+                onSend={(text, attachments, draft, queue, onThread) =>
+                  send(text, attachments, draft, projectId, queue, onThread)
                 }
                 onNewChat={() => newThreadIn(projectId)}
                 onChangeFolder={() => {

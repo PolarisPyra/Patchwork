@@ -12,7 +12,8 @@ const DISMISSED_KEY = "patchwork:update-dismissed";
 export default function UpdateToast() {
   const [status, setStatus] = useState<UpdateStatus | null>(null);
   const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISSED_KEY));
-  const [error, setError] = useState<string | null>(null);
+  // A failed Restart or Download, for the version whose card it was.
+  const [error, setError] = useState<{ version: string; text: string } | null>(null);
   useEffect(() => {
     let live = true;
     const unlisten = onUpdateStatus((next) => {
@@ -43,7 +44,7 @@ export default function UpdateToast() {
   const act = () => {
     setError(null);
     const action = ready ? restartToUpdate() : api.openUrl(RELEASES_URL);
-    action.catch((e: unknown) => setError(errorText(e)));
+    action.catch((e: unknown) => setError({ version: state.version, text: errorText(e) }));
   };
 
   return (
@@ -63,9 +64,9 @@ export default function UpdateToast() {
           <XIcon size={14} />
         </button>
       </div>
-      {error && (
+      {error?.version === state.version && (
         <div role="alert" className="text-[length:var(--fs-sm)] text-danger">
-          {error}
+          {error.text}
         </div>
       )}
     </div>

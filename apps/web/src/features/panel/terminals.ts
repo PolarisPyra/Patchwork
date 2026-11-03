@@ -212,6 +212,8 @@ export async function startShell(
   await document.fonts.load(`${settings.fontSize}px ${family}`).catch(() => {});
   const element = document.createElement("div");
   element.className = "h-full w-full";
+  // The shell shown now comes back if this one fails to start.
+  const shown = [...host.childNodes];
   host.replaceChildren(element);
   const term = new Terminal(options(settings));
   const fit = new FitAddon();
@@ -224,7 +226,7 @@ export async function startShell(
     started = await api.terminalSpawn(cwd, term.cols, term.rows);
   } catch (e) {
     term.dispose();
-    element.remove();
+    host.replaceChildren(...shown);
     throw e;
   }
   const shell: Shell = { id: started.id, name: started.name, term, fit, element };

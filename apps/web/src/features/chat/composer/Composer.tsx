@@ -21,6 +21,7 @@ import {
   type Skill,
 } from "~/api";
 import AccessPicker from "~/components/AccessPicker";
+import { useDismiss } from "~/hooks/useDismiss";
 import CompactPicker from "~/components/CompactPicker";
 import EffortPicker, { modelEfforts } from "~/components/EffortPicker";
 import AttachmentChip from "~/features/chat/AttachmentChip";
@@ -226,6 +227,8 @@ function Composer({
   // Escape hides it until the draft changes again.
   const [menuClosed, setMenuClosed] = useState(false);
   const [dispatchMenuOpen, setDispatchMenuOpen] = useState(false);
+  const dispatchRef = useRef<HTMLDivElement>(null);
+  useDismiss(dispatchRef, dispatchMenuOpen, () => setDispatchMenuOpen(false));
   const [commandIndex, setCommandIndex] = useState(0);
   const [token, setToken] = useState<CommandToken | null>(null);
   // Antigravity reads the message as a prompt, so there are no commands to offer, but an agent
@@ -417,6 +420,7 @@ function Composer({
   // Steer before sending when they want to interrupt the current step.
   useEffect(() => {
     setQueueNext(true);
+    setDispatchMenuOpen(false);
   }, [working, goalActive]);
 
   const editor: Editor | null = useEditor({
@@ -692,8 +696,11 @@ function Composer({
       onSteerQueued();
       return true;
     }
-    // While the @ menu is open, the editor's suggestion handler gets the keys.
-    if (mentionOpen.current) return false;
+    // While the @ menu is open, the editor's suggestion handler gets the keys. With no file
+    // listed there is nothing for Enter to pick, so it still sends.
+    if (mentionOpen.current && (mentionItems.current.length > 0 || event.key !== "Enter")) {
+      return false;
+    }
     if (!menuOpen && stepHistory(event, editor)) return true;
     if (menuOpen) {
       if (event.key === "Escape") {
@@ -746,6 +753,7 @@ function Composer({
     if (queue && !canQueueFollowUp && !editingQueued) return;
     onSubmit(queue);
     setQueueNext(true);
+    setDispatchMenuOpen(false);
   }
 
   // Picks how the next send is dispatched. Enter and the send button use it; nothing is sent here.
@@ -899,7 +907,7 @@ function Composer({
           </button>
         )}
         {(!working || value.trim() || attachments.length > 0) && (
-          <div className="relative flex flex-none items-center">
+          <div ref={dispatchRef} className="relative flex flex-none items-center">
             <button
               className={`grid h-8 w-8 cursor-pointer place-items-center ${working && !editingQueued ? "rounded-l-[var(--radius)]" : "rounded-[var(--radius)]"} border-none bg-accent text-on-accent enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-selected-muted disabled:text-fg-subtle`}
               onClick={() => sendDraft()}

@@ -197,6 +197,12 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
             reply(&out, answer);
         });
     }
+    // The CLI has gone, so nothing reads the answers to what it still had running.
+    running
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .values()
+        .for_each(|stop| stop.store(true, Ordering::Relaxed));
 }
 
 /// Runs the relay a CLI starts: `--mcp-proxy <relay file> <server>`. It passes stdin to

@@ -198,6 +198,8 @@ pub enum AgentEvent {
     ThreadCreated {
         thread: Thread,
     },
+    /// A thread the server made and then took back, such as one a scheduled task could not start in.
+    ThreadDeleted,
     /// The thread was named after what its first message is about.
     TitleUpdated {
         title: String,

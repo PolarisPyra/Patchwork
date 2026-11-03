@@ -90,6 +90,11 @@ pub(in crate::orchestration) struct RunningTurn {
     /// The agent has finished its reply and stays up only for shell commands it left running;
     /// the thread counts as idle, and the next message starts a new reply in this process.
     pub(in crate::orchestration) idle: Arc<AtomicBool>,
+    /// The thread's settings changed while the agent was replying, so it is not used again once
+    /// idle: the next message starts a new process with the settings as they are now.
+    pub(in crate::orchestration) stale: AtomicBool,
+    /// The folder the agent works in.
+    pub(in crate::orchestration) root: String,
     /// Shared with the project's watcher, which adds files to the reply as they change.
     pub(in crate::orchestration) attribution: SharedAttribution,
 }
@@ -128,6 +133,12 @@ impl Drop for Starting<'_> {
     fn drop(&mut self) {
         self.runner
             .starting
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&self.thread_id);
+        // A stop asked of a start that failed has nothing left to stop.
+        self.runner
+            .stop_starting
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .remove(&self.thread_id);
@@ -375,14 +386,23 @@ impl Runner {
             );
             log_cli_version(agent);
         }
+        // Until the turn is recorded below nothing else can stop the agent, so a failure before
+        // then stops it here.
+        let abandon = |child: &mut std::process::Child, error: String| -> Result<(), String> {
+            let _ = child.kill();
+            let _ = child.wait();
+            Err(error)
+        };
         let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
-            return Err("Agent output is unavailable".into());
+            return abandon(&mut child, "Agent output is unavailable".into());
         };
         // The agent has the transcript now, so later turns resume its session instead.
-        if sends_context {
-            server
+        if sends_context
+            && let Err(error) = server
                 .store
-                .update_thread(&thread_id, |t| t.context_pending = false)?;
+                .update_thread(&thread_id, |t| t.context_pending = false)
+        {
+            return abandon(&mut child, error);
         }
         let source = Source::agent(agent, pid, &thread_id, None);
         let stderr_tail = std::thread::spawn(move || read_stderr_tail(stderr, source));
@@ -457,9 +477,20 @@ impl Runner {
                     tasks,
                     controls,
                     idle,
+                    stale: AtomicBool::new(false),
+                    root: turn.root.clone(),
                     attribution,
                 },
             );
+        // Stopped while it was starting, as by Stop or archiving the chat: it stops now it can.
+        if self
+            .stop_starting
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&turn.thread_id)
+        {
+            self.cancel(&turn.thread_id, None);
+        }
         turn.publish(AgentEvent::MessageStarted { message });
         // Claude restores an unmet goal whenever its session resumes, so this turn pursues it.
         if agent == AgentKind::Claude && turn.session_id.is_some() {

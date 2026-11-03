@@ -149,11 +149,15 @@ function CliProviderRows({ settings, updateSettings }: PaneProps) {
   const refresh = () => CLI_KINDS.forEach(recheck);
   const setPath = async (kind: AgentKind, path: string | undefined) => {
     setStatus((prev) => ({ ...prev, [kind]: undefined }));
-    await updateSettings((st) => {
-      const { [kind]: _, ...rest } = st.agentPaths;
-      return { ...st, agentPaths: path ? { ...rest, [kind]: path } : rest };
-    });
-    await recheck(kind);
+    try {
+      await updateSettings((st) => {
+        const { [kind]: _, ...rest } = st.agentPaths;
+        return { ...st, agentPaths: path ? { ...rest, [kind]: path } : rest };
+      });
+    } finally {
+      // Read again even if the path was not saved, so the row leaves "Checking…".
+      await recheck(kind);
+    }
   };
   const locate = async (kind: AgentKind) => {
     const path = await open({ multiple: false, directory: false });

@@ -65,8 +65,14 @@ export default function Panel({
   const [channelId, setChannelId] = useState<string | null>(null);
   const channel = channels.find((c) => c.id === channelId) ?? channels[0] ?? null;
 
-  const start = async () => {
-    if (!host.current || starting.current) return;
+  // A "New terminal" asked for while a shell starts, opened once that one is up.
+  const startNext = useRef(false);
+  const start = async (asked: boolean) => {
+    if (!host.current) return;
+    if (starting.current) {
+      if (asked) startNext.current = true;
+      return;
+    }
     starting.current = true;
     setError(null);
     try {
@@ -77,6 +83,10 @@ export default function Panel({
       setError(errorText(e));
     } finally {
       starting.current = false;
+      if (startNext.current) {
+        startNext.current = false;
+        void start(true);
+      }
     }
   };
 
@@ -85,8 +95,9 @@ export default function Panel({
   useEffect(() => {
     if (tab !== "terminal") return;
     if (shells.length === 0 || asked.current !== newTerminal) {
+      const again = asked.current !== newTerminal;
       asked.current = newTerminal;
-      void start();
+      void start(again);
     }
     // `start` reads the latest props; only these say a shell is wanted.
   }, [tab, newTerminal]);
@@ -193,7 +204,7 @@ export default function Panel({
                 className="btn-icon"
                 aria-label="New terminal"
                 title="New terminal"
-                onClick={() => void start()}
+                onClick={() => void start(true)}
               >
                 <PlusIcon size={14} />
               </button>

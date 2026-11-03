@@ -62,11 +62,16 @@ impl Runner {
                     .lock()
                     .unwrap_or_else(PoisonError::into_inner)
                     .insert(request_id.clone(), sent);
-                write_line(
-                    &stdin,
-                    &provider::claude::background_task(tool_id, &request_id),
-                )
-                .then_some(answer)
+                let line = provider::claude::background_task(tool_id, &request_id);
+                if write_line(&stdin, &line) {
+                    return Some(answer);
+                }
+                // Nothing will answer a request that was never written.
+                controls
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .remove(&request_id);
+                None
             })
             .collect();
         let deadline = Instant::now() + BACKGROUND_WAIT;

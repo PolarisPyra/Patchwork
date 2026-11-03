@@ -188,6 +188,8 @@ fn turn(request: &Request, tx: &Sender<Msg>, rx: &Receiver<Msg>) -> Result<(), S
             Msg::Input(line) => command(&api, &session_id, &line, &mut steers),
             Msg::Delivered(id) => {
                 if steers.remove(&id) {
+                    // The run goes on with it, so an end seen before is over.
+                    ended = false;
                     emit(&json!({"type": "bridge.steered"}));
                 }
             }

@@ -246,6 +246,8 @@ impl Server {
             switched = Some(role);
             text
         };
+        // An idle agent this message resumes counts the files its reply changes from now.
+        self.runner.rebase_idle(&thread_id);
         // While a turn runs, the message steers it, or waits for it to end when the
         // agent cannot take it now.
         let delivery = if queue {
@@ -319,11 +321,11 @@ impl Server {
                 })?;
             }
             Delivery::Queued => {
-                // Read under the store's lock: a turn that ends meanwhile has already taken the
-                // message from its queue, and then its own unflagging comes after this write.
+                // Only ever raised here: a turn that took the message from its queue meanwhile
+                // has flagged it itself, and whoever sends it lowers the flag.
                 self.store.update_thread(&thread_id, |t| {
                     if let Some(m) = t.messages.iter_mut().find(|m| m.id == msg.id) {
-                        m.queued = self.runner.is_queued(&thread_id, &m.id);
+                        m.queued |= self.runner.is_queued(&thread_id, &m.id);
                         msg.queued = m.queued;
                     }
                 })?;

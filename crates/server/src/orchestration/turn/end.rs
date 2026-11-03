@@ -63,9 +63,10 @@ pub(in crate::orchestration) fn record_turn(turn: &Turn, replies: &[String]) {
     }
 }
 
-/// Holds the steers a stopped turn never answered as queued messages, so they wait to be resumed
-/// instead of staying in the thread as sent. They were handed to the agent, but its turn is gone,
-/// so they can be taken back again.
+/// Holds messages a turn took but never answered as queued messages: the steers a stopped turn
+/// never answered, so they wait to be resumed instead of staying in the thread as sent, and the
+/// messages taken from its queue. They were handed to the agent, but its turn is gone, so they
+/// can be taken back again.
 pub(in crate::orchestration) fn hold_unanswered(turn: &Turn, ids: &[String]) {
     if ids.is_empty() {
         return;
@@ -112,7 +113,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
     // Forget the turn before announcing it. Queued messages remain persisted in the
     // thread until the user explicitly resumes them; unanswered steers were already
     // delivered to the agent and continue automatically if needed.
-    let mut unanswered = {
+    let (mut unanswered, queued) = {
         let mut turns = turn
             .server
             .runner
@@ -125,6 +126,13 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
             .is_some_and(|t| Arc::ptr_eq(&t.exited, &turn.exited))
         {
             turns.remove(&turn.thread_id);
+            // A call the user allowed through a hook was allowed for this turn only.
+            turn.server
+                .runner
+                .grants
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .remove(&turn.thread_id);
         }
         // Queued messages stay in the thread as queued until the turn has finished.
         // Steering messages the agent never answered continue automatically unless
@@ -146,8 +154,13 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         queued.iter().for_each(|message| {
             handed_over.remove(&message.message_id);
         });
-        unanswered
+        (unanswered, queued)
     };
+    // Taken from the queue, so marked queued here: the sender may not have saved the flag yet.
+    hold_unanswered(
+        &turn,
+        &queued.into_iter().map(|f| f.message_id).collect::<Vec<_>>(),
+    );
     if cancelled {
         hold_unanswered(
             &turn,

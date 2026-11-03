@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowClockwiseIcon,
   CaretLeftIcon,
@@ -136,7 +136,28 @@ export default function McpServersPane({ appIcon }: { appIcon: string }) {
     await reload();
   };
 
-  if (servers === null) return null;
+  // Nothing to show until the servers are listed; if that failed, say why and offer to try again.
+  if (servers === null) {
+    return (
+      error && (
+        <div
+          role="alert"
+          className="flex items-center gap-2 text-[length:var(--fs-sm)] text-danger"
+        >
+          {error}
+          <button
+            className="btn"
+            onClick={() => {
+              setError(null);
+              void reload();
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )
+    );
+  }
 
   if (editing !== null) {
     return (
@@ -443,11 +464,15 @@ function ServerDetail({
   // Patchwork's own server can leave tools out of API turns; the buttons act on the tools shown.
   const own = card.own;
   const off = new Set(own?.disabledTools ?? []);
-  const setOff = (names: Set<string>) =>
-    own &&
+  // Each change is worked out from the saved list, so the next waits until it is read back.
+  const saving = useRef(false);
+  const setOff = (names: Set<string>) => {
+    if (!own || saving.current) return;
+    saving.current = true;
     void run(
       api.saveMcpServer(own.name, { ...ownConfig(own), disabledTools: [...names] }, own.name),
-    );
+    ).finally(() => (saving.current = false));
+  };
   const turn = (on: boolean) => {
     const next = new Set(off);
     for (const t of tools)

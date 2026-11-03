@@ -46,7 +46,9 @@ export function useComposerDraft({
 }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [pending, setPending] = useState<Record<string, Attachment[]>>({});
-  const [queuedEdit, setQueuedEdit] = useState<QueuedEdit | null>(null);
+  const [heldEdit, setQueuedEdit] = useState<QueuedEdit | null>(null);
+  // An edit shows only in its own chat, so a switch never hands it to the next chat's composer.
+  const queuedEdit = heldEdit?.chat === threadKey ? heldEdit : null;
   const [dropping, setDropping] = useState(false);
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -89,7 +91,7 @@ export function useComposerDraft({
   /** Puts a failed send's text and files back, unless the chat has been written in since. */
   const restoreDraft = (chat: string, text: string, files: Attachment[]) => {
     setDrafts((d) => (d[chat] ? d : { ...d, [chat]: text }));
-    setPending((p) => (p[chat] ? p : { ...p, [chat]: files }));
+    setPending((p) => (p[chat]?.length ? p : { ...p, [chat]: files }));
   };
 
   /** What the draft keeps once the message leaves: the files its text no longer holds. */
@@ -107,8 +109,8 @@ export function useComposerDraft({
       const root = projectPathRef.current;
       // Whatever is dropped on the composer is written into the draft where it landed; anything
       // dropped elsewhere or picked goes in at the caret. They stay attachments only when the
-      // draft cannot be written.
-      const place = mention ?? dropMentions.current?.(null);
+      // draft cannot be written, or the composer has moved to another chat since.
+      const place = keyRef.current === sentKey ? (mention ?? dropMentions.current?.(null)) : null;
       if (place) {
         place(found.map((a) => mentionFor(a, root)));
         droppedFiles.current.push(...found.filter((a) => a.kind !== "image"));
@@ -118,7 +120,7 @@ export function useComposerDraft({
         ...current,
         ...found.filter((a) => !current.some((c) => c.path === a.path)),
       ];
-      if (queuedEditRef.current) {
+      if (queuedEditRef.current && keyRef.current === sentKey) {
         setQueuedEdit((edit) =>
           edit ? { ...edit, attachments: withFresh(edit.attachments) } : edit,
         );
@@ -269,7 +271,5 @@ export function useComposerDraft({
     dropping,
     dropMentions,
     rootRef,
-    /** The chat the draft belongs to, for callbacks that resolve after a send. */
-    keyRef,
   };
 }

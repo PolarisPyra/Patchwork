@@ -887,17 +887,6 @@ fn go_idle(
             path,
         });
     });
-    let queued = std::mem::take(&mut *turn.queue.lock().unwrap_or_else(PoisonError::into_inner));
-    let mut handed_over = turn
-        .server
-        .runner
-        .handed_over
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner);
-    queued.iter().for_each(|message| {
-        handed_over.remove(&message.message_id);
-    });
-    drop(handed_over);
     record_turn(turn, &segments[*completed..]);
     let last = segments.len().saturating_sub(1);
     segments
@@ -968,10 +957,45 @@ fn go_idle(
                 status,
             );
         });
+    }
+    // Under the turns lock, where `steer` reads these flags: a message sent while the reply was
+    // wrapping up is in the queue taken here, not left in one nobody drains.
+    let turns = turn
+        .server
+        .runner
+        .turns
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    let queued = std::mem::take(&mut *turn.queue.lock().unwrap_or_else(PoisonError::into_inner));
+    let mut handed_over = turn
+        .server
+        .runner
+        .handed_over
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    queued.iter().for_each(|message| {
+        handed_over.remove(&message.message_id);
+    });
+    drop(handed_over);
+    // A call the user allowed through a hook was allowed for this reply only.
+    turn.server
+        .runner
+        .grants
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .remove(&turn.thread_id);
+    if stopped {
         // The agent takes the next message again.
         turn.cancelled.store(false, Ordering::SeqCst);
     }
     turn.idle.store(true, Ordering::SeqCst);
+    drop(turns);
+    // Taken from the queue, so marked queued here: the sender may not have saved the flag yet, and
+    // the queued messages are sent, or wait for the user, by that flag.
+    hold_unanswered(
+        turn,
+        &queued.into_iter().map(|f| f.message_id).collect::<Vec<_>>(),
+    );
     if !stopped {
         turn.server.send_queued_later(&turn.thread_id);
     }

@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
-use crate::orchestration::changes::attribution::SharedAttribution;
+use crate::orchestration::changes::attribution::{self, SharedAttribution};
 use crate::orchestration::turn::process::{
     INTERRUPT_GRACE, QUIT_GRACE, terminate, write_line, write_to,
 };
@@ -38,6 +38,8 @@ pub struct Runner {
     /// Messages this process has handed to a turn, whether steered or queued. Written under the
     /// `turns` lock, so a withdrawal sees it in the same order as the queue it checks.
     pub(in crate::orchestration) handed_over: Mutex<HashSet<String>>,
+    /// Threads stopped while their turn was starting, whose agent is stopped once it is up.
+    pub(in crate::orchestration) stop_starting: Mutex<HashSet<String>>,
     /// Permission hooks waiting for the user, by approval id.
     pub(in crate::orchestration) hooks: Mutex<HashMap<String, std::sync::mpsc::Sender<bool>>>,
     /// Calls the user allowed through a hook, by thread, so the agent's own request for them
@@ -52,6 +54,17 @@ impl Runner {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .contains(thread_id)
+    }
+
+    /// Asks a turn still starting to stop once its agent is up. Called under the `turns` lock,
+    /// which the start inserts its agent under before it looks here.
+    fn stop_when_started(&self, thread_id: &str) {
+        if self.is_starting(thread_id) {
+            self.stop_starting
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .insert(thread_id.into());
+        }
     }
 
     /// Whether a reply is under way in the thread. An agent that is only kept up by shell
@@ -104,14 +117,17 @@ impl Runner {
     }
 
     /// Stops the thread's idle agent, and the shell commands it left running, so a turn that
-    /// needs a process of its own can start. A turn that is replying is left alone.
+    /// needs a process of its own can start. A turn that is replying is left to finish, and is
+    /// not used again once it is idle.
     pub fn retire_idle(&self, thread_id: &str) {
         let mut turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
-        if !turns
-            .get(thread_id)
-            .is_some_and(|turn| turn.idle.load(Ordering::SeqCst))
-        {
-            return;
+        match turns.get(thread_id) {
+            Some(turn) if turn.idle.load(Ordering::SeqCst) => {}
+            Some(turn) => {
+                turn.stale.store(true, Ordering::SeqCst);
+                return;
+            }
+            None => return,
         }
         let Some(turn) = turns.remove(thread_id) else {
             return;
@@ -123,6 +139,34 @@ impl Runner {
                 scope::stop(&unit);
             }
         });
+    }
+
+    /// Starts the idle agent's record of the project's files over from how they are now, before
+    /// a message resumes it: the watcher leaves an idle agent alone, so what changed between its
+    /// replies, such as the user's own edits, is no part of the next one.
+    pub(in crate::orchestration) fn rebase_idle(&self, thread_id: &str) {
+        let found = {
+            let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+            turns
+                .get(thread_id)
+                .filter(|turn| turn.idle.load(Ordering::SeqCst))
+                .map(|turn| {
+                    (
+                        turn.root.clone(),
+                        turn.idle.clone(),
+                        turn.attribution.clone(),
+                    )
+                })
+        };
+        let Some((root, idle, shared)) = found else {
+            return;
+        };
+        let now = workspace::git_changes(&root).unwrap_or_default();
+        let mut record = attribution::lock(&shared);
+        // Another message may have resumed it meanwhile, and that reply's record stays.
+        if idle.load(Ordering::SeqCst) {
+            record.settle(now);
+        }
     }
 
     /// Hands a new compact window to the API turn replying in `thread_id`, which compacts by it
@@ -192,8 +236,11 @@ impl Runner {
         let mut stdin = turn.stdin.lock().unwrap_or_else(PoisonError::into_inner);
         if turn.idle.load(Ordering::SeqCst) {
             // The agent's last reply is over; this message starts the next one, and if the agent
-            // can no longer take it, a new turn replaces the idle process.
-            if line.is_some_and(|line| write_to(&mut stdin, &line)) {
+            // can no longer take it, or was started with settings changed since, a new turn
+            // replaces the idle process.
+            if !turn.stale.load(Ordering::SeqCst)
+                && line.is_some_and(|line| write_to(&mut stdin, &line))
+            {
                 turn.idle.store(false, Ordering::SeqCst);
                 turn.steers
                     .lock()
@@ -244,6 +291,8 @@ impl Runner {
                     scope::stop(&unit);
                 }
             });
+        } else {
+            self.stop_when_started(thread_id);
         }
     }
 
@@ -255,6 +304,7 @@ impl Runner {
     pub fn interrupt(&self, thread_id: &str, session_id: Option<&str>, last_line: Option<String>) {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(turn) = turns.get(thread_id) else {
+            self.stop_when_started(thread_id);
             return;
         };
         let turn_id = turn
