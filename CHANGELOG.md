@@ -3,6 +3,13 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.8] - 2026-11-04
+
+### Changed
+
+- Each step in a reply now shows a spinner while it runs and a check or a red cross when it ends, beside the lines an edit added and removed or how many tests passed and failed. "Working for" shimmers while the agent works, and scrolling a step's output no longer scrolls the chat behind it.
+- The chat box and your messages have rounder corners, rows in the sidebar are roomier with long titles fading out at the edge, and the selected task is tinted blue. A chat that finishes while you are in another one shows a check in the sidebar until you open it, and the status bar shows Done when the open chat's turn ends.
+
 ## [26.11.7] - 2026-11-04
 
 ### Changed
