@@ -558,7 +558,7 @@ export default function Chat({
   // One copy handler for everything the chat renders: replies, messages, tool output, prompts.
   return (
     <div
-      className={`relative flex min-h-0 min-w-0 flex-1 flex-col isolate${isNew ? " justify-center" : ""}`}
+      className={`relative isolate flex min-h-0 min-w-0 flex-1 flex-col${isNew ? " justify-center" : ""}`}
       ref={rootRef}
       onCopy={copySelection}
       onKeyDownCapture={stopOnEscapeTwice}
