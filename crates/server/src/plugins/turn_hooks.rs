@@ -44,13 +44,10 @@ pub fn run_hooks(settings: &Settings, context: &HookContext<'_>) -> Vec<String> 
     if commands.is_empty() {
         return Vec::new();
     }
-    let Some(shell) = crate::system::posix_shell(crate::system::effective_shell(None)) else {
-        return vec!["hooks: no shell to run them in".into()];
-    };
     commands
         .into_iter()
         .filter_map(|(name, command, timeout_secs)| {
-            run_command(&shell, &command, timeout_secs, context)
+            run_command(&command, timeout_secs, context)
                 .err()
                 .map(|why| format!("{name}: {why}"))
         })
@@ -58,13 +55,8 @@ pub fn run_hooks(settings: &Settings, context: &HookContext<'_>) -> Vec<String> 
 }
 
 /// Runs one hook command, killing it at its timeout. Its output goes to the log.
-fn run_command(
-    shell: &str,
-    command: &str,
-    timeout_secs: u64,
-    context: &HookContext<'_>,
-) -> Result<(), String> {
-    let mut cmd = crate::system::host_command(shell);
+fn run_command(command: &str, timeout_secs: u64, context: &HookContext<'_>) -> Result<(), String> {
+    let mut cmd = crate::system::shell_command(command).ok_or("there is no shell to run it in")?;
     cmd.current_dir(context.root)
         .env("PATCHWORK_EVENT", context.event.name())
         .env("PATCHWORK_THREAD", context.thread_id)
@@ -72,9 +64,7 @@ fn run_command(
         .env("PATCHWORK_AGENT", context.agent)
         .env("PATCHWORK_STATUS", context.status.unwrap_or_default());
     let timeout = Duration::from_secs(timeout_secs);
-    let args = crate::system::shell_args(shell, command);
-    let args: Vec<&str> = args.iter().map(String::as_str).collect();
-    let probe = crate::provider::run_probe(cmd, &args, timeout, |_| false)
+    let probe = crate::provider::run_probe(cmd, &[], timeout, |_| false)
         .ok_or_else(|| format!("did not start, or ran past {timeout_secs}s and was stopped"))?;
     let stdout = probe.stdout.trim();
     if !stdout.is_empty() {

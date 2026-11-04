@@ -260,7 +260,7 @@ fn env_var(name: &str) -> Option<String> {
         .or_insert_with(|| {
             std::env::var(name)
                 .ok()
-                .or_else(|| crate::provider::shell_var(name))
+                .or_else(|| crate::system::login_var(name))
         })
         .clone()
 }

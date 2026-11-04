@@ -8,7 +8,6 @@ mod turn;
 
 pub use locate::{
     set_agent_paths, codex_binary, agent_command, agent_shell, user_command, turn_command,
-    shell_var,
 };
 use locate::{located, located_or, find_binary};
 pub use parsed::{TaskEvent, Parsed, GoalUpdate};
@@ -18,7 +17,7 @@ use parsed::{
 };
 pub use probe::{Probe, probe, probe_until, probe_in, detect_agent, cli_version, list_models};
 pub(crate) use probe::{run_probe};
-use probe::{PROBE_TIMEOUT, stop, read_pipe};
+use probe::stop;
 pub(crate) use probe::{read_pipe_upto, text};
 pub use turn::{
     GoalCommand, goal_argument, goal_command, TurnSpec, Image, load_images, prompt, Prompt,

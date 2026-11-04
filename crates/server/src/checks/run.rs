@@ -24,18 +24,15 @@ pub struct Outcome {
 /// Runs `command` in `root`, stopping it after `limit`. Output is kept to its last [`KEEP`]
 /// bytes; anything after that is read and dropped, so a chatty command still finishes.
 pub fn run(root: &str, command: &str, limit: Duration) -> Result<Outcome, String> {
-    let shell = crate::system::posix_shell(crate::system::effective_shell(None))
+    let mut cmd = crate::system::shell_command(command)
         .ok_or_else(|| "No shell was found to run the check in.".to_string())?;
-    let mut cmd = crate::system::host_command(&shell);
     cmd.current_dir(Path::new(root))
-        .args(crate::system::shell_args(&shell, command))
         .env("CI", "1")
         // Colour codes make the output unreadable in the card, and hide what the parsers look
         // for; every runner on this list respects one of these.
         .env("NO_COLOR", "1")
         .env("FORCE_COLOR", "0")
         .env("CLICOLOR", "0")
-        .env("TERM", "dumb")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

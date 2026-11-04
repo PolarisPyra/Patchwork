@@ -120,12 +120,7 @@ fn file(root: &Path, name: &str) -> bool {
 /// Whether `program` is on the PATH, so a lockfile naming a package manager that is not installed
 /// does not decide what runs.
 fn installed(program: &str) -> bool {
-    which::which_in(
-        program,
-        crate::system::path_var(),
-        std::env::current_dir().unwrap_or_default(),
-    )
-    .is_ok()
+    crate::system::find_program(program).is_some()
 }
 
 #[cfg(test)]

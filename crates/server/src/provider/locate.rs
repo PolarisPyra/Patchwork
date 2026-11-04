@@ -1,17 +1,12 @@
-//! Finding the agent CLIs and the commands that start them: the paths the user chose, PATH, the usual install folders, and the user's login-shell PATH.
+//! Finding the agent CLIs and the commands that start them: the paths the user chose, the PATH
+//! the user's shell sets up, and the usual install folders.
 
 use std::collections::HashMap;
-use std::ffi::OsString;
-#[cfg(unix)]
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::sync::{Mutex, OnceLock, PoisonError};
-use std::time::{Duration, Instant};
+use std::process::Command;
+use std::sync::{Mutex, PoisonError};
 use crate::system::fs::home_dir;
-use crate::workspace::{signal_process_group, SIGKILL};
 use super::{antigravity, opencode, AgentKind};
-use super::{PROBE_TIMEOUT, read_pipe, stop, text};
 
 /// Agent CLIs the user located by hand, mirrored from the settings.
 static AGENT_PATHS: Mutex<Vec<(AgentKind, PathBuf)>> = Mutex::new(Vec::new());
@@ -83,27 +78,25 @@ fn fallback_dirs() -> Vec<PathBuf> {
     dirs
 }
 
+/// `name` on the PATH the user's shell sets up, else in the usual install folders.
 pub(super) fn find_binary(name: &str) -> Option<PathBuf> {
-    let cwd = std::env::current_dir().unwrap_or_default();
-    which::which_in(name, crate::system::path_var(), cwd)
-        .ok()
-        .or_else(|| {
-            let names: &[&str] = if cfg!(windows) {
-                &["exe", "cmd", "bat"]
-            } else {
-                &[""]
-            };
-            fallback_dirs().into_iter().find_map(|d| {
-                names
-                    .iter()
-                    .map(|ext| d.join(name).with_extension(ext))
-                    .find(|p| p.is_file())
-            })
+    crate::system::find_program(name).or_else(|| {
+        let names: &[&str] = if cfg!(windows) {
+            &["exe", "cmd", "bat"]
+        } else {
+            &[""]
+        };
+        fallback_dirs().into_iter().find_map(|d| {
+            names
+                .iter()
+                .map(|ext| d.join(name).with_extension(ext))
+                .find(|p| p.is_file())
         })
+    })
 }
 
-/// Resolves the agent CLI (searching PATH plus common install dirs, since GUI
-/// launches may not inherit the shell PATH) and returns a Command for it with
+/// Resolves the agent CLI (searching the PATH the user's shell sets up, then common install
+/// dirs) and returns a Command for it with
 /// the binary's directory prepended to PATH (codex needs `node` beside it).
 pub fn agent_command(kind: AgentKind) -> Result<Command, String> {
     let bin = match kind {
@@ -124,10 +117,11 @@ pub fn agent_command(kind: AgentKind) -> Result<Command, String> {
     let mut cmd = program_command(&bin);
     if let Some(dir) = bin.parent() {
         let mut paths = vec![dir.to_path_buf()];
-        paths.extend(shell_path().into_iter().flat_map(std::env::split_paths));
-        if let Some(existing) = crate::system::path_var() {
-            paths.extend(std::env::split_paths(&existing));
-        }
+        paths.extend(
+            crate::system::search_path()
+                .iter()
+                .flat_map(std::env::split_paths),
+        );
         if let Ok(joined) = std::env::join_paths(paths) {
             cmd.env("PATH", joined);
         }
@@ -181,23 +175,11 @@ fn unwrap_cmd_shim(bin: &Path) -> Option<(PathBuf, Option<PathBuf>)> {
 }
 
 /// A command the user configured, such as an MCP server: found and run with the PATH their
-/// login shell sets up, as agents get it.
+/// shell sets up, as agents get it.
 pub fn user_command(program: &str) -> Command {
-    let mut paths: Vec<PathBuf> = shell_path()
-        .into_iter()
-        .flat_map(std::env::split_paths)
-        .collect();
-    if let Some(existing) = crate::system::path_var() {
-        paths.extend(std::env::split_paths(&existing));
-    }
-    let path = std::env::join_paths(paths).ok();
-    let bin = path
-        .as_ref()
-        .and_then(|p| which::which_in(program, Some(p), ".").ok())
-        .or_else(|| find_binary(program))
-        .unwrap_or_else(|| PathBuf::from(program));
+    let bin = find_binary(program).unwrap_or_else(|| PathBuf::from(program));
     let mut cmd = program_command(&bin);
-    if let Some(path) = path {
+    if let Some(path) = crate::system::search_path() {
         cmd.env("PATH", path);
     }
     cmd
@@ -210,91 +192,34 @@ pub fn turn_command(kind: AgentKind) -> Result<Command, String> {
         let exe = std::env::current_exe().map_err(|e| format!("Failed to find Patchwork: {e}"))?;
         let mut cmd = Command::new(exe);
         crate::system::hide_console(&mut cmd);
+        // Patchwork's own agent runs commands in the environment the user's shell sets up, so it
+        // gets it whole; the bridge only needs the PATH to find `opencode`. Either way the shell
+        // need not be read again.
+        if kind == AgentKind::Api {
+            cmd.envs(crate::system::login_env().iter().map(|(k, v)| (k, v)));
+        }
+        if let Some(path) = crate::system::search_path() {
+            cmd.env("PATH", path);
+        }
+        cmd.env(crate::system::ENV_READ, "1");
         return Ok(cmd);
     }
     agent_command(kind)
 }
 
-/// Marks the PATH line in the login shell's output, since profile scripts may print too.
-const PATH_MARKER: &str = "__PATCHWORK_PATH__";
-
-/// The PATH the user's login shell sets up, read once. An app launched from the desktop gets
-/// the session's PATH, which lacks what shell profiles add (nvm, pnpm, cargo), so agents and
-/// the commands they run would not find those tools. None if the shell can't be read.
-fn shell_path() -> Option<&'static OsString> {
-    static PATH: OnceLock<Option<OsString>> = OnceLock::new();
-    PATH.get_or_init(read_shell_path).as_ref()
-}
-
-fn read_shell_path() -> Option<OsString> {
-    login_shell_value("PATH", false).map(OsString::from)
-}
-
-/// An environment variable as the user's interactive login shell sets it, for variables
-/// exported from shell profiles that a desktop launch does not inherit. None if unset or empty.
-pub fn shell_var(name: &str) -> Option<String> {
-    let valid = !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
-    valid.then(|| login_shell_value(name, true)).flatten()
-}
-
-/// The shell `agent` runs its commands in. Each CLI picks its own, so it is not always the one
-/// Settings chose: Claude Code runs only bash or zsh, and looks for zsh first when SHELL is
-/// neither; Codex always runs the account's login shell. The rest run SHELL, which the turn sets
-/// to this, so it reads POSIX commands: OpenCode refuses fish and Nushell, and Patchwork's own
-/// agent calls its tool `bash`. Windows keeps the chosen shell. None when it is not known.
+/// The shell `agent` runs its commands in, which the turn sets as SHELL. Each CLI picks its own:
+/// Claude Code runs only bash or zsh, so it gets bash, else zsh; Codex always runs the account's
+/// login shell. The rest run SHELL, so they get bash, which models write commands for: OpenCode
+/// refuses fish and Nushell, and Patchwork's own agent calls its tool `bash`. Windows keeps the
+/// chosen shell. None when it is not known.
 pub fn agent_shell(agent: AgentKind, chosen: Option<&str>) -> Option<String> {
-    use crate::system::{find_shell, is_posix, login_shell, posix_shell, shell_name};
-    let shell = crate::system::effective_shell(chosen);
+    use crate::system::{command_shell, find_shell, is_posix, login_shell};
     if cfg!(windows) {
-        return shell;
+        return crate::system::effective_shell(chosen);
     }
     match agent {
-        AgentKind::Claude => shell
-            .filter(|shell| matches!(shell_name(shell).as_str(), "bash" | "zsh"))
-            .or_else(|| find_shell("zsh"))
-            .or_else(|| find_shell("bash")),
+        AgentKind::Claude => find_shell("bash").or_else(|| find_shell("zsh")),
         AgentKind::Codex => login_shell().filter(|shell| is_posix(shell)),
-        AgentKind::Antigravity | AgentKind::OpenCode | AgentKind::Api => posix_shell(shell),
+        AgentKind::Antigravity | AgentKind::OpenCode | AgentKind::Api => command_shell(),
     }
-}
-
-/// `$name` in the user's login shell, read with a marker since profile scripts may print too.
-/// Only a POSIX shell or fish reads the probe; Nushell, for one, would print `$name` as it is.
-fn login_shell_value(name: &str, interactive: bool) -> Option<String> {
-    let shell = crate::system::login_shell().or_else(|| std::env::var("SHELL").ok())?;
-    if !crate::system::is_posix(&shell) && crate::system::shell_name(&shell) != "fish" {
-        return None;
-    }
-    let mut cmd = crate::system::host_command(shell);
-    let flags = if interactive { "-lic" } else { "-lc" };
-    cmd.args([
-        flags,
-        &format!("printf '\\n{PATH_MARKER}%s\\n' \"${name}\""),
-    ])
-    .stdin(Stdio::null())
-    .stdout(Stdio::piped())
-    .stderr(Stdio::null());
-    #[cfg(unix)]
-    cmd.process_group(0);
-    let mut child = cmd.spawn().ok()?;
-    let (out, reader) = read_pipe(child.stdout.take()?);
-    let deadline = Instant::now() + PROBE_TIMEOUT;
-    loop {
-        match child.try_wait() {
-            Ok(Some(_)) => break,
-            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
-            _ => {
-                stop(&mut child);
-                return None;
-            }
-        }
-    }
-    // Kill anything the profile left running, so it cannot hold the pipe open.
-    signal_process_group(child.id(), SIGKILL);
-    let _ = reader.join();
-    let value = text(&out)
-        .lines()
-        .find_map(|line| line.strip_prefix(PATH_MARKER))?
-        .to_string();
-    (!value.is_empty()).then_some(value)
 }

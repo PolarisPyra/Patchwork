@@ -16,9 +16,9 @@ import { baseName, errorText } from "~/lib/util";
 
 const isMacPlatform = /Mac|iPhone|iPad/.test(navigator.platform);
 
-/** The shell agents and the terminal run commands in. Shells come from /etc/shells, or on Windows
- * the installed Git Bash, PowerShell, and cmd; a saved shell that is no longer listed stays in the
- * menu so the choice is still visible. */
+/** The shell the terminal runs, and on Windows the one agents run commands in; elsewhere they run
+ * bash. Shells come from /etc/shells, or on Windows the installed Git Bash, PowerShell, and cmd; a
+ * saved shell that is no longer listed stays in the menu so the choice is still visible. */
 function ShellPicker({ settings, updateSettings }: PaneProps) {
   const [choices, setChoices] = useState<ShellChoices>({ shells: [], default: null });
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +33,7 @@ function ShellPicker({ settings, updateSettings }: PaneProps) {
   const choose = (path: string | null) => void updateSettings((s) => ({ ...s, shell: path }));
   return (
     <>
-      <TokenRow title="Shell" desc="The shell agents and the terminal run commands in">
+      <TokenRow title="Shell">
         <Dropdown
           alignEnd
           label="Shell"

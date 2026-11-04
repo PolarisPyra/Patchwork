@@ -1,8 +1,9 @@
 //! The login shells agents and the terminal run in.
 
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
-use crate::system::path_var;
+use crate::system::{find_program, host_command, login_env, path_var, search_path};
 
 /// Entries in /etc/shells that aren't shells to run agents in: git's push-only shell, and
 /// systemd's placeholder for accounts without a shell.
@@ -147,25 +148,47 @@ pub fn is_posix(shell: &str) -> bool {
     POSIX_SHELLS.contains(&shell_name(shell).as_str())
 }
 
-/// The installed shell named `name`, from PATH.
+/// The installed shell named `name`, from the PATH the user's shell sets up.
 pub fn find_shell(name: &str) -> Option<String> {
-    let cwd = std::env::current_dir().unwrap_or_default();
-    which::which_in(name, path_var(), cwd)
-        .ok()
-        .map(|path| path.to_string_lossy().into_owned())
+    find_program(name).map(|path| path.to_string_lossy().into_owned())
 }
 
-/// `shell` if it reads POSIX commands, else bash, else `sh`: where commands written for bash run,
-/// such as a model's or a plugin's hooks, when the user's shell reads another language. Windows
-/// keeps its shell, since agents there are told which one runs.
-pub fn posix_shell(shell: Option<String>) -> Option<String> {
+/// The shell that runs commands a model, a plugin or a check writes: bash, which they are written
+/// for, else `sh`. On Windows, the user's shell, since agents there are told which one runs.
+pub fn command_shell() -> Option<String> {
     if cfg!(windows) {
-        return shell;
+        return std::env::var("SHELL")
+            .ok()
+            .filter(|shell| Path::new(shell).is_file())
+            .or_else(|| effective_shell(None));
     }
-    shell
-        .filter(|shell| is_posix(shell))
-        .or_else(|| find_shell("bash"))
-        .or_else(|| Some("/bin/sh".into()))
+    find_shell("bash").or_else(|| Some("/bin/sh".into()))
+}
+
+/// A command that runs `command` in [`command_shell`] and exits. The shell skips its startup
+/// files, which may print, prompt or start tmux, and runs in the environment they set up instead
+/// ([`login_env`]), with the PATH a terminal has. Output stays plain text, without colour or a
+/// pager waiting for keys. The caller picks the folder, pipes and process group.
+pub fn shell_command(command: &str) -> Option<Command> {
+    let shell = command_shell()?;
+    let mut cmd = host_command(&shell);
+    if shell_name(&shell) == "bash" {
+        cmd.args(["--noprofile", "--norc"]);
+    }
+    cmd.args(shell_args(&shell, command))
+        .envs(login_env().iter().map(|(k, v)| (k, v)))
+        .env_remove("BASH_ENV")
+        .env_remove("ENV")
+        .envs([
+            ("TERM", "dumb"),
+            ("NO_COLOR", "1"),
+            ("PAGER", "cat"),
+            ("GIT_PAGER", "cat"),
+        ]);
+    if let Some(path) = search_path() {
+        cmd.env("PATH", path);
+    }
+    Some(cmd)
 }
 
 /// The arguments that make `shell` run `command` and exit.

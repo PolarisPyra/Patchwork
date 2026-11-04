@@ -379,7 +379,7 @@ pub fn key(provider: &ApiProvider) -> Option<String> {
         return std::env::var(var)
             .ok()
             .filter(|v| !v.is_empty())
-            .or_else(|| crate::provider::shell_var(var));
+            .or_else(|| crate::system::login_var(var));
     }
     if let Some(key) = keys().get(&provider.id) {
         return Some(key.clone());

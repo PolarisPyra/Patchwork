@@ -78,8 +78,7 @@ pub fn open_in_editor(root: &str, rel: &str, token: Option<&str>) -> Result<(), 
 /// search with the system's extensions finds, and installers that skip PATH are looked for where
 /// they install.
 fn editor_program(program: &str) -> Option<std::path::PathBuf> {
-    let cwd = std::env::current_dir().unwrap_or_default();
-    if let Ok(found) = which::which_in(program, crate::system::path_var(), cwd) {
+    if let Some(found) = crate::system::find_program(program) {
         return Some(found);
     }
     if !cfg!(windows) {
