@@ -3,6 +3,22 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.5] - 2026-11-04
+
+### Added
+
+- An agent can now ask you for a password, token or key in a card in the chat instead of asking you to paste it into a message. What you enter never shows up in the conversation, and only the agent's commands can read it.
+
+### Changed
+
+- Settings has a shorter list. Appearance, Chats and Notifications are now one page, Settings → General; each project in Settings → Projects has its own switch for running checks after every task; and the shell is chosen in Settings → Terminal. Claude Code's and Codex's flags and models share one page, Settings → CLIs, with a switch between them.
+- Agents, plugins and checks now run their commands in bash, and find every tool your terminal finds, including those added in your shell's startup files for zsh, bash or fish. A command that runs out of time now stops along with anything it started, and Settings → Terminal → Shell now picks only the terminal's shell on macOS and Linux.
+- Terminals in the panel now keep running when the window reloads and come back with their screen as you left it. Closing a terminal ends everything it started, a terminal no window shows closes after two hours idle at its prompt, and anything left running after Patchwork was force-quit is ended at the next launch. You now pick the shell from the new-terminal button instead of Settings → Terminal.
+
+### Fixed
+
+- Commands Codex runs now show in the chat as the agent wrote them, without "/bin/zsh -lc" in front, so they read the same as in the approval card. Before, some commands looked like they ran in a different shell than others.
+
 ## [26.11.4] - 2026-11-03
 
 ### Fixed
