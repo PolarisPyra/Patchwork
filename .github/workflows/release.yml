@@ -3,8 +3,9 @@ name: Release
 # Runs after each push to main that passes the CI workflow. While a commit since the last release
 # has a Changelog: paragraph for users, it keeps one "Release vYY.M.N" pull request up to date: the
 # next version and its notes, one commit on top of the commit the checks passed on. Merging that
-# pull request with a merge commit releases it: the run after the merge tags it, then builds the
-# Linux AppImage, the Windows installer, and the macOS (Apple silicon) disk image and app bundle,
+# pull request with a merge commit releases it: the merge's own push starts a run that tags it,
+# without waiting for the checks, then builds the Linux AppImage, the Windows installer (on Linux),
+# and the macOS (Apple silicon) disk image and app bundle,
 # publishes them to updates.patchworkeditor.com, and creates the GitHub release with the tag's
 # notes, then points the website at the new release and deploys it. A tag pushed by
 # `scripts/release.sh` is built and published the same way. scripts/release.sh does the work, and
@@ -17,15 +18,20 @@ name: Release
 # anything, to try a change to the build before releasing.
 #
 # A run on main also saves the dependency caches, which a tag's run can restore: a cold build costs
-# about 70 of the private repo's counted minutes.
+# about 50 of the private repo's counted minutes.
 #
 # Actions are pinned to commits, so a moved tag can't change what runs next to the secrets. The
 # comment after each names the version it was.
 
 on:
+  # A tag, or the merge of the release pull request, which always changes the version in
+  # package.json. The merge does not wait for the checks: the commit it releases is the release
+  # pull request's, the commit the checks passed on with only the version and notes on top.
   push:
     tags:
       - "v*"
+    branches: [main]
+    paths: [package.json]
   # Each run of the CI workflow on main. Only a push that passed goes on; see the plan job.
   workflow_run:
     workflows: [CI]
@@ -36,8 +42,10 @@ on:
 permissions:
   contents: read
 
+# Keyed on the event too, so the run after the checks that updates the release pull request does
+# not wait behind a release that is building.
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -47,11 +55,15 @@ env:
 
 jobs:
   # Whether a release pull request was just merged, and as which version. A CI run started by hand,
-  # or one that failed or was cancelled for a newer push, changes nothing.
+  # or one that failed or was cancelled for a newer push, changes nothing. A push to main goes on
+  # only for the merge of the release pull request; `scripts/release.sh bump` releases by its tag.
   plan:
     if: >-
-      github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push'
-      && github.event.workflow_run.conclusion == 'success'
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.conclusion == 'success')
+      || (github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && startsWith(github.event.head_commit.message, 'Merge pull request')
+      && contains(github.event.head_commit.message, format('from {0}/release', github.repository_owner)))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -59,7 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
 
       - name: Look for a merged release
@@ -80,7 +92,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
 
       - name: Tag ${{ needs.plan.outputs.version }}
@@ -93,11 +105,14 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           scripts/release.sh ci-tag "$VERSION"
 
-  # Opens, updates, or closes the release pull request. After a merge it runs once the tag is up,
-  # so commits pushed before the merge that the release left out get a pull request of their own.
+  # Opens, updates, or closes the release pull request, only after the checks passed. After a merge
+  # it runs once the tag is up, so commits pushed before the merge that the release left out get a
+  # pull request of their own.
   pr:
     needs: [plan, cut]
-    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.cut.result != 'failure' }}
+    if: >-
+      !cancelled() && github.event_name == 'workflow_run' && needs.plan.result == 'success'
+      && needs.cut.result != 'failure'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -123,7 +138,7 @@ jobs:
     needs: cut
     # A tag, a release this run tagged, or a build by hand without publishing.
     if: >-
-      !cancelled() && !failure() && (github.event_name == 'push'
+      !cancelled() && !failure() && (github.ref_type == 'tag'
       || github.event_name == 'workflow_dispatch' || needs.cut.outputs.tag != '')
     runs-on: ubuntu-22.04
     timeout-minutes: 45
@@ -159,55 +174,39 @@ jobs:
         run: scripts/release.sh ci-upload linux
 
   windows:
-    # A Dev Drive is needed for the Windows 2025 image's native ReFS support.
+    # Cross-compiled on Linux with cargo-xwin, which builds it in half the time a Windows runner
+    # takes and counts half the minutes. Ubuntu 24.04 has the NSIS that Tauri's installer needs.
     needs: cut
     if: >-
-      !cancelled() && !failure() && (github.event_name == 'push'
+      !cancelled() && !failure() && (github.ref_type == 'tag'
       || github.event_name == 'workflow_dispatch' || needs.cut.outputs.tag != '')
-    runs-on: windows-2025
-    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     outputs:
       assets: ${{ steps.upload.outputs.assets }}
     env:
       RELEASE_TAG: ${{ needs.cut.outputs.tag || (github.ref_type == 'tag' && github.ref_name || '') }}
-    defaults:
-      run:
-        shell: bash
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ needs.cut.outputs.tag || github.ref }}
 
-      # Cargo writes tens of thousands of files, and Defender scans each on C:. A trusted Dev
-      # Drive skips that, so the checkout, the Rust toolchain, and cargo's files all live on one.
-      - uses: samypr100/setup-dev-drive@cf663fdf88945e3faaa980ec525b5bc2350fbf9d # v3
-        with:
-          drive-size: 25GB
-          workspace-copy: true
-          trusted-dev-drive: true
-          env-mapping: |
-            CARGO_HOME,{{ DEV_DRIVE }}/.cargo
-            RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
-
       - uses: ./.github/actions/setup
         with:
           rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
-          directory: ${{ env.DEV_DRIVE_WORKSPACE }}
+          windows: "true"
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: release-windows
-          workspaces: ${{ env.DEV_DRIVE_WORKSPACE }} -> target
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build
-        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
         run: scripts/release.sh ci-build windows
 
       - name: Upload
         id: upload
         if: env.RELEASE_TAG != ''
-        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
         env:
           BUNNY_STORAGE_PASSWORD: ${{ secrets.BUNNY_STORAGE_PASSWORD }}
         run: scripts/release.sh ci-upload windows
@@ -218,7 +217,7 @@ jobs:
     # release or a run by hand: its build is quick without a cache.
     needs: cut
     if: >-
-      !cancelled() && !failure() && (github.event_name == 'push'
+      !cancelled() && !failure() && (github.ref_type == 'tag'
       || github.event_name == 'workflow_dispatch' || needs.cut.outputs.tag != '')
     runs-on: macos-15
     timeout-minutes: 30

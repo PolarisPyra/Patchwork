@@ -10,10 +10,10 @@ For local builds, see [Development](development.md).
 CI workflow (GitHub Actions)            every push to main: the checks
         │ passed
         ▼
-Release workflow                        after each push to main that passed
+Release workflow                        after each push to main that passed, and on the merge of the release pull request
   ├─ plan         does main carry a version with no tag yet, from a merged release pull request?
   ├─ pr           no: notes, version, CHANGELOG.md as one commit on the release branch → "Release v26.11.0" pull request
-  │                 (you merge it with a merge commit; that push starts this workflow again)
+  │                 (you merge it with a merge commit; that push starts this workflow at once, without the checks)
   ├─ cut          yes: tag v26.11.0 on the release commit, push the tag
   │                 (or: pnpm release bump on your machine, which pushes a tag and starts the steps below)
   ├─ appimage  ─┐
@@ -157,20 +157,21 @@ nothing either; the next push that passes brings the pull request up to date.
 **To release**, merge the pull request with **Create a merge commit**, or run
 `gh pr merge release --merge`. Squash and rebase merges are turned off for the repo, because the
 release would then also cover commits pushed after the pull request was last updated, without their
-notes. The merge is a push to `main`, so the checks run on it, and when they pass the Release
-workflow sees that `main` carries a version with no tag yet (`ci-plan`) and:
+notes. The merge is a push to `main` that changes `package.json`, which starts the Release workflow
+straight away, without waiting for the checks. It sees that `main` carries a version with no tag
+yet (`ci-plan`) and:
 
 1. Tags the commit that set that version, the release pull request's own commit, and pushes the tag
    (`scripts/release.sh ci-tag`).
 2. Builds, uploads, signs, and publishes, as below.
-3. Opens a new release pull request for anything pushed before the merge that the release did not
-   include.
 
-The pull request is opened with the workflow's own token, so the CI workflow does not run on it;
-the checks run on the merge instead, before anything is tagged. If they fail, nothing is tagged
-yet: fix it on `main`, and the next push that passes tags the release. What it tags is still the
-pull request's commit, the commit that passed plus the version and notes; the fix goes out in the
-next release. A merge made while a release builds waits for it.
+The checks still run on the merge, and when they pass, the run after them opens a new release pull
+request for anything pushed before the merge that the release did not include.
+
+The release need not wait for them, because what it tags is the pull request's commit: the commit
+that passed the checks plus the version and notes, not the merge, which can also hold pushes that
+had not passed yet. Those go out in the next release. If tagging fails, the run after the checks
+on the merge tags it instead. A merge made while a release builds waits for it.
 
 The repo lets the workflow open pull requests (Settings → Actions → General → **Allow GitHub
 Actions to create and approve pull requests**) and allows only merge commits (Settings → General →
@@ -206,23 +207,26 @@ prints the download links. Ctrl-C stops only the watching, not the build.
 started by hand, on the `ubuntu-22.04` runner the AppImage is built on: it builds the web app, runs
 `pnpm check` and `cargo test --workspace`, and fails if the generated wire types differ from the
 committed ones. These are the checks `scripts/release.sh` runs before a release. A push to `main`
-that passes starts the Release workflow. Its Rust cache is saved only from `main`. A newer run on
+that passes starts the Release workflow (the merge of the release pull request starts it before
+the checks; see [Cut a release](#cut-a-release)). Its Rust cache is saved only from `main`. A newer run on
 the same branch cancels an older one. What the workflows push or open with their own token, such as
 the release pull request or the website's links, starts no run.
 
 ## The Release workflow
 
-`.github/workflows/release.yml` runs after each run of the CI workflow on `main`, on a `v*` tag, and
-when started by hand (see [Cut a release](#cut-a-release) and [Caches](#caches)). Of the CI runs,
-only a push that passed the checks does anything.
+`.github/workflows/release.yml` runs after each run of the CI workflow on `main`, on a push to
+`main` that changes `package.json`, on a `v*` tag, and when started by hand (see
+[Cut a release](#cut-a-release) and [Caches](#caches)). Of the CI runs, only a push that passed the
+checks does anything; of the pushes to `main`, only the merge of the release pull request, whose
+message GitHub writes as `Merge pull request #N from PolarisPyra/release`.
 
 | Job | Runner | Commands | Publishes |
 | --- | --- | --- | --- |
-| plan | `ubuntu-latest`, after a push passed | `ci-plan` | Nothing: the merged version to tag, or none |
+| plan | `ubuntu-latest`, after a push passed or on the release merge | `ci-plan` | Nothing: the merged version to tag, or none |
 | cut | `ubuntu-latest`, with write access, when plan found a version | `ci-tag` | The tag |
-| pr | `ubuntu-latest`, with write access to the repo and pull requests, after cut or in its place | `ci-pr` | The `release` branch and its pull request |
+| pr | `ubuntu-latest`, with write access to the repo and pull requests, after a push passed: after cut or in its place | `ci-pr` | The `release` branch and its pull request |
 | appimage | `ubuntu-22.04` (older glibc, so the AppImage runs on newer distributions) | `ci-build linux`, `ci-upload linux` | `Patchwork_amd64.AppImage` |
-| windows | `windows-2025`, building on a Dev Drive | `ci-build windows`, `ci-upload windows` | `Patchwork_x64-setup.exe` |
+| windows | `ubuntu-24.04`, cross-compiled with `cargo-xwin` (its NSIS is new enough for Tauri's installer) | `ci-build windows`, `ci-upload windows` | `Patchwork_x64-setup.exe` |
 | macos | `macos-15` (Apple silicon) | `ci-build macos`, `ci-upload macos` | `Patchwork_aarch64.dmg`, `Patchwork.app.tar.gz` |
 | release | `ubuntu-latest`, after the three above | `ci-release` | `latest.json`, the GitHub release and its installers |
 
@@ -254,7 +258,7 @@ To check the build without releasing, run the workflow by hand from the Actions 
 Most of each build is compiling the Rust dependencies. A tag's run can restore caches saved on
 `main`, but not ones saved by another tag, so the dependency caches are saved only on `main`:
 
-- A release after a push runs on `main`, so it saves the Linux and Windows caches as it builds. A
+- A release from a merge runs on `main`, so it saves the Linux and Windows caches as it builds. A
   run by hand on `main` builds them without publishing anything, to save them before a tag from
   your machine after a change to a Cargo file.
 - Tag runs restore those caches and save none.
@@ -271,10 +275,12 @@ The workflow is built to stay inside the free plan's Actions limits, whichever p
   until it resets.
 - **Caches only from `main`.** See [Caches](#caches). The repo's cache storage is 10 GB; the Linux
   and Windows dependency caches fit in it, and older ones are evicted on their own.
-- **Minutes.** The free plan has 2,000 a month. Windows minutes count twice and macOS minutes ten
-  times. Without caches, v0.10.16 took about 13 minutes on Linux, 17 on Windows, and 2 on macOS,
-  so about 70 counted minutes. A change to the Rust dependencies costs one cache build of Linux and
-  Windows. Each job has a timeout (macOS 30 minutes, Linux and Windows 45, release 10). A second
+- **Minutes.** The free plan has 2,000 a month. macOS minutes count ten times; the Windows
+  installer is built on Linux, so its minutes count once (on a Windows runner they counted twice,
+  and its build took twice as long). Without caches, v0.10.16 took about 13 minutes on Linux, 17 on
+  Windows, and 2 on macOS, about 70 counted minutes; with Windows built on Linux that is about 50.
+  A change to the Rust dependencies costs one cache build of Linux and Windows. Each job has a
+  timeout (macOS and Windows 30 minutes, Linux 45, release 10). A second
   run for the same ref waits for the first, so a release is never stopped halfway through
   publishing. Each push to `main` costs its CI run, about 5 minutes with the cache, plus a minute
   for the Release run's first job and another to update the release pull request. Each release

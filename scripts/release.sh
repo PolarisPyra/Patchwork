@@ -65,6 +65,8 @@ WORKFLOW=release.yml
 # The branch the Release workflow keeps the next release on, for its pull request. Only it writes
 # there.
 RELEASE_BRANCH=release
+# What the Windows installer is built for, on Linux; its files land in target/<this>/release.
+WINDOWS_TARGET=x86_64-pc-windows-msvc
 # A release that changed these can't be rolled back to the one before it: see withdrawn_tags.
 MIGRATIONS=crates/server/src/persistence/migrations
 SECRETS=(BUNNY_STORAGE_PASSWORD BUNNY_API_KEY TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD)
@@ -278,7 +280,7 @@ upload() {
 # Builds with the Tauri CLI. Nothing is signed here: the release job signs the published files, so
 # the signing key is never on a machine that runs the dependencies' build scripts.
 tauri_build() {
-  pnpm --filter patchwork-desktop exec tauri build --bundles "$1"
+  pnpm --filter patchwork-desktop exec tauri build --bundles "$@"
 }
 
 # Dies unless the argument names a platform, before anything is built or uploaded.
@@ -295,7 +297,7 @@ check_platform() {
 platform_files() {
   case "$1" in
     linux) files=($(ls -t target/release/bundle/appimage/*.AppImage 2> /dev/null | head -n 1 || true)) ;;
-    windows) files=($(ls -t target/release/bundle/nsis/*-setup.exe 2> /dev/null | head -n 1 || true)) ;;
+    windows) files=($(ls -t "target/$WINDOWS_TARGET/release/bundle/nsis/"*-setup.exe 2> /dev/null | head -n 1 || true)) ;;
     macos)
       # The disk image is for new installs; the updater downloads the app tarball.
       files=($(ls -t target/release/bundle/dmg/*.dmg 2> /dev/null | head -n 1 || true)
@@ -376,7 +378,8 @@ ci_build() {
   if [[ -n "${RELEASE_TAG:-}" ]]; then set_version "${RELEASE_TAG#v}"; fi
   case "$platform" in
     linux) tauri_build appimage ;;
-    windows) tauri_build nsis ;;
+    # Built on Linux with cargo-xwin, which compiles it in half the time a Windows runner takes.
+    windows) tauri_build nsis --runner cargo-xwin --target "$WINDOWS_TARGET" ;;
     macos)
       # The disk image is for new installs; the updater downloads Patchwork.app.tar.gz and unpacks
       # it with tar, expecting Patchwork.app at its top. COPYFILE_DISABLE keeps macOS's ._ files out.
