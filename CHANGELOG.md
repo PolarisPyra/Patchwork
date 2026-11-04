@@ -3,7 +3,7 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
-## [26.11.6] - 2026-11-04
+## [26.11.7] - 2026-11-04
 
 ### Changed
 
