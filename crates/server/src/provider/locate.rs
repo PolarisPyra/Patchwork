@@ -211,11 +211,11 @@ pub fn turn_command(kind: AgentKind) -> Result<Command, String> {
 /// Claude Code runs only bash or zsh, so it gets bash, else zsh; Codex always runs the account's
 /// login shell. The rest run SHELL, so they get bash, which models write commands for: OpenCode
 /// refuses fish and Nushell, and Patchwork's own agent calls its tool `bash`. Windows keeps the
-/// chosen shell. None when it is not known.
-pub fn agent_shell(agent: AgentKind, chosen: Option<&str>) -> Option<String> {
+/// user's shell. None when it is not known.
+pub fn agent_shell(agent: AgentKind) -> Option<String> {
     use crate::system::{command_shell, find_shell, is_posix, login_shell};
     if cfg!(windows) {
-        return crate::system::effective_shell(chosen);
+        return crate::system::effective_shell();
     }
     match agent {
         AgentKind::Claude => find_shell("bash").or_else(|| find_shell("zsh")),

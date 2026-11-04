@@ -45,14 +45,18 @@ import type {
   LogLevel,
   NotificationSettings,
   Settings,
-  ShellChoices,
   TerminalSettings,
   Theme,
   TokenSettings,
 } from "~/bindings/settings";
 import type { Secret, SecretStatus } from "~/bindings/secrets";
 import type { Skill } from "~/bindings/skills";
-import type { StartedTerminal, TerminalExit, TerminalOutput } from "~/bindings/terminal";
+import type {
+  AttachedTerminal,
+  TerminalFrame,
+  TerminalInfo,
+  TerminalShell,
+} from "~/bindings/terminal";
 import type {
   AccessMode,
   Approval,
@@ -91,6 +95,7 @@ export type {
   ApiProvider,
   Approval,
   ApprovalStatus,
+  AttachedTerminal,
   Attachment,
   AttachmentKind,
   BackgroundTask,
@@ -144,14 +149,13 @@ export type {
   SecretStatus,
   Screenshot,
   Settings,
-  ShellChoices,
   Skill,
-  StartedTerminal,
   StepStatus,
   SubAgent,
-  TerminalExit,
-  TerminalOutput,
+  TerminalFrame,
+  TerminalInfo,
   TerminalSettings,
+  TerminalShell,
   Theme,
   TokenSettings,
   TokenUsage,

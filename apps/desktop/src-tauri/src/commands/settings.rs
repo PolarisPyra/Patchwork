@@ -24,11 +24,3 @@ pub(crate) async fn default_permission_rules()
 -> Res<Vec<patchwork_server::permissions::PermissionRule>> {
     Ok(patchwork_server::permissions::default_rules())
 }
-
-#[tauri::command]
-pub(crate) fn list_shells() -> ShellChoices {
-    ShellChoices {
-        shells: patchwork_server::system::available_shells(),
-        default: patchwork_server::system::effective_shell(None),
-    }
-}

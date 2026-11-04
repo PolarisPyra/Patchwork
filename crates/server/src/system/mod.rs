@@ -1,13 +1,14 @@
 //! The user's machine: the programs Patchwork starts and the environment they run with, the
 //! environment the user's shell sets up, the shells commands and the terminal run in, opening
-//! files and links on the desktop, the systemd scope agents run in, Patchwork's own folders, and
-//! time.
+//! files and links on the desktop, the systemd scope agents run in, the process table,
+//! Patchwork's own folders, and time.
 
 pub mod dirs;
 mod environment;
 mod host;
 pub mod launch;
 pub mod fs;
+pub(crate) mod processes;
 pub(crate) mod scope;
 mod shells;
 pub(crate) mod time;

@@ -1,6 +1,6 @@
 //! Launch arguments for Claude Code turns.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::agents::{self, Agent};
 use crate::plugins::AgentHook;
@@ -110,6 +110,37 @@ pub fn launch_env(compact_window: u64) -> Vec<(&'static str, String)> {
         ));
     }
     env
+}
+
+/// Variables the shell-environment file leaves out: Patchwork passes the PATH itself, and the rest
+/// would change how bash starts or which shell Claude runs.
+const NOT_IN_ENV_FILE: [&str; 5] = ["PATH", "SHELL", "BASH_ENV", "ENV", crate::system::ENV_READ];
+
+/// A file of what the user's shell sets up beyond Patchwork's own environment, which Claude Code
+/// sources before each Bash command (`CLAUDE_ENV_FILE`). Its commands run in bash, whose startup
+/// files are the ones Claude reads, so without it they would miss what `.zshrc` or `config.fish`
+/// exports. Only the commands read it, so a key exported there does not change which account
+/// Claude itself uses. Readable only by the user, since exports can hold secrets. None when the
+/// shell adds nothing or the file can't be written.
+pub fn shell_env_file() -> Option<PathBuf> {
+    let text: String = crate::system::login_env()
+        .iter()
+        .filter(|(key, value)| {
+            !NOT_IN_ENV_FILE.contains(&key.as_str())
+                && std::env::var(key).ok().as_deref() != Some(value.as_str())
+        })
+        .map(|(key, value)| format!("export {key}='{}'\n", value.replace('\'', r"'\''")))
+        .collect();
+    if text.is_empty() {
+        return None;
+    }
+    let file = crate::system::dirs().cache.join("shell-env.sh");
+    if std::fs::read_to_string(&file).ok().as_deref() != Some(text.as_str()) {
+        crate::system::fs::write_private(&file, &text)
+            .inspect_err(|e| log::warn!("could not write the shell environment for Claude: {e}"))
+            .ok()?;
+    }
+    Some(file)
 }
 
 /// The tools a permission rule can answer in Claude, as the matcher of the hook that asks

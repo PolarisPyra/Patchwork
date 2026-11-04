@@ -55,8 +55,6 @@ pub struct Settings {
     /// Model, `provider/model`, that reads the images of a message on Patchwork's own agent.
     /// None sends images to the main model.
     pub vision_model: Option<String>,
-    /// Shell that agents run commands in. None follows the SHELL environment variable.
-    pub shell: Option<String>,
     /// Folder of the skills every agent loads. None uses `skills` in the config folder.
     pub skills_dir: Option<String>,
     /// Skills switched off in Settings, by name.
@@ -111,13 +109,11 @@ impl CheckSettings {
 }
 
 /// The integrated terminal, as VS Code's `terminal.integrated.*` settings set it up, with its
-/// defaults. The shell is `shell`, shared with the agents.
+/// defaults.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "settings.ts")]
 #[serde(rename_all = "camelCase", default)]
 pub struct TerminalSettings {
-    /// Arguments for the shell. None is `-l` on macOS, none elsewhere.
-    pub shell_args: Option<Vec<String>>,
     /// Variables added to the shell's environment; null removes one. Values may use
     /// `${env:NAME}` and `${workspaceFolder}`.
     pub env: BTreeMap<String, Option<String>>,
@@ -155,7 +151,6 @@ impl Default for TerminalSettings {
     fn default() -> Self {
         let mac = cfg!(target_os = "macos");
         Self {
-            shell_args: None,
             env: BTreeMap::new(),
             inherit_env: true,
             cwd: None,
@@ -378,15 +373,6 @@ impl TokenSettings {
     }
 }
 
-/// The shells the Settings dropdown offers, and the one "System default" resolves to.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
-#[ts(export, export_to = "settings.ts")]
-#[serde(rename_all = "camelCase")]
-pub struct ShellChoices {
-    pub shells: Vec<String>,
-    pub default: Option<String>,
-}
-
 impl Server {
     /// Watches the skills folder in place of any watch before, passing the skills to
     /// `on_change` after each settled burst of changes.
@@ -421,9 +407,8 @@ impl Server {
         crate::logging::follow(&settings.logging);
         let old = self.store.settings();
         let guards_changed = !permissions::same_guards(&old.permissions, &settings.permissions);
-        // The system prompts and the shell are what an agent's launch instructions are made of.
-        let prompt_changed =
-            old.system_prompts != settings.system_prompts || old.shell != settings.shell;
+        // The system prompts are what an agent's launch instructions are made of.
+        let prompt_changed = old.system_prompts != settings.system_prompts;
         let changed = changed_sections(&old, &settings);
         self.store.update_settings(|s| *s = settings)?;
         if !changed.is_empty() {

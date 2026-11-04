@@ -2,18 +2,20 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type ITerminalOptions, type ITheme } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { useSyncExternalStore } from "react";
-import { api, onTerminalExit, onTerminalOutput, type TerminalSettings } from "~/api";
+import { api, type TerminalFrame, type TerminalSettings } from "~/api";
 import { boundCommand } from "~/lib/shortcuts";
 import { copyText } from "~/lib/clipboard";
 
 /**
  * The integrated terminal's shells. Each keeps its xterm and element here, outside React, so it
  * keeps running and keeps its scrollback while the panel is closed; the panel shows the active
- * one's element.
+ * one's element. The shells belong to the app: a window that reloads attaches to them again.
  */
 
 export interface Shell {
   id: number;
+  /** This window's attachment, which types into the shell. */
+  attachment: number;
   /** The shell's file name, such as "zsh". */
   name: string;
   term: Terminal;
@@ -21,6 +23,11 @@ export interface Shell {
   element: HTMLDivElement;
   /** Set once the shell has ended with an error, while its last output stays readable. */
   exitCode?: number;
+  /** Whether its xterm has been drawn into its element yet. */
+  opened: boolean;
+  /** Output kept until it is drawn: a shell attached again is drawn at the panel's size, then
+   * gets its screen. */
+  backlog?: string;
 }
 
 /** App commands a terminal hands back instead of sending their keys to the shell, as VS Code's
@@ -142,9 +149,8 @@ function options(settings: TerminalSettings): ITerminalOptions {
 
 let shells: Shell[] = [];
 const listeners = new Set<() => void>();
-/** Output that arrived before its shell's id was known. */
-const early = new Map<number, string[]>();
 let current: TerminalSettings | null = null;
+let restoring: Promise<void> | null = null;
 
 function changed() {
   shells = [...shells];
@@ -161,87 +167,96 @@ export function useShells(): Shell[] {
   );
 }
 
-void onTerminalOutput(({ id, data }) => {
-  const shell = shells.find((s) => s.id === id);
-  if (shell) shell.term.write(data);
-  else {
-    const queued = early.get(id);
-    if (queued) queued.push(data);
-    else early.set(id, [data]);
-  }
-});
-
-void onTerminalExit(({ id, code }) => {
-  const shell = shells.find((s) => s.id === id);
-  if (!shell) return;
-  // A shell that failed stays, so its last output can be read; one that ended cleanly closes.
-  if (code !== null && code !== 0 && shell.exitCode === undefined) {
-    shell.exitCode = code;
-    shell.term.write(
-      `\r\n\x1b[90mThe terminal process "${shell.name}" terminated with exit code: ${code}.\x1b[0m\r\n`,
-    );
-    changed();
-    return;
-  }
-  remove(shell);
-});
+/** The shells open now, outside React. */
+export function openShells(): Shell[] {
+  return shells;
+}
 
 // The terminal follows the app's light and dark theme.
 new MutationObserver(() => {
   for (const shell of shells) shell.term.options.theme = theme();
 }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
+// A module swapped while the app runs lets go of its shells, which the new one attaches to again.
+import.meta.hot?.dispose(() => {
+  for (const shell of shells) {
+    void api.terminalDetach(shell.id, shell.attachment).catch(() => {});
+    shell.term.dispose();
+    shell.element.remove();
+  }
+});
+
+function print(shell: Shell, data: string) {
+  if (shell.backlog !== undefined) shell.backlog += data;
+  else shell.term.write(data);
+}
+
+function exitText(shell: Shell, code: number) {
+  return `\r\n\x1b[90mThe terminal process "${shell.name}" terminated with exit code: ${code}.\x1b[0m\r\n`;
+}
+
+function onFrame(shell: Shell, frame: TerminalFrame) {
+  if (!shells.includes(shell)) return;
+  if (frame.type === "output") {
+    print(shell, frame.data);
+    return;
+  }
+  // A shell that failed stays, so its last output can be read; one that ended cleanly closes.
+  if (frame.code !== null && frame.code !== 0 && shell.exitCode === undefined) {
+    shell.exitCode = frame.code;
+    print(shell, exitText(shell, frame.code));
+    changed();
+    return;
+  }
+  remove(shell);
+}
+
+/** A terminal's frames, held until its shell is known, since they can come before the reply. */
+function follower() {
+  let shell: Shell | null = null;
+  const early: TerminalFrame[] = [];
+  return {
+    onFrame: (frame: TerminalFrame) => (shell ? onFrame(shell, frame) : early.push(frame)),
+    bind(to: Shell) {
+      shell = to;
+      for (const frame of early.splice(0)) onFrame(to, frame);
+    },
+  };
+}
+
+/** Takes the shell's tab away now, and ends its processes behind it. */
 function remove(shell: Shell) {
   shell.term.dispose();
   shell.element.remove();
   shells = shells.filter((s) => s !== shell);
   changed();
+  void api.terminalClose(shell.id).catch(() => {});
 }
 
-/** Starts a shell in `cwd` (the project folder), drawn into `host` to measure its size. */
-export async function startShell(
-  host: HTMLElement,
-  cwd: string | null,
-  settings: TerminalSettings,
-): Promise<Shell> {
-  current = settings;
-  // Measured in its own font, so the size the shell starts at is the one it keeps.
-  const family =
-    settings.fontFamily ||
-    getComputedStyle(document.documentElement).getPropertyValue("--font-mono");
-  await document.fonts.load(`${settings.fontSize}px ${family}`).catch(() => {});
+function create(settings: TerminalSettings) {
   const element = document.createElement("div");
   element.className = "h-full w-full";
-  // The shell shown now comes back if this one fails to start.
-  const shown = [...host.childNodes];
-  host.replaceChildren(element);
   const term = new Terminal(options(settings));
   const fit = new FitAddon();
   term.loadAddon(fit);
-  term.open(element);
-  fit.fit();
-  let started;
-  try {
-    // At the measured size: a shell resized while it starts redraws its prompt out of place.
-    started = await api.terminalSpawn(cwd, term.cols, term.rows);
-  } catch (e) {
-    term.dispose();
-    host.replaceChildren(...shown);
-    throw e;
-  }
-  const shell: Shell = { id: started.id, name: started.name, term, fit, element };
-  for (const data of early.get(shell.id) ?? []) term.write(data);
-  early.delete(shell.id);
+  return { term, fit, element };
+}
 
+/** Connects the shell's xterm to its process, the clipboard and the app's keys. */
+function wire(shell: Shell) {
+  const { term, element } = shell;
   term.onData((data) => {
-    if (shell.exitCode === undefined) void api.terminalWrite(shell.id, data);
+    if (shell.exitCode === undefined) void api.terminalWrite(shell.id, shell.attachment, data);
   });
   // Sent once the size settles: each resize makes the shell redraw its prompt, so a drag would
   // leave a trail of stale prompts behind.
   let resizeTimer = 0;
   term.onResize(({ cols, rows }) => {
     clearTimeout(resizeTimer);
-    resizeTimer = window.setTimeout(() => void api.terminalResize(shell.id, cols, rows), 100);
+    resizeTimer = window.setTimeout(
+      () => void api.terminalResize(shell.id, shell.attachment, cols, rows).catch(() => {}),
+      100,
+    );
   });
   term.onSelectionChange(() => {
     if (current?.copyOnSelection && term.hasSelection()) {
@@ -278,15 +293,116 @@ export async function startShell(
       () => {},
     );
   });
+}
+
+/**
+ * Starts `program` (a shell's path; null for the user's) in `cwd` (the project folder), drawn into `host`
+ * to measure its size.
+ */
+export async function startShell(
+  host: HTMLElement,
+  cwd: string | null,
+  program: string | null,
+  settings: TerminalSettings,
+): Promise<Shell> {
+  current = settings;
+  // Measured in its own font, so the size the shell starts at is the one it keeps.
+  const family =
+    settings.fontFamily ||
+    getComputedStyle(document.documentElement).getPropertyValue("--font-mono");
+  await document.fonts.load(`${settings.fontSize}px ${family}`).catch(() => {});
+  const { term, fit, element } = create(settings);
+  // The shell shown now comes back if this one fails to start.
+  const shown = [...host.childNodes];
+  host.replaceChildren(element);
+  term.open(element);
+  fit.fit();
+  const follow = follower();
+  let started;
+  try {
+    // At the measured size: a shell resized while it starts redraws its prompt out of place.
+    started = await api.terminalSpawn(cwd, program, term.cols, term.rows, follow.onFrame);
+  } catch (e) {
+    term.dispose();
+    host.replaceChildren(...shown);
+    throw e;
+  }
+  const shell: Shell = {
+    id: started.info.id,
+    attachment: started.attachment,
+    name: started.info.name,
+    term,
+    fit,
+    element,
+    opened: true,
+  };
+  wire(shell);
   shells = [...shells, shell];
   changed();
+  follow.bind(shell);
   return shell;
 }
 
-/** Ends a shell; it closes once its process has exited. One that already ended closes now. */
+/**
+ * Attaches to the terminals the app has open, once per window: after a reload they come back
+ * with their screens. A shell that ended cleanly before is closed instead.
+ */
+export function restoreShells(settings: TerminalSettings): Promise<void> {
+  current ??= settings;
+  restoring ??= (async () => {
+    const open = await api.terminalList().catch(() => []);
+    for (const info of open) {
+      if (!info.running && !info.exitCode) {
+        void api.terminalClose(info.id).catch(() => {});
+        continue;
+      }
+      const follow = follower();
+      const attached = await api.terminalAttach(info.id, follow.onFrame).catch(() => null);
+      if (!attached) continue;
+      const { term, fit, element } = create(settings);
+      const shell: Shell = {
+        id: info.id,
+        attachment: attached.attachment,
+        name: attached.info.name,
+        term,
+        fit,
+        element,
+        opened: false,
+        backlog: attached.screen,
+      };
+      const code = attached.info.exitCode;
+      if (!attached.info.running && code) {
+        shell.exitCode = code;
+        print(shell, exitText(shell, code));
+      }
+      wire(shell);
+      shells = [...shells, shell];
+      changed();
+      follow.bind(shell);
+    }
+  })();
+  return restoring;
+}
+
+/** Shows `shell` in `host`, drawing it there the first time at the host's size. */
+export function showShell(shell: Shell, host: HTMLElement) {
+  if (host.firstChild !== shell.element) host.replaceChildren(shell.element);
+  if (shell.opened) {
+    shell.term.refresh(0, shell.term.rows - 1);
+    return;
+  }
+  shell.opened = true;
+  shell.term.open(shell.element);
+  shell.fit.fit();
+  shell.term.write(shell.backlog ?? "");
+  shell.backlog = undefined;
+  const { cols, rows } = shell.term;
+  void api.terminalResize(shell.id, shell.attachment, cols, rows).catch(() => {});
+}
+
+/** Closes a shell: its tab goes now, and its processes end behind it. */
 export function killShell(shell: Shell) {
-  if (shell.exitCode !== undefined) remove(shell);
-  else void api.terminalKill(shell.id);
+  remove(shell);
 }
 
 /** Applies changed settings to every open shell. */
@@ -295,6 +411,6 @@ export function applySettings(settings: TerminalSettings) {
   current = settings;
   for (const shell of shells) {
     shell.term.options = options(settings);
-    shell.fit.fit();
+    if (shell.opened) shell.fit.fit();
   }
 }

@@ -28,7 +28,7 @@ use patchwork_server::plugins::Plugin;
 use patchwork_server::projects::{Project, Folder};
 use patchwork_server::provider::{AgentKind, AgentStatus, ModelOption, CodexInfo, ClaudeInfo};
 use patchwork_server::scheduled::ScheduledTask;
-use patchwork_server::settings::{Settings, ShellChoices};
+use patchwork_server::settings::Settings;
 use patchwork_server::threads::{AccessMode, Attachment, Message, Thread, TurnTrees};
 use patchwork_server::usage::ProviderUsage;
 use patchwork_server::workspace::FileChange;

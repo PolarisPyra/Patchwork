@@ -1,12 +1,12 @@
-//! The environment the user's own shell sets up, read from that shell once.
+//! The environment the user's own shell sets up, read from that shell once, as Patchwork starts.
 //!
 //! An app launched from the desktop gets the session's environment, which lacks what shell
 //! startup files add: nvm, pnpm, cargo, mise, pyenv, Homebrew, and any `PATH=` line in
 //! `.zshrc`, `.bashrc` or `config.fish`. So the user's login shell is started the way a terminal
 //! starts it, interactive and as a login shell, and asked for its whole environment between
-//! markers, since startup files may print too. The result is kept until one of those files
-//! changes. Commands then run without the startup files, in this environment
-//! (`shell_command`), so they find the same tools a terminal does without re-reading them.
+//! markers, since startup files may print too. Commands, agents and terminals then run in this
+//! environment (`shell_command`), so they find the same tools a terminal does without re-reading
+//! the startup files. A change to them reaches Patchwork when it starts again.
 
 use std::ffi::OsString;
 use std::io::Read;
@@ -14,10 +14,8 @@ use std::io::Read;
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::sync::{Arc, Mutex, PoisonError};
-use std::time::{Duration, Instant, SystemTime};
-
-use crate::system::fs::home_dir;
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::time::{Duration, Instant};
 
 /// Set on a process Patchwork starts with the environment already read, such as its own agent,
 /// so it uses the one it was given instead of starting the user's shell again.
@@ -27,41 +25,36 @@ pub const ENV_READ: &str = "PATCHWORK_LOGIN_ENV";
 const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Variables that describe the probe's own shell rather than the user's environment.
-const NOT_CARRIED: [&str; 7] = ["PWD", "OLDPWD", "SHLVL", "_", "TERM", "COLUMNS", "LINES"];
+const NOT_CARRIED: [&str; 4] = ["PWD", "OLDPWD", "SHLVL", "_"];
 
 /// Set for the probe, so a startup file does not stop to ask about updates or start tmux.
-const PROBE_ENV: [(&str, &str); 2] = [
+const PROBE_ENV: [(&str, &str); 3] = [
     ("DISABLE_AUTO_UPDATE", "true"),
     ("ZSH_TMUX_AUTOSTART", "false"),
+    ("ZSH_TMUX_AUTOSTARTED", "true"),
 ];
 
-/// What a read found, and the startup files' state it was read at.
-struct Reading {
-    key: Vec<Option<SystemTime>>,
-    vars: Option<Arc<Vec<(String, String)>>>,
-}
+/// The shells read, in turn, when the user's own can't be.
+const FALLBACK_SHELLS: [&str; 3] = ["/bin/zsh", "/bin/bash", "/bin/sh"];
 
-static READING: Mutex<Option<Reading>> = Mutex::new(None);
+/// Variables Patchwork sets for the programs it starts, which the user's shell does not change.
+const LAUNCHER_OWNED: [&str; 1] = ["PATCHWORK_"];
 
-/// The variables the user's shell sets up, read again once a startup file changes. Empty when
-/// the shell can't be read, on Windows, and in a process started with them already.
+static LOGIN_ENV: OnceLock<Arc<Vec<(String, String)>>> = OnceLock::new();
+
+/// The variables the user's shell sets up, read on first use, which [`crate::Server::open`] makes
+/// at launch, and kept until Patchwork quits; a caller that comes while the read runs waits for
+/// it. Empty when the shell can't be read, on Windows, whose apps get the PATH from the registry,
+/// and in a process started with them already.
 pub fn login_env() -> Arc<Vec<(String, String)>> {
-    if cfg!(windows) || std::env::var_os(ENV_READ).is_some() {
-        return Arc::default();
-    }
-    let key = startup_files_state();
-    let mut reading = READING.lock().unwrap_or_else(PoisonError::into_inner);
-    if let Some(r) = reading.as_ref()
-        && r.key == key
-    {
-        return r.vars.clone().unwrap_or_default();
-    }
-    let vars = read_login_env().map(Arc::new);
-    *reading = Some(Reading {
-        key,
-        vars: vars.clone(),
-    });
-    vars.unwrap_or_default()
+    LOGIN_ENV
+        .get_or_init(|| {
+            if cfg!(windows) || std::env::var_os(ENV_READ).is_some() {
+                return Arc::default();
+            }
+            Arc::new(read_login_env().unwrap_or_default())
+        })
+        .clone()
 }
 
 /// `name` as the user's shell sets it, else as Patchwork has it. None if unset or empty.
@@ -74,23 +67,13 @@ pub fn login_var(name: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-/// The PATH to find and run programs with: the user's shell's, then the one Patchwork has, each
-/// folder once.
+/// The PATH to find and run programs with: the user's shell's, else the one Patchwork has.
 pub fn search_path() -> Option<OsString> {
-    let env = login_env();
-    let login = env
+    login_env()
         .iter()
-        .find(|(key, _)| key == "PATH")
-        .map(|(_, v)| OsString::from(v));
-    let mut dirs: Vec<PathBuf> = Vec::new();
-    for path in [login, crate::system::path_var()].into_iter().flatten() {
-        for dir in std::env::split_paths(&path) {
-            if !dir.as_os_str().is_empty() && !dirs.contains(&dir) {
-                dirs.push(dir);
-            }
-        }
-    }
-    std::env::join_paths(dirs).ok()
+        .find(|(key, value)| key == "PATH" && !value.is_empty())
+        .map(|(_, value)| OsString::from(value))
+        .or_else(crate::system::path_var)
 }
 
 /// The program `name` on [`search_path`].
@@ -99,65 +82,50 @@ pub fn find_program(name: &str) -> Option<PathBuf> {
     which::which_in(name, search_path(), cwd).ok()
 }
 
-/// The login shell and the modified times of the startup files it may read, so a change to any
-/// of them reads the environment again.
-fn startup_files_state() -> Vec<Option<SystemTime>> {
-    let home = home_dir().unwrap_or_default();
-    let mut files: Vec<PathBuf> = [
-        ".zshenv",
-        ".zprofile",
-        ".zshrc",
-        ".zlogin",
-        ".bash_profile",
-        ".bash_login",
-        ".profile",
-        ".bashrc",
-        ".config/fish/config.fish",
-        ".config/fish/conf.d",
-    ]
-    .iter()
-    .map(|f| home.join(f))
-    .collect();
-    if let Some(zdotdir) = std::env::var_os("ZDOTDIR") {
-        let dir = PathBuf::from(zdotdir);
-        files.extend([".zshenv", ".zprofile", ".zshrc", ".zlogin"].map(|f| dir.join(f)));
+/// Reads the environment the user's login shell sets up, else that of the first of
+/// [`FALLBACK_SHELLS`] that can be read. Nushell and others that can't run the probe are read
+/// through bash.
+fn read_login_env() -> Option<Vec<(String, String)>> {
+    let login = crate::system::login_shell().or_else(|| std::env::var("SHELL").ok());
+    let mut tried: Vec<String> = Vec::new();
+    for shell in login.into_iter().chain(FALLBACK_SHELLS.map(String::from)) {
+        let name = crate::system::shell_name(&shell);
+        let shell = if crate::system::is_posix(&shell) || name == "fish" {
+            shell
+        } else {
+            let cwd = std::env::current_dir().unwrap_or_default();
+            // Not `find_shell`, which reads the environment this is reading.
+            match which::which_in("bash", crate::system::path_var(), cwd) {
+                Ok(bash) => bash.to_string_lossy().into_owned(),
+                Err(_) => continue,
+            }
+        };
+        if tried.contains(&shell) || !std::path::Path::new(&shell).is_file() {
+            continue;
+        }
+        if let Some(vars) = read_shell(&shell) {
+            return Some(vars);
+        }
+        tried.push(shell);
     }
-    let shell = crate::system::login_shell().map(PathBuf::from);
-    files
-        .iter()
-        .chain(shell.as_ref())
-        .map(|f| std::fs::metadata(f).and_then(|m| m.modified()).ok())
-        .collect()
+    None
 }
 
-/// Starts the user's login shell as a terminal would and reads its environment. Bash as a login
-/// shell skips `.bashrc` unless its profile sources it, while a terminal's bash reads only
-/// `.bashrc`, so bash is read both ways and the two joined. A shell whose startup files hand over
-/// to another program, such as `exec tmux`, is read as a plain login shell instead. Nushell and
-/// others that can't run the probe are read through bash.
-fn read_login_env() -> Option<Vec<(String, String)>> {
-    let login = crate::system::login_shell().or_else(|| std::env::var("SHELL").ok())?;
-    let name = crate::system::shell_name(&login);
-    let shell = if crate::system::is_posix(&login) || name == "fish" {
-        login
-    } else {
-        let cwd = std::env::current_dir().unwrap_or_default();
-        // Not `find_shell`, which reads the environment this is reading.
-        which::which_in("bash", crate::system::path_var(), cwd)
-            .ok()?
-            .to_string_lossy()
-            .into_owned()
-    };
+/// Starts `shell` as a terminal would and reads its environment. Bash as a login shell skips
+/// `.bashrc` unless its profile sources it, while a terminal's bash reads only `.bashrc`, so bash
+/// is read both ways and the two joined. A shell whose startup files hand over to another program,
+/// such as `exec tmux`, is read as a plain login shell instead.
+fn read_shell(shell: &str) -> Option<Vec<(String, String)>> {
     let mut flags: Vec<&[&str]> = vec![&["-l", "-i", "-c"]];
-    if crate::system::shell_name(&shell) == "bash" {
+    if crate::system::shell_name(shell) == "bash" {
         flags.push(&["-i", "-c"]);
     }
     let readings: Vec<Vec<(String, String)>> = flags
         .iter()
-        .filter_map(|flags| probe(&shell, flags))
+        .filter_map(|flags| probe(shell, flags))
         .collect();
     let mut readings = readings.into_iter();
-    let Some(mut vars) = readings.next().or_else(|| probe(&shell, &["-l", "-c"])) else {
+    let Some(mut vars) = readings.next().or_else(|| probe(shell, &["-l", "-c"])) else {
         log::warn!("could not read the environment {shell} sets up");
         return None;
     };
@@ -203,6 +171,11 @@ fn probe(shell: &str, flags: &[&str]) -> Option<Vec<(String, String)>> {
         "printf '%s' {marker}; command env -0 2>/dev/null || command env; printf '%s' {marker}"
     );
     let mut cmd = crate::system::host_command(shell);
+    // From the home folder, as a terminal opens, so tools that read the folder they start in,
+    // such as mise and direnv, don't set up the one Patchwork happened to start in.
+    if let Some(home) = crate::system::fs::home_dir() {
+        cmd.current_dir(home);
+    }
     cmd.args(flags)
         .arg(&script)
         .envs(PROBE_ENV)
@@ -236,32 +209,51 @@ fn probe(shell: &str, flags: &[&str]) -> Option<Vec<(String, String)>> {
             }
         })
     };
+    // Read once the closing marker is in: what a startup file started in the background can hold
+    // the pipe open long after, and a logout file still runs as the shell exits.
+    let printed = || {
+        let out = out.lock().unwrap_or_else(PoisonError::into_inner);
+        out.windows(marker.len())
+            .filter(|w| *w == marker.as_bytes())
+            .count()
+            >= 2
+    };
     let deadline = Instant::now() + PROBE_TIMEOUT;
-    let exited = loop {
+    let done = loop {
+        if printed() {
+            break Some(false);
+        }
         match child.try_wait() {
-            Ok(Some(_)) => break true,
+            Ok(Some(_)) => break Some(true),
             Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
-            _ => break false,
+            _ => break None,
         }
     };
-    // Whatever a startup file left running, such as an agent it started, could hold the pipe open.
-    #[cfg(unix)]
-    // SAFETY: kill only sends a signal; the group is the one this child leads.
-    unsafe {
-        libc::kill(-(child.id() as i32), libc::SIGKILL);
-    }
-    if !exited {
-        let _ = child.kill();
-        let _ = child.wait();
-        log::warn!(
-            "{shell} {} did not print its environment in time",
-            flags.join(" ")
-        );
-        return None;
-    }
-    let grace = Instant::now() + Duration::from_secs(1);
-    while !reader.is_finished() && Instant::now() < grace {
-        std::thread::sleep(Duration::from_millis(10));
+    match done {
+        // The shell finishes on its own, and is reaped once it has.
+        Some(false) => {
+            std::thread::spawn(move || child.wait());
+        }
+        Some(true) => {
+            let grace = Instant::now() + Duration::from_secs(1);
+            while !reader.is_finished() && Instant::now() < grace {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+        None => {
+            #[cfg(unix)]
+            // SAFETY: kill only sends a signal; the group is the one this child leads.
+            unsafe {
+                libc::kill(-(child.id() as i32), libc::SIGKILL);
+            }
+            let _ = child.kill();
+            let _ = child.wait();
+            log::warn!(
+                "{shell} {} did not print its environment in time",
+                flags.join(" ")
+            );
+            return None;
+        }
     }
     let out = std::mem::take(&mut *out.lock().unwrap_or_else(PoisonError::into_inner));
     parse(&String::from_utf8_lossy(&out), &marker)
@@ -296,7 +288,8 @@ fn parse(out: &str, marker: &str) -> Option<Vec<(String, String)>> {
     vars.retain(|(key, _)| {
         is_name(key)
             && !NOT_CARRIED.contains(&key.as_str())
-            && !(PROBE_ENV.iter().any(|(k, _)| k == key) && std::env::var_os(key).is_none())
+            && !PROBE_ENV.iter().any(|(k, _)| k == key)
+            && !LAUNCHER_OWNED.iter().any(|prefix| key.starts_with(prefix))
     });
     Some(vars)
 }

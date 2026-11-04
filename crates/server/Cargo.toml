@@ -27,8 +27,9 @@ ureq = { version = "3", features = ["json"] }
 # API providers: keys in the system credential store, and the agent's file search tools.
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 ignore = "0.4"
-# The integrated terminal's pseudo-terminals.
+# The integrated terminal's pseudo-terminals, and the screen and modes a window gets back.
 portable-pty = "0.9"
+vt100 = "0.16"
 # Watching the open project for changes.
 notify = "8"
 globset = "0.4"

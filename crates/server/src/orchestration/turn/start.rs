@@ -327,7 +327,7 @@ impl Runner {
         }
         let input = provider::turn_input(agent, &spec);
         let (mut cmd, scope) = scope::scoped(provider::turn_command(agent)?);
-        if let Some(shell) = provider::agent_shell(agent, settings.shell.as_deref()) {
+        if let Some(shell) = provider::agent_shell(agent) {
             // Claude Code on Windows runs its commands in Git Bash, and refuses to start when it
             // cannot find it on PATH.
             if cfg!(windows) && agent == AgentKind::Claude && shell.ends_with("bash.exe") {
@@ -337,6 +337,9 @@ impl Runner {
         }
         if agent == AgentKind::Claude {
             cmd.envs(crate::provider::claude::launch::launch_env(compact_window));
+            if let Some(file) = crate::provider::claude::launch::shell_env_file() {
+                cmd.env("CLAUDE_ENV_FILE", file);
+            }
         }
         cmd.args(&args)
             .envs(provider::turn_env(agent, &spec))
@@ -658,10 +661,10 @@ impl Turn {
     pub(in crate::orchestration) fn spec(&self) -> TurnSpec<'_> {
         TurnSpec {
             root: &self.root,
+            thread_id: &self.thread_id,
             session_id: self.session_id.as_deref(),
             model: self.model.as_deref(),
             vision_model: self.vision_model.as_deref(),
-            thread_id: &self.thread_id,
             text: &self.text,
             mode: self.mode,
             plan: self.plan,

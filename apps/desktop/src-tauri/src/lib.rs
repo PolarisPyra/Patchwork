@@ -178,6 +178,14 @@ pub fn run() {
                 let _ = window.hide();
             }
         })
+        // A window that loads again lets go of its terminals, which it attaches to anew.
+        .on_page_load(|webview, payload| {
+            if payload.event() == tauri::webview::PageLoadEvent::Started
+                && let Some(server) = webview.try_state::<Arc<Server>>()
+            {
+                server.terminals.release_page(webview.label());
+            }
+        })
         .setup(|app| {
             // Patchwork's folders are `patchwork` in the platform's own rather than the
             // app-identifier folders. Older versions kept everything in the config folder.
@@ -274,7 +282,6 @@ pub fn run() {
             commands::settings::default_permission_rules,
             commands::settings::save_settings,
             commands::agents::detect_agent,
-            commands::settings::list_shells,
             commands::skills::list_skills,
             commands::skills::open_skills_folder,
             commands::skills::watch_skills,
@@ -289,10 +296,14 @@ pub fn run() {
             commands::logs::read_log,
             commands::logs::log_renderer,
             commands::logs::open_thread_logs,
+            commands::terminal::terminal_shells,
+            commands::terminal::terminal_list,
             commands::terminal::terminal_spawn,
+            commands::terminal::terminal_attach,
+            commands::terminal::terminal_detach,
             commands::terminal::terminal_write,
             commands::terminal::terminal_resize,
-            commands::terminal::terminal_kill,
+            commands::terminal::terminal_close,
             commands::logs::export_logs,
             commands::models::list_models,
             commands::models::list_api_providers,
@@ -360,6 +371,7 @@ pub fn run() {
             commands::turns::resume_queued,
             commands::turns::steer_queued,
             commands::turns::respond_approval,
+            commands::turns::answer_secret,
             commands::turns::run_checks,
             commands::imports::scan_imports,
             commands::imports::import_threads,
@@ -371,7 +383,6 @@ pub fn run() {
             commands::files::turn_file_diff,
             commands::git::git_branch,
             commands::git::git_changes,
-            commands::turns::answer_secret,
             commands::git::git_file_diff,
             commands::projects::watch_project,
             commands::git::accept_file,
@@ -386,10 +397,12 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building Patchwork")
         .run(|app, event| {
-            // Agents run in their own scopes, so they would outlive the app.
+            // Agents run in their own scopes, so they would outlive the app, and so would what a
+            // terminal started in the background.
             if let RunEvent::Exit = event {
                 if let Some(server) = app.try_state::<Arc<Server>>() {
                     server.stop_agents();
+                    server.terminals.kill_all();
                 }
                 // After the agents, since a Windows update runs its installer and exits.
                 if let Some(updates) = app.try_state::<updates::Updates>() {

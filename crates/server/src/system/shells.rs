@@ -116,17 +116,14 @@ fn windows_shells() -> Vec<String> {
         .collect()
 }
 
-/// The shell agents run commands in: the user's choice in Settings if it is still installed,
-/// otherwise the login shell, otherwise the SHELL environment variable. On Windows, which has no
-/// login shell, the best installed one comes before SHELL, which Git Bash sets to a path only it
-/// can read. None when nothing is known.
-pub fn effective_shell(chosen: Option<&str>) -> Option<String> {
-    let installed = available_shells();
-    let windows_default = cfg!(windows).then(|| installed.first().cloned()).flatten();
-    chosen
-        .filter(|shell| installed.iter().any(|s| s == shell))
-        .map(str::to_string)
-        .or_else(login_shell)
+/// The user's shell: the login shell, otherwise the SHELL environment variable. On Windows, which
+/// has no login shell, the best installed one comes before SHELL, which Git Bash sets to a path
+/// only it can read. None when nothing is known.
+pub fn effective_shell() -> Option<String> {
+    let windows_default = cfg!(windows)
+        .then(|| available_shells().first().cloned())
+        .flatten();
+    login_shell()
         .or(windows_default)
         .or_else(|| std::env::var("SHELL").ok().filter(|s| !s.is_empty()))
 }
@@ -160,7 +157,7 @@ pub fn command_shell() -> Option<String> {
         return std::env::var("SHELL")
             .ok()
             .filter(|shell| Path::new(shell).is_file())
-            .or_else(|| effective_shell(None));
+            .or_else(effective_shell);
     }
     find_shell("bash").or_else(|| Some("/bin/sh".into()))
 }

@@ -1,53 +1,97 @@
-//! The integrated terminal's shells. What a shell prints goes to the window as `terminal-output`
-//! events, and its end as a `terminal-exit` event.
+//! The integrated terminal's shells. They belong to the app rather than the window: a window
+//! attaches to one and gets its screen, then its output and its end through a channel, and a
+//! window that reloads attaches again.
 
 use super::*;
 
-use patchwork_server::terminal::StartedTerminal;
+use patchwork_server::terminal::{
+    AttachedTerminal, FrameSink, TerminalFrame, TerminalInfo, TerminalShell,
+};
 
-/// Starts a shell in `cwd` (the project folder, or None for the home folder) at the size
-/// of its view. It starts on a worker thread, so the window keeps drawing meanwhile.
+/// The shells a terminal can start, the user's first. Finding them can wait on the first read of
+/// the user's shell, so it runs on a worker thread.
+#[tauri::command]
+pub(crate) async fn terminal_shells() -> Res<Vec<TerminalShell>> {
+    blocking(patchwork_server::terminal::shells).await
+}
+
+/// The terminals that are open, for a window that loads to attach to.
+#[tauri::command]
+pub(crate) fn terminal_list(server: Srv<'_>) -> Vec<TerminalInfo> {
+    server.terminals.list()
+}
+
+/// Starts `shell`, else the user's, in `cwd` (the project folder, or None for the home folder)
+/// at the size of its view, attached to this window. It starts on a worker thread, so the window
+/// keeps drawing meanwhile.
 #[tauri::command]
 pub(crate) async fn terminal_spawn(
-    app: AppHandle,
+    webview: tauri::Webview,
     server: Srv<'_>,
     cwd: Option<String>,
+    shell: Option<String>,
     cols: u16,
     rows: u16,
-) -> Res<StartedTerminal> {
+    on_frame: Channel<TerminalFrame>,
+) -> Res<AttachedTerminal> {
     let server = server.inner().clone();
-    let exit_app = app.clone();
+    let page = webview.label().to_string();
     blocking(move || {
-        server.terminals.spawn(
+        let launch = patchwork_server::terminal::launch(
             &server.store.settings(),
             cwd.as_deref().map(std::path::Path::new),
-            cols,
-            rows,
-            move |output| {
-                let _ = app.emit("terminal-output", output);
-            },
-            move |exit| {
-                let _ = exit_app.emit("terminal-exit", exit);
-            },
-        )
+            shell.as_deref(),
+        )?;
+        server
+            .terminals
+            .spawn(launch, cols, rows, &page, sink(on_frame))
     })
     .await?
 }
 
+/// Attaches this window to terminal `id`, which it types into from then on.
+#[tauri::command]
+pub(crate) fn terminal_attach(
+    webview: tauri::Webview,
+    server: Srv<'_>,
+    id: u32,
+    on_frame: Channel<TerminalFrame>,
+) -> Res<AttachedTerminal> {
+    server.terminals.attach(id, webview.label(), sink(on_frame))
+}
+
+/// Stops sending terminal `id` to `attachment`.
+#[tauri::command]
+pub(crate) fn terminal_detach(server: Srv<'_>, id: u32, attachment: u32) {
+    server.terminals.detach(id, attachment);
+}
+
 /// Types `data` into the shell.
 #[tauri::command]
-pub(crate) fn terminal_write(server: Srv<'_>, id: u32, data: String) -> Res<()> {
-    server.terminals.write(id, &data)
+pub(crate) fn terminal_write(server: Srv<'_>, id: u32, attachment: u32, data: String) -> Res<()> {
+    server.terminals.write(id, attachment, &data)
 }
 
 /// Follows the view's size, so full-screen programs lay out to it.
 #[tauri::command]
-pub(crate) fn terminal_resize(server: Srv<'_>, id: u32, cols: u16, rows: u16) -> Res<()> {
-    server.terminals.resize(id, cols, rows)
+pub(crate) fn terminal_resize(
+    server: Srv<'_>,
+    id: u32,
+    attachment: u32,
+    cols: u16,
+    rows: u16,
+) -> Res<()> {
+    server.terminals.resize(id, attachment, cols, rows)
 }
 
-/// Ends the shell; its `terminal-exit` event follows.
+/// Closes terminal `id`, ending its shell and everything it started. That can take a few
+/// seconds, so it runs on a worker thread.
 #[tauri::command]
-pub(crate) fn terminal_kill(server: Srv<'_>, id: u32) {
-    server.terminals.kill(id);
+pub(crate) async fn terminal_close(server: Srv<'_>, id: u32) -> Res<()> {
+    let server = server.inner().clone();
+    blocking(move || server.terminals.close(id)).await?
+}
+
+fn sink(channel: Channel<TerminalFrame>) -> FrameSink {
+    Box::new(move |frame| channel.send(frame.clone()).is_ok())
 }

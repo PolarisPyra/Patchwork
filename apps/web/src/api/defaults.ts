@@ -6,7 +6,6 @@ const isLinux = /Linux/.test(navigator.platform);
 /** VS Code's terminal defaults, as `TerminalSettings::default` sets them. */
 export function defaultTerminalSettings(): TerminalSettings {
   return {
-    shellArgs: null,
     env: {},
     inheritEnv: true,
     cwd: null,
@@ -44,7 +43,6 @@ export const DEFAULT_SETTINGS: Settings = {
   importLogDisabled: false,
   agentPaths: {},
   systemPrompts: {},
-  shell: null,
   skillsDir: null,
   disabledSkills: [],
   visionModel: null,

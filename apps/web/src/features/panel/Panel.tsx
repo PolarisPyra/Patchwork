@@ -7,7 +7,7 @@ import {
   TrashIcon,
   XIcon,
 } from "@phosphor-icons/react";
-import { api, type Settings } from "~/api";
+import { api, type Settings, type TerminalShell } from "~/api";
 import type { UpdateSettings } from "~/api";
 import { CHIP_CLASS } from "~/components/chip";
 import LogLevelPicker from "~/components/LogLevelPicker";
@@ -17,6 +17,9 @@ import { sortChannels, type Channel } from "~/features/panel/logs";
 import {
   applySettings,
   killShell,
+  openShells,
+  restoreShells,
+  showShell,
   startShell,
   useShells,
   type Shell,
@@ -27,6 +30,9 @@ import { shortcutContext } from "~/lib/shortcuts";
 import { errorText } from "~/lib/util";
 
 export type PanelTab = "terminal" | "output" | "screen";
+
+/** Where the shell last picked for new terminals is kept. */
+const SHELL_KEY = "patchwork-terminal-shell";
 
 interface PanelProps {
   tab: PanelTab;
@@ -65,40 +71,68 @@ export default function Panel({
   const [channelId, setChannelId] = useState<string | null>(null);
   const channel = channels.find((c) => c.id === channelId) ?? channels[0] ?? null;
 
+  // The shells a terminal can start, the user's first, and the one last picked.
+  const [shellChoices, setShellChoices] = useState<TerminalShell[]>([]);
+  const [picked, setPicked] = useState(() => localStorage.getItem(SHELL_KEY));
+  const findShells = () =>
+    api.terminalShells().then(
+      (found) => {
+        setShellChoices(found);
+        return found;
+      },
+      () => [],
+    );
+  useEffect(() => {
+    if (tab === "terminal") void findShells();
+  }, [tab]);
+
   // A "New terminal" asked for while a shell starts, opened once that one is up.
-  const startNext = useRef(false);
-  const start = async (asked: boolean) => {
+  const startNext = useRef<{ shell?: string } | null>(null);
+  const start = async (asked: boolean, chosen?: string) => {
     if (!host.current) return;
     if (starting.current) {
-      if (asked) startNext.current = true;
+      if (asked) startNext.current = { shell: chosen };
       return;
     }
     starting.current = true;
     setError(null);
     try {
-      const shell = await startShell(host.current, cwd, settings.terminal);
+      // The shell last picked while it is still installed, else the user's.
+      const saved = localStorage.getItem(SHELL_KEY);
+      const found = chosen ? [] : await findShells();
+      const path = chosen ?? (found.some((s) => s.path === saved) ? saved : null);
+      const shell = await startShell(host.current, cwd, path, settings.terminal);
       setActiveId(shell.id);
       shell.term.focus();
     } catch (e) {
       setError(errorText(e));
     } finally {
       starting.current = false;
-      if (startNext.current) {
-        startNext.current = false;
-        void start(true);
+      const next = startNext.current;
+      if (next) {
+        startNext.current = null;
+        void start(true, next.shell);
       }
     }
   };
 
-  // The terminal view starts a shell when it opens with none, and on "New terminal".
+  const pickShell = (path: string) => {
+    localStorage.setItem(SHELL_KEY, path);
+    setPicked(path);
+    void start(true, path);
+  };
+  const pickedShell = shellChoices.find((s) => s.path === picked) ?? shellChoices[0];
+
+  // The terminal view starts a shell when it opens with none, once the ones the app already has
+  // are back, and on "New terminal".
   const asked = useRef(newTerminal);
   useEffect(() => {
     if (tab !== "terminal") return;
-    if (shells.length === 0 || asked.current !== newTerminal) {
-      const again = asked.current !== newTerminal;
-      asked.current = newTerminal;
-      void start(again);
-    }
+    const again = asked.current !== newTerminal;
+    asked.current = newTerminal;
+    void restoreShells(settings.terminal).then(() => {
+      if (again || openShells().length === 0) void start(again);
+    });
     // `start` reads the latest props; only these say a shell is wanted.
   }, [tab, newTerminal]);
 
@@ -113,10 +147,7 @@ export default function Panel({
   useLayoutEffect(() => {
     const el = host.current;
     if (tab !== "terminal" || !el || !active) return;
-    if (el.firstChild !== active.element) {
-      el.replaceChildren(active.element);
-      active.term.refresh(0, active.term.rows - 1);
-    }
+    if (el.firstChild !== active.element || !active.opened) showShell(active, el);
     active.fit.fit();
     // Fit once the size settles: each fit rebuilds every row and rewrites xterm's stylesheet,
     // which restyles the whole app, so fitting on every frame of a window drag pins the CPU.
@@ -208,6 +239,43 @@ export default function Panel({
               >
                 <PlusIcon size={14} />
               </button>
+              <Dropdown
+                alignEnd
+                label="Shells"
+                trigger={({ open, toggle }) => (
+                  <button
+                    className="btn-icon"
+                    aria-haspopup="menu"
+                    aria-expanded={open}
+                    aria-label="New terminal in a shell"
+                    title="New terminal in a shell"
+                    onClick={() => {
+                      if (!open) void findShells();
+                      toggle();
+                    }}
+                  >
+                    <CaretDownIcon size={14} />
+                  </button>
+                )}
+              >
+                {(close) =>
+                  shellChoices.map((s) => (
+                    <button
+                      key={s.path}
+                      role="menuitemradio"
+                      aria-checked={s === pickedShell}
+                      title={s.path}
+                      className={`flex w-full cursor-pointer items-center rounded-[var(--radius-sm)] border-none bg-transparent px-2 py-[5px] text-left whitespace-nowrap text-fg hover:bg-hover ${s === pickedShell ? "bg-selected-muted" : ""}`}
+                      onClick={() => {
+                        close();
+                        pickShell(s.path);
+                      }}
+                    >
+                      {s.name}
+                    </button>
+                  ))
+                }
+              </Dropdown>
               {/* With the tab list showing, each tab has its own kill button. */}
               {shells.length < 2 && (
                 <button

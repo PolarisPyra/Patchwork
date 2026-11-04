@@ -100,10 +100,6 @@ systemPrompts: { [key in AgentKind]?: string }, integrations: Integrations, proj
  */
 visionModel: string | null, 
 /**
- * Shell that agents run commands in. None follows the SHELL environment variable.
- */
-shell: string | null, 
-/**
  * Folder of the skills every agent loads. None uses `skills` in the config folder.
  */
 skillsDir: string | null, 
@@ -145,19 +141,10 @@ computerUse: boolean,
 checks: CheckSettings, };
 
 /**
- * The shells the Settings dropdown offers, and the one "System default" resolves to.
- */
-export type ShellChoices = { shells: Array<string>, default: string | null, };
-
-/**
  * The integrated terminal, as VS Code's `terminal.integrated.*` settings set it up, with its
- * defaults. The shell is `shell`, shared with the agents.
+ * defaults.
  */
 export type TerminalSettings = { 
-/**
- * Arguments for the shell. None is `-l` on macOS, none elsewhere.
- */
-shellArgs: Array<string> | null, 
 /**
  * Variables added to the shell's environment; null removes one. Values may use
  * `${env:NAME}` and `${workspaceFolder}`.

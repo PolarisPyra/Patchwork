@@ -10,7 +10,7 @@ use crate::settings::Settings;
 pub(crate) fn agent_instructions(settings: &Settings, agent: AgentKind) -> String {
     [
         checklist_instructions(agent),
-        Some(shell_instructions(settings, agent)),
+        Some(shell_instructions(agent)),
         system_prompt(settings, agent).map(str::to_string),
     ]
     .into_iter()
@@ -50,8 +50,8 @@ fn checklist_instructions(agent: AgentKind) -> Option<String> {
 }
 
 /// Which shells are installed and which one runs `agent`'s commands, which is the one its CLI
-/// picks rather than always the one Settings chose.
-fn shell_instructions(settings: &Settings, agent: AgentKind) -> String {
+/// picks.
+fn shell_instructions(agent: AgentKind) -> String {
     let mut prompt = String::new();
     let installed = crate::system::available_shells();
     if !installed.is_empty() {
@@ -60,17 +60,10 @@ fn shell_instructions(settings: &Settings, agent: AgentKind) -> String {
             installed.join(", ")
         ));
     }
-    let chosen = settings.shell.as_deref();
-    if let Some(shell) = crate::provider::agent_shell(agent, chosen) {
-        if chosen == Some(shell.as_str()) {
-            prompt.push_str(&format!(
-                " The user chose {shell} for shell commands; run them in it and write them for it."
-            ));
-        } else {
-            prompt.push_str(&format!(
-                " Shell commands run in {shell}; write them for it."
-            ));
-        }
+    if let Some(shell) = crate::provider::agent_shell(agent) {
+        prompt.push_str(&format!(
+            " Shell commands run in {shell}; write them for it."
+        ));
         if crate::system::shell_name(&shell) == "zsh" {
             prompt.push_str(ZSH_NOTES);
         }
@@ -109,7 +102,7 @@ mod tests {
 
     #[test]
     fn the_instructions_carry_the_checklist_and_the_shell_line() {
-        let shell = shell_instructions(&Settings::default(), AgentKind::Claude);
+        let shell = shell_instructions(AgentKind::Claude);
         let text = agent_instructions(&Settings::default(), AgentKind::Claude);
         assert!(text.starts_with("For any task with more than one step"));
         assert!(text.ends_with(&shell), "{text}");

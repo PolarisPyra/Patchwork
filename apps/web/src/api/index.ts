@@ -39,7 +39,6 @@ export {
 } from "~/api/models";
 export { onProjectChanged } from "~/api/projects";
 export type { SkillsView } from "~/api/skills";
-export { onTerminalExit, onTerminalOutput } from "~/api/terminal";
 export { onAgentEvent } from "~/api/threads";
 export {
   onUpdateStatus,

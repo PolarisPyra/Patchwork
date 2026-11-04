@@ -77,6 +77,10 @@ impl Server {
         plugins::init(&dirs.config);
         let agents = agents::Library::open(&dirs.config);
         std::thread::spawn(system::scope::prepare);
+        // Read at launch, so the first command does not wait on the shell.
+        std::thread::spawn(system::login_env);
+        // Ends what terminals left running when a Patchwork before this one was killed.
+        std::thread::spawn(terminal::sweep);
         secrets::keep_swept();
         let logs = logging::session_dir(&dirs.logs);
         let store = Store::open(dirs.data)?;
