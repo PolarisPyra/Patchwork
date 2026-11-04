@@ -164,6 +164,8 @@ pub(in crate::orchestration) fn open_child(turn: &Turn, tool: &ToolCall) -> Opti
         context_pending: false,
         role: None,
         role_pending: false,
+        favorite: false,
+        pinned: false,
     };
     if let Err(e) = turn.server.store.insert_threads(vec![thread.clone()]) {
         log::warn!("failed to save a subagent's thread: {e}");

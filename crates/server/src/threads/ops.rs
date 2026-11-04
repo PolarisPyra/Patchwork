@@ -136,6 +136,8 @@ impl Server {
             context_pending: false,
             role: None,
             role_pending: false,
+            favorite: false,
+            pinned: false,
         };
         self.store.insert_threads(vec![thread.clone()])?;
         note(
@@ -193,6 +195,8 @@ impl Server {
             imported_from: None,
             context_pending: true,
             role_pending: false,
+            favorite: false,
+            pinned: false,
             ..source
         };
         self.store.insert_threads(vec![thread.clone()])?;
@@ -221,6 +225,20 @@ impl Server {
             .update_thread(id, |t| t.archived_at = archived.then(now_ms))?;
         note(id, if archived { "archived" } else { "unarchived" }.into());
         Ok(())
+    }
+
+    /// Lists a chat or task under Favorites at the top of the sidebar, or back in its usual spot.
+    pub fn set_thread_favorite(&self, id: &str, favorite: bool) -> Result<(), String> {
+        self.thread(id)?;
+        self.store.update_thread(id, |t| t.favorite = favorite)
+    }
+
+    /// Lists a task first in its project, or back in its folder. Only tasks in a project pin.
+    pub fn set_thread_pinned(&self, id: &str, pinned: bool) -> Result<(), String> {
+        if pinned && self.thread(id)?.project_id.is_none() {
+            return Err("Only tasks in a project can be pinned".into());
+        }
+        self.store.update_thread(id, |t| t.pinned = pinned)
     }
 
     /// Permanently deletes a thread and its messages.

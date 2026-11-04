@@ -339,7 +339,16 @@ contextPending: boolean,
 /**
  * The primary custom agent the chat is in the role of (see `agents`).
  */
-role: string | null, };
+role: string | null, 
+/**
+ * Listed under Favorites at the top of the sidebar, in place of its usual spot.
+ */
+favorite: boolean, 
+/**
+ * A task listed first in its project, above its folders. Chats without a project are never
+ * pinned.
+ */
+pinned: boolean, };
 
 /**
  * Where a subagent's thread came from.

@@ -347,6 +347,8 @@ pub fn run() {
             commands::threads::create_thread,
             commands::threads::delete_thread,
             commands::threads::set_thread_archived,
+            commands::threads::set_thread_favorite,
+            commands::threads::set_thread_pinned,
             commands::threads::set_thread_model,
             commands::threads::set_thread_access_mode,
             commands::threads::set_thread_plan_mode,

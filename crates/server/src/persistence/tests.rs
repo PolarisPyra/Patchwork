@@ -63,6 +63,8 @@ fn thread(messages: Vec<Message>) -> Thread {
         context_pending: false,
         role: None,
         role_pending: false,
+        favorite: false,
+        pinned: false,
     }
 }
 

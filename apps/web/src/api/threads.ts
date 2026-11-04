@@ -33,6 +33,12 @@ export const threadsApi = {
   setThreadArchived: (id: string, archived: boolean) =>
     invoke<void>("set_thread_archived", { id, archived }),
   renameThread: (id: string, title: string) => invoke<void>("rename_thread", { id, title }),
+  /** Lists a chat or task under Favorites at the top of the sidebar, or back in its usual spot. */
+  setThreadFavorite: (id: string, favorite: boolean) =>
+    invoke<void>("set_thread_favorite", { id, favorite }),
+  /** Lists a task first in its project. Chats without a project cannot be pinned. */
+  setThreadPinned: (id: string, pinned: boolean) =>
+    invoke<void>("set_thread_pinned", { id, pinned }),
   /** Sets agent + model; the agent can only change before the first message. */
   setThreadModel: (id: string, agent: AgentKind, model: string | null) =>
     invoke<void>("set_thread_model", { id, agent, model }),

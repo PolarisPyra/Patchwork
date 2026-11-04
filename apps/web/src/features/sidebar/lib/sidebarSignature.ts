@@ -24,6 +24,8 @@ function computeSidebarSignature(t: Thread): string {
     t.projectId,
     t.folderId,
     t.archivedAt,
+    t.favorite,
+    t.pinned,
     t.agent,
     t.accessMode,
     t.goal?.status,

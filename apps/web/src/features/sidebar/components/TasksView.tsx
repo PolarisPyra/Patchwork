@@ -20,6 +20,9 @@ import {
   MagicWandIcon,
   PencilSimpleIcon,
   PlusIcon,
+  PushPinIcon,
+  PushPinSlashIcon,
+  StarIcon,
   TrashIcon,
 } from "@phosphor-icons/react";
 import { api, type Thread } from "~/api";
@@ -34,6 +37,7 @@ import { exportThread } from "~/features/sidebar/lib/exportThread";
 import { shortcutContext, useCommand } from "~/lib/shortcuts";
 import { AGENT_FOLDER_NAMES } from "~/lib/util";
 import { InlineName, ThreadRow, type RowActions } from "~/features/sidebar/components/ThreadRow";
+import type { RowDrag } from "~/features/sidebar/useRowReorder";
 import {
   Collapse,
   PickRow,
@@ -58,6 +62,14 @@ import {
   type Target,
 } from "~/features/sidebar/types";
 
+/** Favorites and pinned tasks keep the sidebar's order among themselves and are not dragged: a
+ * drop would move them into the list they were dropped in. */
+const NO_DRAG: RowDrag = {
+  attrs: { "data-drop": "", onPointerDown: () => {}, onClickCapture: () => {} },
+  edge: "",
+  dragging: false,
+};
+
 export default function TasksView({
   projects,
   threads,
@@ -69,6 +81,8 @@ export default function TasksView({
   onNewChat,
   onSelectThread,
   onRenameThread,
+  onSetFavorite,
+  onSetPinned,
   onChatBackground,
   onRenameProject,
   onRelocateProject,
@@ -163,7 +177,9 @@ export default function TasksView({
     });
   const collapseAll = () =>
     changeCollapsed((prev) => new Set([...prev, ...projects.map((p) => p.id)]));
-  const chats = threads.filter((t) => t.projectId === null);
+  // A favorite is listed only under Favorites, not also in Chats or its project.
+  const favorites = threads.filter((t) => t.favorite);
+  const chats = threads.filter((t) => t.projectId === null && !t.favorite);
   const chatIds = chats.map((t) => t.id);
 
   /** Ctrl+click adds or drops a row from the picked rows and returns true. A plain click clears them and returns false, so the row acts as usual. */
@@ -204,9 +220,38 @@ export default function TasksView({
   const menuItems = (targets: Target[]): MenuItem[] => {
     const archiving = targets.every((t) => t.kind === "thread");
     const count = targets.length > 1 ? ` ${targets.length} items` : "";
+    const picked = archiving ? threads.filter((t) => targets.some((x) => x.id === t.id)) : [];
+    const ids = picked.map((t) => t.id);
+    // Some not yet a favorite, or not yet pinned: the item adds them all; otherwise it takes them all off.
+    const favorite = picked.some((t) => !t.favorite);
+    const pin = picked.some((t) => !t.pinned);
     return [
       ...(targets.length === 1
         ? [{ label: "Rename", Icon: PencilSimpleIcon, onSelect: () => setRenaming(targets[0]) }]
+        : []),
+      ...(picked.length > 0
+        ? [
+            {
+              label: favorite ? "Add to favorites" : "Remove from favorites",
+              Icon: StarIcon,
+              onSelect: () => {
+                reveal.current = { id: ids[0], moved: (t) => t.favorite === favorite };
+                onSetFavorite(ids, favorite);
+              },
+            },
+          ]
+        : []),
+      ...(picked.length > 0 && picked.every((t) => t.projectId !== null)
+        ? [
+            {
+              label: pin ? "Pin" : "Unpin",
+              Icon: pin ? PushPinIcon : PushPinSlashIcon,
+              onSelect: () => {
+                reveal.current = { id: ids[0], moved: (t) => t.pinned === pin };
+                onSetPinned(ids, pin);
+              },
+            },
+          ]
         : []),
       ...(targets.length === 1 && targets[0].kind === "thread"
         ? [
@@ -314,36 +359,38 @@ export default function TasksView({
 
   // Ctrl+A picks the chats and tasks on screen: those in collapsed projects or folders are hidden.
   useCommand("sidebar.selectAll", () => {
-    const hidden = getCollapsed();
-    setPicked(
-      [
-        ...chats,
-        ...projects
-          .filter((p) => !hidden.has(p.id))
-          .flatMap((p) =>
-            threads.filter(
-              (t) =>
-                t.projectId === p.id &&
-                (t.folderId === null || !hidden.has(`folder:${t.folderId}`)),
-            ),
-          ),
-      ]
-        .filter((t) => !leavingIds.has(t.id))
-        .map((t): Target => ({ kind: "thread", id: t.id })),
-    );
+    setPicked([
+      ...listedAbove(),
+      ...buildTree(getCollapsed()).rows.filter((r) => r.kind === "thread"),
+    ]);
   });
 
   // Built when a key or click needs it, from the collapsed set as it is then.
   const buildTree = (hidden: ReadonlySet<string>) =>
     buildTreeRows({ projects, folders, threads, leavingIds }, hidden);
-  // The chats come first on screen, then the projects' rows, so archiving can step through them in that order.
-  const syncTreeRows = () => {
-    const chatRows: Target[] = chats
+  /** The favorites and chats, which sit above the projects. */
+  function listedAbove(): Target[] {
+    return [...favorites, ...chats]
       .filter((t) => !leavingIds.has(t.id))
       .map((t) => ({ kind: "thread", id: t.id }));
-    treeRowsRef.current = [...chatRows, ...buildTree(getCollapsed()).rows];
+  }
+  // The favorites and chats come first on screen, then the projects' rows, so archiving can step through them in that order.
+  const syncTreeRows = () => {
+    treeRowsRef.current = [...listedAbove(), ...buildTree(getCollapsed()).rows];
   };
   useEffect(syncTreeRows);
+  // A row pinned or favorited from the menu moves to the top of its list, often above the part on
+  // screen, so it is scrolled to once it is there.
+  const reveal = useRef<{ id: string; moved: (t: Thread) => boolean } | null>(null);
+  useEffect(() => {
+    const r = reveal.current;
+    const thread = r && threads.find((t) => t.id === r.id);
+    if (!r || !thread || !r.moved(thread)) return;
+    reveal.current = null;
+    treeRef.current
+      ?.querySelector(`[data-thread-id="${r.id}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  });
   // Opening or closing a folder from outside the sidebar, such as the palette, must refresh the list too.
   useEffect(() => onCollapsedChange(syncTreeRows));
 
@@ -460,6 +507,16 @@ export default function TasksView({
       onKeyDown={onTreeKey}
       onClick={clearSelectionOnBlank}
     >
+      {favorites.length > 0 && (
+        <>
+          <SectionLabel>Favorites</SectionLabel>
+          {favorites.map((t) => (
+            <Collapse key={t.id} open={!leavingIds.has(t.id)} overflowWhenOpen>
+              <ThreadRow thread={t} {...rowState(t)} depth={0} drag={NO_DRAG} />
+            </Collapse>
+          ))}
+        </>
+      )}
       <SectionLabel
         action={
           <button className="btn-icon" title="New chat" aria-label="New chat" onClick={onNewChat}>
@@ -533,18 +590,21 @@ export default function TasksView({
             null,
           );
           const row: Target = { kind: "project", id: p.id };
-          const tasks = threads.filter((t) => t.projectId === p.id);
+          const tasks = threads.filter((t) => t.projectId === p.id && !t.favorite);
+          // Pinned tasks come first, above the folders, and go back into theirs when unpinned.
+          const pinned = tasks.filter((t) => t.pinned);
+          const unpinned = tasks.filter((t) => !t.pinned);
           const projectFolders = folders.filter((f) => f.projectId === p.id);
           const group = `${TASKS_GROUP_PREFIX}${p.id}`;
-          const topLevel = tasks.filter((t) => t.folderId === null);
+          const topLevel = unpinned.filter((t) => t.folderId === null);
           const topLevelIds = topLevel.map((t) => t.id);
-          const taskRow = (t: Thread, folderId: string | null, ids: string[]) => (
+          const taskRow = (t: Thread, folderId: string | null, ids: string[] | null) => (
             <Collapse key={t.id} open={!leavingIds.has(t.id)} overflowWhenOpen>
               <ThreadRow
                 thread={t}
                 {...rowState(t)}
                 depth={folderId === null ? 1 : 2}
-                drag={reorder.row(group, t.id, ids, folderId)}
+                drag={ids ? reorder.row(group, t.id, ids, folderId) : NO_DRAG}
               />
             </Collapse>
           );
@@ -648,9 +708,10 @@ export default function TasksView({
                       No tasks yet
                     </div>
                   )}
+                  {pinned.map((t) => taskRow(t, null, null))}
                   {projectFolders.map((f) => {
                     const key = `folder:${f.id}`;
-                    const inside = tasks.filter((t) => t.folderId === f.id);
+                    const inside = unpinned.filter((t) => t.folderId === f.id);
                     const insideIds = inside.map((t) => t.id);
                     const folderEditing = renaming?.kind === "folder" && renaming.id === f.id;
                     const folderRow: Target = { kind: "folder", id: f.id };

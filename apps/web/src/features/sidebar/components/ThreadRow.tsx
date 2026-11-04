@@ -1,5 +1,11 @@
 import { memo, useRef, type KeyboardEvent, type MouseEvent } from "react";
-import { ArchiveIcon, CheckIcon, ShieldWarningIcon } from "@phosphor-icons/react";
+import {
+  ArchiveIcon,
+  CheckIcon,
+  PushPinIcon,
+  ShieldWarningIcon,
+  StarIcon,
+} from "@phosphor-icons/react";
 import { AGENT_LABELS, type Thread } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
 import Spinner from "~/components/Spinner";
@@ -140,6 +146,18 @@ export const ThreadRow = memo(function ThreadRow({
       }}
       onContextMenu={(e) => onContextMenu(e, { kind: "thread", id: thread.id })}
     >
+      {/* A favorite is listed under Favorites, where its pin does not apply, so it shows the star alone. */}
+      {thread.favorite ? (
+        <span role="img" aria-label="Favorite" className="inline-flex flex-none text-fg-muted">
+          <StarIcon size={13} weight="fill" />
+        </span>
+      ) : (
+        thread.pinned && (
+          <span role="img" aria-label="Pinned" className="inline-flex flex-none text-fg-muted">
+            <PushPinIcon size={13} weight="fill" />
+          </span>
+        )
+      )}
       {editing ? (
         <InlineName
           initial={thread.title}

@@ -290,6 +290,8 @@ export function useThreads(initialProjectId: string | null) {
       importedFrom: null,
       contextPending: false,
       role: opts.role ?? null,
+      favorite: false,
+      pinned: false,
     };
     setThreads((prev) => [draft, ...prev]);
     // Through `select`, so a load still running for an earlier pick cannot open that one instead.
@@ -366,6 +368,16 @@ export function useThreads(initialProjectId: string | null) {
   async function renameThread(id: string, title: string): Promise<void> {
     await api.renameThread(id, title);
     setThreads((prev) => prev.map((t) => (t.id === id ? { ...t, title } : t)));
+  }
+
+  async function setFavorite(ids: string[], favorite: boolean): Promise<void> {
+    for (const id of ids) await api.setThreadFavorite(id, favorite);
+    setThreads((prev) => prev.map((t) => (ids.includes(t.id) ? { ...t, favorite } : t)));
+  }
+
+  async function setPinned(ids: string[], pinned: boolean): Promise<void> {
+    for (const id of ids) await api.setThreadPinned(id, pinned);
+    setThreads((prev) => prev.map((t) => (ids.includes(t.id) ? { ...t, pinned } : t)));
   }
 
   async function createFolder(projectId: string): Promise<Folder> {
@@ -561,6 +573,8 @@ export function useThreads(initialProjectId: string | null) {
     deleteThread,
     setThreadArchived,
     renameThread,
+    setFavorite,
+    setPinned,
     clearThread,
     restoreCheckpoint,
     forkThread,

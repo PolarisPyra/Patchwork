@@ -38,6 +38,16 @@ pub(crate) fn set_thread_archived(server: Srv, id: String, archived: bool) -> Re
 }
 
 #[tauri::command]
+pub(crate) async fn set_thread_favorite(server: Srv<'_>, id: String, favorite: bool) -> Res<()> {
+    server.set_thread_favorite(&id, favorite)
+}
+
+#[tauri::command]
+pub(crate) async fn set_thread_pinned(server: Srv<'_>, id: String, pinned: bool) -> Res<()> {
+    server.set_thread_pinned(&id, pinned)
+}
+
+#[tauri::command]
 pub(crate) fn rename_thread(server: Srv, id: String, title: String) -> Res<()> {
     server.rename_thread(&id, &title)
 }

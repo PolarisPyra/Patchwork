@@ -143,6 +143,8 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
         context_pending: session.imported,
         role: None,
         role_pending: false,
+        favorite: false,
+        pinned: false,
         created_at: session.created_at,
         position: -(session.created_at as i64),
         folder_id: None,

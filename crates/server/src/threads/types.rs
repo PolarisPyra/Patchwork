@@ -84,6 +84,13 @@ pub struct Thread {
     /// The role changed since the agent was last told of it, by hand rather than by summoning.
     #[serde(skip)]
     pub role_pending: bool,
+    /// Listed under Favorites at the top of the sidebar, in place of its usual spot.
+    #[serde(default)]
+    pub favorite: bool,
+    /// A task listed first in its project, above its folders. Chats without a project are never
+    /// pinned.
+    #[serde(default)]
+    pub pinned: bool,
 }
 
 /// Where a subagent's thread came from.

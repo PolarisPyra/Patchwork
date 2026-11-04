@@ -22,7 +22,8 @@ export interface TreeRows {
   parent: Map<string, Target>;
 }
 
-/** A project's rows: the project, then each folder with its tasks, then the tasks outside them. */
+/** A project's rows: the project, its pinned tasks, then each folder with its tasks, then the tasks
+ * outside them. Favorites are listed above the projects, so they are not rows of one. */
 export function buildTreeRows(
   { projects, folders, threads, leavingIds }: TreeSource,
   hidden: ReadonlySet<string>,
@@ -37,16 +38,18 @@ export function buildTreeRows(
     const projectRow: Target = { kind: "project", id: p.id };
     addRow(projectRow);
     if (hidden.has(p.id)) continue;
+    const tasks = threads.filter(
+      (x) => x.projectId === p.id && !x.favorite && !leavingIds.has(x.id),
+    );
+    for (const t of tasks.filter((x) => x.pinned)) addRow({ kind: "thread", id: t.id }, projectRow);
     for (const f of folders.filter((x) => x.projectId === p.id)) {
       const folderRow: Target = { kind: "folder", id: f.id };
       addRow(folderRow, projectRow);
       if (hidden.has(collapseKey(folderRow))) continue;
-      for (const t of threads.filter((x) => x.folderId === f.id && !leavingIds.has(x.id)))
+      for (const t of tasks.filter((x) => !x.pinned && x.folderId === f.id))
         addRow({ kind: "thread", id: t.id }, folderRow);
     }
-    for (const t of threads.filter(
-      (x) => x.projectId === p.id && x.folderId === null && !leavingIds.has(x.id),
-    ))
+    for (const t of tasks.filter((x) => !x.pinned && x.folderId === null))
       addRow({ kind: "thread", id: t.id }, projectRow);
   }
   return { rows, parent };

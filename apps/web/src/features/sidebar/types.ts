@@ -39,6 +39,10 @@ export interface SidebarProps {
   onNewChat: () => void;
   onSelectThread: (id: string) => void;
   onRenameThread: (id: string, title: string) => void;
+  /** Lists chats and tasks under Favorites at the top of the tree, or back in their usual spot. */
+  onSetFavorite: (ids: string[], favorite: boolean) => void;
+  /** Lists tasks first in their project, above its folders. */
+  onSetPinned: (ids: string[], pinned: boolean) => void;
   /** Opens the picker of a chat's own background. */
   onChatBackground: (id: string) => void;
   onRenameProject: (id: string, name: string) => void;

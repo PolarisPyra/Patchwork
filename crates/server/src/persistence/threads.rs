@@ -52,6 +52,8 @@ pub(super) fn save_thread_row(tx: &Transaction, t: &Thread) -> rusqlite::Result<
     let window = t.compact_window.map(|w| w.to_string());
     save_state(tx, &compact_window_key(&t.id), window)?;
     save_state(tx, &background_key(&t.id), t.background.as_ref().map(json))?;
+    save_state(tx, &favorite_key(&t.id), t.favorite.then(|| "1".into()))?;
+    save_state(tx, &pinned_key(&t.id), t.pinned.then(|| "1".into()))?;
     Ok(())
 }
 
@@ -78,9 +80,24 @@ fn background_key(thread_id: &str) -> String {
     format!("chat-background:{thread_id}")
 }
 
+/// The `app_state` key set while a thread is a favorite.
+fn favorite_key(thread_id: &str) -> String {
+    format!("favorite:{thread_id}")
+}
+
+/// The `app_state` key set while a task is pinned.
+fn pinned_key(thread_id: &str) -> String {
+    format!("pinned:{thread_id}")
+}
+
 /// The `app_state` keys of a thread's settings, which go when the thread does.
-pub(super) fn thread_state_keys(thread_id: &str) -> [String; 2] {
-    [compact_window_key(thread_id), background_key(thread_id)]
+pub(super) fn thread_state_keys(thread_id: &str) -> [String; 4] {
+    [
+        compact_window_key(thread_id),
+        background_key(thread_id),
+        favorite_key(thread_id),
+        pinned_key(thread_id),
+    ]
 }
 
 pub(super) fn save_message(
@@ -182,12 +199,15 @@ pub(super) fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
                 context_pending: r.get(17)?,
                 role: r.get(18)?,
                 role_pending: r.get(19)?,
+                favorite: false,
+                pinned: false,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
     let mut stmt = conn.prepare(
         "SELECT key, value FROM app_state
-         WHERE key LIKE 'compact-window:%' OR key LIKE 'chat-background:%'",
+         WHERE key LIKE 'compact-window:%' OR key LIKE 'chat-background:%'
+            OR key LIKE 'favorite:%' OR key LIKE 'pinned:%'",
     )?;
     let state: HashMap<String, String> = stmt
         .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
@@ -199,6 +219,8 @@ pub(super) fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
         t.background = state
             .get(&background_key(&t.id))
             .and_then(|b| serde_json::from_str(b).ok());
+        t.favorite = state.contains_key(&favorite_key(&t.id));
+        t.pinned = state.contains_key(&pinned_key(&t.id));
     }
     let mut stmt = conn.prepare(
         "SELECT id, role, text, created_at, status, tools, plan, files, error, approvals,
