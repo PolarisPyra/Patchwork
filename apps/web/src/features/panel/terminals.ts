@@ -30,8 +30,7 @@ export interface Shell {
   backlog?: string;
 }
 
-/** App commands a terminal hands back instead of sending their keys to the shell, as VS Code's
- * `terminal.integrated.commandsToSkipShell`. */
+/** App commands a terminal hands back instead of sending their keys to the shell. */
 const SKIP_SHELL = new Set([
   "terminal.toggle",
   "terminal.new",
@@ -43,7 +42,7 @@ const SKIP_SHELL = new Set([
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 
-/** VS Code's ANSI colors for its dark and light themes. */
+/** The ANSI colors for the dark and light themes. */
 const ANSI = {
   dark: [
     "#000000",

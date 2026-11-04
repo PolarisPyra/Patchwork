@@ -22,7 +22,7 @@ export function channel(id: string): Channel {
   return { id, name: label ?? id, setting: "agents" };
 }
 
-/** Main and Window first, then the agents, then the rest, as VS Code lists core logs. */
+/** Main and Window first, then the agents, then the rest. */
 export function sortChannels(ids: string[]): Channel[] {
   const rank = (c: Channel) =>
     c.id === "main.log" ? 0 : c.id === "window.log" ? 1 : c.setting === "agents" ? 2 : 3;

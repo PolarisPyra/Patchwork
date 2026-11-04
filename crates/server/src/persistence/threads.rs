@@ -47,14 +47,21 @@ pub(super) fn save_thread_row(tx: &Transaction, t: &Thread) -> rusqlite::Result<
             t.role_pending
         ],
     )?;
-    // Kept in `app_state` rather than a column of its own, so the schema stays the same and a
-    // build without this setting can still open the database.
-    let key = compact_window_key(&t.id);
-    match t.compact_window {
-        Some(window) => tx.execute(
+    // Kept in `app_state` rather than columns of their own, so the schema stays the same and a
+    // build without these settings can still open the database.
+    let window = t.compact_window.map(|w| w.to_string());
+    save_state(tx, &compact_window_key(&t.id), window)?;
+    save_state(tx, &background_key(&t.id), t.background.as_ref().map(json))?;
+    Ok(())
+}
+
+/// Stores `value` under `key` in `app_state`, or forgets the key for None.
+fn save_state(tx: &Transaction, key: &str, value: Option<String>) -> rusqlite::Result<()> {
+    match value {
+        Some(value) => tx.execute(
             "INSERT INTO app_state (key, value) VALUES (?1, ?2)
              ON CONFLICT (key) DO UPDATE SET value = excluded.value",
-            params![key, window.to_string()],
+            params![key, value],
         )?,
         None => tx.execute("DELETE FROM app_state WHERE key = ?1", [key])?,
     };
@@ -62,8 +69,18 @@ pub(super) fn save_thread_row(tx: &Transaction, t: &Thread) -> rusqlite::Result<
 }
 
 /// The `app_state` key of a thread's compact window.
-pub(super) fn compact_window_key(thread_id: &str) -> String {
+fn compact_window_key(thread_id: &str) -> String {
     format!("compact-window:{thread_id}")
+}
+
+/// The `app_state` key of a thread's own background.
+fn background_key(thread_id: &str) -> String {
+    format!("chat-background:{thread_id}")
+}
+
+/// The `app_state` keys of a thread's settings, which go when the thread does.
+pub(super) fn thread_state_keys(thread_id: &str) -> [String; 2] {
+    [compact_window_key(thread_id), background_key(thread_id)]
 }
 
 pub(super) fn save_message(
@@ -154,6 +171,7 @@ pub(super) fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
                 folder_id: r.get(10)?,
                 effort: r.get(11)?,
                 compact_window: None,
+                background: None,
                 archived_at: r.get(12)?,
                 parent: r
                     .get::<_, Option<String>>(13)?
@@ -167,15 +185,20 @@ pub(super) fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
-    let mut stmt =
-        conn.prepare("SELECT key, value FROM app_state WHERE key LIKE 'compact-window:%'")?;
-    let windows: HashMap<String, String> = stmt
+    let mut stmt = conn.prepare(
+        "SELECT key, value FROM app_state
+         WHERE key LIKE 'compact-window:%' OR key LIKE 'chat-background:%'",
+    )?;
+    let state: HashMap<String, String> = stmt
         .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
         .collect::<rusqlite::Result<_>>()?;
     for t in &mut threads {
-        t.compact_window = windows
+        t.compact_window = state
             .get(&compact_window_key(&t.id))
             .and_then(|w| w.parse().ok());
+        t.background = state
+            .get(&background_key(&t.id))
+            .and_then(|b| serde_json::from_str(b).ok());
     }
     let mut stmt = conn.prepare(
         "SELECT id, role, text, created_at, status, tools, plan, files, error, approvals,

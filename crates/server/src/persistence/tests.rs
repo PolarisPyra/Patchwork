@@ -54,6 +54,7 @@ fn thread(messages: Vec<Message>) -> Thread {
         folder_id: None,
         effort: None,
         compact_window: None,
+        background: None,
         archived_at: None,
         parent: None,
         plan_mode: false,

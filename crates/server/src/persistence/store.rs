@@ -10,7 +10,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{enc, err};
 use super::settings::{load_settings, save_settings};
-use super::threads::{compact_window_key, load_folders, load_threads, save_message, save_thread_row};
+use super::threads::{load_folders, load_threads, save_message, save_thread_row, thread_state_keys};
 use crate::projects::Folder;
 use crate::settings::Settings;
 use crate::threads::{MessageStatus, Thread};
@@ -392,13 +392,12 @@ impl Store {
             .conn
             .execute("DELETE FROM threads WHERE id = ?1", [id])
             .map_err(err)?;
-        inner
-            .conn
-            .execute(
-                "DELETE FROM app_state WHERE key = ?1",
-                [compact_window_key(id)],
-            )
-            .map_err(err)?;
+        for key in thread_state_keys(id) {
+            inner
+                .conn
+                .execute("DELETE FROM app_state WHERE key = ?1", [key])
+                .map_err(err)?;
+        }
         inner.threads.retain(|t| t.id != id);
         Ok(())
     }
@@ -416,13 +415,10 @@ impl Store {
             .filter(|t| t.project_id.as_deref() == Some(project_id))
             .map(|t| t.id.clone())
             .collect();
-        for id in ids {
+        for key in ids.iter().flat_map(|id| thread_state_keys(id)) {
             inner
                 .conn
-                .execute(
-                    "DELETE FROM app_state WHERE key = ?1",
-                    [compact_window_key(&id)],
-                )
+                .execute("DELETE FROM app_state WHERE key = ?1", [key])
                 .map_err(err)?;
         }
         inner

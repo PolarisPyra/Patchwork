@@ -33,7 +33,8 @@ export function Collapse({
   );
 }
 
-/** VS Code's tree twistie: the chevron-down codicon, turned to point right while a row is collapsed. */
+/** A tree row's twistie: the chevron-down glyph of Codicons (CC BY 4.0), turned to point right while
+ * a row is collapsed. */
 export function Twistie({ open }: { open: boolean }) {
   return (
     <svg

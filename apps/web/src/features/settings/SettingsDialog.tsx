@@ -8,6 +8,7 @@ import {
   GaugeIcon,
   GearSixIcon,
   KeyboardIcon,
+  CertificateIcon,
   PlugIcon,
   PlugsConnectedIcon,
   PuzzlePieceIcon,
@@ -24,8 +25,9 @@ import CliPane from "~/features/settings/providers/CliPane";
 import GeneralPane from "~/features/settings/app/GeneralPane";
 import ImportsPane from "~/features/settings/system/ImportsPane";
 import KeybindingsPane from "~/features/settings/app/KeybindingsPane";
+import LicensePane from "~/features/settings/system/LicensePane";
 import LoggingPane from "~/features/settings/system/LoggingPane";
-import McpServersPane from "~/features/settings/providers/McpServersPane";
+import McpServersPane from "~/features/settings/providers/mcp/McpServersPane";
 import PermissionsPane, { type PermissionsFocus } from "~/features/settings/system/PermissionsPane";
 import PluginsPane from "~/features/settings/agents/PluginsPane";
 import ProjectsPane from "~/features/settings/system/ProjectsPane";
@@ -46,6 +48,8 @@ import type { PaneProps } from "~/features/settings/types";
 interface SettingsDialogProps extends PaneProps {
   /** Opens on Settings → Permissions, with this scope and rule picked out. */
   focus?: PermissionsFocus | null;
+  /** The section it opens on, by id; null opens on General. */
+  section?: string | null;
   /** Called after conversations were imported, so threads can be reloaded. */
   onImported: () => void;
   onClose: () => void;
@@ -64,6 +68,7 @@ const GROUPS: {
       { id: "general", label: "General", Icon: GearSixIcon, Pane: GeneralPane },
       { id: "shortcuts", label: "Shortcuts", Icon: KeyboardIcon, Pane: () => <KeybindingsPane /> },
       { id: "updates", label: "Updates", Icon: ArrowCircleUpIcon, Pane: UpdatesPane },
+      { id: "license", label: "License", Icon: CertificateIcon, Pane: () => <LicensePane /> },
     ],
   },
   {
@@ -110,7 +115,9 @@ const SECTIONS = GROUPS.flatMap((g) => g.sections);
 
 // Memoized: the workspace re-renders on every streamed delta, and the open pane should not.
 export default memo(function SettingsDialog({ onClose, ...props }: SettingsDialogProps) {
-  const [section, setSection] = useState(props.focus ? "permissions" : "general");
+  const [section, setSection] = useState(
+    props.focus ? "permissions" : (props.section ?? "general"),
+  );
   const open = SECTIONS.find((s) => s.id === section) ?? SECTIONS[0];
 
   return (

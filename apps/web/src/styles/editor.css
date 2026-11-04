@@ -1,0 +1,87 @@
+
+/* Composer editor: placeholder text and task lists, which Tailwind classes cannot reach. */
+.composer-editor .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--text-subtle);
+  pointer-events: none;
+}
+/* Text being composed with an input method is not in the document yet, so the placeholder would
+   sit under it. */
+.composer-editor[data-composing] .ProseMirror p.is-editor-empty:first-child::before {
+  content: none;
+}
+/* Only the composer that has focus shows its caret. */
+.composer-editor .ProseMirror:not(.ProseMirror-focused) {
+  caret-color: transparent;
+}
+.composer-editor ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+/* Markdown lines in the composer (see MarkdownLine in composerExtensions.ts). */
+.composer-editor .ProseMirror p.composer-heading-1 {
+  font-size: 1.5em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.composer-editor .ProseMirror p.composer-heading-2 {
+  font-size: 1.25em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.composer-editor .ProseMirror p.composer-heading-3 {
+  font-size: 1.1em;
+  font-weight: 600;
+}
+.composer-editor .ProseMirror p.composer-quote {
+  position: relative;
+  padding-left: 0.5rem;
+  color: var(--text-muted);
+}
+.composer-editor .ProseMirror p.composer-quote::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.2em;
+  bottom: 0.2em;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--border);
+}
+.composer-editor .ProseMirror .composer-quote-marker {
+  color: transparent;
+  caret-color: var(--text);
+  letter-spacing: -0.4em;
+}
+/* Bold, italic, strikethrough and code spans keep their markers, shown faint. */
+.composer-editor .ProseMirror .composer-md-marker {
+  color: var(--text-subtle);
+}
+.composer-editor .ProseMirror .composer-md-bold {
+  font-weight: 600;
+}
+.composer-editor .ProseMirror .composer-md-italic {
+  font-style: italic;
+}
+.composer-editor .ProseMirror .composer-md-strike {
+  text-decoration: line-through;
+}
+.composer-editor .ProseMirror .composer-md-code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.composer-editor ul[data-type="taskList"] li {
+  display: flex;
+  gap: 6px;
+}
+/* A file chip opens the file beside the chat. */
+.composer-editor .ProseMirror [data-type="mention"] {
+  cursor: pointer;
+}
+/* A chip the first Backspace or Delete picked out; the next press removes it. */
+.composer-editor .ProseMirror .ProseMirror-selectednode {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}

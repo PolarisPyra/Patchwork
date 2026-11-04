@@ -5,10 +5,8 @@
  * text painted as it arrives moves in bursts. The reply is revealed at a steady rate instead, a
  * word edge at a time, chasing the arrived text but staying a beat behind it.
  *
- * Three rules are taken from claude.ai's own reveal scheduler, a per-message object in its web
- * bundle: a step never ends inside a word, a step that carries a burst is shown without the
- * per-word fade, and no reveal may schedule itself past a hard horizon. Its horizon is 600ms and
- * its chunks cap at 48 characters, which is where those two numbers come from.
+ * Three rules hold throughout: a step never ends inside a word, a step that carries a burst is
+ * shown without the per-word fade, and no reveal may schedule itself past a hard horizon.
  */
 
 /** The least text revealed in one step, in characters. */
@@ -29,8 +27,7 @@ export const WORD_DELAY_MAX_MS = 150;
 /**
  * A step that reveals more characters than this is a burst rather than a step, and is shown
  * without the per-word fade: fading a dozen words one after another reads as a smear instead of
- * text arriving. It is the size of claude.ai's cross-pass chunk, past which it stops staggering
- * words and lets the text land.
+ * text arriving. Past this, the words stop staggering and the text lands.
  */
 export const WORD_FADE_MAX_CHARS = 48;
 /** Past this, a block is revealed without the word fade; the wrappers cost more than they show. */

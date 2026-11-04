@@ -15,6 +15,7 @@ import { lastEffort } from "~/components/EffortPicker";
 import Chat from "~/features/chat";
 import CommandPalette from "~/features/workspace/components/CommandPalette";
 import SettingsDialog from "~/features/settings/SettingsDialog";
+import ChatBackgroundDialog from "@patchwork/commercial-web/ChatBackgroundDialog";
 import { addFolders, openFolderAsProject, relocateProject, syncProjects } from "~/lib/projects";
 import Sidebar, {
   ActivityBar,
@@ -91,6 +92,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     setPlanMode,
     setEffort,
     setCompactWindow,
+    setBackground,
     send,
     startThread,
   } = useThreads(settings.activeProjectId);
@@ -149,6 +151,11 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   );
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // The section Settings opens on, when something other than the dialog's own list picked it.
+  const [settingsSection, setSettingsSection] = useState<string | null>(null);
+  // The chat whose own background is being picked.
+  const [backgroundFor, setBackgroundFor] = useState<string | null>(null);
+  const backgroundThread = threads.find((t) => t.id === backgroundFor) ?? null;
   // The permission rule Settings opens on, from an approval in the transcript.
   const [settingsFocus, setSettingsFocus] = useState<{
     scope: PermissionScope;
@@ -161,6 +168,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   const closeSettings = useCallback(() => {
     setSettingsOpen(false);
     setSettingsFocus(null);
+    setSettingsSection(null);
   }, []);
   const reloadImported = useCallback(() => void reload(), [reload]);
   const updatePermissions = useCallback(
@@ -430,6 +438,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     onOpenChange: (path: string) =>
       openCanvasAt(path, null, changes.some((c) => c.path === path) ? "diff" : "code"),
     onOpenPalette: () => setPaletteOpen(true),
+    onChatBackground: setBackgroundFor,
   });
 
   // The bars around the chat skip the renders streamed text causes.
@@ -534,6 +543,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
                 onOpenPermissions={openPermissions}
                 checkSettings={settings.checks}
                 onSetProjectChecks={setProjectChecks}
+                chatBackground={settings.chatBackground}
               />
             </main>
 
@@ -589,6 +599,8 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
             },
             openProject: selectProject,
             runChecks,
+            chatBackground:
+              selected && !selected.parent ? () => setBackgroundFor(selected.id) : null,
           })}
           onClose={() => setPaletteOpen(false)}
         />
@@ -598,8 +610,22 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
           settings={settings}
           updateSettings={updateSettings}
           focus={settingsFocus}
+          section={settingsSection}
           onImported={reloadImported}
           onClose={closeSettings}
+        />
+      )}
+      {backgroundFor !== null && backgroundThread && (
+        <ChatBackgroundDialog
+          thread={backgroundThread}
+          shared={settings.chatBackground}
+          onSave={(background) => setBackground(backgroundThread.id, background)}
+          onOpenLicense={() => {
+            setBackgroundFor(null);
+            setSettingsSection("license");
+            setSettingsOpen(true);
+          }}
+          onClose={() => setBackgroundFor(null)}
         />
       )}
     </div>

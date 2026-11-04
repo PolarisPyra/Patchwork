@@ -10,7 +10,7 @@ use ts_rs::TS;
 use super::Json;
 use super::scrub::scrubbed;
 
-/// A log larger than this moves to `<name>.1.log`: VS Code's 30 MB over six files.
+/// A log larger than this moves to `<name>.1.log`: 30 MB over six files.
 const MAX_BYTES: u64 = 5 * 1024 * 1024;
 
 /// How many full logs are kept besides the current one, as `<name>.1.log` (the newest) on.

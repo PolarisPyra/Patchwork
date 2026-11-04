@@ -3,7 +3,7 @@ import type { AgentKind, Settings, TerminalSettings } from "~/api/types";
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 const isLinux = /Linux/.test(navigator.platform);
 
-/** VS Code's terminal defaults, as `TerminalSettings::default` sets them. */
+/** The terminal defaults, as `TerminalSettings::default` sets them. */
 export function defaultTerminalSettings(): TerminalSettings {
   return {
     env: {},
@@ -62,6 +62,7 @@ export const DEFAULT_SETTINGS: Settings = {
   notifications: { goalComplete: true, taskComplete: true },
   updates: { checkEveryMinutes: 10 },
   logo: null,
+  chatBackground: { kind: "none" },
   logging: {
     app: "info",
     window: "info",

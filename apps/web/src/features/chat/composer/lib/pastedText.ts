@@ -118,7 +118,7 @@ function htmlLanguage(html: string): string | null {
 /**
  * Labels a pasted code block once the block is in. A copy from VS Code or another Electron editor
  * names its language in clipboard metadata that the webview does not show to the page, so the app
- * reads it from the system clipboard. Other code gets the language VS Code would detect for it.
+ * reads it from the system clipboard. Other code gets the language detected for it.
  */
 function labelPastedCode(view: EditorView, text: string) {
   void api

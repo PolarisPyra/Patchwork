@@ -1,4 +1,5 @@
 import type { NotificationSettings, Theme } from "~/api";
+import BackgroundPicker from "~/components/BackgroundPicker";
 import { SectionHeading, Segmented, TokenRow, TokenSwitch } from "~/features/settings/controls";
 import { LOGO_URLS } from "~/features/settings/logo";
 import type { PaneProps } from "~/features/settings/types";
@@ -11,10 +12,11 @@ const THEMES: { value: Theme; label: string }[] = [
 ];
 
 /**
- * The settings too few for a pane each: the theme and the app icon Patchwork wears in the dock and
- * the launcher; how a chat is answered, whether picking an offered answer sends it or only fills
- * the composer and what Enter does with a message written while a reply is running; and which
- * finished work raises a desktop notification while Patchwork is not focused.
+ * The settings too few for a pane each: the theme, the app icon Patchwork wears in the dock and the
+ * launcher, and the background every chat shows unless it has its own; how a chat is answered,
+ * whether picking an offered answer sends it or only fills the composer and what Enter does with a
+ * message written while a reply is running; and which finished work raises a desktop notification
+ * while Patchwork is not focused.
  */
 export default function GeneralPane({ settings, updateSettings }: PaneProps) {
   const logo = settings.logo ?? logoManifest.default;
@@ -49,6 +51,16 @@ export default function GeneralPane({ settings, updateSettings }: PaneProps) {
             </button>
           ))}
         </div>
+      </div>
+      <div className="border-b border-border py-2.5">
+        <div className="pb-2 font-semibold">Chat background</div>
+        <BackgroundPicker
+          label="Chat background"
+          value={settings.chatBackground}
+          onChange={(chatBackground) =>
+            chatBackground && void updateSettings((s) => ({ ...s, chatBackground }))
+          }
+        />
       </div>
 
       <SectionHeading>Chats</SectionHeading>

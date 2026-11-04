@@ -48,7 +48,7 @@ export default memo(function PanelArea({
   const [focusTerminal, setFocusTerminal] = useState(0);
   const close = useCallback(() => setPanel((p) => ({ ...p, open: false })), []);
 
-  // As VS Code's: the terminal key opens the terminal, focuses it if it is shown elsewhere, and
+  // The terminal key opens the terminal, focuses it if it is shown elsewhere, and
   // closes the panel from inside it.
   useCommand("terminal.toggle", () => {
     const inTerminal = document.activeElement?.closest(".xterm") != null;

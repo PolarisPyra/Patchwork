@@ -3,7 +3,7 @@ import type { LogLevel } from "~/api";
 import { CHIP_CLASS } from "~/components/chip";
 import Dropdown from "~/components/Dropdown";
 
-/** VS Code's log levels, as its "Set Log Level" lists them. */
+/** The log levels, from the most to the least recorded. */
 export const LOG_LEVELS: { value: LogLevel; label: string }[] = [
   { value: "trace", label: "Trace" },
   { value: "debug", label: "Debug" },
@@ -13,7 +13,7 @@ export const LOG_LEVELS: { value: LogLevel; label: string }[] = [
   { value: "off", label: "Off" },
 ];
 
-/** Picks a log's level, as VS Code's "Set Log Level". */
+/** Picks a log's level. */
 export default function LogLevelPicker({
   label,
   value,

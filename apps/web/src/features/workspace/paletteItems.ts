@@ -20,6 +20,8 @@ interface PaletteSource {
   openProject: (id: string) => void;
   /** Runs the project's checks for the reply on screen; null when there is no reply to check. */
   runChecks: (() => void) | null;
+  /** Picks the open chat's own background; null when no chat is open. */
+  chatBackground: (() => void) | null;
 }
 
 /** What search lists: actions, then every chat and task by project, then the projects. */
@@ -36,6 +38,7 @@ export function paletteItems({
   openThread,
   openProject,
   runChecks,
+  chatBackground,
 }: PaletteSource): PaletteItem[] {
   return [
     {
@@ -63,6 +66,16 @@ export function paletteItems({
             group: "Actions",
             label: "Run checks for the open task",
             run: runChecks,
+          },
+        ]
+      : []),
+    ...(chatBackground
+      ? [
+          {
+            id: "chat-background",
+            group: "Actions",
+            label: "Change this chat's background",
+            run: chatBackground,
           },
         ]
       : []),

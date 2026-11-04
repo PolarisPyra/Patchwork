@@ -1,12 +1,12 @@
-// Detects the language of pasted code with the model VS Code uses for untitled files
-// (@vscode/vscode-languagedetection, guesslang on TensorFlow.js), off the main thread.
+// Detects the language of pasted code with the guesslang model on TensorFlow.js, off the main
+// thread.
 import bundle from "@vscode/vscode-languagedetection/dist/lib/index.js?raw";
 import cpuBackend from "@vscode/vscode-languagedetection/dist/lib/979.js?raw";
 import modelUrl from "@vscode/vscode-languagedetection/model/model.json?url";
 import weightsUrl from "@vscode/vscode-languagedetection/model/group1-shard1of1.bin?url";
 import type { ModelOperations, ModelResult } from "@vscode/vscode-languagedetection";
 
-/** VS Code's minimum confidence for a detected language. */
+/** The least confidence a detected language is taken with. */
 const MIN_CONFIDENCE = 0.2;
 
 /** The model's ids, by the id code blocks use. Languages the composer has no label for are left out. */
@@ -40,7 +40,7 @@ const LANGUAGES: Record<string, string> = {
 };
 
 /**
- * VS Code's corrections to the model's confidence: common languages get a little more, and
+ * Corrections to the model's confidence: common languages get a little more, and
  * languages that simple text is often mistaken for need much more.
  */
 function adjusted({ languageId, confidence }: ModelResult): number {
@@ -54,7 +54,7 @@ function adjusted({ languageId, confidence }: ModelResult): number {
 }
 
 /**
- * Whether VS Code would take the model's best guess: confident enough before and after the
+ * Whether the model's best guess is taken: confident enough before and after the
  * corrections, and clearly ahead of the guesses close behind it.
  */
 function isClearWinner([top, ...rest]: ModelResult[]): boolean {
@@ -71,7 +71,7 @@ function isClearWinner([top, ...rest]: ModelResult[]): boolean {
 
 /**
  * Runs the package's webpack bundle, which loads its CPU backend with a CommonJS `require` that
- * the browser lacks, as VS Code's loader does.
+ * the browser lacks.
  */
 function load(source: string, require: (id: string) => unknown): Record<string, unknown> {
   const module = { exports: {} as Record<string, unknown> };
@@ -93,12 +93,12 @@ function getModel(): ModelOperations {
   return model;
 }
 
-/** Replies with the model's guess, and whether VS Code would take that guess. */
+/** Replies with the model's guess, and whether that guess is taken. */
 self.onmessage = async (e: MessageEvent<{ id: number; text: string }>) => {
   const { id, text } = e.data;
   let reply: { guess: string | null; clear: boolean } = { guess: null, clear: false };
   try {
-    // VS Code reads the first 10,000 characters.
+    // The first 10,000 characters are enough to tell.
     const results = await getModel().runModel(text.slice(0, 10_000));
     const top = results[0];
     reply = {

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { api } from "~/api";
 
-/** How often a shown log is read for new lines, as VS Code's Output view follows a log file. */
+/** How often a shown log is read for new lines. */
 const FOLLOW_MS = 500;
 
 /** Lines kept on screen; older ones are dropped as new ones come in. */

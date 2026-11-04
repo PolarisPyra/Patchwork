@@ -1,0 +1,28 @@
+/* The dev session (`pnpm tauri dev`) is framed in yellow and black hazard stripes, so it cannot
+   be mistaken for the installed app. main.tsx sets `data-dev-session` only in development. The
+   app is inset by the frame's width, and the stripes are a fixed overlay clipped to that gap.
+   They are not the page background: the webview paints without the GPU, and a gradient there is
+   repainted across the whole window on every animated frame, which ran animations at about 20fps.
+   WebKitGTK does not paint a gradient border-image on a fixed element, so the overlay is clipped. */
+html[data-dev-session] {
+  --dev-frame: 6px;
+}
+html[data-dev-session]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+  --f: var(--dev-frame);
+  background: repeating-linear-gradient(-45deg, #f5c400 0 10px, #111 10px 20px);
+  clip-path: polygon(
+    evenodd,
+    0 0, 100% 0, 100% 100%, 0 100%, 0 0,
+    var(--f) var(--f), var(--f) calc(100% - var(--f)), calc(100% - var(--f)) calc(100% - var(--f)),
+    calc(100% - var(--f)) var(--f), var(--f) var(--f)
+  );
+}
+html[data-dev-session] body {
+  margin: var(--dev-frame);
+  height: calc(100% - 2 * var(--dev-frame));
+}

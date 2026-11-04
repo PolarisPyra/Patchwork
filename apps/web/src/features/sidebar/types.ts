@@ -39,6 +39,8 @@ export interface SidebarProps {
   onNewChat: () => void;
   onSelectThread: (id: string) => void;
   onRenameThread: (id: string, title: string) => void;
+  /** Opens the picker of a chat's own background. */
+  onChatBackground: (id: string) => void;
   onRenameProject: (id: string, name: string) => void;
   /** Picks another folder for the project. */
   onRelocateProject: (id: string) => void;

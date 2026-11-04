@@ -121,6 +121,7 @@ impl Server {
             access_mode,
             effort,
             compact_window,
+            background: None,
             session_id: None,
             created_at,
             messages: vec![],

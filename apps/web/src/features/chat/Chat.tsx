@@ -6,6 +6,7 @@ import {
   type AgentKind,
   type Attachment,
   type BackgroundTask,
+  type ChatBackground,
   type CheckSettings,
   type FileChange,
   type Message,
@@ -19,6 +20,7 @@ import {
 import type { CanvasTab } from "~/features/canvas/Canvas";
 import { COMPACT_SETTINGS } from "~/components/CompactPicker";
 import { confirm } from "@tauri-apps/plugin-dialog";
+import ChatBackdrop from "~/features/chat/ChatBackdrop";
 import ChoicePanel from "~/features/chat/prompts/ChoicePanel";
 import GoalBanner from "~/features/chat/prompts/GoalBanner";
 import {
@@ -118,6 +120,8 @@ interface ChatProps {
   /** Settings → Projects, for the switch on a reply's Checks card. */
   checkSettings: CheckSettings;
   onSetProjectChecks: (projectId: string, on: boolean) => void;
+  /** Settings' background, which the chat shows unless it has its own. */
+  chatBackground: ChatBackground;
 }
 
 // A fallback that keeps one identity, so the memoized composer sees no change.
@@ -169,6 +173,7 @@ export default function Chat({
   onOpenPermissions,
   checkSettings,
   onSetProjectChecks,
+  chatBackground,
 }: ChatProps) {
   // Errors by the chat they happened in ("new" for the new-task screen), so one never shows in
   // another chat.
@@ -553,11 +558,12 @@ export default function Chat({
   // One copy handler for everything the chat renders: replies, messages, tool output, prompts.
   return (
     <div
-      className={`relative flex min-h-0 min-w-0 flex-1 flex-col${isNew ? " justify-center" : ""}`}
+      className={`relative flex min-h-0 min-w-0 flex-1 flex-col isolate${isNew ? " justify-center" : ""}`}
       ref={rootRef}
       onCopy={copySelection}
       onKeyDownCapture={stopOnEscapeTwice}
     >
+      <ChatBackdrop own={thread?.background} shared={chatBackground} />
       {thread && (
         <LineageCard thread={thread} working={working} onDisconnect={stop} onError={setError} />
       )}

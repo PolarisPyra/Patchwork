@@ -13,7 +13,7 @@ export const sameTarget = (a: Target, b: Target) => a.kind === b.kind && a.id ==
 export type PickModifiers = Pick<MouseEvent, "ctrlKey" | "shiftKey">;
 
 /**
- * A plain left press on a row, not on one of its buttons. It selects the row at once, as VS Code's list does,
+ * A plain left press on a row, not on one of its buttons. It selects the row at once,
  * so a click that the browser swallows as a drag still selects.
  */
 export const isPlainPress = (e: PointerEvent<HTMLElement>) =>

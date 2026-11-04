@@ -23,7 +23,7 @@ const LOGS: { key: Exclude<keyof LoggingSettings, "threadMenu">; title: string; 
   },
 ];
 
-/** The logs each launch writes to its own folder in the config folder's `logs`, as VS Code's,
+/** The logs each launch writes to its own folder in the config folder's `logs`,
  * which people can send with a bug report. */
 export default function LoggingPane({ settings, updateSettings }: PaneProps) {
   const [error, setError] = useState<string | null>(null);

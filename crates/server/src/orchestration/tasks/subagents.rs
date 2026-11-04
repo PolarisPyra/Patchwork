@@ -146,6 +146,7 @@ pub(in crate::orchestration) fn open_child(turn: &Turn, tool: &ToolCall) -> Opti
         access_mode: parent.access_mode,
         effort: None,
         compact_window: None,
+        background: parent.background,
         session_id: None,
         created_at,
         messages: vec![asked, reply],

@@ -1,7 +1,7 @@
-//! Reads an agent's output for one turn and hands each event to the modules that handle it.
+//! The loop that reads the agent's stdout for one turn and hands each event on.
+
 use std::collections::{HashMap, HashSet};
 use std::io::BufReader;
-use std::path::Path;
 use std::process::Child;
 use std::process::ChildStdout;
 use std::sync::Arc;
@@ -12,18 +12,13 @@ use std::thread::JoinHandle;
 
 use serde_json::Value;
 
-use crate::plugins::HookEvent;
 use crate::provider::GoalUpdate;
-use crate::permissions;
 use crate::provider::Parsed;
 use crate::provider::TaskEvent;
 use crate::provider;
 use crate::system::scope;
 use crate::orchestration::AgentEvent;
-use crate::orchestration::tasks::jobs;
 use crate::provider::AgentKind;
-use crate::threads::Approval;
-use crate::threads::ApprovalStatus;
 
 /// What kind of output a line is, as its `type` (or JSON-RPC `method`) and any `subtype`.
 fn line_kind(value: &Value) -> String {
@@ -50,20 +45,14 @@ fn publish_child(turn: &Turn, child: &mut SubagentThread, events: Vec<AgentEvent
     }
 }
 
-#[cfg(test)]
-use crate::workspace::FileChange;
-use crate::threads::Goal;
 use crate::threads::GoalStatus;
 use crate::threads::MessageStatus;
-use crate::system::new_id;
 use crate::logging::{AGENT_LOG, Data, Source};
 use crate::settings::LogLevel;
 use crate::workspace;
 
 use crate::orchestration::changes::attribution;
 use crate::orchestration::tasks::background::Background;
-#[cfg(test)]
-use crate::orchestration::changes::attribution::changed_paths;
 use crate::orchestration::goal::end_input;
 use crate::orchestration::goal;
 use crate::orchestration::turn::process::exit_error;
@@ -78,13 +67,13 @@ use crate::orchestration::output::stream::Unsaved;
 use crate::orchestration::tasks::subagents::finish_child;
 use crate::orchestration::tasks::subagents::open_child;
 use crate::orchestration::tasks::subagents::SubagentThread;
-use crate::orchestration::turn::end::{TurnEnd, finish, hold_unanswered, plugin_hooks, record_turn};
-use crate::orchestration::turn::start::{PendingApproval, Turn};
-use crate::orchestration::decide;
-use crate::orchestration::unasked;
+use crate::orchestration::turn::end::{TurnEnd, finish};
+use crate::orchestration::turn::start::Turn;
 use crate::orchestration::output::usage::message_usage;
 use crate::orchestration::output::usage::record_request;
 use crate::orchestration::output::usage::Request;
+use super::approvals;
+use super::idle::{can_idle, go_idle, stays_up};
 
 /// Completes the replies a steer moved the turn on from, and counts them in `completed`, which is
 /// how many of `segments` are done. Left streaming, the reply before the steer keeps its own
@@ -235,33 +224,8 @@ pub(in crate::orchestration) fn ingest(
             }
         }
         for item in parsed {
-            // A call the access mode runs without asking runs unless a rule refuses it or asks.
-            let item = match item {
-                Parsed::Check {
-                    title,
-                    detail,
-                    reply,
-                    target,
-                } => {
-                    let asks = turn.mode != crate::threads::AccessMode::FullAccess;
-                    if unasked(&turn.server, &turn.thread_id, &turn.root, &target, asks)
-                        == permissions::Unasked::Run
-                    {
-                        write_line(
-                            &turn.stdin,
-                            &provider::approval_reply(turn.agent, &reply, true, &HashMap::new()),
-                        );
-                        continue;
-                    }
-                    Parsed::Approval {
-                        title,
-                        detail,
-                        reply,
-                        questions: Vec::new(),
-                        target: Some(target),
-                    }
-                }
-                item => item,
+            let Some(item) = approvals::screen(&turn, item) else {
+                continue;
             };
             match item {
                 Parsed::Send(line) => {
@@ -272,119 +236,22 @@ pub(in crate::orchestration) fn ingest(
                     server,
                     tool,
                     arguments,
-                } => {
-                    let stdin = turn.stdin.clone();
-                    let (cancelled, exited) = (turn.cancelled.clone(), turn.exited.clone());
-                    let thread_id = turn.thread_id.clone();
-                    // Patchwork's own agent has its commands run here, so they can outlive it.
-                    let job = (turn.agent == AgentKind::Api
-                        && server == provider::mcp::OWN_SERVER
-                        && jobs::TOOLS.contains(&tool.as_str()))
-                    .then(|| {
-                        (
-                            turn.server.clone(),
-                            jobs::Origin {
-                                thread_id: turn.thread_id.clone(),
-                                message_id: turn.message_id.clone(),
-                                tool_id: id.as_str().unwrap_or_default().to_string(),
-                                root: turn.root.clone(),
-                            },
-                        )
-                    });
-                    std::thread::spawn(move || {
-                        let stopped =
-                            || cancelled.load(Ordering::SeqCst) || exited.load(Ordering::SeqCst);
-                        let result = if let Some((app, from)) = job {
-                            jobs::call(&app, &from, &tool, &arguments, &stopped)
-                        } else if server == provider::mcp::OWN_SERVER {
-                            provider::mcp::call_own(&thread_id, &tool, &arguments, &stopped)
-                        } else {
-                            provider::mcp::call(&server, &tool, &arguments, &stopped)
-                        };
-                        write_line(&stdin, &provider::api::mcp_reply(&id, result));
-                    });
-                }
+                } => approvals::call_tool(&turn, id, server, tool, arguments),
                 Parsed::Approval {
                     title,
                     detail,
                     reply,
                     questions,
                     target,
-                } => {
-                    let mut approval = Approval {
-                        id: new_id(),
-                        title,
-                        detail,
-                        status: ApprovalStatus::Pending,
-                        questions,
-                        answers: HashMap::new(),
-                        kind: target.as_ref().map(|t| t.kind),
-                        suggestions: target
-                            .as_ref()
-                            .map(|t| permissions::suggest(t, Path::new(&turn.root)))
-                            .unwrap_or_default(),
-                        rule: None,
-                        auto: false,
-                        secret: None,
-                    };
-                    // The user already allowed it through a permission hook.
-                    if target.as_ref().is_some_and(|t| {
-                        turn.server
-                            .runner
-                            .take_grant(&turn.thread_id, t, Path::new(&turn.root))
-                    }) {
-                        write_line(
-                            &turn.stdin,
-                            &provider::approval_reply(turn.agent, &reply, true, &HashMap::new()),
-                        );
-                        continue;
-                    }
-                    // A permission rule answers it without asking.
-                    if let Some(decision) = target
-                        .as_ref()
-                        .and_then(|t| decide(&turn.server, &turn.thread_id, &turn.root, t))
-                    {
-                        write_line(
-                            &turn.stdin,
-                            &provider::approval_reply(
-                                turn.agent,
-                                &reply,
-                                decision.allow,
-                                &HashMap::new(),
-                            ),
-                        );
-                        approval.status = if decision.allow {
-                            ApprovalStatus::Allowed
-                        } else {
-                            ApprovalStatus::Denied
-                        };
-                        approval.rule = Some(decision.rule);
-                        approval.auto = true;
-                        turn.save_text(&mut unsaved);
-                        turn.publish(AgentEvent::ApprovalRequested {
-                            message_id: turn.message_id.clone(),
-                            approval,
-                        });
-                        continue;
-                    }
-                    turn.pending
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .insert(
-                            approval.id.clone(),
-                            PendingApproval {
-                                message_id: turn.message_id.clone(),
-                                reply,
-                                target,
-                                root: turn.root.clone(),
-                            },
-                        );
-                    turn.save_text(&mut unsaved);
-                    turn.publish(AgentEvent::ApprovalRequested {
-                        message_id: turn.message_id.clone(),
-                        approval,
-                    });
-                }
+                } => approvals::request_approval(
+                    &turn,
+                    &mut unsaved,
+                    title,
+                    detail,
+                    reply,
+                    questions,
+                    target,
+                ),
                 // Answered above.
                 Parsed::Check { .. } => {}
                 Parsed::Finished => {
@@ -856,20 +723,6 @@ pub(in crate::orchestration) fn ingest(
     );
 }
 
-/// Whether Claude, having ended its reply cleanly, can stay up for the next message.
-fn can_idle(turn: &Turn, goal: &Option<Goal>, stream_error: &Option<String>) -> bool {
-    stream_error.is_none() && !turn.cancelled.load(Ordering::SeqCst) && stays_up(turn, goal)
-}
-
-/// Whether the agent's process can stay up once its reply has ended. Only Claude keeps its process
-/// between messages, and a goal still to be pursued keeps the turn going instead.
-fn stays_up(turn: &Turn, goal: &Option<Goal>) -> bool {
-    turn.agent == AgentKind::Claude
-        && !goal
-            .as_ref()
-            .is_some_and(|g| matches!(g.status, GoalStatus::Active | GoalStatus::Paused))
-}
-
 /// Publishes one event of the turn. A subagent whose call finishes also closes its thread.
 fn publish_event(
     turn: &Turn,
@@ -887,300 +740,5 @@ fn publish_event(
     turn.publish(event);
     if let Some((tool_id, failed)) = finished {
         finish_child(turn, children, &tool_id, failed);
-    }
-}
-
-/// Completes the replies not yet completed, with the files they changed, and marks the turn
-/// idle: the agent stays up and takes the next message as a new reply, starting with the
-/// messages queued meanwhile. `stopped` when Stop interrupted the last reply: it ends as
-/// stopped, its unanswered requests lapse, and the queued messages wait for the user. `error`
-/// when the last reply failed: it ends as failed, with it.
-fn go_idle(
-    turn: &mut Turn,
-    segments: &[String],
-    completed: &mut usize,
-    unsaved: &mut Unsaved,
-    stopped: bool,
-    error: Option<String>,
-) {
-    turn.save_text(unsaved);
-    let after = workspace::git_changes(&turn.root).unwrap_or_default();
-    let changed = attribution::lock(&turn.attribution).settle(after);
-    changed.into_iter().for_each(|path| {
-        turn.publish(AgentEvent::FileTouched {
-            message_id: turn.message_id.clone(),
-            path,
-        });
-    });
-    record_turn(turn, &segments[*completed..]);
-    let last = segments.len().saturating_sub(1);
-    segments
-        .iter()
-        .enumerate()
-        .skip(*completed)
-        .for_each(|(at, id)| {
-            let (status, error) = if stopped && at == last {
-                (MessageStatus::Cancelled, None)
-            } else if at == last && error.is_some() {
-                (MessageStatus::Error, error.clone())
-            } else {
-                (MessageStatus::Complete, None)
-            };
-            turn.publish(AgentEvent::TurnCompleted {
-                message_id: id.clone(),
-                status,
-                error,
-            });
-        });
-    *completed = segments.len();
-    if stopped {
-        // The interrupt ended the requests the agent was waiting on, and the steering messages
-        // it had not taken. A permission hook still holding a call hears it was refused.
-        let lapsed: Vec<String> = turn
-            .pending
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .drain()
-            .map(|(id, _)| id)
-            .collect();
-        let mut hooks = turn
-            .server
-            .runner
-            .hooks
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        lapsed
-            .iter()
-            .filter_map(|id| hooks.remove(id))
-            .for_each(|waiter| {
-                let _ = waiter.send(false);
-            });
-        drop(hooks);
-        // Steers the agent never took are held as queued messages, as the turn's end holds them.
-        let unanswered: Vec<String> = turn
-            .steers
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .drain(..)
-            .map(|f| f.message_id)
-            .collect();
-        hold_unanswered(turn, &unanswered);
-        let (server, thread_id, root, agent) = (
-            turn.server.clone(),
-            turn.thread_id.clone(),
-            turn.root.clone(),
-            turn.agent,
-        );
-        std::thread::spawn(move || {
-            let status = Some(MessageStatus::Cancelled);
-            plugin_hooks(
-                &server,
-                HookEvent::Interrupt,
-                &thread_id,
-                &root,
-                agent,
-                status,
-            );
-        });
-    }
-    // Under the turns lock, where `steer` reads these flags: a message sent while the reply was
-    // wrapping up is in the queue taken here, not left in one nobody drains.
-    let turns = turn
-        .server
-        .runner
-        .turns
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner);
-    let queued = std::mem::take(&mut *turn.queue.lock().unwrap_or_else(PoisonError::into_inner));
-    let mut handed_over = turn
-        .server
-        .runner
-        .handed_over
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner);
-    queued.iter().for_each(|message| {
-        handed_over.remove(&message.message_id);
-    });
-    drop(handed_over);
-    // A call the user allowed through a hook was allowed for this reply only.
-    turn.server
-        .runner
-        .grants
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .remove(&turn.thread_id);
-    if stopped {
-        // The agent takes the next message again.
-        turn.cancelled.store(false, Ordering::SeqCst);
-    }
-    turn.idle.store(true, Ordering::SeqCst);
-    drop(turns);
-    // Taken from the queue, so marked queued here: the sender may not have saved the flag yet, and
-    // the queued messages are sent, or wait for the user, by that flag.
-    hold_unanswered(
-        turn,
-        &queued.into_iter().map(|f| f.message_id).collect::<Vec<_>>(),
-    );
-    if !stopped {
-        turn.server.send_queued_later(&turn.thread_id);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::io::BufRead;
-    use crate::threads::AccessMode;
-    use std::sync::Mutex;
-    use crate::orchestration::turn::process::AgentStdin;
-    use crate::orchestration::turn::process::Stdin;
-    use std::process::Stdio;
-    use crate::provider::TurnSpec;
-    use super::*;
-
-    pub(in crate::orchestration) fn change(path: &str, status: &str, additions: u32) -> FileChange {
-        FileChange {
-            path: path.into(),
-            status: status.into(),
-            additions,
-            deletions: 0,
-            staged: false,
-        }
-    }
-
-    #[test]
-    pub(in crate::orchestration) fn changed_paths_finds_new_and_modified_files() {
-        let before = [change("a.rs", "modified", 1), change("b.rs", "modified", 2)];
-        let after = [
-            change("a.rs", "modified", 1),
-            change("b.rs", "modified", 5),
-            change("c.rs", "untracked", 3),
-        ];
-        assert_eq!(changed_paths(&before, &after), ["b.rs", "c.rs"]);
-    }
-
-    /// Runs a real turn through the installed CLI, allowing every approval, and
-    /// checks the parsed stream. Needs the agent installed and signed in:
-    /// `cargo test -- --ignored`.
-    pub(in crate::orchestration) fn live_turn(agent: AgentKind, mode: AccessMode) {
-        let root = std::env::temp_dir().join(new_id());
-        std::fs::create_dir_all(&root).unwrap();
-        let root_str = root.to_str().unwrap();
-        let ok = crate::system::host_command("git")
-            .args(["init", "-q"])
-            .current_dir(&root)
-            .status()
-            .unwrap();
-        assert!(ok.success());
-
-        let spec = TurnSpec {
-            root: root_str,
-            thread_id: "thread",
-            session_id: None,
-            model: (agent == AgentKind::Claude).then_some("haiku"),
-            vision_model: None,
-            text: "Create a file named hello.txt whose only content is the two letters hi (no period). Do nothing else.",
-            mode,
-            plan: false,
-            effort: None,
-            compact_window: 0,
-            attachments: &[],
-            images: &[],
-            instructions: None,
-            skills_dir: None,
-            guarded: &[],
-            agents: &[],
-            hooks: &[],
-        };
-        let baseline = workspace::git_changes(root_str).unwrap();
-        let input = provider::turn_input(agent, &spec);
-        let mut child = provider::agent_command(agent)
-            .unwrap()
-            .args(provider::turn_args(agent, &spec))
-            .current_dir(&root)
-            .stdin(if input.is_empty() {
-                Stdio::null()
-            } else {
-                Stdio::piped()
-            })
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap();
-        let stdin: Stdin = Arc::new(Mutex::new(AgentStdin::take(&mut child, agent, "test")));
-        for line in &input {
-            write_line(&stdin, line);
-        }
-
-        let mut parsed = Vec::new();
-        for line in BufReader::new(child.stdout.take().unwrap()).lines() {
-            let Ok(value) = serde_json::from_str::<Value>(&line.unwrap()) else {
-                continue;
-            };
-            for item in provider::parse_line(agent, &value, &spec, "m") {
-                match &item {
-                    Parsed::Send(line) => {
-                        write_line(&stdin, line);
-                    }
-                    Parsed::Approval { reply, .. } => {
-                        write_line(
-                            &stdin,
-                            &provider::approval_reply(agent, reply, true, &HashMap::new()),
-                        );
-                    }
-                    Parsed::Finished => drop(stdin.lock().unwrap().take()),
-                    _ => {}
-                }
-                parsed.push(item);
-            }
-        }
-        let out = child.wait_with_output().unwrap();
-        assert!(
-            out.status.success(),
-            "{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        assert!(parsed.iter().any(|p| matches!(p, Parsed::SessionId(_))));
-        assert!(
-            !parsed.iter().any(|p| matches!(p, Parsed::Error(_))),
-            "{parsed:?}"
-        );
-        if mode == AccessMode::Supervised && agent != AgentKind::Antigravity {
-            assert!(parsed.iter().any(|p| matches!(p, Parsed::Approval { .. })));
-        }
-        let changed = changed_paths(&baseline, &workspace::git_changes(root_str).unwrap());
-        assert_eq!(changed, ["hello.txt"]);
-        let content = std::fs::read_to_string(root.join("hello.txt")).unwrap();
-        assert_eq!(content.trim(), "hi");
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    #[ignore = "runs the real Claude Code CLI"]
-    pub(in crate::orchestration) fn live_claude_supervised_turn() {
-        live_turn(AgentKind::Claude, AccessMode::Supervised);
-    }
-
-    #[test]
-    #[ignore = "runs the real Codex CLI"]
-    pub(in crate::orchestration) fn live_codex_supervised_turn() {
-        live_turn(AgentKind::Codex, AccessMode::Supervised);
-    }
-
-    #[test]
-    #[ignore = "runs the real Claude Code CLI"]
-    pub(in crate::orchestration) fn live_claude_turn() {
-        live_turn(AgentKind::Claude, AccessMode::FullAccess);
-    }
-
-    #[test]
-    #[ignore = "runs the real Codex CLI"]
-    pub(in crate::orchestration) fn live_codex_turn() {
-        live_turn(AgentKind::Codex, AccessMode::FullAccess);
-    }
-
-    #[test]
-    #[ignore = "runs the real Antigravity CLI"]
-    pub(in crate::orchestration) fn live_antigravity_turn() {
-        live_turn(AgentKind::Antigravity, AccessMode::AutoAcceptEdits);
     }
 }

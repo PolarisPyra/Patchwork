@@ -6,6 +6,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::backgrounds::ChatBackground;
 use crate::permissions::PermissionSettings;
 use crate::projects::Project;
 use crate::provider::AgentKind;
@@ -63,6 +64,8 @@ pub struct Settings {
     pub updates: UpdateSettings,
     /// Id of the app icon color way in `assets/logos/manifest.json`. None uses the manifest default.
     pub logo: Option<String>,
+    /// What shows behind every chat's messages, unless the chat has its own.
+    pub chat_background: ChatBackground,
     /// Legacy switch for the import log, migrated into `logging` on load.
     #[serde(skip_serializing)]
     pub import_log_disabled: bool,
@@ -108,8 +111,7 @@ impl CheckSettings {
     }
 }
 
-/// The integrated terminal, as VS Code's `terminal.integrated.*` settings set it up, with its
-/// defaults.
+/// The integrated terminal: its environment, font, cursor, and scrollback, with their defaults.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "settings.ts")]
 #[serde(rename_all = "camelCase", default)]
@@ -216,7 +218,7 @@ pub enum RightClickBehavior {
     Nothing,
 }
 
-/// How much each log in `logs/<launch>/` records, as VS Code sets each of its logs.
+/// How much each log in `logs/<launch>/` records.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "settings.ts")]
 #[serde(rename_all = "camelCase", default)]

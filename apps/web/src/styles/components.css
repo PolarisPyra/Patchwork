@@ -1,0 +1,197 @@
+/* The shared primitives: buttons, links, cards, badges, keys, inputs, and toggles. */
+@layer components {
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-editor);
+  color: var(--text);
+  font-size: var(--fs-md);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.btn-success {
+  background: var(--success);
+  border-color: var(--success);
+  color: var(--text-on-accent);
+}
+.btn-success:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.btn-lg {
+  height: 36px;
+  padding: 0 20px;
+}
+/* Square icon button; complete on its own, so `btn` is optional alongside it. */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.btn-icon:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+/* A control shown only while its row is hovered. Out of hover it is clipped out of sight rather
+   than removed, so it stays in the accessibility tree where assistive tools and agents find it. */
+.group:not(:hover) .hover-reveal:not(:focus-visible) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent-text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.link:hover {
+  text-decoration: underline;
+}
+
+.card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  background: var(--bg-selected-muted);
+  color: var(--text-muted);
+}
+.badge-accent {
+  background: var(--bg-accent-soft);
+  color: var(--accent-text);
+}
+.badge-success {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.badge-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--bg-selected-muted);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  font-family: var(--font-ui);
+}
+
+.input {
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-input);
+  outline: none;
+  user-select: text;
+}
+.input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 1px var(--border-focus);
+}
+
+/* toggle switch: <button class="toggle" role="switch" aria-checked="true|false"> */
+.toggle {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  flex: none;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-selected-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.12s;
+}
+.toggle::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-on-accent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 0.12s;
+}
+.toggle[aria-checked="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.toggle[aria-checked="true"]::after {
+  transform: translateX(14px);
+}
+.toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.selectable {
+  -webkit-user-select: text;
+  user-select: text;
+}
+}

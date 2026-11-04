@@ -1,0 +1,15 @@
+[package]
+name = "patchwork-licensing"
+version = "0.0.0"
+license-file = "../../../LICENSE_COMMERCIAL.txt"
+description = "Patchwork's plans and the license keys that unlock them"
+edition = "2024"
+rust-version = "1.90"
+publish = false
+
+[dependencies]
+base64 = "0.22"
+ed25519-dalek = "2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+ts-rs = { version = "12", features = ["no-serde-warnings"] }

@@ -48,7 +48,7 @@ interface PanelProps {
   focusTerminal: number;
 }
 
-/** The panel under the chat, as VS Code's: the integrated terminal and the Output view. */
+/** The panel under the chat: the integrated terminal and the Output view. */
 export default function Panel({
   tab,
   onTab,
@@ -136,7 +136,7 @@ export default function Panel({
     // `start` reads the latest props; only these say a shell is wanted.
   }, [tab, newTerminal]);
 
-  // The last shell ending closes the panel, as closing the last terminal does in VS Code.
+  // The last shell ending closes the panel.
   const had = useRef(shells.length);
   useEffect(() => {
     if (had.current > 0 && shells.length === 0 && tab === "terminal") onClose();

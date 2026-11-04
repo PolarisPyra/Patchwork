@@ -6,10 +6,12 @@
 // calls, so a caller never needs to know which module a command lives in.
 import { agentsApi } from "~/api/agents";
 import { attachmentsApi } from "~/api/attachments";
+import { backgroundsApi } from "~/api/backgrounds";
 import { computerApi } from "~/api/computer";
 import { filesApi } from "~/api/files";
 import { gitApi } from "~/api/git";
 import { importsApi } from "~/api/imports";
+import { licenseApi } from "~/api/license";
 import { logsApi } from "~/api/logs";
 import { mcpApi } from "~/api/mcp";
 import { modelsApi } from "~/api/models";
@@ -63,7 +65,9 @@ export const api = {
   ...threadsApi,
   ...turnsApi,
   ...attachmentsApi,
+  ...backgroundsApi,
   ...filesApi,
   ...gitApi,
   ...updatesApi,
+  ...licenseApi,
 };

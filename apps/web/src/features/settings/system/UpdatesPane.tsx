@@ -4,7 +4,7 @@ import { api, onUpdateStatus, type UpdateState, type UpdateStatus } from "~/api"
 import { Markdown } from "~/features/chat";
 import { MinutesStepper, TokenRow } from "~/features/settings/controls";
 import type { PaneProps } from "~/features/settings/types";
-import { LICENSE_URL, RELEASES_URL, restartToUpdate } from "~/lib/updates";
+import { COMMERCIAL_LICENSE_URL, LICENSE_URL, RELEASES_URL, restartToUpdate } from "~/lib/updates";
 import { errorText } from "~/lib/util";
 import changelog from "../../../../../../CHANGELOG.md?raw";
 
@@ -129,6 +129,14 @@ export default function UpdatesPane({ settings, updateSettings }: PaneProps) {
           onClick={() => void api.openUrl(LICENSE_URL)}
         >
           GNU AGPL v3.0 or later
+        </button>
+        , and its paid features are under the{" "}
+        <button
+          type="button"
+          className="cursor-pointer border-none bg-transparent p-0 text-accent-text underline underline-offset-2 hover:text-accent-hover"
+          onClick={() => void api.openUrl(COMMERCIAL_LICENSE_URL)}
+        >
+          Patchwork Commercial License
         </button>
         . © 2026 PolarisPyra. No warranty.
       </p>

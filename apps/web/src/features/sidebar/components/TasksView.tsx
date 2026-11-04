@@ -16,6 +16,7 @@ import {
   FolderIcon,
   FolderOpenIcon,
   FolderPlusIcon,
+  ImageIcon,
   MagicWandIcon,
   PencilSimpleIcon,
   PlusIcon,
@@ -68,6 +69,7 @@ export default function TasksView({
   onNewChat,
   onSelectThread,
   onRenameThread,
+  onChatBackground,
   onRenameProject,
   onRelocateProject,
   onRemoveTargets,
@@ -171,7 +173,7 @@ export default function TasksView({
     const anchor = cursor ? treeRows.findIndex((r) => sameTarget(r, cursor)) : -1;
     const at = treeRows.findIndex((r) => sameTarget(r, target));
     cursorRef.current = target;
-    // Shift+click picks every tree row from the cursor to the clicked row, as VS Code's explorer does.
+    // Shift+click picks every tree row from the cursor to the clicked row.
     if (e.shiftKey && anchor >= 0 && at >= 0) {
       const [from, to] = anchor < at ? [anchor, at] : [at, anchor];
       setPicked(treeRows.slice(from, to + 1));
@@ -208,6 +210,11 @@ export default function TasksView({
         : []),
       ...(targets.length === 1 && targets[0].kind === "thread"
         ? [
+            {
+              label: "Background…",
+              Icon: ImageIcon,
+              onSelect: () => onChatBackground(targets[0].id),
+            },
             {
               label: "Export to…",
               Icon: ExportIcon,
@@ -422,7 +429,7 @@ export default function TasksView({
         break;
       case "Enter":
         if (!current) break;
-        // Enter opens the chat and moves the focus into it, as Enter does in VS Code's explorer.
+        // Enter opens the chat and moves the focus into it.
         if (current.kind === "thread") {
           holdTreeFocus(false);
           onSelectThread(current.id);

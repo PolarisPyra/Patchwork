@@ -5,11 +5,13 @@
 pub const VERSION: &str = env!("PATCHWORK_VERSION");
 
 pub mod agents;
+pub mod backgrounds;
 pub mod checks;
 pub mod computer;
 pub mod error;
 pub mod harness;
 pub mod import;
+pub mod license;
 pub mod logging;
 pub mod orchestration;
 pub mod permissions;
@@ -51,6 +53,8 @@ pub struct Server {
     chats_dir: PathBuf,
     /// Images pasted into a chat, saved as files so they attach like dropped ones.
     pasted_dir: PathBuf,
+    /// Pictures picked as chat backgrounds, copied so they stay when the originals move.
+    backgrounds_dir: PathBuf,
     /// Where an agent CLI's install script is saved while it runs.
     installers_dir: PathBuf,
     sink: EventSink,
@@ -93,6 +97,7 @@ impl Server {
             runner: Runner::default(),
             chats_dir: data_dir.join("chats"),
             pasted_dir: data_dir.join("pasted"),
+            backgrounds_dir: data_dir.join("backgrounds"),
             installers_dir: data_dir.join("installers"),
             sink,
             project_watch: std::sync::Mutex::default(),

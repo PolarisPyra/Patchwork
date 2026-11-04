@@ -196,7 +196,7 @@ pub fn run() {
             );
             let not_moved = dirs.adopt_old_layout();
             // The app's own messages go to `main.log` in this launch's log folder in every
-            // build, as VS Code writes its own, and to stdout in development. Settings →
+            // build, and to stdout in development. Settings →
             // Logging sets how much they record.
             {
                 use tauri_plugin_log::{Builder, RotationStrategy, Target, TargetKind};
@@ -353,6 +353,11 @@ pub fn run() {
             commands::threads::set_thread_role,
             commands::files::save_text_file,
             commands::threads::set_thread_effort,
+            commands::backgrounds::set_thread_background,
+            commands::backgrounds::import_background_image,
+            commands::license::license_status,
+            commands::license::set_license_key,
+            commands::license::remove_license_key,
             commands::threads::set_thread_compact_window,
             commands::turns::send_message,
             commands::attachments::attachment_for_path,

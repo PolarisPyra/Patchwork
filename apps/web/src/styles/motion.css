@@ -1,0 +1,481 @@
+/* Motion: the spinner, the reply's and the composer's transitions, the setup steps, and the goal
+   sweeps. Each keeps still under reduced motion. */
+@layer components {
+
+/* Spinner's arc runs once around its ring (circumference 2π × 9) per 0.8 seconds. */
+.spinner-arc {
+  animation: spinner-arc 0.8s linear infinite;
+}
+@keyframes spinner-arc {
+  to {
+    stroke-dashoffset: -56.55;
+  }
+}
+
+/* A row whose work is running: a lighter band of grey sweeps across its words, left to right, once
+   every 2 seconds. The band is painted through the text, so the words never dim or move. */
+.text-shimmer {
+  background: linear-gradient(
+      90deg,
+      var(--text-subtle) 35%,
+      var(--text) 50%,
+      var(--text-subtle) 65%
+    )
+    0 0 / 300% 100%;
+  background-clip: text;
+  color: transparent;
+  animation: text-shimmer 2s linear infinite;
+}
+@keyframes text-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .text-shimmer {
+    animation: none;
+    background: none;
+    color: inherit;
+  }
+}
+
+/* A block that has just arrived in a reply settles into place. For the first 30% of the 430ms
+   (129ms) the block moves into place while it is still at zero opacity and still blurred, then it
+   fades in and un-blurs with ease-out. The
+   per-step timing functions live in the keyframes, so the animation itself just says `backwards`,
+   and reduced motion swaps the keyframes rather than the declaration. Only the block still
+   arriving carries the class, so scrolling back does not replay it.
+
+   Blocks of text only: it blurs and scales its whole subtree, which is right for prose appearing
+   as one thing and wrong for a row with an icon in it, so those rows fade their label instead. */
+.timeline-enter {
+  animation: timeline-enter 430ms backwards;
+  /* A row scales up from its own left edge, not from its middle, so it does not drift sideways. */
+  transform-origin: var(--timeline-enter-origin-x, left) center;
+}
+@keyframes timeline-enter {
+  0% {
+    opacity: 0;
+    filter: blur(4px);
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    transform: translateY(5px) scale(0.9);
+  }
+  30% {
+    opacity: 0;
+    filter: blur(4px);
+    animation-timing-function: ease-out;
+    transform: none;
+  }
+  to {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+}
+
+/* An expandable part of a row — the details under a tool call, the steps in a fold, the list of
+   subagents — opens by growing its row height from 0fr to 1fr, so the rows below slide down with
+   it instead of jumping. */
+.timeline-expand {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+.timeline-expand > * {
+  align-self: start;
+  min-width: 0;
+  min-height: 0;
+}
+.timeline-expand-enter {
+  animation: 200ms cubic-bezier(0.19, 1, 0.22, 1) timeline-expand;
+}
+@keyframes timeline-expand {
+  0% {
+    opacity: 0;
+    grid-template-rows: 0fr;
+  }
+  to {
+    opacity: 1;
+    grid-template-rows: 1fr;
+  }
+}
+
+/* A status line — "Working", a retry, a tool row's label — fades in rather than popping into the
+   row it shares with the reply, so the row does not jump when the label changes.
+
+   It goes on the text, never on the row: a row can hold an icon, and an icon that fades, blurs or
+   scales reads as a smudge instead of as something arriving. Rows put this on their label span
+   (see EntryText in AgentStepDisplay.tsx) and paint the icon at once. */
+.timeline-status-enter {
+  animation: 250ms ease-in-out timeline-fade-in;
+}
+@keyframes timeline-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .timeline-status-enter,
+  .timeline-expand-enter {
+    animation: none;
+  }
+  /* The block still settles, but as a plain fade. */
+  @keyframes timeline-enter {
+    0% {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+/* A reply's words as they arrive: each word past the last one on screen fades in where it lands,
+   rather than the whole block re-painting when a delta comes in. The delay is set per word by
+   Markdown.tsx, which spaces a step's words out over a few tens of milliseconds. */
+.stream-word-in {
+  animation: stream-word-fade 100ms linear backwards;
+}
+@keyframes stream-word-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stream-word-in {
+    animation: none;
+  }
+}
+
+/* Each block of a reply is its own layout and paint context, so a word fading in at the end of a
+   long reply repaints that block instead of the whole message. Tables and diagrams keep their own
+   containment: a table would lose its column sizing, and math and mermaid draw outside their box. */
+.md-blocks > * {
+  contain: layout;
+}
+.md-blocks > table,
+.md-blocks > :is(.katex-display, .math-display, [data-artifact], [data-mermaid]) {
+  contain: none;
+}
+
+/* Composer strips share one short height transition for mounting, collapsing, and dismissing.
+   The clipped grid child keeps the composer anchored while the strip's space changes. */
+.composer-strip-presence,
+.composer-strip-disclosure {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 180ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 140ms ease-out;
+}
+.composer-strip-presence[data-open="true"],
+.composer-strip-disclosure[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.composer-strip-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+.composer-strip-caret {
+  transition: transform 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+.composer-strip-caret[data-open="true"] {
+  transform: rotate(90deg);
+}
+.composer-strip button,
+.composer-strip-tone {
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease, opacity 120ms ease;
+}
+.composer-strip-state {
+  animation: composer-strip-state-in 140ms ease-out;
+}
+@keyframes composer-strip-state-in {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+/* A cleared goal's status line settles in rather than appearing at once. */
+.goal-cleared-in {
+  animation: goal-cleared-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes goal-cleared-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .goal-cleared-in { animation: none; }
+}
+/* The update card eases down into place in the top right. */
+.update-card-in {
+  animation: update-card-in 350ms cubic-bezier(0.33, 1, 0.68, 1);
+}
+@keyframes update-card-in {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .update-card-in { animation: none; }
+}
+/* The setup steps: moving on, the line to the next step fills, then that step's circle pops in
+   with a soft ring, and the step left behind turns into a check. Going back undoes it at once. */
+.step-line-fill {
+  /* The logo's colours flow along the line. */
+  background: linear-gradient(90deg, #5bc0eb, #9b5de5, #ff7eb3, #5bc0eb) 0 0 / 300% 100%;
+  transform-origin: left;
+  transition: transform 380ms cubic-bezier(0.65, 0, 0.35, 1);
+  animation: step-line-flow 4s linear infinite;
+}
+@keyframes step-line-flow {
+  to { background-position: 150% 0; }
+}
+.step-dot {
+  transition: background-color 200ms ease, color 200ms ease;
+}
+.step-dot-filled {
+  background: linear-gradient(135deg, #5bc0eb, #9b5de5 55%, #ff7eb3);
+  color: #fff;
+}
+/* A picked setup choice: a plain, slightly lighter fill and a stronger border, no colour. It sets
+   the background outright, so hovering a picked choice changes nothing. */
+.choice-selected {
+  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--text) 6%, var(--bg-editor));
+}
+.step-dot-current {
+  animation: step-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) 220ms both;
+}
+/* Around the current step's circle: a breathing ring in the logo's colours, a few bubbles that
+   bob, and two sparkles that twinkle. Nothing turns, so it never reads as loading. */
+.step-halo {
+  position: absolute;
+  inset: -8px;
+  pointer-events: none;
+  animation: step-halo-in 520ms cubic-bezier(0.34, 1.56, 0.64, 1) 260ms both;
+}
+.step-halo-ring {
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  padding: 1.5px;
+  background: conic-gradient(#5bc0eb, #9b5de5, #ff7eb3, #5bc0eb);
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: step-breathe 2.6s ease-in-out infinite;
+}
+.step-bubble {
+  position: absolute;
+  border-radius: 50%;
+  animation: step-bob 2.2s ease-in-out infinite alternate;
+}
+.step-bubble-1 { top: -1px; right: 0; width: 6px; height: 6px; background: #ff7eb3; }
+.step-bubble-2 { bottom: 1px; left: -2px; width: 5px; height: 5px; background: #5bc0eb; animation-delay: -0.8s; }
+.step-bubble-3 { bottom: -3px; right: 5px; width: 3px; height: 3px; background: #9b5de5; animation-delay: -1.5s; }
+.step-sparkle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  animation: step-twinkle 1.9s ease-in-out infinite;
+}
+.step-sparkle-1 { top: -3px; left: 0; fill: #ffd86b; }
+.step-sparkle-2 { top: 9px; right: -6px; width: 6px; height: 6px; fill: #ffc2dc; animation-delay: -0.95s; }
+@keyframes step-halo-in {
+  from { opacity: 0; transform: scale(0.5); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes step-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.08); opacity: 0.55; }
+}
+@keyframes step-bob {
+  from { transform: translateY(0) scale(1); }
+  to { transform: translateY(-2.5px) scale(1.15); }
+}
+@keyframes step-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.3) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(45deg); }
+}
+.step-check-in {
+  animation: step-check-in 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes step-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+@keyframes step-check-in {
+  from { opacity: 0; transform: scale(0.4) rotate(-30deg); }
+  to { opacity: 1; transform: none; }
+}
+/* A setup step's title, text and box slide in a few pixels from the side the step comes from,
+   one just after another, and its footer text fades in. */
+.step-enter > * {
+  animation: step-enter 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.step-enter > :nth-child(2) { animation-delay: 30ms; }
+.step-enter > :nth-child(3) { animation-delay: 70ms; }
+.step-enter-back > * { --step-from: -16px; }
+@keyframes step-enter {
+  from { opacity: 0; transform: translateX(var(--step-from, 16px)); }
+  to { opacity: 1; transform: none; }
+}
+.step-fade-in {
+  animation: step-fade-in 260ms ease both;
+}
+@keyframes step-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .step-line-fill, .step-dot { transition: none; }
+  .step-line-fill, .step-dot-current, .step-check-in, .step-enter > *, .step-fade-in { animation: none; }
+  .step-halo, .step-halo-ring, .step-bubble { animation: none; }
+  .step-sparkle { display: none; }
+}
+/* A project whose folder was dropped on the sidebar again flashes, to show it is already there. */
+.project-flash {
+  animation: project-flash 900ms ease-out;
+}
+@keyframes project-flash {
+  0%, 30% { background-color: var(--bg-accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+  100% { background-color: transparent; box-shadow: inset 0 0 0 1px transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .project-flash { animation-duration: 1ms; }
+}
+/* A refresh that brought no new numbers shakes its button; one the provider rate-limited also
+   flashes it red. */
+.refresh-shake {
+  animation: refresh-shake 450ms ease-out;
+}
+.refresh-denied {
+  animation: refresh-shake 450ms ease-out, refresh-red 450ms ease-out;
+}
+@keyframes refresh-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+@keyframes refresh-red {
+  0%, 80% { background-color: var(--danger-soft); color: var(--danger); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .refresh-shake { animation: none; }
+  .refresh-denied { animation: refresh-red 450ms ease-out; }
+}
+/* The model picker slides out to the right of its chip instead of dropping down. */
+.model-picker-panel {
+  animation: model-picker-out 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes model-picker-out {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .model-picker-panel { animation: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .composer-strip-presence,
+  .composer-strip-disclosure,
+  .composer-strip-caret,
+  .composer-strip button,
+  .composer-strip-tone {
+    transition: none;
+  }
+  .composer-strip-state { animation: none; }
+}
+
+/* The composer's border while a goal is active: two accent sweeps that turn around the box. The
+   padding-box layer keeps the editor fill, and the border-box layer shows through the border. */
+@property --goal-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.goal-border {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--bg-editor), var(--bg-editor)) padding-box,
+    conic-gradient(
+        from var(--goal-angle),
+        #4285f4 0deg,
+        #9b72cb 72deg,
+        #d96570 144deg,
+        #fbbc04 216deg,
+        #34a853 288deg,
+        #4285f4 360deg
+      )
+      border-box;
+  animation: goal-border-turn 4s linear infinite;
+}
+
+@keyframes goal-border-turn {
+  to {
+    --goal-angle: 360deg;
+  }
+}
+
+/* The same sweep around a sidebar row whose goal is active, so a running goal shows from any
+   other tab. The ::after layer is masked down to its 1px border. The row's fill drifts slowly
+   between the selected blue and a lighter tint. The ring's stops match .goal-border. */
+.goal-ring {
+  position: relative;
+  background-image: linear-gradient(
+    135deg,
+    var(--bg-selected) 0%,
+    color-mix(in srgb, var(--bg-selected), white 10%) 50%,
+    var(--bg-selected) 100%
+  );
+  background-size: 200% 100%;
+  animation: goal-row-drift 8s linear infinite alternate;
+}
+
+@keyframes goal-row-drift {
+  from {
+    background-position: 0% 0;
+  }
+  to {
+    background-position: 100% 0;
+  }
+}
+
+.goal-ring::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--goal-angle),
+    #4285f4 0deg,
+    #9b72cb 72deg,
+    #d96570 144deg,
+    #fbbc04 216deg,
+    #34a853 288deg,
+    #4285f4 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: goal-border-turn 4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .goal-border,
+  .goal-ring,
+  .goal-ring::after {
+    animation: none;
+  }
+}
+}

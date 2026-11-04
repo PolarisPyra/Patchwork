@@ -29,6 +29,9 @@ importers:
       '@legendapp/list':
         specifier: 3.3.5
         version: 3.3.5(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@patchwork/commercial-web':
+        specifier: workspace:*
+        version: link:../../commercial/web
       '@phosphor-icons/react':
         specifier: ^2.1.10
         version: 2.1.10(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -135,6 +138,19 @@ importers:
       vite:
         specifier: ^8.3.4
         version: 8.3.4(@types/node@26.6.5)(jiti@2.7.0)
+
+  commercial/web:
+    dependencies:
+      '@phosphor-icons/react':
+        specifier: ^2.1.10
+        version: 2.1.10(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      react:
+        specifier: ^19.3.1
+        version: 19.3.1
+    devDependencies:
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
 
 packages:
 

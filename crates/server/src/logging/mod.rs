@@ -1,7 +1,6 @@
-//! Debug logs, laid out and written the way VS Code writes its own, for people to send with a
-//! bug report. Each launch writes a folder, `<config>/logs/<YYYYMMDDTHHMMSS>` in local time,
-//! and the newest `KEEP_SESSIONS` are kept. The folder holds only files, so it zips and reads
-//! as it is:
+//! Debug logs, for people to send with a bug report. Each launch writes a folder,
+//! `<config>/logs/<YYYYMMDDTHHMMSS>` in local time, and the newest `KEEP_SESSIONS` are kept. The
+//! folder holds only files, so it zips and reads as it is:
 //!
 //! ```text
 //! 20261026T121729/

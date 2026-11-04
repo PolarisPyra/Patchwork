@@ -6,7 +6,7 @@ let nextId = 1;
 const pending = new Map<number, { text: string; resolve: (language: string | null) => void }>();
 
 /**
- * Programming languages the model's best guess is taken for below VS Code's confidence, when the
+ * Programming languages the model's best guess is taken for below the usual confidence, when the
  * code also matches enough of the language's grammar. A few lines are too little for the model to
  * be sure; text formats that plain text is mistaken for are never taken this way.
  */
@@ -31,7 +31,7 @@ const SHORT_CODE_LANGUAGES = new Set([
 /** Grammar matches a short snippet needs for the model's best guess to be taken. */
 const MIN_GRAMMAR_RELEVANCE = 2;
 
-/** The language to label code with, from the model's guess and whether VS Code would take it. */
+/** The language to label code with, from the model's guess and whether it is clear. */
 function chooseLanguage(text: string, guess: string | null, clear: boolean): string | null {
   if (!guess) return null;
   if (clear) return guess;
@@ -94,7 +94,7 @@ export function isTerminalOutput(text: string): boolean {
   return TERMINAL_LINE.test(text);
 }
 
-/** The language of a piece of code as VS Code would detect it, or null when it is unclear. */
+/** The language of a piece of code, or null when it is unclear. */
 export function detectLanguage(text: string): Promise<string | null> {
   if (isJson(text)) return Promise.resolve("json");
   if (isTerminalOutput(text)) return Promise.resolve(null);

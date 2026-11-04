@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::provider::{AgentKind, ProviderSlashCommand};
+use crate::backgrounds::ChatBackground;
 use crate::threads::Message;
 
 /// How much an agent may do without asking.
@@ -40,6 +41,10 @@ pub struct Thread {
     /// Tokens; 0 leaves it until the context is full.
     #[serde(default)]
     pub compact_window: Option<u64>,
+    /// The chat's own background. None shows the one in Settings, as does any background while
+    /// the plan lacks per-chat backgrounds.
+    #[serde(default)]
+    pub background: Option<ChatBackground>,
     /// Claude session_id / Codex thread_id used to resume the conversation.
     pub session_id: Option<String>,
     pub created_at: u64,

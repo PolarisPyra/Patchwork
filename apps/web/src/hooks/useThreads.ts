@@ -7,6 +7,7 @@ import {
   type AgentEventEnvelope,
   type AgentKind,
   type Attachment,
+  type ChatBackground,
   type Folder,
   type Thread,
 } from "~/api";
@@ -276,6 +277,7 @@ export function useThreads(initialProjectId: string | null) {
       accessMode: opts.accessMode,
       effort: opts.effort,
       compactWindow: opts.compactWindow,
+      background: null,
       sessionId: null,
       createdAt: Date.now(),
       messages: [],
@@ -502,6 +504,11 @@ export function useThreads(initialProjectId: string | null) {
     setThreads((prev) => prev.map((t) => (t.id === id ? { ...t, compactWindow } : t)));
   }
 
+  async function setBackground(id: string, background: ChatBackground | null): Promise<void> {
+    await api.setThreadBackground(id, background);
+    setThreads((prev) => prev.map((t) => (t.id === id ? { ...t, background } : t)));
+  }
+
   /** Sends a message, creating a thread in `projectId` first when none is selected. */
   async function send(
     text: string,
@@ -568,6 +575,7 @@ export function useThreads(initialProjectId: string | null) {
     setPlanMode,
     setEffort,
     setCompactWindow,
+    setBackground,
     send,
     startThread,
   };

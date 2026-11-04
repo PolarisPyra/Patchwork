@@ -1,4 +1,4 @@
-//! How one record reads in a log file: its time, level, source and text, laid out as VS Code lays out its own.
+//! How one record reads in a log file: its time, level, source and text.
 
 use chrono::{Local, TimeZone};
 use crate::settings::LogLevel;

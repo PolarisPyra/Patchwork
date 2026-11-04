@@ -227,8 +227,8 @@ export default function TerminalPane({ settings, updateSettings }: PaneProps) {
   );
 }
 
-/** The terminal's environment variables. A removed variable is taken out of the shell's
- * environment, as `null` in VS Code's `terminal.integrated.env`. */
+/** The terminal's environment variables. A removed variable is kept as `null`, which takes it out
+ * of the shell's environment. */
 function EnvEditor({
   env,
   onChange,
