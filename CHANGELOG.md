@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.9] - 2026-11-04
+
+### Added
+
+- Chats can have a background, like a chat app's wallpaper. Pick one for every chat in Settings → General, from a few ready-made ones or your own picture. On the Basic plan, right-click a chat in the sidebar and choose Background… to give it one of its own, and enter your license key in Settings → License.
+
 ## [26.11.8] - 2026-11-04
 
 ### Changed
