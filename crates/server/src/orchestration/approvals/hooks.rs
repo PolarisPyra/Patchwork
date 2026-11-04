@@ -66,6 +66,7 @@ impl Runner {
             suggestions: permissions::suggest(&target, Path::new(&root)),
             rule: None,
             auto: false,
+            secret: None,
         };
         if let Some(decision) = denied {
             approval.status = ApprovalStatus::Denied;

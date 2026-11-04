@@ -50,6 +50,7 @@ import type {
   Theme,
   TokenSettings,
 } from "~/bindings/settings";
+import type { Secret, SecretStatus } from "~/bindings/secrets";
 import type { Skill } from "~/bindings/skills";
 import type { StartedTerminal, TerminalExit, TerminalOutput } from "~/bindings/terminal";
 import type {
@@ -139,6 +140,8 @@ export type {
   ScheduledRun,
   ScheduledTask,
   ScopeRules,
+  Secret,
+  SecretStatus,
   Screenshot,
   Settings,
   ShellChoices,

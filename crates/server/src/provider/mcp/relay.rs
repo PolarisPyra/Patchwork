@@ -28,6 +28,65 @@ pub fn set_hook_handler(handler: HookHandler) {
     let _ = HOOK_HANDLER.set(handler);
 }
 
+/// The server Patchwork's own tools are served under, to every agent.
+pub const OWN_SERVER: &str = "patchwork";
+
+/// Runs one of Patchwork's own tools for a thread's agent: the thread, the tool, its arguments,
+/// and whether to stop waiting.
+type ToolHandler =
+    Box<dyn Fn(&str, &str, &Value, &dyn Fn() -> bool) -> Result<String, String> + Send + Sync>;
+static TOOL_HANDLER: OnceLock<ToolHandler> = OnceLock::new();
+
+/// Sets what runs Patchwork's own tools; called once when the server opens.
+pub fn set_tool_handler(handler: ToolHandler) {
+    let _ = TOOL_HANDLER.set(handler);
+}
+
+/// Runs Patchwork's own tool `tool` for the agent of `thread_id`, until `stopped`.
+pub fn call_own(
+    thread_id: &str,
+    tool: &str,
+    args: &Value,
+    stopped: &dyn Fn() -> bool,
+) -> Result<String, String> {
+    TOOL_HANDLER
+        .get()
+        .ok_or("Patchwork is still starting")
+        .map_err(str::to_string)
+        .and_then(|handle| handle(thread_id, tool, args, stopped))
+}
+
+/// Answers a request a CLI sends Patchwork's own server, for the agent of `thread_id`.
+fn own_request(
+    thread_id: &str,
+    method: &str,
+    params: &Value,
+    stopped: &dyn Fn() -> bool,
+) -> Result<Value, String> {
+    match method {
+        "initialize" => Ok(json!({
+            "protocolVersion": params["protocolVersion"].as_str().unwrap_or(super::PROTOCOL),
+            "capabilities": {"tools": {}},
+            "serverInfo": {"name": OWN_SERVER, "version": crate::VERSION},
+        })),
+        "ping" => Ok(json!({})),
+        "tools/list" => Ok(json!({"tools": [{
+            "name": crate::secrets::TOOL,
+            "description": crate::secrets::DESCRIPTION,
+            "inputSchema": crate::secrets::input_schema(),
+        }]})),
+        "tools/call" => {
+            let tool = params["name"].as_str().unwrap_or_default();
+            let (text, error) = match call_own(thread_id, tool, &params["arguments"], stopped) {
+                Ok(text) => (text, false),
+                Err(text) => (text, true),
+            };
+            Ok(json!({"content": [{"type": "text", "text": text}], "isError": error}))
+        }
+        _ => Err(format!("Patchwork's own server does not answer {method}")),
+    }
+}
+
 /// The file the relay reads its port and token from, once Patchwork is listening.
 pub fn relay_file() -> Option<PathBuf> {
     RELAY_READY
@@ -88,6 +147,8 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
         return;
     }
     let server = hello["server"].as_str().unwrap_or_default().to_string();
+    // A relay that names its thread is to Patchwork's own server, for that thread's agent.
+    let thread = hello["thread"].as_str().map(str::to_string);
     let out = Arc::new(Mutex::new(stream));
     let reply = move |out: &Mutex<std::net::TcpStream>, v: Value| {
         let mut out = out.lock().unwrap_or_else(PoisonError::into_inner);
@@ -101,7 +162,7 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
     let tokens: Arc<Mutex<HashMap<String, Value>>> = Arc::default();
     // The server's notifications: progress goes to the CLI whose request it is about, and the
     // rest, such as a changed tool list, to every CLI sharing the server.
-    if let Some(entry) = pool().get(&server).cloned() {
+    if let Some(entry) = pool().get(&server).cloned().filter(|_| thread.is_none()) {
         let (tx, rx) = mpsc::channel::<Value>();
         entry
             .notices
@@ -148,8 +209,13 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
             }
             continue;
         };
-        let (out, running, server, tokens) =
-            (out.clone(), running.clone(), server.clone(), tokens.clone());
+        let (out, running, server, tokens, thread) = (
+            out.clone(),
+            running.clone(),
+            server.clone(),
+            tokens.clone(),
+            thread.clone(),
+        );
         let mut params = message["params"].clone();
         let token = params["_meta"]["progressToken"].clone();
         let ours = (!token.is_null()).then(|| {
@@ -167,17 +233,20 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
             .unwrap_or_else(PoisonError::into_inner)
             .insert(id.to_string(), stop.clone());
         std::thread::spawn(move || {
-            let entry = pool().get(&server).cloned();
-            let result = entry
-                .ok_or_else(|| format!("Patchwork is not running the MCP server {server}"))
-                .and_then(|entry| entry.connect())
-                .and_then(|conn| match method.as_str() {
-                    "initialize" => Ok(conn.info.clone()),
-                    "ping" => Ok(json!({})),
-                    _ => conn.request(&method, params, CALL_TIMEOUT, &|| {
-                        stop.load(Ordering::Relaxed)
+            let stopped = || stop.load(Ordering::Relaxed);
+            let result = match &thread {
+                Some(thread) => own_request(thread, &method, &params, &stopped),
+                None => pool()
+                    .get(&server)
+                    .cloned()
+                    .ok_or_else(|| format!("Patchwork is not running the MCP server {server}"))
+                    .and_then(|entry| entry.connect())
+                    .and_then(|conn| match method.as_str() {
+                        "initialize" => Ok(conn.info.clone()),
+                        "ping" => Ok(json!({})),
+                        _ => conn.request(&method, params, CALL_TIMEOUT, &stopped),
                     }),
-                });
+            };
             running
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
@@ -205,13 +274,18 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
         .for_each(|stop| stop.store(true, Ordering::Relaxed));
 }
 
-/// Runs the relay a CLI starts: `--mcp-proxy <relay file> <server>`. It passes stdin to
-/// Patchwork and Patchwork's answers to stdout; the process exits with what this returns.
+/// Runs the relay a CLI starts: `--mcp-proxy <relay file> <server> [thread]`, with the thread
+/// for Patchwork's own server. It passes stdin to Patchwork and Patchwork's answers to stdout; the
+/// process exits with what this returns.
 pub fn run_proxy() -> i32 {
     let args: Vec<String> = std::env::args().skip(2).collect();
-    let [file, server] = args.as_slice() else {
-        eprintln!("Usage: {PROXY_ARG} <relay file> <server>");
-        return 2;
+    let (file, server, thread) = match args.as_slice() {
+        [file, server] => (file, server, None),
+        [file, server, thread] => (file, server, Some(thread)),
+        _ => {
+            eprintln!("Usage: {PROXY_ARG} <relay file> <server> [thread]");
+            return 2;
+        }
     };
     let relay: Value = match std::fs::read_to_string(file)
         .ok()
@@ -234,7 +308,7 @@ pub fn run_proxy() -> i32 {
             return 1;
         }
     };
-    let hello = json!({"token": relay["token"], "server": server});
+    let hello = json!({"token": relay["token"], "server": server, "thread": thread});
     if writeln!(stream, "{hello}").is_err() {
         return 1;
     }

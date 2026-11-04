@@ -478,6 +478,7 @@ mod tests {
     fn spec(mode: AccessMode, plan: bool) -> TurnSpec<'static> {
         TurnSpec {
             root: "/w",
+            thread_id: "thread",
             session_id: None,
             model: None,
             vision_model: None,
@@ -570,6 +571,7 @@ mod dump_rules {
         ] {
             let spec = crate::provider::TurnSpec {
                 root: "/w",
+                thread_id: "thread",
                 session_id: None,
                 model: None,
                 vision_model: None,

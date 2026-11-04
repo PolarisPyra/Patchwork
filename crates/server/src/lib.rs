@@ -18,6 +18,7 @@ pub mod plugins;
 pub mod projects;
 pub mod provider;
 pub mod scheduled;
+pub mod secrets;
 pub mod settings;
 pub mod skills;
 pub mod system;
@@ -61,6 +62,8 @@ pub struct Server {
     pub agents: Arc<agents::Library>,
     /// The integrated terminal's running shells.
     pub terminals: terminal::Terminals,
+    /// Secret requests waiting for the user.
+    secrets: secrets::Waiters,
 }
 
 impl Server {
@@ -74,6 +77,7 @@ impl Server {
         plugins::init(&dirs.config);
         let agents = agents::Library::open(&dirs.config);
         std::thread::spawn(system::scope::prepare);
+        secrets::keep_swept();
         let logs = logging::session_dir(&dirs.logs);
         let store = Store::open(dirs.data)?;
         logging::start(&logs, &store.settings().logging);
@@ -91,11 +95,22 @@ impl Server {
             skills_watch: std::sync::Mutex::default(),
             agents,
             terminals: terminal::Terminals::default(),
+            secrets: secrets::Waiters::default(),
         });
         let weak = Arc::downgrade(&server);
         provider::mcp::set_hook_handler(Box::new(move |request| match weak.upgrade() {
             Some(server) => server.runner.hook_request(&server, request),
             None => serde_json::json!({"deny": "Patchwork is closing"}),
+        }));
+        let weak = Arc::downgrade(&server);
+        provider::mcp::set_tool_handler(Box::new(move |thread_id, tool, args, stopped| match weak
+            .upgrade()
+        {
+            Some(server) if tool == secrets::TOOL => server
+                .runner
+                .request_secret(&server, thread_id, args, stopped),
+            Some(_) => Err(format!("Patchwork has no tool {tool}")),
+            None => Err("Patchwork is closing".into()),
         }));
         Ok(server)
     }

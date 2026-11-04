@@ -130,6 +130,16 @@ fn describe(event: &AgentEvent) -> Option<(LogLevel, &'static str, Option<&str>,
                 format!("{approval_id} {answer}{by}"),
             )
         }
+        AgentEvent::SecretResolved {
+            message_id,
+            approval_id,
+            status,
+        } => (
+            Info,
+            "secret request resolved",
+            Some(message_id),
+            format!("{approval_id} {status:?}"),
+        ),
         AgentEvent::GoalUpdated { goal } => {
             let text = match goal {
                 Some(goal) => format!(

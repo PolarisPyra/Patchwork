@@ -444,16 +444,101 @@ fn codex_file(
         .collect()
 }
 
-/// Arguments that point a CLI's turn at Patchwork's copy of each server it shares, so the two
-/// do not each start one: `--mcp-config` replaces a Claude Code server of the same name, and
-/// `-c` a Codex one.
-pub fn overrides(agent: AgentKind, root: &str) -> Vec<String> {
-    let (Some(relay), Ok(exe)) = (mcp::relay_file(), std::env::current_exe()) else {
+/// How long an agent waits on one of Patchwork's own tools, which may wait an hour for the user.
+const OWN_TIMEOUT_SECS: u64 = 65 * 60;
+
+/// The command and arguments that reach Patchwork's own server for the agent of `thread_id`.
+pub fn own_server(thread_id: &str) -> Option<(String, Vec<String>)> {
+    let (relay, exe) = (mcp::relay_file()?, std::env::current_exe().ok()?);
+    let args = [
+        mcp::PROXY_ARG,
+        &relay.display().to_string(),
+        mcp::OWN_SERVER,
+        thread_id,
+    ];
+    Some((exe.display().to_string(), args.map(String::from).into()))
+}
+
+/// OpenCode's config for Patchwork's own server, for the agent of `thread_id`.
+pub fn opencode_config(thread_id: &str) -> Option<Value> {
+    let (exe, args) = own_server(thread_id)?;
+    let command: Vec<String> = std::iter::once(exe).chain(args).collect();
+    Some(serde_json::json!({"mcp": {mcp::OWN_SERVER: {
+        "type": "local",
+        "command": command,
+        "enabled": true,
+        "timeout": OWN_TIMEOUT_SECS * 1000,
+    }}}))
+}
+
+/// Arguments that give a CLI's turn Patchwork's own server, and point it at Patchwork's copy of
+/// each server it shares, so the two do not each start one: `--mcp-config` replaces a Claude
+/// Code server of the same name, and `-c` a Codex one.
+pub fn overrides(agent: AgentKind, root: &str, thread_id: &str) -> Vec<String> {
+    let Some((exe, own)) = own_server(thread_id) else {
         return Vec::new();
+    };
+    let mut relays = shared_relays(agent, root);
+    relays.insert(mcp::OWN_SERVER.to_string(), own);
+    let tool = crate::secrets::TOOL;
+    match agent {
+        AgentKind::Claude => {
+            let servers: serde_json::Map<String, Value> = relays
+                .into_iter()
+                .map(|(name, args)| {
+                    let mut entry = serde_json::json!({"command": exe, "args": args});
+                    if name == mcp::OWN_SERVER {
+                        entry["timeout"] = (OWN_TIMEOUT_SECS * 1000).into();
+                    }
+                    (name, entry)
+                })
+                .collect();
+            vec![
+                "--mcp-config".into(),
+                serde_json::json!({"mcpServers": servers}).to_string(),
+                // Asking for a secret is the user's to answer, so it is not asked about first.
+                "--allowedTools".into(),
+                format!("mcp__{}__{tool}", mcp::OWN_SERVER),
+            ]
+        }
+        AgentKind::Codex => relays
+            .into_iter()
+            // `-c` splits its key on dots, so a name must not hold one.
+            .filter(|(name, _)| {
+                name.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+            })
+            .flat_map(|(name, args)| {
+                // JSON strings and arrays of strings are also TOML.
+                let mut config = vec![
+                    "-c".to_string(),
+                    format!("mcp_servers.{name}.command={}", Value::from(exe.clone())),
+                    "-c".to_string(),
+                    format!("mcp_servers.{name}.args={}", Value::from(args)),
+                ];
+                if name == mcp::OWN_SERVER {
+                    config.extend([
+                        "-c".to_string(),
+                        format!("mcp_servers.{name}.tool_timeout_sec={OWN_TIMEOUT_SECS}"),
+                        "-c".to_string(),
+                        format!("mcp_servers.{name}.default_tools_approval_mode=\"approve\""),
+                    ]);
+                }
+                config
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// The relay arguments for each server the CLI shares with Patchwork, by the CLI's name for it.
+fn shared_relays(agent: AgentKind, root: &str) -> BTreeMap<String, Vec<String>> {
+    let Some(relay) = mcp::relay_file() else {
+        return BTreeMap::new();
     };
     let shared = mcp::shared_servers();
     if shared.is_empty() {
-        return Vec::new();
+        return BTreeMap::new();
     }
     let project = Project {
         id: String::new(),
@@ -471,9 +556,9 @@ pub fn overrides(agent: AgentKind, root: &str) -> Vec<String> {
                 .join("config.toml"),
             std::slice::from_ref(&project),
         ),
-        _ => return Vec::new(),
+        _ => return BTreeMap::new(),
     };
-    let relays: BTreeMap<String, Vec<String>> = found
+    found
         .into_iter()
         .filter(|f| !f.server.disabled && f.approved)
         .filter_map(|f| {
@@ -487,38 +572,5 @@ pub fn overrides(agent: AgentKind, root: &str) -> Vec<String> {
             ];
             Some((f.name, args))
         })
-        .collect();
-    if relays.is_empty() {
-        return Vec::new();
-    }
-    let exe = exe.display().to_string();
-    match agent {
-        AgentKind::Claude => {
-            let servers: serde_json::Map<String, Value> = relays
-                .into_iter()
-                .map(|(name, args)| (name, serde_json::json!({"command": exe, "args": args})))
-                .collect();
-            vec![
-                "--mcp-config".into(),
-                serde_json::json!({"mcpServers": servers}).to_string(),
-            ]
-        }
-        _ => relays
-            .into_iter()
-            // `-c` splits its key on dots, so a name must not hold one.
-            .filter(|(name, _)| {
-                name.chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-            })
-            .flat_map(|(name, args)| {
-                // JSON strings and arrays of strings are also TOML.
-                [
-                    "-c".to_string(),
-                    format!("mcp_servers.{name}.command={}", Value::from(exe.clone())),
-                    "-c".to_string(),
-                    format!("mcp_servers.{name}.args={}", Value::from(args)),
-                ]
-            })
-            .collect(),
-    }
+        .collect()
 }

@@ -67,6 +67,11 @@ pub fn definitions(plan: bool) -> Value {
             }}}, "required": ["questions"]}),
         ),
         tool(
+            crate::secrets::TOOL,
+            crate::secrets::DESCRIPTION,
+            crate::secrets::input_schema(),
+        ),
+        tool(
             "update_plan",
             "Show the user a checklist of the steps of a multi-step task, and keep it current as steps finish.",
             json!({"type": "object", "properties": {"steps": {"type": "array", "items": {

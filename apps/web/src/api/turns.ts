@@ -29,4 +29,7 @@ export const turnsApi = {
     answers?: Record<string, string[]>,
     rule?: RuleRef,
   ) => invoke<void>("respond_approval", { threadId, approvalId, allow, answers, rule }),
+  /** Saves the secret the agent asked for where only its commands read it; null declines. */
+  answerSecret: (threadId: string, approvalId: string, secret: string | null) =>
+    invoke<void>("answer_secret", { threadId, approvalId, secret }),
 };

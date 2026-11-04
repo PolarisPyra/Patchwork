@@ -152,6 +152,7 @@ fn claude_permission_request_round_trip() {
 fn claude_args_include_resume_model_and_mode() {
     let mut spec = TurnSpec {
         root: "/abs",
+        thread_id: "thread",
         session_id: Some("sid"),
         model: Some("opus"),
         vision_model: None,

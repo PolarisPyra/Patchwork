@@ -235,6 +235,9 @@ pub struct Approval {
     /// Answered by a rule, without asking.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub auto: bool,
+    /// Set when the agent asks for a secret, which the user enters in a private card.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secret: Option<crate::secrets::Secret>,
 }
 
 /// A question the agent asks the user, with the answers it offers.

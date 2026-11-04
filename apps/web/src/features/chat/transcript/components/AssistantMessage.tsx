@@ -81,11 +81,15 @@ export const AssistantMessage = memo(function AssistantMessage({
         onOpenThread={onOpenThread}
         onOpenFile={openFile}
         renderApprovals={(ids) => (
-          <Approvals approvals={message.approvals.filter((a) => ids.includes(a.id))} />
+          <Approvals
+            threadId={threadId}
+            approvals={message.approvals.filter((a) => ids.includes(a.id))}
+          />
         )}
       />
       {/* Replies saved before approvals had their place in the timeline show them here. */}
       <Approvals
+        threadId={threadId}
         approvals={message.approvals.filter(
           (a) => !message.parts.some((p) => p.type === "approval" && p.id === a.id),
         )}

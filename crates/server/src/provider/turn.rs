@@ -10,6 +10,8 @@ use super::Parsed;
 /// What one turn runs with.
 pub struct TurnSpec<'a> {
     pub root: &'a str,
+    /// The thread the turn runs in, which Patchwork's own tools act for.
+    pub thread_id: &'a str,
     pub session_id: Option<&'a str>,
     pub model: Option<&'a str>,
     /// The model that reads images, when `model` cannot. Only Patchwork's own agent uses it.
@@ -206,12 +208,12 @@ pub fn turn_args(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
     match agent {
         AgentKind::Claude => [
             claude::turn_args(spec),
-            crate::provider::mcp::clis::overrides(agent, spec.root),
+            crate::provider::mcp::clis::overrides(agent, spec.root, spec.thread_id),
         ]
         .concat(),
         AgentKind::Codex => [
             codex::turn_args(),
-            crate::provider::mcp::clis::overrides(agent, spec.root),
+            crate::provider::mcp::clis::overrides(agent, spec.root, spec.thread_id),
             crate::provider::hooks::codex_args(spec),
             codex::agents_args(spec),
             codex::compact_args(spec),
@@ -232,6 +234,7 @@ pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)
             opencode::skills_config(spec),
             opencode::agents_config(spec),
             opencode::todo_config(),
+            crate::provider::mcp::clis::opencode_config(spec.thread_id),
         ])
         .map(|config| ("OPENCODE_CONFIG_CONTENT", config))
         .into_iter()
@@ -242,6 +245,7 @@ pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)
                     opencode::permission_config(spec),
                     opencode::agents_config(spec),
                     opencode::instructions_config(spec),
+                    crate::provider::mcp::clis::opencode_config(spec.thread_id),
                 ])
                 .map(|config| ("OPENCODE_CONFIG_CONTENT", config)),
             )

@@ -88,6 +88,23 @@ pub(crate) fn respond_approval(
     )
 }
 
+/// Answers the agent's request for a secret: `secret` is saved where only the agent's commands
+/// can read it, and None declines.
+#[tauri::command]
+pub(crate) async fn answer_secret(
+    server: Srv<'_>,
+    thread_id: String,
+    approval_id: String,
+    secret: Option<String>,
+) -> Res<()> {
+    let server = server.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        server.answer_secret(&thread_id, &approval_id, secret)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Runs the project's check command again for a reply, on a thread of its own: the result
 /// arrives as a `checksRecorded` event.
 #[tauri::command]

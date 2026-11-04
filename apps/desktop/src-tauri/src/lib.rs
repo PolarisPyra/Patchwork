@@ -371,6 +371,7 @@ pub fn run() {
             commands::files::turn_file_diff,
             commands::git::git_branch,
             commands::git::git_changes,
+            commands::turns::answer_secret,
             commands::git::git_file_diff,
             commands::projects::watch_project,
             commands::git::accept_file,

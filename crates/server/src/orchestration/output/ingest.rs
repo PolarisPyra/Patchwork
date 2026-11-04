@@ -274,10 +274,15 @@ pub(in crate::orchestration) fn ingest(
                 } => {
                     let stdin = turn.stdin.clone();
                     let (cancelled, exited) = (turn.cancelled.clone(), turn.exited.clone());
+                    let thread_id = turn.thread_id.clone();
                     std::thread::spawn(move || {
                         let stopped =
                             || cancelled.load(Ordering::SeqCst) || exited.load(Ordering::SeqCst);
-                        let result = provider::mcp::call(&server, &tool, &arguments, &stopped);
+                        let result = if server == provider::mcp::OWN_SERVER {
+                            provider::mcp::call_own(&thread_id, &tool, &arguments, &stopped)
+                        } else {
+                            provider::mcp::call(&server, &tool, &arguments, &stopped)
+                        };
                         write_line(&stdin, &provider::api::mcp_reply(&id, result));
                     });
                 }
@@ -302,6 +307,7 @@ pub(in crate::orchestration) fn ingest(
                             .unwrap_or_default(),
                         rule: None,
                         auto: false,
+                        secret: None,
                     };
                     // The user already allowed it through a permission hook.
                     if target.as_ref().is_some_and(|t| {
@@ -1050,6 +1056,7 @@ mod tests {
 
         let spec = TurnSpec {
             root: root_str,
+            thread_id: "thread",
             session_id: None,
             model: (agent == AgentKind::Claude).then_some("haiku"),
             vision_model: None,

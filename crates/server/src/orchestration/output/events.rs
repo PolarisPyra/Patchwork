@@ -87,6 +87,12 @@ pub enum AgentEvent {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         auto: bool,
     },
+    /// The agent's request for a secret was answered, or stopped waiting.
+    SecretResolved {
+        message_id: String,
+        approval_id: String,
+        status: crate::secrets::SecretStatus,
+    },
     /// The thread's goal changed; None once it is cleared.
     GoalUpdated {
         goal: Option<Goal>,

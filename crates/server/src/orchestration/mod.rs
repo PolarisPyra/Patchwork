@@ -37,10 +37,12 @@ mod output {
 }
 
 /// Approvals a turn waits on, answered by the user or by the permission rules, including the
-/// permission hooks Codex and Antigravity run before a tool call.
+/// permission hooks Codex and Antigravity run before a tool call, and the agent's requests for a
+/// secret.
 mod approvals {
     pub(in crate::orchestration) mod answer;
     pub(in crate::orchestration) mod hooks;
+    pub(in crate::orchestration) mod secrets;
 }
 
 /// The files a reply changed: which changes were its own, and the snapshots of the project taken

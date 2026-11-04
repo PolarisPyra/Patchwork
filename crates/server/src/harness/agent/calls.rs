@@ -69,6 +69,11 @@ impl Agent {
                     Ok(answer) => (Ok(answer), false, false),
                     Err(e) => (Err(e), true, false),
                 },
+                crate::secrets::TOOL => {
+                    let result = self.request_secret(&call.id, &args);
+                    let error = result.is_err();
+                    (result, error, false)
+                }
                 name => {
                     // A write that would be refused anyway is not put to the user first.
                     let stale = self.stale(name, &args);
@@ -329,6 +334,24 @@ impl Agent {
         let reply = self
             .wait(id)
             .ok_or("The turn ended before the tool finished")?;
+        let output = reply["output"].as_str().unwrap_or_default().to_string();
+        if reply["error"] == true {
+            Err(output)
+        } else {
+            Ok(output)
+        }
+    }
+
+    /// Has Patchwork ask the user for a secret, which is theirs to answer, so it is not approved
+    /// first, and waits for where it was saved.
+    fn request_secret(&mut self, id: &str, args: &Value) -> Result<String, String> {
+        emit(&json!({
+            "type": "api.mcp_call", "id": id, "server": crate::provider::mcp::OWN_SERVER,
+            "tool": crate::secrets::TOOL, "arguments": args,
+        }));
+        let reply = self
+            .wait(id)
+            .ok_or("The turn ended before the user answered")?;
         let output = reply["output"].as_str().unwrap_or_default().to_string();
         if reply["error"] == true {
             Err(output)

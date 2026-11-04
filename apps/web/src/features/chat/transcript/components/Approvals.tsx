@@ -6,6 +6,7 @@ import {
   XCircleIcon,
 } from "@phosphor-icons/react";
 import { type Approval } from "~/api";
+import { SecretCard } from "~/features/chat/transcript/components/SecretCard";
 
 // Markdown loads with the chat, not on first use: its plain-text placeholder had another height,
 // so swapping it in moved the messages.
@@ -21,10 +22,13 @@ import {
 
 /** Approvals in order, with each run of the same resolved request, answered the same way,
  * folded into its first one and counted. */
-/** A reply's approvals and questions. A pending one is answered in the banner above the composer. */
-export function Approvals({ approvals }: { approvals: Approval[] }) {
+/** A reply's approvals and questions. A pending one is answered in the banner above the composer,
+ * and a secret in its own card here. */
+export function Approvals({ threadId, approvals }: { threadId: string; approvals: Approval[] }) {
   return groupApprovals(approvals).map(({ approval, count }) =>
-    approval.status === "pending" ? (
+    approval.secret ? (
+      <SecretCard key={approval.id} threadId={threadId} approval={approval} />
+    ) : approval.status === "pending" ? (
       <p
         key={approval.id}
         className="m-0 flex items-center gap-1.5 px-1 text-[length:var(--fs-sm)] text-warning"
@@ -48,6 +52,7 @@ function groupApprovals(approvals: Approval[]): { approval: Approval; count: num
       last &&
       approval.status !== "pending" &&
       !approval.questions?.length &&
+      !approval.secret &&
       last.status === approval.status &&
       last.title === approval.title &&
       last.detail === approval.detail &&

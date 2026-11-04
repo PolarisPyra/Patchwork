@@ -2,6 +2,7 @@
 use crate::Server;
 use crate::orchestration::AgentEvent;
 use crate::orchestration::AgentEventEnvelope;
+use crate::secrets::SecretStatus;
 use crate::threads::ApprovalStatus;
 use crate::threads::Message;
 use crate::threads::MessageStatus;
@@ -171,6 +172,7 @@ pub(in crate::orchestration) fn event_message(event: &AgentEvent) -> Option<&str
         | AgentEvent::ChecksRecorded { message_id, .. }
         | AgentEvent::ApprovalRequested { message_id, .. }
         | AgentEvent::ApprovalResolved { message_id, .. }
+        | AgentEvent::SecretResolved { message_id, .. }
         | AgentEvent::Usage { message_id, .. }
         | AgentEvent::MessageQueued { message_id, .. }
         | AgentEvent::MessageSteered { message_id }
@@ -380,6 +382,22 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
                 };
             }
         }
+        AgentEvent::SecretResolved {
+            approval_id,
+            status,
+            ..
+        } => {
+            if let Some(approval) = msg.approvals.iter_mut().find(|a| a.id == *approval_id) {
+                approval.status = if *status == SecretStatus::Saved {
+                    ApprovalStatus::Allowed
+                } else {
+                    ApprovalStatus::Denied
+                };
+                if let Some(secret) = &mut approval.secret {
+                    secret.status = *status;
+                }
+            }
+        }
         AgentEvent::TurnCompleted { status, error, .. } => {
             end_thinking(msg);
             msg.status = *status;
@@ -389,7 +407,12 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
             msg.approvals
                 .iter_mut()
                 .filter(|a| a.status == ApprovalStatus::Pending)
-                .for_each(|approval| approval.status = ApprovalStatus::Denied);
+                .for_each(|approval| {
+                    approval.status = ApprovalStatus::Denied;
+                    if let Some(secret) = &mut approval.secret {
+                        secret.status = SecretStatus::Cancelled;
+                    }
+                });
             // Nothing can still be running once the turn has ended.
             let tool_end = if *status == MessageStatus::Complete {
                 StepStatus::Done

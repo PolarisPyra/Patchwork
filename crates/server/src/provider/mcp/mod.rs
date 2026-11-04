@@ -23,7 +23,10 @@ pub use pool::{tool_budget, turn_tools, probe, call};
 use pool::{pool, live_servers, Entry, Notices, announce, Answer, Waiters};
 use stdio::{StdioServer};
 use http::{HttpServer};
-pub use relay::{PROXY_ARG, set_hook_handler, relay_endpoint, relay_file, run_proxy};
+pub use relay::{
+    OWN_SERVER, PROXY_ARG, call_own, relay_endpoint, relay_file, run_proxy, set_hook_handler,
+    set_tool_handler,
+};
 use relay::serve_relay;
 
 use std::collections::HashMap;

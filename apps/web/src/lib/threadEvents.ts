@@ -197,6 +197,21 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
         ),
       }));
     }
+    case "secretResolved": {
+      const { messageId, approvalId, status } = event;
+      return updateMessage(thread, messageId, (m) => ({
+        ...m,
+        approvals: m.approvals.map((a) =>
+          a.id === approvalId && a.secret
+            ? {
+                ...a,
+                status: status === "saved" ? "allowed" : "denied",
+                secret: { ...a.secret, status },
+              }
+            : a,
+        ),
+      }));
+    }
     case "threadCreated":
     case "threadDeleted":
       return thread;
@@ -259,7 +274,13 @@ export function applyAgentEvent(thread: Thread, event: AgentEvent): Thread {
         ),
         plan: m.plan.map((s) => (s.status === "running" ? { ...s, status: "pending" } : s)),
         approvals: m.approvals.map((a) =>
-          a.status === "pending" ? { ...a, status: "denied" } : a,
+          a.status === "pending"
+            ? {
+                ...a,
+                status: "denied",
+                secret: a.secret && { ...a.secret, status: "cancelled" },
+              }
+            : a,
         ),
       }));
     }

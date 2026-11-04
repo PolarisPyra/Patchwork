@@ -113,8 +113,11 @@ export function useApprovals({
     [threadId, permissionsContext, setErrorFor],
   );
 
+  // A secret is entered in its own card in the reply.
   const pending =
-    thread?.messages.flatMap((m) => m.approvals).filter((a) => a.status === "pending") ?? [];
+    thread?.messages
+      .flatMap((m) => m.approvals)
+      .filter((a) => a.status === "pending" && !a.secret) ?? [];
   const asking = pending.find((a) => a.questions?.length);
   const permissions = pending.filter((a) => !a.questions?.length);
   const [held, setHeld] = useState<Answering | null>(null);
