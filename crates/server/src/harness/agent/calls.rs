@@ -9,6 +9,7 @@ use super::request::Call;
 use super::{Agent, ImageIn, emit};
 
 const DENIED: &str = "The user denied this. Do not retry it; ask what they would like instead, or carry on another way.";
+const NO_RESULT: &str = "The turn ended before the tool finished";
 const PLAN_SHOWN: &str = "The plan is shown to the user. Call update_plan again with the whole list each time a step starts or finishes.";
 
 impl Agent {
@@ -74,6 +75,12 @@ impl Agent {
                     let error = result.is_err();
                     (result, error, false)
                 }
+                // The commands Patchwork holds for this agent, which reading or stopping asks no one.
+                "job_output" | "job_kill" | "job_list" => {
+                    let result = self.call_own(&call.id, &call.name, &args, NO_RESULT);
+                    let error = result.is_err();
+                    (result, error, false)
+                }
                 name => {
                     // A write that would be refused anyway is not put to the user first.
                     let stale = self.stale(name, &args);
@@ -94,6 +101,11 @@ impl Agent {
                     {
                         let error = image.is_err();
                         (image, error, false)
+                    } else if allowed && name == "bash" {
+                        // Patchwork runs it, so it can carry on as a job past its time limit.
+                        let result = self.call_own(&call.id, name, &args, NO_RESULT);
+                        let error = result.is_err();
+                        (result, error, false)
                     } else if allowed {
                         let result = self
                             .prefetched
@@ -239,8 +251,12 @@ impl Agent {
 
     /// A reminder for a model making the same call again and again, as one stuck in a loop does:
     /// at the 3rd, 5th, and 8th time in a row. Anything in between, such as an edit before the
-    /// same build, starts the count again.
+    /// same build, starts the count again. Reading a job is left out, since its answer changes
+    /// as the job runs.
     fn repeated(&mut self, name: &str, args: &Value) -> Option<String> {
+        if matches!(name, "job_output" | "job_list") {
+            return None;
+        }
         let key = format!("{name} {args}");
         if self.last_call.0 == key {
             self.last_call.1 += 1;
@@ -345,13 +361,28 @@ impl Agent {
     /// Has Patchwork ask the user for a secret, which is theirs to answer, so it is not approved
     /// first, and waits for where it was saved.
     fn request_secret(&mut self, id: &str, args: &Value) -> Result<String, String> {
+        self.call_own(
+            id,
+            crate::secrets::TOOL,
+            args,
+            "The turn ended before the user answered",
+        )
+    }
+
+    /// Has Patchwork run one of its own tools, and waits for the result; `ended` is the error
+    /// when the turn ends first.
+    fn call_own(
+        &mut self,
+        id: &str,
+        tool: &str,
+        args: &Value,
+        ended: &str,
+    ) -> Result<String, String> {
         emit(&json!({
             "type": "api.mcp_call", "id": id, "server": crate::provider::mcp::OWN_SERVER,
-            "tool": crate::secrets::TOOL, "arguments": args,
+            "tool": tool, "arguments": args,
         }));
-        let reply = self
-            .wait(id)
-            .ok_or("The turn ended before the user answered")?;
+        let reply = self.wait(id).ok_or(ended)?;
         let output = reply["output"].as_str().unwrap_or_default().to_string();
         if reply["error"] == true {
             Err(output)

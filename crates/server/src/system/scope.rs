@@ -5,7 +5,7 @@
 //! agents a crashed run of itself left behind without touching another build's.
 
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 
@@ -31,51 +31,77 @@ fn build_slice() -> &'static str {
 }
 
 /// `systemd-run` set to start the command that follows in a new scope under this build's
-/// slice. The command keeps systemd-run's pid, so signals and waits reach the agent
-/// itself. A scope stops as a whole when the kernel kills one of its processes for memory,
-/// and stopping it sends SIGKILL to whatever is left after 5 seconds.
-fn scope_command(run: &Path, unit: Option<&str>) -> Command {
-    let mut cmd = Command::new(run);
+/// slice. The command keeps systemd-run's pid, so signals and waits reach it itself, and its
+/// arguments reach it as they are: systemd 254 and later would otherwise expand each `$NAME`
+/// in them. A scope stops as a whole when the kernel kills one of its processes for memory,
+/// and stopping it sends SIGKILL to whatever is left after `stop_after`.
+fn scope_command(run: &SystemdRun, unit: Option<&str>, stop_after: &str) -> Command {
+    let mut cmd = Command::new(&run.path);
     cmd.args(["--user", "--scope", "--quiet", "--collect"])
+        .args(run.literal.then_some(LITERAL_ARGV))
         .arg(format!("--slice={}", build_slice()))
         .args(unit.map(|u| format!("--unit={u}")))
-        .args([
-            "--property=OOMPolicy=stop",
-            "--property=TimeoutStopSec=5s",
-            "--",
-        ]);
+        .arg("--property=OOMPolicy=stop")
+        .arg(format!("--property=TimeoutStopSec={stop_after}"))
+        .arg("--");
     cmd
 }
 
-/// Sets up agent scopes ahead of the first turn, stopping agents that a previous run of
-/// this build left running when it crashed or was killed.
+/// Keeps systemd-run from expanding `$NAME` in the command it starts. Versions before 254 reject
+/// it, and start a scope's command as it is given anyway.
+const LITERAL_ARGV: &str = "--expand-environment=no";
+
+/// `systemd-run`, and whether it takes [`LITERAL_ARGV`].
+struct SystemdRun {
+    path: PathBuf,
+    literal: bool,
+}
+
+/// Sets up agent scopes ahead of the first turn, stopping the agents and commands that a
+/// previous run of this build left running when it crashed or was killed.
 pub fn prepare() {
     systemd_run();
 }
 
 /// `systemd-run`, once it has started a test scope and the slice's limit is set.
-/// None without a systemd user manager; agents then start directly.
-fn systemd_run() -> Option<&'static PathBuf> {
-    static RUN: OnceLock<Option<PathBuf>> = OnceLock::new();
+/// None without a systemd user manager; agents and commands then start directly.
+fn systemd_run() -> Option<&'static SystemdRun> {
+    static RUN: OnceLock<Option<SystemdRun>> = OnceLock::new();
     RUN.get_or_init(|| {
         std::env::var_os("XDG_RUNTIME_DIR")?;
-        let run = which::which("systemd-run").ok()?;
-        systemctl(&["stop", build_slice()]);
-        let started = scope_command(&run, None)
-            .arg("true")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .is_ok_and(|s| s.success());
-        if !started {
+        let path = which::which("systemd-run").ok()?;
+        // An agent's own process, which runs its hooks, sits in the slice it would stop.
+        if !in_agent_scope() {
+            systemctl(&["stop", build_slice()]);
+        }
+        let starts = |literal| {
+            let run = SystemdRun {
+                path: path.clone(),
+                literal,
+            };
+            let started = scope_command(&run, None, "5s")
+                .arg("true")
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .is_ok_and(|s| s.success());
+            started.then_some(run)
+        };
+        let Some(run) = starts(true).or_else(|| starts(false)) else {
             log::info!("agent scopes are off: systemd-run could not start a scope");
             return None;
-        }
+        };
         limit_slice();
         Some(run)
     })
     .as_ref()
+}
+
+/// Whether this process runs in an agent's scope, as Patchwork's own agent does.
+fn in_agent_scope() -> bool {
+    std::fs::read_to_string("/proc/self/cgroup")
+        .is_ok_and(|cgroup| cgroup.contains("/patchwork-agent-"))
 }
 
 /// Caps the agents together so they leave about 6 GiB free before they are throttled and
@@ -112,8 +138,15 @@ fn limit_slice() {
 
 /// Stops the agent's scope with whatever is still running in it, such as commands the agent
 /// started in sessions of their own, which its process group does not reach.
-pub fn stop(unit: &str) {
-    systemctl(&["stop", "--no-block", unit]);
+/// Whether the stop was queued: false when the scope has ended, or is not set up yet.
+pub fn stop(unit: &str) -> bool {
+    systemctl(&["stop", "--no-block", unit])
+}
+
+/// Whether anything still runs in the scope `unit`.
+#[cfg(unix)]
+pub fn active(unit: &str) -> bool {
+    systemctl(&["is-active", "--quiet", unit])
 }
 
 /// Runs `systemctl --user` with `args`; whether it succeeded.
@@ -138,13 +171,23 @@ fn total_memory() -> Option<u64> {
 
 /// `cmd` run in a new scope under the agents' slice, with the scope's unit name, or `cmd`
 /// itself when scopes are unavailable. Arguments added afterwards still go to the agent.
-pub fn scoped(mut cmd: Command) -> (Command, Option<String>) {
+pub fn scoped(cmd: Command) -> (Command, Option<String>) {
+    in_scope(cmd, "agent", "5s")
+}
+
+/// `cmd` run in a new scope of its own, as [`scoped`] runs an agent, for a command an agent, a
+/// hook or a check runs. Stopping it sends SIGKILL to whatever is left after 3 seconds.
+pub fn command_scope(cmd: Command) -> (Command, Option<String>) {
+    in_scope(cmd, "command", "3s")
+}
+
+fn in_scope(mut cmd: Command, kind: &str, stop_after: &str) -> (Command, Option<String>) {
     let Some(run) = systemd_run() else {
         raise_oom_score(&mut cmd);
         return (cmd, None);
     };
-    let unit = format!("patchwork-agent-{}.scope", uuid::Uuid::new_v4().simple());
-    let mut scoped = scope_command(run, Some(&unit));
+    let unit = format!("patchwork-{kind}-{}.scope", uuid::Uuid::new_v4().simple());
+    let mut scoped = scope_command(run, Some(&unit), stop_after);
     scoped.arg(cmd.get_program()).args(cmd.get_args());
     for (key, value) in cmd.get_envs() {
         match value {

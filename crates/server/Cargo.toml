@@ -50,6 +50,8 @@ xcap = { version = "0.9", default-features = false }
 # The PATH installers write to the registry, which a running app's own PATH never picks up.
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56"
+# The job object a command runs in, which ends everything it started.
+windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Threading"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 x11rb = { version = "0.13", features = ["randr"] }

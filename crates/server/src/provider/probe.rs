@@ -42,7 +42,7 @@ pub fn probe_in(kind: AgentKind, args: &[&str], dir: &Path, timeout: Duration) -
     run_probe(cmd, args, timeout, |_| false)
 }
 
-pub(crate) fn run_probe(
+fn run_probe(
     mut cmd: Command,
     args: &[&str],
     timeout: Duration,
@@ -101,7 +101,7 @@ pub(super) fn read_pipe(pipe: impl Read + Send + 'static) -> (Arc<Mutex<Vec<u8>>
 
 /// Reads a pipe to its end, keeping at most about `limit` bytes: past that, the start and the
 /// latest output are kept with a note between them, and the middle is dropped.
-pub(crate) fn read_pipe_upto(
+fn read_pipe_upto(
     mut pipe: impl Read + Send + 'static,
     limit: usize,
 ) -> (Arc<Mutex<Vec<u8>>>, JoinHandle<()>) {
@@ -126,7 +126,7 @@ pub(crate) fn read_pipe_upto(
     (buf, handle)
 }
 
-pub(crate) fn text(buf: &Mutex<Vec<u8>>) -> String {
+fn text(buf: &Mutex<Vec<u8>>) -> String {
     let bytes = buf.lock().unwrap_or_else(PoisonError::into_inner);
     String::from_utf8_lossy(&bytes).into_owned()
 }

@@ -81,8 +81,14 @@ impl Runner {
         });
     }
 
-    /// Stops one subagent of the running turn, leaving the rest of the turn going.
+    /// Stops one subagent of the running turn, leaving the rest of the turn going, or a command
+    /// Patchwork's own agent moved to the background.
     pub fn stop_subagent(&self, thread_id: &str, tool_id: &str) -> Result<(), String> {
+        if let Some(stopped) = self.jobs.stop_listed(thread_id, tool_id) {
+            return stopped
+                .then_some(())
+                .ok_or_else(|| "This command has already finished".into());
+        }
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         let turn = turns
             .get(thread_id)

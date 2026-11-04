@@ -1,6 +1,8 @@
 //! The hooks Patchwork runs itself around a turn, for every agent, with the turn in their environment.
 
-use std::time::Duration;
+use std::io::Read;
+use std::process::Stdio;
+use std::time::{Duration, Instant};
 use crate::settings::Settings;
 use super::{HookEvent, PluginHookHandler, list};
 
@@ -54,7 +56,8 @@ pub fn run_hooks(settings: &Settings, context: &HookContext<'_>) -> Vec<String> 
         .collect()
 }
 
-/// Runs one hook command, killing it at its timeout. Its output goes to the log.
+/// Runs one hook command in a range of its own, stopping it and all it started at its timeout,
+/// and what it left running once it exits. Its output goes to the log.
 fn run_command(command: &str, timeout_secs: u64, context: &HookContext<'_>) -> Result<(), String> {
     let mut cmd = crate::system::shell_command(command).ok_or("there is no shell to run it in")?;
     cmd.current_dir(context.root)
@@ -63,17 +66,53 @@ fn run_command(command: &str, timeout_secs: u64, context: &HookContext<'_>) -> R
         .env("PATCHWORK_CWD", context.root)
         .env("PATCHWORK_AGENT", context.agent)
         .env("PATCHWORK_STATUS", context.status.unwrap_or_default());
-    let timeout = Duration::from_secs(timeout_secs);
-    let probe = crate::provider::run_probe(cmd, &[], timeout, |_| false)
-        .ok_or_else(|| format!("did not start, or ran past {timeout_secs}s and was stopped"))?;
-    let stdout = probe.stdout.trim();
+    let (mut child, range) = crate::system::contained::spawn(cmd, Stdio::null())
+        .map_err(|e| format!("did not start: {e}"))?;
+    let read = |pipe: Option<Box<dyn Read + Send>>| {
+        std::thread::spawn(move || {
+            let mut text = String::new();
+            if let Some(mut pipe) = pipe {
+                let _ = pipe.read_to_string(&mut text);
+            }
+            text
+        })
+    };
+    let stdout = read(
+        child
+            .stdout
+            .take()
+            .map(|p| Box::new(p) as Box<dyn Read + Send>),
+    );
+    let stderr = read(
+        child
+            .stderr
+            .take()
+            .map(|p| Box::new(p) as Box<dyn Read + Send>),
+    );
+    let deadline = Instant::now() + Duration::from_secs(timeout_secs);
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
+            _ => {
+                range.stop();
+                let _ = child.wait();
+                return Err(format!("ran past {timeout_secs}s and was stopped"));
+            }
+        }
+    };
+    // What it left running holds the output pipes open.
+    range.stop();
+    let stdout = stdout.join().unwrap_or_default();
+    let stderr = stderr.join().unwrap_or_default();
+    let stdout = stdout.trim();
     if !stdout.is_empty() {
         log::info!("plugin hook {}: {stdout}", context.event.name());
     }
-    if probe.success {
+    if status.success() {
         Ok(())
     } else {
-        let stderr = probe.stderr.trim();
+        let stderr = stderr.trim();
         Err(if stderr.is_empty() {
             "exited with an error".into()
         } else {

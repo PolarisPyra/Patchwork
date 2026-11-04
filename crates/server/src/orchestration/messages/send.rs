@@ -50,8 +50,13 @@ impl Server {
         self.runner.running().len()
     }
 
+    /// Stops every running agent, and at the same time the commands Patchwork's own agent
+    /// left running; for quitting the app.
     pub fn stop_agents(&self) {
-        self.runner.stop_all();
+        std::thread::scope(|s| {
+            s.spawn(|| self.runner.jobs.stop_all(self));
+            self.runner.stop_all();
+        });
     }
 
     /// Replaces the `placeholder` title with one a model writes from `text`, in the background,

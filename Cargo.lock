@@ -3671,6 +3671,7 @@ dependencies = [
  "wayland-client",
  "wayland-protocols",
  "which",
+ "windows-sys 0.60.2",
  "winreg 0.56.0",
  "x11rb",
  "xcap",

@@ -16,9 +16,7 @@ use parsed::{
     relative, ToolStart, tool_started, tool_finished, thinking, file_touched, text_delta, summarize,
 };
 pub use probe::{Probe, probe, probe_until, probe_in, detect_agent, cli_version, list_models};
-pub(crate) use probe::{run_probe};
 use probe::stop;
-pub(crate) use probe::{read_pipe_upto, text};
 pub use turn::{
     GoalCommand, goal_argument, goal_command, TurnSpec, Image, load_images, prompt, Prompt,
     steer_input, goal_pause, interrupt, stop_subagent, is_goal_command, turn_args, turn_env,

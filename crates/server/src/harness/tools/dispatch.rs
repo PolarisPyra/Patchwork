@@ -3,7 +3,6 @@
 use std::path::Path;
 
 use super::files::{READ_LINES, edit_file, glob, grep, list_dir, read_file, write_file};
-use super::shell::{BASH_TIMEOUT, MAX_BASH_TIMEOUT, bash};
 use super::web::fetch_url;
 
 use serde_json::Value;
@@ -74,14 +73,6 @@ pub fn run(name: &str, args: &Value, root: &Path) -> Result<String, String> {
             &path().unwrap_or_else(|_| root.to_path_buf()),
             args["glob"].as_str(),
             args["case_insensitive"] == true,
-            root,
-        ),
-        "bash" => bash(
-            &text("command")?,
-            args["timeout"]
-                .as_u64()
-                .unwrap_or(BASH_TIMEOUT)
-                .clamp(1, MAX_BASH_TIMEOUT),
             root,
         ),
         "fetch_url" => fetch_url(&text("url")?),

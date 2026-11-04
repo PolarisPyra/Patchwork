@@ -99,14 +99,8 @@ pub fn run_tool_hook(hook: &AgentHook, input: &Value, root: &str) -> Option<Stri
 fn run_command(hook: &AgentHook, command: &str, input: &Value, root: &str) -> Option<String> {
     let event = hook.event.name();
     let mut cmd = crate::system::shell_command(command)?;
-    cmd.current_dir(root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    #[cfg(unix)]
-    std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
-    let mut child = cmd
-        .spawn()
+    cmd.current_dir(root);
+    let (mut child, range) = crate::system::contained::spawn(cmd, Stdio::piped())
         .inspect_err(|e| log::warn!("plugin hook {event} did not start: {e}"))
         .ok()?;
     let read = |pipe: Option<Box<dyn Read + Send>>| {
@@ -140,11 +134,14 @@ fn run_command(hook: &AgentHook, command: &str, input: &Value, root: &str) -> Op
     let deadline = Instant::now() + Duration::from_secs(hook.timeout_secs);
     let status = loop {
         match child.try_wait() {
-            Ok(Some(status)) => break status,
+            Ok(Some(status)) => {
+                // What it left running holds the output pipes open, and would outlive the call.
+                range.stop();
+                break status;
+            }
             Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
             _ => {
-                crate::workspace::signal_process_group(child.id(), crate::workspace::SIGKILL);
-                let _ = child.kill();
+                range.stop();
                 let _ = child.wait();
                 log::warn!(
                     "plugin hook {event} ran past {}s and was stopped",

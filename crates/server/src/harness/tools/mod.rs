@@ -10,3 +10,4 @@ mod web;
 pub use describe::{definitions, display_name, summary, shown, approval, writes};
 
 pub use dispatch::*;
+pub use shell::{BASH_TIMEOUT, MAX_BASH_TIMEOUT, bash_command, outcome};

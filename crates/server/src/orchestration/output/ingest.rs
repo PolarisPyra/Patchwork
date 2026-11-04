@@ -20,6 +20,7 @@ use crate::provider::TaskEvent;
 use crate::provider;
 use crate::system::scope;
 use crate::orchestration::AgentEvent;
+use crate::orchestration::tasks::jobs;
 use crate::provider::AgentKind;
 use crate::threads::Approval;
 use crate::threads::ApprovalStatus;
@@ -275,10 +276,27 @@ pub(in crate::orchestration) fn ingest(
                     let stdin = turn.stdin.clone();
                     let (cancelled, exited) = (turn.cancelled.clone(), turn.exited.clone());
                     let thread_id = turn.thread_id.clone();
+                    // Patchwork's own agent has its commands run here, so they can outlive it.
+                    let job = (turn.agent == AgentKind::Api
+                        && server == provider::mcp::OWN_SERVER
+                        && jobs::TOOLS.contains(&tool.as_str()))
+                    .then(|| {
+                        (
+                            turn.server.clone(),
+                            jobs::Origin {
+                                thread_id: turn.thread_id.clone(),
+                                message_id: turn.message_id.clone(),
+                                tool_id: id.as_str().unwrap_or_default().to_string(),
+                                root: turn.root.clone(),
+                            },
+                        )
+                    });
                     std::thread::spawn(move || {
                         let stopped =
                             || cancelled.load(Ordering::SeqCst) || exited.load(Ordering::SeqCst);
-                        let result = if server == provider::mcp::OWN_SERVER {
+                        let result = if let Some((app, from)) = job {
+                            jobs::call(&app, &from, &tool, &arguments, &stopped)
+                        } else if server == provider::mcp::OWN_SERVER {
                             provider::mcp::call_own(&thread_id, &tool, &arguments, &stopped)
                         } else {
                             provider::mcp::call(&server, &tool, &arguments, &stopped)

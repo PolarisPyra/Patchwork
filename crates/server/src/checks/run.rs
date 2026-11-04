@@ -32,15 +32,9 @@ pub fn run(root: &str, command: &str, limit: Duration) -> Result<Outcome, String
         // for; every runner on this list respects one of these.
         .env("NO_COLOR", "1")
         .env("FORCE_COLOR", "0")
-        .env("CLICOLOR", "0")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    #[cfg(unix)]
-    std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
+        .env("CLICOLOR", "0");
     let started = Instant::now();
-    let mut child = cmd
-        .spawn()
+    let (mut child, range) = crate::system::contained::spawn(cmd, Stdio::null())
         .map_err(|e| format!("The check command didn't start: {e}"))?;
     let stdout = keep_tail(child.stdout.take(), KEEP);
     let stderr = keep_tail(child.stderr.take(), KEEP);
@@ -50,15 +44,13 @@ pub fn run(root: &str, command: &str, limit: Duration) -> Result<Outcome, String
             Ok(Some(status)) => {
                 // Whatever it left running, such as a server a test started and never stopped,
                 // still holds the output pipes open, and reading them would wait on it forever.
-                #[cfg(unix)]
-                crate::workspace::signal_process_group(child.id(), crate::workspace::SIGKILL);
+                range.stop();
                 break (Some(status), false);
             }
             Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(50)),
             Ok(None) => {
-                // The whole group, so a runner that started a server or a watcher takes it along.
-                crate::workspace::signal_process_group(child.id(), crate::workspace::SIGKILL);
-                let _ = child.kill();
+                // All of it, so a runner that started a server or a watcher takes it along.
+                range.stop();
                 let _ = child.wait();
                 break (None, true);
             }

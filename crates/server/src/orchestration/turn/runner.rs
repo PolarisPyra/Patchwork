@@ -45,6 +45,8 @@ pub struct Runner {
     /// Calls the user allowed through a hook, by thread, so the agent's own request for them
     /// is not asked again.
     pub(in crate::orchestration) grants: Mutex<HashMap<String, Vec<Target>>>,
+    /// The commands Patchwork's own agent runs, which outlive its turns as background jobs.
+    pub(in crate::orchestration) jobs: crate::orchestration::tasks::jobs::Jobs,
 }
 
 impl Runner {

@@ -113,11 +113,33 @@ pub fn definitions(plan: bool) -> Value {
         ),
         tool(
             "bash",
-            "Run a shell command in the project root and return its output and exit code.",
+            "Run a shell command in the project root and return its output and exit code. A command still running at its timeout is not stopped: it keeps running as a background job, which job_output reads and job_kill stops.",
             json!({"type": "object", "properties": {
                 "command": {"type": "string"},
-                "timeout": {"type": "integer", "description": "Seconds before the command is stopped; 120 by default, at most 600"}
+                "timeout": {"type": "integer", "description": "Seconds to wait before the command moves to the background; 120 by default, at most 600"},
+                "run_in_background": {"type": "boolean", "description": "Start it as a background job and return at once, for a server or a watcher"}
             }, "required": ["command"]}),
+        ),
+        tool(
+            "job_output",
+            "Read what a background job printed since the last read, and whether it still runs.",
+            json!({"type": "object", "properties": {
+                "job_id": {"type": "string"},
+                "wait": {"type": "boolean", "description": "Wait for the job to end first"},
+                "timeout_ms": {"type": "integer", "description": "How long to wait, in milliseconds; 30000 by default, at most 600000"}
+            }, "required": ["job_id"]}),
+        ),
+        tool(
+            "job_kill",
+            "Stop a background job and everything it started.",
+            json!({"type": "object", "properties": {
+                "job_id": {"type": "string"}
+            }, "required": ["job_id"]}),
+        ),
+        tool(
+            "job_list",
+            "List this thread's background jobs and where each stands.",
+            json!({"type": "object", "properties": {}}),
         ),
     ]);
     // Computer use is only offered once Settings → Permissions has turned it on.
@@ -184,6 +206,9 @@ pub fn display_name(name: &str) -> &str {
         "glob" => "Glob",
         "grep" => "Grep",
         "bash" => "Bash",
+        "job_output" => "JobOutput",
+        "job_kill" => "JobKill",
+        "job_list" => "JobList",
         "fetch_url" => "WebFetch",
         "ask_user" => "AskUserQuestion",
         "update_plan" => "TodoWrite",
@@ -203,13 +228,14 @@ pub fn summary(name: &str, args: &Value, root: &Path) -> String {
     let field = |key: &str| args[key].as_str().unwrap_or_default().to_string();
     let summary = match name {
         "bash" => field("command"),
+        "job_output" | "job_kill" => field("job_id"),
         "fetch_url" => field("url"),
         "glob" | "grep" => field("pattern"),
         "ask_user" => args["questions"][0]["question"]
             .as_str()
             .unwrap_or_default()
             .to_string(),
-        "update_plan" | "propose_plan" | "computer_screenshot" => String::new(),
+        "update_plan" | "propose_plan" | "computer_screenshot" | "job_list" => String::new(),
         "computer_move" | "computer_click" => format!("{}, {}", field("x"), field("y")),
         "computer_type" => field("text"),
         "computer_key" => {
