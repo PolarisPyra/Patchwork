@@ -11,6 +11,7 @@ use crate::threads::StepStatus;
 use crate::threads::Refusal;
 use crate::threads::TaskStatus;
 use crate::threads::TokenUsage;
+use crate::provider::edit_lines;
 use crate::provider::file_touched;
 use crate::provider::GoalUpdate;
 use crate::provider::without_attachments;
@@ -46,7 +47,7 @@ pub(super) fn claude_tool_use(
     let id = block["id"].as_str().unwrap_or_default();
     let name = block["name"].as_str().unwrap_or("Tool");
     let input = &block["input"];
-    out.push(tool_started(
+    let mut started = tool_started(
         message_id,
         ToolStart {
             id,
@@ -55,7 +56,11 @@ pub(super) fn claude_tool_use(
             subagent: subagent_of(input),
             parent,
         },
-    ));
+    );
+    if let Parsed::Event(AgentEvent::ToolStarted { tool, .. }) = &mut started {
+        tool.lines = edit_lines(name, input);
+    }
+    out.push(started);
 
     let path_of = |key: &str| input[key].as_str().map(|p| relative(root, p));
     let touched = match name {

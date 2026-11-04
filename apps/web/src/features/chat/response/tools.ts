@@ -66,25 +66,6 @@ function programOf(command: string): string {
   return word.split("/").pop() || "command";
 }
 
-/**
- * Whether a command line runs more than one program: a `;`, `|`, `&&` or line break outside
- * quotes. Its exit status says only that one part failed, not which, so it is not put on the first.
- */
-function isCompound(command: string): boolean {
-  let quote: string | null = null;
-  for (let i = 0; i < command.length; i++) {
-    const c = command[i];
-    if (quote) {
-      if (c === quote) quote = null;
-      else if (c === "\\" && quote === '"') i++;
-    } else if (c === "'" || c === '"') quote = c;
-    else if (c === "\\") i++;
-    else if (c === ";" || c === "|" || c === "\n" || (c === "&" && command[i + 1] === "&"))
-      return true;
-  }
-  return false;
-}
-
 /** `mcp__server__tool` and Codex's `server.tool` name the tool last. */
 function toolName(tool: ToolCall): string {
   if (tool.name.startsWith("mcp__")) return tool.name.split("__").pop() ?? tool.name;
@@ -100,13 +81,13 @@ export function toolLabel(tool: ToolCall): string {
   switch (actionOf(tool)) {
     case "command":
       if (running) return `Running ${programOf(summary)}`;
-      if (tool.status === "error")
-        return isCompound(summary) ? "Failed command" : `Failed ${programOf(summary)}`;
+      if (tool.status === "error") return summary ? `Failed: ${summary}` : "Failed command";
       return summary || "Ran command";
     case "read":
       return summary ? `${verb("Reading", "Read")} ${summary}` : "Read file";
     case "edit":
-      return summary ? `${verb("Editing", "Changed")} ${summary}` : "Changed file";
+      if (!summary) return "Changed file";
+      return `${verb("Editing", created(tool) ? "Created" : "Changed")} ${summary}`;
     case "search":
       return summary ? `${verb("Searching", "Searched")} ${summary}` : "Searched files";
     case "web":
@@ -170,4 +151,37 @@ export function detailsOf(entry: Extract<Entry, { kind: "tool" }>): string {
   const { tool } = entry;
   const input = actionOf(tool) === "command" ? `$ ${tool.summary}` : tool.summary;
   return [input, tool.output].filter(Boolean).join("\n\n") || "No output";
+}
+
+/** Whether a Claude `Write` made a new file rather than replacing one, as its result says. */
+function created(tool: ToolCall): boolean {
+  return tool.name === "Write" && (tool.output?.startsWith("File created successfully") ?? false);
+}
+
+/** The lines an edit added and removed. A `Write` counts all its text, which is right only for a
+ * file it created, so one that replaced a file, or has not said yet, shows none. */
+export function linesOf(tool: ToolCall): ToolCall["lines"] {
+  return tool.name === "Write" && !created(tool) ? null : tool.lines;
+}
+
+/** What a command came to, for its row: the tests it ran, or else the exit code it failed with. */
+export type CommandResult = { passed: number; failed: number } | { exit: number };
+
+/**
+ * "24 passed" or "exit 1", read from a finished command's output. Test counts are summed over the
+ * summary lines test runners print ("test result: ok. 246 passed; 0 failed", "Tests: 24 passed"),
+ * leaving out the per-file and per-suite totals, which count the same tests again.
+ */
+export function commandResult(tool: ToolCall): CommandResult | null {
+  if (actionOf(tool) !== "command" || isRunning(tool) || !tool.output) return null;
+  let passed = 0;
+  let failed = 0;
+  for (const line of tool.output.split("\n")) {
+    if (/Test (Suites|Files)/.test(line)) continue;
+    passed += Number(/\b(\d+) passed\b/.exec(line)?.[1] ?? 0);
+    failed += Number(/\b(\d+) failed\b/.exec(line)?.[1] ?? 0);
+  }
+  if (passed + failed > 0) return { passed, failed };
+  const code = tool.status === "error" ? /^Exit code (\d+)/.exec(tool.output) : null;
+  return code ? { exit: Number(code[1]) } : null;
 }

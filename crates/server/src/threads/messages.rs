@@ -69,6 +69,18 @@ pub struct ToolCall {
     /// The thread holding the subagent's own transcript, for a call that started one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub child_thread_id: Option<String>,
+    /// The lines an edit adds and removes, for an agent whose call carries the edit's text. For a
+    /// `Write`, every line of its text, which is right only when it created the file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lines: Option<EditLines>,
+}
+
+/// How many lines an edit adds and removes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "threads.ts")]
+pub struct EditLines {
+    pub added: u32,
+    pub removed: u32,
 }
 
 /// The most of a tool call's output that is kept.

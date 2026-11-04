@@ -8,9 +8,9 @@ mod types;
 
 pub use messages::{
     Approval, ApprovalStatus, Attachment, AttachmentKind, BackgroundTask, CheckFailure,
-    CheckStatus, image_media_type, MAX_TOOL_OUTPUT, Message, MessageStatus, Part, PlanStep,
-    Question, QuestionOption, Refusal, Role, StepStatus, SubAgent, TaskStatus, TokenUsage,
-    ToolCall, tool_output, TurnChecks, TurnTrees,
+    CheckStatus, EditLines, image_media_type, MAX_TOOL_OUTPUT, Message, MessageStatus, Part,
+    PlanStep, Question, QuestionOption, Refusal, Role, StepStatus, SubAgent, TaskStatus,
+    TokenUsage, ToolCall, tool_output, TurnChecks, TurnTrees,
 };
 pub use ops::NewThread;
 pub use title::{title_from, without_leading_attachments};

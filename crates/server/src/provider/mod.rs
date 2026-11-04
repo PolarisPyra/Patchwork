@@ -13,7 +13,8 @@ use locate::{located, located_or, find_binary};
 pub use parsed::{TaskEvent, Parsed, GoalUpdate};
 pub(crate) use parsed::{one_line};
 use parsed::{
-    relative, ToolStart, tool_started, tool_finished, thinking, file_touched, text_delta, summarize,
+    relative, ToolStart, tool_started, tool_finished, thinking, file_touched, text_delta,
+    summarize, edit_lines,
 };
 pub use probe::{Probe, probe, probe_until, probe_in, detect_agent, cli_version, list_models};
 use probe::stop;

@@ -5,7 +5,7 @@ use crate::orchestration::AgentEvent;
 use crate::system::now_ms;
 use crate::threads::{
     StepStatus, ToolCall, tool_output, SubAgent, Question, TokenUsage, Goal, BackgroundTask,
-    TaskStatus,
+    TaskStatus, EditLines,
 };
 use crate::usage::UsageWindow;
 use super::ProviderSlashCommand;
@@ -181,6 +181,7 @@ pub(super) fn tool_started(message_id: &str, start: ToolStart<'_>) -> Parsed {
             ended_at: None,
             output: None,
             child_thread_id: None,
+            lines: None,
         },
     })
 }
@@ -246,4 +247,58 @@ pub(super) fn summarize(input: &Value, root: &str) -> String {
         })
         .map(|s| one_line(&s))
         .unwrap_or_default()
+}
+
+/// The lines a Claude `Edit` or `MultiEdit` call adds and removes, from the text it replaces: the
+/// lines the old and new text share at their start and end are context, and the rest changed.
+/// `replace_all` changes an unknown number of places, so it is not counted. A `Write` does not
+/// carry the text it replaces, so all of its text counts as added, which holds only when it
+/// creates the file; the row shows it only then.
+pub(super) fn edit_lines(name: &str, input: &Value) -> Option<EditLines> {
+    let one = |edit: &Value| {
+        if edit["replace_all"] == true {
+            return None;
+        }
+        let old = edit["old_string"].as_str()?;
+        let new = edit["new_string"].as_str()?;
+        Some(changed_lines(old, new))
+    };
+    match name {
+        "Edit" => one(input),
+        "Write" => input["content"].as_str().map(|text| EditLines {
+            added: u32::try_from(text.lines().count()).unwrap_or(u32::MAX),
+            removed: 0,
+        }),
+        "MultiEdit" => input["edits"].as_array()?.iter().try_fold(
+            EditLines {
+                added: 0,
+                removed: 0,
+            },
+            |sum, edit| {
+                let lines = one(edit)?;
+                Some(EditLines {
+                    added: sum.added + lines.added,
+                    removed: sum.removed + lines.removed,
+                })
+            },
+        ),
+        _ => None,
+    }
+}
+
+fn changed_lines(old: &str, new: &str) -> EditLines {
+    let old: Vec<&str> = old.lines().collect();
+    let new: Vec<&str> = new.lines().collect();
+    let head = old.iter().zip(&new).take_while(|(a, b)| a == b).count();
+    let tail = old[head..]
+        .iter()
+        .rev()
+        .zip(new[head..].iter().rev())
+        .take_while(|(a, b)| a == b)
+        .count();
+    let count = |n: usize| u32::try_from(n - head - tail).unwrap_or(u32::MAX);
+    EditLines {
+        added: count(new.len()),
+        removed: count(old.len()),
+    }
 }

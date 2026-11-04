@@ -91,7 +91,7 @@ export default function ResponseTimeline({
   // The block still arriving settles into place; the ones before it are already read, so a chat
   // list that remounts them while scrolling does not replay their entrance.
   const arriving = streaming ? shown.at(-1) : undefined;
-  const stepClass = (step: Step) => `px-1 py-0.5 pb-2${step === arriving ? " timeline-enter" : ""}`;
+  const stepClass = (step: Step) => `py-0.5 pb-2${step === arriving ? " timeline-enter" : ""}`;
   return (
     <div className="flex min-w-0 flex-col">
       {/* The head of a turn, in the one place its status ever goes. */}
@@ -106,7 +106,7 @@ export default function ResponseTimeline({
       {/* Holds the head's place until the agent's reply fills it, so the chat does not grow as the
           goal banner above the composer closes. */}
       {streaming && clearsGoal && steps.length === 0 && (
-        <div className="px-1 py-0.5 pb-2">
+        <div className="py-0.5 pb-2">
           <GoalClearedNotice text="Clearing goal" live pending />
         </div>
       )}

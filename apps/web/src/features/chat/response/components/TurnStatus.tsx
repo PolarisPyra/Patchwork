@@ -29,7 +29,7 @@ export default function TurnStatus({ phase, since }: { phase: Phase; since: numb
         {/* Compacting is work too: it sweeps where "Working for" does, not behind a spinner. */}
         {(phase.kind === "retry" || phase.kind === "checking-goal") && (
           <LineGutter>
-            {phase.kind === "retry" ? <ArrowClockwiseIcon size={15} /> : <TargetIcon size={15} />}
+            {phase.kind === "retry" ? <ArrowClockwiseIcon size={17} /> : <TargetIcon size={17} />}
           </LineGutter>
         )}
         <span

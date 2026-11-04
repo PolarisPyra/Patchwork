@@ -124,6 +124,11 @@ detail: string, };
 export type CheckStatus = "running" | "passed" | "failed" | "timedOut" | "notRun";
 
 /**
+ * How many lines an edit adds and removes.
+ */
+export type EditLines = { added: number, removed: number, };
+
+/**
  * A condition the agent keeps working toward until it is met (`/goal`).
  */
 export type Goal = { objective: string, status: GoalStatus, 
@@ -376,7 +381,12 @@ output?: string | null,
 /**
  * The thread holding the subagent's own transcript, for a call that started one.
  */
-childThreadId?: string | null, };
+childThreadId?: string | null, 
+/**
+ * The lines an edit adds and removes, for an agent whose call carries the edit's text. For a
+ * `Write`, every line of its text, which is right only when it created the file.
+ */
+lines?: EditLines | null, };
 
 /**
  * What a project's check command made of the turn that wrote a reply.
