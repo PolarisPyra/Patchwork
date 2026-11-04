@@ -38,11 +38,14 @@
   /* Accent, from the app's blue; used for focus and the active row only */
   --accent: #7aa7ff;
   --accent-fill: #2e436e;
+  --lift: 0 24px 64px rgba(0, 0, 0, 0.4);
 
   --font-ui: "Inter Variable", "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, monospace;
 
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  color-scheme: dark;
 }
 
 *,
@@ -52,11 +55,17 @@
 }
 
 html {
-  scroll-behavior: smooth;
+  height: 100%;
   -webkit-text-size-adjust: 100%;
 }
 
+/* The header stays put above the page, and only the page under it scrolls, so the scrollbar starts
+   below the header instead of running up beside it. */
 body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
   margin: 0;
   background: var(--bg);
   color: var(--fg);
@@ -65,6 +74,40 @@ body {
   line-height: 1.5;
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
+}
+
+.page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+/* It takes focus only so the scroll keys work, so it shows no ring. */
+.page:focus {
+  outline: none;
+}
+
+/* The app's scrollbar: a thin rounded thumb on no track. */
+.page::-webkit-scrollbar {
+  width: 10px;
+}
+
+.page::-webkit-scrollbar-thumb {
+  background: #4e5157;
+  border: 2px solid transparent;
+  border-radius: 5px;
+  background-clip: padding-box;
+}
+
+.page::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .page {
+    scrollbar-color: #4e5157 transparent;
+  }
 }
 
 h1,
@@ -132,8 +175,8 @@ pre,
 /* ---------- Navigation ---------- */
 
 .nav {
-  position: sticky;
-  top: 0;
+  position: relative;
+  flex: none;
   z-index: 20;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
@@ -264,20 +307,19 @@ pre,
 /* ---------- Hero ---------- */
 
 .hero {
-  padding: 64px 0 80px;
+  padding: 88px 0 96px;
 }
 
 .hero-grid {
   display: grid;
-  gap: 56px;
+  gap: 64px;
 }
 
-.eyebrow {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--fg-3);
-  letter-spacing: 0.01em;
+.hero-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 
 .hero h1 {
@@ -290,7 +332,7 @@ pre,
 
 .lede {
   margin-top: 20px;
-  max-width: 36ch;
+  max-width: 44ch;
   font-size: 18px;
   line-height: 28px;
   color: var(--fg-2);
@@ -307,27 +349,17 @@ pre,
   margin-top: 32px;
 }
 
-/* ---------- Product shot ---------- */
-
-.hero-shot {
-  display: block;
-  width: 100%;
-  height: auto;
-  border: 1px solid var(--line-strong);
-  background: var(--panel);
-}
-
 /* ---------- Sections ---------- */
 
 .section {
   padding: 96px 0;
   border-top: 1px solid var(--line);
-  scroll-margin-top: 60px;
 }
 
 .section-head {
   max-width: 42rem;
-  margin-bottom: 48px;
+  margin: 0 auto 48px;
+  text-align: center;
 }
 
 .section h2 {
@@ -339,7 +371,7 @@ pre,
 }
 
 .section-lede {
-  margin-top: 16px;
+  margin: 16px auto 0;
   max-width: 44ch;
   font-size: 16px;
   line-height: 26px;
@@ -347,59 +379,162 @@ pre,
 }
 
 .note {
-  margin-top: 24px;
+  margin: 32px auto 0;
   max-width: 60ch;
+  text-align: center;
   font-size: 14px;
   line-height: 22px;
   color: var(--fg-3);
 }
 
-/* Screenshots */
+/* Promo video */
 
-.shots {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 32px 24px;
+.promo {
+  position: relative;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--bg);
+  box-shadow: var(--lift);
 }
 
-.shot {
-  display: flex;
-  flex-direction: column;
-}
-
-.shot:nth-child(1),
-.shot:nth-child(4) {
-  grid-column: 1 / -1;
-}
-
-.shot img {
+.promo video {
+  display: block;
   width: 100%;
   height: auto;
-  border: 1px solid var(--line-strong);
-  background: var(--panel);
+  aspect-ratio: 16 / 9;
 }
 
-.shot figcaption {
+/* The player bar: play and pause, the scrubber, and the time. */
+.promo-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-top: 12px;
-  font-size: 13px;
-  line-height: 20px;
-  color: var(--fg-3);
+  align-items: center;
+  gap: 14px;
+  padding: 40px 20px 16px 16px;
+  background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.6));
+  transition: opacity 140ms var(--ease);
 }
 
-.shot figcaption .mono {
-  font-size: 11px;
-  color: var(--fg-3);
+.promo-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: rgba(19, 19, 20, 0.72);
+  backdrop-filter: blur(8px);
+  color: var(--fg);
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--ease),
+    opacity 140ms var(--ease);
+}
+
+.promo-toggle:hover {
+  background: var(--raised);
+}
+
+.promo-toggle:focus-visible {
+  border-radius: 50%;
+}
+
+.promo-seek {
+  --p: 0%;
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+}
+
+.promo-seek::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background:
+    linear-gradient(var(--fg), var(--fg)) 0 / var(--p) 100% no-repeat,
+    rgba(237, 237, 237, 0.24);
+}
+
+.promo-seek::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background:
+    linear-gradient(var(--fg), var(--fg)) 0 / var(--p) 100% no-repeat,
+    rgba(237, 237, 237, 0.24);
+}
+
+.promo-seek::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border: none;
+  border-radius: 50%;
+  background: var(--fg);
+  appearance: none;
+}
+
+.promo-seek::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: var(--fg);
+}
+
+.promo-time {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+/* With a mouse the bar shows while the pointer is over the video, on focus, and while paused; on
+   touch it always shows. */
+@media (hover: hover) {
+  .promo-bar {
+    opacity: 0;
+  }
+
+  .promo:hover .promo-bar,
+  .promo.is-paused .promo-bar,
+  .promo-bar:focus-within {
+    opacity: 1;
+  }
+}
+
+.promo-bar[hidden],
+.promo-toggle .i-play,
+.promo.is-paused .promo-toggle .i-pause {
+  display: none;
+}
+
+.promo.is-paused .promo-toggle .i-play {
+  display: block;
 }
 
 /* Features */
 
 .features {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 40px 48px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.features li {
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
 }
 
 .features h3 {
@@ -427,21 +562,26 @@ pre,
 /* Agents */
 
 .agents {
-  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .agents li {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
 }
 
 .agent-logo {
-  width: 20px;
-  height: 20px;
+  width: 28px;
+  height: 28px;
+  margin-bottom: 18px;
   color: var(--fg-2);
 }
 
@@ -453,16 +593,6 @@ pre,
 .agent-vendor {
   font-size: 13px;
   color: var(--fg-3);
-}
-
-.agents code {
-  justify-self: end;
-  padding: 3px 8px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--raised);
-  font-size: 12px;
-  color: var(--fg-2);
 }
 
 /* Download */
@@ -536,7 +666,9 @@ pre,
   padding: 32px 0;
 }
 
+/* Full width like the header, so the mark sits at the left edge and the line at the right. */
 .footer-inner {
+  max-width: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -588,7 +720,7 @@ pre,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html {
+  .page {
     scroll-behavior: auto;
   }
 
@@ -617,6 +749,11 @@ pre,
 
   .lede {
     max-width: 46ch;
+  }
+
+  .features,
+  .agents {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .downloads {
@@ -674,18 +811,12 @@ pre,
     margin-bottom: 32px;
   }
 
-  .shots,
   .features {
     grid-template-columns: minmax(0, 1fr);
-    gap: 24px;
   }
 
   .features {
-    gap: 32px;
-  }
-
-  .shot:nth-child(n) {
-    grid-column: auto;
+    gap: 12px;
   }
 }
 
@@ -693,22 +824,12 @@ pre,
   .hero-actions {
     grid-auto-flow: row;
     width: auto;
+    align-self: stretch;
   }
 
   .footer-inner {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
-  }
-}
-
-@media (max-width: 420px) {
-  .agents li {
-    grid-template-columns: 20px minmax(0, 1fr) auto;
-    row-gap: 2px;
-  }
-
-  .agent-vendor {
-    display: none;
   }
 }
