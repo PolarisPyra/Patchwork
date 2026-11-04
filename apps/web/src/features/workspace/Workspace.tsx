@@ -562,6 +562,10 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
         changeCount={changes.length}
         agent={selected?.agent ?? defaultAgent}
         working={isBusy(selected)}
+        done={
+          selected?.messages.at(-1)?.status === "complete" &&
+          selected.messages.at(-1)?.role === "assistant"
+        }
         planMode={selected?.planMode ?? false}
         onOpenChanges={barHandlers.openChanges}
       />

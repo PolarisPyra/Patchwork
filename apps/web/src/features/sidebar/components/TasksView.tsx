@@ -447,7 +447,7 @@ export default function TasksView({
       role="tree"
       aria-label="Tasks"
       aria-multiselectable="true"
-      className="group/tree flex min-h-0 flex-1 flex-col gap-px overflow-y-scroll overflow-x-hidden p-2 *:shrink-0 focus:outline-none"
+      className="group/tree flex min-h-0 flex-1 flex-col gap-px overflow-y-scroll overflow-x-hidden p-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:border-0 *:shrink-0 focus:outline-none"
       tabIndex={-1}
       {...shortcutContext("sidebarTreeFocus")}
       onKeyDown={onTreeKey}
@@ -463,7 +463,7 @@ export default function TasksView({
         Chats
       </SectionLabel>
       {chats.length === 0 && (
-        <div className="flex h-[22px] items-center px-1.5 text-[length:var(--fs-sm)] text-fg-muted">
+        <div className="flex h-[28px] items-center px-1.5 text-[length:var(--fs-sm)] text-fg-muted">
           No chats yet
         </div>
       )}
@@ -512,7 +512,7 @@ export default function TasksView({
         Projects
       </SectionLabel>
       {projects.length === 0 && !folderDrop && (
-        <div className="flex h-[22px] items-center px-1.5 text-[length:var(--fs-sm)] text-fg-muted">
+        <div className="flex h-[28px] items-center px-1.5 text-[length:var(--fs-sm)] text-fg-muted">
           No projects yet
         </div>
       )}
@@ -556,7 +556,7 @@ export default function TasksView({
                   drag.attrs.onPointerDown(e);
                   if (!editing && isPlainPress(e)) pickRow(e, row);
                 }}
-                className={`group mx-1 flex h-[22px] cursor-pointer items-center rounded-[var(--radius-sm)] select-none border-none pr-1.5 pl-1 text-left text-fg ${drag.edge} ${drag.dragging ? "opacity-50" : ""} ${flashId === p.id ? "project-flash" : ""}`}
+                className={`group mx-1 flex h-[28px] cursor-pointer items-center rounded-[var(--radius-sm)] select-none border-none pr-1.5 pl-1 text-left text-fg ${drag.edge} ${drag.dragging ? "opacity-50" : ""} ${flashId === p.id ? "project-flash" : ""}`}
                 onClick={(e) => {
                   if (!pickRow(e, row)) toggle(p.id);
                 }}
@@ -572,7 +572,7 @@ export default function TasksView({
                     onCancel={() => setRenaming(null)}
                   />
                 ) : (
-                  <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium">
+                  <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap [mask-image:linear-gradient(to_right,#000_calc(100%-28px),rgb(0_0_0/0.45))] font-medium">
                     {p.name}
                     {telltales.has(p.id) && (
                       <span className="ml-1.5 font-normal text-fg-muted">
@@ -637,7 +637,7 @@ export default function TasksView({
                     className="pointer-events-none absolute top-0 bottom-0 left-4 w-px bg-[#58585866] opacity-0 transition-opacity group-hover/tree:opacity-100"
                   />
                   {tasks.length === 0 && projectFolders.length === 0 && (
-                    <div className="flex h-[22px] items-center pl-[30px] text-[length:var(--fs-sm)] text-fg-muted">
+                    <div className="flex h-[28px] items-center pl-[30px] text-[length:var(--fs-sm)] text-fg-muted">
                       No tasks yet
                     </div>
                   )}
@@ -659,7 +659,7 @@ export default function TasksView({
                           onPointerDown={(e) => {
                             if (!folderEditing && isPlainPress(e)) pickRow(e, folderRow);
                           }}
-                          className={`group mx-1 flex h-[22px] cursor-pointer items-center rounded-[var(--radius-sm)] select-none pr-1.5 pl-3 text-fg ${target.edge}`}
+                          className={`group mx-1 flex h-[28px] cursor-pointer items-center rounded-[var(--radius-sm)] select-none pr-1.5 pl-3 text-fg ${target.edge}`}
                           onClick={(e) => {
                             if (!pickRow(e, folderRow)) toggle(key);
                           }}
@@ -720,7 +720,7 @@ export default function TasksView({
       {folderDrop && (
         <div
           ref={(el) => el?.scrollIntoView({ block: "nearest" })}
-          className="mx-1 flex h-[22px] items-center gap-1.5 rounded-[var(--radius-sm)] border border-dashed border-accent px-2 text-[length:var(--fs-sm)] text-fg-muted"
+          className="mx-1 flex h-[28px] items-center gap-1.5 rounded-[var(--radius-sm)] border border-dashed border-accent px-2 text-[length:var(--fs-sm)] text-fg-muted"
         >
           <FolderPlusIcon size={15} />
           Add Folder

@@ -1,6 +1,6 @@
 /** Bottom status bar: project and branch, open thread, change count, prompt mode, and agent status. */
 import { memo } from "react";
-import { CaretRightIcon, CircleIcon, GitBranchIcon } from "@phosphor-icons/react";
+import { CaretRightIcon, CheckIcon, CircleIcon, GitBranchIcon } from "@phosphor-icons/react";
 import { AGENT_LABELS, type AgentKind, type Project } from "~/api";
 import Spinner from "~/components/Spinner";
 
@@ -12,6 +12,8 @@ interface StatusBarProps {
   changeCount: number;
   agent: AgentKind;
   working: boolean;
+  /** The open thread's last turn finished. */
+  done: boolean;
   /** Plan mode of the open thread; off when no thread is selected. */
   planMode: boolean;
   onOpenChanges: () => void;
@@ -24,6 +26,7 @@ function StatusBar({
   changeCount,
   agent,
   working,
+  done,
   planMode,
   onOpenChanges,
 }: StatusBarProps) {
@@ -64,6 +67,11 @@ function StatusBar({
           <>
             <Spinner />
             {AGENT_LABELS[agent]} working…
+          </>
+        ) : done ? (
+          <>
+            Done
+            <CheckIcon size={12} weight="bold" className="text-success" />
           </>
         ) : (
           "Idle"

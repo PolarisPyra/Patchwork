@@ -1,5 +1,5 @@
 import { memo, useRef, type KeyboardEvent, type MouseEvent } from "react";
-import { ArchiveIcon, ShieldWarningIcon } from "@phosphor-icons/react";
+import { ArchiveIcon, CheckIcon, ShieldWarningIcon } from "@phosphor-icons/react";
 import { AGENT_LABELS, type Thread } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
 import Spinner from "~/components/Spinner";
@@ -39,7 +39,7 @@ export function InlineName({
   };
   return (
     <input
-      className="h-[22px] min-w-0 flex-1 border border-border-focus rounded-[var(--radius-sm)] bg-input px-1 text-fg outline-none"
+      className="h-[28px] min-w-0 flex-1 border border-border-focus rounded-[var(--radius-sm)] bg-input px-1 text-fg outline-none"
       aria-label="Name"
       defaultValue={initial}
       autoFocus
@@ -91,6 +91,10 @@ function sameRow(a: ThreadRowProps, b: ThreadRowProps): boolean {
   );
 }
 
+/** Chats whose turn ended while another chat was open. Each shows a check until it is opened. The set
+ * sits outside the rows, so a row that scrolls away or redraws keeps its mark. */
+const finishedUnseen = new Set<string>();
+
 export const ThreadRow = memo(function ThreadRow({
   thread,
   selected,
@@ -106,10 +110,15 @@ export const ThreadRow = memo(function ThreadRow({
   const goalActive = thread.goal?.status === "active";
   const last = thread.messages[thread.messages.length - 1];
   const needsApproval = last?.approvals.some((a) => a.status === "pending") ?? false;
-  // Tree rows are 22px tall, as in VS Code's explorer. The indent and the empty chevron column sit in the margin, so the highlight starts just before the title and the titles still line up with project and folder names.
+  const busy = isBusy(thread);
+  const wasBusy = useRef(busy);
+  if (wasBusy.current && !busy && !selected) finishedUnseen.add(thread.id);
+  wasBusy.current = busy;
+  if (selected) finishedUnseen.delete(thread.id);
+  // Tree rows are 28px tall. The indent and the empty chevron column sit in the margin, so the highlight starts just before the title and the titles still line up with project and folder names.
   // Chats sit in the padded list, tasks in their project's unpadded group, so both end at the same edge.
   const margins = ["-ml-[2px] -mr-1", "ml-[30px] mr-1", "ml-[38px] mr-1"][depth];
-  const spacing = `h-[22px] rounded-[var(--radius-sm)] pr-2 pl-2 ${margins}`;
+  const spacing = `h-[28px] rounded-[var(--radius-sm)] pr-2 pl-2 ${margins}`;
   // The picked rows are the selection, and the open chat is always among them.
   const fill = selectionFill(picked);
   return (
@@ -138,12 +147,12 @@ export const ThreadRow = memo(function ThreadRow({
           onCancel={onCancelRename}
         />
       ) : (
-        <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+        <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap [mask-image:linear-gradient(to_right,#000_calc(100%-28px),rgb(0_0_0/0.45))]">
           {displayTitle(thread.title)}
         </span>
       )}
-      {/* A right-aligned slot as wide as the time, or a spinner or approval shield, and the archive button in their place on hover. */}
-      <span className="flex min-w-5 flex-none items-center justify-end">
+      {/* A right-aligned slot as wide as the widest time ("59m", "30d"), so every title ends at the same edge. It holds the time, a spinner or approval shield, and the archive button in their place on hover. */}
+      <span className="flex w-8 flex-none items-center justify-end">
         <span className="flex items-center group-hover:hidden">
           {needsApproval ? (
             <span
@@ -154,9 +163,18 @@ export const ThreadRow = memo(function ThreadRow({
             >
               <ShieldWarningIcon size={15} />
             </span>
-          ) : isBusy(thread) ? (
+          ) : busy ? (
             <span title="Working" role="img" aria-label="Working" className="inline-flex flex-none">
               <Spinner className="text-accent-text" />
+            </span>
+          ) : finishedUnseen.has(thread.id) ? (
+            <span
+              title="Finished"
+              role="img"
+              aria-label="Finished"
+              className="step-check-in grid size-3.5 flex-none place-items-center rounded-full bg-[var(--success-soft)] text-success"
+            >
+              <CheckIcon size={9} weight="bold" />
             </span>
           ) : (
             <span

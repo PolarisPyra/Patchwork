@@ -37,6 +37,6 @@ export const collapseKey = (t: Target) => (t.kind === "folder" ? `folder:${t.id}
 export const selectionFill = (selected: boolean) =>
   `mb-0.5 ${
     selected
-      ? "bg-[var(--tree-inactive-selected,var(--bg-selected-muted))] hover:bg-[var(--tree-selected,var(--bg-selected))] group-focus-within/tree:bg-[var(--tree-selected,var(--bg-selected))] outline-transparent group-focus-within/tree:outline group-focus-within/tree:outline-1 group-focus-within/tree:-outline-offset-1 group-focus-within/tree:outline-[#3994bcb3]"
+      ? "bg-[var(--tree-inactive-selected,var(--bg-accent-soft))] hover:bg-[var(--tree-selected,var(--bg-selected))] group-focus-within/tree:bg-[var(--tree-selected,var(--bg-selected))] outline-transparent group-focus-within/tree:outline group-focus-within/tree:outline-1 group-focus-within/tree:-outline-offset-1 group-focus-within/tree:outline-[#3994bcb3]"
       : "bg-transparent hover:bg-[var(--tree-hover,var(--bg-hover))]"
   }`;

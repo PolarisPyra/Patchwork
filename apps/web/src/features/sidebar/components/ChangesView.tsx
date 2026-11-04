@@ -93,7 +93,7 @@ export default function ChangesView({
         </button>
       </div>
       <div
-        className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-scroll p-2 [scrollbar-gutter:stable]"
+        className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-scroll p-2 [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:border-0"
         style={{ "--diff-col": `${diffDigits + 1}ch` } as CSSProperties}
       >
         {changes.length > 0 && !fullAccess && (
@@ -103,7 +103,7 @@ export default function ChangesView({
           </div>
         )}
         {changes.length === 0 && (
-          <div className="-mt-2.5 flex h-[22px] items-center px-1 text-[length:var(--fs-sm)] text-fg-muted">
+          <div className="-mt-2.5 flex h-[28px] items-center px-1 text-[length:var(--fs-sm)] text-fg-muted">
             No changes
           </div>
         )}

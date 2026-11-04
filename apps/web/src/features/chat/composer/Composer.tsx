@@ -313,7 +313,7 @@ function Composer({
   return (
     <div
       ref={surfaceRef}
-      className={`relative flex flex-col gap-2 rounded-[8px] pt-3.5 pr-3 pb-2.5 pl-3 ${surface}`}
+      className={`relative flex flex-col gap-2 rounded-[var(--radius-lg)] pt-3.5 pr-3 pb-2.5 pl-3 ${surface}`}
       // The frame's padding and gaps belong to the text field: a click there puts the caret back
       // where it was in the draft, so Ctrl+A still selects the draft.
       onMouseDown={(e) => {

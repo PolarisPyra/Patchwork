@@ -100,7 +100,7 @@ export default function ArchivedView({
       role="treeitem"
       aria-level={folder ? 2 : 1}
       aria-expanded={!collapsed.has(key)}
-      className={`group mx-1 flex h-[22px] cursor-pointer items-center rounded-[var(--radius-sm)] select-none pr-1.5 text-left text-fg ${folder ? "pl-3" : "pl-1"} ${selectionFill(false)}`}
+      className={`group mx-1 flex h-[28px] cursor-pointer items-center rounded-[var(--radius-sm)] select-none pr-1.5 text-left text-fg ${folder ? "pl-3" : "pl-1"} ${selectionFill(false)}`}
       onClick={() => toggle(key)}
       onContextMenu={(e) =>
         openMenu(e, [
@@ -130,7 +130,7 @@ export default function ArchivedView({
       aria-level={nested ? 3 : 2}
       aria-selected={isPicked(t.id)}
       aria-label={displayTitle(t.title)}
-      className={`group mr-1 flex h-[22px] cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] select-none pr-2 pl-2 text-fg ${nested ? "ml-[38px]" : "ml-[30px]"} ${selectionFill(isPicked(t.id))}`}
+      className={`group mr-1 flex h-[28px] cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] select-none pr-2 pl-2 text-fg ${nested ? "ml-[38px]" : "ml-[30px]"} ${selectionFill(isPicked(t.id))}`}
       onClick={(e) => pick(e, t.id)}
       onContextMenu={(e) =>
         openMenu(e, [
@@ -158,7 +158,7 @@ export default function ArchivedView({
         ])
       }
     >
-      <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+      <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap [mask-image:linear-gradient(to_right,#000_calc(100%-28px),rgb(0_0_0/0.45))]">
         {displayTitle(t.title)}
       </span>
       <button
@@ -215,10 +215,10 @@ export default function ArchivedView({
         aria-multiselectable="true"
         {...shortcutContext("archivedListFocus")}
         onClick={clearSelectionOnBlank}
-        className="group/tree flex min-h-0 flex-1 flex-col gap-px overflow-y-scroll overflow-x-hidden p-2 *:shrink-0 focus:outline-none"
+        className="group/tree flex min-h-0 flex-1 flex-col gap-px overflow-y-scroll overflow-x-hidden p-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:border-0 *:shrink-0 focus:outline-none"
       >
         {archivedThreads.length === 0 && (
-          <div className="-mt-2.5 flex h-[22px] items-center px-1 text-[length:var(--fs-sm)] text-fg-muted">
+          <div className="-mt-2.5 flex h-[28px] items-center px-1 text-[length:var(--fs-sm)] text-fg-muted">
             Nothing archived
           </div>
         )}
