@@ -11,8 +11,8 @@ Each release adds its notes at the top; see docs/release.md.
 
 ### Changed
 
-- Settings has a shorter list. Appearance, Chats and Notifications are now one page, Settings → General; each project in Settings → Projects has its own switch for running checks after every task; and the shell is chosen in Settings → Terminal. Claude Code's and Codex's flags and models share one page, Settings → CLIs, with a switch between them.
-- Agents, plugins and checks now run their commands in bash, and find every tool your terminal finds, including those added in your shell's startup files for zsh, bash or fish. A command that runs out of time now stops along with anything it started, and Settings → Terminal → Shell now picks only the terminal's shell on macOS and Linux.
+- Settings has a shorter list. Appearance, Chats and Notifications are now one page, Settings → General, and each project in Settings → Projects has its own switch for running checks after every task. Claude Code's and Codex's flags and models share one page, Settings → CLIs, with a switch between them.
+- Agents, plugins and checks now run their commands in bash, and find every tool your terminal finds, including those added in your shell's startup files for zsh, bash or fish. A command that runs out of time now stops along with anything it started.
 - Terminals in the panel now keep running when the window reloads and come back with their screen as you left it. Closing a terminal ends everything it started, a terminal no window shows closes after two hours idle at its prompt, and anything left running after Patchwork was force-quit is ended at the next launch. You now pick the shell from the new-terminal button instead of Settings → Terminal.
 
 ### Fixed
