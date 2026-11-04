@@ -7,7 +7,8 @@ name: Release
 # without waiting for the checks, then builds the Linux AppImage, the Windows installer (on Linux),
 # and the macOS (Apple silicon) disk image and app bundle,
 # publishes them to updates.patchworkeditor.com, and creates the GitHub release with the tag's
-# notes, then points the website at the new release and deploys it. A tag pushed by
+# notes, then points the website at the new release, deploys it, and announces it on Discord. A
+# tag pushed by
 # `scripts/release.sh` is built and published the same way. scripts/release.sh does the work, and
 # docs/release.md explains it.
 #
@@ -341,3 +342,27 @@ jobs:
           # main can move while the release builds; the links commit goes on top of it.
           git pull -q --rebase origin main
           git push origin HEAD:main
+
+  # Announces the published release in the Discord channel named by the DISCORD_RELEASE_WEBHOOK_URL
+  # secret. A trailing /github is dropped, since that suffix makes Discord expect GitHub's payload,
+  # so the release webhook's URL works too. Without the secret it only warns. It holds no signing
+  # secrets.
+  announce:
+    needs: [cut, release]
+    if: ${{ !cancelled() && needs.release.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      RELEASE_TAG: ${{ needs.cut.outputs.tag || github.ref_name }}
+    steps:
+      - name: Announce ${{ env.RELEASE_TAG }} on Discord
+        env:
+          DISCORD_RELEASE_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_RELEASE_WEBHOOK_URL" ]; then
+            echo "::warning::DISCORD_RELEASE_WEBHOOK_URL is not set, so the release was not announced."
+            exit 0
+          fi
+          url="https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG"
+          jq -n --arg text "New release: Patchwork $RELEASE_TAG is out. $url" '{content: $text}' \
+            | curl -fsS -H 'Content-Type: application/json' --data-binary @- "${DISCORD_RELEASE_WEBHOOK_URL%/github}" >/dev/null

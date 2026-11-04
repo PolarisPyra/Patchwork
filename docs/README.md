@@ -10,6 +10,8 @@ for people using it.
 | [Agent CLIs](agent-clis.md) | How each agent is detected, run, approved, steered, and imported |
 | [Artifacts, scheduled tasks, plugins, computer use](artifacts-and-automation.md) | The four features around the agents, and how each one decides what to do |
 | [Releasing](release.md) | Versions, the changelog, the release workflow, and the update server |
+| [Licensing and plans](licensing.md) | The open-core split, how a plan unlocks a paid feature, and issuing license keys |
+| [Accounts](accounts.md) | The hosted account service: signing in, its routes and data, running and deploying it |
 
 ## Adding a guide
 

@@ -2,7 +2,7 @@
 
 ## Repo layout
 
-The repo is split into `apps/web`, `crates/server`, and `apps/desktop`:
+The repo is split into `apps/web`, `crates/server`, `crates/api`, `apps/desktop`, and `commercial`:
 
 - `crates/server` — the backend, a Rust crate with no Tauri dependency
   - `src/lib.rs` — the module list, `Server`, and how it opens. Every other module is one domain, holding its wire types, its `impl Server` operations and its logic: a folder domain splits them into `types.rs` (re-exported from the folder) and `ops.rs`, and a one-file domain keeps them in that order:
@@ -19,12 +19,17 @@ The repo is split into `apps/web`, `crates/server`, and `apps/desktop`:
   - `src/workspace/` — git and file access; `src/watch.rs` — watches the open project for file changes (see [File changes](#file-changes))
   - `src/system/` — the user's machine: the programs Patchwork starts and their environment, login shells, paths, opening files on the desktop
   - `src/logging/` — the debug logs
+  - `src/license.rs` — the plan the stored license key gives, and which paid features it allows; `src/backgrounds.rs` — chat backgrounds
+- `crates/api` — the hosted service on its own server: accounts, sign-in by password and emailed code, and the devices signed in, on Postgres (see [Accounts](accounts.md))
 - `apps/desktop/src-tauri` — the Tauri shell: exposes `Server` as commands and forwards events
 - `apps/web` — the React UI (`~/` imports resolve to `apps/web/src`)
   - `src/app/` — app root; `src/api/` — typed bridge to the backend, one area per file
   - `src/features/{chat,sidebar,usage,updates,settings,onboarding,canvas,panel,workspace}/` — UI, one folder per feature
   - `src/features/chat/Artifact.tsx` — Mermaid diagrams and sandboxed HTML/SVG artifacts in a reply
-  - `src/components/`, `src/hooks/`, `src/lib/` — what two or more features share; `src/theme.css` — design tokens
+  - `src/components/`, `src/hooks/`, `src/lib/` — what two or more features share; `src/theme.css` — design tokens; `src/styles/` — the base rules, shared primitives, motion, the composer editor, and the dev session frame
+- `commercial/` — the paid features, under the commercial license (see [Licensing and plans](licensing.md))
+  - `crates/licensing` — the plans, what each unlocks, and the license key check
+  - `web` — the UI of paid features, imported as `@patchwork/commercial-web/<Component>`
 
 ## Data model
 

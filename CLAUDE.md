@@ -7,7 +7,8 @@ Tauri desktop app: React frontend, Rust backend. Run everything from the repo ro
 - pnpm workspace, `apps/*`:
   - `apps/desktop` (`patchwork-desktop`): Tauri app, owns `@tauri-apps/cli`.
   - `apps/web` (`patchwork-web`): frontend.
-- Cargo workspace: `crates/server` (providers, persistence, usage, thread import) and `apps/desktop/src-tauri`.
+- Cargo workspace: `crates/server` (providers, persistence, usage, thread import), `crates/api` (the hosted account service, on Postgres; see `docs/accounts.md`), `apps/desktop/src-tauri`, and `commercial/crates/licensing`.
+- `commercial/`: the paid features under the commercial license, as `commercial/crates/licensing` (plans and license keys) and `commercial/web` (`@patchwork/commercial-web`, their UI). See `docs/licensing.md`.
 
 ### `apps/web/src`
 
@@ -40,7 +41,7 @@ Tauri desktop app: React frontend, Rust backend. Run everything from the repo ro
 | All static checks | `pnpm check` (regenerates the types, then typecheck, format, rustfmt, clippy) |
 | Wire types | `pnpm types` writes `apps/web/src/bindings` from the Rust types in `crates/server` |
 | Web typecheck | `pnpm typecheck` |
-| Format TS and TSX | `pnpm format` / `pnpm format:check` (`apps/**/*.{ts,tsx}`, not the generated `bindings/`) |
+| Format TS and TSX | `pnpm format` / `pnpm format:check` (`{apps,commercial}/**/*.{ts,tsx}`, not the generated `bindings/`) |
 | Rust format | `cargo fmt --all` / `cargo fmt --all -- --check` |
 | Rust lint | `cargo clippy --workspace --all-targets -- -D warnings` |
 | Rust tests | `cargo test --workspace` |

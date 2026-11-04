@@ -31,8 +31,7 @@ place to decide what survives. It does not replace the CLIs you already trust �
 - **Bring your own key.** Add DeepSeek or any OpenAI-compatible endpoint under
   **Settings → Providers**. Keys live in your system keychain, not in the app's database.
 - **It reads what your agent already wrote.** Import past conversations from Claude Code, Codex, the
-  Gemini CLI, or [T3 Code](https://github.com/pingdotgg/t3code) — each becomes a task whose
-  follow-ups resume the original session.
+  Gemini CLI, or OpenCode — each becomes a task whose follow-ups resume the original session.
 - **Artifacts, drawn in place.** A Mermaid diagram, an HTML mock, or an SVG chart in a reply renders
   in the chat, in a sandboxed frame that cannot reach the rest of the app.
 - **Runs on your machine.** No account, no proxy, no telemetry server. Requests go from your
@@ -109,14 +108,16 @@ Bug reports, fixes, and guides are welcome. Start with [CONTRIBUTING.md](CONTRIB
 
 ## License
 
-Patchwork is free software under the [GNU Affero General Public License, version 3 or
-later](LICENSE) (AGPL-3.0-or-later), with no warranty.
+Patchwork is open core. Almost all of it is free software under the [GNU Affero General Public
+License, version 3 or later](LICENSE_AGPL.txt) (AGPL-3.0-or-later), with no warranty. The paid
+features in [`commercial/`](commercial/) are source-available under the [Patchwork Commercial
+License](LICENSE_COMMERCIAL.txt): free to read, change, and test, with a paid plan for everyday use.
+[LICENSE](LICENSE) says which covers what, and the [licensing FAQ](LICENSE_FAQ.md) lists what each
+plan includes.
 
 The AGPL lets you use, study, change, and share Patchwork, provided that anything you distribute, or
 run as a network service, is offered under the same license with its source. If that does not suit
-you — closed-source integration, or a product you cannot publish under the AGPL — a **commercial
-license** is available instead; open an issue titled "Commercial license". That dual licensing is
-how the project is funded.
+you, a **commercial license** is available instead; open an issue titled "Commercial license".
 
-The license covers the code. The Patchwork name and logo are not licensed with it, so a fork needs
+The licenses cover the code. The Patchwork name and logo are not licensed with them, so a fork needs
 its own name.
