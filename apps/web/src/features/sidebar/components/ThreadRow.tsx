@@ -172,9 +172,9 @@ export const ThreadRow = memo(function ThreadRow({
               title="Finished"
               role="img"
               aria-label="Finished"
-              className="step-check-in grid size-3.5 flex-none place-items-center rounded-full bg-[var(--success-soft)] text-success"
+              className="inline-flex flex-none text-success"
             >
-              <CheckIcon size={9} weight="bold" />
+              <CheckIcon size={14} weight="bold" />
             </span>
           ) : (
             <span

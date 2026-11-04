@@ -44,7 +44,6 @@ export default function AgentStepDisplay({
     running: active,
     done: !active && tool?.status === "done",
     failed: tool?.status === "error",
-    pop: live,
     lines: tool && linesOf(tool),
     result: tool && commandResult(tool),
   };
@@ -136,14 +135,13 @@ export function LineGutter({ children }: { children: ReactNode }) {
  *
  * Nothing here fades. A label that dims and brightens on a loop reads as text that cannot settle,
  * and beside an icon the icon looks like it is going with it. Only a row that has just arrived
- * fades its text in, and only a check that lands while you watch pops in.
+ * fades its text in.
  */
 export function EntryText({
   entering = false,
   running = false,
   done = false,
   failed = false,
-  pop = false,
   lines = null,
   result = null,
   className = "",
@@ -157,8 +155,6 @@ export function EntryText({
   done?: boolean;
   /** Its work failed, so a red cross follows its text. */
   failed?: boolean;
-  /** The reply is live, so a check that lands now pops in. */
-  pop?: boolean;
   /** The lines its edits added and removed. */
   lines?: ToolCall["lines"];
   /** What its command came to. */
@@ -179,21 +175,13 @@ export function EntryText({
           {running ? (
             <Spinner size={15} className="text-accent-text" />
           ) : failed ? (
-            <span
-              role="img"
-              aria-label="Failed"
-              className={`grid size-4 place-items-center rounded-full bg-[var(--danger-soft)] text-danger ${pop ? "step-check-in" : ""}`}
-            >
-              <XIcon size={10} weight="bold" />
+            <span role="img" aria-label="Failed" className="inline-flex text-danger">
+              <XIcon size={14} weight="bold" />
             </span>
           ) : (
             done && (
-              <span
-                role="img"
-                aria-label="Done"
-                className={`grid size-4 place-items-center rounded-full bg-[var(--success-soft)] text-success ${pop ? "step-check-in" : ""}`}
-              >
-                <CheckIcon size={11} weight="bold" />
+              <span role="img" aria-label="Done" className="inline-flex text-success">
+                <CheckIcon size={14} weight="bold" />
               </span>
             )
           )}
