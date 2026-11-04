@@ -186,6 +186,8 @@ jobs:
       assets: ${{ steps.upload.outputs.assets }}
     env:
       RELEASE_TAG: ${{ needs.cut.outputs.tag || (github.ref_type == 'tag' && github.ref_name || '') }}
+      # cargo-xwin fetches the Windows SDK and C runtime for arm64 as well unless told otherwise.
+      XWIN_ARCH: x86_64
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -201,8 +203,24 @@ jobs:
           shared-key: release-windows
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
+      # The SDK and C runtime cargo-xwin unpacks. Fetching them from Microsoft took 15 minutes on a
+      # runner; it skips that while its folder is there. Saved only on main, like the Rust cache.
+      - name: Restore the Windows SDK
+        id: xwin
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/cargo-xwin
+          key: xwin-0.23.1-${{ env.XWIN_ARCH }}
+
       - name: Build
         run: scripts/release.sh ci-build windows
+
+      - name: Save the Windows SDK
+        if: github.ref == 'refs/heads/main' && steps.xwin.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/cargo-xwin
+          key: ${{ steps.xwin.outputs.cache-primary-key }}
 
       - name: Upload
         id: upload

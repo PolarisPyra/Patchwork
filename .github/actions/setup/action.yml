@@ -28,14 +28,15 @@ runs:
           librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
 
     # cargo-xwin compiles and links with clang and lld against the Windows SDK it downloads, and
-    # Tauri's installer script needs NSIS 3.09 or newer, which Ubuntu 24.04 has.
+    # Tauri's installer script needs NSIS 3.09 or newer, which Ubuntu 24.04 has. The Tauri CLI on
+    # Linux looks up the tray icon library with pkg-config for any target, and stops without it.
     - name: Install the tools that build for Windows
       if: inputs.windows == 'true'
       shell: bash
       run: |
         sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
         sudo apt-get update
-        sudo apt-get install -y -o Acquire::Retries=3 clang lld llvm nsis
+        sudo apt-get install -y -o Acquire::Retries=3 clang lld llvm nsis libayatana-appindicator3-dev
 
     - name: Install cargo-xwin
       if: inputs.windows == 'true'

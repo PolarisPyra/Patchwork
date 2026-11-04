@@ -264,6 +264,9 @@ Most of each build is compiling the Rust dependencies. A tag's run can restore c
 - Tag runs restore those caches and save none.
 - The Rust toolchain is pinned (`RUST_TOOLCHAIN` in the workflow), because a cache is only reused by
   the same compiler. Raising it rebuilds the caches on that push.
+- The Windows job also caches the Windows SDK and C runtime that `cargo-xwin` downloads from
+  Microsoft, for x86_64 only (`XWIN_ARCH`), keyed on the `cargo-xwin` version. Without it the
+  download alone took 15 minutes on a runner.
 - macOS has no cache. Its build is short, and its minutes count ten times.
 
 ### Actions limits
