@@ -1,0 +1,26 @@
+[package]
+name = "patchwork-api"
+version = "0.0.0"
+license = "AGPL-3.0-or-later"
+description = "Patchwork's hosted service: accounts, sign-in, and the devices signed in"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+
+[dependencies]
+axum = "0.8"
+argon2 = "0.6"
+base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+getrandom = "0.3"
+hmac = "0.12"
+log = { version = "0.4", features = ["std"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "sync", "time"] }
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
+# Postgres over its local socket, with the migrations in migrations/ built into the binary.
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres", "uuid", "chrono", "migrate", "macros"] }
+# Sign-in codes go out over SMTP with TLS, so any mail provider works.
+lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "tokio1-rustls-tls"] }
