@@ -18,10 +18,17 @@ use super::{configured_model, models};
 
 /// `codex app-server` speaks JSON-RPC on stdio; `turn_input` starts the conversation. Codex leaves
 /// out its `update_plan` tool unless asked, and that tool is what fills the plan above the chat box.
+/// Its `request_user_input` tool, the question card, works only in plan mode unless enabled.
 pub fn turn_args() -> Vec<String> {
-    ["app-server", "-c", "tools.update_plan.enabled=true"]
-        .map(String::from)
-        .into()
+    [
+        "app-server",
+        "-c",
+        "tools.update_plan.enabled=true",
+        "-c",
+        "features.default_mode_request_user_input=true",
+    ]
+    .map(String::from)
+    .into()
 }
 
 /// A set compact window makes Codex compact once its context reaches it.
