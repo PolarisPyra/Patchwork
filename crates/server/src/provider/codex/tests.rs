@@ -123,7 +123,7 @@ fn an_open_command_or_subagent_is_a_background_task_without_a_stop() {
     assert_eq!(task.kind, "command");
     assert_eq!(
         task.description,
-        "/usr/bin/zsh -lc 'node -e \"setTimeout(()=>console.log(1),60000)\"'"
+        "node -e \"setTimeout(()=>console.log(1),60000)\""
     );
     assert_eq!(task.status, TaskStatus::Running);
     assert_eq!(task.task_id, None);

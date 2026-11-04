@@ -93,13 +93,13 @@ fn codex_item(
             }
         }
         Some("commandExecution") => {
-            let command = item["command"].as_str().unwrap_or_default();
+            let command = bare_command(item["command"].as_str().unwrap_or_default());
             out.push(tool_started(
                 message_id,
                 ToolStart {
                     id,
                     name: "Shell",
-                    summary: one_line(command),
+                    summary: one_line(&command),
                     subagent: None,
                     parent: None,
                 },
@@ -173,6 +173,70 @@ fn codex_item(
         }
         _ => {}
     }
+}
+
+/// The command the model wrote, without the `/bin/zsh -lc '…'` Codex wraps each one in to run it
+/// in the login shell. Approvals already show it bare, so a command reads the same in both.
+fn bare_command(command: &str) -> String {
+    match shell_words(command).as_slice() {
+        [shell, flag, inner]
+            if matches!(
+                shell.rsplit('/').next(),
+                Some("sh" | "bash" | "zsh" | "dash")
+            ) && matches!(flag.as_str(), "-c" | "-lc") =>
+        {
+            inner.clone()
+        }
+        _ => command.to_string(),
+    }
+}
+
+/// `line` split into words with a POSIX shell's quoting removed.
+fn shell_words(line: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut word = String::new();
+    let mut in_word = false;
+    let mut chars = line.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '\'' => {
+                in_word = true;
+                word.extend(chars.by_ref().take_while(|&c| c != '\''));
+            }
+            '"' => {
+                in_word = true;
+                while let Some(c) = chars.next() {
+                    match c {
+                        '"' => break,
+                        '\\' => match chars.next() {
+                            Some(e @ ('"' | '\\' | '$' | '`')) => word.push(e),
+                            Some(e) => word.extend(['\\', e]),
+                            None => word.push('\\'),
+                        },
+                        c => word.push(c),
+                    }
+                }
+            }
+            '\\' => {
+                in_word = true;
+                word.extend(chars.next());
+            }
+            c if c.is_whitespace() => {
+                if in_word {
+                    words.push(std::mem::take(&mut word));
+                    in_word = false;
+                }
+            }
+            c => {
+                in_word = true;
+                word.push(c);
+            }
+        }
+    }
+    if in_word {
+        words.push(word);
+    }
+    words
 }
 
 /// The start of the id of a `thread/read` for a subagent's thread, which goes on with the
