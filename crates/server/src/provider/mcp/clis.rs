@@ -522,6 +522,10 @@ pub fn overrides(agent: AgentKind, root: &str, thread_id: &str) -> Vec<String> {
                         format!("mcp_servers.{name}.tool_timeout_sec={OWN_TIMEOUT_SECS}"),
                         "-c".to_string(),
                         format!("mcp_servers.{name}.default_tools_approval_mode=\"approve\""),
+                        // Codex otherwise leaves MCP tools to be found from inside its `exec`
+                        // code, where the model never learns of `request_secret`.
+                        "-c".to_string(),
+                        format!("features.code_mode.direct_only_tool_namespaces=[\"mcp__{name}\"]"),
                     ]);
                 }
                 config
