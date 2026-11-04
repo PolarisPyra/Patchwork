@@ -3,6 +3,17 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.6] - 2026-11-04
+
+### Changed
+
+- A command Patchwork's own agent runs no longer gets killed when it runs out of time. It keeps running as a background job listed under the reply, where you can stop it, and the agent can read its output or stop it too. Stopping a command, a plugin's hook or a project check now asks it to end first, forces it 3 seconds later, and takes along everything it started.
+
+### Fixed
+
+- Codex now asks its questions in the question card in every chat, like the other providers, instead of listing the options as text in its reply. Before, it could only do this in plan mode.
+- Codex now asks for passwords, tokens and keys in the private card in the chat, like the other providers, instead of asking you to type them into your reply.
+
 ## [26.11.5] - 2026-11-04
 
 ### Added
