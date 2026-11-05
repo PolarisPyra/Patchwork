@@ -34,6 +34,13 @@ export default function LicensePane() {
   if (!status) return null;
   const note = status.paused ? "Paused: sign in with this email to use it" : expiryText(status);
   const desc = [status.email, note].filter(Boolean).join(" · ") || undefined;
+  // A key in effect is changed by removing it first, so the field shows only when a key would help.
+  const active = status.email !== null && !status.expired && !status.paused;
+  const alert = error && (
+    <div role="alert" className="text-[length:var(--fs-sm)] text-danger">
+      {error}
+    </div>
+  );
   return (
     <>
       <TokenRow title={`${PLAN_NAMES[status.plan]} plan`} desc={desc}>
@@ -57,32 +64,36 @@ export default function LicensePane() {
           </button>
         )}
       </TokenRow>
-      <form
-        className="flex flex-col gap-2 border-b border-border py-2.5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (key.trim()) void run(() => setLicenseKey(key));
-        }}
-      >
-        <label htmlFor="license-key" className="font-semibold">
-          License key
-        </label>
-        <textarea
-          id="license-key"
-          className={`${TEXTAREA} font-[family-name:var(--font-mono)]`}
-          spellCheck={false}
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-        />
-        {error && (
-          <div role="alert" className="text-[length:var(--fs-sm)] text-danger">
-            {error}
-          </div>
-        )}
-        <button type="submit" className="btn btn-primary self-start" disabled={busy || !key.trim()}>
-          Activate
-        </button>
-      </form>
+      {active ? (
+        alert && <div className="border-b border-border py-2.5">{alert}</div>
+      ) : (
+        <form
+          className="flex flex-col gap-2 border-b border-border py-2.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (key.trim()) void run(() => setLicenseKey(key));
+          }}
+        >
+          <label htmlFor="license-key" className="font-semibold">
+            License key
+          </label>
+          <textarea
+            id="license-key"
+            className={`${TEXTAREA} font-[family-name:var(--font-mono)]`}
+            spellCheck={false}
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+          />
+          {alert}
+          <button
+            type="submit"
+            className="btn btn-primary self-start"
+            disabled={busy || !key.trim()}
+          >
+            Activate
+          </button>
+        </form>
+      )}
     </>
   );
 }
