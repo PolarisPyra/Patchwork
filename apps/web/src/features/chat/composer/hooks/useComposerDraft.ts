@@ -167,12 +167,11 @@ export function useComposerDraft({
       const scale = window.devicePixelRatio;
       return { x: position.x / scale, y: position.y / scale };
     }
+    // What is drawn at the point decides, so a drop on a dialog over the chat stays the dialog's.
     function overChat(position: { x: number; y: number }) {
-      const el = rootRef.current;
-      if (!el) return false;
-      const r = el.getBoundingClientRect();
       const { x, y } = cssPoint(position);
-      return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+      const hit = document.elementFromPoint(x, y);
+      return !!hit && !!rootRef.current?.contains(hit);
     }
     let cancelled = false;
     let unlisten: (() => void) | undefined;
