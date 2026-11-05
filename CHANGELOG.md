@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.12] - 2026-11-05
+
+### Changed
+
+- Account now sits right below General in the Settings sidebar, so signing in and your license are easier to find.
+
 ## [26.11.11] - 2026-11-05
 
 ### Added
