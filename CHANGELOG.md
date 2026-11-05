@@ -3,6 +3,17 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.16] - 2026-11-05
+
+### Added
+
+- Pictures you pick as a chat background in Settings → General or in a chat's background picker now stay there as their own tiles, named after their file, with a button to delete one and an Undo right after; you can also drop a picture on the picker or paste one into it, large photos are shrunk so chats stay quick, and the same photo picked twice is kept once. The first tile goes back to the default background and shows as picked when nothing else is, the arrow keys move between the tiles, and a chat's background picker no longer darkens the chat, so each pick shows on it. A new Background strength row in Settings → General sets how much of the background shows through: Subtle, Medium or Strong.
+
+### Fixed
+
+- A file dropped on a dialog that covers the chat box, such as Settings, no longer also attaches to the chat behind it.
+- A symbol in a reply that is meant to sit over a letter, such as a slashed circle written on its own, no longer overlaps the words beside it.
+
 ## [26.11.15] - 2026-11-05
 
 ### Removed

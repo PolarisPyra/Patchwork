@@ -1,7 +1,7 @@
 {
   "name": "patchwork-web",
   "private": true,
-  "version": "26.11.15",
+  "version": "26.11.16",
   "license": "MIT",
   "type": "module",
   "scripts": {
