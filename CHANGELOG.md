@@ -3,6 +3,20 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.10] - 2026-11-04
+
+### Added
+
+- Right-click a chat or task in the sidebar and choose "Add to favorites" to move it into a Favorites section at the top, which shows once you have a favorite. Tasks in a project can also be pinned from the same menu, which lists them first in their project above its folders, and they go back into their folder when unpinned. Favorites show a star and pinned tasks a pin beside their title.
+
+### Changed
+
+- The check beside a finished chat in the sidebar, and the check or cross at the end of each step the agent runs in a chat, are now plain, larger marks without a tinted circle or a bouncing pop. They are easier to read at a glance.
+
+### Fixed
+
+- The background picked in Settings → General now shows behind your chats. Before, no background appeared, neither the one for every chat nor a chat's own.
+
 ## [26.11.9] - 2026-11-04
 
 ### Added
