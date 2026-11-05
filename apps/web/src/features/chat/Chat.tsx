@@ -572,15 +572,11 @@ export default function Chat({
         shared={chatBackground}
         strength={chatBackgroundStrength}
       />
-      {thread && (
-        <LineageCard thread={thread} working={working} onDisconnect={stop} onError={setError} />
-      )}
-      <div
-        className={`relative flex min-h-0 flex-col ${isNew ? "flex-none overflow-y-auto" : "flex-1"}`}
-      >
+      {/* Floats over the transcript's top right; only its controls take clicks. */}
+      <div className="pointer-events-none absolute top-3 right-4 z-10 flex flex-col items-end gap-2 *:pointer-events-auto">
         {!isNew && project && (
           <button
-            className="btn absolute top-3 right-5 z-10 rounded-full border-none bg-[color-mix(in_srgb,var(--text)_14%,transparent)] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),inset_0_0_0_1px_rgba(255,255,255,0.04),0_1px_3px_rgba(0,0,0,0.15)] backdrop-blur-md hover:bg-[color-mix(in_srgb,var(--text)_18%,transparent)]"
+            className="btn rounded-full border-none bg-[color-mix(in_srgb,var(--text)_14%,transparent)] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),inset_0_0_0_1px_rgba(255,255,255,0.04),0_1px_3px_rgba(0,0,0,0.15)] backdrop-blur-md hover:bg-[color-mix(in_srgb,var(--text)_18%,transparent)]"
             onClick={() =>
               api.openInEditor(project.id, "").catch((e: unknown) => setError(errorText(e)))
             }
@@ -589,6 +585,11 @@ export default function Chat({
             Open in editor
           </button>
         )}
+        {thread && (
+          <LineageCard thread={thread} working={working} onDisconnect={stop} onError={setError} />
+        )}
+      </div>
+      <div className={`flex min-h-0 flex-col ${isNew ? "flex-none overflow-y-auto" : "flex-1"}`}>
         {!isNew ? (
           <PermissionsContext.Provider value={approvals.permissionsContext}>
             <ChecksContext.Provider value={checksContext}>

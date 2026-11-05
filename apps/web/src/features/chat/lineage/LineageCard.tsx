@@ -53,7 +53,7 @@ export default function LineageCard({
   }
 
   return (
-    <div className="absolute top-3 right-4 z-10 w-[280px] rounded-[var(--radius-lg)] border border-border bg-panel text-[length:var(--fs-sm)] shadow-[var(--shadow-popup)]">
+    <div className="w-[280px] rounded-[var(--radius-lg)] border border-border bg-panel text-[length:var(--fs-sm)] shadow-[var(--shadow-popup)]">
       <div className="flex items-center gap-2 px-3 py-2">
         <span className="flex-1 truncate font-medium text-[length:var(--fs-xs)] text-fg-muted">
           {running > 0 ? `Lineage · ${running} running` : "Lineage"}
