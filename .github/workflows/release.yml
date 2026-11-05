@@ -363,6 +363,5 @@ jobs:
             echo "::warning::DISCORD_RELEASE_WEBHOOK_URL is not set, so the release was not announced."
             exit 0
           fi
-          url="https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG"
-          jq -n --arg text "New release: Patchwork $RELEASE_TAG is out. $url" '{content: $text}' \
+          jq -n --arg text "New release: Patchwork $RELEASE_TAG is out." '{content: $text}' \
             | curl -fsS -H 'Content-Type: application/json' --data-binary @- "${DISCORD_RELEASE_WEBHOOK_URL%/github}" >/dev/null
