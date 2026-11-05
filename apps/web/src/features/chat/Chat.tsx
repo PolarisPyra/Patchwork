@@ -5,6 +5,7 @@ import {
   type AccessMode,
   type AgentKind,
   type Attachment,
+  type BackgroundStrength,
   type BackgroundTask,
   type ChatBackground,
   type CheckSettings,
@@ -122,6 +123,8 @@ interface ChatProps {
   onSetProjectChecks: (projectId: string, on: boolean) => void;
   /** Settings' background, which the chat shows unless it has its own. */
   chatBackground: ChatBackground;
+  /** How much of the background shows through. */
+  chatBackgroundStrength: BackgroundStrength;
 }
 
 // A fallback that keeps one identity, so the memoized composer sees no change.
@@ -174,6 +177,7 @@ export default function Chat({
   checkSettings,
   onSetProjectChecks,
   chatBackground,
+  chatBackgroundStrength,
 }: ChatProps) {
   // Errors by the chat they happened in ("new" for the new-task screen), so one never shows in
   // another chat.
@@ -563,7 +567,11 @@ export default function Chat({
       onCopy={copySelection}
       onKeyDownCapture={stopOnEscapeTwice}
     >
-      <ChatBackdrop own={thread?.background} shared={chatBackground} />
+      <ChatBackdrop
+        own={thread?.background}
+        shared={chatBackground}
+        strength={chatBackgroundStrength}
+      />
       {thread && (
         <LineageCard thread={thread} working={working} onDisconnect={stop} onError={setError} />
       )}

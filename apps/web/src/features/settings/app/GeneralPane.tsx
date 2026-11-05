@@ -1,9 +1,15 @@
-import type { NotificationSettings, Theme } from "~/api";
+import type { BackgroundStrength, NotificationSettings, Theme } from "~/api";
 import BackgroundPicker from "~/components/BackgroundPicker";
 import { SectionHeading, Segmented, TokenRow, TokenSwitch } from "~/features/settings/controls";
 import { LOGO_URLS } from "~/features/settings/logo";
 import type { PaneProps } from "~/features/settings/types";
 import logoManifest from "../../../../../../assets/logos/manifest.json";
+
+const STRENGTHS: { value: BackgroundStrength; label: string }[] = [
+  { value: "subtle", label: "Subtle" },
+  { value: "medium", label: "Medium" },
+  { value: "strong", label: "Strong" },
+];
 
 const THEMES: { value: Theme; label: string }[] = [
   { value: "light", label: "Light" },
@@ -18,7 +24,11 @@ const THEMES: { value: Theme; label: string }[] = [
  * message written while a reply is running; and which finished work raises a desktop notification
  * while Patchwork is not focused.
  */
-export default function GeneralPane({ settings, updateSettings }: PaneProps) {
+export default function GeneralPane({
+  settings,
+  updateSettings,
+  onRemoveBackgroundImage,
+}: PaneProps & { onRemoveBackgroundImage: (file: string) => Promise<() => Promise<void>> }) {
   const logo = settings.logo ?? logoManifest.default;
   const notifications = settings.notifications;
   const notify = (patch: Partial<NotificationSettings>) =>
@@ -57,11 +67,23 @@ export default function GeneralPane({ settings, updateSettings }: PaneProps) {
         <BackgroundPicker
           label="Chat background"
           value={settings.chatBackground}
+          cleared={{ kind: "none" }}
           onChange={(chatBackground) =>
             chatBackground && void updateSettings((s) => ({ ...s, chatBackground }))
           }
+          onRemove={onRemoveBackgroundImage}
         />
       </div>
+      <TokenRow title="Background strength">
+        <Segmented
+          label="Background strength"
+          value={settings.chatBackgroundStrength}
+          options={STRENGTHS}
+          onChange={(chatBackgroundStrength) =>
+            void updateSettings((s) => ({ ...s, chatBackgroundStrength }))
+          }
+        />
+      </TokenRow>
 
       <SectionHeading>Chats</SectionHeading>
       <TokenRow title="Click answers twice to send">

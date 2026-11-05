@@ -6,7 +6,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::backgrounds::ChatBackground;
+use crate::backgrounds::{BackgroundStrength, ChatBackground};
 use crate::permissions::PermissionSettings;
 use crate::projects::Project;
 use crate::provider::AgentKind;
@@ -66,6 +66,8 @@ pub struct Settings {
     pub logo: Option<String>,
     /// What shows behind every chat's messages, unless the chat has its own.
     pub chat_background: ChatBackground,
+    /// How much of a chat's background shows through the window color.
+    pub chat_background_strength: BackgroundStrength,
     /// Legacy switch for the import log, migrated into `logging` on load.
     #[serde(skip_serializing)]
     pub import_log_disabled: bool,

@@ -50,6 +50,9 @@ interface SettingsDialogProps extends PaneProps {
   section?: string | null;
   /** Called after conversations were imported, so threads can be reloaded. */
   onImported: () => void;
+  /** Deletes a background picture, and moves the chats and Settings that showed it back to their
+   * defaults. */
+  onRemoveBackgroundImage: (file: string) => Promise<() => Promise<void>>;
   onClose: () => void;
 }
 
@@ -162,7 +165,7 @@ export default memo(function SettingsDialog({ onClose, ...props }: SettingsDialo
           <div
             role="region"
             aria-label={open.label}
-            className="min-h-0 flex-1 overflow-y-auto px-5 pb-5"
+            className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 [scrollbar-gutter:stable]"
           >
             <open.Pane {...props} />
           </div>

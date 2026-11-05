@@ -11,14 +11,18 @@ interface ChatBackgroundDialogProps {
   shared: ChatBackground;
   /** Saves the chat's own background; null goes back to the shared one. */
   onSave: (background: ChatBackground | null) => Promise<void>;
+  /** Deletes a picture, and moves the chats and Settings that showed it back to their defaults.
+   * Resolves to the way to take that back. */
+  onRemoveImage: (file: string) => Promise<() => Promise<void>>;
   onClose: () => void;
 }
 
-/** Picks a background for one chat. */
+/** Picks a background for one chat. The chat stays undimmed behind it, to show each pick. */
 export default function ChatBackgroundDialog({
   thread,
   shared,
   onSave,
+  onRemoveImage,
   onClose,
 }: ChatBackgroundDialogProps) {
   const [value, setValue] = useState(thread.background);
@@ -35,8 +39,17 @@ export default function ChatBackgroundDialog({
       setError(errorText(e));
     });
   };
+  const removeImage = async (file: string) => {
+    const undo = await onRemoveImage(file);
+    const showed = value?.kind === "image" && value.file === file;
+    if (showed) setValue(null);
+    return async () => {
+      await undo();
+      if (showed) setValue({ kind: "image", file });
+    };
+  };
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[rgba(0,0,0,0.4)]">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
       <div
         ref={panel}
         role="dialog"
@@ -56,8 +69,10 @@ export default function ChatBackgroundDialog({
         <BackgroundPicker
           label="Background of this chat"
           value={value}
+          cleared={null}
           shared={shared}
           onChange={pick}
+          onRemove={removeImage}
         />
         {error && (
           <div role="alert" className="text-[length:var(--fs-sm)] text-danger">

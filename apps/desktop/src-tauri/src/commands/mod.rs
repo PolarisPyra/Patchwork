@@ -24,7 +24,7 @@ mod support;
 
 use crate::{activation, clipboard, logo, updates};
 
-use patchwork_server::backgrounds::ChatBackground;
+use patchwork_server::backgrounds::{BackgroundImage, ChatBackground, RemovedBackground};
 use patchwork_server::import::{ImportSource, ImportScan};
 use patchwork_server::plugins::Plugin;
 use patchwork_server::projects::{Project, Folder};

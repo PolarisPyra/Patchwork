@@ -1,5 +1,5 @@
-import type { CSSProperties } from "react";
-import type { ChatBackground } from "~/api";
+import { useSyncExternalStore, type CSSProperties } from "react";
+import { api, type BackgroundImage, type BackgroundStrength, type ChatBackground } from "~/api";
 
 /** A background the app comes with. `css` is the CSS `background` it paints. */
 export interface BackgroundPreset {
@@ -31,6 +31,13 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   { id: "dots", name: "Dots", css: `${dots(14)}, var(--bg-editor)` },
 ];
 
+/** How much of the window color is laid over a background, in percent, at each strength. */
+export const STRENGTH_VEIL: Record<BackgroundStrength, number> = {
+  subtle: 88,
+  medium: 78,
+  strong: 60,
+};
+
 /** The background `chat` shows: its own when it has one, else `shared`. */
 export function effectiveBackground(
   own: ChatBackground | null | undefined,
@@ -57,4 +64,43 @@ export function backgroundStyle(
     return { background: `${veilCss}, center / cover no-repeat url("${imageSrc}")` };
   }
   return null;
+}
+
+/** The pictures in Patchwork's backgrounds folder, read once for the whole window. */
+const library = {
+  images: [] as BackgroundImage[],
+  listeners: new Set<() => void>(),
+  started: false,
+};
+
+/** Reads the pictures again, after one was added or removed. */
+export function refreshBackgroundImages(): Promise<void> {
+  library.started = true;
+  return api.listBackgroundImages().then(
+    (images) => {
+      library.images = images;
+      library.listeners.forEach((listener) => listener());
+    },
+    () => void (library.started = false),
+  );
+}
+
+const subscribe = (listener: () => void) => {
+  if (!library.started) void refreshBackgroundImages();
+  library.listeners.add(listener);
+  return () => void library.listeners.delete(listener);
+};
+
+/** The pictures picked as backgrounds, oldest first; re-renders when one is added or removed. */
+export function useBackgroundImages(): BackgroundImage[] {
+  return useSyncExternalStore(subscribe, () => library.images);
+}
+
+/** Where the picture `background` shows is, or null when it is no picture or it is gone. */
+export function backgroundImagePath(
+  images: BackgroundImage[],
+  background: ChatBackground | null | undefined,
+): string | null {
+  if (background?.kind !== "image") return null;
+  return images.find((image) => image.file === background.file)?.path ?? null;
 }

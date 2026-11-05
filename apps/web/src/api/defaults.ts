@@ -63,6 +63,7 @@ export const DEFAULT_SETTINGS: Settings = {
   updates: { checkEveryMinutes: 10 },
   logo: null,
   chatBackground: { kind: "none" },
+  chatBackgroundStrength: "medium",
   logging: {
     app: "info",
     window: "info",

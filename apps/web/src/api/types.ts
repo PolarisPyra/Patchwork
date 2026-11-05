@@ -1,4 +1,9 @@
-import type { ChatBackground } from "~/bindings/backgrounds";
+import type {
+  BackgroundImage,
+  BackgroundStrength,
+  ChatBackground,
+  RemovedBackground,
+} from "~/bindings/backgrounds";
 import type { Screenshot } from "~/bindings/computer";
 import type { ImportScan, ImportSource } from "~/bindings/import";
 import type { LogChunk } from "~/bindings/logging";
@@ -99,6 +104,8 @@ export type {
   AttachedTerminal,
   Attachment,
   AttachmentKind,
+  BackgroundImage,
+  BackgroundStrength,
   BackgroundTask,
   ChatBackground,
   CheckFailure,
@@ -140,6 +147,7 @@ export type {
   ProviderUsage,
   Question,
   Refusal,
+  RemovedBackground,
   Role,
   RuleRef,
   RunOutcome,

@@ -105,6 +105,7 @@ impl Server {
             terminals: terminal::Terminals::default(),
             secrets: secrets::Waiters::default(),
         });
+        server.purge_removed_backgrounds();
         let weak = Arc::downgrade(&server);
         provider::mcp::set_hook_handler(Box::new(move |request| match weak.upgrade() {
             Some(server) => server.runner.hook_request(&server, request),

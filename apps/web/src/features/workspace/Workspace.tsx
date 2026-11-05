@@ -16,6 +16,7 @@ import Chat from "~/features/chat";
 import ChatBackgroundDialog from "~/features/workspace/components/ChatBackgroundDialog";
 import CommandPalette from "~/features/workspace/components/CommandPalette";
 import SettingsDialog from "~/features/settings/SettingsDialog";
+import { refreshBackgroundImages } from "~/lib/chatBackgrounds";
 import { addFolders, openFolderAsProject, relocateProject, syncProjects } from "~/lib/projects";
 import Sidebar, {
   ActivityBar,
@@ -173,6 +174,27 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     setSettingsSection(null);
   }, []);
   const reloadImported = useCallback(() => void reload(), [reload]);
+  const removeBackgroundImage = useCallback(
+    async (file: string) => {
+      const removed = await api.removeBackgroundImage(file);
+      // The backend moved the chats and Settings that showed it back to their defaults, and moves
+      // them back on undo, unless another background was picked since; this window's copies follow.
+      await Promise.all([reload(), refreshBackgroundImages()]);
+      if (removed.shared) await updateSettings((s) => ({ ...s, chatBackground: { kind: "none" } }));
+      return async () => {
+        await api.restoreBackgroundImage(removed);
+        await Promise.all([reload(), refreshBackgroundImages()]);
+        if (removed.shared) {
+          await updateSettings((s) =>
+            s.chatBackground.kind === "none"
+              ? { ...s, chatBackground: { kind: "image", file } }
+              : s,
+          );
+        }
+      };
+    },
+    [reload, updateSettings],
+  );
   const updatePermissions = useCallback(
     (change: (p: PermissionSettings) => PermissionSettings) =>
       void updateSettings((s) => ({ ...s, permissions: change(s.permissions) })),
@@ -548,6 +570,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
                 checkSettings={settings.checks}
                 onSetProjectChecks={setProjectChecks}
                 chatBackground={settings.chatBackground}
+                chatBackgroundStrength={settings.chatBackgroundStrength}
               />
             </main>
 
@@ -616,14 +639,16 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
           focus={settingsFocus}
           section={settingsSection}
           onImported={reloadImported}
+          onRemoveBackgroundImage={removeBackgroundImage}
           onClose={closeSettings}
         />
       )}
       {backgroundFor !== null && backgroundThread && (
         <ChatBackgroundDialog
           thread={backgroundThread}
-          shared={settings.chatBackground}
           onSave={(background) => setBackground(backgroundThread.id, background)}
+          shared={settings.chatBackground}
+          onRemoveImage={removeBackgroundImage}
           onClose={() => setBackgroundFor(null)}
         />
       )}
