@@ -66,9 +66,9 @@ const GROUPS: {
     label: "General",
     sections: [
       { id: "general", label: "General", Icon: GearSixIcon, Pane: GeneralPane },
+      { id: "account", label: "Account", Icon: UserCircleIcon, Pane: () => <AccountPane /> },
       { id: "shortcuts", label: "Shortcuts", Icon: KeyboardIcon, Pane: () => <KeybindingsPane /> },
       { id: "updates", label: "Updates", Icon: ArrowCircleUpIcon, Pane: UpdatesPane },
-      { id: "account", label: "Account", Icon: UserCircleIcon, Pane: () => <AccountPane /> },
     ],
   },
   {
