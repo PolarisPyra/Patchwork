@@ -24,8 +24,10 @@
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="stylesheet" href="styles.css" />
-    <script src="site.js"></script>
+    <!-- Browsers may keep these two for 4 hours (Cloudflare's browser cache), so bump ?v= whenever
+         either changes, or a visitor gets the new page with the old styles. -->
+    <link rel="stylesheet" href="styles.css?v=2" />
+    <script src="site.js?v=2"></script>
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
