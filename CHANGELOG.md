@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.15] - 2026-11-05
+
+### Removed
+
+- Settings → Account is gone, along with signing in, license keys and the free trial, so Patchwork never asks for an account. Every chat can have its own background for everyone, and Patchwork is now free under the MIT License.
+
 ## [26.11.14] - 2026-11-05
 
 ### Changed
