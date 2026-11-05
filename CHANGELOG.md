@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.11] - 2026-11-05
+
+### Added
+
+- You can now create a Patchwork account and sign in from Settings → Account, with a code sent to your email, and see or sign out the devices you are signed in on. Your license now lives there too, and a key works only while you are signed in to the account it was bought for. A new account can try Basic free for 14 days with the Activate 14-day trial button.
+
 ## [26.11.10] - 2026-11-04
 
 ### Added
