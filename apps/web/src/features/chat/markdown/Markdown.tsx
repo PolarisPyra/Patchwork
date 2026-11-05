@@ -262,7 +262,73 @@ function rehypeMathSource() {
   };
   return walk;
 }
-const REHYPE_PLUGINS = [rehypeKatex, rehypeMathSource, rehypeTrimBreaks];
+
+/** A combining mark with no letter before it: at the start of a text, or after a space. */
+const BARE_MARK = /(^|\s)(\p{M})/gu;
+/** An enclosing mark, such as the slashed circle U+20E0, alone in the same way. */
+const BARE_ENCLOSING_MARK = /(^|\s)(\p{Me})/u;
+
+/** How far each enclosing mark's ink reaches left and right of where it is placed, in em. */
+const markReach = new Map<string, [number, number]>();
+
+/** Measures once how far `mark` reaches, in the window's own fonts. Fonts differ: one centers a
+ * slashed circle on its place, another draws a circle wholly to the left of it. */
+function reachOf(mark: string): [number, number] {
+  let reach = markReach.get(mark);
+  if (!reach) {
+    const context = document.createElement("canvas").getContext("2d");
+    reach = [0, 0];
+    if (context) {
+      context.font = `100px ${getComputedStyle(document.body).fontFamily}`;
+      const ink = context.measureText(mark);
+      reach = [
+        Math.max(0, ink.actualBoundingBoxLeft) / 100,
+        Math.max(0, ink.actualBoundingBoxRight) / 100,
+      ];
+    }
+    markReach.set(mark, reach);
+  }
+  return reach;
+}
+
+/**
+ * A combining mark is drawn over the character before it and takes no room of its own, so one
+ * written alone after a space overlaps the words beside it. An enclosing mark, such as the slashed
+ * circle U+20E0, gets a box padded out to the ink it draws. Any other mark gets the dotted circle
+ * U+25CC to sit on, which is how Unicode shows a mark alone. Code and formulas stay as written.
+ */
+function rehypeMarkBases() {
+  const split = (value: string): HastNode[] => {
+    const found = BARE_ENCLOSING_MARK.exec(value);
+    if (!found) return [{ type: "text", value: value.replace(BARE_MARK, "$1\u25CC$2") }];
+    const end = found.index + found[0].length;
+    const before = value.slice(0, found.index) + found[1];
+    const [left, right] = reachOf(found[2]);
+    return [
+      ...(before ? [{ type: "text", value: before }] : []),
+      {
+        type: "element",
+        tagName: "span",
+        properties: {
+          className: ["inline-block"],
+          style: `padding-left:${left}em;padding-right:${right}em`,
+        },
+        children: [{ type: "text", value: found[2] }],
+      },
+      ...split(value.slice(end)),
+    ];
+  };
+  const walk = (node: HastNode): void => {
+    if (!node.children) return;
+    node.children = node.children.flatMap((child) => {
+      if (child.type === "text") return split(child.value ?? "");
+      if (!unwrapped(child)) walk(child);
+      return [child];
+    });
+  };
+  return walk;
+}
+const REHYPE_PLUGINS = [rehypeKatex, rehypeMathSource, rehypeTrimBreaks, rehypeMarkBases];
 
 /** A `$skill` anywhere in the text, after a space; skill names are lowercase words joined by
  * hyphens, so `$HOME` or `$5` stays text. */
@@ -354,7 +420,7 @@ function rehypeChips() {
     walk(tree);
   };
 }
-const CHIP_REHYPE_PLUGINS = [rehypeTrimBreaks, rehypeChips];
+const CHIP_REHYPE_PLUGINS = [rehypeTrimBreaks, rehypeChips, rehypeMarkBases];
 
 /** Elements whose text arrives whole, so a word inside one is never wrapped or faded. */
 const UNWRAPPED = new Set(["code", "pre", "a", "kbd", "samp", "button", "input", "svg", "math"]);
