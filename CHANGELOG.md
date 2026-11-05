@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.17] - 2026-11-05
+
+### Added
+
+- A chat in a project now has an "Open in editor" button floating in the top right corner of the conversation, which opens the project's folder in your code editor in one click.
+
+### Changed
+
+- An image opened in the file viewer now shows on an Image tab, in place of the Code and Diff tabs, which could not show a picture. It opens there even from Show changes, which used to land on an empty diff.
+
 ## [26.11.16] - 2026-11-05
 
 ### Added
