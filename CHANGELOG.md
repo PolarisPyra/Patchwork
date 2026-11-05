@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.14] - 2026-11-05
+
+### Changed
+
+- Settings → Account no longer shows the license key field while a key is active. Remove the key to enter another; the field still shows when there is no key, or when it has expired or is paused.
+
+### Fixed
+
+- Settings → Account now appears all at once instead of growing as the account, license and devices load, and opens straight away the next time. Its buttons no longer dim for a moment while the device list loads.
+
 ## [26.11.13] - 2026-11-05
 
 ### Changed
