@@ -108,16 +108,4 @@ Bug reports, fixes, and guides are welcome. Start with [CONTRIBUTING.md](CONTRIB
 
 ## License
 
-Patchwork is open core. Almost all of it is free software under the [GNU Affero General Public
-License, version 3 or later](LICENSE_AGPL.txt) (AGPL-3.0-or-later), with no warranty. The paid
-features in [`commercial/`](commercial/) are source-available under the [Patchwork Commercial
-License](LICENSE_COMMERCIAL.txt): free to read, change, and test, with a paid plan for everyday use.
-[LICENSE](LICENSE) says which covers what, and the [licensing FAQ](LICENSE_FAQ.md) lists what each
-plan includes.
-
-The AGPL lets you use, study, change, and share Patchwork, provided that anything you distribute, or
-run as a network service, is offered under the same license with its source. If that does not suit
-you, a **commercial license** is available instead; open an issue titled "Commercial license".
-
-The licenses cover the code. The Patchwork name and logo are not licensed with them, so a fork needs
-its own name.
+Patchwork is released under the [MIT License](LICENSE).
