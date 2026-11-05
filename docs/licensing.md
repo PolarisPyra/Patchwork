@@ -47,7 +47,12 @@ A key is `<payload>.<signature>`, both unpadded base64url. The payload is the JS
 
 `expires` is in seconds since 1970. The signature is the payload's Ed25519 signature. Keys are
 checked on the machine against `PUBLIC_KEY` in the licensing crate, so no server is asked. A key
-whose `expires` has passed still shows in Settings → License, as Expired, and gives the Free plan.
+whose `expires` has passed still shows in Settings → Account, as Expired, and gives the Free plan.
+
+A key belongs to the account with its `email`. Settings → Account takes it only while signed in to
+that account, and its plan holds only while this install is signed in to it; signed out, or signed
+in to another account, the key stays saved, shows as Paused, and gives the Free plan. The check reads
+the saved sign-in, so no server is asked here either.
 
 ### Issuing a key
 
@@ -62,7 +67,7 @@ echo "$(b64 < payload.json).$(b64 < sig.bin)"
 rm payload.json sig.bin
 ```
 
-The buyer pastes the printed key into Settings → License.
+The buyer signs in with the key's email and pastes the printed key into Settings → Account.
 
 ### Rotating the signing key
 

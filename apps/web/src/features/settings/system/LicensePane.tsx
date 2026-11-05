@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { LicenseStatus } from "~/api";
-import { removeLicenseKey, setLicenseKey, useLicense } from "~/hooks/useLicense";
+import { removeLicenseKey, setLicenseKey, startTrial, useLicense } from "~/hooks/useLicense";
 import { TEXTAREA, TokenRow } from "~/features/settings/controls";
 import { errorText } from "~/lib/util";
 
@@ -32,11 +32,12 @@ export default function LicensePane() {
     }
   };
   if (!status) return null;
-  const desc = [status.email, expiryText(status)].filter(Boolean).join(" · ") || undefined;
+  const note = status.paused ? "Paused: sign in with this email to use it" : expiryText(status);
+  const desc = [status.email, note].filter(Boolean).join(" · ") || undefined;
   return (
     <>
       <TokenRow title={`${PLAN_NAMES[status.plan]} plan`} desc={desc}>
-        {status.email !== null && (
+        {status.email !== null ? (
           <button
             type="button"
             className="btn"
@@ -44,6 +45,15 @@ export default function LicensePane() {
             onClick={() => void run(removeLicenseKey)}
           >
             Remove key
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn"
+            disabled={busy}
+            onClick={() => void run(startTrial)}
+          >
+            Activate 14-day trial
           </button>
         )}
       </TokenRow>

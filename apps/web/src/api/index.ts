@@ -4,6 +4,7 @@
 // One module per area, each with its commands, the events it listens to, and the shapes they carry
 // that are not generated into `~/bindings`. `api` joins the commands into the one object the app
 // calls, so a caller never needs to know which module a command lives in.
+import { accountsApi } from "~/api/accounts";
 import { agentsApi } from "~/api/agents";
 import { attachmentsApi } from "~/api/attachments";
 import { backgroundsApi } from "~/api/backgrounds";
@@ -70,4 +71,5 @@ export const api = {
   ...gitApi,
   ...updatesApi,
   ...licenseApi,
+  ...accountsApi,
 };

@@ -9,6 +9,8 @@ publish = false
 
 [dependencies]
 axum = "0.8"
+# Signs the license key of a free trial.
+ed25519-dalek = "2"
 argon2 = "0.6"
 base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }

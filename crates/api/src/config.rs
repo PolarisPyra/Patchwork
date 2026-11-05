@@ -19,6 +19,8 @@ pub struct Config {
     /// The key the HMAC of each one-time code is made with, so the database alone can't check one.
     pub code_key: [u8; 32],
     pub mail: MailConfig,
+    /// The Ed25519 key license keys are signed with, for free trials; None turns trials off.
+    pub license_key: Option<[u8; 32]>,
 }
 
 pub enum MailConfig {
@@ -48,15 +50,38 @@ impl Config {
             "log" => MailConfig::Log,
             other => return Err(format!("PATCHWORK_API_MAIL is {other}, not smtp or log")),
         };
+        let license_key = match env::var("PATCHWORK_API_LICENSE_KEY_FILE") {
+            Ok(path) => Some(signing_key(&path)?),
+            Err(_) => None,
+        };
         Ok(Self {
             database_url,
             listen,
             code_key,
             mail,
+            license_key,
         })
     }
 }
 
 fn required(name: &str) -> Result<String, String> {
     env::var(name).map_err(|_| format!("{name} is not set"))
+}
+
+/// The seed of the Ed25519 private key in the PEM file at `path`, as `openssl genpkey -algorithm
+/// ed25519` writes it: PKCS#8, whose DER ends with the 32-byte seed after a fixed prefix.
+fn signing_key(path: &str) -> Result<[u8; 32], String> {
+    const PREFIX: [u8; 16] = [
+        0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04,
+        0x20,
+    ];
+    let pem = std::fs::read_to_string(path)
+        .map_err(|e| format!("PATCHWORK_API_LICENSE_KEY_FILE: couldn't read {path}: {e}"))?;
+    let body: String = pem.lines().filter(|l| !l.starts_with("-----")).collect();
+    let der = STANDARD.decode(body.trim()).unwrap_or_default();
+    der.strip_prefix(&PREFIX)
+        .and_then(|seed| <[u8; 32]>::try_from(seed).ok())
+        .ok_or_else(|| {
+            format!("PATCHWORK_API_LICENSE_KEY_FILE: {path} is not an Ed25519 private key")
+        })
 }

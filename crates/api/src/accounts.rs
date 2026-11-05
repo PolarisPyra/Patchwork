@@ -413,7 +413,7 @@ async fn confirm_password(api: &Api, email: &str, password: &str, ip: Option<&st
     }
 }
 
-async fn user(api: &Api, id: Uuid) -> Res<UserRow> {
+pub(crate) async fn user(api: &Api, id: Uuid) -> Res<UserRow> {
     let user = sqlx::query_as(concat!(
         "select ",
         user_columns!(),

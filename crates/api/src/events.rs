@@ -14,6 +14,7 @@ pub(crate) enum Event {
     PasswordReset,
     DeviceRevoked,
     AccountDeleted,
+    TrialStarted,
 }
 
 impl Event {
@@ -28,6 +29,7 @@ impl Event {
             Event::PasswordReset => "password_reset",
             Event::DeviceRevoked => "device_revoked",
             Event::AccountDeleted => "account_deleted",
+            Event::TrialStarted => "trial_started",
         }
     }
 }

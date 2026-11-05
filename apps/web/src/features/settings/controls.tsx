@@ -85,6 +85,7 @@ export function TokenSwitch({
 }) {
   return (
     <button
+      type="button"
       className="toggle"
       role="switch"
       aria-label={label}
@@ -115,6 +116,7 @@ export function Segmented<T extends string>({
       {options.map((o) => (
         <button
           key={o.value}
+          type="button"
           role="radio"
           aria-checked={value === o.value}
           className={`grid h-6 w-auto cursor-pointer place-items-center border-none px-2.5 py-0 text-[length:var(--fs-sm)] whitespace-nowrap tabular-nums [&+&]:border-l [&+&]:border-border-strong ${value === o.value ? "bg-selected text-fg" : "bg-transparent text-fg-muted hover:bg-hover hover:text-fg"}`}

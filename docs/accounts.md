@@ -1,7 +1,9 @@
 # Accounts
 
 How the hosted service in [`crates/api`](../crates/api) signs people in, what it stores, and how to
-run and deploy it. The desktop app does not call it yet.
+run and deploy it. The desktop app signs in to it from Settings → Account
+([`crates/server/src/accounts.rs`](../crates/server/src/accounts.rs)); set `PATCHWORK_API_URL` when
+starting `pnpm tauri dev` to point it at a local one.
 
 ## Shape
 
@@ -93,6 +95,7 @@ can be shown to the user as is. `device` is `{identifier, name, platform, versio
 | `DELETE /v1/accounts/me` | `{password}` | 204; the account, its devices and sessions are gone |
 | `GET /v1/devices` | | `[{id, name, platform, version, lastSeenAt, current}]` |
 | `DELETE /v1/devices/{id}` | | 204; the device's sessions end |
+| `POST /v1/license/trial` | | `{key}`: a 14-day Basic license key for the account's email; 409 `trial_used` once the account or its email has had one |
 
 `platform` is `linux`, `macos`, or `windows`. `identifier` is chosen by the install and kept, so
 signing in again on the same install reuses its device.
@@ -100,9 +103,11 @@ signing in again on the same install reuses its device.
 ## Data
 
 Postgres, with the schema in [`migrations/0001_accounts.sql`](../crates/api/migrations/0001_accounts.sql):
-`users`, `devices`, `sessions`, `email_codes`, `login_failures`, and `events`. Emails are
-`citext`, so case never makes two accounts. Deleting a user deletes its devices, sessions and the
-codes made for it, and keeps its events without the link to it.
+`users`, `devices`, `sessions`, `email_codes`, `login_failures`, and `events`, and in
+[`migrations/0002_trials.sql`](../crates/api/migrations/0002_trials.sql) `trials`, kept by
+account and by email apart from `users`, so a deleted or moved account gets no second trial.
+Emails are `citext`, so case never makes two accounts. Deleting a user deletes its devices,
+sessions and the codes made for it, and keeps its events without the link to it.
 
 A schema change is a new file in `migrations/`, numbered after the last. Never edit one that has
 shipped: `migrate` refuses a database whose applied migrations differ from the files.
@@ -117,6 +122,7 @@ shipped: `migrate` refuses a database whose applied migrations differ from the f
 | `PATCHWORK_API_MAIL` | required | `smtp`, or `log` to write emails to the log instead, for development |
 | `PATCHWORK_API_SMTP_URL` | required for `smtp` | `scheme://user:password@host:port/ehlo-name?tls=…`; see [Mail through Google Workspace](#mail-through-google-workspace) |
 | `PATCHWORK_API_MAIL_FROM` | required for `smtp` | such as `Patchwork <accounts@patchworkeditor.com>` |
+| `PATCHWORK_API_LICENSE_KEY_FILE` | unset, so trials answer 503 | the license signing key, `signing-key.pem` from `docs/licensing.md`; readable only by the service |
 | `RUST_LOG` | `info` | |
 
 The client IP comes from Cloudflare's `CF-Connecting-IP`. That is safe only because the firewall
@@ -158,7 +164,13 @@ PATCHWORK_API_CODE_KEY=...
 PATCHWORK_API_MAIL=smtp
 PATCHWORK_API_SMTP_URL=smtp://smtp-relay.gmail.com:587/api.patchworkeditor.com?tls=required
 PATCHWORK_API_MAIL_FROM=Patchwork <accounts@patchworkeditor.com>
+PATCHWORK_API_LICENSE_KEY_FILE=/etc/patchwork-api/license-signing.pem
 ```
+
+The license signing key is the one in `.license-signing/signing-key.pem`. Copy it to the server
+with `install -d -m 700 -o patchwork /etc/patchwork-api` and
+`install -m 400 -o patchwork signing-key.pem /etc/patchwork-api/license-signing.pem`, so only the
+service can read it. Without it, free trials answer 503 and everything else works.
 
 `/etc/systemd/system/patchwork-api.service`, run as the `patchwork` user so peer auth maps it to
 the `patchwork` role:

@@ -1,3 +1,4 @@
+import type { Account, AccountDevice, LoginStep } from "~/bindings/accounts";
 import type { ChatBackground } from "~/bindings/backgrounds";
 import type { Screenshot } from "~/bindings/computer";
 import type { ImportScan, ImportSource } from "~/bindings/import";
@@ -88,6 +89,8 @@ import type {
 import type { ProviderUsage, UsageWindow } from "~/bindings/usage";
 import type { FileChange, FileMedia, ProjectChanged } from "~/bindings/workspace";
 export type {
+  Account,
+  AccountDevice,
   AccessMode,
   AgentEvent,
   AgentEventEnvelope,
@@ -122,6 +125,7 @@ export type {
   LicenseStatus,
   LogChunk,
   LoggingSettings,
+  LoginStep,
   LogLevel,
   McpServer,
   MessageStatus,

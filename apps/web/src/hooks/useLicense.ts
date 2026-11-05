@@ -29,11 +29,21 @@ export function useFeature(feature: Feature): boolean {
   return useLicense()?.features.includes(feature) ?? false;
 }
 
-/** Takes a license key; rejects with the reason for a key Patchwork did not sign. */
+/** Takes a license key; rejects with the reason for a key Patchwork did not sign or that belongs to another account. */
 export async function setLicenseKey(key: string): Promise<void> {
   publish(await api.setLicenseKey(key));
 }
 
 export async function removeLicenseKey(): Promise<void> {
   publish(await api.removeLicenseKey());
+}
+
+/** Reads the plan again, for when signing in or out changes whether the key's plan holds. */
+export async function refreshLicense(): Promise<void> {
+  publish(await api.licenseStatus());
+}
+
+/** Starts the account's 14-day trial of Basic; rejects once the account has had it. */
+export async function startTrial(): Promise<void> {
+  publish(await api.startTrial());
 }

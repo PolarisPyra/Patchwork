@@ -58,7 +58,7 @@ pub struct License {
     /// The order the key was issued for, so a refunded one can be named.
     pub id: String,
     pub plan: Plan,
-    /// Who bought it, shown in Settings → License.
+    /// Who bought it, shown in Settings → Account.
     pub email: String,
     /// When the subscription runs out, in seconds since 1970.
     pub expires: u64,

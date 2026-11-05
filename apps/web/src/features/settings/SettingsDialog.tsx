@@ -1,6 +1,7 @@
 import { memo, useState, type ReactNode } from "react";
 import {
   ArrowCircleUpIcon,
+  UserCircleIcon,
   BooksIcon,
   ClockIcon,
   DownloadSimpleIcon,
@@ -8,7 +9,6 @@ import {
   GaugeIcon,
   GearSixIcon,
   KeyboardIcon,
-  CertificateIcon,
   PlugIcon,
   PlugsConnectedIcon,
   PuzzlePieceIcon,
@@ -20,12 +20,12 @@ import {
   XIcon,
   type Icon,
 } from "@phosphor-icons/react";
+import AccountPane from "~/features/settings/system/AccountPane";
 import AgentsPane from "~/features/settings/agents/AgentsPane";
 import CliPane from "~/features/settings/providers/CliPane";
 import GeneralPane from "~/features/settings/app/GeneralPane";
 import ImportsPane from "~/features/settings/system/ImportsPane";
 import KeybindingsPane from "~/features/settings/app/KeybindingsPane";
-import LicensePane from "~/features/settings/system/LicensePane";
 import LoggingPane from "~/features/settings/system/LoggingPane";
 import McpServersPane from "~/features/settings/providers/mcp/McpServersPane";
 import PermissionsPane, { type PermissionsFocus } from "~/features/settings/system/PermissionsPane";
@@ -68,7 +68,7 @@ const GROUPS: {
       { id: "general", label: "General", Icon: GearSixIcon, Pane: GeneralPane },
       { id: "shortcuts", label: "Shortcuts", Icon: KeyboardIcon, Pane: () => <KeybindingsPane /> },
       { id: "updates", label: "Updates", Icon: ArrowCircleUpIcon, Pane: UpdatesPane },
-      { id: "license", label: "License", Icon: CertificateIcon, Pane: () => <LicensePane /> },
+      { id: "account", label: "Account", Icon: UserCircleIcon, Pane: () => <AccountPane /> },
     ],
   },
   {

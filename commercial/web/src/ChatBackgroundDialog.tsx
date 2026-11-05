@@ -12,7 +12,7 @@ interface ChatBackgroundDialogProps {
   shared: ChatBackground;
   /** Saves the chat's own background; null goes back to the shared one. */
   onSave: (background: ChatBackground | null) => Promise<void>;
-  /** Opens Settings → License, for a plan without per-chat backgrounds. */
+  /** Opens Settings → Account, where the license is, for a plan without per-chat backgrounds. */
   onOpenLicense: () => void;
   onClose: () => void;
 }

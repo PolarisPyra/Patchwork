@@ -626,7 +626,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
           onSave={(background) => setBackground(backgroundThread.id, background)}
           onOpenLicense={() => {
             setBackgroundFor(null);
-            setSettingsSection("license");
+            setSettingsSection("account");
             setSettingsOpen(true);
           }}
           onClose={() => setBackgroundFor(null)}

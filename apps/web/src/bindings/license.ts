@@ -6,7 +6,7 @@
 export type Feature = "chatBackgrounds";
 
 /**
- * The plan in effect, and the key it comes from, for Settings → License.
+ * The plan in effect, and the key it comes from, for Settings → Account.
  */
 export type LicenseStatus = { plan: Plan, 
 /**
@@ -24,7 +24,11 @@ expiresAt: number | null,
 /**
  * The key has run out, so the plan is Free again.
  */
-expired: boolean, };
+expired: boolean, 
+/**
+ * This install is not signed in to the key's account, so the plan is Free until it is.
+ */
+paused: boolean, };
 
 /**
  * What someone paid for. Without a license key, or with one that no longer holds, it is Free.

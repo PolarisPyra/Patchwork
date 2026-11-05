@@ -1,6 +1,7 @@
 //! The Tauri commands the webview calls, grouped by domain. `lib.rs` registers each one.
 //! Each group `use super::*;` for the shared imports and the helpers in `support`.
 
+pub mod accounts;
 pub mod agents;
 pub mod app;
 pub mod attachments;
@@ -25,6 +26,7 @@ mod support;
 
 use crate::{activation, clipboard, logo, updates};
 
+use patchwork_server::accounts::{Account, AccountDevice, LoginStep};
 use patchwork_server::backgrounds::ChatBackground;
 use patchwork_server::import::{ImportSource, ImportScan};
 use patchwork_server::license::LicenseStatus;

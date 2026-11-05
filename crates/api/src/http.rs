@@ -13,7 +13,7 @@ use axum::{Json, Router};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
-use crate::{Api, accounts, auth, devices};
+use crate::{Api, accounts, auth, devices, trials};
 
 pub type Res<T> = Result<T, ApiError>;
 
@@ -146,6 +146,7 @@ pub fn router(api: Api) -> Router {
         .route("/v1/accounts/password", post(accounts::change_password))
         .route("/v1/devices", get(devices::list))
         .route("/v1/devices/{id}", delete(devices::revoke))
+        .route("/v1/license/trial", post(trials::start))
         .fallback(not_found)
         .with_state(api)
 }
