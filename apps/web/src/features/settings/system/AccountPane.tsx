@@ -34,16 +34,40 @@ const FIELD =
 
 const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: "medium" });
 
+// What the pane last showed, so it opens as it was left while it reads everything again.
+let last: { account: Account | null; devices: AccountDevice[] | null } | undefined;
+
 /** The optional Patchwork account: signing in, and the account once signed in. */
 export default function AccountPane() {
-  // undefined while it is being read; null when signed out.
-  const [account, setAccount] = useState<Account | null | undefined>(undefined);
+  // undefined while it is first read; null when signed out.
+  const [account, setAccount] = useState<Account | null | undefined>(last?.account);
+  const [devices, setDevices] = useState<AccountDevice[] | null>(last?.devices ?? null);
   const [error, setError] = useState<string | null>(null);
+  // The account, its devices and the plan are read before any of them shows, so the pane fills in
+  // at once instead of growing row by row.
   const load = () => {
     setError(null);
-    api.getAccount().then(setAccount, (e: unknown) => setError(errorText(e)));
+    api.getAccount().then(
+      async (a) => {
+        const [d] = await Promise.all([
+          a ? api.accountDevices().catch(() => null) : null,
+          refreshLicense().catch(() => {}),
+        ]);
+        setDevices(d);
+        setAccount(a);
+      },
+      (e: unknown) => setError(errorText(e)),
+    );
   };
   useEffect(load, []);
+  useEffect(() => {
+    if (account !== undefined) last = { account, devices };
+  }, [account, devices]);
+  // Another account's devices are not this one's.
+  const changeAccount = (a: Account | null) => {
+    if (a?.email !== account?.email) setDevices(null);
+    setAccount(a);
+  };
   // A key's plan holds only while signed in to its account, so it is read again on each change.
   const signedInAs = account === undefined ? undefined : (account?.email ?? null);
   useEffect(() => {
@@ -67,9 +91,14 @@ export default function AccountPane() {
       </div>
     );
   return account ? (
-    <SignedIn account={account} onAccount={setAccount} />
+    <SignedIn
+      account={account}
+      onAccount={changeAccount}
+      devices={devices}
+      onDevices={setDevices}
+    />
   ) : (
-    <SignedOut onSignedIn={setAccount} />
+    <SignedOut onSignedIn={changeAccount} />
   );
 }
 
@@ -468,11 +497,15 @@ function Avatar({ account }: { account: Account }) {
 function SignedIn({
   account,
   onAccount,
+  devices,
+  onDevices: setDevices,
 }: {
   account: Account;
   onAccount: (account: Account | null) => void;
+  /** null until they have been read. */
+  devices: AccountDevice[] | null;
+  onDevices: (devices: AccountDevice[]) => void;
 }) {
-  const [devices, setDevices] = useState<AccountDevice[] | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [password, setPassword] = useState("");
   const { busy, error, run } = useAction();
@@ -485,9 +518,20 @@ function SignedIn({
     );
   };
   const act = (action: () => Promise<void>) => run(action, checkSession);
-  const loadDevices = () => act(async () => setDevices(await api.accountDevices()));
-  // Once, when the pane opens signed in.
-  useEffect(() => void loadDevices(), []);
+  // Reading the list is not an action, so the buttons stay enabled while it loads.
+  const [devicesError, setDevicesError] = useState<string | null>(null);
+  const loadDevices = () => {
+    setDevicesError(null);
+    api.accountDevices().then(setDevices, (e: unknown) => {
+      setDevicesError(errorText(e));
+      checkSession();
+    });
+  };
+  // Once, when the pane opens signed in without them: just after signing in, or when reading them
+  // with the account failed.
+  useEffect(() => {
+    if (devices === null) loadDevices();
+  }, []);
 
   return (
     <>
@@ -532,7 +576,7 @@ function SignedIn({
       <SectionHeading>Devices</SectionHeading>
       {devices === null ? (
         <div role="status" aria-label="Loading devices" className="py-2.5">
-          {busy && <Spinner size={13} />}
+          {devicesError ? <ErrorText error={devicesError} /> : <Spinner size={13} />}
         </div>
       ) : (
         <ul aria-label="Devices" className="m-0 list-none p-0">
@@ -581,7 +625,7 @@ function SignedIn({
         <button
           type="button"
           className="btn"
-          disabled={busy || devices === null}
+          disabled={busy}
           onClick={() =>
             void act(async () => {
               await api.accountSignOutOthers();
