@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { ListChecksIcon } from "@phosphor-icons/react";
+import { CodeIcon, ListChecksIcon } from "@phosphor-icons/react";
 import {
   api,
   type AccessMode,
@@ -575,7 +575,20 @@ export default function Chat({
       {thread && (
         <LineageCard thread={thread} working={working} onDisconnect={stop} onError={setError} />
       )}
-      <div className={`flex min-h-0 flex-col ${isNew ? "flex-none overflow-y-auto" : "flex-1"}`}>
+      <div
+        className={`relative flex min-h-0 flex-col ${isNew ? "flex-none overflow-y-auto" : "flex-1"}`}
+      >
+        {!isNew && project && (
+          <button
+            className="btn absolute top-3 right-5 z-10 rounded-full border-none bg-[color-mix(in_srgb,var(--text)_14%,transparent)] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),inset_0_0_0_1px_rgba(255,255,255,0.04),0_1px_3px_rgba(0,0,0,0.15)] backdrop-blur-md hover:bg-[color-mix(in_srgb,var(--text)_18%,transparent)]"
+            onClick={() =>
+              api.openInEditor(project.id, "").catch((e: unknown) => setError(errorText(e)))
+            }
+          >
+            <CodeIcon size={14} />
+            Open in editor
+          </button>
+        )}
         {!isNew ? (
           <PermissionsContext.Provider value={approvals.permissionsContext}>
             <ChecksContext.Provider value={checksContext}>
