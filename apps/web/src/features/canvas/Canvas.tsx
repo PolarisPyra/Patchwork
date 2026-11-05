@@ -18,7 +18,7 @@ import { useFileMedia } from "~/hooks/useFileMedia";
 import { copyText } from "~/lib/clipboard";
 import { baseName, errorText } from "~/lib/util";
 
-export type CanvasTab = "plan" | "code" | "diff";
+export type CanvasTab = "plan" | "code" | "diff" | "image";
 
 export interface CanvasProps {
   projectId: string;
@@ -59,11 +59,12 @@ export default function Canvas({
   const [copied, setCopied] = useState(false);
 
   const key = `${projectId}\u0000${path ?? ""}`;
-  const activeTab: CanvasTab = path === null ? "plan" : tab;
-  // An image shows as a picture on the code tab, as the backend judges what may be previewed.
+  // An image gets an Image tab in place of Code and Diff, as the backend judges what may be
+  // previewed, and opens on it from either.
   const media = useFileMedia(projectId, path ? [path] : []);
   const shown = media?.find((m) => m.path === path);
   const image = shown?.kind === "image";
+  const activeTab: CanvasTab = path === null ? "plan" : image && tab !== "plan" ? "image" : tab;
   const src = useImageSrc(shown?.kind === "image" ? shown.absolute : null);
 
   useEffect(() => {
@@ -143,13 +144,18 @@ export default function Canvas({
         ? change.additions + change.deletions
         : 0;
 
-  const tabs: { id: CanvasTab; label: string; count: number }[] = path
-    ? [
-        { id: "plan", label: "Plan", count: planCount },
-        { id: "code", label: "Code", count: 0 },
-        { id: "diff", label: "Diff", count: diffCount },
-      ]
-    : [{ id: "plan", label: "Plan", count: planCount }];
+  const tabs: { id: CanvasTab; label: string; count: number }[] = !path
+    ? [{ id: "plan", label: "Plan", count: planCount }]
+    : image
+      ? [
+          { id: "plan", label: "Plan", count: planCount },
+          { id: "image", label: "Image", count: 0 },
+        ]
+      : [
+          { id: "plan", label: "Plan", count: planCount },
+          { id: "code", label: "Code", count: 0 },
+          { id: "diff", label: "Diff", count: diffCount },
+        ];
 
   async function runAction(action: () => Promise<void>) {
     setBusy(true);
@@ -195,7 +201,7 @@ export default function Canvas({
     if (activeTab === "plan" || !path) {
       return <PlanView message={message} />;
     }
-    if (activeTab === "code" && image) {
+    if (activeTab === "image") {
       return (
         <div className="grid h-full place-items-center p-4">
           {src && <img src={src} alt={name} className="max-h-full max-w-full object-contain" />}
