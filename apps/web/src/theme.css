@@ -13,8 +13,6 @@
 @import "./styles/motion.css";
 @import "./styles/editor.css";
 @import "./styles/dev-session.css";
-/* The paid features draw with the same classes, from outside this package. */
-@source "../../../commercial/web/src";
 
 /* Tailwind color utilities (bg-panel, text-fg-muted, border-border) read the
    tokens below, so the theme switch still drives every class. */

@@ -12,5 +12,3 @@ apps/desktop/src-tauri/gen
 *.swp
 *.log
 
-# The private key that signs license keys. Never commit it; keep it in a password manager.
-/.license-signing

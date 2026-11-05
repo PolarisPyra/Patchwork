@@ -1,8 +1,6 @@
-import type { Account, AccountDevice, LoginStep } from "~/bindings/accounts";
 import type { ChatBackground } from "~/bindings/backgrounds";
 import type { Screenshot } from "~/bindings/computer";
 import type { ImportScan, ImportSource } from "~/bindings/import";
-import type { Feature, LicenseStatus, Plan } from "~/bindings/license";
 import type { LogChunk } from "~/bindings/logging";
 import type {
   AgentEvent,
@@ -89,8 +87,6 @@ import type {
 import type { ProviderUsage, UsageWindow } from "~/bindings/usage";
 import type { FileChange, FileMedia, ProjectChanged } from "~/bindings/workspace";
 export type {
-  Account,
-  AccountDevice,
   AccessMode,
   AgentEvent,
   AgentEventEnvelope,
@@ -113,7 +109,6 @@ export type {
   CodexInfo,
   CodexModel,
   Effect,
-  Feature,
   FileChange,
   FileMedia,
   Folder,
@@ -122,10 +117,8 @@ export type {
   ImportScan,
   ImportSource,
   Integrations,
-  LicenseStatus,
   LogChunk,
   LoggingSettings,
-  LoginStep,
   LogLevel,
   McpServer,
   MessageStatus,
@@ -136,7 +129,6 @@ export type {
   PermissionRule,
   PermissionScope,
   PermissionSettings,
-  Plan,
   PlanStep,
   Plugin,
   PluginApp,

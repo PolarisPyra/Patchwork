@@ -1,7 +1,6 @@
 import { memo, useState, type ReactNode } from "react";
 import {
   ArrowCircleUpIcon,
-  UserCircleIcon,
   BooksIcon,
   ClockIcon,
   DownloadSimpleIcon,
@@ -20,7 +19,6 @@ import {
   XIcon,
   type Icon,
 } from "@phosphor-icons/react";
-import AccountPane from "~/features/settings/system/AccountPane";
 import AgentsPane from "~/features/settings/agents/AgentsPane";
 import CliPane from "~/features/settings/providers/CliPane";
 import GeneralPane from "~/features/settings/app/GeneralPane";
@@ -66,7 +64,6 @@ const GROUPS: {
     label: "General",
     sections: [
       { id: "general", label: "General", Icon: GearSixIcon, Pane: GeneralPane },
-      { id: "account", label: "Account", Icon: UserCircleIcon, Pane: () => <AccountPane /> },
       { id: "shortcuts", label: "Shortcuts", Icon: KeyboardIcon, Pane: () => <KeybindingsPane /> },
       { id: "updates", label: "Updates", Icon: ArrowCircleUpIcon, Pane: UpdatesPane },
     ],

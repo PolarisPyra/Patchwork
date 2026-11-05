@@ -3,7 +3,6 @@ import { XIcon } from "@phosphor-icons/react";
 import type { ChatBackground, Thread } from "~/api";
 import BackgroundPicker from "~/components/BackgroundPicker";
 import { useDismiss } from "~/hooks/useDismiss";
-import { useFeature } from "~/hooks/useLicense";
 import { displayTitle, errorText } from "~/lib/util";
 
 interface ChatBackgroundDialogProps {
@@ -12,20 +11,16 @@ interface ChatBackgroundDialogProps {
   shared: ChatBackground;
   /** Saves the chat's own background; null goes back to the shared one. */
   onSave: (background: ChatBackground | null) => Promise<void>;
-  /** Opens Settings → Account, where the license is, for a plan without per-chat backgrounds. */
-  onOpenLicense: () => void;
   onClose: () => void;
 }
 
-/** Picks a background for one chat, which the Basic plan unlocks. */
+/** Picks a background for one chat. */
 export default function ChatBackgroundDialog({
   thread,
   shared,
   onSave,
-  onOpenLicense,
   onClose,
 }: ChatBackgroundDialogProps) {
-  const unlocked = useFeature("chatBackgrounds");
   const [value, setValue] = useState(thread.background);
   const [error, setError] = useState<string | null>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -58,19 +53,10 @@ export default function ChatBackgroundDialog({
             <XIcon size={16} />
           </button>
         </div>
-        {!unlocked && (
-          <div className="flex items-center justify-between gap-3 rounded-[var(--radius-sm)] bg-accent-soft px-3 py-2">
-            <span>A background for each chat comes with the Basic plan.</span>
-            <button type="button" className="btn btn-primary flex-none" onClick={onOpenLicense}>
-              Enter license key
-            </button>
-          </div>
-        )}
         <BackgroundPicker
           label="Background of this chat"
-          value={unlocked ? value : null}
+          value={value}
           shared={shared}
-          disabled={!unlocked}
           onChange={pick}
         />
         {error && (

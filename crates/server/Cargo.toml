@@ -2,7 +2,7 @@
 name = "patchwork-server"
 # The app's version is in apps/desktop/src-tauri/tauri.conf.json; releases leave this alone.
 version = "0.0.0"
-license = "AGPL-3.0-or-later"
+license = "MIT"
 description = "Patchwork backend: providers, persistence, usage, and thread import"
 edition = "2024"
 rust-version = "1.90"
@@ -15,8 +15,6 @@ base64 = "0.22"
 serde_json = "1.0"
 toml = "1.1"
 serde = { version = "1.0", features = ["derive"] }
-# Plans and license keys, under the Patchwork Commercial License.
-patchwork-licensing = { path = "../../commercial/crates/licensing" }
 log = "0.4"
 uuid = { version = "1", features = ["v4"] }
 which = "7"

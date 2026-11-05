@@ -2,7 +2,7 @@
 name = "patchwork"
 # The app's version is in apps/desktop/src-tauri/tauri.conf.json; releases leave this alone.
 version = "0.0.0"
-license = "AGPL-3.0-or-later"
+license = "MIT"
 description = "Patchwork — an agentic development environment"
 edition = "2024"
 rust-version = "1.90"

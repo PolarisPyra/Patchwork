@@ -4,7 +4,6 @@
 /// The app's version, from `tauri.conf.json` (see build.rs).
 pub const VERSION: &str = env!("PATCHWORK_VERSION");
 
-pub mod accounts;
 pub mod agents;
 pub mod backgrounds;
 pub mod checks;
@@ -12,7 +11,6 @@ pub mod computer;
 pub mod error;
 pub mod harness;
 pub mod import;
-pub mod license;
 pub mod logging;
 pub mod orchestration;
 pub mod permissions;

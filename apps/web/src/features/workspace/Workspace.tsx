@@ -13,9 +13,9 @@ import { lastAccessMode } from "~/components/AccessPicker";
 import { lastCompactWindow } from "~/components/CompactPicker";
 import { lastEffort } from "~/components/EffortPicker";
 import Chat from "~/features/chat";
+import ChatBackgroundDialog from "~/features/workspace/components/ChatBackgroundDialog";
 import CommandPalette from "~/features/workspace/components/CommandPalette";
 import SettingsDialog from "~/features/settings/SettingsDialog";
-import ChatBackgroundDialog from "@patchwork/commercial-web/ChatBackgroundDialog";
 import { addFolders, openFolderAsProject, relocateProject, syncProjects } from "~/lib/projects";
 import Sidebar, {
   ActivityBar,
@@ -624,11 +624,6 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
           thread={backgroundThread}
           shared={settings.chatBackground}
           onSave={(background) => setBackground(backgroundThread.id, background)}
-          onOpenLicense={() => {
-            setBackgroundFor(null);
-            setSettingsSection("account");
-            setSettingsOpen(true);
-          }}
           onClose={() => setBackgroundFor(null)}
         />
       )}

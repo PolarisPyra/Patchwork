@@ -1,12 +1,10 @@
-//! Chat backgrounds: the one every chat shows, kept in Settings, and a chat's own, which needs a
-//! plan with [`Feature::ChatBackgrounds`].
+//! Chat backgrounds: the one every chat shows, kept in Settings, and a chat's own.
 
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::license::Feature;
 use crate::{Res, Server};
 
 /// What shows behind a chat's messages.
@@ -26,9 +24,6 @@ pub enum ChatBackground {
 impl Server {
     /// Gives a chat a background of its own, or None to show the one every chat shares.
     pub fn set_thread_background(&self, id: &str, background: Option<ChatBackground>) -> Res<()> {
-        if background.is_some() && !self.allows(Feature::ChatBackgrounds) {
-            return Err("A background for each chat comes with the Basic plan".into());
-        }
         self.store
             .update_thread(id, |t| t.background = background.clone())
     }

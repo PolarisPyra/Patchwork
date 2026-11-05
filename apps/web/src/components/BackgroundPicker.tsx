@@ -16,8 +16,6 @@ interface BackgroundPickerProps {
   onChange: (background: ChatBackground | null) => void;
   /** Offers the background every chat shares as the first choice, picked as null. */
   shared?: ChatBackground;
-  /** Shows the choices without letting them be picked. */
-  disabled?: boolean;
 }
 
 /** The backgrounds a chat can show: none, the presets, and a picture from disk. */
@@ -26,7 +24,6 @@ export default function BackgroundPicker({
   value,
   onChange,
   shared,
-  disabled = false,
 }: BackgroundPickerProps) {
   const [error, setError] = useState<string | null>(null);
   const picture = value?.kind === "image" ? value.path : null;
@@ -34,12 +31,10 @@ export default function BackgroundPicker({
   const sharedPicture = shared?.kind === "image" ? shared.path : null;
   const sharedSrc = useImageSrc(sharedPicture);
   const pick = (background: ChatBackground | null) => {
-    if (disabled) return;
     setError(null);
     onChange(background);
   };
   const choosePicture = async () => {
-    if (disabled) return;
     setError(null);
     try {
       const path = await open({
@@ -54,17 +49,11 @@ export default function BackgroundPicker({
   };
   return (
     <>
-      <div
-        role="radiogroup"
-        aria-label={label}
-        aria-disabled={disabled || undefined}
-        className="grid grid-cols-5 gap-2"
-      >
+      <div role="radiogroup" aria-label={label} className="grid grid-cols-5 gap-2">
         {shared && (
           <Swatch
             name="Same as all chats"
             checked={value === null}
-            disabled={disabled}
             style={backgroundStyle(shared, sharedSrc, 0)}
             onPick={() => pick(null)}
           />
@@ -72,7 +61,6 @@ export default function BackgroundPicker({
         <Swatch
           name="None"
           checked={value?.kind === "none"}
-          disabled={disabled}
           style={null}
           onPick={() => pick({ kind: "none" })}
         >
@@ -83,7 +71,6 @@ export default function BackgroundPicker({
             key={preset.id}
             name={preset.name}
             checked={value?.kind === "preset" && value.id === preset.id}
-            disabled={disabled}
             style={{ background: preset.css }}
             onPick={() => pick({ kind: "preset", id: preset.id })}
           />
@@ -92,7 +79,6 @@ export default function BackgroundPicker({
           <Swatch
             name="Picture"
             checked
-            disabled={disabled}
             style={backgroundStyle({ kind: "image", path: picture }, pictureSrc, 0)}
             onPick={() => {}}
           />
@@ -101,8 +87,7 @@ export default function BackgroundPicker({
           type="button"
           aria-label="Choose a picture"
           title="Choose a picture"
-          aria-disabled={disabled || undefined}
-          className={`grid aspect-[4/3] place-items-center rounded-[var(--radius-sm)] border border-dashed border-border-strong bg-transparent text-fg-muted ${disabled ? "cursor-default opacity-60" : "cursor-pointer hover:bg-hover"}`}
+          className="grid aspect-[4/3] cursor-pointer place-items-center rounded-[var(--radius-sm)] border border-dashed border-border-strong bg-transparent text-fg-muted hover:bg-hover"
           onClick={() => void choosePicture()}
         >
           <ImageIcon size={18} />
@@ -120,14 +105,12 @@ export default function BackgroundPicker({
 function Swatch({
   name,
   checked,
-  disabled,
   style,
   onPick,
   children,
 }: {
   name: string;
   checked: boolean;
-  disabled: boolean;
   style: CSSProperties | null;
   onPick: () => void;
   children?: ReactNode;
@@ -138,10 +121,9 @@ function Swatch({
       role="radio"
       aria-checked={checked}
       aria-label={name}
-      aria-disabled={disabled || undefined}
       title={name}
       style={style ?? undefined}
-      className={`grid aspect-[4/3] place-items-center rounded-[var(--radius-sm)] border-2 bg-editor ${checked ? "border-accent" : "border-border"} ${disabled ? "cursor-default opacity-60" : "cursor-pointer hover:border-border-strong"}`}
+      className={`grid aspect-[4/3] place-items-center rounded-[var(--radius-sm)] border-2 bg-editor ${checked ? "border-accent" : "border-border"} cursor-pointer hover:border-border-strong`}
       onClick={onPick}
     >
       {children}

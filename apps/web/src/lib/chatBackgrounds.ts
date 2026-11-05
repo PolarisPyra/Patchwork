@@ -31,13 +31,12 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   { id: "dots", name: "Dots", css: `${dots(14)}, var(--bg-editor)` },
 ];
 
-/** The background `chat` shows: its own when it has one and the plan allows it, else `shared`. */
+/** The background `chat` shows: its own when it has one, else `shared`. */
 export function effectiveBackground(
   own: ChatBackground | null | undefined,
   shared: ChatBackground,
-  perChat: boolean,
 ): ChatBackground {
-  return (perChat && own) || shared;
+  return own || shared;
 }
 
 /**
