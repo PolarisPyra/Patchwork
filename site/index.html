@@ -6,53 +6,49 @@
     <title>Patchwork — a desktop workspace for coding agents</title>
     <meta
       name="description"
-      content="Patchwork runs Claude Code, Codex, Antigravity, OpenCode and your API keys side by side in one window, all sharing the same agents and skills. Free on macOS, Windows and Linux."
+      content="Patchwork runs Claude Code, Codex, Antigravity, OpenCode and your own API keys in one window, and lets you keep only the changes you like. Free on macOS, Windows and Linux."
     />
-    <meta name="theme-color" content="#131314" />
+    <meta name="theme-color" content="#15121c" />
     <link rel="canonical" href="https://patchworkeditor.com/" />
-    <meta property="og:type" content="video.other" />
+    <meta property="og:type" content="website" />
     <meta property="og:title" content="Patchwork — a desktop workspace for coding agents" />
     <meta
       property="og:description"
-      content="Run Claude Code, Codex, Antigravity, OpenCode and your API keys side by side, all sharing the same agents and skills."
+      content="Claude Code, Codex, Antigravity, OpenCode and your own API keys in one cozy window."
     />
     <meta property="og:url" content="https://patchworkeditor.com/" />
     <meta property="og:image" content="https://patchworkeditor.com/img/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <!-- Discord and other chat apps play this in the link preview, with the image above as its cover. -->
-    <meta property="og:video" content="https://patchworkeditor.com/video/patchwork.mp4" />
-    <meta property="og:video:secure_url" content="https://patchworkeditor.com/video/patchwork.mp4" />
-    <meta property="og:video:type" content="video/mp4" />
-    <meta property="og:video:width" content="1920" />
-    <meta property="og:video:height" content="1080" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
-    <link
-      rel="preload"
-      href="fonts/jetbrains-mono-latin-wght-normal.woff2"
-      as="font"
-      type="font/woff2"
-      crossorigin
-    />
     <link rel="stylesheet" href="styles.css" />
-    <script src="site.js" defer></script>
+    <script src="site.js"></script>
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
 
+    <!-- The four-point sparkle from the app's setup steps, drawn once and reused. -->
+    <svg class="defs" aria-hidden="true">
+      <symbol id="sparkle" viewBox="0 0 10 10">
+        <path d="M5 0Q5.6 4.4 10 5Q5.6 5.6 5 10Q4.4 5.6 0 5Q4.4 4.4 5 0Z" />
+      </symbol>
+    </svg>
+
     <header class="nav">
       <div class="wrap nav-inner">
         <a class="brand" href="/" aria-label="Patchwork, home">
-          <img class="brand-mark" src="favicon.svg" alt="" width="22" height="22" />
+          <img class="brand-mark" src="favicon.svg" alt="" width="24" height="24" />
           <span>Patchwork</span>
         </a>
         <nav class="nav-links" id="nav-links" aria-label="Main">
+          <a href="#setup">Setup</a>
           <a href="#features">Features</a>
           <a href="#agents">Agents</a>
           <a href="#download">Download</a>
+          <a href="https://github.com/PolarisPyra/Patchwork">GitHub</a>
         </nav>
         <button
           class="nav-toggle"
@@ -76,129 +72,210 @@
       <main id="main">
         <!-- Hero -->
         <section class="hero">
-          <div class="wrap hero-grid">
-            <div class="hero-copy">
-              <h1>One workspace for every coding agent</h1>
+          <div class="wrap wrap-wide">
+            <div class="hero-copy reveal">
+              <h1>
+                All your coding agents, in one <span class="mark">cozy</span> window
+                <svg class="sparkle sparkle-a" aria-hidden="true"><use href="#sparkle" /></svg>
+                <svg class="sparkle sparkle-b" aria-hidden="true"><use href="#sparkle" /></svg>
+              </h1>
               <p class="lede">
-                Every CLI you're signed in to and every API key you have, side by side in one window,
-                all sharing the same agents and skills.
+                Claude Code, Codex, Antigravity, OpenCode, or your own API key. Hand one a task,
+                watch it work, and keep only the changes you like.
               </p>
               <div class="hero-actions">
-                <a
-                  class="btn btn-primary"
-                  href="https://github.com/PolarisPyra/Patchwork/releases/download/v26.11.16/Patchwork_amd64.AppImage"
-                  data-download="linux"
-                  data-download-label
-                  >Download for Linux</a
-                >
+                <span class="halo-btn">
+                  <a
+                    class="btn btn-primary"
+                    href="https://github.com/PolarisPyra/Patchwork/releases/download/v26.11.16/Patchwork_amd64.AppImage"
+                    data-download="linux"
+                    data-download-label
+                    >Download for Linux</a
+                  >
+                </span>
+                <a class="btn btn-secondary" href="https://github.com/PolarisPyra/Patchwork">View on GitHub</a>
               </div>
             </div>
 
-            <div class="hero-visual">
-              <figure class="promo" data-promo>
-                <video
-                  width="1920"
-                  height="1080"
-                  poster="img/promo-poster.webp"
-                  preload="none"
-                  muted
-                  loop
-                  playsinline
-                  controls
-                  aria-label="Patchwork in 58 seconds: Claude Code, Codex, Antigravity, OpenCode and an API key gather into one window, an agent adds a promo code field to a cart and runs the tests, then access modes, goals and the Usage meters"
-                >
-                  <source src="video/patchwork.webm" type="video/webm" />
-                  <source src="video/patchwork.mp4" type="video/mp4" />
-                </video>
-                <div class="promo-bar" data-promo-bar hidden>
-                  <button class="promo-toggle" type="button" aria-label="Pause video" data-promo-toggle>
-                    <svg class="i i-pause" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M9 6v12M15 6v12" />
-                    </svg>
-                    <svg class="i i-play" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M8 5.5v13l10.5-6.5z" />
-                    </svg>
-                  </button>
-                  <input
-                    class="promo-seek"
-                    type="range"
-                    min="0"
-                    max="58"
-                    step="0.1"
-                    value="0"
-                    aria-label="Seek"
-                    data-promo-seek
-                  />
-                  <span class="promo-time" aria-hidden="true" data-promo-time>0:00 / 0:58</span>
-                </div>
-              </figure>
+            <figure class="shot shot-hero">
+              <span class="bubble bubble-1" aria-hidden="true"></span>
+              <span class="bubble bubble-2" aria-hidden="true"></span>
+              <span class="bubble bubble-3" aria-hidden="true"></span>
+              <div class="window">
+                <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+                <img
+                  src="img/app-task.webp"
+                  width="2400"
+                  height="1440"
+                  alt="Patchwork with a task running in the router-firmware project: the agent has read the header code, searched for crc, changed it, and is running cargo test while it explains the checksum it found"
+                />
+              </div>
+            </figure>
+          </div>
+        </section>
+
+        <!-- Setup -->
+        <section class="section" id="setup">
+          <div class="wrap wrap-wide split">
+            <div class="split-copy reveal slide-in">
+              <h2>Ready in about a minute</h2>
+              <ol class="steps" aria-label="Setup steps">
+                <li>
+                  <span class="step-dot" aria-hidden="true">1</span>
+                  <span><b>Agents.</b> Patchwork finds the CLIs you're signed in to.</span>
+                </li>
+                <li>
+                  <span class="step-dot" aria-hidden="true">2</span>
+                  <span><b>Imports.</b> Bring your old conversations along.</span>
+                </li>
+                <li>
+                  <span class="step-dot" aria-hidden="true">3</span>
+                  <span><b>Projects.</b> Point it at your code.</span>
+                </li>
+                <li class="is-current">
+                  <span class="step-dot" aria-hidden="true">
+                    4
+                    <span class="step-halo">
+                      <span class="step-ring"></span>
+                      <svg class="sparkle step-sparkle"><use href="#sparkle" /></svg>
+                    </span>
+                  </span>
+                  <span><b>Ready.</b> Start your first task.</span>
+                </li>
+              </ol>
             </div>
+            <figure class="shot">
+              <div class="window">
+                <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+                <img
+                  src="img/app-setup.webp"
+                  width="2400"
+                  height="1440"
+                  loading="lazy"
+                  alt="The first setup step, Connect your coding agents, listing Claude Code, Codex, Antigravity and OpenCode as signed in, with Claude Code picked as the default agent"
+                />
+              </div>
+            </figure>
           </div>
         </section>
 
         <!-- Features -->
         <section class="section" id="features">
-          <div class="wrap">
-            <header class="section-head">
-              <h2>What it does</h2>
-            </header>
+          <div class="wrap wrap-wide">
+            <div class="split">
+              <div class="split-copy reveal slide-in">
+                <span class="tag tag-mint" aria-hidden="true">Review</span>
+                <h2>Keep what you like</h2>
+                <p>
+                  Every task ends with a list of what changed. Open the diff, stage the files you
+                  want, and reject the rest to put them back.
+                </p>
+              </div>
+              <figure class="shot">
+                <div class="window">
+                  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+                  <img
+                    src="img/app-review.webp"
+                    width="2400"
+                    height="1440"
+                    loading="lazy"
+                    alt="A finished task in the light theme on a lavender chat background: the agent explains a save-format change, and a card lists the three files it changed with their added and removed lines"
+                  />
+                </div>
+              </figure>
+            </div>
 
-            <ul class="features">
-              <li>
-                <h3>One interface for every agent</h3>
+            <div class="split split-flip">
+              <div class="split-copy reveal slide-in">
+                <span class="tag tag-sky" aria-hidden="true">Usage</span>
+                <h2>See how much you have left</h2>
                 <p>
-                  Claude Code, Codex, Antigravity, OpenCode and API models share the same chat, plan
-                  and code views. Switch agents without switching apps.
+                  Your plan's session and weekly limits sit in the sidebar, with when each one
+                  resets, so you know before you start something big.
                 </p>
-              </li>
-              <li>
-                <h3>Your agents work with every CLI</h3>
+              </div>
+              <figure class="shot">
+                <div class="window">
+                  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+                  <img
+                    src="img/app-usage.webp"
+                    width="2400"
+                    height="1440"
+                    loading="lazy"
+                    alt="The Usage panel open in the sidebar, showing Claude Code's 5-hour session at 32 percent and the weekly limit at 14 percent, with when each resets"
+                  />
+                </div>
+              </figure>
+            </div>
+
+            <div class="split">
+              <div class="split-copy reveal slide-in">
+                <span class="tag tag-pink" aria-hidden="true">Yours</span>
+                <h2>Make it yours</h2>
                 <p>
-                  Write a custom agent or a skill once, and every CLI and API model can use it.
-                  Summon one with <code>&amp;name</code> in any chat.
+                  Light or dark, two dozen app icons, and a background for every chat. Or drop in a
+                  picture of your own.
                 </p>
+              </div>
+              <figure class="shot">
+                <div class="window">
+                  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+                  <img
+                    src="img/app-general.webp"
+                    width="2400"
+                    height="1440"
+                    loading="lazy"
+                    alt="Settings on General, with the Light, Dark and System theme switch, a grid of colourful cube app icons, and a row of chat backgrounds"
+                  />
+                </div>
+              </figure>
+            </div>
+          </div>
+
+          <div class="wrap">
+            <h2 class="more-head reveal drop-in">And the little things</h2>
+            <ul class="cards">
+              <li class="card reveal flip-in">
+                <span class="card-icon icon-sun" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3.5" /></svg>
+                </span>
+                <h3>Set a goal</h3>
+                <p>Give it a <code>/goal</code> and walk away, or send a message mid-turn to change course.</p>
               </li>
-              <li>
-                <h3>You decide how much rope</h3>
-                <p>
-                  Supervised, auto-accept edits, auto or full access, chosen per task. Approval
-                  requests arrive in the chat, where the work is.
-                </p>
+              <li class="card reveal flip-in">
+                <span class="card-icon icon-violet" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2.5" /><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5" /></svg>
+                </span>
+                <h3>You hold the leash</h3>
+                <p>Supervised, auto-accept edits, auto, or full access, set per task. It asks in the chat.</p>
               </li>
-              <li>
-                <h3>Goals and steering</h3>
-                <p>
-                  Give the agent a <code>/goal</code> to work toward, or send a message mid-turn to
-                  steer it. An afternoon of babysitting becomes one instruction and one review.
-                </p>
+              <li class="card reveal flip-in">
+                <span class="card-icon icon-pink" aria-hidden="true">
+                  <svg viewBox="0 0 10 10" class="fill"><use href="#sparkle" /></svg>
+                </span>
+                <h3>Skills for every agent</h3>
+                <p>Write an agent or a skill once and every CLI can use it. Call one with <code>&amp;name</code>.</p>
               </li>
-              <li>
+              <li class="card reveal flip-in">
+                <span class="card-icon icon-sky" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><circle cx="8" cy="12" r="4" /><path d="M12 12h8M17 12v3M20 12v2" /></svg>
+                </span>
                 <h3>Bring your own key</h3>
-                <p>
-                  Add DeepSeek or any OpenAI-compatible endpoint under Settings → Providers. Keys live
-                  in your system keychain, not in the app's database.
-                </p>
+                <p>DeepSeek or any OpenAI-compatible endpoint. Keys stay in your system keychain.</p>
               </li>
-              <li>
-                <h3>It reads what your agent already wrote</h3>
-                <p>
-                  Import past conversations from Claude Code, Codex or the Gemini CLI. Each
-                  becomes a task whose follow-ups resume the original session.
-                </p>
+              <li class="card reveal flip-in">
+                <span class="card-icon icon-mint" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 103-6.2" /><path d="M4 4v4h4" /><path d="M12 8v4l3 2" /></svg>
+                </span>
+                <h3>Pick up old sessions</h3>
+                <p>Import chats from Claude Code, Codex, the Gemini CLI or OpenCode, and keep going.</p>
               </li>
-              <li>
-                <h3>Artifacts, drawn in place</h3>
-                <p>
-                  A Mermaid diagram, an HTML mock or an SVG chart in a reply renders in the chat, in a
-                  sandboxed frame that cannot reach the rest of the app.
-                </p>
-              </li>
-              <li>
-                <h3>The long tail, handled</h3>
-                <p>
-                  Scheduled tasks, plugin bundles with skills and MCP servers, a subscription Usage
-                  view, and an optional screen tool that asks before it clicks anything.
-                </p>
+              <li class="card reveal flip-in">
+                <span class="card-icon icon-sun" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M4 11l8-6.5 8 6.5" /><path d="M6.5 9.5V19h11V9.5" /></svg>
+                </span>
+                <h3>Stays on your machine</h3>
+                <p>No account, no proxy, no telemetry. Requests go straight to your provider.</p>
               </li>
             </ul>
           </div>
@@ -207,15 +284,15 @@
         <!-- Agents -->
         <section class="section" id="agents">
           <div class="wrap">
-            <header class="section-head">
-              <h2>Agents you already use</h2>
-              <p class="section-lede">
-                Patchwork does not replace the CLIs you trust, it drives them. Install one and sign in
-                with its own login command, and Patchwork uses it as it is.
+            <header class="section-head reveal drop-in">
+              <h2>Works with the agents you already use</h2>
+              <p>
+                Sign in with each CLI's own login and Patchwork picks it up. No CLI? Add an API key
+                and use the built-in agent.
               </p>
             </header>
 
-            <ul class="agents">
+            <ul class="agents reveal">
               <li>
                 <svg class="agent-logo" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <path d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z" fill="#D97757" fill-rule="nonzero"></path>
@@ -247,32 +324,23 @@
                 <span class="agent-vendor">Open source</span>
               </li>
             </ul>
-
-            <p class="note">
-              No CLI? Add an API provider under Settings → Providers and Patchwork's built-in agent
-              reads, searches, edits and runs commands itself.
-            </p>
           </div>
         </section>
 
         <!-- Download -->
         <section class="section" id="download">
           <div class="wrap">
-            <header class="section-head">
-              <h2>Download Patchwork</h2>
-              <p class="section-lede">
-                For macOS, Windows and Linux. Once installed, Patchwork updates itself, and checks
-                each update's signature before installing it.
-              </p>
+            <header class="section-head reveal drop-in">
+              <h2>Get Patchwork</h2>
+              <p>Free and open source, for macOS, Windows and Linux. It keeps itself up to date.</p>
             </header>
 
             <div class="downloads">
-              <article class="dl">
+              <article class="dl reveal deal-in">
                 <h3>Linux</h3>
                 <p class="dl-file">Patchwork_amd64.AppImage</p>
-                <p class="dl-note">x86-64. Make it executable and run it.</p>
-                <pre><code>chmod +x Patchwork_amd64.AppImage
-./Patchwork_amd64.AppImage</code></pre>
+                <p class="dl-note">x86-64. Make it executable, then run it.</p>
+                <pre><code>chmod +x Patchwork_amd64.AppImage</code></pre>
                 <a
                   class="btn btn-secondary"
                   href="https://github.com/PolarisPyra/Patchwork/releases/download/v26.11.16/Patchwork_amd64.AppImage"
@@ -281,7 +349,7 @@
                 >
               </article>
 
-              <article class="dl">
+              <article class="dl reveal deal-in">
                 <h3>Windows</h3>
                 <p class="dl-file">Patchwork_x64-setup.exe</p>
                 <p class="dl-note">Installs for your user, with a Start menu shortcut.</p>
@@ -293,10 +361,10 @@
                 >
               </article>
 
-              <article class="dl">
+              <article class="dl reveal deal-in">
                 <h3>macOS</h3>
                 <p class="dl-file">Patchwork_aarch64.dmg</p>
-                <p class="dl-note">Apple silicon. Open the disk image and drag Patchwork to Applications.</p>
+                <p class="dl-note">Apple silicon. Open it and drag Patchwork to Applications.</p>
                 <a
                   class="btn btn-secondary"
                   href="https://github.com/PolarisPyra/Patchwork/releases/download/v26.11.16/Patchwork_aarch64.dmg"
@@ -305,11 +373,6 @@
                 >
               </article>
             </div>
-
-            <p class="note">
-              Tasks run directly in your project folder, and chats run in a scratch folder that is
-              deleted with the chat.
-            </p>
           </div>
         </section>
       </main>
@@ -320,7 +383,10 @@
             <img class="brand-mark" src="favicon.svg" alt="" width="20" height="20" />
             <span>Patchwork</span>
           </div>
-          <p class="footer-line">© <span data-year>2026</span> Patchwork · MIT License</p>
+          <p class="footer-line">
+            © <span data-year>2026</span> Patchwork · MIT License ·
+            <a href="https://github.com/PolarisPyra/Patchwork">GitHub</a>
+          </p>
         </div>
       </footer>
     </div>

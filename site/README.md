@@ -7,13 +7,12 @@ folder, so it can be dragged into Cloudflare Pages as it is.
 site/
   index.html              the whole page
   styles.css              one stylesheet
-  site.js                 platform detection for the download button, mobile menu, promo video
+  site.js                 platform detection for the download button, mobile menu, pop-ins on scroll
   refresh-downloads.mjs   points the page at the newest release tag
   _headers                Cloudflare Pages headers (CSP, cache lifetimes)
   robots.txt
   fonts/                  Inter and JetBrains Mono, subset to Latin, self hosted
-  img/                    the promo poster as WebP, plus the social card
-  video/                  the promo loop in the hero, as WebM (VP9) and MP4 (H.264)
+  img/                    screenshots of the app as WebP, plus the social card
   favicon.svg
   apple-touch-icon.png
 ```

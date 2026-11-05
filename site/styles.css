@@ -1,6 +1,8 @@
 /*
- * Patchwork site. Dark IDE graphite: surfaces come from one neutral ramp, chrome stays quiet,
- * and colour lives in the product views and the agent marks. All spacing on the 4px scale.
+ * Patchwork site. The colours are the logo's (sky, violet, pink) plus the setup steps' sparkle
+ * yellow, on a soft plum night. The motion is the app's setup flow: things pop in with a little
+ * overshoot, the current step breathes, and sparkles twinkle. All of it stops for reduced motion.
+ * Spacing is on the 4px scale.
  */
 
 @font-face {
@@ -20,30 +22,35 @@
 }
 
 :root {
-  /* Graphite ramp */
-  --bg: #131314;
-  --panel: #19191b;
-  --raised: #232325;
-  --sunk: #101011;
+  /* Plum ramp */
+  --bg: #15121c;
+  --panel: #1d1926;
+  --raised: #272133;
+  --sunk: #110e17;
 
   /* Text roles */
-  --fg: #ededed;
-  --fg-2: #a1a1a6;
-  --fg-3: #85858b;
+  --fg: #f4f0fa;
+  --fg-2: #bdb5cc;
+  --fg-3: #938ba6;
 
-  /* Lines and depth */
-  --line: rgba(237, 237, 237, 0.08);
-  --line-strong: rgba(237, 237, 237, 0.14);
+  /* Lines */
+  --line: rgba(244, 240, 250, 0.08);
+  --line-strong: rgba(244, 240, 250, 0.16);
 
-  /* Accent, from the app's blue; used for focus and the active row only */
-  --accent: #7aa7ff;
-  --accent-fill: #2e436e;
-  --lift: 0 24px 64px rgba(0, 0, 0, 0.4);
+  /* The logo, and the setup steps' sparkles */
+  --sky: #5bc0eb;
+  --violet: #9b5de5;
+  --pink: #ff7eb3;
+  --sun: #ffd86b;
+  --mint: #7be0b0;
+  --candy: linear-gradient(135deg, var(--sky), var(--violet) 55%, var(--pink));
 
   --font-ui: "Inter Variable", "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, monospace;
 
-  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* The app's setup easings: a springy pop, and a soft settle. */
+  --pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --settle: cubic-bezier(0.22, 1, 0.36, 1);
 
   color-scheme: dark;
 }
@@ -71,30 +78,31 @@ body {
   color: var(--fg);
   font-family: var(--font-ui);
   font-size: 16px;
-  line-height: 1.5;
-  font-weight: 400;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
 
+/* The chat backgrounds' dot grid, faint, behind everything. */
 .page {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   scroll-behavior: smooth;
+  background:
+    radial-gradient(rgba(244, 240, 250, 0.07) 1px, transparent 1.6px) 0 0 / 22px 22px,
+    var(--bg);
 }
 
-/* It takes focus only so the scroll keys work, so it shows no ring. */
 .page:focus {
   outline: none;
 }
 
-/* The app's scrollbar: a thin rounded thumb on no track. */
 .page::-webkit-scrollbar {
   width: 10px;
 }
 
 .page::-webkit-scrollbar-thumb {
-  background: #4e5157;
+  background: #4a4259;
   border: 2px solid transparent;
   border-radius: 5px;
   background-clip: padding-box;
@@ -106,7 +114,7 @@ body {
 
 @supports not selector(::-webkit-scrollbar) {
   .page {
-    scrollbar-color: #4e5157 transparent;
+    scrollbar-color: #4a4259 transparent;
   }
 }
 
@@ -116,11 +124,13 @@ h3,
 p,
 figure,
 ul,
+ol,
 pre {
   margin: 0;
 }
 
-ul {
+ul,
+ol {
   padding: 0;
   list-style: none;
 }
@@ -136,29 +146,40 @@ svg {
 }
 
 code,
-kbd,
-pre,
-.mono {
+pre {
   font-family: var(--font-mono);
-  font-feature-settings: "liga" 0;
+}
+
+code {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--raised);
+  color: var(--fg);
+  font-size: 0.88em;
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 4px;
+  outline: 2px solid var(--pink);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+.defs {
+  position: absolute;
+  width: 0;
+  height: 0;
 }
 
 .skip {
   position: absolute;
   left: 16px;
-  top: -64px;
-  z-index: 100;
-  padding: 10px 16px;
-  background: var(--raised);
-  border: 1px solid var(--line-strong);
-  font-size: 14px;
-  transition: top 140ms var(--ease);
+  top: -48px;
+  z-index: 10;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--pink);
+  color: #2a0f1e;
+  font-weight: 600;
 }
 
 .skip:focus-visible {
@@ -167,75 +188,89 @@ pre,
 
 .wrap {
   width: 100%;
-  max-width: 1184px;
+  max-width: 1160px;
   margin: 0 auto;
-  padding: 0 32px;
+  padding: 0 24px;
 }
 
-/* ---------- Navigation ---------- */
+/* Rows with screenshots run wider, so the pictures can be big. */
+.wrap-wide {
+  max-width: 1440px;
+}
+
+/* Header */
 
 .nav {
   position: relative;
+  z-index: 5;
   flex: none;
-  z-index: 20;
-  background: var(--bg);
   border-bottom: 1px solid var(--line);
+  background: rgba(21, 18, 28, 0.92);
+}
+
+/* The header and footer run edge to edge: the logo sits at the far left, the links at the far right. */
+.nav-inner,
+.footer-inner {
+  max-width: none;
 }
 
 .nav-inner {
-  max-width: none;
   display: flex;
   align-items: center;
-  gap: 32px;
-  height: 60px;
+  gap: 24px;
+  height: 64px;
 }
 
 .brand {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 15px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
+  gap: 12px;
+  font-weight: 700;
+  font-size: 18px;
 }
 
 .brand-mark {
-  width: 22px;
-  height: 22px;
-  border-radius: 5px;
+  transition: transform 420ms var(--pop);
+}
+
+.brand:hover .brand-mark {
+  transform: rotate(-12deg) scale(1.12);
 }
 
 .nav-links {
   display: flex;
-  align-items: center;
-  gap: 28px;
+  gap: 4px;
   margin-left: auto;
-  font-size: 14px;
-  color: var(--fg-2);
 }
 
 .nav-links a {
-  transition: color 140ms var(--ease);
+  padding: 8px 12px;
+  border-radius: 999px;
+  color: var(--fg-2);
+  font-size: 15px;
+  transition: color 150ms ease, background-color 150ms ease;
 }
 
 .nav-links a:hover {
+  background: var(--raised);
   color: var(--fg);
 }
 
 .nav-toggle {
   display: none;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
+  margin-left: auto;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border: 1px solid var(--line-strong);
-  background: var(--raised);
+  border-radius: 12px;
+  background: transparent;
   color: var(--fg);
   cursor: pointer;
 }
 
-.nav-toggle .i-close {
+.nav-toggle .i-close,
+.nav.is-open .nav-toggle .i-menu {
   display: none;
 }
 
@@ -243,320 +278,463 @@ pre,
   display: block;
 }
 
-.nav.is-open .nav-toggle .i-menu {
-  display: none;
-}
-
-/* ---------- Icons ---------- */
-
 .i {
-  width: 16px;
-  height: 16px;
-  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: auto;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.5;
+  stroke-width: 1.8;
   stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
-/* ---------- Buttons ---------- */
+/* Buttons */
 
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 46px;
-  padding: 0 20px;
-  border: 1px solid transparent;
-  font-size: 15px;
-  font-weight: 500;
-  letter-spacing: -0.005em;
+  height: 48px;
+  padding: 0 24px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 16px;
   white-space: nowrap;
   transition:
-    background-color 140ms var(--ease),
-    border-color 140ms var(--ease),
-    color 140ms var(--ease),
-    transform 140ms var(--ease);
+    background-color 150ms ease,
+    border-color 150ms ease;
 }
 
-.btn:active {
-  transform: scale(0.98);
-}
-
-/* Lighter than the raised panels, so a button's edge shows against the page; the secondary a step
-   darker than the primary. */
 .btn-primary {
-  background: #2c2c2f;
-  color: var(--fg);
+  position: relative;
+  background: var(--pink);
+  color: #2a0f1e;
 }
 
 .btn-primary:hover {
-  background: #343438;
+  background: #ff97c3;
 }
 
 .btn-secondary {
-  background: #232326;
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
   color: var(--fg);
 }
 
 .btn-secondary:hover {
-  background: #2b2b2e;
+  border-color: var(--violet);
+  background: var(--raised);
 }
 
-/* ---------- Hero ---------- */
+/* The primary button wears the current setup step's ring: the logo's colours. */
+.halo-btn {
+  position: relative;
+  display: inline-flex;
+}
+
+.halo-btn::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 999px;
+  padding: 2px;
+  background: conic-gradient(var(--sky), var(--violet), var(--pink), var(--sun), var(--sky));
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* Sparkles */
+
+.sparkle {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  fill: var(--sun);
+  pointer-events: none;
+}
+
+/* Hero */
 
 .hero {
-  padding: 88px 0 96px;
-}
-
-.hero-grid {
-  display: grid;
-  gap: 64px;
+  padding: 88px 0 64px;
+  overflow-x: clip;
+  background:
+    radial-gradient(60% 50% at 20% 0%, rgba(155, 93, 229, 0.18), transparent 70%),
+    radial-gradient(50% 40% at 85% 10%, rgba(255, 126, 179, 0.12), transparent 70%);
 }
 
 .hero-copy {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  isolation: isolate;
+  max-width: 760px;
+  margin: 0 auto;
   text-align: center;
 }
 
 .hero h1 {
-  font-size: clamp(36px, 4.5vw, 56px);
-  line-height: 1.06;
-  font-weight: 500;
+  position: relative;
+  display: inline-block;
+  font-size: clamp(40px, 6vw, 68px);
+  line-height: 1.05;
+  font-weight: 800;
   letter-spacing: -0.03em;
-  max-width: 16ch;
+  text-wrap: balance;
+}
+
+/* A highlighter swipe in the logo's colours under one word. */
+.mark {
+  position: relative;
+  white-space: nowrap;
+}
+
+.mark::after {
+  content: "";
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  bottom: 0.06em;
+  height: 0.3em;
+  z-index: -1;
+  border-radius: 999px;
+  background: var(--candy);
+  opacity: 0.75;
+  transform-origin: left;
+}
+
+.sparkle-a {
+  top: -14px;
+  right: -22px;
+}
+
+.sparkle-b {
+  bottom: 6px;
+  left: -28px;
+  width: 12px;
+  height: 12px;
+  fill: #ffc2dc;
 }
 
 .lede {
-  margin-top: 20px;
-  max-width: 44ch;
-  font-size: 18px;
-  line-height: 28px;
+  max-width: 640px;
+  margin: 24px auto 0;
   color: var(--fg-2);
+  font-size: 19px;
+  text-wrap: balance;
 }
 
-/* Both buttons take the wider one's width, whatever label the primary gets for the visitor's system. */
 .hero-actions {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 1fr;
-  width: max-content;
-  max-width: 100%;
-  gap: 12px;
-  margin-top: 32px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 36px;
 }
 
-/* ---------- Sections ---------- */
+/* Screenshots: a little window with candy-coloured dots. */
+
+.shot {
+  position: relative;
+  isolation: isolate;
+}
+
+.window {
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: var(--sunk);
+}
+
+.window-bar {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.window-bar i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--pink);
+}
+
+.window-bar i:nth-child(2) {
+  background: var(--sun);
+}
+
+.window-bar i:nth-child(3) {
+  background: var(--mint);
+}
+
+.window img {
+  width: 100%;
+  height: auto;
+}
+
+.shot-hero {
+  max-width: 1280px;
+  margin: 64px auto 0;
+}
+
+/* The setup steps' bubbles, floating at the hero window's corners. */
+.bubble {
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+}
+
+.bubble-1 {
+  top: -18px;
+  right: 8%;
+  width: 36px;
+  height: 36px;
+  background: var(--pink);
+}
+
+.bubble-2 {
+  bottom: 12%;
+  left: -18px;
+  width: 28px;
+  height: 28px;
+  background: var(--sky);
+}
+
+.bubble-3 {
+  bottom: -12px;
+  right: 22%;
+  width: 16px;
+  height: 16px;
+  background: var(--violet);
+}
+
+/* Sections */
 
 .section {
   padding: 96px 0;
-  border-top: 1px solid var(--line);
+}
+
+.section h2 {
+  font-size: clamp(30px, 3.6vw, 42px);
+  line-height: 1.12;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
 }
 
 .section-head {
-  max-width: 42rem;
+  max-width: 780px;
   margin: 0 auto 48px;
   text-align: center;
 }
 
-.section h2 {
+.section-head p,
+.split-copy p {
   margin-top: 16px;
-  font-size: clamp(26px, 3vw, 34px);
-  line-height: 1.15;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-}
-
-.section-lede {
-  margin: 16px auto 0;
-  max-width: 44ch;
-  font-size: 16px;
-  line-height: 26px;
   color: var(--fg-2);
+  font-size: 18px;
+  text-wrap: balance;
 }
 
-.note {
-  margin: 32px auto 0;
-  max-width: 60ch;
-  text-align: center;
+/* A picture beside its words; every other one swaps sides. */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+  align-items: center;
+  gap: 48px;
+}
+
+.split + .split {
+  margin-top: 112px;
+}
+
+.split-flip {
+  grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
+}
+
+.split-flip .split-copy {
+  order: 2;
+}
+
+.tag {
+  display: inline-block;
+  margin-bottom: 16px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  color: #1a1323;
   font-size: 14px;
-  line-height: 22px;
-  color: var(--fg-3);
+  font-weight: 700;
+  transform: rotate(-3deg);
 }
 
-/* Promo video */
+.tag-mint {
+  background: var(--mint);
+}
 
-.promo {
+.tag-sky {
+  background: var(--sky);
+}
+
+.tag-pink {
+  background: var(--pink);
+}
+
+/* Setup steps, drawn like the app's stepper: numbered dots on a line in the logo's colours. */
+.steps {
   position: relative;
-  border: 1px solid var(--line-strong);
-  border-radius: 16px;
-  overflow: hidden;
-  background: var(--bg);
-  box-shadow: var(--lift);
+  display: grid;
+  gap: 24px;
+  margin-top: 32px;
 }
 
-.promo video {
-  display: block;
-  width: 100%;
-  height: auto;
-  aspect-ratio: 16 / 9;
-}
-
-/* The player bar: play and pause, the scrubber, and the time. */
-.promo-bar {
+.steps::before {
+  content: "";
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: 18px;
+  bottom: 18px;
+  left: 17px;
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--sky), var(--violet), var(--pink), var(--sky)) 0 0 / 100% 300%;
+  transform-origin: top;
+}
+
+.steps li {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 40px 20px 16px 16px;
-  background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.6));
-  transition: opacity 140ms var(--ease);
-}
-
-.promo-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: 1px solid var(--line-strong);
-  border-radius: 50%;
-  background: rgba(19, 19, 20, 0.72);
-  backdrop-filter: blur(8px);
-  color: var(--fg);
-  cursor: pointer;
-  transition:
-    background-color 140ms var(--ease),
-    opacity 140ms var(--ease);
-}
-
-.promo-toggle:hover {
-  background: var(--raised);
-}
-
-.promo-toggle:focus-visible {
-  border-radius: 50%;
-}
-
-.promo-seek {
-  --p: 0%;
-  flex: 1;
-  min-width: 0;
-  height: 20px;
-  margin: 0;
-  background: transparent;
-  appearance: none;
-  cursor: pointer;
-}
-
-.promo-seek::-webkit-slider-runnable-track {
-  height: 4px;
-  border-radius: 2px;
-  background:
-    linear-gradient(var(--fg), var(--fg)) 0 / var(--p) 100% no-repeat,
-    rgba(237, 237, 237, 0.24);
-}
-
-.promo-seek::-moz-range-track {
-  height: 4px;
-  border-radius: 2px;
-  background:
-    linear-gradient(var(--fg), var(--fg)) 0 / var(--p) 100% no-repeat,
-    rgba(237, 237, 237, 0.24);
-}
-
-.promo-seek::-webkit-slider-thumb {
-  width: 12px;
-  height: 12px;
-  margin-top: -4px;
-  border: none;
-  border-radius: 50%;
-  background: var(--fg);
-  appearance: none;
-}
-
-.promo-seek::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border: none;
-  border-radius: 50%;
-  background: var(--fg);
-}
-
-.promo-time {
-  flex: none;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--fg);
-  font-variant-numeric: tabular-nums;
-}
-
-/* With a mouse the bar shows while the pointer is over the video, on focus, and while paused; on
-   touch it always shows. */
-@media (hover: hover) {
-  .promo-bar {
-    opacity: 0;
-  }
-
-  .promo:hover .promo-bar,
-  .promo.is-paused .promo-bar,
-  .promo-bar:focus-within {
-    opacity: 1;
-  }
-}
-
-.promo-bar[hidden],
-.promo-toggle .i-play,
-.promo.is-paused .promo-toggle .i-pause {
-  display: none;
-}
-
-.promo.is-paused .promo-toggle .i-play {
-  display: block;
-}
-
-/* Features */
-
-.features {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
+  color: var(--fg-2);
+  font-size: 17px;
 }
 
-.features li {
-  padding: 24px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--panel);
+.steps b {
+  color: var(--fg);
+  font-weight: 650;
 }
 
-.features h3 {
-  font-size: 16px;
-  line-height: 22px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-}
-
-.features p {
-  margin-top: 8px;
+.step-dot {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--sky), var(--violet) 55%, var(--pink));
+  color: #fff;
+  font-weight: 700;
   font-size: 15px;
-  line-height: 24px;
+}
+
+.step-halo {
+  position: absolute;
+  inset: -8px;
+  pointer-events: none;
+}
+
+.step-ring {
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  padding: 2px;
+  background: conic-gradient(var(--sky), var(--violet), var(--pink), var(--sky));
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+
+.step-sparkle {
+  top: -4px;
+  right: -6px;
+  width: 12px;
+  height: 12px;
+}
+
+/* The rest of the features, as little cards. */
+
+.more-head {
+  margin: 128px 0 40px;
+  text-align: center;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.card {
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--panel);
+  transition: transform 380ms var(--pop), border-color 200ms ease;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  border-color: var(--line-strong);
+}
+
+.card h3 {
+  margin-top: 20px;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.card p {
+  margin-top: 8px;
   color: var(--fg-2);
 }
 
-.features code {
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--raised);
-  font-size: 13px;
-  color: var(--fg);
+.card-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  color: #1a1323;
+  transition: transform 420ms var(--pop);
+}
+
+.card:hover .card-icon {
+  transform: rotate(-8deg) scale(1.1);
+}
+
+.card-icon svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.card-icon svg.fill {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+  stroke: none;
+}
+
+.icon-sun {
+  background: var(--sun);
+}
+
+.icon-violet {
+  background: #c4a1f2;
+}
+
+.icon-pink {
+  background: var(--pink);
+}
+
+.icon-sky {
+  background: var(--sky);
+}
+
+.icon-mint {
+  background: var(--mint);
 }
 
 /* Agents */
@@ -564,38 +742,49 @@ pre,
 .agents {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  gap: 20px;
 }
 
 .agents li {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 24px;
+  align-items: center;
+  gap: 4px;
+  padding: 32px 16px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 20px;
   background: var(--panel);
+  text-align: center;
+  transition: transform 380ms var(--pop), border-color 200ms ease;
+}
+
+.agents li:hover {
+  transform: translateY(-4px) rotate(1deg);
+  border-color: var(--line-strong);
 }
 
 .agent-logo {
-  width: 28px;
-  height: 28px;
-  margin-bottom: 18px;
-  color: var(--fg-2);
+  width: 44px;
+  height: 44px;
+  margin-bottom: 16px;
+  transition: transform 480ms var(--pop);
+}
+
+.agents li:hover .agent-logo {
+  transform: scale(1.15) rotate(-6deg);
 }
 
 .agent-name {
-  font-size: 15px;
-  font-weight: 500;
+  font-weight: 700;
+  font-size: 17px;
 }
 
 .agent-vendor {
-  font-size: 13px;
   color: var(--fg-3);
+  font-size: 14px;
 }
 
-/* Download */
+/* Downloads */
 
 .downloads {
   display: grid;
@@ -606,115 +795,407 @@ pre,
 .dl {
   display: flex;
   flex-direction: column;
-  padding: 24px;
+  padding: 28px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 20px;
   background: var(--panel);
 }
 
 .dl h3 {
-  font-size: 18px;
-  line-height: 24px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
+  font-size: 22px;
+  font-weight: 800;
 }
 
 .dl-file {
   margin-top: 4px;
+  color: var(--fg-3);
   font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--fg-2);
-  word-break: break-word;
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .dl-note {
-  margin-top: 12px;
-  margin-bottom: 20px;
-  font-size: 13.5px;
-  line-height: 20px;
-  color: var(--fg-3);
+  margin-top: 16px;
+  color: var(--fg-2);
 }
 
 .dl pre {
-  margin: 0 0 20px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--sunk);
+  margin-top: 12px;
+  padding: 12px 16px;
   overflow-x: auto;
-  font-size: 11.5px;
-  line-height: 18px;
-  color: var(--fg-2);
+  border-radius: 12px;
+  background: var(--sunk);
+  font-size: 13px;
+}
+
+.dl pre code {
+  padding: 0;
+  background: none;
 }
 
 .dl .btn {
   margin-top: auto;
-  align-self: flex-start;
 }
 
-/* Cards hold different amounts of copy, so the buttons line up on a shared bottom edge. */
 .dl-note,
 .dl pre {
-  flex: none;
+  margin-bottom: 24px;
 }
 
-/* ---------- Footer ---------- */
+/* The visitor's own system gets the pink button. */
+.dl.is-yours {
+  border-color: rgba(255, 126, 179, 0.5);
+}
+
+.dl.is-yours .btn {
+  border-color: transparent;
+  background: var(--pink);
+  color: #2a0f1e;
+}
+
+/* Footer */
 
 .footer {
+  padding: 40px 0;
   border-top: 1px solid var(--line);
-  padding: 32px 0;
 }
 
-/* Full width like the header, so the mark sits at the left edge and the line at the right. */
 .footer-inner {
-  max-width: none;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
 }
 
 .footer-brand {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.footer-brand .brand-mark {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
+  gap: 8px;
+  font-weight: 700;
 }
 
 .footer-line {
-  font-family: var(--font-mono);
-  font-size: 12px;
   color: var(--fg-3);
+  font-size: 14px;
 }
 
-/* ---------- Motion ---------- */
+.footer-line a {
+  color: var(--fg-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.footer-line a:hover {
+  color: var(--fg);
+}
+
+/* Motion, after the app's setup flow. Without JavaScript nothing waits to be revealed. */
 
 @media (prefers-reduced-motion: no-preference) {
-  .hero-copy,
-  .hero-visual {
-    animation: rise 420ms var(--ease) both;
+  /* Each block waits out of sight, then makes its own entrance the first time it scrolls into
+     view. The fill is only backwards, so once in, a block's hover lift and tilt work again. */
+  .js .reveal:not(.is-seen) {
+    opacity: 0;
   }
 
-  .hero-visual {
-    animation-delay: 60ms;
+  .js .reveal.is-seen {
+    animation: pop-in 560ms var(--pop) backwards;
   }
 
-  @keyframes rise {
+  /* A few blocks only open the curtain, and their parts come on one after another. */
+  .js .hero-copy.is-seen,
+  .js .agents.is-seen {
+    animation: none;
+  }
+
+  /* The headline comes into focus and the words rise after it. The buttons and pictures are just there. */
+  .js .hero-copy.is-seen h1 {
+    animation: focus-in 700ms var(--settle) backwards;
+  }
+
+  .js .hero-copy.is-seen .lede {
+    animation: pop-in 560ms var(--pop) 160ms backwards;
+  }
+
+  /* The highlighter swipes across once the headline is in. */
+  .js .hero-copy .mark::after {
+    transform: scaleX(0);
+  }
+
+  .js .hero-copy.is-seen .mark::after {
+    animation: swipe 520ms var(--settle) 560ms both;
+  }
+
+  /* Words slide in from the side away from their picture, and the tag is stamped on after.
+     --from is the side they start on, swapped when a row is flipped. */
+  .slide-in {
+    --from: -1;
+  }
+
+  .split-flip .slide-in {
+    --from: 1;
+  }
+
+  .js .slide-in.is-seen {
+    animation: slide-in 640ms var(--pop) backwards;
+  }
+
+  .js .slide-in.is-seen .tag {
+    animation: stamp 520ms var(--pop) 380ms backwards;
+  }
+
+  /* Headings drop in and bounce. */
+  .js .drop-in.is-seen {
+    animation: drop-in 760ms var(--settle) backwards;
+  }
+
+  /* The cards flip up like flaps in turn, and each icon gives a wiggle once its card is down. */
+  .js .flip-in.is-seen {
+    transform-origin: 50% 0;
+    animation: flip-in 640ms var(--pop) backwards;
+  }
+
+  .js .flip-in.is-seen:nth-child(3n + 2) {
+    animation-delay: 90ms;
+  }
+
+  .js .flip-in.is-seen:nth-child(3n) {
+    animation-delay: 180ms;
+  }
+
+  .js .flip-in.is-seen .card-icon {
+    animation: wiggle 700ms ease-in-out 520ms;
+  }
+
+  /* The agents squish in one by one, like jelly. */
+  .js .agents.is-seen li {
+    animation: jelly 720ms ease-out backwards;
+  }
+
+  .js .agents.is-seen li:nth-child(2) {
+    animation-delay: 100ms;
+  }
+
+  .js .agents.is-seen li:nth-child(3) {
+    animation-delay: 200ms;
+  }
+
+  .js .agents.is-seen li:nth-child(4) {
+    animation-delay: 300ms;
+  }
+
+  /* The downloads are dealt out like cards, fanned from the middle. */
+  .js .deal-in.is-seen {
+    --tilt: 0deg;
+    animation: deal-in 700ms var(--pop) backwards;
+  }
+
+  .js .deal-in.is-seen:nth-child(1) {
+    --tilt: -9deg;
+  }
+
+  .js .deal-in.is-seen:nth-child(2) {
+    animation-delay: 110ms;
+  }
+
+  .js .deal-in.is-seen:nth-child(3) {
+    --tilt: 9deg;
+    animation-delay: 220ms;
+  }
+
+  /* Like moving through setup: the line fills down, each dot pops in turn, and the current step's
+     ring breathes while its sparkle twinkles. */
+  .js .steps::before {
+    transform: scaleY(0);
+  }
+
+  .js .is-seen .steps::before {
+    animation:
+      fill-down 900ms cubic-bezier(0.65, 0, 0.35, 1) 200ms both,
+      flow 4s linear 1.1s infinite;
+  }
+
+  .js .steps .step-dot {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+
+  .js .is-seen .steps .step-dot {
+    animation: step-pop 460ms var(--pop) both;
+  }
+
+  .js .is-seen .steps li:nth-child(1) .step-dot { animation-delay: 220ms; }
+  .js .is-seen .steps li:nth-child(2) .step-dot { animation-delay: 440ms; }
+  .js .is-seen .steps li:nth-child(3) .step-dot { animation-delay: 660ms; }
+  .js .is-seen .steps li:nth-child(4) .step-dot { animation-delay: 880ms; }
+
+  .step-ring {
+    animation: breathe 2.6s ease-in-out infinite;
+  }
+
+  .sparkle {
+    animation: twinkle 1.9s ease-in-out infinite;
+  }
+
+  .sparkle-b {
+    animation-delay: -0.95s;
+  }
+
+  /* Most of these give only a start, so each block settles back into its own transform. */
+  @keyframes pop-in {
     from {
       opacity: 0;
-      transform: translateY(10px);
+      transform: translateY(16px) scale(0.98);
+    }
+  }
+
+  @keyframes focus-in {
+    from {
+      opacity: 0;
+      filter: blur(12px);
+      transform: scale(1.06);
+    }
+  }
+
+  @keyframes slide-in {
+    from {
+      opacity: 0;
+      transform: translateX(calc(var(--from) * 56px)) rotate(calc(var(--from) * 2deg));
+    }
+  }
+
+  @keyframes stamp {
+    0% {
+      opacity: 0;
+      transform: scale(2.4) rotate(-20deg);
+    }
+    60% {
+      opacity: 1;
+      transform: scale(0.9) rotate(0deg);
+    }
+  }
+
+  @keyframes drop-in {
+    0% {
+      opacity: 0;
+      transform: translateY(-40px);
+    }
+    55% {
+      opacity: 1;
+      transform: translateY(8px);
+    }
+    75% {
+      transform: translateY(-4px);
+    }
+    90% {
+      transform: translateY(2px);
+    }
+  }
+
+  @keyframes flip-in {
+    from {
+      opacity: 0;
+      transform: perspective(900px) rotateX(-80deg) translateY(16px);
+    }
+  }
+
+  @keyframes wiggle {
+    25% {
+      transform: rotate(-16deg) scale(1.15);
+    }
+    50% {
+      transform: rotate(12deg) scale(1.1);
+    }
+    75% {
+      transform: rotate(-6deg);
+    }
+  }
+
+  @keyframes jelly {
+    0% {
+      opacity: 0;
+      transform: scale(0.3);
+    }
+    45% {
+      opacity: 1;
+      transform: scale(1.14, 0.86);
+    }
+    65% {
+      transform: scale(0.92, 1.08);
+    }
+    82% {
+      transform: scale(1.04, 0.97);
+    }
+  }
+
+  @keyframes deal-in {
+    from {
+      opacity: 0;
+      transform: translateY(96px) rotate(var(--tilt)) scale(0.92);
+    }
+  }
+
+  @keyframes swipe {
+    from {
+      transform: scaleX(0);
     }
     to {
+      transform: scaleX(1);
+    }
+  }
+
+  @keyframes fill-down {
+    from {
+      transform: scaleY(0);
+    }
+    to {
+      transform: scaleY(1);
+    }
+  }
+
+  @keyframes flow {
+    to {
+      background-position: 0 150%;
+    }
+  }
+
+  @keyframes step-pop {
+    0% {
+      opacity: 0;
+      transform: scale(0.4);
+    }
+    60% {
       opacity: 1;
-      transform: none;
+      transform: scale(1.2);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes breathe {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 0.9;
+    }
+    50% {
+      transform: scale(1.08);
+      opacity: 0.5;
+    }
+  }
+
+  @keyframes twinkle {
+    0%,
+    100% {
+      opacity: 0.2;
+      transform: scale(0.5) rotate(0deg);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1) rotate(45deg);
     }
   }
 }
@@ -727,109 +1208,87 @@ pre,
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: 0s !important;
   }
 }
 
-/* ---------- Small screens ---------- */
+/* Narrow screens */
 
 @media (max-width: 1000px) {
-  .hero-grid {
-    gap: 48px;
-  }
-
-  .hero {
-    padding: 56px 0 72px;
-  }
-
-  .hero h1 {
-    max-width: 20ch;
-  }
-
-  .lede {
-    max-width: 46ch;
-  }
-
-  .features,
-  .agents {
+  .cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .downloads {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .dl .btn {
-    align-self: stretch;
+  .agents {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 860px) {
-  .wrap {
-    padding: 0 20px;
-  }
-
-  .nav-inner {
-    gap: 16px;
-  }
-
   .nav-toggle {
-    display: inline-flex;
-    margin-left: auto;
+    display: grid;
   }
 
   .nav-links {
+    position: absolute;
+    top: 64px;
+    left: 0;
+    right: 0;
     display: none;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 24px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
   }
 
   .nav.is-open .nav-links {
     display: flex;
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 60px;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0;
-    padding: 8px 20px 16px;
-    background: var(--bg);
-    border-bottom: 1px solid var(--line);
   }
 
-  .nav.is-open .nav-links a {
-    padding: 12px 0;
-    font-size: 15px;
-    color: var(--fg);
+  .nav-links a {
+    padding: 12px 16px;
+    font-size: 17px;
   }
 
-  .section {
-    padding: 64px 0;
-  }
-
-  .section-head {
-    margin-bottom: 32px;
-  }
-
-  .features {
+  .split,
+  .downloads {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .features {
-    gap: 12px;
+  .split {
+    gap: 32px;
+  }
+
+  .split-flip .split-copy {
+    order: 0;
+  }
+
+  .split + .split {
+    margin-top: 80px;
   }
 }
 
-@media (max-width: 760px) {
-  .hero-actions {
-    grid-auto-flow: row;
-    width: auto;
-    align-self: stretch;
+@media (max-width: 560px) {
+  .wrap {
+    padding: 0 20px;
   }
 
-  .footer-inner {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+  .hero {
+    padding-top: 56px;
+  }
+
+  .section {
+    padding: 72px 0;
+  }
+
+  .cards,
+  .agents {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bubble,
+  .sparkle-b {
+    display: none;
   }
 }
