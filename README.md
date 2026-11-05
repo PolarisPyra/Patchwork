@@ -44,9 +44,9 @@ subscription **Usage** view, and an optional screen tool that asks before it cli
 
 | Platform | Download |
 | --- | --- |
-| Linux | [`Patchwork_amd64.AppImage`](https://github.com/PolarisPyra/Patchwork-ADE/releases/latest/download/Patchwork_amd64.AppImage) |
-| Windows | [`Patchwork_x64-setup.exe`](https://github.com/PolarisPyra/Patchwork-ADE/releases/latest/download/Patchwork_x64-setup.exe) |
-| macOS (Apple silicon) | [`Patchwork_aarch64.dmg`](https://github.com/PolarisPyra/Patchwork-ADE/releases/latest/download/Patchwork_aarch64.dmg) |
+| Linux | [`Patchwork_amd64.AppImage`](https://github.com/PolarisPyra/Patchwork/releases/latest/download/Patchwork_amd64.AppImage) |
+| Windows | [`Patchwork_x64-setup.exe`](https://github.com/PolarisPyra/Patchwork/releases/latest/download/Patchwork_x64-setup.exe) |
+| macOS (Apple silicon) | [`Patchwork_aarch64.dmg`](https://github.com/PolarisPyra/Patchwork/releases/latest/download/Patchwork_aarch64.dmg) |
 
 Those links always serve the newest release. On Linux, make the AppImage executable and run it:
 

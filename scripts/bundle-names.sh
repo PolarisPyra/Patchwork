@@ -4,7 +4,7 @@
 # Tauri names each bundle after the version it built: Patchwork_26.1.0_x64-setup.exe,
 # Patchwork_26.1.0_aarch64.dmg, Patchwork_26.1.0_amd64.AppImage. A download link that carried that
 # name would break at every release, so the version comes out of it right after the build and
-# before anything is uploaded or signed. The update server, latest.json, and the README then name
+# before anything is published or signed. The release, latest.json, and the README then name
 # the same file from one release to the next.
 #
 # The updater does not care: it picks its file by suffix (`-setup.exe`, `.AppImage`) or by its fixed

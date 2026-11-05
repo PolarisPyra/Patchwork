@@ -1,7 +1,7 @@
 # Releasing
 
 Everything about shipping Patchwork: versions, the changelog, the release script, the GitHub
-Actions workflow, the update server on Bunny, signing, and what to do when a release goes wrong.
+Actions workflow, the GitHub releases the updater reads, signing, and what to do when a release goes wrong.
 For local builds, see [Development](development.md).
 
 ## Overview
@@ -17,19 +17,18 @@ Release workflow                        after each push to main that passed, and
   ├─ cut          yes: tag v26.11.0 on the release commit, push the tag
   │                 (or: pnpm release bump on your machine, which pushes a tag and starts the steps below)
   ├─ appimage  ─┐
-  ├─ windows   ─┼─ build (no secrets), upload → updates.patchworkeditor.com/v26.1.0/<file>
+  ├─ windows   ─┼─ build (no secrets) → one artifact each
   ├─ macos     ─┘
-  └─ release      fetch back, check, sign, check signature → latest.json, GitHub release with notes
+  └─ release      check, sign, check signature → GitHub release with the files, latest.json, notes
         │
         ▼
 Installed copies (0.10.10 and newer)    read latest.json, download, check SHA-256 and signature, install
 ```
 
-The repo is public. Each release carries two copies of every installer: one on the update server,
-which the app's updater reads, and one attached to the release on GitHub. The GitHub copy is what
-the README's download links use, through
-`github.com/PolarisPyra/Patchwork-ADE/releases/latest/download/<name>`, which needed the names to
-stop carrying a version (see [Versions](#versions) and `scripts/bundle-names.sh`).
+The repo is public. Each GitHub release carries every installer and the `latest.json` the app's
+updater reads. The updater and the README's download links reach the newest one through
+`github.com/PolarisPyra/Patchwork/releases/latest/download/<name>`, which needed the names to stop
+carrying a version (see [Versions](#versions) and `scripts/bundle-names.sh`).
 
 These files do all of it:
 
@@ -132,9 +131,8 @@ section; the next push that passes writes them again from the commits, so fix a 
 commit rather than in the pull request.
 
 **Fixing notes after a release.** `CHANGELOG.md` is the source. Edit the release's section, commit
-it, and run `scripts/release.sh notes 26.1.0` to publish it to the GitHub release, and to
-`latest.json` when it is the latest release and `BUNNY_STORAGE_PASSWORD` and `BUNNY_API_KEY` are
-set. Copies already installed show the fix once they update past it.
+it, and run `scripts/release.sh notes 26.1.0` to publish it to the GitHub release and its
+`latest.json`. Copies already installed show the fix once they update past it.
 
 ## Cut a release
 
@@ -225,27 +223,27 @@ message GitHub writes as `Merge pull request #N from PolarisPyra/release`.
 | plan | `ubuntu-latest`, after a push passed or on the release merge | `ci-plan` | Nothing: the merged version to tag, or none |
 | cut | `ubuntu-latest`, with write access, when plan found a version | `ci-tag` | The tag |
 | pr | `ubuntu-latest`, with write access to the repo and pull requests, after a push passed: after cut or in its place | `ci-pr` | The `release` branch and its pull request |
-| appimage | `ubuntu-22.04` (older glibc, so the AppImage runs on newer distributions) | `ci-build linux`, `ci-upload linux` | `Patchwork_amd64.AppImage` |
-| windows | `ubuntu-24.04`, cross-compiled with `cargo-xwin` (its NSIS is new enough for Tauri's installer) | `ci-build windows`, `ci-upload windows` | `Patchwork_x64-setup.exe` |
-| macos | `macos-15` (Apple silicon) | `ci-build macos`, `ci-upload macos` | `Patchwork_aarch64.dmg`, `Patchwork.app.tar.gz` |
+| appimage | `ubuntu-22.04` (older glibc, so the AppImage runs on newer distributions) | `ci-build linux` | `Patchwork_amd64.AppImage` |
+| windows | `ubuntu-24.04`, cross-compiled with `cargo-xwin` (its NSIS is new enough for Tauri's installer) | `ci-build windows` | `Patchwork_x64-setup.exe` |
+| macos | `macos-15` (Apple silicon) | `ci-build macos` | `Patchwork_aarch64.dmg`, `Patchwork.app.tar.gz` |
 | release | `ubuntu-latest`, after the three above | `ci-release` | `latest.json`, the GitHub release and its installers |
 
 The build jobs and the release job take the tag from `$RELEASE_TAG`: the one cut made, or the one
 pushed. cut pushes with the workflow's own token, which starts no second run, so the same run builds
 the tag it made. Each build job sets the tag's version first, so a tag pushed without the script
-still builds with its own version. It builds with no secrets in its environment, then a separate
-step uploads the files to `updates.patchworkeditor.com/<tag>/` and passes each file's name and SHA-256 to the release
-job as a job output.
+still builds with its own version. It builds with no secrets and no write access, keeps its files
+as a one-day artifact (`release-linux`, `release-windows`, `release-macos`), and passes each file's
+name and SHA-256 to the release job as a job output.
 
 The release job is the only one with the signing key. It, cut, pr, and site are the only ones with
-write access to the repo, and none of them runs the project's dependencies. For each file, the release job
-downloads it back from the update server, checks it matches the SHA-256 its build job reported, signs it with the Tauri CLI version `pnpm-lock.yaml`
-pins, and checks the signature with `minisign` against the key built into the app (`SIGNING_KEY` in
-`updates/release.rs`), the way the updater will. Any mismatch stops the release before `latest.json`
-changes, so installed copies are never offered a file that won't install. It then uploads
-`latest.json` to `<tag>/latest.json` and to `latest.json` (last, so it never names a file that
-isn't there yet), purges Bunny's cached copy, and creates a GitHub release named `Patchwork v26.1.0`.
-Both carry the tag's section of `CHANGELOG.md`.
+write access to the repo, and none of them runs the project's dependencies. It downloads the
+artifacts, and for each file checks it matches the SHA-256 its build job reported, signs it with the
+Tauri CLI version `pnpm-lock.yaml` pins, and checks the signature with `minisign` against the key
+built into the app (`SIGNING_KEY` in `updates/release.rs`), the way the updater will. Any mismatch
+stops the release before anything is published, so installed copies are never offered a file that
+won't install. It then creates the GitHub release `Patchwork v26.1.0` as a draft with the files and
+`latest.json`, and publishes it as the latest once every file is up, so `latest.json` never names a
+file that isn't there yet. Both carry the tag's section of `CHANGELOG.md`.
 
 Every action is pinned to a commit, with the version it was in a comment, so a moved tag upstream
 can't change what runs. To update one, look up the commit of its new release and replace both.
@@ -273,9 +271,8 @@ Most of each build is compiling the Rust dependencies. A tag's run can restore c
 
 The workflow is built to stay inside the free plan's Actions limits, whichever plan the repo is on:
 
-- **No artifacts.** Builds upload straight to Bunny, so the installers live on the update server
-  only. Artifact storage is counted across the billing month, so deleted artifacts keep counting
-  until it resets.
+- **Artifacts for a day.** The build jobs' artifacts only carry the files to the release job, so
+  they are kept for one day and not compressed.
 - **Caches only from `main`.** See [Caches](#caches). The repo's cache storage is 10 GB; the Linux
   and Windows dependency caches fit in it, and older ones are evicted on their own.
 - **Minutes.** The free plan has 2,000 a month. macOS minutes count ten times; the Windows
@@ -291,23 +288,24 @@ The workflow is built to stay inside the free plan's Actions limits, whichever p
 
 Check usage at github.com → Settings → Billing and plans.
 
-## Update server
+## Release files
 
-Release files are served from `https://updates.patchworkeditor.com`:
+Every GitHub release carries the same files:
 
 ```
-/latest.json                              the newest release; the only file that changes
-/v26.1.0/Patchwork_amd64.AppImage         one folder per tag, never overwritten
-/v26.1.0/Patchwork_x64-setup.exe
-/v26.1.0/Patchwork_aarch64.dmg
-/v26.1.0/Patchwork.app.tar.gz
+latest.json                  what the updater reads, from the release GitHub marks as the latest
+Patchwork_amd64.AppImage
+Patchwork_x64-setup.exe
+Patchwork_aarch64.dmg
+Patchwork.app.tar.gz
 ```
 
-The file names are the same in every tag's folder. Tauri names each bundle after the version it
-built, and `ci-build` takes the version out of the name before anything is uploaded or signed
-(`scripts/bundle-names.sh`), so a file keeps one name from release to release. The updater does not
-read the name for a version: it picks its file by suffix, so it finds its download either way. The
-folder is still the tag, which is what keeps an old release downloadable as it was.
+`/releases/latest/download/<name>` answers the latest release's copy, and
+`/releases/download/<tag>/<name>` one release's, which never changes. Tauri names each bundle after
+the version it built, and `ci-build` takes the version out of the name before anything is published
+or signed (`scripts/bundle-names.sh`), so a file keeps one name from release to release. The updater
+does not read the name for a version: it picks its file by suffix, so it finds its download either
+way.
 
 `latest.json` has the shape of GitHub's release API, plus each file's signature. `body` is the
 release's section of `CHANGELOG.md`:
@@ -319,7 +317,7 @@ release's section of `CHANGELOG.md`:
   "assets": [
     {
       "name": "Patchwork_amd64.AppImage",
-      "browser_download_url": "https://updates.patchworkeditor.com/v26.1.0/Patchwork_amd64.AppImage",
+      "browser_download_url": "https://github.com/PolarisPyra/Patchwork/releases/download/v26.1.0/Patchwork_amd64.AppImage",
       "digest": "sha256:…",
       "signature": "untrusted comment: signature from tauri secret key\n…"
     }
@@ -342,32 +340,22 @@ installed from a release report new versions but don't install them.
 Patchwork 0.10.9 and older checked GitHub's API instead, which the repo being private at the time
 blocked. Those copies need a one-time manual download of 0.10.10 or newer.
 
-### Bunny setup
-
-| Piece | Value |
-| --- | --- |
-| Storage zone | `patchwork-releases`, New York (`https://ny.storage.bunnycdn.com/patchwork-releases`) |
-| Pull zone | `patchwork-releases` (`patchwork-releases.b-cdn.net`), origin: the storage zone |
-| Custom hostname | `updates.patchworkeditor.com`, free SSL, Force SSL on |
-| DNS (Cloudflare) | `CNAME updates → patchwork-releases.b-cdn.net`, **DNS only** (grey cloud) |
-
-Keep the DNS record unproxied. Bunny issues and renews the certificate itself, and needs to see the
-traffic to do it. Proxying through Cloudflare would also put a second cache in front of
-`latest.json` that the release job doesn't purge.
+Patchwork 26.11.12 and older read `https://updates.patchworkeditor.com/latest.json`, which was on
+Bunny. A Cloudflare redirect rule on that hostname sends it to
+`https://github.com/PolarisPyra/Patchwork/releases/latest/download/latest.json`, so they update to
+the first GitHub-only release like any other. Keep the rule while copies that old may still be
+around.
 
 ### Secrets
 
-The workflow reads four repository secrets. The release script stops if any is missing.
+The workflow reads two repository secrets. The release script stops if either is missing.
 
 | Secret | Where it comes from | Used for |
 | --- | --- | --- |
-| `BUNNY_STORAGE_PASSWORD` | Bunny → Storage → patchwork-releases → Access → Password (not the read-only one) | Uploading files |
-| `BUNNY_API_KEY` | Bunny → Account settings → API key | Purging `latest.json` |
 | `TAURI_SIGNING_PRIVATE_KEY` | The updater signing key | Signing the update files, in the release job only |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | That key's password | Signing the update files, in the release job only |
 
-Set one with `gh secret set <NAME>` and paste the value at the prompt. If a Bunny key leaks,
-regenerate it in Bunny and set it again.
+Set one with `gh secret set <NAME>` and paste the value at the prompt.
 
 The signing key's public half is in `updates/release.rs` (`SIGNING_KEY`), which the app and the release job
 check signatures against. If `TAURI_SIGNING_PRIVATE_KEY` is ever set to a different key, the
@@ -376,10 +364,10 @@ again, so keep a copy outside GitHub. Changing it means every copy needs a manua
 
 ## Share a build
 
-Every release's files stay on the server, so send a link:
+Every release's files stay on its GitHub release, so send a link:
 
 ```
-https://updates.patchworkeditor.com/v26.1.0/Patchwork_amd64.AppImage
+https://github.com/PolarisPyra/Patchwork/releases/download/v26.1.0/Patchwork_amd64.AppImage
 ```
 
 On Linux, the AppImage runs after `chmod +x Patchwork_amd64.AppImage`. Windows uses the
@@ -393,24 +381,23 @@ file name stays the same. The release script prints the links for the release it
   Fix the cause on `main`; the next release carries it. Never reuse, move, or delete a pushed
   tag. The next release's notes take in the failed one's section (see [Changelog](#changelog)), so
   nothing it said is lost. To try a fix to the build first, run the workflow by hand.
-- **A release went out broken.** Run `scripts/release.sh pull YY.M.N` with `BUNNY_STORAGE_PASSWORD`
-  and `BUNNY_API_KEY` set. It points `latest.json` back at the release before YY.M.N, using the copy
-  each release keeps in its own folder, so copies that haven't updated stop being offered it. It
-  also lists YY.M.N under `withdrawn` in `latest.json`, and copies already on it go back to the
-  release before it at their next update check, like any update. Pulling a second release in a row
-  keeps the first on the list. Releases before v0.10.18 have no copy, so they can't be gone back to.
+- **A release went out broken.** Run `scripts/release.sh pull YY.M.N`. It makes the release before
+  YY.M.N the latest on GitHub again and YY.M.N a prerelease, so copies that haven't updated stop
+  being offered it. It also lists YY.M.N under `withdrawn` in that release's own `latest.json`, and
+  copies already on it go back to the release before it at their next update check, like any
+  update. Pulling a second release in a row keeps the first on the list. Releases before the move to
+  GitHub (v26.11.12 and older) have no `latest.json` on GitHub, so they can't be gone back to.
 
   A release that changed the database schema (`crates/server/src/persistence/migrations/`) is left
   off the list, because the release before it refuses a database a newer build migrated. The script
   says so, and copies on it keep it until the fix ships; merge the release pull request as
   soon as it carries the fix. Copies running a release from before rollbacks existed never
   read `withdrawn`, so they too wait for the fix.
-- **"Artifact storage quota has been hit."** Something is still uploading GitHub artifacts. The
-  workflow above uses none; check that no step calls `actions/upload-artifact`.
 - **A job hit its timeout or the minutes ran out.** Wait for the monthly reset, or rerun the
   failed run with `gh run rerun <id>` once there are minutes again.
-- **`latest.json` still shows the old version.** Purge it in Bunny (pull zone → Purge Cache) or
-  run `curl -X POST -H "AccessKey: <api key>" "https://api.bunny.net/purge?url=https://updates.patchworkeditor.com/latest.json"`.
+- **`latest.json` still shows the old version.** The new release is still a draft, or another one
+  is marked as the latest. Check with `gh release list`, and fix it with
+  `gh release edit vYY.M.N --draft=false --latest`.
 - **A copy won't install an update.** Its Settings → Updates shows why. "Not signed with
   Patchwork's release key" means the file and the key don't match.
 

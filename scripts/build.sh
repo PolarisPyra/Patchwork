@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds Patchwork's AppImage and installs it as $PREFIX/bin/patchwork (default ~/.local) with its
-# icons and a launcher. The app updates that file in place from the releases at
-# updates.patchworkeditor.com. Release builds come from scripts/release.sh.
+# icons and a launcher. The app updates that file in place from the GitHub releases. Release
+# builds come from scripts/release.sh.
 #
 # Usage: scripts/build.sh install
 set -euo pipefail
@@ -44,7 +44,7 @@ build_appimage() {
   require_tools
   pnpm --filter patchwork-desktop exec tauri build --bundles appimage
   # Tauri names the file after the version. Rename it to the name every release publishes, so the
-  # AppImage installed here is the one the update server serves, under that one name.
+  # AppImage installed here is the one each release publishes, under that one name.
   local built
   built=$(ls -t target/release/bundle/appimage/*.AppImage 2> /dev/null | head -n 1 || true)
   [[ -n "$built" ]] || die "No AppImage found after the build."

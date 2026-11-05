@@ -36,13 +36,12 @@ npx wrangler pages deploy site --project-name patchwork-site
 ```
 
 Either way there is nothing to build: `site/` is already the deployable output. Uploading it does
-not touch the update server (`updates.patchworkeditor.com`), which is a separate Bunny pull zone on a
-DNS-only record.
+not touch the releases, which live on GitHub.
 
 ## After a release
 
-The page links into the per-tag folder on the update server (`/v26.11.0/Patchwork_amd64.AppImage`,
-and so on), which never changes once published. The Release workflow's `site` job points the page
+The page links into one GitHub release (`/releases/download/v26.11.0/Patchwork_amd64.AppImage`,
+and so on), whose files never change once published. The Release workflow's `site` job points the page
 at the new tag, deploys it to the `patchwork-site` Pages project, and commits the new links to main,
 so nothing is done by hand. It needs two repository secrets, set once:
 
@@ -56,11 +55,11 @@ node site/refresh-downloads.mjs          # rewrite index.html with the newest ta
 node site/refresh-downloads.mjs --check  # exit 1 if it is stale, for CI
 ```
 
-It reads `https://updates.patchworkeditor.com/latest.json`, checks that the release has all three
-files, and updates the download links, the release line in the hero and the version in the
-download section. A browser cannot do this itself: the update server sends no CORS headers, so
-reading `latest.json` from the page would fail. That is why the tag is written into the page at
-release time instead.
+It reads `https://github.com/PolarisPyra/Patchwork/releases/latest/download/latest.json`, checks
+that the release has all three files, and updates the download links, the release line in the hero
+and the version in the download section. A browser cannot do this itself: GitHub sends no CORS
+headers for release files, so reading `latest.json` from the page would fail. That is why the tag
+is written into the page at release time instead.
 
 `site.js` only picks which of the three files the download button points at, from the visitor's
 platform, and falls back to the download section on a phone or an unknown system.

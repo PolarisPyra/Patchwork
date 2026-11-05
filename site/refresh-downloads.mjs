@@ -1,20 +1,21 @@
 #!/usr/bin/env node
-// Points the page at the newest release on the update server.
+// Points the page at the newest GitHub release.
 //
-// The download server publishes `latest.json` for the updater, and per-tag folders
-// (`/v26.11.0/Patchwork_amd64.AppImage`, ...) that are never overwritten. The page links into
-// those folders, so it has to be told which tag is current: run this after a release.
+// Each release carries `latest.json` for the updater and its installers
+// (`/releases/download/v26.11.0/Patchwork_amd64.AppImage`, ...), which never change once published.
+// The page links into a release, so it has to be told which tag is current: run this after a
+// release.
 //
 //   node site/refresh-downloads.mjs           write the new tag into index.html
 //   node site/refresh-downloads.mjs --check   exit 1 if index.html is out of date
 //
-// The update server sends no CORS headers, so a browser cannot read latest.json itself; this runs
-// on the command line (or in a workflow) instead.
+// GitHub sends no CORS headers for release files, so a browser cannot read latest.json itself; this
+// runs on the command line (or in a workflow) instead.
 
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-const LATEST = "https://updates.patchworkeditor.com/latest.json";
+const LATEST = "https://github.com/PolarisPyra/Patchwork/releases/latest/download/latest.json";
 const page = fileURLToPath(new URL("./index.html", import.meta.url));
 const checkOnly = process.argv.includes("--check");
 
@@ -46,8 +47,8 @@ if (missing.length > 0) {
 
 const before = await readFile(page, "utf8");
 const after = before.replace(
-  /updates\.patchworkeditor\.com\/v\d+\.\d+\.\d+\//g,
-  `updates.patchworkeditor.com/${tag}/`,
+  /github\.com\/PolarisPyra\/Patchwork\/releases\/download\/v\d+\.\d+\.\d+\//g,
+  `github.com/PolarisPyra/Patchwork/releases/download/${tag}/`,
 );
 
 if (before === after) {

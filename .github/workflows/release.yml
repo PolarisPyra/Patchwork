@@ -6,8 +6,8 @@ name: Release
 # pull request with a merge commit releases it: the merge's own push starts a run that tags it,
 # without waiting for the checks, then builds the Linux AppImage, the Windows installer (on Linux),
 # and the macOS (Apple silicon) disk image and app bundle,
-# publishes them to updates.patchworkeditor.com, and creates the GitHub release with the tag's
-# notes, then points the website at the new release, deploys it, and announces it on Discord. A
+# and publishes them as the GitHub release with the tag's notes and the updater's latest.json,
+# then points the website at the new release, deploys it, and announces it on Discord. A
 # tag pushed by
 # `scripts/release.sh` is built and published the same way. scripts/release.sh does the work, and
 # docs/release.md explains it.
@@ -144,7 +144,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     outputs:
-      assets: ${{ steps.upload.outputs.assets }}
+      assets: ${{ steps.build.outputs.assets }}
     env:
       # linuxdeploy is itself an AppImage; this lets it run without FUSE.
       APPIMAGE_EXTRACT_AND_RUN: 1
@@ -165,14 +165,18 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build
+        id: build
         run: scripts/release.sh ci-build linux
 
       - name: Upload
-        id: upload
         if: env.RELEASE_TAG != ''
-        env:
-          BUNNY_STORAGE_PASSWORD: ${{ secrets.BUNNY_STORAGE_PASSWORD }}
-        run: scripts/release.sh ci-upload linux
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-linux
+          path: release-files/
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
 
   windows:
     # Cross-compiled on Linux with cargo-xwin, which builds it in half the time a Windows runner
@@ -184,7 +188,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     outputs:
-      assets: ${{ steps.upload.outputs.assets }}
+      assets: ${{ steps.build.outputs.assets }}
     env:
       RELEASE_TAG: ${{ needs.cut.outputs.tag || (github.ref_type == 'tag' && github.ref_name || '') }}
       # cargo-xwin fetches the Windows SDK and C runtime for arm64 as well unless told otherwise.
@@ -214,6 +218,7 @@ jobs:
           key: xwin-0.23.1-${{ env.XWIN_ARCH }}
 
       - name: Build
+        id: build
         run: scripts/release.sh ci-build windows
 
       - name: Save the Windows SDK
@@ -224,11 +229,14 @@ jobs:
           key: ${{ steps.xwin.outputs.cache-primary-key }}
 
       - name: Upload
-        id: upload
         if: env.RELEASE_TAG != ''
-        env:
-          BUNNY_STORAGE_PASSWORD: ${{ secrets.BUNNY_STORAGE_PASSWORD }}
-        run: scripts/release.sh ci-upload windows
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-windows
+          path: release-files/
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
 
   macos:
     # macos-15 runs on Apple silicon, so the build is native arm64. Its minutes count ten times
@@ -241,7 +249,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 30
     outputs:
-      assets: ${{ steps.upload.outputs.assets }}
+      assets: ${{ steps.build.outputs.assets }}
     env:
       RELEASE_TAG: ${{ needs.cut.outputs.tag || (github.ref_type == 'tag' && github.ref_name || '') }}
     steps:
@@ -254,18 +262,23 @@ jobs:
           rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
 
       - name: Build
+        id: build
         run: scripts/release.sh ci-build macos
 
       - name: Upload
-        id: upload
         if: env.RELEASE_TAG != ''
-        env:
-          BUNNY_STORAGE_PASSWORD: ${{ secrets.BUNNY_STORAGE_PASSWORD }}
-        run: scripts/release.sh ci-upload macos
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-macos
+          path: release-files/
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
 
   # The only job with the signing key or write access. It runs none of the project's dependencies:
-  # it fetches each published file back, checks it, signs it with the Tauri CLI the lockfile pins,
-  # checks the signature against the key built into the app, and only then publishes latest.json.
+  # it takes each file from its build job's artifact, checks it, signs it with the Tauri CLI the
+  # lockfile pins, checks the signature against the key built into the app, and only then publishes
+  # the GitHub release with the files and latest.json.
   release:
     needs: [cut, appimage, windows, macos]
     if: >-
@@ -286,13 +299,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y -o Acquire::Retries=3 minisign
 
-      - name: Check, sign, and publish latest.json and the GitHub release
+      - name: Download the builds
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-*
+          path: release-check
+          merge-multiple: true
+
+      - name: Check, sign, and publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          BUNNY_STORAGE_PASSWORD: ${{ secrets.BUNNY_STORAGE_PASSWORD }}
-          BUNNY_API_KEY: ${{ secrets.BUNNY_API_KEY }}
           LINUX: ${{ needs.appimage.outputs.assets }}
           WINDOWS: ${{ needs.windows.outputs.assets }}
           MACOS: ${{ needs.macos.outputs.assets }}
@@ -363,5 +381,6 @@ jobs:
             echo "::warning::DISCORD_RELEASE_WEBHOOK_URL is not set, so the release was not announced."
             exit 0
           fi
-          jq -n --arg text "New release: Patchwork $RELEASE_TAG is out." '{content: $text}' \
+          url="https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG"
+          jq -n --arg text "New release: Patchwork $RELEASE_TAG is out. $url" '{content: $text}' \
             | curl -fsS -H 'Content-Type: application/json' --data-binary @- "${DISCORD_RELEASE_WEBHOOK_URL%/github}" >/dev/null

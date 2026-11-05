@@ -1,6 +1,6 @@
 # Builds Patchwork's Windows installer and installs it for the current user under
-# %LOCALAPPDATA%\Patchwork, with a Start menu shortcut. The app updates itself from the releases at
-# updates.patchworkeditor.com with the same installer. Release builds come from scripts/release.sh.
+# %LOCALAPPDATA%\Patchwork, with a Start menu shortcut. The app updates itself from the GitHub
+# releases with the same installer. Release builds come from scripts/release.sh.
 #
 # Usage: powershell -ExecutionPolicy Bypass -File scripts\build.ps1 install
 param([Parameter(Position = 0)][string]$Action)
