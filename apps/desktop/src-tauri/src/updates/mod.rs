@@ -1,4 +1,4 @@
-//! Keeps Patchwork up to date from the releases published at updates.patchworkeditor.com. Shortly
+//! Keeps Patchwork up to date from its GitHub releases, each of which carries a latest.json. Shortly
 //! after launch and then as often as Settings asks, it checks the latest release, downloads this
 //! platform's file, checks it against the release's SHA-256 digest and the release signing key's
 //! signature, and installs it. The new version

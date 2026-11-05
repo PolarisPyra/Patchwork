@@ -10,7 +10,8 @@ use tauri::AppHandle;
 use super::install;
 use super::{UpdateState, Updates};
 
-const LATEST_RELEASE: &str = "https://updates.patchworkeditor.com/latest.json";
+const LATEST_RELEASE: &str =
+    "https://github.com/PolarisPyra/Patchwork/releases/latest/download/latest.json";
 const SIGNING_KEY: &str = "RWRXprrQ+eDX1VTXegp1CNjQ85EUGvB2gw6QQR/8pzPzVHjoIsayrxzc";
 const CHECK_TIMEOUT: Duration = Duration::from_secs(30);
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(30 * 60);
