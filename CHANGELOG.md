@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.13] - 2026-11-05
+
+### Changed
+
+- Patchwork now downloads its updates from its GitHub releases, and the release and license links in Settings → Updates point to the renamed Patchwork repository on GitHub.
+
 ## [26.11.12] - 2026-11-05
 
 ### Changed
