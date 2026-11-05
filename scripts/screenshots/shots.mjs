@@ -56,25 +56,18 @@ async function shot(browser, { name, mode = "goal", act }) {
 
 const browser = await chromium.launch();
 
-// A turn still running, with its work rows opened so each step shows.
-await shot(browser, {
-  name: "grid-1",
-  act: async (page) => {
-    // A run of calls folds into one summary row; opening it lists them.
-    await page.getByRole("button", { name: /^Running npm/ }).first().click();
-    await page.waitForTimeout(400);
-  },
-});
+// A turn still running, with each step in its work rows.
+await shot(browser, { name: "grid-1" });
 
 // An empty task, ready for a prompt.
 await shot(browser, { name: "grid-2", mode: "new" });
 
-// Settings, on Appearance.
+// Settings, on General: the theme, app icons and chat backgrounds.
 await shot(browser, {
   name: "grid-3",
   act: async (page) => {
     await page.locator('button[aria-label="Settings"]').first().click();
-    await page.getByRole("button", { name: "Appearance", exact: true }).first().click();
+    await page.getByRole("button", { name: "General", exact: true }).first().click();
     await page.waitForTimeout(400);
   },
 });

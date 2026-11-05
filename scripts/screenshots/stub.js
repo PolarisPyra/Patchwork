@@ -14,9 +14,10 @@
   const DAY = 86_400_000;
 
   const projects = [
-    { id: "p1", name: "acme-storefront", path: "/home/you/code/acme-storefront" },
-    { id: "p2", name: "acme-api", path: "/home/you/code/acme-api" },
-    { id: "p3", name: "acme-docs", path: "/home/you/code/acme-docs" },
+    { id: "p1", name: "router-firmware", path: "/home/you/code/router-firmware" },
+    { id: "p2", name: "save-editor", path: "/home/you/code/save-editor" },
+    { id: "p3", name: "relay-server", path: "/home/you/code/relay-server" },
+    { id: "p4", name: "dotfiles", path: "/home/you/code/dotfiles" },
   ];
 
   /** A message, shaped like the backend's. */
@@ -40,7 +41,7 @@
     parts: o.parts ?? [{ type: "text", text: o.text }],
     finishedAt: o.ago ? now - o.ago + 40_000 : null,
     usage: o.usage ?? null,
-    turn: null,
+    turn: o.turn ?? null,
   });
 
   const thread = (o) => ({
@@ -78,16 +79,25 @@
     output: null,
   });
 
-  // The cart's promo code, still being written: the work rows, then the words landing.
-  const promoCode = thread({
+  // The firmware header's checksum, still being worked out: the work rows, then the words landing.
+  const reply = [
+    "The checksum at `0x1C` is a CRC-32 over the payload only, not the header. It starts at",
+    "`0xFFFFFFFF` and skips the final XOR, which is why the standard `crc32` never matched.",
+    "",
+    "The unpacker now checks it before extracting anything, and refuses an image whose checksum",
+    "is off, with the expected and actual values in the error.",
+    "",
+    "All three images in `samples/` pass, and a copy with one flipped byte is turned away.",
+  ].join("\n");
+  const checksum = thread({
     id: "t0",
-    title: "Add a promo code field to the cart",
+    title: "Work out the update image checksum",
     ago: 12 * 60_000,
     messages: [
       msg({
         id: "c1",
         role: "user",
-        text: "Can you add a promo code field to the cart? It should tell people straight away if a code is wrong.",
+        text: "The router's update images start with a 32-byte header we can't validate. Can you work out the checksum so the unpacker can verify an image before extracting it?",
         ago: 12 * 60_000,
       }),
       msg({
@@ -95,63 +105,44 @@
         role: "assistant",
         status: "streaming",
         ago: 40_000,
-        text: [
-          "The cart now takes a code above the total, and checks it as it is typed, so a wrong one",
-          "shows an inline error rather than waiting for the customer to reach checkout.",
-          "",
-          "It reads the same `discounts` table the checkout already uses, so a code that works in",
-          "the cart is honoured there too, and an expired one is refused in both.",
-          "",
-          "Nothing else about the total changes: the code is applied to the price, not the tax, and",
-          "the cart keeps it if the customer refreshes or comes back later.",
-        ].join("\n"),
+        text: reply,
         tools: [
-          tool({ id: "k1", name: "Read", summary: "app/cart/page.tsx", ago: 38_000 }),
-          tool({ id: "k2", name: "Grep", summary: "discounts", ago: 30_000 }),
-          tool({ id: "k3", name: "Edit", summary: "app/cart/page.tsx", ago: 22_000 }),
-          tool({ id: "k4", name: "Bash", summary: "npm test -- cart", status: "running", ago: 8_000 }),
+          tool({ id: "k1", name: "Read", summary: "src/header.rs", ago: 38_000 }),
+          tool({ id: "k2", name: "Grep", summary: "crc", ago: 30_000 }),
+          tool({ id: "k3", name: "Edit", summary: "src/header.rs", ago: 22_000 }),
+          tool({ id: "k4", name: "Bash", summary: "cargo test header", status: "running", ago: 8_000 }),
         ],
         parts: [
-          { type: "thinking", text: "Find where the cart renders the total.", startedAt: now - 39_000, endedAt: now - 36_000 },
+          { type: "thinking", text: "Find where the header is parsed.", startedAt: now - 39_000, endedAt: now - 36_000 },
           { type: "tool", id: "k1" },
           { type: "tool", id: "k2" },
           { type: "tool", id: "k3" },
           { type: "tool", id: "k4" },
-          {
-            type: "text",
-            text: [
-              "The cart now takes a code above the total, and checks it as it is typed, so a wrong one",
-              "shows an inline error rather than waiting for the customer to reach checkout.",
-              "",
-              "It reads the same `discounts` table the checkout already uses, so a code that works in",
-              "the cart is honoured there too, and an expired one is refused in both.",
-              "",
-              "Nothing else about the total changes: the code is applied to the price, not the tax, and",
-              "the cart keeps it if the customer refreshes or comes back later.",
-            ].join("\n"),
-          },
+          { type: "text", text: reply },
         ],
       }),
     ],
   });
 
   // A finished turn, with the files it touched and the tokens it spent.
-  const searchSpeed = thread({
+  const saveFormat = thread({
     id: "t1",
-    title: "Speed up product search",
+    projectId: "p2",
+    title: "Saves from 1.4 crash the inventory",
     ago: 55 * 60_000,
     messages: [
       msg({
         id: "s1",
         role: "user",
-        text: "Product search takes about a second on the catalogue page. Can you make it faster?",
+        text: "Saves from the 1.4 patch crash the editor as soon as it loads the inventory. Can you figure out what changed in the format?",
         ago: 55 * 60_000,
       }),
       msg({
         id: "s2",
         role: "assistant",
         ago: 40 * 60_000,
-        files: ["app/catalogue/search.ts", "app/catalogue/page.tsx", "db/migrations/0042_search_index.sql"],
+        files: ["src/format/inventory.ts", "src/format/version.ts", "docs/save-format.md"],
+        turn: { before: "a1b2c3", after: "d4e5f6" },
         usage: {
           input: 3_900,
           cacheRead: 121_000,
@@ -160,57 +151,76 @@
           context: 124_100,
         },
         text: [
-          "Search was scanning every product row on each keystroke. Results now come from indexed",
-          "columns, and requests wait until you pause typing, so the page answers in about 40ms.",
+          "1.4 added a two-byte durability value to every item, so an inventory slot is now 14 bytes",
+          "instead of 12, and the reader drifted out of step after the first item.",
           "",
-          "- Results keep their relevance order, and paging still works.",
-          "- If the index is missing the old scan runs instead, so a checkout deploys before the",
-          "  migration cannot break search.",
-          "- A search of one letter no longer queries the database at all.",
+          "- The format version at `0x04` went from 7 to 8, and the parser picks the slot size from it.",
+          "- Older saves load exactly as before, and 1.4 saves round-trip byte for byte.",
+          "- A version the editor doesn't know shows an error instead of crashing.",
         ].join("\n"),
       }),
     ],
   });
 
   const threads = [
-    promoCode,
-    searchSpeed,
+    checksum,
+    saveFormat,
     thread({
       id: "t2",
-      title: "Fix the pay button in Safari",
+      title: "Map the UART commands in the update handler",
       ago: 5 * 60 * 60_000,
       messages: [
         msg({
           id: "m1",
           role: "user",
-          text: "The pay button does nothing in Safari, but it is fine in Chrome.",
+          text: "The update handler reads commands from the serial port. Can you map out what each one does?",
           ago: 5 * 60 * 60_000,
         }),
         msg({
           id: "m2",
           role: "assistant",
           ago: 40 * 60_000,
-          text: "Safari drops the form submission because the pay button is removed from the page while it is still handling the click. Switching it to a disabled state fixes it in both browsers.",
+          text: "The handler reads one command byte and jumps through a table of 12 entries. All 12 are named now, and `docs/uart.md` lists their arguments. `0x0B` is an undocumented memory dump that only answers before the bootloader locks flash.",
         }),
       ],
     }),
     thread({
       id: "t3",
       projectId: "p2",
-      title: "Unknown ids should 404",
+      title: "Diff the 1.3 and 1.4 save routines",
+      ago: 1 * DAY,
+      messages: [
+        msg({
+          id: "m5",
+          role: "user",
+          text: "Compare how 1.3 and 1.4 write the save file, so we know which blocks changed.",
+          ago: 1 * DAY,
+        }),
+        msg({
+          id: "m6",
+          role: "assistant",
+          ago: 1 * DAY - 60_000,
+          text: "Only the inventory writer changed: it now writes a durability value after each item's count. The header, the map flags and the quest block are written by the same code in both versions.",
+        }),
+      ],
+    }),
+    thread({
+      id: "t4",
+      projectId: "p3",
+      title: "Unknown build ids should 404",
       ago: 2 * DAY,
       messages: [
         msg({
           id: "m3",
           role: "user",
-          text: "GET /orders/:id returns an empty 200 for ids that do not exist. It should be a 404.",
+          text: "GET /builds/:id returns an empty 200 for ids that don't exist. It should be a 404.",
           ago: 2 * DAY,
         }),
         msg({
           id: "m4",
           role: "assistant",
           ago: 2 * DAY - 30_000,
-          text: "The handler returned whatever the query found, including nothing. It now answers 404 when no order matches, and the same for customers and invoices, which had the same bug.",
+          text: "The handler returned whatever the query found, including nothing. It now answers 404 when no build matches, and the same for artifacts and logs, which had the same bug.",
         }),
       ],
     }),
@@ -222,7 +232,7 @@
     agents: ["claude", "codex"],
     integrations: { github: false, terminal: false, figma: false, browser: false },
     projects,
-    activeProjectId: MODE === "new" ? "p3" : "p1",
+    activeProjectId: MODE === "new" ? "p4" : "p1",
     agent: null,
     importLogDisabled: false,
     agentPaths: {},
@@ -242,6 +252,11 @@
     notifications: { goalComplete: true, taskComplete: true },
     updates: { checkEveryMinutes: 10 },
     logo: null,
+    chatBackground: { kind: "none" },
+    chatBackgroundStrength: "medium",
+    systemPrompts: {},
+    steerWhileWorking: false,
+    checks: { afterEveryTask: false, projects: {} },
     logging: { app: "info", window: "info", agents: "info", imports: "info" },
     terminal: null,
     permissions: {
@@ -279,8 +294,18 @@
     list_scheduled_tasks: [],
     list_shells: { shells: [], defaultShell: null },
     list_files: ["README.md", "src/index.ts"],
+    list_background_images: [],
+    list_models: [],
+    checkpoints: [],
+    git_branch: "main",
     thread_usage: null,
-    turn_files: [],
+    turn_files: (args) =>
+      (args?.paths ?? []).map((path, i) => ({
+        path,
+        additions: [46, 18, 9][i] ?? 4,
+        deletions: [21, 12, 0][i] ?? 0,
+        state: "uncommitted",
+      })),
     is_folder: true,
     missing_folder: false,
     missing_files: [],
@@ -295,9 +320,9 @@
     get_collapsed: [],
     set_collapsed: null,
     git_changes: [
-      { path: "app/catalogue/search.ts", status: "modified", additions: 46, deletions: 21, staged: false },
-      { path: "app/catalogue/page.tsx", status: "modified", additions: 18, deletions: 12, staged: false },
-      { path: "db/migrations/0042_search_index.sql", status: "added", additions: 9, deletions: 0, staged: true },
+      { path: "src/format/inventory.ts", status: "modified", additions: 46, deletions: 21, staged: false },
+      { path: "src/format/version.ts", status: "modified", additions: 18, deletions: 12, staged: false },
+      { path: "docs/save-format.md", status: "added", additions: 9, deletions: 0, staged: true },
     ],
     git_status: { branch: "main", ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [] },
     list_agent_status: [
