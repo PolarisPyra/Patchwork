@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.21] - 2026-11-06
+
+### Fixed
+
+- A chat with the built-in API agent no longer fails every message with "Unterminated string…" (400) after the model's tool call is cut off at the output limit. Chats already stuck this way work again on their next message.
+
 ## [26.11.20] - 2026-11-06
 
 ### Fixed
