@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.20] - 2026-11-06
+
+### Fixed
+
+- The window no longer shifts up and leaves an empty band at the bottom. When it did, the toolbar and the Tasks and Changes buttons were off the top of the window, so you couldn't switch the sidebar back from the Changes view.
+
 ## [26.11.19] - 2026-11-06
 
 ### Fixed
