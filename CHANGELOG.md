@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.24] - 2026-11-06
+
+### Fixed
+
+- Mentioning a file or folder whose name has spaces with @ now keeps the whole path. Its chip in a sent message and in a restored draft covers the full path, instead of stopping at the first space.
+
 ## [26.11.23] - 2026-11-06
 
 ### Fixed
