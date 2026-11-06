@@ -359,15 +359,15 @@ export default function TasksView({
 
   // Ctrl+A picks the chats and tasks on screen: those in collapsed projects or folders are hidden.
   useCommand("sidebar.selectAll", () => {
-    setPicked([
-      ...listedAbove(),
-      ...buildTree(getCollapsed()).rows.filter((r) => r.kind === "thread"),
-    ]);
+    setPicked(buildTree(getCollapsed()).rows.filter((r) => r.kind === "thread"));
   });
 
-  // Built when a key or click needs it, from the collapsed set as it is then.
-  const buildTree = (hidden: ReadonlySet<string>) =>
-    buildTreeRows({ projects, folders, threads, leavingIds }, hidden);
+  // Built when a key or click needs it, from the collapsed set as it is then. The favorites and
+  // chats come first, as on screen, so the arrow keys and Shift+click reach them too.
+  const buildTree = (hidden: ReadonlySet<string>) => {
+    const tree = buildTreeRows({ projects, folders, threads, leavingIds }, hidden);
+    return { ...tree, rows: [...listedAbove(), ...tree.rows] };
+  };
   /** The favorites and chats, which sit above the projects. */
   function listedAbove(): Target[] {
     return [...favorites, ...chats]
@@ -376,7 +376,7 @@ export default function TasksView({
   }
   // The favorites and chats come first on screen, then the projects' rows, so archiving can step through them in that order.
   const syncTreeRows = () => {
-    treeRowsRef.current = [...listedAbove(), ...buildTree(getCollapsed()).rows];
+    treeRowsRef.current = buildTree(getCollapsed()).rows;
   };
   useEffect(syncTreeRows);
   // A row pinned or favorited from the menu moves to the top of its list, often above the part on
