@@ -41,7 +41,7 @@ function ContextLevels({
 }
 
 /** A model picked from one agent's models. The empty choice is `empty`, such as the CLI's own default. */
-export function DefaultModel({
+function DefaultModel({
   kind,
   label,
   empty,

@@ -49,6 +49,12 @@ pub(super) fn load_settings(conn: &Connection) -> rusqlite::Result<Settings> {
     if settings.import_log_disabled {
         settings.logging.imports = crate::settings::LogLevel::Off;
     }
+    if let Some(model) = settings.vision_model.take() {
+        settings.vision.get_or_insert(crate::settings::VisionModel {
+            agent: crate::provider::AgentKind::Api,
+            model,
+        });
+    }
     crate::permissions::seed(&mut settings.permissions);
     // Claude compacted only near the model's full window by default, far past where it gets costly.
     let tokens = &mut settings.tokens;

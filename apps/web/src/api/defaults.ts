@@ -45,6 +45,7 @@ export const DEFAULT_SETTINGS: Settings = {
   systemPrompts: {},
   skillsDir: null,
   disabledSkills: [],
+  vision: null,
   visionModel: null,
   tokens: {
     showUsage: true,

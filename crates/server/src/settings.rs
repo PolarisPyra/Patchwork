@@ -53,8 +53,11 @@ pub struct Settings {
     pub projects: Vec<Project>,
     pub active_project_id: Option<String>,
     pub tokens: TokenSettings,
-    /// Model, `provider/model`, that reads the images of a message on Patchwork's own agent.
-    /// None sends images to the main model.
+    /// The model that reads the images of a message on Patchwork's own agent and describes them
+    /// to the chat's model. None sends the images to the chat's model.
+    pub vision: Option<VisionModel>,
+    /// Legacy vision model, an API provider's `provider/model`, migrated into `vision` on load.
+    #[serde(skip_serializing)]
     pub vision_model: Option<String>,
     /// Folder of the skills every agent loads. None uses `skills` in the config folder.
     pub skills_dir: Option<String>,
@@ -86,6 +89,16 @@ pub struct Settings {
     pub computer_use: bool,
     /// Whether a project's own check command runs after every task.
     pub checks: CheckSettings,
+}
+
+/// A model that reads images: an API provider's `provider/model`, or a model of a CLI the user
+/// is signed in to, which Patchwork runs on its own for each message with images.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "settings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct VisionModel {
+    pub agent: AgentKind,
+    pub model: String,
 }
 
 /// A project's checks: the command its `package.json`, manifest or Makefile names, run after a

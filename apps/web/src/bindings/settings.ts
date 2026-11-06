@@ -96,8 +96,12 @@ agentPaths: { [key in AgentKind]?: string },
  */
 systemPrompts: { [key in AgentKind]?: string }, integrations: Integrations, projects: Array<Project>, activeProjectId: string | null, tokens: TokenSettings, 
 /**
- * Model, `provider/model`, that reads the images of a message on Patchwork's own agent.
- * None sends images to the main model.
+ * The model that reads the images of a message on Patchwork's own agent and describes them
+ * to the chat's model. None sends the images to the chat's model.
+ */
+vision: VisionModel | null, 
+/**
+ * Legacy vision model, an API provider's `provider/model`, migrated into `vision` on load.
  */
 visionModel: string | null, 
 /**
@@ -248,3 +252,9 @@ export type UpdateSettings = {
  * Minutes between checks for a new release: 10 to 60, in steps of 10.
  */
 checkEveryMinutes: number, };
+
+/**
+ * A model that reads images: an API provider's `provider/model`, or a model of a CLI the user
+ * is signed in to, which Patchwork runs on its own for each message with images.
+ */
+export type VisionModel = { agent: AgentKind, model: string, };

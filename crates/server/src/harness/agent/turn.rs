@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::plugins::AgentHook;
+use crate::provider::AgentKind;
 use crate::threads::AccessMode;
 
 /// The argument that starts Patchwork's own binary as the API agent.
@@ -80,16 +81,25 @@ pub(super) struct McpTool {
     pub(super) read_only: bool,
 }
 
-/// The connection to the vision model.
+/// The vision model: a CLI the user is signed in to, which the agent runs for each message with
+/// images, or an API provider's endpoint.
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct Vision {
-    pub(super) base_url: String,
-    pub(super) api_key: Option<String>,
-    #[serde(default)]
-    pub(super) headers: HashMap<String, String>,
-    pub(super) model: String,
-    pub(super) provider: String,
+#[serde(untagged, rename_all_fields = "camelCase")]
+pub(super) enum Vision {
+    Cli {
+        agent: AgentKind,
+        model: String,
+        /// Where the user located the CLI, when they did.
+        path: Option<String>,
+    },
+    Endpoint {
+        base_url: String,
+        api_key: Option<String>,
+        #[serde(default)]
+        headers: HashMap<String, String>,
+        model: String,
+        provider: String,
+    },
 }
 
 #[derive(Deserialize)]

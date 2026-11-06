@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use serde_json::{Value, json};
 
 use crate::orchestration::AgentEvent;
-use crate::provider::{AgentStatus, ProviderSlashCommand};
+use crate::provider::{AgentKind, AgentStatus, ProviderSlashCommand};
 use crate::threads::{PlanStep, Question, QuestionOption, StepStatus, TokenUsage};
 use crate::permissions::Target;
 use crate::provider::{Image, Parsed, ToolStart, TurnSpec};
@@ -37,10 +37,16 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         .model
         .map(String::from)
         .or_else(crate::provider::api::config::default_model);
-    let vision = spec
-        .vision_model
-        .filter(|vision| model.as_deref() != Some(*vision))
-        .and_then(|vision| crate::provider::api::config::connection(Some(vision)).ok());
+    let vision = spec.vision_model.and_then(|vision| match vision.agent {
+        AgentKind::Api if model.as_deref() == Some(vision.model.as_str()) => None,
+        AgentKind::Api => crate::provider::api::config::connection(Some(&vision.model)).ok(),
+        // The agent runs the CLI itself, as the one the user located when they did.
+        agent => Some(json!({
+            "agent": agent,
+            "model": vision.model,
+            "path": crate::provider::locate::located(agent),
+        })),
+    });
     let images_ok = vision.is_none();
     let mut request = match crate::provider::api::config::connection(model.as_deref()) {
         Ok(connection) => connection,

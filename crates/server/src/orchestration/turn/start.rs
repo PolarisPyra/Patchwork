@@ -282,13 +282,13 @@ impl Runner {
             }
             AgentKind::Antigravity | AgentKind::Api => Vec::new(),
         };
-        let vision_model = settings.vision_model.clone();
+        let vision_model = settings.vision.clone();
         let spec = TurnSpec {
             root: &root,
             thread_id: &thread_id,
             session_id: session_id.as_deref(),
             model: model.as_deref(),
-            vision_model: vision_model.as_deref(),
+            vision_model: vision_model.as_ref(),
             text: &text,
             mode,
             plan,
@@ -580,7 +580,7 @@ pub(in crate::orchestration) struct Turn {
     pub(in crate::orchestration) root: String,
     pub(in crate::orchestration) session_id: Option<String>,
     pub(in crate::orchestration) model: Option<String>,
-    pub(in crate::orchestration) vision_model: Option<String>,
+    pub(in crate::orchestration) vision_model: Option<crate::settings::VisionModel>,
     pub(in crate::orchestration) text: String,
     pub(in crate::orchestration) mode: AccessMode,
     pub(in crate::orchestration) plan: bool,
@@ -664,7 +664,7 @@ impl Turn {
             thread_id: &self.thread_id,
             session_id: self.session_id.as_deref(),
             model: self.model.as_deref(),
-            vision_model: self.vision_model.as_deref(),
+            vision_model: self.vision_model.as_ref(),
             text: &self.text,
             mode: self.mode,
             plan: self.plan,

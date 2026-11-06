@@ -15,7 +15,7 @@ pub struct TurnSpec<'a> {
     pub session_id: Option<&'a str>,
     pub model: Option<&'a str>,
     /// The model that reads images, when `model` cannot. Only Patchwork's own agent uses it.
-    pub vision_model: Option<&'a str>,
+    pub vision_model: Option<&'a crate::settings::VisionModel>,
     pub text: &'a str,
     pub mode: AccessMode,
     /// Plan mode: the agent plans and proposes a plan, without changing files.

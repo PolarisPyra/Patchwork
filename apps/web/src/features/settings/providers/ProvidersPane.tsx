@@ -8,6 +8,7 @@ import {
   type ApiProvider,
   type ApiProviderView,
   type CliKind,
+  type ModelOption,
 } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
 import {
@@ -18,7 +19,6 @@ import {
   syncAgents,
 } from "~/features/settings/providers/ApiProvidersPane";
 import { TEXTAREA, TokenRow } from "~/features/settings/controls";
-import { DefaultModel } from "~/features/settings/app/TokensPane";
 import type { PaneProps } from "~/features/settings/types";
 import { AGENT_KINDS, CLI_KINDS, describeAgent, errorText } from "~/lib/util";
 
@@ -271,6 +271,66 @@ function CliProviderRows({ settings, updateSettings }: PaneProps) {
 
 /** Every provider in one list: the CLIs, then the API endpoints. Editing an endpoint takes over
  * the pane with its form, as it did on its own page. */
+/** Agents whose models can read a message's images for an API model. */
+const VISION_AGENTS: AgentKind[] = ["api", "claude", "codex"];
+
+/** The model that reads a message's images and describes them to an API chat's model, picked from
+ * every connected agent that can read them. The empty choice sends the images to the chat's model. */
+function VisionModelPicker({ settings, updateSettings }: PaneProps) {
+  const kinds = AGENT_KINDS.filter((k) => VISION_AGENTS.includes(k) && settings.agents.includes(k));
+  const kindsKey = kinds.join(",");
+  const [models, setModels] = useState<Partial<Record<AgentKind, ModelOption[]>>>({});
+  useEffect(() => {
+    let cancelled = false;
+    for (const kind of kindsKey.split(",") as AgentKind[]) {
+      api.listModels(kind).then(
+        (list) => {
+          if (!cancelled) setModels((m) => ({ ...m, [kind]: list }));
+        },
+        () => {},
+      );
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [kindsKey]);
+  const vision = settings.vision;
+  const pick = (value: string) => {
+    const at = value.indexOf(":");
+    const next =
+      at < 0 ? null : { agent: value.slice(0, at) as AgentKind, model: value.slice(at + 1) };
+    void updateSettings((s) => ({ ...s, vision: next }));
+  };
+  return (
+    <select
+      aria-label="Vision model"
+      className="h-7 w-[200px] rounded-[var(--radius-sm)] border border-border-strong bg-editor pl-2 pr-6 text-[length:var(--fs-sm)] text-fg"
+      value={vision ? `${vision.agent}:${vision.model}` : ""}
+      onChange={(e) => pick(e.target.value)}
+    >
+      <option value="">The chat's own model</option>
+      {kinds.map((kind) => {
+        const listed = (models[kind] ?? []).flatMap((m) =>
+          m.id ? [{ id: m.id, label: m.label }] : [],
+        );
+        // A saved model that is no longer listed still shows as picked.
+        if (vision?.agent === kind && !listed.some((m) => m.id === vision.model)) {
+          listed.push({ id: vision.model, label: vision.model });
+        }
+        return (
+          <optgroup key={kind} label={AGENT_LABELS[kind]}>
+            {listed.map((m) => (
+              <option key={m.id} value={`${kind}:${m.id}`}>
+                {m.label}
+              </option>
+            ))}
+          </optgroup>
+        );
+      })}
+    </select>
+  );
+}
+
 export default function ProvidersPane({ settings, updateSettings }: PaneProps) {
   const [providers, setProviders] = useState<ApiProviderView[]>([]);
   const [editing, setEditing] = useState<ApiProvider | null>(null);
@@ -353,13 +413,7 @@ export default function ProvidersPane({ settings, updateSettings }: PaneProps) {
       ))}
       {connected.includes("api") && (
         <TokenRow title="Vision model">
-          <DefaultModel
-            kind="api"
-            label="Vision model"
-            empty="Default"
-            value={settings.visionModel ?? undefined}
-            onChange={(id) => void updateSettings((s) => ({ ...s, visionModel: id ?? null }))}
-          />
+          <VisionModelPicker settings={settings} updateSettings={updateSettings} />
         </TokenRow>
       )}
       {connected.length > 1 && (
