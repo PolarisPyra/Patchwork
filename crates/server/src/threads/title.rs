@@ -187,13 +187,18 @@ pub(crate) fn clean_name(name: &str) -> Result<String, String> {
 
 /// The message without the attachments it opens with: `@name` mentions of files and images
 /// written as Markdown, which the composer puts first. `is_file` says whether a bare `@name` is
-/// a file; a word with a slash or a dot always is, as the composer writes paths.
+/// a file; a word with a slash or a dot always is, as the composer writes paths. A path with
+/// spaces is written `@<path>`, which always is one.
 pub fn without_leading_attachments(text: &str, is_file: impl Fn(&str) -> bool) -> &str {
     let mut rest = text.trim_start();
     loop {
         let end = if rest.starts_with("![") {
             rest.find("](<")
                 .and_then(|open| rest[open..].find(">)").map(|close| open + close + 2))
+        } else if let Some(path) = rest.strip_prefix("@<") {
+            path.split_once('>')
+                .filter(|(path, _)| !path.contains(['<', '\n']))
+                .map(|(path, _)| path.len() + 3)
         } else if rest.starts_with('@') {
             let token_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
             let word = &rest[1..token_end];

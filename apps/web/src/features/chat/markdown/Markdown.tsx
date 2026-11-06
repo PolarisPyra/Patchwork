@@ -337,9 +337,14 @@ const SKILL_TOKEN = /(^|\s)(\$[a-z][a-z0-9]*(?:[-_:][a-z0-9]+)*)(?=[\s.,!?;:)]|$
 /** A summoned agent, `&name` after a space, as the composer writes it. */
 const AGENT_TOKEN = /(^|\s)(&[A-Za-z][A-Za-z0-9]*(?:[-_][A-Za-z0-9]+)*)(?=[\s.,!?;:)]|$)/g;
 
-/** A file mention, `@path` after a space, as the composer writes it; punctuation after it stays
- * text. Only a path with a slash or a dot counts, so `@name` stays text. */
-const MENTION_TOKEN = /(^|\s)(@\S*[^\s.,!?;:)])/g;
+/** A file mention, `@path` or `@<path with spaces>` after a space, as the composer writes it;
+ * punctuation after a bare one stays text. Only a bare path with a slash or a dot counts, so
+ * `@name` stays text. */
+const MENTION_TOKEN = /(^|\s)(@<[^<>\n]+>|@\S*[^\s.,!?;:)])/g;
+
+/** The path a mention token names, without its `@` and any angle brackets. */
+const mentionPath = (token: string) =>
+  token.startsWith("@<") ? token.slice(2, -1) : token.slice(1);
 
 function chip(
   label: string,
@@ -375,17 +380,20 @@ function chipPieces(value: string, start: boolean): HastNode[] {
       node: chip(match[2], AGENT_CLASS),
     })),
     ...[...value.matchAll(MENTION_TOKEN)]
-      .filter((match) => /[./]/.test(match[2].slice(1)))
-      .map((match) => ({
-        match,
-        node: chip(match[2], MENTION_CLASS, {
-          dataMention: match[2].slice(1),
-          title: match[2].slice(1),
-          role: "button",
-          tabIndex: 0,
-          ariaLabel: `Reveal ${match[2].slice(1)}`,
-        }),
-      })),
+      .filter((match) => match[2].startsWith("@<") || /[./]/.test(mentionPath(match[2])))
+      .map((match) => {
+        const path = mentionPath(match[2]);
+        return {
+          match,
+          node: chip(`@${path}`, MENTION_CLASS, {
+            dataMention: path,
+            title: path,
+            role: "button",
+            tabIndex: 0,
+            ariaLabel: `Reveal ${path}`,
+          }),
+        };
+      }),
   ].sort((a, b) => a.match.index - b.match.index);
   for (const { match, node } of tokens) {
     const at = match.index + match[1].length;

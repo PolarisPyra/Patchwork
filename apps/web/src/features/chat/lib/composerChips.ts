@@ -91,8 +91,9 @@ export function rematchChips(editor: Editor, catalog: ChipCatalog) {
     { sigil: sigils.files, make: (path: string) => chip("mention", path), leading: false },
   ];
   const known = [catalog.isCommand, catalog.isSkill, catalog.isAgent, catalog.isFile];
+  // A path with spaces is written in angle brackets, `@<path>`.
   const find = new RegExp(
-    `(^|\\s)(${kinds.map((kind) => escape(kind.sigil)).join("|")})([^\\s\\ufffc]+)`,
+    `(^|\\s)(${kinds.map((kind) => escape(kind.sigil)).join("|")})(<[^<>\\n\\ufffc]+>|[^\\s\\ufffc]+)`,
     "g",
   );
   function chip(type: string, name: string) {
@@ -111,9 +112,10 @@ export function rematchChips(editor: Editor, catalog: ChipCatalog) {
     const text = block.textBetween(0, block.content.size, undefined, "￼");
     for (const match of text.matchAll(find)) {
       const kind = kinds.findIndex((k) => k.sigil === match[2]);
-      const name = match[3];
+      const token = match[3];
+      const name = token.startsWith("<") && token.endsWith(">") ? token.slice(1, -1) : token;
       const from = blockPos + 1 + (match.index ?? 0) + match[1].length;
-      const to = from + match[2].length + name.length;
+      const to = from + match[2].length + token.length;
       if (kind < 0 || to === caret || !known[kind](name)) continue;
       if (kinds[kind].leading && from !== 1) continue;
       const node = kinds[kind].make(name);

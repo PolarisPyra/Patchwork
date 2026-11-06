@@ -228,13 +228,18 @@ export const AgentCommand = Node.create<{ isAgent: (name: string) => boolean }>(
   },
 });
 
+/** A file mention as Markdown: `@path`, or `@<path>` when the path has spaces, so it stays one word. */
+export function mentionMarkdown(path: string) {
+  return /\s/.test(path) ? `@<${path}>` : `@${path}`;
+}
+
 /**
  * A reference to a project file, written `@path` in the draft. The agent reads the path as
  * typed, so it serialises to the same text the mention shows.
  */
 const FileMention = Mention.extend({
   renderMarkdown: (node: { attrs?: { id?: string; label?: string } }) =>
-    `@${node.attrs?.label ?? node.attrs?.id ?? ""}`,
+    mentionMarkdown(node.attrs?.label ?? node.attrs?.id ?? ""),
 });
 
 /** An image written into a message: Markdown of its path, in angle brackets so spaces stay in it. */

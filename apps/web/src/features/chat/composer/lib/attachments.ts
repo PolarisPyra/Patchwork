@@ -1,6 +1,6 @@
 import { type Attachment } from "~/api";
 import type { MentionItem } from "~/features/chat/composer/types";
-import { inlineImagePaths } from "~/features/chat/lib/composerExtensions";
+import { inlineImagePaths, mentionMarkdown } from "~/features/chat/lib/composerExtensions";
 
 /**
  * How attachments meet the draft. A file dropped on the composer is written into the text as a
@@ -33,7 +33,7 @@ export function pathOfFileUri(uri: string): string | null {
 
 /** Whether the draft still mentions this file. */
 export function mentions(text: string, file: Attachment, root: string | null): boolean {
-  return text.includes(`@${mentionFor(file, root).label}`);
+  return text.includes(mentionMarkdown(mentionFor(file, root).label));
 }
 
 /** A message's attachments with the images written into its text, and the dropped files it still
