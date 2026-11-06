@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.23] - 2026-11-06
+
+### Fixed
+
+- Queueing a message while a reply is working through its plan no longer hides the plan steps above the composer. They stay until the reply finishes, as they do without a queued message.
+
 ## [26.11.22] - 2026-11-06
 
 ### Added
