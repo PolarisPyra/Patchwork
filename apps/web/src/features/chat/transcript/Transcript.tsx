@@ -17,6 +17,8 @@ import {
 import QuoteSelection, {
   quotedSelection,
 } from "~/features/chat/transcript/components/QuoteSelection";
+import { type Find } from "~/features/chat/find/matches";
+import { useFindHighlight } from "~/features/chat/find/useFindHighlight";
 import TurnRail, { useTurnRail } from "~/features/chat/transcript/components/TurnRail";
 import { useTranscriptScroll } from "~/features/chat/transcript/useTranscriptScroll";
 import { shortcutContext, useCommand } from "~/lib/shortcuts";
@@ -43,6 +45,8 @@ export interface TranscriptProps {
   /** Adds selected text to the draft as a quote, given as its lines. */
   onQuote: (lines: string[]) => void;
   tokens: TokenSettings;
+  /** What the find field is looking for, highlighted in the rows on screen. */
+  find?: Find;
 }
 
 function idsOf(messages: readonly Message[]): ReadonlySet<string> {
@@ -82,6 +86,7 @@ export default function Transcript({
   onFork,
   onQuote,
   tokens,
+  find,
 }: TranscriptProps) {
   // Queued messages wait above the composer until the turn ends, so they are not shown here.
   const messages = useMemo(() => visibleMessages(thread.messages), [thread.messages]);
@@ -159,6 +164,7 @@ export default function Transcript({
   // The app disables text selection by default, so the browser's select-all would not reach the
   // transcript. Focus lands here on click, and Ctrl/Cmd+A then selects what the list has rendered.
   const rootRef = useRef<HTMLDivElement>(null);
+  useFindHighlight(rootRef, listRef, find);
   useCommand("transcript.selectAll", () => {
     if (rootRef.current) window.getSelection()?.selectAllChildren(rootRef.current);
   });

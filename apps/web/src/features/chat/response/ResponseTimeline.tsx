@@ -114,7 +114,7 @@ export default function ResponseTimeline({
         switch (step.kind) {
           case "text":
             return (
-              <div key={`t${step.index}`} className={stepClass(step)}>
+              <div key={`t${step.index}`} className={stepClass(step)} data-find-text={message.id}>
                 {goalCleared ? (
                   <GoalClearedNotice text={step.text} live={streaming && !clearsGoal} />
                 ) : (

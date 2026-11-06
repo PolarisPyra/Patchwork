@@ -1,4 +1,4 @@
-/* The shared primitives: buttons, links, cards, badges, keys, inputs, and toggles. */
+/* The shared primitives: buttons, links, cards, badges, keys, inputs, toggles, and find highlights. */
 @layer components {
 
 .btn {
@@ -193,5 +193,14 @@
 .selectable {
   -webkit-user-select: text;
   user-select: text;
+}
+
+/* Find in chat: every match, and the current one. Named in `features/chat/find/useFindHighlight`. */
+::highlight(chat-find) {
+  background-color: color-mix(in srgb, var(--warning) 28%, transparent);
+}
+::highlight(chat-find-current) {
+  background-color: var(--warning);
+  color: #1e1f22;
 }
 }

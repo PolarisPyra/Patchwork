@@ -82,6 +82,7 @@ export const COMMANDS: CommandInfo[] = [
     title: "Quote in reply",
     description: "Adds highlighted chat text to the message box as a quote",
   },
+  { id: "chat.find", page: "Chat", title: "Find in chat" },
   {
     id: "sidebar.selectAll",
     page: "Sidebar",
@@ -130,6 +131,7 @@ export const DEFAULT_RULES: Rule[] = [
   { key: "mod+k", command: "palette.toggle" },
   { key: "mod+t", command: "chat.new" },
   { key: "mod+n", command: "chat.newHere" },
+  { key: "mod+f", command: "chat.find", when: "!terminalFocus" },
   { key: "mod+,", command: "settings.open" },
   { key: "mod+`", command: "terminal.toggle" },
   { key: "mod+shift+~", command: "terminal.new" },

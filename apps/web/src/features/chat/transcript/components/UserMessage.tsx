@@ -77,6 +77,7 @@ export const UserMessage = memo(function UserMessage({
         // as blank lines.
         <div
           className="rounded-[16px] bg-[color-mix(in_srgb,var(--text)_10%,var(--bg-editor))] px-4 py-2.5 leading-[1.55] text-fg [word-break:break-word] selectable [&_h3]:mt-0 [&_h3]:mb-0 [&_p]:whitespace-pre-wrap [&_[data-mention]]:cursor-pointer [&_[data-mention]]:hover:underline"
+          data-find-text={message.id}
           onClick={(event) => {
             const path = (event.target as Element).closest<HTMLElement>("[data-mention]")?.dataset
               .mention;

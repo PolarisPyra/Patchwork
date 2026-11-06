@@ -35,6 +35,8 @@ import BackgroundTasks from "~/features/chat/BackgroundTasks";
 import EmptyChat from "~/features/chat/EmptyChat";
 import QueuedMessages from "~/features/chat/composer/components/QueuedMessages";
 import LineageCard from "~/features/chat/lineage/LineageCard";
+import FindField from "~/features/chat/find/FindField";
+import { type Find } from "~/features/chat/find/matches";
 import Composer from "~/features/chat/composer/Composer";
 import type { HistoryEntry } from "~/features/chat/composer/types";
 import Transcript from "~/features/chat/transcript/Transcript";
@@ -488,7 +490,9 @@ export default function Chat({
     const popup = document.querySelector(
       '[role="menu"], [role="listbox"], [role="dialog"], [aria-label="Approval request"]',
     );
-    if (!working || e.repeat || e.nativeEvent.isComposing || popup) {
+    // Esc in the find field closes it, and is not half of a stop.
+    const inFind = (e.target as Element).closest('[role="search"]');
+    if (!working || e.repeat || e.nativeEvent.isComposing || popup || inFind) {
       lastEscape.current = 0;
       return;
     }
@@ -499,6 +503,9 @@ export default function Chat({
       lastEscape.current = e.timeStamp;
     }
   }
+
+  // What the find field over the transcript is looking for.
+  const [find, setFind] = useState<Find>();
 
   // Codex takes /goal resume; Claude and Antigravity have no such command, so a message carries
   // the goal on.
@@ -574,16 +581,21 @@ export default function Chat({
       />
       {/* Floats over the transcript's top right; only its controls take clicks. */}
       <div className="pointer-events-none absolute top-3 right-4 z-10 flex flex-col items-end gap-2 *:pointer-events-auto">
-        {!isNew && project && (
-          <button
-            className="btn rounded-[var(--radius)] border-border bg-panel px-3 text-[length:var(--fs-sm)] shadow-[0_1px_3px_rgba(0,0,0,0.12)] hover:bg-hover"
-            onClick={() =>
-              api.openInEditor(project.id, "").catch((e: unknown) => setError(errorText(e)))
-            }
-          >
-            <CodeIcon size={14} />
-            Open in editor
-          </button>
+        {!isNew && thread && (
+          <div className="flex items-center gap-2">
+            <FindField messages={thread.messages} onFind={setFind} />
+            {project && (
+              <button
+                className="btn rounded-[var(--radius)] border-border bg-panel px-3 text-[length:var(--fs-sm)] shadow-[0_1px_3px_rgba(0,0,0,0.12)] hover:bg-hover"
+                onClick={() =>
+                  api.openInEditor(project.id, "").catch((e: unknown) => setError(errorText(e)))
+                }
+              >
+                <CodeIcon size={14} />
+                Open in editor
+              </button>
+            )}
+          </div>
         )}
         {thread && (
           <LineageCard thread={thread} working={working} onDisconnect={stop} onError={setError} />
@@ -606,6 +618,7 @@ export default function Chat({
                 onFork={transcriptHandlers.onFork}
                 onQuote={transcriptHandlers.onQuote}
                 tokens={tokens}
+                find={find}
               />
             </ChecksContext.Provider>
           </PermissionsContext.Provider>
