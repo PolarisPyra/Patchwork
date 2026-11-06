@@ -338,7 +338,11 @@ export function useThreads(initialProjectId: string | null) {
     setThreads((prev) =>
       prev.map((t) => (t.id === id ? { ...t, archivedAt: archived ? Date.now() : null } : t)),
     );
-    if (archived) setSelectedId((cur) => (cur === id ? null : cur));
+    // A thread asked to open in its place, such as the next one after Ctrl+W, replaces it once
+    // loaded; clearing it meanwhile showed the new-chat screen until then.
+    if (archived && (wantedId.current === null || wantedId.current === id)) {
+      setSelectedId((cur) => (cur === id ? null : cur));
+    }
   }
 
   /** Whether a thread is still loading to open, so the one on screen is about to change. */
