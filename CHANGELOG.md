@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.19] - 2026-11-06
+
+### Fixed
+
+- Opening a chat sometimes showed messages from the chat you had open before, or the wrong place in it. Each chat now opens with its own messages, at its end.
+- Searching in one chat and then opening another no longer carries the search over and scrolls the new chat to an unrelated match. Each chat now opens with an empty search, at its end.
+- The arrow keys in the sidebar now move through Favorites and Chats as well as the projects. Before, they jumped from a favorite or chat to the first project and never went back up, and a task you favorited could not be reached from the keyboard.
+- Unpinning or unfavoriting a task now puts it back where it was in its folder. After you had dragged other tasks into a new order, it used to land at the top instead.
+- Closing the open chat with Ctrl+W, or archiving it from the sidebar, no longer flashes the empty new-chat screen while the next chat loads, where anything typed started a new chat.
+
 ## [26.11.18] - 2026-11-06
 
 ### Added
