@@ -3,6 +3,18 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.18] - 2026-11-06
+
+### Added
+
+- A chat now has a rail of short marks along the right edge of the conversation, one for each message you sent, with the turns on screen lit. Hover it to preview a message and the start of its reply, and click a mark, or use the arrow keys and Enter, to jump to that turn.
+- A search button now sits beside "Open in editor" at the top of a chat, and Ctrl+F (Cmd+F on a Mac) opens it too. It widens into a find field that counts the matches in the conversation, highlights them, and steps through them with Enter, Shift+Enter or its arrows, scrolling to each one; Esc closes it.
+
+### Changed
+
+- The "Open in editor" button at the top of a chat is now a rounded rectangle with the same background, border and soft shadow as the card below it, so it fits in with the rest of the conversation instead of floating as a tinted pill.
+- The conversation's scrollbar is now a thin line, like the ones in the sidebar, so it sits quietly beside the new turn rail.
+
 ## [26.11.17] - 2026-11-05
 
 ### Added
