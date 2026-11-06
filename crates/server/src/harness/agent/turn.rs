@@ -270,7 +270,7 @@ impl Agent {
                 let calls: Vec<Value> = reply
                     .calls
                     .iter()
-                    .map(|c| json!({"id": c.id, "type": "function", "function": {"name": c.name, "arguments": c.arguments}}))
+                    .map(|c| json!({"id": c.id, "type": "function", "function": {"name": c.name, "arguments": history_arguments(&c.arguments)}}))
                     .collect();
                 message["tool_calls"] = json!(calls);
             }
@@ -403,8 +403,29 @@ impl Agent {
 fn load(path: &Path) -> Option<(Vec<Value>, u64)> {
     let text = std::fs::read_to_string(path).ok()?;
     let v: Value = serde_json::from_str(&text).ok()?;
-    let messages = v["messages"].as_array().cloned()?;
+    let mut messages = v["messages"].as_array().cloned()?;
+    // Repairs a conversation saved with a cut-off call, which every request would be refused for.
+    for call in messages
+        .iter_mut()
+        .filter_map(|m| m["tool_calls"].as_array_mut())
+        .flatten()
+    {
+        if let Some(arguments) = call["function"]["arguments"].as_str() {
+            call["function"]["arguments"] = json!(history_arguments(arguments));
+        }
+    }
     Some((messages, v["context"].as_u64().unwrap_or(0)))
+}
+
+/// A call's arguments as the conversation keeps them: `{}` in place of arguments that are not a
+/// JSON object, such as ones cut off at the output limit. Endpoints parse the history's calls and
+/// refuse the whole request over one that does not parse; the call's result already tells the
+/// model what went wrong.
+fn history_arguments(arguments: &str) -> String {
+    match serde_json::from_str::<Value>(arguments) {
+        Ok(Value::Object(_)) => arguments.to_string(),
+        _ => "{}".to_string(),
+    }
 }
 
 pub(super) fn emit(v: &Value) {
