@@ -605,7 +605,10 @@ export default function Chat({
         {!isNew ? (
           <PermissionsContext.Provider value={approvals.permissionsContext}>
             <ChecksContext.Provider value={checksContext}>
+              {/* One list per chat: a list reused for another chat kept the old one's rows,
+                  sizes and scroll anchor, and could show them in place of the new chat. */}
               <Transcript
+                key={thread.id}
                 thread={thread}
                 onOpenThread={onOpenThread}
                 changes={changes}

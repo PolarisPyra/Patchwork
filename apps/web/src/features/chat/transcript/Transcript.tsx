@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { ArrowDownIcon } from "@phosphor-icons/react";
 import { api, type FileChange, type Message, type Thread, type TokenSettings } from "~/api";
@@ -93,8 +93,7 @@ export default function Transcript({
   // One pass over the thread, so a compacted divider reads the size before it in constant time.
   const before = useMemo(() => contextBefore(messages), [messages]);
   // The messages the chat opened with. A reply after them came in while it was on screen.
-  const [opened, setOpened] = useState(() => ({ id: thread.id, with: idsOf(messages) }));
-  if (opened.id !== thread.id) setOpened({ id: thread.id, with: idsOf(messages) });
+  const [openedWith] = useState(() => idsOf(messages));
   const listRef = useRef<LegendListRef>(null);
   const { atEnd, settled } = useTranscriptScroll(listRef, messages);
   const rail = useTurnRail(listRef, messages);
@@ -103,20 +102,6 @@ export default function Transcript({
   useEffect(() => {
     if (settled) refreshRail();
   }, [settled, refreshRail]);
-
-  // The list outlives the chat it shows, so its own initial jump to the end happens once, for the
-  // first chat. Every chat opened after it is jumped to its end here. Two frames: the rows of the
-  // new chat are placed by estimated height first, and only then measured, which moves the end.
-  useLayoutEffect(() => {
-    let measured = 0;
-    const placed = requestAnimationFrame(() => {
-      measured = requestAnimationFrame(() => void listRef.current?.scrollToEnd());
-    });
-    return () => {
-      cancelAnimationFrame(placed);
-      cancelAnimationFrame(measured);
-    };
-  }, [thread.id]);
 
   // A mention of a project file is relative to its root; one of a file outside it is absolute.
   const projectId = thread.projectId;
@@ -142,7 +127,7 @@ export default function Transcript({
       onRestore,
       onFork,
       onRevealMention,
-      openedWith: opened.with,
+      openedWith,
     }),
     [
       thread,
@@ -157,7 +142,7 @@ export default function Transcript({
       onRestore,
       onFork,
       onRevealMention,
-      opened.with,
+      openedWith,
     ],
   );
 
