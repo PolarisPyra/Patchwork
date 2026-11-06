@@ -576,7 +576,7 @@ export default function Chat({
       <div className="pointer-events-none absolute top-3 right-4 z-10 flex flex-col items-end gap-2 *:pointer-events-auto">
         {!isNew && project && (
           <button
-            className="btn rounded-full border-none bg-[color-mix(in_srgb,var(--text)_14%,transparent)] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),inset_0_0_0_1px_rgba(255,255,255,0.04),0_1px_3px_rgba(0,0,0,0.15)] backdrop-blur-md hover:bg-[color-mix(in_srgb,var(--text)_18%,transparent)]"
+            className="btn rounded-[var(--radius)] border-border bg-panel px-3 text-[length:var(--fs-sm)] shadow-[0_1px_3px_rgba(0,0,0,0.12)] hover:bg-hover"
             onClick={() =>
               api.openInEditor(project.id, "").catch((e: unknown) => setError(errorText(e)))
             }
