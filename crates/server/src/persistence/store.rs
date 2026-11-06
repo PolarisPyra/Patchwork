@@ -314,10 +314,12 @@ impl Store {
 
     /// Puts `ids` in `folder_id` (None: the top level) in that order. The ids are the
     /// whole destination list, so a thread that came from elsewhere joins it here.
-    /// Archived threads are not in `ids`; they keep their slots in the list, so restoring
-    /// one puts it back where it was.
+    /// Archived, pinned and favorite threads are not in `ids`; they keep their slots in the
+    /// list, so restoring, unpinning or unfavoriting one puts it back where it was.
     pub fn reorder_threads(&self, ids: &[String], folder_id: Option<&str>) -> Result<(), String> {
         let mut inner = self.lock();
+        // Listed elsewhere in the sidebar, so not among the rows that were dragged.
+        let held = |t: &Thread| t.archived_at.is_some() || t.pinned || t.favorite;
         let ids = {
             let project_id = ids
                 .first()
@@ -329,7 +331,7 @@ impl Store {
                 .filter(|t| {
                     Some(&t.project_id) == project_id.as_ref()
                         && t.folder_id.as_deref() == folder_id
-                        && (t.archived_at.is_some() || ids.contains(&t.id))
+                        && (held(t) || ids.contains(&t.id))
                 })
                 .collect();
             list.sort_by_key(|t| t.position);
@@ -337,7 +339,7 @@ impl Store {
             let mut order: Vec<String> = list
                 .iter()
                 .filter_map(|t| {
-                    if t.archived_at.is_some() && !ids.contains(&t.id) {
+                    if held(t) && !ids.contains(&t.id) {
                         Some(t.id.clone())
                     } else {
                         moved.next().cloned()
