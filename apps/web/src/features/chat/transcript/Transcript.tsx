@@ -190,7 +190,7 @@ export default function Transcript({
         maintainVisibleContentPosition
         onScroll={rail.refresh}
         onItemSizeChanged={rail.refresh}
-        className={`min-h-0 flex-1 overflow-x-hidden [overflow-anchor:none]${settled ? "" : " invisible"}`}
+        className={`min-h-0 flex-1 overflow-x-hidden [overflow-anchor:none] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:border-0${settled ? "" : " invisible"}`}
         renderItem={({ item, index }) => {
           const kind = rowKindOf(item);
           if (kind === "absent") return <div />;
