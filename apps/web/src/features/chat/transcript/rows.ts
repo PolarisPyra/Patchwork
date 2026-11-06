@@ -82,3 +82,28 @@ export function tailOf(messages: readonly Message[]): Tail {
   const reply = messages.at(-2)?.id === sent ? messages.at(-1)?.id : undefined;
   return { sent, reply };
 }
+
+/** One turn as the turn rail shows it: where it starts in the list, and its text for a preview. */
+export interface Turn {
+  /** The id of the user message that starts it. */
+  id: string;
+  /** That message's row in the list. */
+  index: number;
+  ask: string;
+  /** The text of the last reply before the next turn, if one has come. */
+  answer: string | undefined;
+}
+
+/** The turns of a thread, one per user message the transcript draws. */
+export function turnsOf(messages: readonly Message[]): Turn[] {
+  const turns: Turn[] = [];
+  messages.forEach((message, index) => {
+    if (rowKindOf(message) === "user") {
+      turns.push({ id: message.id, index, ask: message.text, answer: undefined });
+    } else if (message.role !== "user" && message.text) {
+      const turn = turns.at(-1);
+      if (turn) turn.answer = message.text;
+    }
+  });
+  return turns;
+}

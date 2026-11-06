@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { ArrowDownIcon } from "@phosphor-icons/react";
 import { api, type FileChange, type Message, type Thread, type TokenSettings } from "~/api";
@@ -17,6 +17,7 @@ import {
 import QuoteSelection, {
   quotedSelection,
 } from "~/features/chat/transcript/components/QuoteSelection";
+import TurnRail, { useTurnRail } from "~/features/chat/transcript/components/TurnRail";
 import { useTranscriptScroll } from "~/features/chat/transcript/useTranscriptScroll";
 import { shortcutContext, useCommand } from "~/lib/shortcuts";
 
@@ -91,6 +92,12 @@ export default function Transcript({
   if (opened.id !== thread.id) setOpened({ id: thread.id, with: idsOf(messages) });
   const listRef = useRef<LegendListRef>(null);
   const { atEnd, settled } = useTranscriptScroll(listRef, messages);
+  const rail = useTurnRail(listRef, messages);
+  // The rail shows once the list has settled, so its strips are lit then rather than on a scroll.
+  const refreshRail = rail.refresh;
+  useEffect(() => {
+    if (settled) refreshRail();
+  }, [settled, refreshRail]);
 
   // The list outlives the chat it shows, so its own initial jump to the end happens once, for the
   // first chat. Every chat opened after it is jumped to its end here. Two frames: the rows of the
@@ -181,6 +188,8 @@ export default function Transcript({
         initialScrollAtEnd
         maintainScrollAtEnd
         maintainVisibleContentPosition
+        onScroll={rail.refresh}
+        onItemSizeChanged={rail.refresh}
         className={`min-h-0 flex-1 overflow-x-hidden [overflow-anchor:none]${settled ? "" : " invisible"}`}
         renderItem={({ item, index }) => {
           const kind = rowKindOf(item);
@@ -203,6 +212,15 @@ export default function Transcript({
           );
         }}
       />
+      {settled && (
+        <TurnRail
+          turns={rail.turns}
+          current={rail.current}
+          strips={rail.strips}
+          onSelect={rail.select}
+          onWheel={rail.wheel}
+        />
+      )}
       <QuoteSelection root={rootRef} onQuote={onQuote} />
       {!atEnd && (
         <button
