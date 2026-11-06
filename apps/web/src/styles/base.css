@@ -15,6 +15,15 @@
     margin: 0;
   }
 
+  /* Nothing may reach past the window. Anything that did let a scrollIntoView or focus scroll
+     the whole page, even under `overflow: hidden`, which pushed the toolbar and the activity
+     bar off the top for good. `clip`, unlike `hidden`, cannot be scrolled, and `relative` keeps
+     absolutely placed elements inside the clip too. */
+  #root {
+    position: relative;
+    overflow: clip;
+  }
+
   body {
     background: var(--bg-app);
     color: var(--text);
