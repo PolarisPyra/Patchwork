@@ -583,7 +583,9 @@ export default function Chat({
       <div className="pointer-events-none absolute top-3 right-4 z-10 flex flex-col items-end gap-2 *:pointer-events-auto">
         {!isNew && thread && (
           <div className="flex items-center gap-2">
-            <FindField messages={thread.messages} onFind={setFind} />
+            {/* One search per chat: kept across chats, its place in the last chat's matches
+                jumped the next chat to an arbitrary match instead of its end. */}
+            <FindField key={thread.id} messages={thread.messages} onFind={setFind} />
             {project && (
               <button
                 className="btn rounded-[var(--radius)] border-border bg-panel px-3 text-[length:var(--fs-sm)] shadow-[0_1px_3px_rgba(0,0,0,0.12)] hover:bg-hover"
