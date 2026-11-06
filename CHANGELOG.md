@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.22] - 2026-11-06
+
+### Added
+
+- The vision model in Settings → Providers can now be a Claude Code or Codex model you're signed in to, not only an API provider's. Its empty choice now says "The chat's own model" instead of "Default", since that's where the images go.
+
 ## [26.11.21] - 2026-11-06
 
 ### Fixed
