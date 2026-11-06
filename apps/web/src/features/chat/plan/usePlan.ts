@@ -42,8 +42,9 @@ export function usePlan({
 }) {
   // The plan of the reply running now. Once that reply ends, finished or not, its plan stays a
   // moment and then folds away, so nothing looks under way when nothing is. Plans of replies that
-  // ended before the chat was opened are not shown.
-  const lastMessage = thread?.messages.at(-1);
+  // ended before the chat was opened are not shown. Queued messages wait after the reply, so they
+  // are skipped.
+  const lastMessage = thread?.messages.filter((m) => !m.queued).at(-1);
   const livePlanId =
     working &&
     lastMessage?.role === "assistant" &&
