@@ -30,6 +30,11 @@ pub(crate) async fn remove_api_provider(id: String) -> Res<()> {
 }
 
 #[tauri::command]
+pub(crate) async fn reveal_api_key(id: String) -> Res<Option<String>> {
+    blocking(move || patchwork_server::provider::api::config::stored_key(&id)).await
+}
+
+#[tauri::command]
 pub(crate) async fn fetch_api_models(
     query: patchwork_server::provider::api::config::ModelsQuery,
 ) -> Res<Vec<patchwork_server::provider::api::config::ApiModel>> {

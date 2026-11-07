@@ -309,6 +309,7 @@ pub fn run() {
             commands::models::list_api_providers,
             commands::models::save_api_provider,
             commands::models::remove_api_provider,
+            commands::models::reveal_api_key,
             commands::mcp::list_mcp_servers,
             commands::mcp::save_mcp_server,
             commands::mcp::remove_mcp_server,

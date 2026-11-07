@@ -253,6 +253,8 @@ export function ProviderForm({
   const saved = draft.id !== "";
   const [key, setKey] = useState("");
   const [showKey, setShowKey] = useState(false);
+  // The stored key, fetched when the eye first shows it. It is shown, not edited: Save keeps it.
+  const [savedKey, setSavedKey] = useState<string | null>(null);
   const [clearKey, setClearKey] = useState(false);
   const [useEnv, setUseEnv] = useState(draft.keyEnv !== null);
   const [advanced, setAdvanced] = useState(draft.headers.length > 0);
@@ -260,6 +262,17 @@ export function ProviderForm({
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const set = (patch: Partial<ApiProvider>) => setDraft({ ...draft, ...patch });
+
+  const toggleShowKey = async () => {
+    const show = !showKey;
+    setShowKey(show);
+    if (!show || !hasKey || key || savedKey !== null) return;
+    try {
+      setSavedKey((await api.revealApiKey(draft.id)) ?? "");
+    } catch (e) {
+      setError(errorText(e));
+    }
+  };
 
   // An environment variable replaces a saved key, so the saved one is removed.
   const keyChange = (): KeyChange =>
@@ -359,13 +372,14 @@ export function ProviderForm({
               className={`${INPUT} font-mono`}
               type={showKey ? "text" : "password"}
               aria-label="API key"
-              value={key}
+              value={key || savedKey || ""}
               placeholder={keyPlaceholder}
               autoFocus={!!draft.name && !hasKey}
               autoComplete="off"
               spellCheck={false}
               onChange={(e) => {
                 setKey(e.target.value);
+                setSavedKey(null);
                 setClearKey(false);
               }}
             />
@@ -374,7 +388,7 @@ export function ProviderForm({
               title={showKey ? "Hide key" : "Show key"}
               aria-label="Show key"
               aria-pressed={showKey}
-              onClick={() => setShowKey(!showKey)}
+              onClick={toggleShowKey}
             >
               {showKey ? <EyeSlashIcon size={15} /> : <EyeIcon size={15} />}
             </button>

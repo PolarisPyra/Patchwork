@@ -392,6 +392,14 @@ pub fn key(provider: &ApiProvider) -> Option<String> {
     Some(key)
 }
 
+/// The key Patchwork stored for a provider, for the settings to show when asked. An environment
+/// variable's value is not returned.
+pub fn stored_key(id: &str) -> Option<String> {
+    provider(id)
+        .filter(|p| p.key_store.is_some())
+        .and_then(|p| key(&p))
+}
+
 /// Models of every enabled provider, as `provider/model` ids.
 pub fn models() -> Vec<ModelOption> {
     providers()

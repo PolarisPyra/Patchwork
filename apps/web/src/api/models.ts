@@ -56,6 +56,8 @@ export const modelsApi = {
     }),
   removeApiProvider: (id: string) =>
     invoke<void>("remove_api_provider", { id }).then(apiProvidersChanged),
+  /** A provider's stored key, for the settings' eye button; null when it has none. */
+  revealApiKey: (id: string) => invoke<string | null>("reveal_api_key", { id }),
   /** The endpoint's own model list, which also checks the URL and key. A key typed but not saved
    * goes in `key`; otherwise the saved provider's key is used. */
   fetchApiModels: (query: {
