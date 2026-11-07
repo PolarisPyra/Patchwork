@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.26] - 2026-11-07
+
+### Changed
+
+- Installed agents now show their version without a leading v: "Ready · 26.11.24" instead of "Ready · v26.11.24", in Settings → Providers, the usage popup and onboarding.
+
+### Fixed
+
+- The eye button beside a provider's API key now shows the key you saved, in Settings → Providers. It used to leave the field empty.
+
 ## [26.11.25] - 2026-11-07
 
 ### Changed
