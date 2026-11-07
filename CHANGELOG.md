@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.28] - 2026-11-07
+
+### Added
+
+- A video opened in the file viewer now plays on a Video tab, in place of the Code and Diff tabs, which could not show it.
+
 ## [26.11.27] - 2026-11-07
 
 ### Changed
