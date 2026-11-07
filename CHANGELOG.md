@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.25] - 2026-11-07
+
+### Changed
+
+- The goal banner above the chat box now shows tokens and time the same way as the rest of the app, for example "19.4k tokens" and "3m 05s" instead of "19k tokens" and "3m 5s".
+
 ## [26.11.24] - 2026-11-06
 
 ### Fixed
