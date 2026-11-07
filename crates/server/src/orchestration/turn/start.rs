@@ -320,7 +320,9 @@ impl Runner {
         let mut args = provider::turn_args(agent, &spec);
         if agent == AgentKind::Claude {
             args.extend(crate::provider::claude::launch::launch_args(
-                &settings, &hooks,
+                &settings,
+                &hooks,
+                crate::orchestration::agent_instructions(&settings, AgentKind::Claude),
             ));
             args.extend(crate::provider::claude::launch::permission_args());
             args.extend(crate::provider::claude::launch::agents_args(&agents, &root));

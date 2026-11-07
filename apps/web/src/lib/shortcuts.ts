@@ -1,3 +1,4 @@
+import { isMac } from "~/api";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { COMMANDS, DEFAULT_RULES, type ShortcutPage } from "~/lib/shortcutDefaults";
 
@@ -211,7 +212,6 @@ export function keyFromEvent(event: KeyboardEvent): string | null {
   return parts.join("+");
 }
 
-const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 const KEY_NAMES: Record<string, string> = {
   escape: "Esc",
   arrowup: "Up",

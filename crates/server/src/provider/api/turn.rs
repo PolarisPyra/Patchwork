@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 
 use crate::orchestration::AgentEvent;
 use crate::provider::{AgentKind, AgentStatus, ProviderSlashCommand};
-use crate::threads::{PlanStep, Question, QuestionOption, StepStatus, TokenUsage};
+use crate::threads::{PlanStep, Question, QuestionOption, TokenUsage};
 use crate::permissions::Target;
 use crate::provider::{Image, Parsed, ToolStart, TurnSpec};
 use crate::provider::{mcp, file_touched, prompt, text_delta, thinking, tool_finished, tool_started};
@@ -172,11 +172,7 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
                 .flatten()
                 .map(|s| PlanStep {
                     text: s["text"].as_str().unwrap_or_default().into(),
-                    status: match s["status"].as_str() {
-                        Some("done" | "completed") => StepStatus::Done,
-                        Some("running" | "in_progress") => StepStatus::Running,
-                        _ => StepStatus::Pending,
-                    },
+                    status: crate::provider::step_status(s["status"].as_str()),
                 })
                 .collect();
             vec![Parsed::Event(AgentEvent::PlanUpdated {

@@ -9,7 +9,7 @@ use super::{dec, enc, err, json};
 use super::store::{Inner, Store};
 use crate::provider::AgentKind;
 use crate::scheduled::{RunOutcome, Schedule, ScheduledRun, ScheduledTask};
-use crate::system::{new_id, now_ms};
+use crate::system::now_ms;
 use crate::threads::AccessMode;
 
 /// How many runs each task keeps.
@@ -194,26 +194,10 @@ impl Store {
         }
     }
 
-    /// Adds a task, or replaces the one with its id. A task without an id is given one.
-    pub fn save_scheduled_task(&self, mut task: ScheduledTask) -> Result<ScheduledTask, String> {
-        if task.id.trim().is_empty() {
-            task.id = new_id();
-        }
-        if task.name.trim().is_empty() {
-            return Err("A scheduled task needs a name".into());
-        }
-        if task.prompt.trim().is_empty() {
-            return Err("A scheduled task needs a prompt".into());
-        }
-        let next = crate::scheduled::next_run_at(&task.schedule, chrono::Local::now());
-        if next.is_none() {
-            return Err("The schedule needs a time of day, as HH:MM".into());
-        }
-        // Saving a task reschedules it from now, so a change to the time takes effect at once.
-        task.next_run_at = if task.enabled { next } else { None };
+    /// Adds a task, or replaces the one with its id.
+    pub fn save_scheduled_task(&self, task: &ScheduledTask) -> Result<(), String> {
         let inner = self.lock();
-        save(&inner, &task)?;
-        Ok(task)
+        save(&inner, task)
     }
 
     pub fn remove_scheduled_task(&self, id: &str) -> Result<(), String> {

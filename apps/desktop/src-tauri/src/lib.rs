@@ -145,7 +145,6 @@ impl Notifier {
     }
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// How often a scheduled task is looked for. A tick that finds nothing to start does no work.
 const SCHEDULED_TICK: std::time::Duration = std::time::Duration::from_secs(30);
 
@@ -165,6 +164,7 @@ fn start_scheduled_tasks(server: Arc<Server>) {
         .unwrap_or_else(|e| log::warn!("scheduled tasks will not run: {e}"));
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())

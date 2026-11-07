@@ -12,12 +12,13 @@ use crate::settings::Settings;
 /// a conversation's system prompt on its first request and resumes with that record, so a prompt
 /// edited in Settings would never reach a chat already started; with the record off the prompt
 /// is built on each request, and the cache still holds it while it stays the same.
-pub fn launch_args(settings: &Settings, hooks: &[AgentHook]) -> Vec<String> {
+/// `instructions` is what is appended: Patchwork's instructions for Claude.
+pub fn launch_args(settings: &Settings, hooks: &[AgentHook], instructions: String) -> Vec<String> {
     let mut args = vec![
         "--system-prompt-snapshot".to_string(),
         "off".to_string(),
         "--append-system-prompt".to_string(),
-        crate::orchestration::agent_instructions(settings, AgentKind::Claude),
+        instructions,
     ];
     if let Some(plugin) = crate::skills::sync(settings, "claude") {
         write_hooks(&plugin.join("hooks").join("hooks.json"), hooks);

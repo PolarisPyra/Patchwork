@@ -1,5 +1,5 @@
 import { XIcon } from "@phosphor-icons/react";
-import { defaultTerminalSettings, type TerminalSettings } from "~/api";
+import { defaultTerminalSettings, isMac, type TerminalSettings } from "~/api";
 import {
   NumberField,
   SectionHeading,
@@ -9,8 +9,6 @@ import {
   TokenSwitch,
 } from "~/features/settings/controls";
 import type { PaneProps } from "~/features/settings/types";
-
-const isMacPlatform = /Mac|iPhone|iPad/.test(navigator.platform);
 
 /** How the integrated terminal starts, looks, and behaves. New terminals run the shell last picked on the panel's New terminal menu, else the user's. */
 export default function TerminalPane({ settings, updateSettings }: PaneProps) {
@@ -184,7 +182,7 @@ export default function TerminalPane({ settings, updateSettings }: PaneProps) {
           onChange={(altClickMovesCursor) => set({ altClickMovesCursor })}
         />
       </TokenRow>
-      {isMacPlatform && (
+      {isMac && (
         <TokenRow title="Option is Meta">
           <TokenSwitch
             label="Option is Meta"

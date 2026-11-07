@@ -1,6 +1,7 @@
 import type { AgentKind, Settings, TerminalSettings } from "~/api/types";
 
-const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+/** Whether this is a Mac (or an iPhone or iPad), going by the webview's platform. */
+export const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 const isLinux = /Linux/.test(navigator.platform);
 
 /** The terminal defaults, as `TerminalSettings::default` sets them. */

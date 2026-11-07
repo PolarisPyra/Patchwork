@@ -165,7 +165,7 @@ pub(super) fn todo_plan(name: &str, input: &Value, message_id: &str) -> Option<P
         .flatten()
         .map(|todo| PlanStep {
             text: todo["content"].as_str().unwrap_or_default().into(),
-            status: crate::provider::claude::claude_step_status(todo["status"].as_str()),
+            status: crate::provider::step_status(todo["status"].as_str()),
         })
         .collect();
     Some(Parsed::Event(AgentEvent::PlanUpdated {

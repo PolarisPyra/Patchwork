@@ -148,6 +148,16 @@ pub(crate) fn one_line(s: &str) -> String {
         .collect()
 }
 
+/// A plan step's status, however the agent spells it: `in_progress` (Claude, OpenCode),
+/// `inProgress` (Codex), `running` and `done` (Patchwork's own agent).
+pub(crate) fn step_status(status: Option<&str>) -> StepStatus {
+    match status {
+        Some("in_progress" | "inProgress" | "running") => StepStatus::Running,
+        Some("completed" | "done") => StepStatus::Done,
+        _ => StepStatus::Pending,
+    }
+}
+
 /// Strips the project root so paths are project-relative; other paths pass through.
 pub(super) fn relative(root: &str, path: &str) -> String {
     let root = root.trim_end_matches('/');

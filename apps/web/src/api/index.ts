@@ -25,7 +25,7 @@ import { updatesApi } from "~/api/updates";
 import { usageApi } from "~/api/usage";
 
 export type * from "~/api/types";
-export { DEFAULT_SETTINGS, defaultAgentOf, defaultTerminalSettings } from "~/api/defaults";
+export { DEFAULT_SETTINGS, defaultAgentOf, defaultTerminalSettings, isMac } from "~/api/defaults";
 export { AGENT_LABELS, SOURCE_LABELS, importSourcesFor } from "~/api/labels";
 export type { AgentsView, CliKind, CustomAgent } from "~/api/agents";
 export type { ComputerAction } from "~/api/computer";
@@ -38,6 +38,7 @@ export {
   type ApiProviderView,
   type KeyChange,
 } from "~/api/models";
+export { onFileDrop } from "~/api/files";
 export { onProjectChanged } from "~/api/projects";
 export type { SkillsView } from "~/api/skills";
 export { onAgentEvent } from "~/api/threads";

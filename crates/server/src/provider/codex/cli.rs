@@ -5,11 +5,12 @@
 use std::path::PathBuf;
 
 use crate::provider::cli_info::{self, InfoCommand};
-use crate::provider::{CodexFeature, CodexInfo, CodexModel};
+use crate::provider::{find_binary, located_or};
+use crate::provider::{AgentKind, CodexFeature, CodexInfo, CodexModel};
 
-/// The Codex CLI in use, if it is installed.
+/// The Codex CLI in use: the one the user located, else `codex` on PATH.
 pub fn binary() -> Option<PathBuf> {
-    crate::provider::codex_binary()
+    located_or(AgentKind::Codex, || find_binary("codex"))
 }
 
 /// Runs the Codex CLI with `args`. See `cli_info::run`.

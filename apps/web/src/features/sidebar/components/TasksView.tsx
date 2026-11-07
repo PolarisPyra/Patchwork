@@ -25,8 +25,7 @@ import {
   StarIcon,
   TrashIcon,
 } from "@phosphor-icons/react";
-import { api, type Thread } from "~/api";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { api, onFileDrop, type Thread } from "~/api";
 import ContextMenu, { type MenuItem } from "~/components/ContextMenu";
 import { useRowReorder } from "~/features/sidebar/useRowReorder";
 import { useStableCallback } from "~/hooks/useStableHandlers";
@@ -113,42 +112,17 @@ export default function TasksView({
   const projectsLabelRef = useRef<HTMLDivElement>(null);
   // True while folders from the file manager are dragged over the Projects section.
   const [folderDrop, setFolderDrop] = useState(false);
-  // Tauri hands dropped files over as paths (HTML drop events carry none), so drops are listened
-  // for on the webview and kept only when they land on the Projects section: from its label down.
+  // Dropped folders are kept only when they land on the Projects section: from its label down.
   useEffect(() => {
-    function overProjects(position: { x: number; y: number }) {
+    function overProjects({ x, y }: { x: number; y: number }) {
       const tree = treeRef.current;
       const label = projectsLabelRef.current;
       if (!tree || !label) return false;
-      // Positions are physical pixels; the rects are in CSS pixels.
-      const scale = window.devicePixelRatio;
-      const x = position.x / scale;
-      const y = position.y / scale;
       const r = tree.getBoundingClientRect();
       const top = Math.max(r.top, label.getBoundingClientRect().top);
       return x >= r.left && x <= r.right && y >= top && y <= r.bottom;
     }
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-    void getCurrentWebview()
-      .onDragDropEvent(({ payload }) => {
-        if (payload.type === "leave") {
-          setFolderDrop(false);
-        } else if (payload.type === "drop") {
-          setFolderDrop(false);
-          if (overProjects(payload.position)) onDropFolders(payload.paths);
-        } else {
-          setFolderDrop(overProjects(payload.position));
-        }
-      })
-      .then((fn) => {
-        if (cancelled) fn();
-        else unlisten = fn;
-      });
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
+    return onFileDrop(overProjects, setFolderDrop, onDropFolders);
   }, [onDropFolders]);
   // Set when a chat opens from the tree, so its composer does not take the focus from the tree;
   // false when the tree hands the focus to the chat, null when the tree has not said.

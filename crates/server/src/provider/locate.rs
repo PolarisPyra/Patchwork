@@ -41,11 +41,6 @@ pub(super) fn located_or(
     }
 }
 
-/// The Codex CLI in use: the one the user located, else `codex` on PATH.
-pub fn codex_binary() -> Option<PathBuf> {
-    located_or(AgentKind::Codex, || find_binary("codex"))
-}
-
 /// Directories searched when `which` cannot find the agent CLI on PATH.
 fn fallback_dirs() -> Vec<PathBuf> {
     let home = home_dir().unwrap_or_default();

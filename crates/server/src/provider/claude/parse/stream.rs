@@ -7,7 +7,7 @@ use crate::threads::BackgroundTask;
 use crate::system::now_ms;
 use crate::threads::PlanStep;
 use crate::provider::ProviderSlashCommand;
-use crate::threads::StepStatus;
+use crate::provider::step_status;
 use crate::threads::Refusal;
 use crate::threads::TaskStatus;
 use crate::threads::TokenUsage;
@@ -28,14 +28,6 @@ use super::super::PLAN_CAPTURED;
 use super::goal::goal_from_command;
 use super::requests::claude_control_request;
 use super::tasks::{claude_ended_status, claude_task_status, subagent_of, tool_result};
-
-pub(in crate::provider) fn claude_step_status(status: Option<&str>) -> StepStatus {
-    match status {
-        Some("in_progress") => StepStatus::Running,
-        Some("completed") => StepStatus::Done,
-        _ => StepStatus::Pending,
-    }
-}
 
 pub(super) fn claude_tool_use(
     block: &Value,
@@ -78,7 +70,7 @@ pub(super) fn claude_tool_use(
             .flatten()
             .map(|todo| PlanStep {
                 text: todo["content"].as_str().unwrap_or_default().into(),
-                status: claude_step_status(todo["status"].as_str()),
+                status: step_status(todo["status"].as_str()),
             })
             .collect();
         out.push(Parsed::Event(AgentEvent::PlanUpdated {

@@ -204,7 +204,8 @@ fn scheduled_tasks_survive_reopen() {
         created_at: 7,
         recent_runs: Vec::new(),
     };
-    let saved = store.save_scheduled_task(task).unwrap();
+    let saved = crate::scheduled::prepare(task).unwrap();
+    store.save_scheduled_task(&saved).unwrap();
     assert!(!saved.id.is_empty(), "a new task is given an id");
     assert!(saved.next_run_at.is_some(), "a saved task is scheduled");
     drop(store);
@@ -271,8 +272,8 @@ fn a_task_without_a_name_or_a_time_is_refused() {
         created_at: 0,
         recent_runs: Vec::new(),
     };
-    assert!(store.save_scheduled_task(task("", "09:00")).is_err());
-    assert!(store.save_scheduled_task(task("n", "nine")).is_err());
+    assert!(crate::scheduled::prepare(task("", "09:00")).is_err());
+    assert!(crate::scheduled::prepare(task("n", "nine")).is_err());
     assert!(store.scheduled_tasks().is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }

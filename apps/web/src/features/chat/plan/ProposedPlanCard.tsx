@@ -7,6 +7,7 @@ import { api } from "~/api";
 // so swapping it in moved the messages.
 import Markdown from "~/features/chat/markdown/Markdown";
 import { copyText } from "~/lib/clipboard";
+import { slugFileName } from "~/lib/util";
 
 /** The plan's first heading, which names it. */
 export function planTitle(markdown: string): string {
@@ -20,15 +21,6 @@ function planBody(markdown: string): string {
   const next = lines.findIndex((l) => l.trim() !== "");
   if (next !== -1 && /^\s{0,3}#{1,6}\s+summary\s*$/i.test(lines[next])) lines.splice(next, 1);
   return lines.join("\n").trim();
-}
-
-/** A file name from the title: lowercase words joined by dashes. */
-function planFileName(title: string): string {
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return `${slug || "plan"}.md`;
 }
 
 /**
@@ -63,7 +55,7 @@ export default function ProposedPlanCard({ markdown }: { markdown: string }) {
   async function download() {
     setMenu(false);
     const path = await save({
-      defaultPath: planFileName(title),
+      defaultPath: slugFileName(title, "plan"),
       filters: [{ name: "Markdown", extensions: ["md"] }],
     });
     if (path) await api.saveTextFile(path, `${markdown.trimEnd()}\n`);

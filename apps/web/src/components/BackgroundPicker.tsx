@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { ImageIcon, ProhibitIcon, XIcon } from "@phosphor-icons/react";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
-import { api, type BackgroundImage, type ChatBackground } from "~/api";
+import { api, onFileDrop, type BackgroundImage, type ChatBackground } from "~/api";
 import Spinner from "~/components/Spinner";
 import { useImageSrc } from "~/hooks/useImageSrc";
 import {
@@ -131,38 +130,17 @@ export default function BackgroundPicker({
     return () => clearTimeout(timer);
   }, [undo]);
 
-  // Tauri hands dropped files over as paths (HTML drop events carry none), so drops are listened
-  // for on the webview and kept only when they land on the picker.
+  // Dropped files are kept only when they land on the picker.
   useEffect(() => {
-    function over(position: { x: number; y: number }) {
-      const scale = window.devicePixelRatio;
-      const hit = document.elementFromPoint(position.x / scale, position.y / scale);
+    function over({ x, y }: { x: number; y: number }) {
+      const hit = document.elementFromPoint(x, y);
       return !!hit && !!root.current?.contains(hit);
     }
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-    void getCurrentWebview()
-      .onDragDropEvent(({ payload }) => {
-        if (payload.type === "leave") {
-          setDropping(false);
-        } else if (payload.type === "drop") {
-          setDropping(false);
-          if (over(payload.position) && payload.paths.some(isPicture)) {
-            const { add, importPaths } = addRef.current;
-            void add(() => importPaths(payload.paths));
-          }
-        } else {
-          setDropping(over(payload.position));
-        }
-      })
-      .then((fn) => {
-        if (cancelled) fn();
-        else unlisten = fn;
-      });
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
+    return onFileDrop(over, setDropping, (paths) => {
+      if (!paths.some(isPicture)) return;
+      const { add, importPaths } = addRef.current;
+      void add(() => importPaths(paths));
+    });
   }, []);
 
   // The choices are one stop for Tab; the arrow keys move between them and pick, as in any group

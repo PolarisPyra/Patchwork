@@ -1,5 +1,5 @@
 import { StarIcon } from "@phosphor-icons/react";
-import { apiProviderName, type AgentKind, type ModelOption } from "~/api";
+import { apiProviderName, isMac, type AgentKind, type ModelOption } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
 
 const PROVIDER_NAMES: Record<AgentKind, string> = {
@@ -91,7 +91,7 @@ export default function ModelRow({
       </span>
       {index !== null && index < 9 && (
         <kbd className="flex-none rounded-[4px] bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-1 py-0.5 text-[12px] leading-4 text-fg-muted [font-family:inherit]">
-          {navigator.platform.includes("Mac") ? "Cmd" : "Ctrl"}+{index + 1}
+          {isMac ? "Cmd" : "Ctrl"}+{index + 1}
         </kbd>
       )}
       <button

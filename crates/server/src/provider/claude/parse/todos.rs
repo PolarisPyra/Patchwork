@@ -8,7 +8,7 @@ use serde_json::Value;
 use crate::threads::PlanStep;
 use crate::threads::StepStatus;
 
-use super::claude_step_status;
+use crate::provider::step_status;
 
 /// One task: the id Claude gave it, once its `TaskCreate` result names it, and its step.
 struct Todo {
@@ -59,7 +59,7 @@ impl TaskList {
                     id: None,
                     step: PlanStep {
                         text: input["subject"].as_str().unwrap_or_default().into(),
-                        status: claude_step_status(None),
+                        status: step_status(None),
                     },
                 });
                 true
@@ -80,7 +80,7 @@ impl TaskList {
                 }
                 let step = &mut self.todos[index].step;
                 if let Some(status) = input["status"].as_str() {
-                    step.status = claude_step_status(Some(status));
+                    step.status = step_status(Some(status));
                 }
                 if let Some(subject) = input["subject"].as_str() {
                     step.text = subject.into();

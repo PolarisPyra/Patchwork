@@ -17,6 +17,16 @@ pub enum InfoCommand {
 }
 
 impl InfoCommand {
+    /// The command a Settings pane names: `doctor`, `mcp` or `plugins`.
+    pub fn named(name: &str) -> Option<Self> {
+        match name {
+            "doctor" => Some(InfoCommand::Doctor),
+            "mcp" => Some(InfoCommand::McpList),
+            "plugins" => Some(InfoCommand::PluginList),
+            _ => None,
+        }
+    }
+
     fn args(self) -> &'static [&'static str] {
         match self {
             InfoCommand::Doctor => &["doctor"],

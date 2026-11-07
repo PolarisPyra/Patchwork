@@ -1,3 +1,4 @@
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { invoke } from "~/api/invoke";
 import type { FileMedia, TurnFile, TurnTrees } from "~/api/types";
 
@@ -25,3 +26,44 @@ export const filesApi = {
   /** Opens a web or mail link in the default browser or mail app. */
   openUrl: (url: string) => invoke<void>("open_url", { url }),
 };
+
+type Point = { x: number; y: number };
+
+/**
+ * Follows files dragged from the file manager over the window. Tauri hands dropped files over as
+ * paths (HTML drop events carry none), so drops are listened for on the webview. `over` says
+ * whether a point, in CSS pixels, is on the target; `onHover` hears whether a drag is over it, and
+ * `onDrop` gets the files dropped on it. Returns the stop.
+ */
+export function onFileDrop(
+  over: (point: Point) => boolean,
+  onHover: (hovering: boolean) => void,
+  onDrop: (paths: string[], point: Point) => void,
+): () => void {
+  let cancelled = false;
+  let unlisten: (() => void) | undefined;
+  void getCurrentWebview()
+    .onDragDropEvent(({ payload }) => {
+      if (payload.type === "leave") {
+        onHover(false);
+        return;
+      }
+      // Positions are physical pixels; the page's are CSS pixels.
+      const scale = window.devicePixelRatio;
+      const point = { x: payload.position.x / scale, y: payload.position.y / scale };
+      if (payload.type === "drop") {
+        onHover(false);
+        if (over(point)) onDrop(payload.paths, point);
+      } else {
+        onHover(over(point));
+      }
+    })
+    .then((fn) => {
+      if (cancelled) fn();
+      else unlisten = fn;
+    });
+  return () => {
+    cancelled = true;
+    unlisten?.();
+  };
+}

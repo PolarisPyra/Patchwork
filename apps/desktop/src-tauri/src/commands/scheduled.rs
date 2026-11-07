@@ -10,7 +10,7 @@ pub(crate) fn list_scheduled_tasks(server: Srv) -> Vec<ScheduledTask> {
 /// Adds or replaces a task, and returns it as saved, with its next run worked out.
 #[tauri::command]
 pub(crate) fn save_scheduled_task(server: Srv, task: ScheduledTask) -> Res<ScheduledTask> {
-    server.store.save_scheduled_task(task)
+    server.save_scheduled_task(task)
 }
 
 #[tauri::command]

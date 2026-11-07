@@ -13,7 +13,6 @@ pub use input::{
 use input::PLAN_CAPTURED;
 pub use parse::{subagent_events, SHELL_TASK, parse, goal_outcome, TaskList};
 pub(crate) use parse::claude_target;
-pub(super) use parse::claude_step_status;
 
 #[cfg(test)]
 pub(crate) mod tests;

@@ -16,7 +16,6 @@ use crate::permissions::PermissionKind;
 use crate::threads::Question;
 use crate::threads::QuestionOption;
 use crate::threads::Refusal;
-use crate::threads::StepStatus;
 use crate::provider::file_touched;
 use crate::provider::GoalUpdate;
 use crate::provider::one_line;
@@ -33,14 +32,6 @@ use super::{
     begin, goal_of, goal_reply, GOAL_REQUEST, GOAL_SETUP, INTERRUPT_REQUEST, SKILLS_REQUEST,
     STEER_REQUEST, thread_params, THREAD_REQUEST, TURN_REQUEST,
 };
-
-fn plan_step_status(status: Option<&str>) -> StepStatus {
-    match status {
-        Some("inProgress") => StepStatus::Running,
-        Some("completed") => StepStatus::Done,
-        _ => StepStatus::Pending,
-    }
-}
 
 /// Maps `item/started` / `item/completed`.
 fn codex_item(
@@ -505,7 +496,7 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                 .flatten()
                 .map(|step| PlanStep {
                     text: step["step"].as_str().unwrap_or_default().into(),
-                    status: plan_step_status(step["status"].as_str()),
+                    status: crate::provider::step_status(step["status"].as_str()),
                 })
                 .collect();
             out.push(Parsed::Event(AgentEvent::PlanUpdated {

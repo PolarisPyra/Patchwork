@@ -27,6 +27,15 @@ pub fn enabled() -> bool {
     ENABLED.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// Refuses while computer use is off, so a stray call cannot look at the screen or act on it.
+pub fn ensure_enabled() -> Result<(), String> {
+    if enabled() {
+        Ok(())
+    } else {
+        Err("Computer use is off in Settings → Permissions".into())
+    }
+}
+
 /// A screenshot, as a data URL the webview can show, and the screen's size.
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export, export_to = "computer.ts")]

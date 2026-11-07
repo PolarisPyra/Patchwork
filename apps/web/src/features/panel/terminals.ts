@@ -2,7 +2,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type ITerminalOptions, type ITheme } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { useSyncExternalStore } from "react";
-import { api, type TerminalFrame, type TerminalSettings } from "~/api";
+import { api, isMac, type TerminalFrame, type TerminalSettings } from "~/api";
 import { boundCommand } from "~/lib/shortcuts";
 import { copyText } from "~/lib/clipboard";
 
@@ -39,8 +39,6 @@ const SKIP_SHELL = new Set([
   "palette.toggle",
   "settings.open",
 ]);
-
-const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 
 /** The ANSI colors for the dark and light themes. */
 const ANSI = {

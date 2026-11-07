@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { api, type Attachment } from "~/api";
+import { api, onFileDrop, type Attachment } from "~/api";
 import {
   base64Of,
   mentionFor,
@@ -159,44 +158,17 @@ export function useComposerDraft({
     }
   }
 
-  // Tauri hands dropped files over as paths (HTML drop events carry none), so drops are
-  // listened for on the webview and kept only when they land on the chat.
+  // Dropped files are kept only when they land on the chat.
   useEffect(() => {
-    // Positions are physical pixels; the chat's rect is in CSS pixels.
-    function cssPoint(position: { x: number; y: number }) {
-      const scale = window.devicePixelRatio;
-      return { x: position.x / scale, y: position.y / scale };
-    }
     // What is drawn at the point decides, so a drop on a dialog over the chat stays the dialog's.
-    function overChat(position: { x: number; y: number }) {
-      const { x, y } = cssPoint(position);
+    function overChat({ x, y }: { x: number; y: number }) {
       const hit = document.elementFromPoint(x, y);
       return !!hit && !!rootRef.current?.contains(hit);
     }
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-    void getCurrentWebview()
-      .onDragDropEvent(({ payload }) => {
-        if (payload.type === "leave") {
-          setDropping(false);
-        } else if (payload.type === "drop") {
-          setDropping(false);
-          if (overChat(payload.position)) {
-            const mention = dropMentions.current?.(cssPoint(payload.position)) ?? undefined;
-            void attach(payload.paths, mention);
-          }
-        } else {
-          setDropping(overChat(payload.position));
-        }
-      })
-      .then((fn) => {
-        if (cancelled) fn();
-        else unlisten = fn;
-      });
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
+    return onFileDrop(overChat, setDropping, (paths, point) => {
+      const mention = dropMentions.current?.(point) ?? undefined;
+      void attach(paths, mention);
+    });
     // `attach` only reads refs and stable setters, so the listener set up once sees the current
     // draft.
   }, []);

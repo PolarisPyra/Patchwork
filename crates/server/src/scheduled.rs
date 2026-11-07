@@ -13,7 +13,7 @@ use ts_rs::TS;
 use crate::orchestration::{AgentEvent, AgentEventEnvelope};
 use crate::provider::AgentKind;
 use crate::scheduled;
-use crate::system::now_ms;
+use crate::system::{new_id, now_ms};
 use crate::threads::{AccessMode, NewThread, Thread};
 use crate::Server;
 
@@ -197,6 +197,13 @@ impl Server {
         Ok(thread)
     }
 
+    /// Adds a task or replaces the one with its id, and returns it as saved. See `prepare`.
+    pub fn save_scheduled_task(&self, task: ScheduledTask) -> Result<ScheduledTask, String> {
+        let task = prepare(task)?;
+        self.store.save_scheduled_task(&task)?;
+        Ok(task)
+    }
+
     /// Starts one scheduled task now, whatever its schedule says.
     pub fn run_scheduled_task(self: &Arc<Self>, id: &str) -> Result<Thread, String> {
         let task = self
@@ -356,6 +363,26 @@ pub fn next_run_at(schedule: &Schedule, now: DateTime<Local>) -> Option<i64> {
                 .earliest()
         })
         .map(|at| at.timestamp_millis())
+}
+
+/// `task` as it is saved: given an id if it has none, checked, and rescheduled from now, so a
+/// change to the time takes effect at once.
+pub fn prepare(mut task: ScheduledTask) -> Result<ScheduledTask, String> {
+    if task.id.trim().is_empty() {
+        task.id = new_id();
+    }
+    if task.name.trim().is_empty() {
+        return Err("A scheduled task needs a name".into());
+    }
+    if task.prompt.trim().is_empty() {
+        return Err("A scheduled task needs a prompt".into());
+    }
+    let next = next_run_at(&task.schedule, Local::now());
+    if next.is_none() {
+        return Err("The schedule needs a time of day, as HH:MM".into());
+    }
+    task.next_run_at = if task.enabled { next } else { None };
+    Ok(task)
 }
 
 /// A one-line description of the schedule for a list row, e.g. `Weekdays at 09:00`.

@@ -48,6 +48,15 @@ export function dirName(path: string): string {
   return i === -1 ? "" : path.slice(0, i);
 }
 
+/** A Markdown file name from a title: lowercase words joined by dashes, else `fallback`. */
+export function slugFileName(title: string, fallback: string): string {
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${slug || fallback}.md`;
+}
+
 /** A path under the person's home folder, written from `~` so it fits in a settings row. */
 export function tildify(path: string): string {
   return path.replace(/^(\/home\/[^/]+|\/Users\/[^/]+|[A-Za-z]:\\Users\\[^\\]+)/, "~");

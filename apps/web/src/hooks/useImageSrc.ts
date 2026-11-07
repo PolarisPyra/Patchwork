@@ -12,6 +12,18 @@ export function forgetPreview(path: string): void {
 }
 
 /**
+ * The webview URL for an image file, once the backend has allowed it. Asks the backend first,
+ * since the asset scope is not kept across restarts.
+ */
+export function previewSrc(path: string): Promise<string> {
+  if (allowed.has(path)) return Promise.resolve(convertFileSrc(path));
+  return api.allowPreview(path).then(() => {
+    allowed.add(path);
+    return convertFileSrc(path);
+  });
+}
+
+/**
  * The webview URL for an image attachment, or null for other kinds and while it loads.
  * Asks the backend to allow the file first, since the asset scope is not kept across restarts.
  */
@@ -36,10 +48,9 @@ export function useImageSrc(path: string | null): string | null {
       return;
     }
     let cancelled = false;
-    api.allowPreview(path).then(
-      () => {
-        allowed.add(path);
-        if (!cancelled) setShown({ path, src: convertFileSrc(path) });
+    previewSrc(path).then(
+      (src) => {
+        if (!cancelled) setShown({ path, src });
       },
       () => {},
     );

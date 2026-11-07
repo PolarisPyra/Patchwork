@@ -1,6 +1,6 @@
 import { save } from "@tauri-apps/plugin-dialog";
 import { AGENT_LABELS, api, type Message, type Thread } from "~/api";
-import { displayTitle } from "~/lib/util";
+import { displayTitle, slugFileName } from "~/lib/util";
 
 /** A reply as Markdown: its text and plans, with each tool call as a list line. */
 function replyMarkdown(msg: Message): string {
@@ -35,20 +35,11 @@ function threadMarkdown(thread: Thread): string {
   return `${out.join("\n\n")}\n`;
 }
 
-/** A file name from the title: lowercase words joined by dashes. */
-function fileName(title: string): string {
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return `${slug || "chat"}.md`;
-}
-
 /** Asks where to save a thread, then writes its transcript there as Markdown. */
 export async function exportThread(id: string): Promise<void> {
   const thread = await api.getThread(id);
   const path = await save({
-    defaultPath: fileName(displayTitle(thread.title)),
+    defaultPath: slugFileName(displayTitle(thread.title), "chat"),
     filters: [{ name: "Markdown", extensions: ["md"] }],
   });
   if (path) await api.saveTextFile(path, threadMarkdown(thread));

@@ -11,8 +11,7 @@ import StarterKit from "@tiptap/starter-kit";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { type EditorState, Plugin, Selection, TextSelection } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { api } from "~/api";
+import { previewSrc } from "~/hooks/useImageSrc";
 import CodeBlockNodeView from "~/features/chat/markdown/CodeBlockNodeView";
 import { codeHighlightPlugin } from "~/features/chat/lib/codeHighlight";
 import { ChipKeys } from "~/features/chat/lib/composerChips";
@@ -293,8 +292,8 @@ const InlineImage = Node.create({
       img.alt = "";
       img.className = "h-4 w-4 flex-none rounded-[2px] object-cover";
       dom.append(img, node.attrs.label);
-      api.allowPreview(node.attrs.id).then(
-        () => (img.src = convertFileSrc(node.attrs.id)),
+      previewSrc(node.attrs.id).then(
+        (src) => (img.src = src),
         () => img.remove(),
       );
       return { dom };
