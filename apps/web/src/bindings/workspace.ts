@@ -15,7 +15,7 @@ export type FileMedia = { path: string, absolute: string, size: number, kind: Pr
 /**
  * How a file a reply produced is shown.
  */
-export type PreviewKind = "image" | "text" | "other";
+export type PreviewKind = "image" | "video" | "text" | "other";
 
 /**
  * A settled burst of file changes in the watched project, with git's state after it.

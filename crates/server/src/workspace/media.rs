@@ -22,6 +22,8 @@ const MAX_MEDIA_PATHS: usize = 50;
 pub enum PreviewKind {
     /// A thumbnail, for an image a webview draws within `MAX_PREVIEW_BYTES`.
     Image,
+    /// A player, for a video a webview plays. It streams, so it has no size cap.
+    Video,
     /// Source or config text. The diff list keeps these, so they get no card.
     Text,
     /// A card with the file's size and type.
@@ -48,6 +50,11 @@ fn is_previewable_image(ext: &str) -> bool {
     )
 }
 
+/// Videos a webview plays, through GStreamer on Linux.
+fn is_playable_video(ext: &str) -> bool {
+    matches!(ext, "mp4" | "m4v" | "webm" | "mov" | "ogv" | "mkv")
+}
+
 const SOURCE_TEXT: &[&str] = &[
     "rs", "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "go", "java", "kt", "swift", "c", "h",
     "cc", "cpp", "hpp", "cs", "rb", "php", "sh", "css", "scss", "json", "toml", "yaml", "yml",
@@ -68,6 +75,8 @@ fn preview_kind(rel: &str, size: u64) -> PreviewKind {
         } else {
             PreviewKind::Other
         }
+    } else if is_playable_video(&ext) {
+        PreviewKind::Video
     } else if SOURCE_TEXT.contains(&ext.as_str()) {
         PreviewKind::Text
     } else {

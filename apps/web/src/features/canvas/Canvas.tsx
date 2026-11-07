@@ -18,7 +18,7 @@ import { useFileMedia } from "~/hooks/useFileMedia";
 import { copyText } from "~/lib/clipboard";
 import { baseName, errorText } from "~/lib/util";
 
-export type CanvasTab = "plan" | "code" | "diff" | "image";
+export type CanvasTab = "plan" | "code" | "diff" | "image" | "video";
 
 export interface CanvasProps {
   projectId: string;
@@ -59,13 +59,13 @@ export default function Canvas({
   const [copied, setCopied] = useState(false);
 
   const key = `${projectId}\u0000${path ?? ""}`;
-  // An image gets an Image tab in place of Code and Diff, as the backend judges what may be
-  // previewed, and opens on it from either.
+  // An image gets an Image tab and a video a Video tab in place of Code and Diff, as the backend
+  // judges what may be previewed, and each opens on it from either.
   const media = useFileMedia(projectId, path ? [path] : []);
   const shown = media?.find((m) => m.path === path);
-  const image = shown?.kind === "image";
-  const activeTab: CanvasTab = path === null ? "plan" : image && tab !== "plan" ? "image" : tab;
-  const src = useImageSrc(shown?.kind === "image" ? shown.absolute : null);
+  const preview = shown?.kind === "image" || shown?.kind === "video" ? shown.kind : null;
+  const activeTab: CanvasTab = path === null ? "plan" : preview && tab !== "plan" ? preview : tab;
+  const src = useImageSrc(preview ? (shown?.absolute ?? null) : null);
 
   useEffect(() => {
     setTab(initialTab ?? (path ? "code" : "plan"));
@@ -146,10 +146,10 @@ export default function Canvas({
 
   const tabs: { id: CanvasTab; label: string; count: number }[] = !path
     ? [{ id: "plan", label: "Plan", count: planCount }]
-    : image
+    : preview
       ? [
           { id: "plan", label: "Plan", count: planCount },
-          { id: "image", label: "Image", count: 0 },
+          { id: preview, label: preview === "image" ? "Image" : "Video", count: 0 },
         ]
       : [
           { id: "plan", label: "Plan", count: planCount },
@@ -205,6 +205,21 @@ export default function Canvas({
       return (
         <div className="grid h-full place-items-center p-4">
           {src && <img src={src} alt={name} className="max-h-full max-w-full object-contain" />}
+        </div>
+      );
+    }
+    if (activeTab === "video") {
+      return (
+        <div className="grid h-full place-items-center p-4">
+          {src && (
+            <video
+              src={src}
+              controls
+              preload="metadata"
+              aria-label={name}
+              className="max-h-full max-w-full"
+            />
+          )}
         </div>
       );
     }
