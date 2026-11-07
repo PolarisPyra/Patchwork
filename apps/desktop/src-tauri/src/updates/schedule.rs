@@ -30,8 +30,12 @@ fn check_every(app: &AppHandle) -> Duration {
     Duration::from_secs(u64::from(minutes.clamp(10, 60)) * 60)
 }
 
-/// Starts the background checks.
+/// Starts the background checks. A dev build runs its checkout's version, which is behind the latest
+/// release until it is pulled, so it never checks on its own; Settings can still check.
 pub fn start(app: &AppHandle) {
+    if cfg!(debug_assertions) {
+        return;
+    }
     let app = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(FIRST_CHECK);
