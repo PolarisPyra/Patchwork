@@ -193,7 +193,7 @@ function StatusBadge({ probe }: { probe: AgentProbe }) {
   if (!status.signedIn) return <span className={`${BADGE} badge-danger`}>Not signed in</span>;
   return (
     <span className={`${BADGE} badge-success`}>
-      {status.version ? `Ready · v${status.version}` : "Ready"}
+      {status.version ? `Ready · ${status.version}` : "Ready"}
     </span>
   );
 }

@@ -122,5 +122,5 @@ export function describeAgent(status: AgentStatus | null | undefined): string {
   if (status === null) return "Unavailable";
   if (!status.installed) return status.detail || "Not installed";
   const state = status.signedIn ? "Ready" : "Sign-in required";
-  return status.version ? `${state} · v${status.version}` : state;
+  return status.version ? `${state} · ${status.version}` : state;
 }
