@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.27] - 2026-11-07
+
+### Changed
+
+- The version chip at the top of the window shows the version without a leading v, as 26.11.26 instead of v26.11.26.
+
 ## [26.11.26] - 2026-11-07
 
 ### Changed
