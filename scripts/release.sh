@@ -367,7 +367,11 @@ ci_build() {
   # A tag pushed without `scripts/release.sh` still builds with its own version.
   if [[ -n "${RELEASE_TAG:-}" ]]; then set_version "${RELEASE_TAG#v}"; fi
   case "$platform" in
-    linux) tauri_build appimage ;;
+    # The AppImage bundles GStreamer, which WebKit plays video and audio with, so it carries the
+    # runner's plugins too: the user's own, built for a newer GStreamer, crash the web process.
+    linux)
+      tauri_build appimage --config '{"bundle":{"linux":{"appimage":{"bundleMediaFramework":true}}}}'
+      ;;
     # Built on Linux with cargo-xwin, which compiles it in half the time a Windows runner takes.
     windows) tauri_build nsis --runner cargo-xwin --target "$WINDOWS_TARGET" ;;
     macos)
