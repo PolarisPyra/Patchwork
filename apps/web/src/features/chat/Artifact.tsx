@@ -149,6 +149,85 @@ const ArtifactFrame = memo(function ArtifactFrame({ code, lang }: { code: string
   );
 });
 
+/** What a lone video artifact plays. */
+interface LoneVideo {
+  src: string | null;
+  sources: { src: string; type: string | null }[];
+  poster: string | null;
+  loop: boolean;
+  /** Only a muted video starts on its own, so opening a chat never plays sound. */
+  autoPlay: boolean;
+}
+
+/**
+ * The video an artifact consists of, when it is nothing but one `<video>` with its sources. The
+ * parse is inert: it runs no script and loads nothing.
+ */
+function loneVideo(code: string): LoneVideo | null {
+  const doc = new DOMParser().parseFromString(code, "text/html");
+  const video = doc.body.firstElementChild;
+  if (doc.head.childElementCount > 0 || !(video instanceof HTMLVideoElement)) return null;
+  const blank = (node: Node) => node.nodeType === Node.TEXT_NODE && !node.textContent?.trim();
+  if (![...doc.body.childNodes].every((node) => node === video || blank(node))) return null;
+  if ([...video.children].some((child) => !["SOURCE", "TRACK"].includes(child.tagName))) {
+    return null;
+  }
+  return {
+    src: video.getAttribute("src"),
+    sources: [...video.querySelectorAll("source[src]")].map((s) => ({
+      src: s.getAttribute("src") ?? "",
+      type: s.getAttribute("type"),
+    })),
+    poster: video.getAttribute("poster"),
+    loop: video.hasAttribute("loop"),
+    autoPlay: video.hasAttribute("autoplay") && video.hasAttribute("muted"),
+  };
+}
+
+/** A lone video artifact, as a player the size of the video rather than a page-wide frame. */
+const VideoArtifact = memo(function VideoArtifact({
+  video,
+  label,
+}: {
+  video: LoneVideo;
+  label: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div role="alert" className="px-3 py-2.5 text-[length:var(--fs-sm)] text-fg-muted">
+        This video could not be played.
+      </div>
+    );
+  }
+  const last = video.sources.length - 1;
+  return (
+    <video
+      controls
+      preload="metadata"
+      playsInline
+      src={video.src ?? undefined}
+      poster={video.poster ?? undefined}
+      loop={video.loop}
+      muted={video.autoPlay}
+      autoPlay={video.autoPlay}
+      aria-label={label}
+      className="block max-h-[480px] max-w-full bg-black"
+      onError={() => setFailed(true)}
+    >
+      {/* A `<source>` reports its own error; the last one failing means none could play. */}
+      {video.sources.map((source, i) => (
+        <source
+          key={source.src}
+          src={source.src}
+          type={source.type ?? undefined}
+          onError={i === last ? () => setFailed(true) : undefined}
+        />
+      ))}
+    </video>
+  );
+});
+
 /** A diagram or artifact block, with a toggle back to its source. */
 export default function Artifact({
   lang,
@@ -162,9 +241,15 @@ export default function Artifact({
   const name = lang.trim().toLowerCase();
   const [showCode, setShowCode] = useState(false);
   const diagram = name === DIAGRAM;
+  const video = useMemo(
+    () => (diagram || name === "svg" ? null : loneVideo(code)),
+    [code, diagram, name],
+  );
+  // A video's card fits the video, so it shows no empty page beside or below it.
+  const fit = video && !showCode ? " w-fit min-w-64 max-w-full" : "";
   return (
     <div
-      className="my-2 overflow-hidden rounded-[var(--radius)] border border-border bg-panel"
+      className={`my-2 overflow-hidden rounded-[var(--radius)] border border-border bg-panel${fit}`}
       data-artifact={name}
       data-artifact-source={code}
     >
@@ -192,6 +277,12 @@ export default function Artifact({
         </pre>
       ) : diagram ? (
         <Mermaid code={code} />
+      ) : video ? (
+        <VideoArtifact
+          key={[video.src, ...video.sources.map((s) => s.src)].join("\n")}
+          video={video}
+          label={title || "Video"}
+        />
       ) : (
         <ArtifactFrame code={code} lang={name} />
       )}
