@@ -114,7 +114,7 @@ function Toolbar({ project, projects, onSelectProject, onOpenFolder }: ToolbarPr
       </div>
       {version && (
         <span className="ml-auto flex-none rounded-[var(--radius-sm)] border border-border bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-2 py-px text-[length:var(--fs-xs)] leading-4 text-fg-muted tabular-nums">
-          v{version}
+          {version}
         </span>
       )}
     </header>
