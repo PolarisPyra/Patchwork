@@ -1,6 +1,6 @@
 {
   "name": "@patchwork/monorepo",
-  "version": "26.11.28",
+  "version": "26.11.29",
   "license": "MIT",
   "private": true,
   "type": "module",

@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.29] - 2026-11-07
+
+### Changed
+
+- A chat artifact that is just a video now shows as a player the size of the video, instead of a full-width white page with a small black box. A video that can't load says so instead of showing an empty player.
+
 ## [26.11.28] - 2026-11-07
 
 ### Added
