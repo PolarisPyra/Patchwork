@@ -3,6 +3,25 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.30] - 2026-11-08
+
+### Added
+
+- The window title now shows the open thread's title, as Patchwork - <title>.
+- The Changes view in the sidebar is now Source Control: commit with your own or a written message, push, open a pull request, and browse the branch's history in a graph that marks unpushed commits and the agent that made each one. When a pull request has failed checks or comments, Send to agent passes them to the task that wrote the code, merge conflicts get a Resolve with agent button, and a reply's changes can be undone from the commit they went into.
+- A project's right-click menu in the sidebar, and the command palette, can now start a new task in a git worktree: a separate copy of the project on its own branch, listed as a project of its own, so the task's edits stay apart from your other tasks. Removing that project removes the copy, and Patchwork refuses while it has changes that aren't committed; the branch and its commits stay.
+- A file's Diff tab now has Stage, Unstage and Discard buttons on each change, so you can keep part of a file's edits and undo the rest, and arrows that jump to the previous or next change. Select lines, or press a change's Note button, to leave a note under them; Send review then passes all your notes, with the lines they are about, to the task as one message.
+
+### Changed
+
+- The selected tab above a file (Plan, Code or Diff) is now gray with white text instead of blue, and its count stays readable on it, which looks better on the OLED theme.
+
+### Fixed
+
+- The Codex and OpenCode logos now show on the dark and OLED themes, where they were black on a dark background.
+- The usage rings in the usage popover now show their full circle on the OLED theme, where the empty part was invisible.
+- A new window now opens in your theme right away, instead of flashing the default theme until settings load.
+
 ## [26.11.29] - 2026-11-08
 
 ### Added
