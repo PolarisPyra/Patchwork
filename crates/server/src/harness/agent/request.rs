@@ -3,7 +3,7 @@
 use std::borrow::Cow;
 use std::io::{BufRead, BufReader, Read};
 use std::sync::mpsc::{self, RecvTimeoutError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use serde::ser::SerializeSeq;
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -25,11 +25,24 @@ const MAX_BACKOFF: u64 = 30;
 pub(super) struct StreamError {
     message: String,
     shown: bool,
+    /// The watchdog stopped a reply stuck in a loop, which sending again would repeat.
+    stopped: bool,
 }
 
 /// The longest gap between two lines of a streamed reply before it counts as stalled. Endpoints
 /// that queue or think send keep-alive comments, which count as lines.
 const STREAM_IDLE: Duration = Duration::from_secs(180);
+
+/// How much a local model may reason without answering or calling a tool before its reply is
+/// stopped: a reasoning loop holds the server until something stops it.
+const MAX_REASONING: usize = 128 * 1024;
+
+/// A reply is checked for a loop each time it grows by this much.
+const LOOP_STEP: usize = 1024;
+/// The shortest and longest stretch of text a loop repeats.
+const LOOP_UNIT: std::ops::RangeInclusive<usize> = 64..=1024;
+/// Times in a row a stretch has to repeat at the end of the reply.
+const LOOP_TIMES: usize = 8;
 
 /// Why a request failed: some failures are fixed by making the conversation smaller.
 pub(super) enum Failure {
@@ -151,6 +164,8 @@ pub(super) struct Reply {
     pub(super) context: u64,
     /// The reply stopped at the model's output limit, so its text or its last call is cut off.
     pub(super) cut_off: bool,
+    /// The watchdog stopped the reply, which was stuck in a loop.
+    runaway: bool,
 }
 
 impl Reply {
@@ -167,11 +182,56 @@ pub(super) struct Call {
     pub(super) arguments: String,
 }
 
+/// Spots a reply stuck in a loop: the same 64 to 1024 bytes at least 8 times in a row at its end,
+/// found at two checks 1 KB apart, so a list or table that repeats for a moment is left alone.
+#[derive(Default)]
+struct LoopWatch {
+    checked: usize,
+    hits: u32,
+}
+
+impl LoopWatch {
+    fn looping(&mut self, text: &str) -> bool {
+        if text.len() < self.checked + LOOP_STEP {
+            return false;
+        }
+        self.checked = text.len();
+        self.hits = if repeats(text.as_bytes()) {
+            self.hits + 1
+        } else {
+            0
+        };
+        self.hits >= 2
+    }
+}
+
+/// Whether `text` ends in one stretch repeated `LOOP_TIMES` times: the end shifted by the
+/// stretch's length matches itself.
+fn repeats(text: &[u8]) -> bool {
+    LOOP_UNIT.into_iter().any(|unit| {
+        let span = unit * LOOP_TIMES;
+        if text.len() < span {
+            return false;
+        }
+        let tail = &text[text.len() - span..];
+        // The last two stretches first, which rules out nearly every length cheaply.
+        tail[span - unit..] == tail[span - 2 * unit..span - unit]
+            && tail[unit..] == tail[..span - unit]
+    })
+}
+
+/// How fast a request answered: the time to its first token, and its output tokens per second
+/// from then on.
+struct Speed {
+    first_token_ms: u64,
+    output_per_second: Option<u64>,
+}
+
 /// Reports a request's tokens. Cache hits are OpenAI's and OpenRouter's cached-token details,
 /// DeepSeek's hit count, or Kimi's top-level count; OpenRouter also counts the tokens a request
 /// wrote to the cache. The prompt's count includes both. Returns the tokens of the request and
 /// its reply.
-fn emit_usage(usage: &Value) -> u64 {
+fn emit_usage(usage: &Value, speed: Option<&Speed>) -> u64 {
     let count = |v: &Value| v.as_u64().unwrap_or(0);
     let prompt = count(&usage["prompt_tokens"]);
     let cached = usage["prompt_tokens_details"]["cached_tokens"]
@@ -188,6 +248,8 @@ fn emit_usage(usage: &Value) -> u64 {
         "cacheWrite": written,
         "output": count(&usage["completion_tokens"]),
         "context": prompt,
+        "firstTokenMs": speed.map(|s| s.first_token_ms),
+        "outputPerSecond": speed.and_then(|s| s.output_per_second),
     }));
     prompt + count(&usage["completion_tokens"])
 }
@@ -353,15 +415,20 @@ impl Agent {
                 request = request.header(name, value);
             }
             let mut retry_after = None;
+            let sent = Instant::now();
             let failure = match request.send(body.as_str()) {
                 Ok(response) if response.status().is_success() => {
-                    match self.stream(response.into_body().into_reader()) {
+                    match self.stream(response.into_body().into_reader(), sent) {
                         Ok(reply) if reply.is_empty() && attempt < MAX_ATTEMPTS => (
                             format!("{} sent an empty reply", self.request.provider),
                             true,
                         ),
                         Ok(reply) => return Ok(reply),
-                        Err(StreamError { message, shown }) => {
+                        Err(StreamError {
+                            message,
+                            shown,
+                            stopped,
+                        }) => {
                             // Some endpoints, such as LM Studio, accept the request and then
                             // refuse a prompt too long for the loaded context as an error event
                             // in the stream.
@@ -370,8 +437,9 @@ impl Agent {
                                 return Err(Failure::Context(message));
                             }
                             // A reply that broke off once the user saw part of it is not sent
-                            // again, which would show that part twice.
-                            (message, !shown)
+                            // again, which would show that part twice; nor is one the watchdog
+                            // stopped, which would loop again.
+                            (message, !shown && !stopped)
                         }
                     }
                 }
@@ -418,27 +486,67 @@ impl Agent {
         }
     }
 
-    /// Reads a server-sent event stream of completion chunks.
-    pub(super) fn stream(&self, body: impl Read + Send + 'static) -> Result<Reply, StreamError> {
+    /// Reads a server-sent event stream of completion chunks, for a request sent at `sent`.
+    pub(super) fn stream(
+        &self,
+        body: impl Read + Send + 'static,
+        sent: Instant,
+    ) -> Result<Reply, StreamError> {
         let mut reply = Reply::default();
-        match self.read_stream(body, &mut reply) {
+        match self.read_stream(body, sent, &mut reply) {
             Ok(()) => Ok(reply),
             Err(message) => Err(StreamError {
                 message,
                 // A quiet reply, like a summary, shows nothing until it is done.
                 shown: !self.quiet && (!reply.content.is_empty() || !reply.reasoning.is_empty()),
+                stopped: reply.runaway,
             }),
         }
+    }
+
+    /// Stops a local model's reply that is stuck: one repeating the same text, or reasoning on
+    /// and on without answering. Cloud replies are left alone.
+    fn watch(
+        &self,
+        reply: &mut Reply,
+        calls: &[Call],
+        text: &mut LoopWatch,
+        reasoning: &mut LoopWatch,
+    ) -> Result<(), String> {
+        if !self.request.local {
+            return Ok(());
+        }
+        let model = &self.request.model;
+        let stuck = if text.looping(&reply.content) || reasoning.looping(&reply.reasoning) {
+            format!("{model} kept repeating the same text")
+        } else if reply.reasoning.len() > MAX_REASONING
+            && reply.content.trim().is_empty()
+            && calls.is_empty()
+        {
+            format!(
+                "{model} reasoned for {} KB without answering",
+                MAX_REASONING / 1024
+            )
+        } else {
+            return Ok(());
+        };
+        reply.runaway = true;
+        Err(format!(
+            "{stuck}, so its reply was stopped. Send a message to continue, or choose another model."
+        ))
     }
 
     /// Reads the chunks into `reply`, which keeps what arrived when it fails.
     fn read_stream(
         &self,
         body: impl Read + Send + 'static,
+        sent: Instant,
         reply: &mut Reply,
     ) -> Result<(), String> {
         let mut calls: Vec<Call> = Vec::new();
         let mut usage = Value::Null;
+        let mut first_token: Option<Instant> = None;
+        let (mut text_loop, mut reasoning_loop) = (LoopWatch::default(), LoopWatch::default());
         // Lines come through a thread so a stalled reply can be given up on.
         let (tx, lines) = mpsc::sync_channel(256);
         std::thread::spawn(move || {
@@ -507,6 +615,14 @@ impl Agent {
                     emit(&json!({"type": "api.text", "delta": text}));
                 }
             }
+            let has_calls = delta["tool_calls"]
+                .as_array()
+                .is_some_and(|parts| !parts.is_empty());
+            if first_token.is_none()
+                && (has_calls || !reply.content.is_empty() || !reply.reasoning.is_empty())
+            {
+                first_token = Some(Instant::now());
+            }
             for part in delta["tool_calls"].as_array().into_iter().flatten() {
                 // Calls carry an index; without one, a new id starts a new call.
                 let index = match part["index"].as_u64() {
@@ -530,9 +646,20 @@ impl Agent {
                     call.arguments.push_str(arguments);
                 }
             }
+            self.watch(reply, &calls, &mut text_loop, &mut reasoning_loop)?;
         }
         if !usage.is_null() {
-            reply.context = emit_usage(&usage);
+            let speed = first_token.map(|first| {
+                let decoding = first.elapsed().as_secs_f64();
+                let output = usage["completion_tokens"].as_u64().unwrap_or(0);
+                Speed {
+                    first_token_ms: first.duration_since(sent).as_millis() as u64,
+                    // Too short a stretch makes a rate that means nothing.
+                    output_per_second: (decoding >= 0.25 && output > 0)
+                        .then(|| (output as f64 / decoding).round() as u64),
+                }
+            });
+            reply.context = emit_usage(&usage, speed.as_ref());
         }
         reply.calls = calls
             .into_iter()

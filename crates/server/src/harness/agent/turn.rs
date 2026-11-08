@@ -33,6 +33,10 @@ pub(super) struct Request {
     pub(super) model: String,
     /// The provider's name, for messages.
     pub(super) provider: String,
+    /// The provider runs on this computer or the user's network, where a stuck reply holds the
+    /// server until it is stopped; such replies are watched for loops.
+    #[serde(default)]
+    pub(super) local: bool,
     pub(super) root: String,
     pub(super) sessions_dir: String,
     pub(super) session_id: Option<String>,
