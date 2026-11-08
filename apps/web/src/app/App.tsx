@@ -27,9 +27,13 @@ export default function App() {
     api.getSettings().then(setSettings, () => setSettings(DEFAULT_SETTINGS));
   }, []);
 
+  // Until settings load, the theme index.html set from the last window stays.
+  const theme = settings?.theme;
   useEffect(() => {
+    if (!theme) return;
     document.documentElement.dataset.theme = resolvedTheme;
-  }, [resolvedTheme]);
+    localStorage.setItem("patchwork.theme", theme);
+  }, [theme, resolvedTheme]);
 
   // Source of truth for sequential updates; React state updaters may run lazily.
   const settingsRef = useRef<Settings | null>(null);
