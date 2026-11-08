@@ -42,7 +42,8 @@
 }
 
 :root,
-[data-theme="dark"] {
+[data-theme="dark"],
+[data-theme="oled"] {
   color-scheme: dark;
   --bg-app: #1e1f22; /* window chrome, toolbars, stripes */
   --bg-panel: #2b2d30; /* tool windows, sidebar, cards */
@@ -93,6 +94,21 @@
   --syn-deletion: #db5c5c;
 
   --shadow-popup: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* OLED: the dark palette above, with its surfaces pushed to true black for OLED screens. */
+[data-theme="oled"] {
+  --bg-app: #000000;
+  --bg-panel: #0a0a0a;
+  --bg-editor: #000000;
+  --bg-elevated: #0e0e0e;
+  --bg-input: #000000;
+  --bg-hover: #1a1a1b;
+  --bg-selected-muted: #1a1a1b;
+  --bg-code-gutter: #000000;
+  --border: #222327;
+  --border-strong: #34363b;
+  --shadow-popup: 0 6px 24px rgba(0, 0, 0, 0.7);
 }
 
 [data-theme="light"] {

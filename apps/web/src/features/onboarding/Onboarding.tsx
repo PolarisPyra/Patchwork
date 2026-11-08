@@ -18,7 +18,7 @@ import { errorText } from "~/lib/util";
 export interface OnboardingProps {
   settings: Settings;
   updateSettings: UpdateSettings;
-  resolvedTheme: "light" | "dark";
+  resolvedTheme: "light" | "dark" | "oled";
   toggleTheme: () => void;
 }
 
@@ -274,14 +274,14 @@ export default function Onboarding({
             className="btn btn-icon"
             onClick={toggleTheme}
             title={
-              resolvedTheme === "dark"
-                ? "Dark theme (switch to light)"
-                : "Light theme (switch to dark)"
+              resolvedTheme === "light"
+                ? "Light theme (switch to dark)"
+                : "Dark theme (switch to light)"
             }
             aria-label="Dark theme"
-            aria-pressed={resolvedTheme === "dark"}
+            aria-pressed={resolvedTheme !== "light"}
           >
-            {resolvedTheme === "dark" ? <MoonIcon size={16} /> : <SunIcon size={16} />}
+            {resolvedTheme === "light" ? <SunIcon size={16} /> : <MoonIcon size={16} />}
           </button>
           <button
             type="button"

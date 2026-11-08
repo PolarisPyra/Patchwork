@@ -14,6 +14,7 @@ const STRENGTHS: { value: BackgroundStrength; label: string }[] = [
 const THEMES: { value: Theme; label: string }[] = [
   { value: "light", label: "Light" },
   { value: "dark", label: "Dark" },
+  { value: "oled", label: "OLED" },
   { value: "system", label: "System" },
 ];
 

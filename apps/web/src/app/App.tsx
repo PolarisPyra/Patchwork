@@ -6,7 +6,7 @@ import Workspace from "~/features/workspace/Workspace";
 // Onboarding only runs on first launch, so it stays out of the main chunk.
 const Onboarding = lazy(() => import("~/features/onboarding/Onboarding"));
 
-function useResolvedTheme(theme: Settings["theme"]): "light" | "dark" {
+function useResolvedTheme(theme: Settings["theme"]): "light" | "dark" | "oled" {
   const query = "(prefers-color-scheme: dark)";
   const [systemDark, setSystemDark] = useState(() => window.matchMedia(query).matches);
   useEffect(() => {
@@ -53,7 +53,7 @@ export default function App() {
   }, []);
 
   const toggleTheme = useCallback(() => {
-    void updateSettings((s) => ({ ...s, theme: resolvedTheme === "dark" ? "light" : "dark" }));
+    void updateSettings((s) => ({ ...s, theme: resolvedTheme === "light" ? "dark" : "light" }));
   }, [resolvedTheme, updateSettings]);
 
   if (!settings) return null;
