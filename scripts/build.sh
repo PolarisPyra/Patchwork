@@ -9,10 +9,6 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
-# The one place that takes the version out of a bundle's name, shared with scripts/release.sh.
-# shellcheck source=scripts/bundle-names.sh
-source "$repo_root/scripts/bundle-names.sh"
-
 die() {
   echo "$*" >&2
   exit 1
@@ -45,10 +41,11 @@ build_appimage() {
   pnpm --filter patchwork-desktop exec tauri build --bundles appimage
   # Tauri names the file after the version. Rename it to the name every release publishes, so the
   # AppImage installed here is the one each release publishes, under that one name.
-  local built
+  local built name
   built=$(ls -t target/release/bundle/appimage/*.AppImage 2> /dev/null | head -n 1 || true)
   [[ -n "$built" ]] || die "No AppImage found after the build."
-  appimage="target/release/bundle/appimage/$(stable_bundle_name "$built" "$version")"
+  name=${built##*/}
+  appimage="target/release/bundle/appimage/${name//_${version}_/_}"
   mv -f "$built" "$appimage"
 }
 

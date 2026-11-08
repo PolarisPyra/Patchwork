@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 # Git runs this for each commit once `git config core.hooksPath scripts/hooks` is set, which
-# `pnpm install` does. See scripts/changelog.sh.
-exec "$(git rev-parse --show-toplevel)/scripts/changelog.sh" hook "$1"
+# `pnpm install` does. See scripts/release.sh.
+exec "$(git rev-parse --show-toplevel)/scripts/release.sh" hook "$1"

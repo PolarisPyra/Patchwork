@@ -1,7 +1,7 @@
 # Changelog style
 
 `CHANGELOG.md` is for Patchwork's users. The app shows it in Settings → Updates, before and after
-an update, and it is the text of each GitHub release. `scripts/changelog.sh` checks every entry
+an update, and it is the text of each GitHub release. `scripts/release.sh` checks every entry
 against the rules below. Each entry is a commit's `Changelog:` paragraph, word for word, so it is
 written for users when the commit is.
 

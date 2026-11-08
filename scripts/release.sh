@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Everything that releases Patchwork, on your machine and in the Release workflow
-# (.github/workflows/release.yml). docs/release.md explains how it all fits together.
+# Everything that releases Patchwork: the changelog, the version, cutting a release on your machine,
+# and the Release workflow's steps (.github/workflows/release.yml). docs/release.md explains how it
+# all fits together, and docs/changelog-style.md the rules for the notes.
 #
 # After each push to main that passes the checks, the Release workflow keeps a "Release vYY.M.N"
 # pull request up to date with what users would get; merging it releases. These are for releasing
@@ -25,6 +26,11 @@
 #   scripts/release.sh pull YY.M.N      Withdraw YY.M.N when it went wrong: make the release before
 #                                       it the latest again, and send copies already on YY.M.N
 #                                       back to it unless YY.M.N changed the database.
+#
+# For git (scripts/hooks/commit-msg):
+#   scripts/release.sh hook MSGFILE     A commit that changes the app needs a
+#                                       `Changelog: <Group>: <text>` paragraph for users, or
+#                                       `Changelog: none`.
 #
 # In the Release workflow, where $RELEASE_TAG names the tag being published:
 #   scripts/release.sh ci-plan          Write the version main carries to the step's `version`
@@ -52,10 +58,6 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
-# The one place that takes the version out of a bundle's name, shared with scripts/build.sh.
-# shellcheck source=scripts/bundle-names.sh
-source "$repo_root/scripts/bundle-names.sh"
-
 REPO_URL=https://github.com/PolarisPyra/Patchwork
 # What the updater reads: the newest release's own latest.json.
 LATEST_JSON=$REPO_URL/releases/latest/download/latest.json
@@ -68,6 +70,19 @@ WINDOWS_TARGET=x86_64-pc-windows-msvc
 # A release that changed these can't be rolled back to the one before it: see withdrawn_tags.
 MIGRATIONS=crates/server/src/persistence/migrations
 SECRETS=(TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD)
+# Where a release's notes wait, ignored by git, until it is pushed.
+NOTES_DIR=.release-notes
+
+STYLE=docs/changelog-style.md
+# Changes to these paths are internal and never need an entry. Keep in step with is_app_path.
+INTERNAL_PATHS=(':!.github' ':!scripts' ':!docs' ':!*.md')
+# The groups, in the order a section lists them. A paragraph names one; one that names none (from
+# before groups were required) is Changed.
+SECTIONS=(Added Changed Fixed Removed Security)
+# What a release with only internal changes says.
+NOTHING_NEW="Behind-the-scenes improvements, with nothing new to see."
+# Product and platform names whose capitals the identifier checks would flag.
+NAMES='GitHub|GitLab|AppImage|JavaScript|TypeScript|OpenCode|PowerShell|YouTube|macOS|iOS|iPadOS|LaTeX|DeepSeek|OpenAI|OpenRouter|MiniMax|ChatGPT|WebKit|WebView|Node\.js|Next\.js'
 
 die() {
   echo "$*" >&2
@@ -80,6 +95,9 @@ step() {
 usage() {
   sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed '$d' | sed 's/^# \{0,1\}//'
 }
+
+# ---- Versions --------------------------------------------------------------------------------
+
 # A version is CalVer, YY.M.N: the two-digit year, the month, and which release of that month it
 # is, from 0. The year is two digits, which tells a CalVer version apart from the old
 # MAJOR.MINOR.PATCH scheme (`0.11.3` has a one-digit first part). The YY.N.P releases before it
@@ -160,44 +178,257 @@ set_version() {
   echo "Set the version to $version."
 }
 
+# ---- Changelog -------------------------------------------------------------------------------
+
+is_app_path() {
+  case "$1" in
+    .github/* | scripts/* | docs/* | *.md) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# The text of a message's `Changelog:` paragraph, joined into one line, or nothing.
+paragraph() {
+  awk '
+    /^Changelog:/ { on = 1; sub(/^Changelog:[ \t]*/, "") }
+    on && (/^[ \t]*$/ || /^[A-Za-z-]+-[Bb]y:/) { exit }
+    on { printf "%s%s", (n++ ? " " : ""), $0 }
+  ' <<< "$1" | sed 's/[[:space:]]*$//'
+}
+
+is_none() {
+  [[ "$1" =~ ^[Nn][Oo][Nn][Ee]\.?$ ]]
+}
+
+# The group a paragraph names, or nothing.
+group_of() {
+  local group
+  for group in "${SECTIONS[@]}"; do
+    [[ "$1" == "$group: "* ]] && echo "$group" && return
+  done
+  return 0
+}
+
+# Prints what breaks the style rules in one entry, or nothing.
+problems() {
+  local text="$1" bare
+  bare=$(sed -E "s/($NAMES)//g" <<< "$text")
+  [[ "$text" == *$'\n'* ]] && echo "it has a line break"
+  [[ ${#text} -lt 25 ]] && echo "it is too short to say what changed"
+  [[ "$text" == *'`'* ]] && echo "it has backticks"
+  grep -qE '[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+\.[a-z]{1,5}\b|\b[A-Za-z0-9_-]+\.(tsx?|jsx?|mjs|rs|toml|json|ya?ml|sh|css|html|md)\b' <<< "$bare" &&
+    echo "it names a file"
+  grep -qE '\b[a-z0-9]+_[a-z0-9_]+\b' <<< "$bare" && echo "it has a snake_case name"
+  grep -qE '\b[a-z]+[A-Z][A-Za-z0-9]*\b|\b[A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*\b' <<< "$bare" &&
+    echo "it has a code-style name"
+  grep -qE '\b[0-9]+ ?px\b' <<< "$text" && echo "it gives a pixel size"
+  grep -qiE '\b(refactor(ed|ing|s)?|components?|backend|frontend|crates?|css|ipc|stdout|stderr|props)\b' <<< "$text" &&
+    echo "it uses developer words"
+  return 0
+}
+
+# The commit-msg hook: turns down a commit that changes the app without a Changelog: paragraph, one
+# without a group, and one that breaks the style rules, so the author fixes it while it is fresh.
+commit_msg_hook() {
+  local file="$1" msg subject text found group
+  msg=$(tr -d '\r' < "$file" | grep -v '^#' || true)
+  subject=$(head -n 1 <<< "$msg")
+  [[ "$subject" =~ ^(Release\ v|Merge\ |fixup!\ |squash!\ |amend!\ ) ]] && return 0
+  # An amend's commit also holds what the commit it replaces changed.
+  local base=() path app=()
+  [[ "${GIT_REFLOG_ACTION:-}" == *amend* ]] && git rev-parse --quiet --verify HEAD^ > /dev/null && base=(HEAD^)
+  while IFS= read -r path; do
+    [[ -n "$path" ]] && is_app_path "$path" && app+=("$path")
+  done < <(git diff --cached --name-only ${base[@]+"${base[@]}"})
+  [[ ${#app[@]} -eq 0 ]] && return 0
+  found=$(grep -c '^Changelog:' <<< "$msg" || true)
+  if [[ "$found" -eq 0 ]]; then
+    cat >&2 << EOF
+This commit changes the app (${app[0]}$([[ ${#app[@]} -gt 1 ]] && echo ", and $((${#app[@]} - 1)) more")),
+so its message needs a paragraph for the changelog, which users read in Settings → Updates:
+
+  Changelog: <$(IFS='|' && echo "${SECTIONS[*]}")>: <what users see or can do now, where, and what is different>
+
+or, for a change users can't notice, "Changelog: none". The rules are in $STYLE.
+EOF
+    return 1
+  fi
+  text=$(paragraph "$msg")
+  is_none "$text" && return 0
+  group=$(group_of "$text")
+  [[ -n "$group" ]] || die "The Changelog: paragraph needs its group first, one of ${SECTIONS[*]}: \"Changelog: Fixed: …\"."
+  local issues
+  issues=$(problems "${text#"$group: "}")
+  if [[ -n "$issues" ]]; then
+    {
+      echo "The Changelog: paragraph breaks the rules in $STYLE:"
+      sed 's/^/  - /' <<< "$issues"
+      echo "  $text"
+    } >&2
+    return 1
+  fi
+}
+
+# Checks a release section: one heading for the version, group names, and each entry.
+check_notes() {
+  local file="$1" version="${2#v}" line bad=0 issues heads
+  [[ -s "$file" ]] || die "$file is empty."
+  heads=$(grep -c '^## ' "$file" || true)
+  if [[ "$heads" -ne 1 ]] || ! grep -q "^## \[$version\] - [0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}\$" "$file"; then
+    echo "It needs exactly one heading, \"## [$version] - YYYY-MM-DD\"." >&2
+    bad=1
+  fi
+  while IFS= read -r line; do
+    case "$line" in
+      "" | "## ["*) ;;
+      "### "*)
+        [[ " ${SECTIONS[*]} " == *" ${line#\#\#\# } "* ]] || {
+          echo "Unknown group: $line" >&2
+          bad=1
+        }
+        ;;
+      "- "*)
+        issues=$(problems "${line#- }")
+        if [[ -n "$issues" ]]; then
+          printf '%s\n' "$line" "$(sed 's/^/    /' <<< "$issues")" >&2
+          bad=1
+        fi
+        ;;
+      *)
+        echo "Not a heading or an entry: $line" >&2
+        bad=1
+        ;;
+    esac
+  done < "$file"
+  [[ $bad -eq 0 ]] || die "Fix $file, then run the release again."
+}
+
+# The commits since the last tag that change the app, oldest first.
+app_commits() {
+  local since="$1"
+  git log --reverse --format='%H %s' "$since..HEAD" -- . "${INTERNAL_PATHS[@]}" |
+    grep -vE '^[0-9a-f]+ Release v' | cut -d' ' -f1 || true
+}
+
+# Prints VERSION's section from "group<TAB>entry" lines on stdin: the groups in order, each entry
+# once, and the placeholder only when there is nothing else.
+render() {
+  local version="$1" lines group
+  lines=$(awk -F'\t' '!seen[$0]++')
+  printf '## [%s] - %s\n' "$version" "$(date +%F)"
+  grep -qv $'\t'"$NOTHING_NEW\$" <<< "$lines" && lines=$(grep -v $'\t'"$NOTHING_NEW\$" <<< "$lines")
+  [[ -n "$lines" ]] || lines="Changed"$'\t'"$NOTHING_NEW"
+  for group in "${SECTIONS[@]}"; do
+    grep -q "^$group"$'\t' <<< "$lines" || continue
+    printf '\n### %s\n\n' "$group"
+    grep "^$group"$'\t' <<< "$lines" | cut -f2- | sed 's/^/- /'
+  done
+}
+
+# A section as "group<TAB>entry" lines.
+entries() {
+  awk '/^### / { group = substr($0, 5); next } /^- / { print group "\t" substr($0, 3) }'
+}
+
+# The Changelog: paragraphs since the last tag, other than `none`, as "group<TAB>entry" lines.
+unreleased() {
+  local since hash text group
+  since=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD) || die "No earlier release tag."
+  while IFS= read -r hash; do
+    text=$(paragraph "$(git show -s --format=%B "$hash")")
+    [[ -z "$text" ]] || is_none "$text" && continue
+    group=$(group_of "$text")
+    printf '%s\t%s\n' "${group:-Changed}" "${text#"${group:+$group: }"}"
+  done < <(app_commits "$since")
+}
+
+# Writes VERSION's section into FILE from the Changelog: paragraphs since the last tag, unless FILE
+# was written already, as by an earlier run or by hand; either way it is checked.
+draft_notes() {
+  local version="$1" file="$2"
+  if [[ -s "$file" ]]; then
+    echo "Using the notes already written in $file."
+  else
+    mkdir -p "$(dirname "$file")"
+    unreleased | render "$version" > "$file"
+  fi
+  check_notes "$file" "$version"
+}
+
+# The version of the newest release that published, from its GitHub release, which the Release
+# workflow creates only once every file is up. Nothing when it can't be told.
+published_version() {
+  local tag
+  tag=$(gh release view --json tagName -q .tagName 2> /dev/null) || return 0
+  echo "${tag#v}"
+}
+
+# Adds VERSION's section in FILE to the top of CHANGELOG.md, merging in the sections of tags that
+# never published.
+insert_notes() {
+  local file="$1" version="$2" latest header superseded rest
+  check_notes "$file" "$version"
+  latest=$(published_version)
+  header=$(awk '/^## \[/ { exit } { print }' CHANGELOG.md)
+  # Sections above the newest published release are of tags whose build failed, so users never got
+  # them. Their entries go into this one, and they go.
+  if [[ -n "$latest" ]] && grep -q "^## \[$latest\]" CHANGELOG.md; then
+    superseded=$(awk -v head="## [$latest]" 'index($0, head) == 1 { exit } found || /^## \[/ { found = 1; print }' CHANGELOG.md)
+    rest=$(awk -v head="## [$latest]" 'found || index($0, head) == 1 { found = 1; print }' CHANGELOG.md)
+  else
+    superseded=""
+    rest=$(awk 'found || /^## \[/ { found = 1; print }' CHANGELOG.md)
+  fi
+  if [[ -n "$superseded" ]]; then
+    { entries < "$file"; entries <<< "$superseded"; } | render "$version" > "$file.merged"
+    mv "$file.merged" "$file"
+    check_notes "$file" "$version"
+  fi
+  printf '%s\n\n%s\n\n%s\n' "$header" "$(cat "$file")" "$rest" > CHANGELOG.md
+}
+
+# Prints VERSION's section of CHANGELOG.md.
+notes_section() {
+  local version="${1#v}"
+  awk -v head="## [$version]" '
+    index($0, head) == 1 { on = 1; print; next }
+    on && /^## \[/ { exit }
+    on { print }
+  ' CHANGELOG.md | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}'
+}
+
+# ---- Cutting a release -----------------------------------------------------------------------
+
 # Writes and checks the release notes, sets the version, adds the notes to CHANGELOG.md, and
 # commits, all on the current commit. Pushing is up to the caller.
 commit_release() {
   local version="$1" tag="v$1"
   # Kept until the release is pushed, so an edit to it, or a second run, is used as it is.
-  local notes=".release-notes/$tag.md"
+  local notes="$NOTES_DIR/$tag.md"
   step "Release notes for $tag"
-  scripts/changelog.sh draft "$tag" "$notes"
+  draft_notes "$version" "$notes"
   echo
   cat "$notes"
   echo
-  scripts/changelog.sh check "$notes" "$version"
 
   step "Committing $tag"
   set_version "$version"
-  scripts/changelog.sh insert "$notes" "$version"
+  insert_notes "$notes" "$version"
   git add CHANGELOG.md package.json apps/web/package.json apps/desktop/package.json \
     apps/desktop/src-tauri/tauri.conf.json
   git commit -m "Release $tag"
 }
 
-# commit_release, then the annotated tag on that commit.
-tag_release() {
-  commit_release "$1"
-  git tag -a "v$1" -m "Patchwork $1"
-}
-
 cut_release() {
-  local asked="${1:-bump}" version previous
-  version=$(resolve_version "$asked")
-  check_version "$version"
+  local version previous
+  version=$(resolve_version "${1:-bump}")
   previous=$(latest_version)
   [[ "$version" != "$previous" ]] || die "v$version is already the latest release; nothing to cut."
   local tag="v$version"
   echo "Cutting $tag, up from v$previous."
 
   step "Checking the repo"
-  local tool secret
+  local tool secret secrets
   for tool in git pnpm cargo gh jq curl; do
     command -v "$tool" > /dev/null || die "$tool is required."
   done
@@ -208,7 +439,6 @@ cut_release() {
   ! git rev-parse --quiet --verify "refs/tags/$tag" > /dev/null || die "$tag already exists."
   git merge-base --is-ancestor origin/main HEAD \
     || die "main is behind or has diverged from origin/main. Pull or rebase first."
-  local secrets
   secrets=$(gh secret list --json name -q '.[].name')
   for secret in "${SECRETS[@]}"; do
     grep -qx "$secret" <<< "$secrets" || die "The repo has no $secret secret. Set it with gh secret set $secret."
@@ -227,9 +457,10 @@ cut_release() {
   if [[ -n "$(git rev-list origin/main..HEAD)" ]]; then
     git push origin main
   fi
-  tag_release "$version"
+  commit_release "$version"
+  git tag -a "$tag" -m "Patchwork $version"
   git push origin main "$tag"
-  rm -f ".release-notes/$tag.md"
+  rm -f "$NOTES_DIR/$tag.md"
 
   # The build runs on GitHub from here; `scripts/release.sh watch` follows it.
   local run=""
@@ -268,18 +499,12 @@ watch_release() {
   jq -r '.assets[] | "  \(.browser_download_url)"' <<< "$manifest"
 }
 
+# ---- The Release workflow --------------------------------------------------------------------
+
 # Builds with the Tauri CLI. Nothing is signed here: the release job signs the published files, so
 # the signing key is never on a machine that runs the dependencies' build scripts.
 tauri_build() {
   pnpm --filter patchwork-desktop exec tauri build --bundles "$@"
-}
-
-# Dies unless the argument names a platform, before anything is built.
-check_platform() {
-  case "$1" in
-    linux | windows | macos) ;;
-    *) die "Usage: scripts/release.sh ci-build linux|windows|macos" ;;
-  esac
 }
 
 # Sets `files` to the files a platform's build publishes. Each is found by pattern, since Tauri puts
@@ -293,7 +518,6 @@ platform_files() {
       files=($(ls -t target/release/bundle/dmg/*.dmg 2> /dev/null | head -n 1 || true)
         target/release/bundle/macos/Patchwork.app.tar.gz)
       ;;
-    *) die "Usage: scripts/release.sh ci-build linux|windows|macos" ;;
   esac
   (( ${#files[@]} )) || die "The $1 build has no files: nothing was built yet."
   [[ -f "${files[0]}" ]] || die "The $1 build has no file at ${files[0]}."
@@ -321,7 +545,7 @@ ci_plan() {
 ci_pr() {
   local pr version body
   pr=$(gh pr list --head "$RELEASE_BRANCH" --base main --state open --json number -q '.[0].number // empty')
-  if ! scripts/changelog.sh pending; then
+  if [[ -z "$(unreleased)" ]]; then
     echo "No commit since $(latest_version) has notes for users, so there is nothing to release."
     if [[ -n "$pr" ]]; then
       gh pr close "$pr" --delete-branch --comment "Nothing for users is waiting any more."
@@ -331,7 +555,7 @@ ci_pr() {
   version=$(next_version)
   commit_release "$version"
   git push --force origin "HEAD:refs/heads/$RELEASE_BRANCH"
-  body="$(cat ".release-notes/v$version.md")
+  body="$(cat "$NOTES_DIR/v$version.md")
 
 ---
 
@@ -362,8 +586,11 @@ ci_tag() {
 }
 
 ci_build() {
-  local platform="${1:-}" files=() file version stable was i dir
-  check_platform "$platform"
+  local platform="${1:-}" files=() file version was i dir
+  case "$platform" in
+    linux | windows | macos) ;;
+    *) die "Usage: scripts/release.sh ci-build linux|windows|macos" ;;
+  esac
   # A tag pushed without `scripts/release.sh` still builds with its own version.
   if [[ -n "${RELEASE_TAG:-}" ]]; then set_version "${RELEASE_TAG#v}"; fi
   case "$platform" in
@@ -383,17 +610,18 @@ ci_build() {
       ;;
   esac
   platform_files "$platform"
-  # Tauri names each bundle after its version. The version comes out of it here, before anything is
-  # uploaded or signed, so every release publishes the same file names.
+  # Tauri names each bundle after its version (Patchwork_26.1.0_x64-setup.exe). A download link that
+  # carried it would break at every release, so the version comes out of the name here, before
+  # anything is uploaded or signed: the release, latest.json, and the README then name the same file
+  # from one release to the next. The updater picks its file by suffix, so it finds it either way.
   version=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
   for i in "${!files[@]}"; do
     dir=$(dirname "${files[$i]}")
     was=$(basename "${files[$i]}")
-    stable=$(stable_bundle_name "${files[$i]}" "$version")
-    [[ "$stable" != "$was" ]] || continue
-    mv -f "${files[$i]}" "$dir/$stable"
-    files[i]="$dir/$stable"
-    echo "Named $was as $stable."
+    [[ "$was" == *"_${version}_"* ]] || continue
+    mv -f "${files[$i]}" "$dir/${was//_${version}_/_}"
+    files[i]="$dir/${was//_${version}_/_}"
+    echo "Named $was as $(basename "${files[$i]}")."
   done
   for file in "${files[@]}"; do
     [[ -f "$file" ]] || die "Expected $file after the build."
@@ -456,8 +684,8 @@ ci_release() {
     echo "Checked and signed $name"
   done < <(jq -c '.[]' <<< "$built")
 
-  # The tag's section of CHANGELOG.md, which release.sh committed before tagging.
-  scripts/changelog.sh section "$tag" > RELEASE_NOTES.md
+  # The tag's section of CHANGELOG.md, which was committed before tagging.
+  notes_section "$tag" > RELEASE_NOTES.md
   [[ -s RELEASE_NOTES.md ]] || echo "CHANGELOG.md has no section for $tag, so the release has no notes." >&2
   # In the shape of GitHub's release API, plus each file's signature and the notes, as the updater
   # reads it.
@@ -486,6 +714,8 @@ ci_release() {
   echo "Published $tag and $LATEST_JSON"
 }
 
+# ---- After a release -------------------------------------------------------------------------
+
 # The tags latest.json withdraws once it names $previous again: those it withdrew already, and
 # $tag. A tag that changed the database schema since $previous is left out, since $previous can't
 # open a database it migrated, so copies on that tag keep it until a fix ships.
@@ -511,9 +741,9 @@ pull_release() {
   [[ "$(jq -r .tag_name <<< "$manifest")" == "$tag" ]] \
     || die "latest.json names $(jq -r .tag_name <<< "$manifest"), not $tag, so there is nothing to pull."
   git fetch --quiet --tags origin
-  mkdir -p .release-notes
+  mkdir -p "$NOTES_DIR"
   for candidate in $(git tag -l 'v*' --sort=-v:refname); do
-    if [[ -n "$found" ]] && curl -fsSL -o .release-notes/latest.json "$REPO_URL/releases/download/$candidate/latest.json" 2> /dev/null; then
+    if [[ -n "$found" ]] && curl -fsSL -o "$NOTES_DIR/latest.json" "$REPO_URL/releases/download/$candidate/latest.json" 2> /dev/null; then
       previous="$candidate"
       break
     fi
@@ -523,13 +753,13 @@ pull_release() {
   local withdrawn
   withdrawn=$(withdrawn_tags "$manifest" "$previous" "$tag")
   jq --arg tags "$withdrawn" '.withdrawn = ($tags | split("\n") | map(select(. != "")))' \
-    .release-notes/latest.json > .release-notes/latest.json.new
-  mv .release-notes/latest.json.new .release-notes/latest.json
-  gh release upload "$previous" .release-notes/latest.json --clobber
+    "$NOTES_DIR/latest.json" > "$NOTES_DIR/latest.json.new"
+  mv "$NOTES_DIR/latest.json.new" "$NOTES_DIR/latest.json"
+  gh release upload "$previous" "$NOTES_DIR/latest.json" --clobber
   # $tag becomes a prerelease, so GitHub never counts it as the latest again.
   gh release edit "$previous" --latest > /dev/null
   gh release edit "$tag" --prerelease > /dev/null
-  rm -f .release-notes/latest.json
+  rm -f "$NOTES_DIR/latest.json"
   echo "latest.json names $previous again, so $tag is no longer offered as an update."
   if grep -qx "$tag" <<< "$withdrawn"; then
     echo "Copies already on $tag go back to $previous at their next update check."
@@ -541,11 +771,11 @@ republish_notes() {
   local version="${1#v}"
   check_version "$version"
   local tag="v$version"
-  local notes=".release-notes/$tag.published.md"
-  mkdir -p .release-notes
-  scripts/changelog.sh section "$tag" > "$notes"
+  local notes="$NOTES_DIR/$tag.published.md"
+  mkdir -p "$NOTES_DIR"
+  notes_section "$tag" > "$notes"
   [[ -s "$notes" ]] || die "CHANGELOG.md has no section for $version."
-  scripts/changelog.sh check "$notes" "$version"
+  check_notes "$notes" "$version"
   gh release edit "$tag" --notes-file "$notes" > /dev/null
   echo "Updated the notes of the GitHub release $tag."
   # The release's own latest.json, which the app reads while it is the latest.
@@ -553,10 +783,10 @@ republish_notes() {
   if ! manifest=$(curl -fsSL "$REPO_URL/releases/download/$tag/latest.json" 2> /dev/null); then
     echo "$tag has no latest.json of its own, so the app's update notes are unchanged."
   else
-    jq --rawfile body "$notes" '.body = $body' <<< "$manifest" > .release-notes/latest.json
-    gh release upload "$tag" .release-notes/latest.json --clobber
+    jq --rawfile body "$notes" '.body = $body' <<< "$manifest" > "$NOTES_DIR/latest.json"
+    gh release upload "$tag" "$NOTES_DIR/latest.json" --clobber
     echo "Updated the notes in $tag's latest.json."
-    rm -f .release-notes/latest.json
+    rm -f "$NOTES_DIR/latest.json"
   fi
   rm -f "$notes"
 }
@@ -571,6 +801,7 @@ case "${1:-}" in
   notes) republish_notes "${2:-}" ;;
   pull) pull_release "${2:-}" ;;
   watch) watch_release "${2:-}" ;;
+  hook) commit_msg_hook "${2:?Usage: scripts/release.sh hook MSGFILE}" ;;
   ci-plan) ci_plan ;;
   ci-pr) ci_pr ;;
   ci-tag) ci_tag "${2:-}" ;;
