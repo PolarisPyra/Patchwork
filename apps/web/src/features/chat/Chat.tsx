@@ -776,8 +776,7 @@ export default function Chat({
           working={working}
           backgroundRunning={background.some(isLiveTask)}
           error={
-            error ??
-            (noAgents ? "No agents connected. Turn one on in Settings → Cloud providers." : null)
+            error ?? (noAgents ? "No agents connected. Turn one on in Settings → Providers." : null)
           }
           agent={agent}
           model={options.model}

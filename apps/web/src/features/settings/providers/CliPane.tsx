@@ -360,7 +360,7 @@ export function hasDetails(kind: CliKind): kind is DetailsKind {
   return kind in CLIS;
 }
 
-/** Settings → Cloud providers → a CLI's Details: its reading on a page of its own. */
+/** Settings → Providers → a CLI's Details: its reading on a page of its own. */
 export default function CliPane({ kind, onBack }: { kind: DetailsKind; onBack: () => void }) {
   return (
     <>

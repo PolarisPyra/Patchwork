@@ -64,9 +64,9 @@ pub struct ApiProvider {
     pub base_url: String,
     #[serde(default = "yes")]
     pub enabled: bool,
-    /// Found on this computer, added from Settings → Local providers or by Use a local model: shown
-    /// there with live health. Every other provider, added from a preset or by its address, is
-    /// `false` and shows in Settings → Cloud providers.
+    /// Found on this computer, added from Settings → Providers or by Use a local model: listed under
+    /// Local providers there, with live health. Every other provider, added from a preset or by its
+    /// address, is `false` and listed above them.
     pub local: bool,
     #[serde(default)]
     pub models: Vec<ApiModel>,
@@ -581,7 +581,7 @@ fn blank() -> ApiProvider {
     }
 }
 
-/// The live health of a saved provider's endpoint, probed on demand so Settings → Local providers can
+/// The live health of a saved provider's endpoint, probed on demand so Settings → Providers can
 /// show whether a local server is answering and which models it serves right now.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "provider.ts")]
@@ -669,7 +669,7 @@ const DISCOVERY_CANDIDATES: &[(&str, &str)] = &[
 ];
 
 /// Looks for local model servers on well-known ports, sending no key, and returns the ones that
-/// answer their model list. Runs each time Settings → Local providers opens.
+/// answer their model list. Runs each time Settings → Providers opens.
 pub fn discover() -> Vec<DiscoveredServer> {
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_global(Some(Duration::from_millis(1500)))
@@ -721,12 +721,12 @@ pub fn connection(model: Option<&str>) -> Result<Value, String> {
     let model = model
         .map(String::from)
         .or_else(default_model)
-        .ok_or("Add a model to an inference server in Settings → Local providers first")?;
+        .ok_or("Add a provider with a model in Settings → Providers first")?;
     let (provider, model_id) =
         resolve(&model).ok_or_else(|| format!("No API provider has the model {model}"))?;
     if !provider.enabled {
         return Err(format!(
-            "{} is turned off in Settings → Local providers",
+            "{} is turned off in Settings → Providers",
             provider.name
         ));
     }

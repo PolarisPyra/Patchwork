@@ -1,6 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { PlusIcon } from "@phosphor-icons/react";
 import {
   api,
   AGENT_LABELS,
@@ -13,6 +12,7 @@ import {
 } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
 import CliPane, { hasDetails, type DetailsKind } from "~/features/settings/providers/CliPane";
+import LocalProviders from "~/features/settings/providers/InferencePane";
 import {
   ApiProviderRow,
   blank,
@@ -20,7 +20,7 @@ import {
   ProviderForm,
   syncAgents,
 } from "~/features/settings/providers/ApiProvidersPane";
-import { TEXTAREA, TokenRow } from "~/features/settings/controls";
+import { SectionHeading, TEXTAREA, TokenRow } from "~/features/settings/controls";
 import type { PaneProps } from "~/features/settings/types";
 import { AGENT_KINDS, CLI_KINDS, describeAgent, errorText } from "~/lib/util";
 
@@ -346,7 +346,6 @@ function VisionModelPicker({ settings, updateSettings }: PaneProps) {
 }
 
 export default function ProvidersPane({ settings, updateSettings }: PaneProps) {
-  // Servers found on this computer live in Settings → Local providers; every other endpoint is here.
   const [providers, setProviders] = useState<ApiProviderView[]>([]);
   const [editing, setEditing] = useState<ApiProvider | null>(null);
   const [promptingId, setPromptingId] = useState<string | null>(null);
@@ -401,6 +400,7 @@ export default function ProvidersPane({ settings, updateSettings }: PaneProps) {
   }
 
   const cloud = providers.filter((p) => !p.local);
+  const local = providers.filter((p) => p.local);
   // Choosing a default reorders `agents`, not the buttons.
   const connected = settings.agents;
   const makeDefault = (kind: AgentKind) =>
@@ -452,16 +452,10 @@ export default function ProvidersPane({ settings, updateSettings }: PaneProps) {
           </select>
         </TokenRow>
       )}
-      <div className="flex items-start gap-2">
-        <PresetGrid onPick={(preset) => setEditing(blank(preset))} />
-        <button
-          className="btn mt-2.5 ml-auto flex-none"
-          onClick={() => setEditing(blank({ id: "custom", name: "", baseUrl: "", models: [] }))}
-        >
-          <PlusIcon size={13} />
-          Add a server
-        </button>
-      </div>
+      <SectionHeading>Add a provider</SectionHeading>
+      <PresetGrid onPick={(preset) => setEditing(blank(preset))} />
+      <SectionHeading>Local providers</SectionHeading>
+      <LocalProviders providers={local} onEdit={setEditing} onChanged={reload} />
       {error && (
         <div role="alert" className="text-[length:var(--fs-sm)] text-danger">
           {error}

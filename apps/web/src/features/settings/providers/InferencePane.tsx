@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ArrowClockwiseIcon, MagnifyingGlassIcon, PlusIcon } from "@phosphor-icons/react";
 import {
   api,
@@ -9,17 +9,15 @@ import {
 } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
 import Spinner from "~/components/Spinner";
-import { blank, ProviderForm, syncAgents } from "~/features/settings/providers/ApiProvidersPane";
+import { blank, PROVIDER_TILE, TILE_GRID } from "~/features/settings/providers/ApiProvidersPane";
 import { PromptEditor } from "~/features/settings/providers/ProvidersPane";
-import type { PaneProps } from "~/features/settings/types";
 import { errorText } from "~/lib/util";
 
 /** The probe of each server, by provider id: `undefined` while it is still checking. */
 type HealthMap = Partial<Record<string, ProviderHealth>>;
 
-// Kept across mounts so reopening the Inference tab shows the last servers and their status at
-// once, then refreshes in place, instead of flashing every row back to "Checking…".
-let providerCache: ApiProviderView[] = [];
+// Kept across mounts so reopening Settings → Providers shows each server's last status at once,
+// then refreshes it in place, instead of flashing every row back to "Checking…".
 const healthCache = new Map<string, ProviderHealth>();
 
 /** A custom provider prefilled from a server found on this computer, so Add opens the editor ready
@@ -191,35 +189,33 @@ function Repair({ provider: p, onMoved }: { provider: ApiProviderView; onMoved: 
   );
 }
 
-/** A server answering on this computer that is not saved yet, offered to add. */
-function FoundRow({ server, onAdd }: { server: DiscoveredServer; onAdd: () => void }) {
-  return (
-    <div className="my-1.5 flex items-center gap-3 rounded-[var(--radius-sm)] border border-border px-2.5 py-2">
-      <div className="min-w-0 flex-1">
-        <div className="font-semibold">{server.name}</div>
-        <div className="truncate font-mono text-[length:var(--fs-sm)] text-fg-muted">
-          {server.baseUrl} · {server.models.length} model{server.models.length === 1 ? "" : "s"}
-        </div>
-      </div>
-      <button className="btn" aria-label={`Add ${server.name}`} onClick={onAdd}>
-        <PlusIcon size={13} />
-        Add
-      </button>
-    </div>
-  );
+/** A local server's state in words, for its tile's name, and the colour of its dot. */
+function tileStatus(p: ApiProviderView, health: ProviderHealth | undefined): [string, string] {
+  if (!p.enabled) return ["off", "bg-fg-subtle"];
+  if (health === undefined) return ["checking", "bg-border-strong"];
+  return health.reachable ? ["answering", "bg-success"] : ["not answering", "bg-danger"];
 }
 
 /**
- * Settings → Local providers: the local-first home for the OpenAI-compatible model servers Patchwork
- * talks to. Each server shows whether it is answering right now and which models it serves, so a
- * model's availability does not depend on what a CLI happens to have configured on its host.
+ * The Local providers section of Settings → Providers: a tile for each model server on this
+ * computer, with a dot for whether it is answering. A saved server's tile opens its row, with its
+ * status, switch, and system prompt; a server running here that is not added yet adds it.
  */
-export default function InferencePane({ updateSettings }: PaneProps) {
-  const [providers, setProviders] = useState<ApiProviderView[]>(providerCache);
+export default function LocalProviders({
+  providers,
+  onEdit,
+  onChanged,
+}: {
+  /** The saved providers that run on this computer. */
+  providers: ApiProviderView[];
+  onEdit: (provider: ApiProvider) => void;
+  /** Reloads the saved providers after one changed here. */
+  onChanged: () => Promise<void>;
+}) {
   const [health, setHealth] = useState<HealthMap>(() => Object.fromEntries(healthCache));
-  const [editing, setEditing] = useState<ApiProvider | null>(null);
   const [promptingId, setPromptingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
 
   // Re-probes without clearing the last result first, so a row keeps its status until the fresh
   // one lands rather than blinking through "Checking…".
@@ -239,27 +235,13 @@ export default function InferencePane({ updateSettings }: PaneProps) {
     );
   }, []);
 
-  const reload = useCallback(async () => {
-    try {
-      const list = await api.listApiProviders();
-      // Inference manages local servers only; cloud endpoints live in Settings → Cloud providers.
-      const local = list.filter((p) => p.local);
-      providerCache = local;
-      setProviders(local);
-      // `api` is usable when any provider has a model, so sync on the full list, not just local.
-      syncAgents(list, updateSettings);
-      // Drop cached health for servers that are gone, then re-probe the current ones.
-      const ids = new Set(local.map((p) => p.id));
-      for (const id of [...healthCache.keys()]) if (!ids.has(id)) healthCache.delete(id);
-      local.forEach((p) => probe(p.id));
-    } catch (e) {
-      setError(errorText(e));
-    }
-  }, [updateSettings, probe]);
-
+  // Drops cached health for servers that are gone, then probes the current ones.
+  const ids = providers.map((p) => p.id).join("\n");
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    const current = ids ? ids.split("\n") : [];
+    for (const id of [...healthCache.keys()]) if (!current.includes(id)) healthCache.delete(id);
+    current.forEach(probe);
+  }, [ids, probe]);
 
   // Servers answering on this computer, looked for each time the pane opens.
   const [found, setFound] = useState<DiscoveredServer[] | null>(null);
@@ -274,7 +256,7 @@ export default function InferencePane({ updateSettings }: PaneProps) {
     setError(null);
     try {
       await api.saveApiProvider({ ...p, enabled: !p.enabled }, { action: "keep" });
-      await reload();
+      await onChanged();
     } catch (e) {
       setError(errorText(e));
     }
@@ -282,58 +264,76 @@ export default function InferencePane({ updateSettings }: PaneProps) {
 
   const savePrompt = async (p: ApiProviderView, systemPrompt: string) => {
     await api.saveApiProvider({ ...p, systemPrompt }, { action: "keep" });
-    await reload();
+    await onChanged();
     setPromptingId(null);
   };
 
-  if (editing !== null) {
-    return (
-      <ProviderForm
-        key={editing.id}
-        initial={editing}
-        hasKey={providers.some((p) => p.id === editing.id && p.hasKey)}
-        onDone={() => {
-          setEditing(null);
-          void reload();
-        }}
-      />
-    );
-  }
+  const open = providers.find((p) => p.id === selected);
 
   return (
     <>
-      {providers.map((p) => (
-        <Fragment key={p.id}>
+      {(providers.length > 0 || unsaved.length > 0) && (
+        <div role="group" aria-label="Local providers" className={TILE_GRID}>
+          {providers.map((p) => {
+            const [status, dot] = tileStatus(p, health[p.id]);
+            return (
+              <button
+                key={p.id}
+                className={`${PROVIDER_TILE} bg-panel text-fg ${selected === p.id ? "border-accent" : "border-border"}`}
+                aria-label={`${p.name}, ${status}`}
+                aria-expanded={selected === p.id}
+                title={healthLine(p, health[p.id])}
+                onClick={() => setSelected(selected === p.id ? null : p.id)}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`absolute top-2 right-2 size-2 rounded-full ${dot}`}
+                />
+                <ProviderLogos kind="api" preset={p.preset} logo={p.logo} size={22} />
+                <span className="max-w-full truncate">{p.name}</span>
+              </button>
+            );
+          })}
+          {unsaved.map((d) => (
+            <button
+              key={d.baseUrl}
+              className={`${PROVIDER_TILE} border-dashed border-border-strong bg-transparent text-fg-muted hover:text-fg`}
+              aria-label={`Add ${d.name}`}
+              title={d.baseUrl}
+              onClick={() => onEdit(fromDiscovered(d))}
+            >
+              <PlusIcon size={12} aria-hidden="true" className="absolute top-2 right-2" />
+              <ProviderLogos kind="api" preset="custom" size={22} />
+              <span className="max-w-full truncate">{d.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {open && (
+        <>
           <ServerRow
-            provider={p}
-            health={health[p.id]}
-            prompting={promptingId === p.id}
-            onRecheck={() => probe(p.id)}
-            onEdit={() => setEditing(p)}
-            onPrompt={() => setPromptingId(promptingId === p.id ? null : p.id)}
-            onToggle={() => void toggle(p)}
+            provider={open}
+            health={health[open.id]}
+            prompting={promptingId === open.id}
+            onRecheck={() => probe(open.id)}
+            onEdit={() => onEdit(open)}
+            onPrompt={() => setPromptingId(promptingId === open.id ? null : open.id)}
+            onToggle={() => void toggle(open)}
           />
-          {health[p.id]?.reachable === false && (
-            <Repair provider={p} onMoved={() => void reload()} />
+          {health[open.id]?.reachable === false && (
+            <Repair provider={open} onMoved={() => void onChanged().then(() => probe(open.id))} />
           )}
-          {promptingId === p.id && (
+          {promptingId === open.id && (
             <PromptEditor
-              label={p.name}
-              saved={p.systemPrompt}
-              onSave={(text) => savePrompt(p, text)}
+              label={open.name}
+              saved={open.systemPrompt}
+              onSave={(text) => savePrompt(open, text)}
               onCancel={() => setPromptingId(null)}
             />
           )}
-        </Fragment>
-      ))}
-      {unsaved.map((d) => (
-        <FoundRow key={d.baseUrl} server={d} onAdd={() => setEditing(fromDiscovered(d))} />
-      ))}
-      {empty && (
-        <div className="flex h-full items-center justify-center text-fg-muted">
-          No local providers available
-        </div>
+        </>
       )}
+      {empty && <div className="py-6 text-center text-fg-muted">No local providers available</div>}
       {error && (
         <div role="alert" className="text-[length:var(--fs-sm)] text-danger">
           {error}

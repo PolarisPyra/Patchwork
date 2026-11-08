@@ -89,7 +89,7 @@ type Entry = {
   status?: AgentStatus | null;
 };
 
-/** The agents with plan limits to show, when they are connected in Settings → Cloud providers. */
+/** The agents with plan limits to show, when they are connected in Settings → Providers. */
 const PLAN_AGENTS: AgentKind[] = ["claude", "codex", "antigravity"];
 /** Every agent the popover can show: the plan agents, then OpenCode. */
 const SHOWN_AGENTS: AgentKind[] = [...PLAN_AGENTS, "opencode"];

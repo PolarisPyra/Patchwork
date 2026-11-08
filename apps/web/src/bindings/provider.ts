@@ -29,9 +29,9 @@ preset: string,
  */
 baseUrl: string, enabled: boolean, 
 /**
- * Found on this computer, added from Settings → Local providers or by Use a local model: shown
- * there with live health. Every other provider, added from a preset or by its address, is
- * `false` and shows in Settings → Cloud providers.
+ * Found on this computer, added from Settings → Providers or by Use a local model: listed under
+ * Local providers there, with live health. Every other provider, added from a preset or by its
+ * address, is `false` and listed above them.
  */
 local: boolean, models: Array<ApiModel>, 
 /**
@@ -225,7 +225,7 @@ efforts: Array<string> | null,
 contextWindow: number | null, };
 
 /**
- * The live health of a saved provider's endpoint, probed on demand so Settings → Local providers can
+ * The live health of a saved provider's endpoint, probed on demand so Settings → Providers can
  * show whether a local server is answering and which models it serves right now.
  */
 export type ProviderHealth = { 
@@ -272,9 +272,9 @@ preset: string,
  */
 baseUrl: string, enabled: boolean, 
 /**
- * Found on this computer, added from Settings → Local providers or by Use a local model: shown
- * there with live health. Every other provider, added from a preset or by its address, is
- * `false` and shows in Settings → Cloud providers.
+ * Found on this computer, added from Settings → Providers or by Use a local model: listed under
+ * Local providers there, with live health. Every other provider, added from a preset or by its
+ * address, is `false` and listed above them.
  */
 local: boolean, models: Array<ApiModel>, 
 /**

@@ -32,13 +32,45 @@ interface Preset {
   models: string[];
 }
 
-/** Cloud endpoints the Cloud providers pane offers to start from, beside Add a server for any other. */
+/** Cloud endpoints the Providers pane offers to start from, beside Add a server for any other. The
+ * id names the key's environment variable (`MISTRAL_API_KEY`) and picks the logo. */
 const PRESETS: Preset[] = [
+  { id: "deepseek", name: "DeepSeek", baseUrl: "https://api.deepseek.com", models: [] },
+  { id: "openai", name: "OpenAI", baseUrl: "https://api.openai.com/v1", models: [] },
   {
-    id: "deepseek",
-    name: "DeepSeek",
-    baseUrl: "https://api.deepseek.com",
+    id: "gemini",
+    name: "Gemini",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
     models: [],
+  },
+  { id: "xai", name: "Grok", baseUrl: "https://api.x.ai/v1", models: [] },
+  { id: "mistral", name: "Mistral", baseUrl: "https://api.mistral.ai/v1", models: [] },
+  { id: "zai", name: "Z.ai", baseUrl: "https://api.z.ai/api/paas/v4", models: [] },
+  { id: "llama", name: "Meta", baseUrl: "https://api.llama.com/compat/v1", models: [] },
+  { id: "moonshot", name: "Kimi", baseUrl: "https://api.moonshot.ai/v1", models: [] },
+  {
+    id: "dashscope",
+    name: "Qwen",
+    baseUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    models: [],
+  },
+  { id: "minimax", name: "MiniMax", baseUrl: "https://api.minimax.io/v1", models: [] },
+  { id: "groq", name: "Groq", baseUrl: "https://api.groq.com/openai/v1", models: [] },
+  { id: "together", name: "Together AI", baseUrl: "https://api.together.xyz/v1", models: [] },
+  {
+    id: "fireworks",
+    name: "Fireworks AI",
+    baseUrl: "https://api.fireworks.ai/inference/v1",
+    models: [],
+  },
+  { id: "cerebras", name: "Cerebras", baseUrl: "https://api.cerebras.ai/v1", models: [] },
+  { id: "openrouter", name: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", models: [] },
+  // Perplexity has no model list to load, so its models are filled in.
+  {
+    id: "perplexity",
+    name: "Perplexity",
+    baseUrl: "https://api.perplexity.ai",
+    models: ["sonar", "sonar-pro", "sonar-reasoning-pro"],
   },
 ];
 
@@ -69,19 +101,35 @@ export function syncAgents(providers: ApiProviderView[], updateSettings: UpdateS
   });
 }
 
+/** A grid of provider tiles: the presets to add, and the servers on this computer. */
+export const TILE_GRID =
+  "grid w-full grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2 py-2.5";
+
+export const PROVIDER_TILE =
+  "relative flex h-[4.5rem] min-w-0 cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--radius-md)] border px-2 text-[length:var(--fs-sm)] transition-colors hover:border-border-strong hover:bg-hover";
+
+/** The presets to start a provider from, then Add a server for any other address. */
 export function PresetGrid({ onPick }: { onPick: (p: Preset) => void }) {
   return (
-    <div className="flex flex-wrap gap-2 py-2.5">
+    <div role="group" aria-label="Add a provider" className={TILE_GRID}>
       {PRESETS.map((p) => (
         <button
           key={p.id}
-          className="flex size-20 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-border bg-transparent text-fg hover:border-border-strong hover:bg-hover"
+          className={`${PROVIDER_TILE} border-border bg-panel text-fg`}
+          aria-label={`Add ${p.name}`}
           onClick={() => onPick(p)}
         >
-          <ProviderLogos kind="api" preset={p.id} size={20} />
-          <span className="text-[length:var(--fs-sm)]">{p.name}</span>
+          <ProviderLogos kind="api" preset={p.id} size={22} />
+          <span className="max-w-full truncate">{p.name}</span>
         </button>
       ))}
+      <button
+        className={`${PROVIDER_TILE} border-dashed border-border-strong bg-transparent text-fg-muted hover:text-fg`}
+        onClick={() => onPick({ id: "custom", name: "", baseUrl: "", models: [] })}
+      >
+        <PlusIcon size={22} className="flex-none" />
+        <span className="max-w-full truncate">Add a server</span>
+      </button>
     </div>
   );
 }

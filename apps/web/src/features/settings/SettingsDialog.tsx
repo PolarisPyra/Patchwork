@@ -2,8 +2,6 @@ import { memo, useState, type ReactNode } from "react";
 import {
   ArrowCircleUpIcon,
   ClockIcon,
-  CloudIcon,
-  DesktopTowerIcon,
   FolderSimpleIcon,
   GaugeIcon,
   GearSixIcon,
@@ -12,6 +10,7 @@ import {
   PlugIcon,
   PuzzlePieceIcon,
   ShieldCheckIcon,
+  SparkleIcon,
   TerminalWindowIcon,
   XIcon,
   type Icon,
@@ -19,7 +18,6 @@ import {
 import AgentsPane from "~/features/settings/agents/AgentsPane";
 import GeneralPane from "~/features/settings/app/GeneralPane";
 import ImportsPane from "~/features/settings/system/ImportsPane";
-import InferencePane from "~/features/settings/providers/InferencePane";
 import KeybindingsPane from "~/features/settings/app/KeybindingsPane";
 import LoggingPane from "~/features/settings/system/LoggingPane";
 import McpServersPane from "~/features/settings/providers/mcp/McpServersPane";
@@ -111,11 +109,10 @@ const GROUPS: {
     sections: [
       {
         id: "providers",
-        label: "Cloud providers",
-        Icon: CloudIcon,
+        label: "Providers",
+        Icon: SparkleIcon,
         Pane: ProvidersPane,
       },
-      { id: "inference", label: "Local providers", Icon: DesktopTowerIcon, Pane: InferencePane },
       { id: "tokens", label: "AI Tokenomics", Icon: GaugeIcon, Pane: TokensPane },
     ],
   },
