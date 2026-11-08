@@ -43,7 +43,7 @@ Everything the sidebar shows comes from one SQLite database, `patchwork.db`, in 
 
 Where a thread runs:
 
-- **Task:** directly in its project's `path`. There is no copy and no git worktree, so tasks in the same project share one working tree.
+- **Task:** directly in its project's `path`, so tasks in the same project share one working tree. "New task in a worktree" (a project's menu, or the palette) runs `git worktree add -b patchwork/<id>` into `worktrees/<repo>-<id>` under the app's local data directory and adds it as a project of its own, so its tasks work apart. Removing that project removes the worktree, refused while it has changes not committed; the branch stays.
 - **Chat:** in `chats/<thread id>` under the app's local data directory (`app_local_data_dir`). The folder is deleted with the chat.
 
 Sidebar order is the `position` column. A new thread gets `-created_at`, so the newest is first until it is dragged. Dropping rows calls `reorder_threads`, which numbers that list `0..n`.

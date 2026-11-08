@@ -19,7 +19,7 @@ import ChatBackgroundDialog from "~/features/workspace/components/ChatBackground
 import CommandPalette from "~/features/workspace/components/CommandPalette";
 import SettingsDialog from "~/features/settings/SettingsDialog";
 import { refreshBackgroundImages } from "~/lib/chatBackgrounds";
-import { addFolders, relocateProject, syncProjects } from "~/lib/projects";
+import { addFolders, createWorktree, relocateProject, syncProjects } from "~/lib/projects";
 import Sidebar, {
   ActivityBar,
   getSelectedRows,
@@ -383,6 +383,14 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
       await rememberProject(projectId);
     });
 
+  /** A task in a new git worktree of the project, which is added as a project of its own. */
+  const newThreadInWorktree = (projectId: string) =>
+    attempt(async () => {
+      const project = await createWorktree(projectId, updateSettings);
+      await createThread(project.id, newThreadOptions());
+      await rememberProject(project.id);
+    });
+
   /** Ctrl+N: a task in the selected task's folder or project; a chat when a chat or nothing is selected. */
   const newThreadHere = () => {
     if (!selected?.projectId) return newChat();
@@ -469,6 +477,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     onUndoSortByAgent: (projectId: string) => attempt(() => undoSortByAgent(projectId)),
     onRenameFolder: (id: string, name: string) => attempt(() => renameFolder(id, name)),
     onNewTaskInFolder: newThreadInFolder,
+    onNewTaskInWorktree: newThreadInWorktree,
     onOpenFolder: openFolder,
     onDropFolders: dropFolders,
     onRefreshChanges: () => attempt(refreshGit),
@@ -650,6 +659,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
             rules,
             newChat,
             newTask: newThreadIn,
+            newTaskInWorktree: newThreadInWorktree,
             toggleTheme,
             openSettings: () => setSettingsOpen(true),
             openFolder,

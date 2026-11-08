@@ -71,6 +71,8 @@ export interface SidebarProps {
   onDeleteArchived: (ids: string[]) => void;
   /** Starts a task at the top of a folder; `threadIds` are the folder's tasks in order. */
   onNewTaskInFolder: (projectId: string, folderId: string, threadIds: string[]) => void;
+  /** Starts a task in a new git worktree of the project, added as a project of its own. */
+  onNewTaskInWorktree: (projectId: string) => void;
   onOpenFolder: () => void;
   /** Adds folders dropped on the Projects section as projects. */
   onDropFolders: (paths: string[]) => void;

@@ -12,6 +12,7 @@ interface PaletteSource {
   rules: Rule[];
   newChat: () => void;
   newTask: (projectId: string) => void;
+  newTaskInWorktree: (projectId: string) => void;
   toggleTheme: () => void;
   openSettings: () => void;
   openFolder: () => void;
@@ -34,6 +35,7 @@ export function paletteItems({
   rules,
   newChat,
   newTask,
+  newTaskInWorktree,
   toggleTheme,
   openSettings,
   openFolder,
@@ -59,6 +61,12 @@ export function paletteItems({
             label: `New task in ${project.name}`,
             hint: keyLabel(rules, "chat.new"),
             run: () => newTask(project.id),
+          },
+          {
+            id: "new-task-worktree",
+            group: "Actions",
+            label: `New task in a worktree of ${project.name}`,
+            run: () => newTaskInWorktree(project.id),
           },
         ]
       : []),

@@ -29,7 +29,10 @@ export const projectsApi = {
   testSshHost: (name: string) => invoke<SshTest>("test_ssh_host", { name }),
   /** Opens `~/.ssh/config` in the editor; fails when there is none. */
   openSshConfig: () => invoke<void>("open_ssh_config"),
+  /** A worktree project also removes its worktree, refused while it has changes not committed. */
   removeProject: (id: string) => invoke<void>("remove_project", { id }),
+  /** Makes a git worktree of the project on a new branch, registered as the active project. */
+  createWorktree: (projectId: string) => invoke<Project>("create_worktree", { projectId }),
   listFolders: () => invoke<Folder[]>("list_folders"),
   createFolder: (projectId: string, name: string) =>
     invoke<Folder>("create_folder", { projectId, name }),

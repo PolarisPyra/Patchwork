@@ -53,3 +53,13 @@ export async function relocateProject(id: string, updateSettings: UpdateSettings
   await api.relocateProject(id, path);
   await syncProjects(updateSettings);
 }
+
+/** Makes a git worktree of the project, on a new branch, as a project of its own; resolves to it. */
+export async function createWorktree(
+  projectId: string,
+  updateSettings: UpdateSettings,
+): Promise<Project> {
+  const project = await api.createWorktree(projectId);
+  await syncProjects(updateSettings);
+  return project;
+}

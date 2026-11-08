@@ -341,6 +341,7 @@ pub fn run() {
             commands::projects::open_ssh_config,
             commands::threads::rename_thread,
             commands::projects::remove_project,
+            commands::projects::create_worktree,
             commands::threads::list_threads,
             commands::threads::get_thread,
             commands::threads::reorder_threads,

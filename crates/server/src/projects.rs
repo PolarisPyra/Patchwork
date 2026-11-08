@@ -1,6 +1,6 @@
 //! Projects, the folders that group their threads, and what the sidebar remembers about them.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -167,7 +167,101 @@ impl Server {
         Ok(())
     }
 
+    /// Makes a git worktree of the project's repository, on a new branch from its HEAD, and adds
+    /// it as a project of its own, so that its tasks work apart from the project's. Ignored
+    /// files, such as installed packages, are not in it.
+    pub fn create_worktree(&self, project_id: &str) -> Result<Project, String> {
+        let source = self
+            .store
+            .settings()
+            .projects
+            .into_iter()
+            .find(|p| p.id == project_id)
+            .ok_or_else(|| format!("unknown project {project_id}"))?;
+        let top = workspace::run_git(&source.path, &["rev-parse", "--show-toplevel"])
+            .map_err(|_| format!("{} isn't a git repository", source.name))?;
+        let top = top.trim();
+        if workspace::run_git(top, &["rev-parse", "--verify", "-q", "HEAD"]).is_err() {
+            return Err("Make a first commit before starting a task in a worktree".into());
+        }
+        // A project in a folder of its repository opens the same folder of the worktree.
+        let prefix = workspace::run_git(&source.path, &["rev-parse", "--show-prefix"])?;
+        let short = &new_id()[..8];
+        let folder = Path::new(top)
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "worktree".into());
+        std::fs::create_dir_all(&self.worktrees_dir)
+            .map_err(|e| format!("Cannot create {}: {e}", self.worktrees_dir.display()))?;
+        let root = self.worktrees_dir.join(format!("{folder}-{short}"));
+        let branch = format!("patchwork/{short}");
+        workspace::run_git(
+            top,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                &branch,
+                &root.to_string_lossy(),
+                "HEAD",
+            ],
+        )?;
+        let mut project = workspace::make_project(&root.join(prefix.trim()).to_string_lossy())?;
+        project.name = format!("{} · {short}", source.name);
+        self.register_project(project, true)
+    }
+
+    /// When the project at `path` is a worktree `create_worktree` made, removes the worktree,
+    /// refused while it has changes that aren't committed. Its branch stays with its commits.
+    fn remove_worktree(&self, id: &str, path: &str) -> Result<(), String> {
+        let Ok(dir) = std::fs::canonicalize(&self.worktrees_dir) else {
+            return Ok(());
+        };
+        let Some(first) = Path::new(path)
+            .strip_prefix(&dir)
+            .ok()
+            .and_then(|rel| rel.components().next())
+        else {
+            return Ok(());
+        };
+        let root = dir.join(first);
+        // Gone already: git drops its record of the worktree by itself.
+        if !root.exists() {
+            return Ok(());
+        }
+        let root = root.to_string_lossy();
+        let running = self
+            .store
+            .threads()
+            .into_iter()
+            .any(|t| t.project_id.as_deref() == Some(id) && self.runner.is_running(&t.id));
+        if running {
+            return Err("Stop this worktree's running tasks before removing it".into());
+        }
+        if !workspace::run_git(&root, &["status", "--porcelain"])?
+            .trim()
+            .is_empty()
+        {
+            return Err(
+                "This worktree has changes that aren't committed. Commit or discard them before removing it"
+                    .into(),
+            );
+        }
+        let common = workspace::run_git(
+            &root,
+            &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+        )?;
+        let git_dir = format!("--git-dir={}", common.trim());
+        workspace::run_git(
+            &dir.to_string_lossy(),
+            &[&git_dir, "worktree", "remove", &root],
+        )?;
+        Ok(())
+    }
+
     pub fn remove_project(&self, id: &str) -> Result<(), String> {
+        let path = self.project_root(id)?;
+        self.remove_worktree(id, &path)?;
         self.store.update_settings(|s| {
             s.projects.retain(|p| p.id != id);
             if s.active_project_id.as_deref() == Some(id) {

@@ -67,9 +67,18 @@ pub(crate) async fn open_ssh_config(app: AppHandle) -> Res<()> {
     edit_file(&app, dir, "config".to_string()).await
 }
 
+/// A worktree project removes its worktree too, which runs git.
 #[tauri::command]
-pub(crate) fn remove_project(server: Srv, id: String) -> Res<()> {
-    server.remove_project(&id)
+pub(crate) async fn remove_project(server: Srv<'_>, id: String) -> Res<()> {
+    let server = server.inner().clone();
+    blocking(move || server.remove_project(&id)).await?
+}
+
+/// Starts a git worktree of the project as a project of its own.
+#[tauri::command]
+pub(crate) async fn create_worktree(server: Srv<'_>, project_id: String) -> Res<Project> {
+    let server = server.inner().clone();
+    blocking(move || server.create_worktree(&project_id)).await?
 }
 
 #[tauri::command]

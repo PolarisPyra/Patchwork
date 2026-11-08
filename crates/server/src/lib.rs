@@ -57,6 +57,8 @@ pub struct Server {
     backgrounds_dir: PathBuf,
     /// Where an agent CLI's install script is saved while it runs.
     installers_dir: PathBuf,
+    /// The git worktrees tasks work in apart from their project, one folder each.
+    worktrees_dir: PathBuf,
     sink: EventSink,
     /// The watcher on the active project, with that project's id.
     project_watch: std::sync::Mutex<Option<(String, watch::ProjectWatcher)>>,
@@ -99,6 +101,7 @@ impl Server {
             pasted_dir: data_dir.join("pasted"),
             backgrounds_dir: data_dir.join("backgrounds"),
             installers_dir: data_dir.join("installers"),
+            worktrees_dir: data_dir.join("worktrees"),
             sink,
             project_watch: std::sync::Mutex::default(),
             skills_watch: std::sync::Mutex::default(),

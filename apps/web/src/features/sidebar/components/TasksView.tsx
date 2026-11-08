@@ -16,6 +16,7 @@ import {
   FolderIcon,
   FolderOpenIcon,
   FolderPlusIcon,
+  GitBranchIcon,
   ImageIcon,
   MagicWandIcon,
   PencilSimpleIcon,
@@ -93,6 +94,7 @@ export default function TasksView({
   onSortByAgent,
   onUndoSortByAgent,
   onNewTaskInFolder,
+  onNewTaskInWorktree,
   onOpenFolder,
   onDropFolders,
   flashId,
@@ -252,6 +254,11 @@ export default function TasksView({
         : []),
       ...(targets.length === 1 && targets[0].kind === "project"
         ? [
+            {
+              label: "New task in a worktree",
+              Icon: GitBranchIcon,
+              onSelect: () => onNewTaskInWorktree(targets[0].id),
+            },
             {
               label: "Change folder…",
               Icon: FolderIcon,
