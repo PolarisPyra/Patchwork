@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   api,
   defaultAgentOf,
@@ -134,6 +135,10 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   useEffect(() => {
     if (view) lastView.current = view;
   }, [view]);
+  const windowTitle = selected ? `Patchwork - ${displayTitle(selected.title)}` : "Patchwork";
+  useEffect(() => {
+    void getCurrentWindow().setTitle(windowTitle);
+  }, [windowTitle]);
   useEffect(() => {
     const timer = setTimeout(() => {
       void loadCanvas();
