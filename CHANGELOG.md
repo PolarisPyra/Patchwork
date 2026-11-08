@@ -3,6 +3,27 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.29] - 2026-11-08
+
+### Added
+
+- Settings → General has an OLED theme, the dark theme with true-black backgrounds for OLED screens.
+- Adding a project now opens a dialog inside Patchwork where you pick the machine, browse its folders, or type a path, instead of the system's folder picker. Machines from your SSH config are listed too, though only this computer can be opened for now.
+- Settings → SSH lists the hosts in your SSH config with their user and port, tests whether each one lets Patchwork in with a key, and opens the config to edit it.
+- Settings → Providers has a Local providers section with a tile for each model server on this computer, showing whether it is answering, which models it serves, and how fast, alongside servers running here that aren't added yet. A server that stops answering offers Find server, to look for where it moved, and Change address. LM Studio shows its own logo, and other servers on this computer show a plug.
+- Adding a provider in Settings → Providers is now a grid of tiles with logos, with presets for OpenAI, Gemini, Grok, Mistral, Z.ai, Meta, Kimi, Qwen, MiniMax, Groq, Together AI, Fireworks AI, Cerebras, OpenRouter, and Perplexity beside DeepSeek, and Add a server for any other address.
+- Settings → AI Tokenomics can pick the model that writes chat and task titles, so a local model can name every chat. With Only local models write titles on, a chat's first message is never sent to a cloud service for its title, and a chat without a local model keeps its first line as its title.
+- The token counts above the chat box now show how long the latest reply took to start and how many tokens a second it wrote, for chats on API and local models.
+- A reply from a local model that keeps repeating the same text, or reasons at length without ever answering, is now stopped with a message saying why, so it no longer ties up your server until you notice. Send a message to carry on, or pick another model.
+- Use a local model, in the model picker and the Ctrl+K menu, finds a model server on this computer, adds it, and picks one of its models for the chat. Above the chat box, a local model's chat now says when its server isn't answering, with Find server, when the server no longer serves the chat's model, with the models it serves now, and when the model can't read the images you attached. Settings → Providers shows which local servers' models read images.
+
+### Changed
+
+- A chat artifact that is just a video now shows as a player the size of the video, instead of a full-width white page with a small black box. A video that can't load says so instead of showing an empty player.
+- Settings has a shorter list. Agents, Skills, and Hooks are now tabs under Extensions, Logs sits at the end of General, Imports at the end of Projects, and every model provider, cloud or local, is in Settings → Providers, now with a sparkle icon.
+- Each installed CLI in Settings → Providers has a Details button beside System Prompt, which opens a page of its own with the CLI's version, path, models, and settings, and buttons for its MCP servers, plugins, and other listings. OpenCode and Antigravity have this page now too.
+- The model picker marks each local model with this computer, beside its provider's name.
+
 ## [26.11.28] - 2026-11-07
 
 ### Added
