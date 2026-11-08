@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowClockwiseIcon,
   CaretDownIcon,
@@ -22,7 +22,7 @@ import type { UpdateSettings } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
 import Spinner from "~/components/Spinner";
 import { errorText } from "~/lib/util";
-import { INPUT } from "~/features/settings/controls";
+import { INPUT, Segmented } from "~/features/settings/controls";
 
 /** Endpoints a provider can start from. */
 interface Preset {
@@ -32,6 +32,8 @@ interface Preset {
   models: string[];
 }
 
+/** Cloud endpoints the Cloud providers pane offers to start from. A custom endpoint by URL is added
+ * on the Local providers pane, not here. */
 const PRESETS: Preset[] = [
   {
     id: "deepseek",
@@ -39,7 +41,6 @@ const PRESETS: Preset[] = [
     baseUrl: "https://api.deepseek.com",
     models: [],
   },
-  { id: "custom", name: "Custom", baseUrl: "", models: [] },
 ];
 
 export const blank = (preset: Preset): ApiProvider => ({
@@ -48,6 +49,7 @@ export const blank = (preset: Preset): ApiProvider => ({
   preset: preset.id,
   baseUrl: preset.baseUrl,
   enabled: true,
+  local: false,
   models: preset.models.map((id) => ({ id, name: null })),
   headers: [],
   keyEnv: null,
@@ -66,6 +68,23 @@ export function syncAgents(providers: ApiProviderView[], updateSettings: UpdateS
     if (usable) return { ...s, agents: [...s.agents, "api"] };
     return { ...s, agents: s.agents.filter((k) => k !== "api") };
   });
+}
+
+export function PresetGrid({ onPick }: { onPick: (p: Preset) => void }) {
+  return (
+    <div className="flex flex-wrap gap-2 py-2.5">
+      {PRESETS.map((p) => (
+        <button
+          key={p.id}
+          className="flex size-20 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-border bg-transparent text-fg hover:border-border-strong hover:bg-hover"
+          onClick={() => onPick(p)}
+        >
+          <ProviderLogos kind="api" preset={p.id} size={20} />
+          <span className="text-[length:var(--fs-sm)]">{p.name}</span>
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /** A saved provider in the Providers list: click or Edit to change it, Prompt for its system
@@ -132,6 +151,11 @@ function describe(p: ApiProviderView): string {
   return [models, key].filter(Boolean).join(" · ");
 }
 
+const RUNS_ON: { value: "local" | "cloud"; label: string }[] = [
+  { value: "local", label: "Local" },
+  { value: "cloud", label: "Cloud" },
+];
+
 /** One labeled field of the editor. */
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -139,27 +163,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <span className="text-[length:var(--fs-sm)] font-medium text-fg-muted">{label}</span>
       {children}
     </label>
-  );
-}
-
-export function PresetGrid({ onPick }: { onPick: (p: Preset) => void }) {
-  return (
-    <div className="grid grid-cols-2 gap-2 py-2.5">
-      {PRESETS.map((p) => (
-        <button
-          key={p.id}
-          className="flex h-16 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-border bg-transparent text-fg hover:border-border-strong hover:bg-hover"
-          onClick={() => onPick(p)}
-        >
-          {p.id === "custom" ? (
-            <PlusIcon size={20} />
-          ) : (
-            <ProviderLogos kind="api" preset={p.id} size={20} />
-          )}
-          <span className="text-[length:var(--fs-sm)]">{p.name}</span>
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -261,7 +264,36 @@ export function ProviderForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  // Runs on follows the suggestion for the URL until it is picked by hand; a saved provider keeps
+  // the choice it was saved with.
+  const [runsOnPicked, setRunsOnPicked] = useState(saved);
+  const [runsOnReason, setRunsOnReason] = useState<string | null>(null);
   const set = (patch: Partial<ApiProvider>) => setDraft({ ...draft, ...patch });
+
+  useEffect(() => {
+    if (runsOnPicked) return;
+    const url = draft.baseUrl.trim();
+    if (!/^https?:\/\/[^/]/.test(url)) {
+      setRunsOnReason(null);
+      return;
+    }
+    let cancelled = false;
+    // Waits for typing to pause, since an unknown name is looked up in DNS.
+    const timer = setTimeout(() => {
+      api.suggestProviderLocality(url).then(
+        (s) => {
+          if (cancelled) return;
+          setDraft((d) => ({ ...d, local: s.local }));
+          setRunsOnReason(s.reason);
+        },
+        () => {},
+      );
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [draft.baseUrl, runsOnPicked]);
 
   const toggleShowKey = async () => {
     const show = !showKey;
@@ -284,7 +316,16 @@ export function ProviderForm({
           ? { action: "set", key }
           : { action: "keep" };
 
+  // A cloud service always needs credentials: a key, a variable holding one, or a header.
+  const noCredentials =
+    (useEnv ? !draft.keyEnv?.trim() : clearKey || (!hasKey && !key.trim())) &&
+    draft.headers.every((h) => !h.name.trim());
+
   const save = async () => {
+    if (!draft.local && noCredentials) {
+      setError("A cloud service needs an API key");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -344,6 +385,25 @@ export function ProviderForm({
             onChange={(e) => set({ baseUrl: e.target.value })}
           />
         </Field>
+      </div>
+      <div className="flex flex-col gap-1">
+        <span className="text-[length:var(--fs-sm)] font-medium text-fg-muted">Runs on</span>
+        <div className="flex min-w-0 items-center gap-3">
+          <Segmented
+            label="Runs on"
+            value={draft.local ? "local" : "cloud"}
+            options={RUNS_ON}
+            onChange={(v) => {
+              setRunsOnPicked(true);
+              set({ local: v === "local" });
+            }}
+          />
+          {!runsOnPicked && runsOnReason && (
+            <span role="status" className="truncate text-[length:var(--fs-sm)] text-fg-subtle">
+              {runsOnReason}
+            </span>
+          )}
+        </div>
       </div>
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between">
