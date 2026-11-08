@@ -28,8 +28,8 @@ mod install;
 mod types;
 
 pub use types::{
-    AgentKind, AgentStatus, ClaudeFeature, ClaudeInfo, ClaudeModel, CodexFeature, CodexInfo,
-    CodexModel, ModelOption, ProviderSlashCommand,
+    AgentKind, AgentStatus, ClaudeFeature, ClaudeInfo, ClaudeModel, CliInfo, CliSetting,
+    CodexFeature, CodexInfo, CodexModel, ModelOption, ProviderSlashCommand,
 };
 
 pub mod claude;

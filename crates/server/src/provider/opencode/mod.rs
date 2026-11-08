@@ -16,6 +16,7 @@ pub use serve::{uses_serve, bridge_request, mode_asks, steer_line, approval_repl
 use serve::{action, parse_serve};
 
 pub mod bridge;
+pub mod cli;
 
 #[cfg(test)]
 mod tests;

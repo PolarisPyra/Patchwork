@@ -1,4 +1,4 @@
-//! The agent CLIs: finding and installing them, what Claude Code and Codex report about themselves, and the custom agents a chat can summon.
+//! The agent CLIs: finding and installing them, what each CLI reports about itself, and the custom agents a chat can summon.
 
 use super::*;
 
@@ -49,6 +49,34 @@ pub(crate) async fn codex_command(kind: String) -> Res<String> {
     let kind = patchwork_server::provider::cli_info::InfoCommand::named(&kind)
         .ok_or_else(|| format!("There is no Codex command named {kind}"))?;
     blocking(move || patchwork_server::provider::codex::cli::command(kind)).await?
+}
+
+/// What the installed OpenCode offers: its version, models, and config settings.
+#[tauri::command]
+pub(crate) async fn opencode_info() -> Res<CliInfo> {
+    blocking(patchwork_server::provider::opencode::cli::info).await?
+}
+
+/// The output of one of OpenCode's read-only diagnostics commands.
+#[tauri::command]
+pub(crate) async fn opencode_command(kind: String) -> Res<String> {
+    let kind = patchwork_server::provider::cli_info::InfoCommand::named(&kind)
+        .ok_or_else(|| format!("There is no OpenCode command named {kind}"))?;
+    blocking(move || patchwork_server::provider::opencode::cli::command(kind)).await?
+}
+
+/// What the installed Antigravity CLI offers: its version and models.
+#[tauri::command]
+pub(crate) async fn antigravity_info() -> Res<CliInfo> {
+    blocking(patchwork_server::provider::antigravity::info).await?
+}
+
+/// The output of one of the Antigravity CLI's read-only diagnostics commands.
+#[tauri::command]
+pub(crate) async fn antigravity_command(kind: String) -> Res<String> {
+    let kind = patchwork_server::provider::cli_info::InfoCommand::named(&kind)
+        .ok_or_else(|| format!("There is no Antigravity command named {kind}"))?;
+    blocking(move || patchwork_server::provider::antigravity::command(kind)).await?
 }
 
 #[derive(serde::Serialize)]

@@ -28,7 +28,7 @@ use patchwork_server::backgrounds::{BackgroundImage, ChatBackground, RemovedBack
 use patchwork_server::import::{ImportSource, ImportScan};
 use patchwork_server::plugins::Plugin;
 use patchwork_server::projects::{Project, Folder};
-use patchwork_server::provider::{AgentKind, AgentStatus, ModelOption, CodexInfo, ClaudeInfo};
+use patchwork_server::provider::{AgentKind, AgentStatus, ModelOption, CodexInfo, ClaudeInfo, CliInfo};
 use patchwork_server::scheduled::ScheduledTask;
 use patchwork_server::settings::Settings;
 use patchwork_server::threads::{AccessMode, Attachment, Message, Thread, TurnTrees};

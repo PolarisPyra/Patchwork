@@ -7,6 +7,8 @@ use serde_json::Value;
 use crate::threads::{AccessMode, TokenUsage};
 use crate::provider::AgentKind;
 use crate::provider::AgentStatus;
+use crate::provider::CliInfo;
+use crate::provider::cli_info::{self, InfoCommand};
 use crate::provider::ModelOption;
 use super::find_binary;
 use super::GoalUpdate;
@@ -72,6 +74,34 @@ pub fn models() -> Vec<ModelOption> {
             context_window: None,
         })
         .collect()
+}
+
+/// The commands the Antigravity pane offers. It has no flags and no `doctor`.
+const INFO_COMMANDS: &[InfoCommand] = &[
+    InfoCommand::McpList,
+    InfoCommand::PluginList,
+    InfoCommand::Changelog,
+];
+
+/// The CLI's path, version and models, for the Settings pane.
+pub fn info() -> Result<CliInfo, String> {
+    let path = antigravity_bin().ok_or("The Antigravity CLI is not installed")?;
+    let version = cli_info::run(&path, &["--version"])
+        .map(|text| text.lines().next().unwrap_or_default().trim().to_string())
+        .unwrap_or_else(|_| "unknown".into());
+    Ok(CliInfo {
+        path: path.to_string_lossy().into_owned(),
+        version,
+        settings: Vec::new(),
+        models: models(),
+    })
+}
+
+/// Runs one of the read-only diagnostics commands. See `cli_info::command`.
+pub fn command(kind: InfoCommand) -> Result<String, String> {
+    cli_info::check("Antigravity", kind, INFO_COMMANDS)?;
+    let binary = antigravity_bin().ok_or("The Antigravity CLI is not installed")?;
+    cli_info::command(&binary, kind)
 }
 
 /// Antigravity without a way to ask: in "default" mode, actions that need approval are
@@ -169,6 +199,7 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                         cache_write: 0,
                         output: count("output_tokens") + count("thinking_tokens"),
                         context: prompt,
+                        ..Default::default()
                     },
                     top_level: true,
                 });

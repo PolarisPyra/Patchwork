@@ -140,6 +140,15 @@ pub fn info() -> Result<CodexInfo, String> {
 
 /// Runs one of the read-only diagnostics commands. See `cli_info::command`.
 pub fn command(kind: InfoCommand) -> Result<String, String> {
+    cli_info::check(
+        "Codex",
+        kind,
+        &[
+            InfoCommand::Doctor,
+            InfoCommand::McpList,
+            InfoCommand::PluginList,
+        ],
+    )?;
     let binary = binary().ok_or("The Codex CLI is not installed")?;
     cli_info::command(&binary, kind)
 }

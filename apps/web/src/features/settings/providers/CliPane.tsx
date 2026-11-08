@@ -1,18 +1,30 @@
 import { useEffect, useState } from "react";
-import { MagnifyingGlassIcon, StethoscopeIcon } from "@phosphor-icons/react";
-import { api } from "~/api";
-import { INPUT, Segmented, chip } from "~/features/settings/controls";
+import {
+  CaretLeftIcon,
+  MagnifyingGlassIcon,
+  StethoscopeIcon,
+  type Icon,
+} from "@phosphor-icons/react";
+import { api, AGENT_LABELS, type CliInfo, type CliKind } from "~/api";
+import ProviderLogos from "~/components/ProviderLogos";
+import { INPUT, chip } from "~/features/settings/controls";
 import { errorText, tildify } from "~/lib/util";
 
-/** The CLIs whose flags and model catalog Patchwork can read. */
-type DetailsKind = "claude" | "codex";
+/** The CLIs whose details Patchwork can read. */
+export type DetailsKind = "claude" | "codex" | "opencode" | "antigravity";
 
-/** Claude Code's and Codex's readings in one shape, so one view draws both. */
+/** Each CLI's reading in one shape, so one view draws them all. */
 interface Details {
   path: string;
   version: string;
-  /** `kept` is whether the filter chip keeps the flag. */
-  features: { name: string; detail: string; enabled: boolean | null; kept: boolean }[];
+  /** `kept` is whether the filter chip keeps the row; `source` is the file that sets it. */
+  features: {
+    name: string;
+    detail: string;
+    enabled: boolean | null;
+    kept: boolean;
+    source?: string;
+  }[];
   models: {
     id: string;
     name: string;
@@ -22,19 +34,50 @@ interface Details {
   }[];
 }
 
+/** A button that runs one of the CLI's read-only commands and shows its output. */
+interface Command {
+  label: string;
+  /** The output's title, the command as typed. */
+  title: string;
+  run: () => Promise<string>;
+  Icon?: Icon;
+}
+
+/** The commands Claude Code and Codex share. */
+const SHARED = (command: (kind: "doctor" | "mcp" | "plugins") => Promise<string>): Command[] => [
+  { label: "Doctor", title: "doctor", run: () => command("doctor"), Icon: StethoscopeIcon },
+  { label: "MCP servers", title: "mcp list", run: () => command("mcp") },
+  { label: "Plugins", title: "plugin list", run: () => command("plugins") },
+];
+
+/** OpenCode's and Antigravity's models, which carry no tag. */
+const cliModels = (info: CliInfo): Details["models"] =>
+  info.models.map((m) => ({
+    id: m.id ?? m.label,
+    name: m.label,
+    contextWindow: m.contextWindow,
+    efforts: m.efforts ?? [],
+    tag: null,
+  }));
+
 /**
  * Claude Code prints neither its feature gates nor its model catalog, so its reading is the gates
  * the CLI itself has cached in `.claude.json` and the catalog it has fetched into
- * `~/.claude/cache`. Codex's flags and catalog are read from the binary itself. Either way a newer
- * CLI shows up as it is rather than as a copy of a list from an older release.
+ * `~/.claude/cache`. Codex's flags and catalog are read from the binary itself. OpenCode and
+ * Antigravity have no flags: OpenCode's rows are the settings in its config files, and Antigravity
+ * shows none. Either way a newer CLI shows up as it is rather than as a copy of a list from an
+ * older release.
  */
 const CLIS: Record<
   DetailsKind,
   {
     name: string;
     read: () => Promise<Details>;
-    command: (kind: "doctor" | "mcp" | "plugins") => Promise<string>;
-    filter: string;
+    commands: Command[];
+    /** What its rows are, or `null` when it has none to show. */
+    rows: "flags" | "settings" | null;
+    /** The filter chip's label, when its rows have one. */
+    filter: string | null;
     empty: string;
   }
 > = {
@@ -48,7 +91,8 @@ const CLIS: Record<
         models: info.models.map((m) => ({ ...m, tag: m.fastMode ? "fast" : null })),
       };
     },
-    command: api.claudeCommand,
+    commands: SHARED(api.claudeCommand),
+    rows: "flags",
     filter: "On only",
     empty: "Claude Code has not cached its feature gates yet. Start it once, then read again.",
   },
@@ -67,8 +111,50 @@ const CLIS: Record<
         })),
       };
     },
-    command: api.codexCommand,
+    commands: SHARED(api.codexCommand),
+    rows: "flags",
     filter: "Stable only",
+    empty: "Nothing matches.",
+  },
+  opencode: {
+    name: "opencode",
+    read: async () => {
+      const info = await api.opencodeInfo();
+      return {
+        ...info,
+        features: info.settings.map((s) => ({
+          name: s.name,
+          detail: s.value,
+          enabled: null,
+          kept: true,
+          source: s.source,
+        })),
+        models: cliModels(info),
+      };
+    },
+    commands: [
+      { label: "Agents", title: "debug agents", run: () => api.opencodeCommand("agents") },
+      { label: "Paths", title: "debug paths", run: () => api.opencodeCommand("paths") },
+      { label: "MCP servers", title: "mcp list", run: () => api.opencodeCommand("mcp") },
+      { label: "Plugins", title: "plugin list", run: () => api.opencodeCommand("plugins") },
+    ],
+    rows: "settings",
+    filter: null,
+    empty: "No config file sets anything yet.",
+  },
+  antigravity: {
+    name: "agy",
+    read: async () => {
+      const info = await api.antigravityInfo();
+      return { ...info, features: [], models: cliModels(info) };
+    },
+    commands: [
+      { label: "Changelog", title: "changelog", run: () => api.antigravityCommand("changelog") },
+      { label: "MCP servers", title: "mcp list", run: () => api.antigravityCommand("mcp") },
+      { label: "Plugins", title: "plugin list", run: () => api.antigravityCommand("plugins") },
+    ],
+    rows: null,
+    filter: null,
     empty: "Nothing matches.",
   },
 };
@@ -98,13 +184,10 @@ function CliDetails({ kind }: { kind: DetailsKind }) {
       .finally(() => setBusy(false));
   }
 
-  function command(which: "doctor" | "mcp" | "plugins", title: string) {
+  function command(c: Command) {
     setOutput(null);
     run(async () =>
-      setOutput({
-        title: `${cli.name} ${title}`,
-        text: (await cli.command(which)) || "Nothing to report.",
-      }),
+      setOutput({ title: `${cli.name} ${c.title}`, text: (await c.run()) || "Nothing to report." }),
     );
   }
 
@@ -138,48 +221,48 @@ function CliDetails({ kind }: { kind: DetailsKind }) {
           <div className="flex flex-wrap items-center gap-1.5 pb-3">
             <span className="font-semibold">{info.version}</span>
             <span className="text-[length:var(--fs-sm)] text-fg-subtle">{tildify(info.path)}</span>
-            <span className="ml-auto text-[length:var(--fs-sm)] text-fg-muted">
-              {enabled} of {all.length} flags on
-            </span>
+            {cli.rows && (
+              <span className="ml-auto text-[length:var(--fs-sm)] text-fg-muted">
+                {cli.rows === "flags"
+                  ? `${enabled} of ${all.length} flags on`
+                  : `${all.length} settings`}
+              </span>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 pb-2">
-            <button
-              className={chip(filtered)}
-              aria-pressed={filtered}
-              onClick={() => setFiltered(!filtered)}
-            >
-              {cli.filter}
-            </button>
-            <label className="relative w-52">
-              <MagnifyingGlassIcon
-                size={13}
-                className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-fg-muted"
-              />
-              <input
-                className={`${INPUT} pl-7`}
-                value={query}
-                placeholder="Search flags"
-                aria-label="Search flags"
-                spellCheck={false}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </label>
-            <span className="ml-auto flex gap-1.5">
-              <button className="btn" disabled={busy} onClick={() => command("doctor", "doctor")}>
-                <StethoscopeIcon size={13} />
-                Doctor
-              </button>
-              <button className="btn" disabled={busy} onClick={() => command("mcp", "mcp list")}>
-                MCP servers
-              </button>
+            {cli.filter && (
               <button
-                className="btn"
-                disabled={busy}
-                onClick={() => command("plugins", "plugin list")}
+                className={chip(filtered)}
+                aria-pressed={filtered}
+                onClick={() => setFiltered(!filtered)}
               >
-                Plugins
+                {cli.filter}
               </button>
+            )}
+            {cli.rows && (
+              <label className="relative w-52">
+                <MagnifyingGlassIcon
+                  size={13}
+                  className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-fg-muted"
+                />
+                <input
+                  className={`${INPUT} pl-7`}
+                  value={query}
+                  placeholder={`Search ${cli.rows}`}
+                  aria-label={`Search ${cli.rows}`}
+                  spellCheck={false}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </label>
+            )}
+            <span className="ml-auto flex gap-1.5">
+              {cli.commands.map((c) => (
+                <button key={c.label} className="btn" disabled={busy} onClick={() => command(c)}>
+                  {c.Icon && <c.Icon size={13} />}
+                  {c.label}
+                </button>
+              ))}
               <button
                 className="btn"
                 disabled={busy}
@@ -204,7 +287,10 @@ function CliDetails({ kind }: { kind: DetailsKind }) {
             </div>
           )}
 
-          <div className="max-h-[300px] overflow-auto rounded-[var(--radius-md)] border border-border">
+          <div
+            hidden={!cli.rows}
+            className="max-h-[300px] overflow-auto rounded-[var(--radius-md)] border border-border"
+          >
             <table className="w-full border-collapse text-[length:var(--fs-sm)]">
               <tbody>
                 {features.map((feature) => (
@@ -214,7 +300,11 @@ function CliDetails({ kind }: { kind: DetailsKind }) {
                     </td>
                     <td
                       className="max-w-[260px] truncate px-2 py-1 text-right font-[family-name:var(--font-mono)] text-[11px] text-fg-muted"
-                      title={feature.detail}
+                      title={
+                        feature.source
+                          ? `${feature.detail}\n${tildify(feature.source)}`
+                          : feature.detail
+                      }
                     >
                       {feature.detail}
                     </td>
@@ -265,20 +355,23 @@ function CliDetails({ kind }: { kind: DetailsKind }) {
   );
 }
 
-const KINDS: { value: DetailsKind; label: string }[] = [
-  { value: "claude", label: "Claude Code" },
-  { value: "codex", label: "Codex" },
-];
+/** Whether Patchwork can read `kind`'s details, so its row offers them. */
+export function hasDetails(kind: CliKind): kind is DetailsKind {
+  return kind in CLIS;
+}
 
-/** Settings → CLIs: Claude Code's or Codex's reading, one at a time. */
-export default function CliPane() {
-  const [kind, setKind] = useState<DetailsKind>("claude");
+/** Settings → Cloud providers → a CLI's Details: its reading on a page of its own. */
+export default function CliPane({ kind, onBack }: { kind: DetailsKind; onBack: () => void }) {
   return (
     <>
-      <div className="pb-3">
-        <Segmented label="CLI" value={kind} options={KINDS} onChange={setKind} />
+      <div className="flex items-center gap-3 pb-4">
+        <button className="btn-icon" title="Back" aria-label="Back" onClick={onBack}>
+          <CaretLeftIcon size={16} />
+        </button>
+        <ProviderLogos kind={kind} size={24} />
+        <h3 className="m-0 text-[length:var(--fs-lg)] font-semibold">{AGENT_LABELS[kind]}</h3>
       </div>
-      <CliDetails key={kind} kind={kind} />
+      <CliDetails kind={kind} />
     </>
   );
 }

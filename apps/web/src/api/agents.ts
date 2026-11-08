@@ -1,6 +1,6 @@
 import { Channel } from "@tauri-apps/api/core";
 import { invoke } from "~/api/invoke";
-import type { AgentKind, AgentStatus, ClaudeInfo, CodexInfo } from "~/api/types";
+import type { AgentKind, AgentStatus, ClaudeInfo, CliInfo, CodexInfo } from "~/api/types";
 
 /** The agents that run an installed CLI. */
 export type CliKind = Exclude<AgentKind, "api">;
@@ -62,6 +62,16 @@ export const agentsApi = {
   claudeInfo: () => invoke<ClaudeInfo>("claude_info"),
   /** The output of `claude doctor`, `claude mcp list`, or `claude plugin list`. */
   claudeCommand: (kind: "doctor" | "mcp" | "plugins") => invoke<string>("claude_command", { kind }),
+  /** The path, version, models and config settings of the installed OpenCode. */
+  opencodeInfo: () => invoke<CliInfo>("opencode_info"),
+  /** The output of `opencode mcp list`, `plugin list`, `debug paths`, or its agents as a list. */
+  opencodeCommand: (kind: "mcp" | "plugins" | "paths" | "agents") =>
+    invoke<string>("opencode_command", { kind }),
+  /** The path, version and models of the installed Antigravity CLI. */
+  antigravityInfo: () => invoke<CliInfo>("antigravity_info"),
+  /** The output of `agy mcp list`, `agy plugin list`, or `agy changelog`. */
+  antigravityCommand: (kind: "mcp" | "plugins" | "changelog") =>
+    invoke<string>("antigravity_command", { kind }),
   /** The agents now, and on `onChange` after each change to them, until another watch. */
   watchAgents: (onChange: (view: AgentsView) => void) => {
     const channel = new Channel<AgentsView>();

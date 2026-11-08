@@ -14,15 +14,25 @@ pub enum InfoCommand {
     McpList,
     /// `plugin list`: the plugins the CLI has installed.
     PluginList,
+    /// `debug paths`: OpenCode's data, config, cache, state and log folders.
+    Paths,
+    /// `debug agents`: OpenCode's agents, as JSON.
+    Agents,
+    /// `changelog`: Antigravity's notes for its latest release.
+    Changelog,
 }
 
 impl InfoCommand {
-    /// The command a Settings pane names: `doctor`, `mcp` or `plugins`.
+    /// The command a Settings pane names: `doctor`, `mcp`, `plugins`, `paths`, `agents` or
+    /// `changelog`.
     pub fn named(name: &str) -> Option<Self> {
         match name {
             "doctor" => Some(InfoCommand::Doctor),
             "mcp" => Some(InfoCommand::McpList),
             "plugins" => Some(InfoCommand::PluginList),
+            "paths" => Some(InfoCommand::Paths),
+            "agents" => Some(InfoCommand::Agents),
+            "changelog" => Some(InfoCommand::Changelog),
             _ => None,
         }
     }
@@ -32,7 +42,20 @@ impl InfoCommand {
             InfoCommand::Doctor => &["doctor"],
             InfoCommand::McpList => &["mcp", "list"],
             InfoCommand::PluginList => &["plugin", "list"],
+            InfoCommand::Paths => &["debug", "paths"],
+            InfoCommand::Agents => &["debug", "agents"],
+            InfoCommand::Changelog => &["changelog"],
         }
+    }
+}
+
+/// Fails unless `kind` is one of the commands the CLI `name` has. A CLI given a subcommand it
+/// lacks may take it as a prompt and start a turn, so each CLI names the ones it has.
+pub fn check(name: &str, kind: InfoCommand, offered: &[InfoCommand]) -> Result<(), String> {
+    if offered.contains(&kind) {
+        Ok(())
+    } else {
+        Err(format!("{name} has no `{}` command", kind.args().join(" ")))
     }
 }
 

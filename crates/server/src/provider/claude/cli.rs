@@ -162,6 +162,15 @@ pub fn info() -> Result<ClaudeInfo, String> {
 
 /// Runs one of the read-only diagnostics commands. See `cli_info::command`.
 pub fn command(kind: InfoCommand) -> Result<String, String> {
+    cli_info::check(
+        "Claude Code",
+        kind,
+        &[
+            InfoCommand::Doctor,
+            InfoCommand::McpList,
+            InfoCommand::PluginList,
+        ],
+    )?;
     let binary = binary().ok_or("Claude Code is not installed")?;
     cli_info::command(&binary, kind)
 }

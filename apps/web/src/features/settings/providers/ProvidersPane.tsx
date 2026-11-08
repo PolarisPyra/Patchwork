@@ -11,6 +11,7 @@ import {
   type ModelOption,
 } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
+import CliPane, { hasDetails, type DetailsKind } from "~/features/settings/providers/CliPane";
 import {
   ApiProviderRow,
   blank,
@@ -53,8 +54,9 @@ function CliInstall({ kind, onInstalled }: { kind: CliKind; onInstalled: () => v
 }
 
 /** A provider's system prompt, with Save and Cancel under the field. Save waits for `onSave`
- * and shows its error here; the parent closes the editor once it has saved. */
-function PromptEditor({
+ * and shows its error here; the parent closes the editor once it has saved. Shared with the
+ * Inference pane, which edits each inference server's prompt the same way. */
+export function PromptEditor({
   label,
   saved,
   onSave,
@@ -136,7 +138,11 @@ function SystemPrompt({
 }
 
 /** One row per CLI: whether it is installed, where it is, and whether Patchwork connects to it. */
-function CliProviderRows({ settings, updateSettings }: PaneProps) {
+function CliProviderRows({
+  settings,
+  updateSettings,
+  onDetails,
+}: PaneProps & { onDetails: (kind: DetailsKind) => void }) {
   const [prompting, setPrompting] = useState<AgentKind | null>(null);
   const [status, setStatus] = useState<Partial<Record<AgentKind, AgentStatus | null>>>({});
   // Re-reads an agent, skipping the cache, so a fresh install shows at once.
@@ -237,6 +243,15 @@ function CliProviderRows({ settings, updateSettings }: PaneProps) {
                   </button>
                 )
               )}
+              {s?.installed && hasDetails(kind) && (
+                <button
+                  className="btn"
+                  aria-label={`${AGENT_LABELS[kind]} details`}
+                  onClick={() => onDetails(kind)}
+                >
+                  Details
+                </button>
+              )}
               <button
                 className={`btn${settings.systemPrompts[kind] ? " text-accent" : ""}`}
                 aria-label={`${AGENT_LABELS[kind]} system prompt`}
@@ -269,8 +284,6 @@ function CliProviderRows({ settings, updateSettings }: PaneProps) {
   );
 }
 
-/** Every provider in one list: the CLIs, then the API endpoints. Editing an endpoint takes over
- * the pane with its form, as it did on its own page. */
 /** Agents whose models can read a message's images for an API model. */
 const VISION_AGENTS: AgentKind[] = ["api", "claude", "codex"];
 
@@ -332,15 +345,18 @@ function VisionModelPicker({ settings, updateSettings }: PaneProps) {
 }
 
 export default function ProvidersPane({ settings, updateSettings }: PaneProps) {
+  // Only cloud endpoints live here; local model servers are managed in Settings → Local providers.
   const [providers, setProviders] = useState<ApiProviderView[]>([]);
   const [editing, setEditing] = useState<ApiProvider | null>(null);
   const [promptingId, setPromptingId] = useState<string | null>(null);
+  const [details, setDetails] = useState<DetailsKind | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const reload = async () => {
     try {
       const list = await api.listApiProviders();
       setProviders(list);
+      // `api` is usable when any provider has a model, local or cloud, so sync on the full list.
       syncAgents(list, updateSettings);
     } catch (e) {
       setError(errorText(e));
@@ -367,6 +383,8 @@ export default function ProvidersPane({ settings, updateSettings }: PaneProps) {
     setPromptingId(null);
   };
 
+  if (details !== null) return <CliPane kind={details} onBack={() => setDetails(null)} />;
+
   if (editing !== null) {
     return (
       <ProviderForm
@@ -381,6 +399,7 @@ export default function ProvidersPane({ settings, updateSettings }: PaneProps) {
     );
   }
 
+  const cloud = providers.filter((p) => !p.local);
   // Choosing a default reorders `agents`, not the buttons.
   const connected = settings.agents;
   const makeDefault = (kind: AgentKind) =>
@@ -391,8 +410,8 @@ export default function ProvidersPane({ settings, updateSettings }: PaneProps) {
 
   return (
     <>
-      <CliProviderRows settings={settings} updateSettings={updateSettings} />
-      {providers.map((p) => (
+      <CliProviderRows settings={settings} updateSettings={updateSettings} onDetails={setDetails} />
+      {cloud.map((p) => (
         <Fragment key={p.id}>
           <ApiProviderRow
             provider={p}

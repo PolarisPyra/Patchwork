@@ -146,3 +146,28 @@ pub struct ClaudeInfo {
     pub features: Vec<ClaudeFeature>,
     pub models: Vec<ClaudeModel>,
 }
+
+/// A top-level setting from one of the config files OpenCode reads.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export, export_to = "provider.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct CliSetting {
+    pub name: String,
+    /// The value in short: a plain value as it is, an object as its keys, a list as its length.
+    /// Values are not shown whole, since a provider's options can hold an API key.
+    pub value: String,
+    /// The config file that sets it.
+    pub source: String,
+}
+
+/// What an installed OpenCode or Antigravity CLI offers: its path and version, its models, and
+/// for OpenCode the settings its config files hold. Neither has feature flags.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "provider.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct CliInfo {
+    pub path: String,
+    pub version: String,
+    pub settings: Vec<CliSetting>,
+    pub models: Vec<ModelOption>,
+}
