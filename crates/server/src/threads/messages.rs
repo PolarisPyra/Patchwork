@@ -352,6 +352,15 @@ pub struct TokenUsage {
     pub output: u64,
     /// Size of the prompt of the agent's last request: the context it is working in.
     pub context: u64,
+    /// How long the last request took to its first token, in milliseconds. Only Patchwork's own
+    /// agent measures it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub first_token_ms: Option<u64>,
+    /// The last request's output tokens per second after its first token.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub output_per_second: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]

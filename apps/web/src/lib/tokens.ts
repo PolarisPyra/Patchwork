@@ -13,7 +13,8 @@ export function formatTokens(n: number): string {
 }
 
 /**
- * A thread's tokens: the context of its latest reply, and what all its replies used together.
+ * A thread's tokens: the context and speed of its latest reply, and what all its replies used
+ * together.
  * Null when no reply has reported usage.
  */
 export function threadUsage(messages: Message[]): TokenUsage | null {
@@ -25,6 +26,8 @@ export function threadUsage(messages: Message[]): TokenUsage | null {
     cacheWrite: 0,
     output: 0,
     context: last.context,
+    firstTokenMs: last.firstTokenMs,
+    outputPerSecond: last.outputPerSecond,
   };
   for (const { usage } of messages) {
     if (!usage) continue;

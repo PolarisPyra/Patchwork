@@ -11,7 +11,7 @@ pub(in crate::orchestration) struct Request {
     pub(in crate::orchestration) usage: TokenUsage,
 }
 
-/// The tokens a message used, summed over its requests. Its context is the prompt of the
+/// The tokens a message used, summed over its requests. Its context and speed are those of the
 /// last request the main agent made for it.
 pub(in crate::orchestration) fn message_usage(
     requests: &[Request],
@@ -25,6 +25,8 @@ pub(in crate::orchestration) fn message_usage(
         total.output += r.usage.output;
         if r.top_level {
             total.context = r.usage.context;
+            total.first_token_ms = r.usage.first_token_ms;
+            total.output_per_second = r.usage.output_per_second;
         }
     }
     total

@@ -263,6 +263,8 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
                     cache_write: count("cacheWrite"),
                     output: count("output"),
                     context: count("context"),
+                    first_token_ms: v["firstTokenMs"].as_u64(),
+                    output_per_second: v["outputPerSecond"].as_u64(),
                 },
                 top_level: true,
             }]

@@ -297,6 +297,7 @@ pub(super) fn parse_serve(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<P
                     cache_write,
                     output: count(&tokens["output"]) + count(&tokens["reasoning"]),
                     context: input + cache_read + cache_write,
+                    ..Default::default()
                 },
                 top_level: true,
             }]

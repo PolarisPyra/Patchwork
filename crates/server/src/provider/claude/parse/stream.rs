@@ -96,6 +96,7 @@ fn request_usage(message: &Value, top_level: bool) -> Option<Parsed> {
             cache_write,
             output: count("output_tokens"),
             context: input + cache_read + cache_write,
+            ..Default::default()
         },
         top_level,
     })

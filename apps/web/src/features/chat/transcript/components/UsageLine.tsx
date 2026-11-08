@@ -34,6 +34,15 @@ export function UsageLine({ usage, warnAbove }: { usage: TokenUsage | null; warn
       <span>Cache write {formatTokens(usage.cacheWrite)} tokens</span>
       <span>Input {formatTokens(usage.input)} tokens</span>
       <span>Output {formatTokens(usage.output)} tokens</span>
+      {usage.firstTokenMs !== undefined && (
+        <span>
+          First token{" "}
+          {usage.firstTokenMs < 1000
+            ? `${usage.firstTokenMs} ms`
+            : `${(usage.firstTokenMs / 1000).toFixed(1)} s`}
+        </span>
+      )}
+      {usage.outputPerSecond !== undefined && <span>{usage.outputPerSecond} tokens/s</span>}
     </p>
   );
 }

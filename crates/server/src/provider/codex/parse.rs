@@ -544,6 +544,7 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                     cache_write: 0,
                     output: count("outputTokens"),
                     context: count("totalTokens"),
+                    ..Default::default()
                 },
                 top_level: true,
             });

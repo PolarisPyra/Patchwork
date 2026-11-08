@@ -366,7 +366,16 @@ input: number, cacheRead: number, cacheWrite: number, output: number,
 /**
  * Size of the prompt of the agent's last request: the context it is working in.
  */
-context: number, };
+context: number, 
+/**
+ * How long the last request took to its first token, in milliseconds. Only Patchwork's own
+ * agent measures it.
+ */
+firstTokenMs?: number, 
+/**
+ * The last request's output tokens per second after its first token.
+ */
+outputPerSecond?: number, };
 
 export type ToolCall = { id: string, 
 /**
