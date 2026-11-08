@@ -29,7 +29,7 @@ SECTIONS=(Added Changed Fixed Removed Security)
 # What a release with only internal changes says.
 NOTHING_NEW="Behind-the-scenes improvements, with nothing new to see."
 # Product and platform names whose capitals the identifier checks would flag.
-NAMES='GitHub|GitLab|AppImage|JavaScript|TypeScript|OpenCode|PowerShell|YouTube|macOS|iOS|iPadOS|LaTeX|DeepSeek|OpenAI|OpenRouter|ChatGPT|WebKit|WebView|Node\.js|Next\.js'
+NAMES='GitHub|GitLab|AppImage|JavaScript|TypeScript|OpenCode|PowerShell|YouTube|macOS|iOS|iPadOS|LaTeX|DeepSeek|OpenAI|OpenRouter|MiniMax|ChatGPT|WebKit|WebView|Node\.js|Next\.js'
 
 die() {
   echo "$*" >&2
