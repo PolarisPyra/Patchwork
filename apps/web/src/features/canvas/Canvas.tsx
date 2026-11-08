@@ -369,11 +369,17 @@ export default function Canvas({
             role="tab"
             aria-selected={activeTab === t.id}
             aria-label={t.count > 0 ? `${t.label} (${t.count})` : t.label}
-            className="inline-flex items-center gap-1.5 h-7 px-2.5 border-none rounded-[var(--radius)] bg-transparent text-fg-muted! hover:text-fg! cursor-pointer whitespace-nowrap aria-selected:text-accent-text! aria-selected:bg-accent-soft"
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 border-none rounded-[var(--radius)] bg-transparent text-fg-muted! hover:text-fg! cursor-pointer whitespace-nowrap aria-selected:text-fg! aria-selected:bg-selected-muted"
             onClick={() => setTab(t.id)}
           >
             {t.label}
-            {t.count > 0 && <span className="badge tabular-nums">{t.count}</span>}
+            {t.count > 0 && (
+              <span
+                className={`badge tabular-nums ${activeTab === t.id ? "bg-border-strong text-fg" : ""}`}
+              >
+                {t.count}
+              </span>
+            )}
           </button>
         ))}
         {activeTab === "diff" && (
