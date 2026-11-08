@@ -14,6 +14,8 @@ interface Props {
   onPick: (agent: AgentKind, model: string | null) => void;
   /** Opens the picker each time it changes, as a keyboard shortcut asks. */
   openRequest?: number;
+  /** Finds a model server on this computer, adds it, and returns one of its models. */
+  onSetUpLocalModel?: () => Promise<string>;
 }
 
 /** The composer's model button, which opens the model picker. */

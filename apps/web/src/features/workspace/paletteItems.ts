@@ -22,6 +22,8 @@ interface PaletteSource {
   runChecks: (() => void) | null;
   /** Picks the open chat's own background; null when no chat is open. */
   chatBackground: (() => void) | null;
+  /** Finds a model server on this computer and makes one of its models the default. */
+  setUpLocalModel: () => void;
 }
 
 /** What search lists: actions, then every chat and task by project, then the projects. */
@@ -39,6 +41,7 @@ export function paletteItems({
   openProject,
   runChecks,
   chatBackground,
+  setUpLocalModel,
 }: PaletteSource): PaletteItem[] {
   return [
     {
@@ -79,6 +82,7 @@ export function paletteItems({
           },
         ]
       : []),
+    { id: "use-local-model", group: "Actions", label: "Use a local model", run: setUpLocalModel },
     { id: "toggle-theme", group: "Actions", label: "Toggle theme", run: toggleTheme },
     {
       id: "settings",

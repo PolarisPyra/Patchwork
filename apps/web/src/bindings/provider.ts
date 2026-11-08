@@ -27,7 +27,13 @@ preset: string,
 /**
  * The OpenAI-compatible base URL, e.g. `https://api.deepseek.com`.
  */
-baseUrl: string, enabled: boolean, models: Array<ApiModel>, 
+baseUrl: string, enabled: boolean, 
+/**
+ * Runs on this computer or the user's network: shown in Settings → Local providers with live
+ * health. A cloud service such as DeepSeek is `false` and shows in Settings → Cloud providers.
+ * The user picks it; a provider saved before it existed gets a suggestion once, on first read.
+ */
+local: boolean, models: Array<ApiModel>, 
 /**
  * Extra request headers, sent with every request.
  */
@@ -92,6 +98,12 @@ legacy: boolean, };
 export type CliGroup = { agent: AgentKind, file: string, servers: Array<CliServer>, };
 
 /**
+ * What an installed OpenCode or Antigravity CLI offers: its path and version, its models, and
+ * for OpenCode the settings its config files hold. Neither has feature flags.
+ */
+export type CliInfo = { path: string, version: string, settings: Array<CliSetting>, models: Array<ModelOption>, };
+
+/**
  * A server as the settings show it. Environment and header values stay out, since they may
  * hold secrets; only their names are shown.
  */
@@ -124,6 +136,20 @@ status: string,
 relayed: boolean, tools: Array<ToolInfo>, error: string | null, };
 
 /**
+ * A top-level setting from one of the config files OpenCode reads.
+ */
+export type CliSetting = { name: string, 
+/**
+ * The value in short: a plain value as it is, an object as its keys, a list as its length.
+ * Values are not shown whole, since a provider's options can hold an API key.
+ */
+value: string, 
+/**
+ * The config file that sets it.
+ */
+source: string, };
+
+/**
  * A feature flag of the installed Codex CLI, from `codex features list`.
  */
 export type CodexFeature = { name: string, 
@@ -146,9 +172,27 @@ export type CodexModel = { slug: string, displayName: string, contextWindow: num
  */
 listed: boolean, };
 
+/**
+ * A local model server found on this machine, offered to prefill the add-server form.
+ */
+export type DiscoveredServer = { 
+/**
+ * The engine the port is known for, e.g. `Ollama`.
+ */
+name: string, baseUrl: string, 
+/**
+ * The model ids it serves right now.
+ */
+models: Array<string>, };
+
 export type Header = { name: string, value: string, };
 
 export type KeyStore = "keychain" | "file";
+
+/**
+ * Where a provider looks like it runs, and why, shown beside the suggestion in the provider form.
+ */
+export type Locality = { local: boolean, reason: string, };
 
 export type McpServer = { command?: string | null, args?: Array<string>, env?: { [key in string]: string }, url?: string | null, headers?: { [key in string]: string }, disabled?: boolean, 
 /**
@@ -186,6 +230,32 @@ efforts: Array<string> | null,
 contextWindow: number | null, };
 
 /**
+ * The live health of a saved provider's endpoint, probed on demand so Settings → Local providers can
+ * show whether a local server is answering and which models it serves right now.
+ */
+export type ProviderHealth = { 
+/**
+ * The endpoint answered its model list.
+ */
+reachable: boolean, 
+/**
+ * Round-trip of the probe in milliseconds, when it answered.
+ */
+latencyMs: number | null, 
+/**
+ * The model ids the endpoint serves right now.
+ */
+servedModels: Array<string>, 
+/**
+ * Why the probe failed, when it did.
+ */
+error: string | null, 
+/**
+ * Whether each of its saved models reads images, for a local server whose engine says.
+ */
+images: { [key in string]: boolean }, };
+
+/**
  * A slash command advertised by a provider CLI for this thread/workspace.
  */
 export type ProviderSlashCommand = { name: string, description: string | null, };
@@ -205,7 +275,13 @@ preset: string,
 /**
  * The OpenAI-compatible base URL, e.g. `https://api.deepseek.com`.
  */
-baseUrl: string, enabled: boolean, models: Array<ApiModel>, 
+baseUrl: string, enabled: boolean, 
+/**
+ * Runs on this computer or the user's network: shown in Settings → Local providers with live
+ * health. A cloud service such as DeepSeek is `false` and shows in Settings → Cloud providers.
+ * The user picks it; a provider saved before it existed gets a suggestion once, on first read.
+ */
+local: boolean, models: Array<ApiModel>, 
 /**
  * Extra request headers, sent with every request.
  */

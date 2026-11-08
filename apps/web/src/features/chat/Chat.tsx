@@ -31,6 +31,7 @@ import {
   type LocalCommand,
 } from "~/lib/composerActions";
 import { ComposerStripPresence } from "~/features/chat/ComposerStrip";
+import { ModelNotice } from "~/features/chat/ModelNotice";
 import BackgroundTasks from "~/features/chat/BackgroundTasks";
 import EmptyChat from "~/features/chat/EmptyChat";
 import QueuedMessages from "~/features/chat/composer/components/QueuedMessages";
@@ -81,6 +82,10 @@ interface ChatProps {
   agents: AgentKind[];
   tokens: TokenSettings;
   onUpdateTokens: (patch: Partial<TokenSettings>) => void;
+  /** Settings has a model that reads every chat's images. */
+  visionSet: boolean;
+  /** Finds a model server on this computer, adds it, and returns one of its models. */
+  onSetUpLocalModel?: () => Promise<string>;
   onOpenFolder: () => void;
   onOpenCanvas: (path: string, message: Message | null, tab: CanvasTab) => void;
   onShowChanges: (messageId: string) => void;
@@ -154,6 +159,8 @@ export default function Chat({
   defaultAgent,
   agents,
   tokens,
+  visionSet,
+  onSetUpLocalModel,
   onUpdateTokens,
   onOpenFolder,
   onOpenCanvas,
@@ -740,6 +747,15 @@ export default function Chat({
             />
           )}
         </ComposerStripPresence>
+        <ModelNotice
+          agent={agent}
+          model={options.model ?? tokens.defaultModels.api ?? null}
+          images={composerAttachments.some((a) => a.kind === "image")}
+          visionSet={visionSet}
+          working={working}
+          onPick={(model) => options.pickModel("api", model)}
+          onChoose={() => setModelPickerRequest((request) => request + 1)}
+        />
         {thread && tokens.showUsage && (
           <UsageLine usage={usage || null} warnAbove={tokens.warnAbove} />
         )}
@@ -760,13 +776,15 @@ export default function Chat({
           working={working}
           backgroundRunning={background.some(isLiveTask)}
           error={
-            error ?? (noAgents ? "No agents connected. Turn one on in Settings → Providers." : null)
+            error ??
+            (noAgents ? "No agents connected. Turn one on in Settings → Cloud providers." : null)
           }
           agent={agent}
           model={options.model}
           agents={stableComposerAgents}
           onPickModel={composerHandlers.onPickModel}
           modelPickerRequest={modelPickerRequest}
+          onSetUpLocalModel={onSetUpLocalModel}
           providerSlashCommands={thread?.slashCommands ?? NO_COMMANDS}
           onSelectSlashCommand={composerHandlers.onSelectSlashCommand}
           accessMode={options.accessMode}

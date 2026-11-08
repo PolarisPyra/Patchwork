@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock, PoisonError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -64,6 +64,10 @@ pub struct ApiProvider {
     pub base_url: String,
     #[serde(default = "yes")]
     pub enabled: bool,
+    /// Runs on this computer or the user's network: shown in Settings → Local providers with live
+    /// health. A cloud service such as DeepSeek is `false` and shows in Settings → Cloud providers.
+    /// The user picks it; a provider saved before it existed gets a suggestion once, on first read.
+    pub local: bool,
     #[serde(default)]
     pub models: Vec<ApiModel>,
     /// Extra request headers, sent with every request.
@@ -124,8 +128,44 @@ struct Config {
     providers: Vec<ApiProvider>,
 }
 
+/// The saved providers. A provider saved before `local` existed gets a suggestion from its URL
+/// (without a DNS lookup, since this runs ahead of turns), and the file is saved once with it.
 fn read_config() -> Config {
-    crate::system::fs::read_json_or_default(&dir().join(CONFIG_FILE))
+    let path = dir().join(CONFIG_FILE);
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return Config::default();
+    };
+    let Ok(mut value) = serde_json::from_str::<Value>(&text) else {
+        // Not JSON: this keeps a copy beside it and starts over, as for any settings file.
+        return crate::system::fs::read_json_or_default(&path);
+    };
+    let mut filled = false;
+    if let Some(list) = value.get_mut("providers").and_then(Value::as_array_mut) {
+        for p in list.iter_mut().filter_map(Value::as_object_mut) {
+            if p.contains_key("local") {
+                continue;
+            }
+            let url = p.get("baseUrl").and_then(Value::as_str).unwrap_or_default();
+            let suggested = super::locality::classify(url, false);
+            log::info!(
+                "API provider {} taken as {}: {}",
+                p.get("id").and_then(Value::as_str).unwrap_or("?"),
+                if suggested.local { "local" } else { "cloud" },
+                suggested.reason
+            );
+            p.insert("local".into(), Value::Bool(suggested.local));
+            filled = true;
+        }
+    }
+    match serde_json::from_value::<Config>(value) {
+        Ok(config) => {
+            if filled && let Err(e) = write_config(&config) {
+                log::warn!("Could not save where each API provider runs: {e}");
+            }
+            config
+        }
+        Err(_) => crate::system::fs::read_json_or_default(&path),
+    }
 }
 
 fn write_config(config: &Config) -> Result<(), String> {
@@ -242,6 +282,21 @@ pub fn save(mut provider: ApiProvider, key: KeyChange) -> Result<ProviderView, S
     })
 }
 
+/// Points a saved provider at a new base URL, keeping the rest of it.
+pub fn move_to(id: &str, base_url: &str) -> Result<(), String> {
+    let base_url = base_url.trim().trim_end_matches('/');
+    check_url(base_url)?;
+    let _guard = WRITE.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut config = read_config();
+    let provider = config
+        .providers
+        .iter_mut()
+        .find(|p| p.id == id)
+        .ok_or("That provider is no longer saved")?;
+    provider.base_url = base_url.to_string();
+    write_config(&config)
+}
+
 pub fn remove(id: &str) -> Result<(), String> {
     let _guard = WRITE.lock().unwrap_or_else(PoisonError::into_inner);
     let mut config = read_config();
@@ -308,7 +363,7 @@ pub(crate) fn delete_secret(name: &str) {
 }
 
 /// The provider with its header values filled in from where they are stored.
-fn with_headers(mut provider: ApiProvider) -> ApiProvider {
+pub(super) fn with_headers(mut provider: ApiProvider) -> ApiProvider {
     // A config written before header values moved out still holds them.
     if provider.headers.iter().all(|h| !h.value.is_empty()) {
         return provider;
@@ -517,6 +572,7 @@ fn blank() -> ApiProvider {
         preset: custom(),
         base_url: String::new(),
         enabled: true,
+        local: false,
         models: Vec::new(),
         headers: Vec::new(),
         key_env: None,
@@ -526,18 +582,152 @@ fn blank() -> ApiProvider {
     }
 }
 
+/// The live health of a saved provider's endpoint, probed on demand so Settings → Local providers can
+/// show whether a local server is answering and which models it serves right now.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "provider.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderHealth {
+    /// The endpoint answered its model list.
+    pub reachable: bool,
+    /// Round-trip of the probe in milliseconds, when it answered.
+    pub latency_ms: Option<u32>,
+    /// The model ids the endpoint serves right now.
+    pub served_models: Vec<String>,
+    /// Why the probe failed, when it did.
+    pub error: Option<String>,
+    /// Whether each of its saved models reads images, for a local server whose engine says.
+    pub images: HashMap<String, bool>,
+}
+
+/// Probes a saved provider's endpoint (`GET /models`) with its stored key and headers, timing the
+/// round-trip. A failure is reported in `error`, not as an `Err`, so one unreachable server does
+/// not read as a broken request.
+pub fn probe(id: &str) -> Result<ProviderHealth, String> {
+    let provider = provider(id).ok_or("That provider is no longer saved")?;
+    let provider = with_headers(provider);
+    let query = ModelsQuery {
+        base_url: provider.base_url.clone(),
+        headers: provider.headers.clone(),
+        key: None,
+        key_env: provider.key_env.clone(),
+        provider_id: Some(provider.id.clone()),
+    };
+    let started = Instant::now();
+    match fetch_models(query) {
+        Ok(models) => {
+            let latency_ms = started.elapsed().as_millis().min(u128::from(u32::MAX)) as u32;
+            let served_models: Vec<String> = models.into_iter().map(|m| m.id).collect();
+            let saved: Vec<String> = provider
+                .models
+                .iter()
+                .map(|m| m.id.clone())
+                .filter(|m| served_models.contains(m))
+                .collect();
+            let images = if provider.local {
+                super::servers::images(&provider, &saved)
+            } else {
+                HashMap::new()
+            };
+            Ok(ProviderHealth {
+                reachable: true,
+                latency_ms: Some(latency_ms),
+                served_models,
+                error: None,
+                images,
+            })
+        }
+        Err(error) => Ok(ProviderHealth {
+            reachable: false,
+            latency_ms: None,
+            served_models: Vec::new(),
+            error: Some(error),
+            images: HashMap::new(),
+        }),
+    }
+}
+
+/// A local model server found on this machine, offered to prefill the add-server form.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "provider.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveredServer {
+    /// The engine the port is known for, e.g. `Ollama`.
+    pub name: String,
+    pub base_url: String,
+    /// The model ids it serves right now.
+    pub models: Vec<String>,
+}
+
+/// Ports well-known OpenAI-compatible local servers listen on, with the engine each belongs to.
+const DISCOVERY_CANDIDATES: &[(&str, &str)] = &[
+    ("Ollama", "http://localhost:11434/v1"),
+    ("LM Studio", "http://localhost:1234/v1"),
+    ("llama.cpp", "http://localhost:8080/v1"),
+    ("llama.cpp", "http://localhost:8081/v1"),
+    ("vLLM", "http://localhost:8000/v1"),
+    ("Local server", "http://localhost:5000/v1"),
+];
+
+/// Looks for local model servers on well-known ports, sending no key, and returns the ones that
+/// answer their model list. Runs on demand behind the **Find servers** button.
+pub fn discover() -> Vec<DiscoveredServer> {
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(Duration::from_millis(1500)))
+        .http_status_as_error(false)
+        .build()
+        .into();
+    let mut found: Vec<DiscoveredServer> = Vec::new();
+    for (name, base) in DISCOVERY_CANDIDATES {
+        if found.iter().any(|d| d.base_url == *base) {
+            continue;
+        }
+        let Ok(mut response) = agent.get(format!("{base}/models")).call() else {
+            continue;
+        };
+        if !response.status().is_success() {
+            continue;
+        }
+        let text = response.body_mut().read_to_string().unwrap_or_default();
+        let Ok(body) = serde_json::from_str::<Value>(&text) else {
+            continue;
+        };
+        let Some(list) = body["data"]
+            .as_array()
+            .or_else(|| body["models"].as_array())
+        else {
+            continue;
+        };
+        let models = list
+            .iter()
+            .filter_map(|m| {
+                m["id"]
+                    .as_str()
+                    .or_else(|| m["name"].as_str())
+                    .map(String::from)
+            })
+            .collect();
+        found.push(DiscoveredServer {
+            name: (*name).to_string(),
+            base_url: (*base).to_string(),
+            models,
+        });
+    }
+    found
+}
+
 /// The request line the API bridge reads first: everything a turn needs, key included, so
 /// the key never appears in the bridge's arguments or environment.
 pub fn connection(model: Option<&str>) -> Result<Value, String> {
     let model = model
         .map(String::from)
         .or_else(default_model)
-        .ok_or("Add a model to an API provider in Settings → API Providers first")?;
+        .ok_or("Add a model to an inference server in Settings → Local providers first")?;
     let (provider, model_id) =
         resolve(&model).ok_or_else(|| format!("No API provider has the model {model}"))?;
     if !provider.enabled {
         return Err(format!(
-            "{} is turned off in Settings → API Providers",
+            "{} is turned off in Settings → Local providers",
             provider.name
         ));
     }
@@ -559,6 +749,7 @@ pub fn connection(model: Option<&str>) -> Result<Value, String> {
         "headers": headers,
         "model": model_id,
         "provider": provider.name,
+        "local": provider.local,
         "preset": provider.preset,
         "systemPrompt": provider.system_prompt,
     }))

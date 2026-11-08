@@ -40,3 +40,40 @@ pub(crate) async fn fetch_api_models(
 ) -> Res<Vec<patchwork_server::provider::api::config::ApiModel>> {
     blocking(move || patchwork_server::provider::api::config::fetch_models(query)).await?
 }
+
+/// Probes a saved provider's endpoint for its live health, for Settings → Inference.
+#[tauri::command]
+pub(crate) async fn probe_api_provider(
+    id: String,
+) -> Res<patchwork_server::provider::api::config::ProviderHealth> {
+    blocking(move || patchwork_server::provider::api::config::probe(&id)).await?
+}
+
+/// Scans well-known local ports for OpenAI-compatible model servers, for Find servers.
+#[tauri::command]
+pub(crate) async fn discover_inference_servers()
+-> Res<Vec<patchwork_server::provider::api::config::DiscoveredServer>> {
+    blocking(patchwork_server::provider::api::config::discover).await
+}
+
+/// Suggests whether the provider at `base_url` runs locally or in the cloud, looking up its name
+/// when the URL alone does not tell; the provider form pre-fills its Runs on choice with it.
+#[tauri::command]
+pub(crate) async fn suggest_provider_locality(
+    base_url: String,
+) -> Res<patchwork_server::provider::api::locality::Locality> {
+    blocking(move || patchwork_server::provider::api::locality::classify(&base_url, true)).await
+}
+
+/// Looks for where a saved server moved on its machine, and points the provider there.
+#[tauri::command]
+pub(crate) async fn relocate_api_provider(id: String) -> Res<String> {
+    blocking(move || patchwork_server::provider::api::servers::relocate(&id)).await?
+}
+
+/// Adds the first local model server that answers, or reuses its saved provider, and returns one
+/// of its models as `provider/model`.
+#[tauri::command]
+pub(crate) async fn use_local_model() -> Res<String> {
+    blocking(patchwork_server::provider::api::servers::use_local_model).await?
+}

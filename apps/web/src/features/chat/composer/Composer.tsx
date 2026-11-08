@@ -50,6 +50,8 @@ interface ComposerProps {
   /** Picking another agent's model switches the agent too. */
   onPickModel: (agent: AgentKind, model: string | null) => void;
   modelPickerRequest: number;
+  /** Finds a model server on this computer, adds it, and returns one of its models. */
+  onSetUpLocalModel?: () => Promise<string>;
   providerSlashCommands: ProviderSlashCommand[];
   onSelectSlashCommand: (name: string) => boolean;
   accessMode: AccessMode;
@@ -121,6 +123,7 @@ function Composer({
   agents,
   onPickModel,
   modelPickerRequest,
+  onSetUpLocalModel,
   providerSlashCommands,
   onSelectSlashCommand,
   accessMode,
@@ -353,6 +356,7 @@ function Composer({
           models={models}
           onPick={onPickModel}
           openRequest={modelPickerRequest}
+          onSetUpLocalModel={onSetUpLocalModel}
         />
         <EffortPicker agent={agent} effort={effort} levels={levels} onPick={onPickEffort} />
         <CompactPicker

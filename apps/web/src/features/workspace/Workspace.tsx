@@ -13,11 +13,12 @@ import { lastAccessMode } from "~/components/AccessPicker";
 import { lastCompactWindow } from "~/components/CompactPicker";
 import { lastEffort } from "~/components/EffortPicker";
 import Chat from "~/features/chat";
+import AddProjectDialog from "~/features/workspace/components/AddProjectDialog";
 import ChatBackgroundDialog from "~/features/workspace/components/ChatBackgroundDialog";
 import CommandPalette from "~/features/workspace/components/CommandPalette";
 import SettingsDialog from "~/features/settings/SettingsDialog";
 import { refreshBackgroundImages } from "~/lib/chatBackgrounds";
-import { addFolders, openFolderAsProject, relocateProject, syncProjects } from "~/lib/projects";
+import { addFolders, relocateProject, syncProjects } from "~/lib/projects";
 import Sidebar, {
   ActivityBar,
   getSelectedRows,
@@ -156,6 +157,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
   const [settingsOpen, setSettingsOpen] = useState(false);
   // The section Settings opens on, when something other than the dialog's own list picked it.
   const [settingsSection, setSettingsSection] = useState<string | null>(null);
+  const [addProjectOpen, setAddProjectOpen] = useState(false);
   // The chat whose own background is being picked.
   const [backgroundFor, setBackgroundFor] = useState<string | null>(null);
   const backgroundThread = threads.find((t) => t.id === backgroundFor) ?? null;
@@ -265,8 +267,11 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
       const existing = await add();
       if (existing.length > 0) setFlashId(existing[existing.length - 1]);
     });
-  const openFolder = () =>
-    addingFolders(() => openFolderAsProject(settings.projects, updateSettings));
+  const openFolder = () => setAddProjectOpen(true);
+  const addProjectAt = (path: string) =>
+    addFolders([path], settings.projects, updateSettings).then((existing) => {
+      if (existing.length > 0) setFlashId(existing[existing.length - 1]);
+    });
   const dropFolders = (paths: string[]) =>
     addingFolders(() => addFolders(paths, settings.projects, updateSettings));
   const renameProjectTo = (id: string, name: string) =>
@@ -477,6 +482,17 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
       setChangeFocus(null);
       setView("changes");
     },
+    // Finds a model server on this computer, adds it, and makes one of its models the default
+    // for Patchwork's own agent, turning that agent on.
+    setUpLocalModel: async () => {
+      const model = await api.useLocalModel();
+      await updateSettings((s) => ({
+        ...s,
+        agents: s.agents.includes("api") ? s.agents : [...s.agents, "api"],
+        tokens: { ...s.tokens, defaultModels: { ...s.tokens.defaultModels, api: model } },
+      }));
+      return model;
+    },
   });
 
   return (
@@ -529,6 +545,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
                 defaultAgent={defaultAgent}
                 agents={connectedAgents}
                 tokens={settings.tokens}
+                visionSet={settings.vision !== null}
                 onUpdateTokens={(patch) =>
                   void updateSettings((s) => ({ ...s, tokens: { ...s.tokens, ...patch } }))
                 }
@@ -552,6 +569,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
                 onForkThread={forkThread}
                 onCancel={(id) => api.cancelTurn(id)}
                 onSetModel={setModel}
+                onSetUpLocalModel={barHandlers.setUpLocalModel}
                 onSetAccessMode={setAccessMode}
                 onSetPlanMode={setPlanMode}
                 onStartThread={(opts, title, text) =>
@@ -628,6 +646,11 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
             runChecks,
             chatBackground:
               selected && !selected.parent ? () => setBackgroundFor(selected.id) : null,
+            setUpLocalModel: () =>
+              attempt(async () => {
+                const model = await barHandlers.setUpLocalModel();
+                if (selected && !selected.parent) await setModel(selected.id, "api", model);
+              }),
           })}
           onClose={() => setPaletteOpen(false)}
         />
@@ -642,6 +665,9 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
           onRemoveBackgroundImage={removeBackgroundImage}
           onClose={closeSettings}
         />
+      )}
+      {addProjectOpen && (
+        <AddProjectDialog onAdd={addProjectAt} onClose={() => setAddProjectOpen(false)} />
       )}
       {backgroundFor !== null && backgroundThread && (
         <ChatBackgroundDialog

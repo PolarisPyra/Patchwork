@@ -34,6 +34,7 @@ export type { CliMcpGroup, CliMcpServer, McpServerView, McpTool } from "~/api/mc
 export {
   apiProviderName,
   apiProviderOf,
+  apiModelPlace,
   onApiProvidersChanged,
   type ApiProviderView,
   type KeyChange,

@@ -1,12 +1,20 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import { CaretRightIcon, MagnifyingGlassIcon } from "@phosphor-icons/react";
-import { AGENT_LABELS, apiProviderName, type AgentKind, type ModelOption } from "~/api";
+import { CaretRightIcon, DesktopIcon, MagnifyingGlassIcon } from "@phosphor-icons/react";
+import {
+  AGENT_LABELS,
+  apiModelPlace,
+  apiProviderName,
+  type AgentKind,
+  type ModelOption,
+} from "~/api";
+import Spinner from "~/components/Spinner";
 import { readFavorites, saveFavorites } from "~/features/chat/composer/modelPicker/favorites";
 import ModelRow, { type ModelRowData } from "~/features/chat/composer/modelPicker/ModelRow";
 import ProviderRail, {
   type ProviderFilter,
 } from "~/features/chat/composer/modelPicker/ProviderRail";
 import { usePopupPlacement } from "~/features/chat/composer/modelPicker/usePopupPlacement";
+import { errorText } from "~/lib/util";
 
 const rowKey = (kind: AgentKind, item: ModelOption) => `${kind}:${item.id ?? "default"}`;
 
@@ -20,6 +28,7 @@ export default function PickerPopup({
   agents,
   models,
   onPick,
+  onSetUpLocalModel,
   anchor,
   close,
 }: {
@@ -28,6 +37,7 @@ export default function PickerPopup({
   agents: AgentKind[];
   models: Partial<Record<AgentKind, ModelOption[]>>;
   onPick: (agent: AgentKind, model: string | null) => void;
+  onSetUpLocalModel?: () => Promise<string>;
   anchor: HTMLButtonElement;
   close: () => void;
 }) {
@@ -59,7 +69,7 @@ export default function PickerPopup({
     )
     .filter(({ kind, item, key }) =>
       searching
-        ? `${item.label} ${item.defaultModel ?? ""} ${AGENT_LABELS[kind]} ${apiProviderName(item.id) ?? ""}`
+        ? `${item.label} ${item.defaultModel ?? ""} ${AGENT_LABELS[kind]} ${apiProviderName(item.id) ?? ""} ${apiModelPlace(item.id) ?? ""}`
             .toLowerCase()
             .includes(query.trim().toLowerCase())
         : provider === "favorites"
@@ -94,6 +104,42 @@ export default function PickerPopup({
         </span>
         <CaretRightIcon size={14} className="flex-none text-fg-subtle" />
       </button>
+    ) : null;
+
+  // With no local model yet, the list ends with a way to set one up.
+  const [settingUp, setSettingUp] = useState(false);
+  const [setUpError, setSetUpError] = useState<string | null>(null);
+  const hasLocal = (models.api ?? []).some((m) => apiModelPlace(m.id) !== undefined);
+  const setUpLocal = async () => {
+    if (!onSetUpLocalModel) return;
+    setSettingUp(true);
+    setSetUpError(null);
+    try {
+      onPick("api", await onSetUpLocalModel());
+      close();
+    } catch (e) {
+      setSetUpError(errorText(e));
+      setSettingUp(false);
+    }
+  };
+  const setUpRow =
+    onSetUpLocalModel && !hasLocal ? (
+      <>
+        <button
+          type="button"
+          className="mb-0.5 flex min-h-11 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-[4px] border-0 bg-transparent px-2 py-1 text-left text-[12px] leading-[16.5px] font-medium text-fg hover:bg-hover focus-visible:bg-hover disabled:cursor-default"
+          disabled={settingUp}
+          onClick={() => void setUpLocal()}
+        >
+          {settingUp ? <Spinner size={14} /> : <DesktopIcon size={14} className="flex-none" />}
+          Use a local model
+        </button>
+        {setUpError && (
+          <div role="alert" className="px-2 pb-1 text-[12px] leading-[16.5px] text-danger">
+            {setUpError}
+          </div>
+        )}
+      </>
     ) : null;
 
   const flyoutLeft = usePopupPlacement(anchor, panel, input, close);
@@ -214,6 +260,7 @@ export default function PickerPopup({
           >
             {rows.map((row, index) => renderRow(row, index))}
             {legacyToggleRow}
+            {setUpRow}
             {!rows.length && !legacyToggleRow && (
               <div className="p-2 text-center text-[14px] text-fg-subtle">No models found</div>
             )}
