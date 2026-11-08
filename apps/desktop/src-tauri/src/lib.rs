@@ -326,7 +326,6 @@ pub fn run() {
             commands::models::fetch_api_models,
             commands::models::probe_api_provider,
             commands::models::discover_inference_servers,
-            commands::models::suggest_provider_locality,
             commands::models::relocate_api_provider,
             commands::models::use_local_model,
             commands::usage::get_usage,

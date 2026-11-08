@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { PlusIcon } from "@phosphor-icons/react";
 import {
   api,
   AGENT_LABELS,
@@ -345,7 +346,7 @@ function VisionModelPicker({ settings, updateSettings }: PaneProps) {
 }
 
 export default function ProvidersPane({ settings, updateSettings }: PaneProps) {
-  // Only cloud endpoints live here; local model servers are managed in Settings → Local providers.
+  // Servers found on this computer live in Settings → Local providers; every other endpoint is here.
   const [providers, setProviders] = useState<ApiProviderView[]>([]);
   const [editing, setEditing] = useState<ApiProvider | null>(null);
   const [promptingId, setPromptingId] = useState<string | null>(null);
@@ -452,6 +453,13 @@ export default function ProvidersPane({ settings, updateSettings }: PaneProps) {
         </TokenRow>
       )}
       <PresetGrid onPick={(preset) => setEditing(blank(preset))} />
+      <button
+        className="btn self-start"
+        onClick={() => setEditing(blank({ id: "custom", name: "", baseUrl: "", models: [] }))}
+      >
+        <PlusIcon size={13} />
+        Add a server
+      </button>
       {error && (
         <div role="alert" className="text-[length:var(--fs-sm)] text-danger">
           {error}

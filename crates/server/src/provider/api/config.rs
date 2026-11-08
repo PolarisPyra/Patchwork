@@ -64,9 +64,9 @@ pub struct ApiProvider {
     pub base_url: String,
     #[serde(default = "yes")]
     pub enabled: bool,
-    /// Runs on this computer or the user's network: shown in Settings → Local providers with live
-    /// health. A cloud service such as DeepSeek is `false` and shows in Settings → Cloud providers.
-    /// The user picks it; a provider saved before it existed gets a suggestion once, on first read.
+    /// Found on this computer, added from Settings → Local providers or by Use a local model: shown
+    /// there with live health. Every other provider, added from a preset or by its address, is
+    /// `false` and shows in Settings → Cloud providers.
     pub local: bool,
     #[serde(default)]
     pub models: Vec<ApiModel>,
@@ -128,8 +128,8 @@ struct Config {
     providers: Vec<ApiProvider>,
 }
 
-/// The saved providers. A provider saved before `local` existed gets a suggestion from its URL
-/// (without a DNS lookup, since this runs ahead of turns), and the file is saved once with it.
+/// The saved providers. A provider saved before `local` existed is local when its URL points at
+/// this computer, and the file is saved once with it.
 fn read_config() -> Config {
     let path = dir().join(CONFIG_FILE);
     let Ok(text) = std::fs::read_to_string(&path) else {
@@ -146,14 +146,13 @@ fn read_config() -> Config {
                 continue;
             }
             let url = p.get("baseUrl").and_then(Value::as_str).unwrap_or_default();
-            let suggested = super::locality::classify(url, false);
+            let local = super::servers::on_this_computer(url);
             log::info!(
-                "API provider {} taken as {}: {}",
+                "API provider {} taken as {}",
                 p.get("id").and_then(Value::as_str).unwrap_or("?"),
-                if suggested.local { "local" } else { "cloud" },
-                suggested.reason
+                if local { "local" } else { "cloud" }
             );
-            p.insert("local".into(), Value::Bool(suggested.local));
+            p.insert("local".into(), Value::Bool(local));
             filled = true;
         }
     }
@@ -670,7 +669,7 @@ const DISCOVERY_CANDIDATES: &[(&str, &str)] = &[
 ];
 
 /// Looks for local model servers on well-known ports, sending no key, and returns the ones that
-/// answer their model list. Runs on demand behind the **Find servers** button.
+/// answer their model list. Runs each time Settings → Local providers opens.
 pub fn discover() -> Vec<DiscoveredServer> {
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_global(Some(Duration::from_millis(1500)))

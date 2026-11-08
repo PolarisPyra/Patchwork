@@ -37,6 +37,11 @@ fn is_this_computer(host: &str) -> bool {
     matches!(host, "localhost" | "127.0.0.1" | "[::1]" | "0.0.0.0")
 }
 
+/// The server at `base` runs on this computer.
+pub(super) fn on_this_computer(base: &str) -> bool {
+    split(base).is_some_and(|(_, host, ..)| is_this_computer(host))
+}
+
 /// The model ids the server at `base` serves, when it answers its model list.
 fn served(agent: &ureq::Agent, provider: &ApiProvider, base: &str) -> Option<Vec<String>> {
     let mut request = agent.get(format!("{base}/models"));

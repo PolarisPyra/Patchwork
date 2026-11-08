@@ -22,17 +22,12 @@ type HealthMap = Partial<Record<string, ProviderHealth>>;
 let providerCache: ApiProviderView[] = [];
 const healthCache = new Map<string, ProviderHealth>();
 
-/** A blank server to add by hand: a server is pointed at by its URL, not picked from a cloud
- * preset, so Inference stays local-first. */
-const emptyServer = (): ApiProvider => ({
-  ...blank({ id: "custom", name: "", baseUrl: "", models: [] }),
-  local: true,
-});
-
-/** A custom provider prefilled from a discovered server, so Add opens the editor ready to save. */
+/** A custom provider prefilled from a server found on this computer, so Add opens the editor ready
+ * to save. */
 function fromDiscovered(d: DiscoveredServer): ApiProvider {
   return {
-    ...emptyServer(),
+    ...blank({ id: "custom", name: "", baseUrl: "", models: [] }),
+    local: true,
     name: d.name,
     baseUrl: d.baseUrl,
     models: d.models.map((id) => ({ id, name: null })),
@@ -196,55 +191,20 @@ function Repair({ provider: p, onMoved }: { provider: ApiProviderView; onMoved: 
   );
 }
 
-/** Find servers: scans this machine's well-known ports and offers each answering server to add. */
-function Discovery({ onAdd }: { onAdd: (d: DiscoveredServer) => void }) {
-  const [busy, setBusy] = useState(false);
-  const [found, setFound] = useState<DiscoveredServer[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const scan = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      setFound(await api.discoverInferenceServers());
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
+/** A server answering on this computer that is not saved yet, offered to add. */
+function FoundRow({ server, onAdd }: { server: DiscoveredServer; onAdd: () => void }) {
   return (
-    <div className="flex flex-col gap-1.5 py-2.5">
-      <button className="btn self-start" disabled={busy} onClick={() => void scan()}>
-        {busy ? <Spinner size={13} /> : <MagnifyingGlassIcon size={13} />}
-        Find servers on this computer
+    <div className="my-1.5 flex items-center gap-3 rounded-[var(--radius-sm)] border border-border px-2.5 py-2">
+      <div className="min-w-0 flex-1">
+        <div className="font-semibold">{server.name}</div>
+        <div className="truncate font-mono text-[length:var(--fs-sm)] text-fg-muted">
+          {server.baseUrl} · {server.models.length} model{server.models.length === 1 ? "" : "s"}
+        </div>
+      </div>
+      <button className="btn" aria-label={`Add ${server.name}`} onClick={onAdd}>
+        <PlusIcon size={13} />
+        Add
       </button>
-      {error && (
-        <div role="alert" className="text-[length:var(--fs-sm)] text-danger">
-          {error}
-        </div>
-      )}
-      {found !== null && found.length === 0 && !busy && (
-        <div className="text-[length:var(--fs-sm)] text-fg-muted">
-          No model servers answered on well-known ports.
-        </div>
-      )}
-      {found?.map((d) => (
-        <div
-          key={d.baseUrl}
-          className="flex items-center gap-3 rounded-[var(--radius-sm)] border border-border px-2.5 py-2"
-        >
-          <div className="min-w-0 flex-1">
-            <div className="font-semibold">{d.name}</div>
-            <div className="truncate font-mono text-[length:var(--fs-sm)] text-fg-muted">
-              {d.baseUrl} · {d.models.length} model{d.models.length === 1 ? "" : "s"}
-            </div>
-          </div>
-          <button className="btn" aria-label={`Add ${d.name}`} onClick={() => onAdd(d)}>
-            <PlusIcon size={13} />
-            Add
-          </button>
-        </div>
-      ))}
     </div>
   );
 }
@@ -300,6 +260,15 @@ export default function InferencePane({ updateSettings }: PaneProps) {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // Servers answering on this computer, looked for each time the pane opens.
+  const [found, setFound] = useState<DiscoveredServer[] | null>(null);
+  useEffect(() => {
+    api.discoverInferenceServers().then(setFound, () => setFound([]));
+  }, []);
+  const saved = new Set(providers.map((p) => p.baseUrl.replace(/\/+$/, "")));
+  const unsaved = (found ?? []).filter((d) => !saved.has(d.baseUrl.replace(/\/+$/, "")));
+  const empty = found !== null && providers.length === 0 && unsaved.length === 0;
 
   const toggle = async (p: ApiProviderView) => {
     setError(null);
@@ -357,11 +326,14 @@ export default function InferencePane({ updateSettings }: PaneProps) {
           )}
         </Fragment>
       ))}
-      <Discovery onAdd={(d) => setEditing(fromDiscovered(d))} />
-      <button className="btn self-start" onClick={() => setEditing(emptyServer())}>
-        <PlusIcon size={13} />
-        Add a server
-      </button>
+      {unsaved.map((d) => (
+        <FoundRow key={d.baseUrl} server={d} onAdd={() => setEditing(fromDiscovered(d))} />
+      ))}
+      {empty && (
+        <div className="flex h-full items-center justify-center text-fg-muted">
+          No local providers available
+        </div>
+      )}
       {error && (
         <div role="alert" className="text-[length:var(--fs-sm)] text-danger">
           {error}

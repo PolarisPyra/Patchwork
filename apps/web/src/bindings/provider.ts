@@ -29,9 +29,9 @@ preset: string,
  */
 baseUrl: string, enabled: boolean, 
 /**
- * Runs on this computer or the user's network: shown in Settings → Local providers with live
- * health. A cloud service such as DeepSeek is `false` and shows in Settings → Cloud providers.
- * The user picks it; a provider saved before it existed gets a suggestion once, on first read.
+ * Found on this computer, added from Settings → Local providers or by Use a local model: shown
+ * there with live health. Every other provider, added from a preset or by its address, is
+ * `false` and shows in Settings → Cloud providers.
  */
 local: boolean, models: Array<ApiModel>, 
 /**
@@ -189,11 +189,6 @@ export type Header = { name: string, value: string, };
 
 export type KeyStore = "keychain" | "file";
 
-/**
- * Where a provider looks like it runs, and why, shown beside the suggestion in the provider form.
- */
-export type Locality = { local: boolean, reason: string, };
-
 export type McpServer = { command?: string | null, args?: Array<string>, env?: { [key in string]: string }, url?: string | null, headers?: { [key in string]: string }, disabled?: boolean, 
 /**
  * Tools left out of API turns, by name.
@@ -277,9 +272,9 @@ preset: string,
  */
 baseUrl: string, enabled: boolean, 
 /**
- * Runs on this computer or the user's network: shown in Settings → Local providers with live
- * health. A cloud service such as DeepSeek is `false` and shows in Settings → Cloud providers.
- * The user picks it; a provider saved before it existed gets a suggestion once, on first read.
+ * Found on this computer, added from Settings → Local providers or by Use a local model: shown
+ * there with live health. Every other provider, added from a preset or by its address, is
+ * `false` and shows in Settings → Cloud providers.
  */
 local: boolean, models: Array<ApiModel>, 
 /**

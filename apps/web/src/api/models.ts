@@ -5,7 +5,6 @@ import type {
   ApiModel,
   ApiProvider,
   DiscoveredServer,
-  Locality,
   ModelOption,
   ProviderHealth,
 } from "~/api/types";
@@ -116,7 +115,4 @@ export const modelsApi = {
       apiProvidersChanged();
       return model;
     }),
-  /** Suggests whether the provider at `baseUrl` runs locally or in the cloud, and why. */
-  suggestProviderLocality: (baseUrl: string) =>
-    invoke<Locality>("suggest_provider_locality", { baseUrl }),
 };
