@@ -452,14 +452,16 @@ export default function ProvidersPane({ settings, updateSettings }: PaneProps) {
           </select>
         </TokenRow>
       )}
-      <PresetGrid onPick={(preset) => setEditing(blank(preset))} />
-      <button
-        className="btn self-start"
-        onClick={() => setEditing(blank({ id: "custom", name: "", baseUrl: "", models: [] }))}
-      >
-        <PlusIcon size={13} />
-        Add a server
-      </button>
+      <div className="flex items-start gap-2">
+        <PresetGrid onPick={(preset) => setEditing(blank(preset))} />
+        <button
+          className="btn mt-2.5 ml-auto flex-none"
+          onClick={() => setEditing(blank({ id: "custom", name: "", baseUrl: "", models: [] }))}
+        >
+          <PlusIcon size={13} />
+          Add a server
+        </button>
+      </div>
       {error && (
         <div role="alert" className="text-[length:var(--fs-sm)] text-danger">
           {error}
