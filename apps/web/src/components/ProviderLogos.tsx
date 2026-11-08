@@ -21,17 +21,17 @@ import qwenIcon from "../../../../assets/qwen-color.svg";
 import togetherIcon from "../../../../assets/together-color.svg";
 import zaiIcon from "../../../../assets/zai.svg";
 
-const LOGOS: Record<ImportSource, string> = {
-  claude: claudeIcon,
-  codex: openaiIcon,
-  antigravity: antigravityIcon,
-  t3: t3Icon,
-  opencode: opencodeIcon,
+/** A one-colour mark is `mono` and takes the text colour, so it shows on every theme. */
+const LOGOS: Record<ImportSource, { src: string; mono?: true }> = {
+  claude: { src: claudeIcon },
+  codex: { src: openaiIcon, mono: true },
+  antigravity: { src: antigravityIcon },
+  t3: { src: t3Icon },
+  opencode: { src: opencodeIcon, mono: true },
 };
 
-/** Marks of the API provider presets that have one; the rest get a generic mark. A one-colour
- * mark is `mono` and takes the text colour, so it shows on every theme. The marks come from
- * LobeHub's icon set (the MIT-licensed `@lobehub/icons-static-svg` package's `icons/` folder). */
+/** Marks of the API provider presets that have one; the rest get a generic mark. The marks come
+ * from LobeHub's icon set (the MIT-licensed `@lobehub/icons-static-svg` package's `icons/` folder). */
 const PRESET_LOGOS: Record<string, { src: string; mono?: true }> = {
   deepseek: { src: deepseekIcon },
   openai: { src: openaiIcon, mono: true },
@@ -71,8 +71,13 @@ export default function ProviderLogos({
 }) {
   const provider = kind === "api" && preset === undefined ? apiProviderOf(model) : undefined;
   const own = kind === "api" ? (provider ? provider.logo : logo) : null;
-  const mark = kind === "api" && !own ? PRESET_LOGOS[provider?.preset ?? preset ?? ""] : undefined;
-  const src = kind === "api" ? own || mark?.src : LOGOS[kind];
+  const mark =
+    kind === "api"
+      ? own
+        ? undefined
+        : PRESET_LOGOS[provider?.preset ?? preset ?? ""]
+      : LOGOS[kind];
+  const src = own || mark?.src;
   if (!src) return <PlugsConnectedIcon size={size} aria-hidden="true" className="flex-none" />;
   if (mark?.mono) {
     const mask = `url("${src}") center / contain no-repeat`;
