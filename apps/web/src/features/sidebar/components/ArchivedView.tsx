@@ -1,4 +1,4 @@
-import { useState, type MouseEvent, type ReactNode } from "react";
+import { useRef, useState, type MouseEvent, type ReactNode } from "react";
 import {
   ArrowCounterClockwiseIcon,
   ArrowsInLineVerticalIcon,
@@ -50,19 +50,6 @@ export default function ArchivedView({
     });
   const targetOf = (id: string): Target => ({ kind: "thread", id });
   const isPicked = (id: string) => picked.some((p) => sameTarget(p, targetOf(id)));
-  // Ctrl+click picks a thread for deleting together; a plain click clears the picks and opens it.
-  const pick = (e: MouseEvent, id: string) => {
-    if (!e.ctrlKey) {
-      setPicked([]);
-      onSelectThread(id);
-      return;
-    }
-    setPicked((prev) =>
-      prev.some((p) => sameTarget(p, targetOf(id)))
-        ? prev.filter((p) => !sameTarget(p, targetOf(id)))
-        : [...prev, targetOf(id)],
-    );
-  };
   const chats = archivedThreads.filter((t) => t.projectId === null);
   const groups = projects
     .map((p) => {
@@ -75,6 +62,44 @@ export default function ArchivedView({
       return { project: p, folders: projectFolders, topLevel };
     })
     .filter((g) => g.folders.length > 0 || g.topLevel.length > 0);
+  // The chats and tasks on screen, top to bottom, so a shift-click can pick everything between two.
+  const visibleIds = [
+    ...(collapsed.has("chats") ? [] : chats.map((t) => t.id)),
+    ...groups.flatMap((g) =>
+      collapsed.has(g.project.id)
+        ? []
+        : [
+            ...g.folders.flatMap(({ folder, tasks }) =>
+              collapsed.has(`folder:${folder.id}`) ? [] : tasks.map((t) => t.id),
+            ),
+            ...g.topLevel.map((t) => t.id),
+          ],
+    ),
+  ];
+  // The row the last click landed on, where a shift-click starts its range.
+  const cursorRef = useRef<string | null>(null);
+  // Shift+click picks every row from the last click to this one. Ctrl+click picks a thread for
+  // deleting together; a plain click clears the picks and opens it.
+  const pick = (e: MouseEvent, id: string) => {
+    const anchor = cursorRef.current === null ? -1 : visibleIds.indexOf(cursorRef.current);
+    const at = visibleIds.indexOf(id);
+    cursorRef.current = id;
+    if (e.shiftKey && anchor >= 0 && at >= 0) {
+      const [from, to] = anchor < at ? [anchor, at] : [at, anchor];
+      setPicked(visibleIds.slice(from, to + 1).map((x) => targetOf(x)));
+      return;
+    }
+    if (!e.ctrlKey) {
+      setPicked([]);
+      onSelectThread(id);
+      return;
+    }
+    setPicked((prev) =>
+      prev.some((p) => sameTarget(p, targetOf(id)))
+        ? prev.filter((p) => !sameTarget(p, targetOf(id)))
+        : [...prev, targetOf(id)],
+    );
+  };
   const collapseAll = () =>
     setCollapsedGroups(
       (prev) =>
