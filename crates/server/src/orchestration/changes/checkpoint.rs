@@ -364,6 +364,46 @@ pub fn restore(root: &str, thread_id: &str, message_id: &str) -> Result<(), Stri
     Ok(())
 }
 
+/// Takes back what one turn did to `files`, leaving the rest of the project as it is: the turn's
+/// own diff of them is applied to the files on disk in reverse. When a file changed since in a
+/// way the reverse no longer fits, nothing is touched.
+pub fn undo(root: &str, turn: &TurnTrees, files: &[String]) -> Result<(), String> {
+    // Without paths the diff would cover the whole project.
+    if files.is_empty() {
+        return Err("This reply changed no files".into());
+    }
+    let mut args = vec![
+        "diff",
+        "--binary",
+        "--no-color",
+        "--no-ext-diff",
+        &turn.before,
+        &turn.after,
+        "--",
+    ];
+    args.extend(files.iter().map(String::as_str));
+    let patch = run(root, None, &args, None)?.stdout;
+    if patch.is_empty() {
+        return Err("This reply changed no files".into());
+    }
+    // The patch names files from the repository's top, which the project may sit below.
+    let top = git(root, &["rev-parse", "--show-toplevel"])?;
+    run(
+        &top,
+        None,
+        &["apply", "--reverse", "--check", "-"],
+        Some(&patch),
+    )
+    .map_err(|e| {
+        format!(
+            "The reply's changes were edited since, so they can't be taken back cleanly. {}",
+            e.trim_start_matches("git apply --reverse --check -: ")
+        )
+    })?;
+    run(&top, None, &["apply", "--reverse", "-"], Some(&patch))?;
+    Ok(())
+}
+
 /// Drops the snapshots of the given messages, or of the whole thread when `message_ids` is None.
 pub fn remove(root: &str, thread_id: &str, message_ids: Option<&[String]>) {
     let ids = match message_ids {
@@ -444,6 +484,28 @@ impl Server {
             t.context_pending = !t.messages.is_empty();
         })?;
         self.thread(thread_id)
+    }
+
+    /// Takes back the files one reply changed, as `undo` does, while the thread and its other
+    /// replies stay as they are. The changes it undoes show up as uncommitted ones.
+    pub fn undo_reply(&self, thread_id: &str, message_id: &str) -> Result<(), String> {
+        if self.runner.is_running(thread_id) {
+            return Err("Stop the running turn before undoing a reply".into());
+        }
+        let root = self
+            .checkpoint_root(thread_id)
+            .ok_or("Only project tasks have replies to undo")?;
+        let thread = self.thread(thread_id)?;
+        let reply = thread
+            .messages
+            .iter()
+            .find(|m| m.id == message_id)
+            .ok_or("Reply not found")?;
+        let turn = reply
+            .turn
+            .as_ref()
+            .ok_or("This reply has no snapshot to undo it from")?;
+        undo(&root, turn, &reply.files)
     }
 
     /// Drops the thread's checkpoints, once its messages are gone.

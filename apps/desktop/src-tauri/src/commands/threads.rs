@@ -101,6 +101,13 @@ pub(crate) fn restore_checkpoint(
     server.restore_checkpoint(&thread_id, &message_id)
 }
 
+/// Takes back the files one reply changed; the thread stays as it is.
+#[tauri::command]
+pub(crate) async fn undo_reply(server: Srv<'_>, thread_id: String, message_id: String) -> Res<()> {
+    let server = server.inner().clone();
+    blocking(move || server.undo_reply(&thread_id, &message_id)).await?
+}
+
 #[tauri::command]
 pub(crate) async fn fork_thread(
     server: Srv<'_>,

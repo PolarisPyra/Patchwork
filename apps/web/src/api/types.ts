@@ -101,7 +101,16 @@ import type {
   TurnTrees,
 } from "~/bindings/threads";
 import type { ProviderUsage, UsageWindow } from "~/bindings/usage";
-import type { FileChange, FileMedia, ProjectChanged } from "~/bindings/workspace";
+import type {
+  CommitReply,
+  FileChange,
+  FileMedia,
+  GitCommit,
+  GitRef,
+  GitSyncState,
+  ProjectChanged,
+  PullRequest,
+} from "~/bindings/workspace";
 export type {
   AccessMode,
   AgentEvent,
@@ -127,6 +136,7 @@ export type {
   CodexFeature,
   CodexInfo,
   CodexModel,
+  CommitReply,
   DirEntry,
   DirListing,
   DiscoveredServer,
@@ -134,6 +144,9 @@ export type {
   FileChange,
   FileMedia,
   Folder,
+  GitCommit,
+  GitRef,
+  GitSyncState,
   Goal,
   GoalStatus,
   ImportScan,
@@ -162,6 +175,7 @@ export type {
   ProviderHealth,
   ProviderSlashCommand,
   ProviderUsage,
+  PullRequest,
   Question,
   Refusal,
   RemovedBackground,

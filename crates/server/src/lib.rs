@@ -9,6 +9,7 @@ pub mod backgrounds;
 pub mod checks;
 pub mod computer;
 pub mod error;
+pub mod git;
 pub mod harness;
 pub mod import;
 pub mod logging;

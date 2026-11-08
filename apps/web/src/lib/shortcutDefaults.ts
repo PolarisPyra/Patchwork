@@ -41,8 +41,8 @@ export const COMMANDS: CommandInfo[] = [
   {
     id: "sidebar.showChanges",
     page: "Sidebar",
-    title: "Show changes",
-    description: "Opens the sidebar on the project's changes",
+    title: "Show source control",
+    description: "Opens the sidebar on the project's changes and commits",
   },
   {
     id: "sidebar.showArchived",

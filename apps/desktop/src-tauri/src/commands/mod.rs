@@ -33,7 +33,7 @@ use patchwork_server::scheduled::ScheduledTask;
 use patchwork_server::settings::Settings;
 use patchwork_server::threads::{AccessMode, Attachment, Message, Thread, TurnTrees};
 use patchwork_server::usage::ProviderUsage;
-use patchwork_server::workspace::FileChange;
+use patchwork_server::workspace::{FileChange, GitCommit, GitSyncState, PullRequest};
 use patchwork_server::workspace;
 use patchwork_server::{Res, orchestration, provider};
 use patchwork_server::threads::NewThread;

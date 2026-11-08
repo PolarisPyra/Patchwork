@@ -1,4 +1,5 @@
-//! Names a thread after what its first message is about, with a one-off call to a small model.
+//! Names a thread after what its first message is about, with a one-off call to a small model,
+//! which `ask` also makes for other short writing such as commit messages.
 
 use std::time::Duration;
 
@@ -63,41 +64,80 @@ pub fn generate(
     writer: &Writer,
 ) -> Option<String> {
     let message: String = message.chars().take(MAX_MESSAGE_CHARS).collect();
-    if let Some(title_model) = writer.model.as_deref()
-        && (!writer.local_only || runs_locally(Some(title_model)))
-        && let Some(title) = from_api(&message, Some(title_model))
+    let answer = ask(
+        &Request {
+            prompt: PROMPT,
+            schema: SCHEMA,
+            label: "User message",
+            input: &message,
+        },
+        Some(agent),
+        model,
+        writer,
+    )?;
+    clean(answer["title"].as_str().or(answer.as_str())?)
+}
+
+/// A one-off question to a small model: instructions, the JSON schema of the answer, and the
+/// text it is about.
+pub(crate) struct Request<'a> {
+    pub prompt: &'a str,
+    pub schema: &'a str,
+    /// Names `input` for the CLIs, which get the instructions and the input in one prompt.
+    pub label: &'a str,
+    pub input: &'a str,
+}
+
+/// The answer to `request` as the JSON object its schema describes, or a plain string when an
+/// API model answers in plain text. Asked as a title is: the writer's model when it has one,
+/// else the provider of `agent` with `model`, or Claude, else Codex, without an agent. With
+/// `local_only`, only a local model is asked.
+/// None when none answers.
+pub(crate) fn ask(
+    request: &Request,
+    agent: Option<AgentKind>,
+    model: Option<&str>,
+    writer: &Writer,
+) -> Option<Value> {
+    if let Some(writer_model) = writer.model.as_deref()
+        && (!writer.local_only || runs_locally(Some(writer_model)))
+        && let Some(answer) = from_api(request, Some(writer_model))
     {
-        return Some(title);
+        return Some(answer);
     }
-    let chat_is_local = agent == AgentKind::Api && runs_locally(model);
+    let chat_is_local = agent == Some(AgentKind::Api) && runs_locally(model);
     if writer.local_only && !chat_is_local {
         return None;
     }
-    if agent == AgentKind::Api {
-        return from_api(&message, model);
+    if agent == Some(AgentKind::Api) {
+        return from_api(request, model);
     }
-    let prompt = format!("{PROMPT}\n\nUser message:\n{message}");
+    let prompt = format!(
+        "{}\n\n{}:\n{}",
+        request.prompt, request.label, request.input
+    );
     // A folder of its own, so the model reads no project instructions.
     let dir = std::env::temp_dir().join(format!("patchwork-title-{}", crate::system::new_id()));
     std::fs::create_dir_all(&dir).ok()?;
-    let title = match agent {
-        AgentKind::Claude => from_claude(&prompt, &dir),
-        AgentKind::Codex => from_codex(&prompt, &dir, model),
-        _ => from_claude(&prompt, &dir).or_else(|| from_codex(&prompt, &dir, None)),
+    let schema = request.schema;
+    let answer = match agent {
+        Some(AgentKind::Claude) => from_claude(&prompt, schema, &dir),
+        Some(AgentKind::Codex) => from_codex(&prompt, schema, &dir, model),
+        _ => from_claude(&prompt, schema, &dir).or_else(|| from_codex(&prompt, schema, &dir, None)),
     };
     let _ = std::fs::remove_dir_all(&dir);
-    title
+    answer
 }
 
 /// Asks the thread's OpenAI-compatible endpoint, such as DeepSeek's, with the thread's model.
-fn from_api(message: &str, model: Option<&str>) -> Option<String> {
+fn from_api(request: &Request, model: Option<&str>) -> Option<Value> {
     let connection = crate::provider::api::config::connection(model).ok()?;
     let base = connection["baseUrl"].as_str()?.trim_end_matches('/');
     let body = json!({
         "model": connection["model"],
         "messages": [
-            {"role": "system", "content": PROMPT},
-            {"role": "user", "content": message},
+            {"role": "system", "content": request.prompt},
+            {"role": "user", "content": request.input},
         ],
         "stream": false,
     });
@@ -118,7 +158,7 @@ fn from_api(message: &str, model: Option<&str>) -> Option<String> {
     let mut response = request.send(body.to_string()).ok()?;
     let text = response.body_mut().read_to_string().unwrap_or_default();
     if !response.status().is_success() {
-        log::warn!("title generation failed: {}", text.trim());
+        log::warn!("a one-off model call failed: {}", text.trim());
         return None;
     }
     let reply: Value = serde_json::from_str(&text).ok()?;
@@ -131,19 +171,19 @@ fn from_api(message: &str, model: Option<&str>) -> Option<String> {
         .trim_end_matches("```")
         .trim();
     match serde_json::from_str::<Value>(unfenced) {
-        Ok(value) => clean(value["title"].as_str()?),
-        Err(_) => clean(content),
+        Ok(value) if value.is_object() => Some(value),
+        _ => Some(Value::String(content.to_string())),
     }
 }
 
-fn from_claude(prompt: &str, dir: &std::path::Path) -> Option<String> {
+fn from_claude(prompt: &str, schema: &str, dir: &std::path::Path) -> Option<Value> {
     let args = [
         "-p",
         prompt,
         "--output-format",
         "json",
         "--json-schema",
-        SCHEMA,
+        schema,
         "--model",
         "haiku",
         "--tools",
@@ -158,18 +198,23 @@ fn from_claude(prompt: &str, dir: &std::path::Path) -> Option<String> {
     ];
     let out = provider::probe_in(AgentKind::Claude, &args, dir, TIMEOUT)?;
     if !out.success {
-        log::warn!("title generation failed: {}", out.stderr.trim());
+        log::warn!("a one-off model call failed: {}", out.stderr.trim());
         return None;
     }
-    let value: Value = serde_json::from_str(&out.stdout).ok()?;
-    clean(value["structured_output"]["title"].as_str()?)
+    let mut value: Value = serde_json::from_str(&out.stdout).ok()?;
+    Some(value["structured_output"].take()).filter(Value::is_object)
 }
 
 /// With the thread's model when it has one, at low effort, else Codex's default model.
-fn from_codex(prompt: &str, dir: &std::path::Path, model: Option<&str>) -> Option<String> {
+fn from_codex(
+    prompt: &str,
+    schema_text: &str,
+    dir: &std::path::Path,
+    model: Option<&str>,
+) -> Option<Value> {
     let schema = dir.join("schema.json");
     let answer = dir.join("answer.json");
-    std::fs::write(&schema, SCHEMA).ok()?;
+    std::fs::write(&schema, schema_text).ok()?;
     let mut args = vec![
         "exec",
         "--ephemeral",
@@ -189,11 +234,12 @@ fn from_codex(prompt: &str, dir: &std::path::Path, model: Option<&str>) -> Optio
     args.push(prompt);
     let out = provider::probe_in(AgentKind::Codex, &args, dir, TIMEOUT)?;
     if !out.success {
-        log::warn!("title generation failed: {}", out.stderr.trim());
+        log::warn!("a one-off model call failed: {}", out.stderr.trim());
         return None;
     }
-    let value: Value = serde_json::from_str(&std::fs::read_to_string(&answer).ok()?).ok()?;
-    clean(value["title"].as_str()?)
+    serde_json::from_str::<Value>(&std::fs::read_to_string(&answer).ok()?)
+        .ok()
+        .filter(Value::is_object)
 }
 
 /// One line without wrapping quotes or a trailing period, at most 120 characters.

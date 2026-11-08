@@ -32,6 +32,8 @@ export interface SidebarProps {
   /** The tree's rows in on-screen order, kept current so archiving the open task can move on to the next one. */
   treeRowsRef: { current: Target[] };
   selectedId: string | null;
+  /** The open project's checked-out branch. */
+  branch: string | null;
   changes: FileChange[];
   /** Starts a new task in the given project. */
   onNewTask: (projectId: string) => void;
@@ -75,6 +77,10 @@ export interface SidebarProps {
   /** A project whose folder was added again; its row is scrolled to and flashes. */
   flashId: string | null;
   onRefreshChanges: () => void;
+  /** Opens a thread and sends it a message. */
+  onSendToThread: (threadId: string, text: string) => void;
+  /** Starts a task in the open project with `text` as its first message. */
+  onStartTask: (title: string, text: string) => void;
   onOpenChange: (path: string) => void;
   /** Files of the reply the Changes view was opened from, if any. */
   changeFocus: string[] | null;

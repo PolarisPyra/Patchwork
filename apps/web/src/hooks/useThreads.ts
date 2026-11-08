@@ -549,6 +549,16 @@ export function useThreads(initialProjectId: string | null) {
     );
   }
 
+  /** Sends `text` to a thread other than the open one; it waits behind a running turn. */
+  async function sendTo(threadId: string, text: string): Promise<void> {
+    const message = await api.sendMessage(threadId, text, [], true);
+    setThreads((prev) =>
+      prev.map((t) =>
+        t.id === threadId ? { ...t, messages: upsertMessage(t.messages, message) } : t,
+      ),
+    );
+  }
+
   /** Starts a thread in `projectId` with `text` as its first message, named `title`, and selects it. */
   async function startThread(
     projectId: string | null,
@@ -595,6 +605,7 @@ export function useThreads(initialProjectId: string | null) {
     setCompactWindow,
     setBackground,
     send,
+    sendTo,
     startThread,
   };
 }

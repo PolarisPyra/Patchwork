@@ -58,6 +58,10 @@ export const threadsApi = {
    * and the ones after it. Returns the thread as it is now. */
   restoreCheckpoint: (threadId: string, messageId: string) =>
     invoke<Thread>("restore_checkpoint", { threadId, messageId }),
+  /** Takes back the files one reply changed, leaving the thread and the rest of the project as they
+   * are. Refused when they were edited since in a way that no longer fits. */
+  undoReply: (threadId: string, messageId: string) =>
+    invoke<void>("undo_reply", { threadId, messageId }),
   forkThread: (threadId: string, messageId: string) =>
     invoke<Thread>("fork_thread", { threadId, messageId }),
   /** The thread that was open when the app last closed. */

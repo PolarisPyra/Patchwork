@@ -1,61 +1,213 @@
-import { useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  ArrowCounterClockwiseIcon,
   ArrowLeftIcon,
   ArrowsClockwiseIcon,
-  ChatCircleIcon,
-  FolderIcon,
+  CaretDownIcon,
+  CaretRightIcon,
+  PlusIcon,
+  SparkleIcon,
 } from "@phosphor-icons/react";
-import { api, type FileChange } from "~/api";
+import { api, type FileChange, type GitSyncState } from "~/api";
 import { confirm } from "@tauri-apps/plugin-dialog";
+import Spinner from "~/components/Spinner";
 import { useMissingFiles } from "~/hooks/useMissingFiles";
-import { baseName, dirName, errorText } from "~/lib/util";
-import { BulkButton, ChangeRow, REPLY_ROW_CLASS } from "~/features/sidebar/components/ChangeRow";
+import { baseName, errorText } from "~/lib/util";
+import { ChangeRow } from "~/features/sidebar/components/ChangeRow";
+import CommitBox from "~/features/sidebar/components/CommitBox";
+import GraphSection from "~/features/sidebar/components/GraphSection";
+import PullRequestBar from "~/features/sidebar/components/PullRequestBar";
 import type { SidebarProps } from "~/features/sidebar/types";
 
-/** The changes view: the reply's files pinned on top, the rest grouped by folder. */
+/** Source Control: the commit box, the changed files, and the commit graph. */
 
-/** Changed files. Those from the reply the view was opened from are pinned on top; the rest are grouped by folder. */
+/** The Graph's height while Changes is open too, as the divider between them left it. */
+const GRAPH_HEIGHT_KEY = "patchwork.graphHeight";
+const GRAPH_HEIGHT = 260;
+/** Neither pane is dragged smaller than its header and a few rows. */
+const PANE_MIN_PX = 88;
+
+/** A collapsible part of the view, such as Changes or Graph: `height` tall, else it fills what
+ * the other pane leaves. */
+function Pane({
+  title,
+  open,
+  onToggle,
+  height,
+  actions,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  height?: number;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  const Caret = open ? CaretDownIcon : CaretRightIcon;
+  return (
+    <section
+      aria-label={title}
+      style={open && height ? { height, maxHeight: `calc(100% - ${PANE_MIN_PX}px)` } : undefined}
+      className={`flex min-h-0 flex-col border-t border-border first:border-t-0 ${open && !height ? "flex-1" : "flex-none"}`}
+    >
+      <div className="group flex h-[22px] flex-none items-center pr-2">
+        <button
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-1 border-none bg-transparent px-1 text-left text-[length:var(--fs-xs)] font-semibold text-fg"
+          aria-expanded={open}
+          onClick={onToggle}
+        >
+          <Caret size={12} />
+          {title}
+        </button>
+        {open && actions}
+      </div>
+      {open && (
+        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-scroll pb-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:border-0">
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** A small icon button for a row or group, shown on hover. */
+function RowAction({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      className="btn-icon hover-reveal !h-5 !w-5"
+      title={label}
+      aria-label={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** A group of files under its name, a count, and the actions for all of them. */
+function Group({
+  title,
+  count,
+  actions,
+  children,
+}: {
+  title: string;
+  count: number;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div role="group" aria-label={title} className="flex flex-col px-1">
+      <div className="group flex h-[22px] items-center gap-1 px-1 text-[length:var(--fs-sm)]">
+        <span className="min-w-0 flex-1 truncate">{title}</span>
+        {actions}
+        <span className="min-w-[18px] rounded-full bg-selected-muted px-1.5 text-center text-[length:var(--fs-xs)] leading-[18px]">
+          {count}
+        </span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export default function ChangesView({
   project,
   threads,
   selectedId,
+  branch,
   changes,
   changeFocus,
   onClearChangeFocus,
   onRefreshChanges,
   onOpenChange,
+  archivedThreads,
+  onSelectThread,
+  onSendToThread,
+  onStartTask,
 }: SidebarProps) {
   const [error, setError] = useState<string | null>(null);
-  // With full access nothing waits for review, so the bulk actions are left out.
+  const [resolving, setResolving] = useState(false);
+  const [sync, setSync] = useState<GitSyncState | null>(null);
+  const [changesOpen, setChangesOpen] = useState(true);
+  const [graphOpen, setGraphOpen] = useState(true);
+  const [graphHeight, setGraphHeight] = useState(
+    () => Number(localStorage.getItem(GRAPH_HEIGHT_KEY)) || GRAPH_HEIGHT,
+  );
+  const panesRef = useRef<HTMLDivElement>(null);
+  // With full access nothing waits for review, so staging and discarding are left out.
   const fullAccess = threads.find((t) => t.id === selectedId)?.accessMode === "full-access";
   // The reply's files, listed whether or not they still have uncommitted changes.
   const replyFiles = changeFocus ?? [];
   const missing = useMissingFiles(project?.id ?? null, replyFiles, changes);
-  // The +/− counts sit in columns as wide as the longest count, so they line up across rows.
-  const diffDigits = Math.max(
-    1,
-    ...changes.map((c) => String(Math.max(c.additions, c.deletions)).length),
-  );
-  const pinned = changes.filter((c) => replyFiles.includes(c.path));
-  const folders = new Map<string, FileChange[]>();
-  for (const c of changes) {
-    if (pinned.includes(c)) continue;
-    const dir = dirName(c.path);
-    folders.set(dir, [...(folders.get(dir) ?? []), c]);
+  const hasChanges = changes.length > 0;
+  const projectId = project?.id ?? null;
+
+  // Where the branch stands asks gh over the network, so it is read when the branch or whether
+  // anything is uncommitted changes, and after each action, not with every edit.
+  const refreshSync = useCallback(() => {
+    if (!projectId) return;
+    api.gitSyncState(projectId).then(setSync, () => setSync(null));
+  }, [projectId]);
+  useEffect(refreshSync, [refreshSync, branch, hasChanges]);
+
+  function refreshAll() {
+    onRefreshChanges();
+    refreshSync();
+  }
+
+  /** The Graph's height kept between the panes' smallest, and remembered. */
+  function setGraphHeightClamped(next: number) {
+    const total = panesRef.current?.clientHeight ?? 0;
+    const height = Math.round(Math.max(PANE_MIN_PX, Math.min(total - PANE_MIN_PX, next)));
+    localStorage.setItem(GRAPH_HEIGHT_KEY, String(height));
+    setGraphHeight(height);
+  }
+
+  function startResize(e: React.MouseEvent) {
+    const panes = panesRef.current;
+    if (!panes) return;
+    e.preventDefault();
+    const bottom = panes.getBoundingClientRect().bottom;
+    const onMove = (ev: MouseEvent) => setGraphHeightClamped(bottom - ev.clientY);
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+
+  function resizeByKey(e: React.KeyboardEvent) {
+    const step = e.key === "ArrowUp" ? 16 : e.key === "ArrowDown" ? -16 : 0;
+    if (!step) return;
+    e.preventDefault();
+    setGraphHeightClamped(graphHeight + step);
   }
 
   async function act(action: () => Promise<void>) {
     setError(null);
     try {
       await action();
-      onRefreshChanges();
     } catch (e) {
       setError(errorText(e));
     }
+    onRefreshChanges();
   }
 
   /** Stages every file in `files`, one after another. */
-  function applyAll(files: FileChange[]) {
+  function stage(files: FileChange[]) {
     if (!project) return;
     void act(async () => {
       for (const f of files) await api.acceptFile(project.id, f.path);
@@ -63,10 +215,10 @@ export default function ChangesView({
   }
 
   /** Reverts every file in `files` after one confirmation. */
-  async function rejectAll(files: FileChange[]) {
+  async function discard(files: FileChange[]) {
     if (!project || files.length === 0) return;
-    const count = files.length === 1 ? "1 file" : `${files.length} files`;
-    if (!(await confirm(`Discard changes to ${count}?`, { title: "Reject", kind: "warning" }))) {
+    const what = files.length === 1 ? baseName(files[0].path) : `${files.length} files`;
+    if (!(await confirm(`Discard changes to ${what}?`, { title: "Discard", kind: "warning" }))) {
       return;
     }
     void act(async () => {
@@ -74,106 +226,195 @@ export default function ChangesView({
     });
   }
 
+  /** Starts a task whose agent resolves the conflicts, given both sides of each. */
+  async function resolveWithAgent() {
+    if (!projectId) return;
+    setError(null);
+    setResolving(true);
+    try {
+      onStartTask("Resolve merge conflicts", await api.conflictPrompt(projectId));
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setResolving(false);
+    }
+  }
+
   const row = (c: FileChange) => (
-    <ChangeRow key={c.path} change={c} onOpen={() => onOpenChange(c.path)} />
+    <ChangeRow
+      key={c.path}
+      change={c}
+      onOpen={() => onOpenChange(c.path)}
+      actions={
+        !fullAccess && (
+          <>
+            <RowAction label="Discard changes" onClick={() => void discard([c])}>
+              <ArrowCounterClockwiseIcon size={14} />
+            </RowAction>
+            {!c.staged && (
+              <RowAction label="Stage changes" onClick={() => stage([c])}>
+                <PlusIcon size={14} />
+              </RowAction>
+            )}
+          </>
+        )
+      }
+    />
   );
+
+  const conflicted = changes.filter((c) => c.status === "conflicted");
+  const pinned = changes.filter((c) => replyFiles.includes(c.path) && !conflicted.includes(c));
+  const rest = changes.filter((c) => !pinned.includes(c) && !conflicted.includes(c));
+  const staged = rest.filter((c) => c.staged);
+  const unstaged = rest.filter((c) => !c.staged);
 
   return (
     <>
-      {/* The list below reserves its 10px scrollbar (theme.css), so the header keeps the same inset. */}
-      <div className="flex h-8 flex-none items-center justify-between pr-[18px] pl-3 text-[length:var(--fs-sm)] font-semibold">
-        <span>Changes</span>
-        <button
-          className="btn-icon"
-          title="Refresh"
-          aria-label="Refresh"
-          onClick={onRefreshChanges}
-        >
-          <ArrowsClockwiseIcon size={18} />
+      {/* The panes below keep a 4px scrollbar and an 8px inset, so the header ends where they do. */}
+      <div className="mt-1.5 flex h-8 flex-none items-center justify-between px-3 text-[length:var(--fs-sm)] font-semibold">
+        <span>Source Control</span>
+        <button className="btn-icon" title="Refresh" aria-label="Refresh" onClick={refreshAll}>
+          {/* The text sits low in its line box, so the icon comes down to its middle. */}
+          <ArrowsClockwiseIcon size={18} className="translate-y-px" />
         </button>
       </div>
-      <div
-        className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-scroll p-2 [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:border-0"
-        style={{ "--diff-col": `${diffDigits + 1}ch` } as CSSProperties}
-      >
-        {changes.length > 0 && !fullAccess && (
-          <div className="flex justify-end gap-1 px-1">
-            <BulkButton onClick={() => applyAll(changes)}>Stage all</BulkButton>
-            <BulkButton onClick={() => void rejectAll(changes)}>Reject all</BulkButton>
-          </div>
-        )}
-        {changes.length === 0 && (
-          <div className="-mt-2.5 flex h-[28px] items-center px-1 text-[length:var(--fs-sm)] text-fg-muted">
-            No changes
-          </div>
-        )}
-        {replyFiles.length > 0 && (
-          // Shared columns, so every folder starts together. A name takes at most about half the
-          // row and truncates past that; the folder takes what is left, and shrinks first as the
-          // sidebar narrows.
-          <div
-            role="group"
-            aria-label="From this reply"
-            className="grid grid-cols-[fit-content(55%)_minmax(0,1fr)_auto] gap-x-3 gap-y-px"
-          >
-            <div className="col-span-full flex items-center gap-1.5 px-1.5 pt-1 text-[length:var(--fs-xs)] text-fg-subtle">
-              <ChatCircleIcon size={14} />
-              <span className="min-w-0 flex-1 truncate">From this reply</span>
-              {pinned.length > 0 && !fullAccess && (
-                <span className="flex gap-1">
-                  <BulkButton onClick={() => applyAll(pinned)}>Stage</BulkButton>
-                  <BulkButton onClick={() => void rejectAll(pinned)}>Reject</BulkButton>
-                </span>
-              )}
-              <button
-                className="ml-auto flex flex-none cursor-pointer items-center gap-1 rounded-[var(--radius-sm)] border-none bg-transparent px-1.5 py-0.5 text-[length:var(--fs-xs)] text-fg-subtle hover:bg-hover hover:text-fg"
-                onClick={onClearChangeFocus}
-              >
-                <ArrowLeftIcon size={14} />
-                Project
-              </button>
-            </div>
-            {replyFiles.map((path) => {
-              const change = changes.find((c) => c.path === path);
-              return change ? (
-                <ChangeRow key={path} change={change} showDir onOpen={() => onOpenChange(path)} />
-              ) : (
+      <div ref={panesRef} className="flex min-h-0 flex-1 flex-col">
+        <Pane title="Changes" open={changesOpen} onToggle={() => setChangesOpen((o) => !o)}>
+          {project && (
+            <CommitBox
+              projectId={project.id}
+              threadId={selectedId}
+              sync={sync}
+              hasChanges={hasChanges}
+              onDone={refreshAll}
+            />
+          )}
+          {project && sync?.pullRequest && (
+            <PullRequestBar
+              projectId={project.id}
+              pr={sync.pullRequest}
+              threads={threads}
+              onSendToThread={onSendToThread}
+              onStartTask={onStartTask}
+            />
+          )}
+          {conflicted.length > 0 && (
+            <Group
+              title="Merge Changes"
+              count={conflicted.length}
+              actions={
                 <button
-                  key={path}
-                  className={`${REPLY_ROW_CLASS} !text-fg-muted`}
-                  title={path}
-                  onClick={() => onOpenChange(path)}
+                  className="flex flex-none cursor-pointer items-center gap-1 rounded-[var(--radius-sm)] border-none bg-transparent px-1.5 py-0.5 text-[length:var(--fs-xs)] text-fg-subtle hover:bg-hover hover:text-fg disabled:cursor-default"
+                  disabled={resolving}
+                  onClick={() => void resolveWithAgent()}
                 >
-                  <span className={`truncate ${missing.has(path) ? "line-through" : ""}`}>
-                    {baseName(path)}
-                  </span>
-                  <span className="truncate text-[length:var(--fs-xs)] text-fg-subtle">
-                    {dirName(path)}
-                  </span>
-                  <span className="justify-self-end text-[length:var(--fs-xs)] text-fg-subtle">
-                    {missing.has(path) ? "Deleted" : "No changes"}
-                  </span>
+                  {resolving ? <Spinner size={12} /> : <SparkleIcon size={14} />}
+                  Resolve with agent
                 </button>
-              );
-            })}
-          </div>
-        )}
-        {[...folders]
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([dir, files]) => (
-            <div key={dir} className="flex flex-col gap-px">
-              <div className="flex items-center gap-1.5 px-1.5 pt-1 text-[length:var(--fs-xs)] text-fg-subtle">
-                <FolderIcon size={14} />
-                <span className="min-w-0 truncate">{dir || "Project root"}</span>
-              </div>
-              {files.map(row)}
+              }
+            >
+              {conflicted.map(row)}
+            </Group>
+          )}
+          {replyFiles.length > 0 && (
+            <Group
+              title="From this reply"
+              count={replyFiles.length}
+              actions={
+                <button
+                  className="flex flex-none cursor-pointer items-center gap-1 rounded-[var(--radius-sm)] border-none bg-transparent px-1.5 py-0.5 text-[length:var(--fs-xs)] text-fg-subtle hover:bg-hover hover:text-fg"
+                  onClick={onClearChangeFocus}
+                >
+                  <ArrowLeftIcon size={14} />
+                  Project
+                </button>
+              }
+            >
+              {pinned.map(row)}
+              {replyFiles
+                .filter((path) => !changes.some((c) => c.path === path))
+                .map((path) => (
+                  <button
+                    key={path}
+                    className="flex h-[22px] cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border-none bg-transparent pr-1.5 pl-5 text-left text-[length:var(--fs-sm)] text-fg-muted hover:bg-hover"
+                    title={path}
+                    onClick={() => onOpenChange(path)}
+                  >
+                    <span
+                      className={`min-w-0 flex-1 truncate ${missing.has(path) ? "line-through" : ""}`}
+                    >
+                      {baseName(path)}
+                    </span>
+                    <span className="flex-none text-[length:var(--fs-xs)] text-fg-subtle">
+                      {missing.has(path) ? "Deleted" : "No changes"}
+                    </span>
+                  </button>
+                ))}
+            </Group>
+          )}
+          {staged.length > 0 && (
+            <Group title="Staged Changes" count={staged.length}>
+              {staged.map(row)}
+            </Group>
+          )}
+          {unstaged.length > 0 && (
+            <Group
+              title="Changes"
+              count={unstaged.length}
+              actions={
+                !fullAccess && (
+                  <>
+                    <RowAction label="Discard all changes" onClick={() => void discard(unstaged)}>
+                      <ArrowCounterClockwiseIcon size={14} />
+                    </RowAction>
+                    <RowAction label="Stage all changes" onClick={() => stage(unstaged)}>
+                      <PlusIcon size={14} />
+                    </RowAction>
+                  </>
+                )
+              }
+            >
+              {unstaged.map(row)}
+            </Group>
+          )}
+          {error && (
+            <div role="alert" className="px-3 text-[length:var(--fs-sm)] text-danger">
+              {error}
             </div>
-          ))}
-        {error && (
-          <div role="alert" className="px-2 text-[length:var(--fs-sm)] text-danger">
-            {error}
-          </div>
+          )}
+        </Pane>
+        {changesOpen && graphOpen && (
+          <div
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Resize graph"
+            aria-valuenow={graphHeight}
+            aria-valuemin={PANE_MIN_PX}
+            aria-valuemax={
+              panesRef.current ? panesRef.current.clientHeight - PANE_MIN_PX : undefined
+            }
+            tabIndex={0}
+            onKeyDown={resizeByKey}
+            onMouseDown={startResize}
+            className="relative z-[1] -mb-1 h-1 flex-none cursor-row-resize focus-visible:bg-accent"
+          />
         )}
+        <Pane
+          title="Graph"
+          open={graphOpen}
+          onToggle={() => setGraphOpen((o) => !o)}
+          height={changesOpen ? graphHeight : undefined}
+        >
+          {project && (
+            <GraphSection
+              projectId={project.id}
+              changes={changes}
+              threads={threads}
+              archivedThreads={archivedThreads}
+              onSelectThread={onSelectThread}
+            />
+          )}
+        </Pane>
       </div>
     </>
   );

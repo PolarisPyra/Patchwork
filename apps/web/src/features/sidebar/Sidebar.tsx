@@ -106,14 +106,16 @@ export default memo(function Sidebar(props: SidebarProps) {
           onClose={() => setWidthMenu(null)}
         />
       )}
-      <button
-        className="mx-2 mt-3 mb-0.5 flex h-8 flex-none cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border border-border bg-input px-2 text-[length:var(--fs-sm)] text-fg-muted hover:border-border-strong hover:text-fg"
-        onClick={props.onOpenPalette}
-      >
-        <MagnifyingGlassIcon size={18} />
-        Search…
-        {searchKey && <kbd className="kbd ml-auto">{formatKey(searchKey).join(" ")}</kbd>}
-      </button>
+      {props.view !== "changes" && (
+        <button
+          className="mx-2 mt-3 mb-0.5 flex h-8 flex-none cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border border-border bg-input px-2 text-[length:var(--fs-sm)] text-fg-muted hover:border-border-strong hover:text-fg"
+          onClick={props.onOpenPalette}
+        >
+          <MagnifyingGlassIcon size={18} />
+          Search…
+          {searchKey && <kbd className="kbd ml-auto">{formatKey(searchKey).join(" ")}</kbd>}
+        </button>
+      )}
       {props.view === "tasks" && <TasksView {...props} />}
       {props.view === "changes" && <ChangesView {...props} />}
       {props.view === "archived" && <ArchivedView {...props} />}

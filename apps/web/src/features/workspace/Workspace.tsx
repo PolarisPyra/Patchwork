@@ -99,6 +99,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     setCompactWindow,
     setBackground,
     send,
+    sendTo,
     startThread,
   } = useThreads(settings.activeProjectId);
   // The selected thread decides the project (null: a chat without a project);
@@ -471,6 +472,13 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
     onOpenFolder: openFolder,
     onDropFolders: dropFolders,
     onRefreshChanges: () => attempt(refreshGit),
+    onSendToThread: (id: string, text: string) => {
+      selectThread(id);
+      attempt(() => sendTo(id, text));
+    },
+    onStartTask: (title: string, text: string) => {
+      if (projectId) attempt(() => startThread(projectId, newThreadOptions(), title, text));
+    },
     onOpenChange: (path: string) =>
       openCanvasAt(path, null, changes.some((c) => c.path === path) ? "diff" : "code"),
     onOpenPalette: () => setPaletteOpen(true),
@@ -514,6 +522,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
           view={view}
           onSelect={barHandlers.selectView}
           onOpenSettings={barHandlers.openSettings}
+          changeCount={changes.length}
         />
         {view && (
           <Sidebar
@@ -526,6 +535,7 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
             treeRowsRef={treeRowsRef}
             archivedThreads={sidebarThreads.archived}
             selectedId={selectedId}
+            branch={branch}
             changes={changes}
             changeFocus={focusFiles}
             folders={folders}
