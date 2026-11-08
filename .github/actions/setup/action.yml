@@ -13,16 +13,36 @@ inputs:
   windows:
     description: Set to "true" to build the Windows installer on Linux instead of the Linux app.
     default: "false"
+  cache-packages:
+    description: >
+      Set to "true" to restore Tauri's Linux packages from the Actions cache instead of installing
+      them, for the checks, which only compile and link against them.
+    default: "false"
 runs:
   using: composite
   steps:
     # The runner's Azure apt mirror is sometimes throttled (55 MB once took 20 minutes), so drop it
     # from the mirror list and use archive.ubuntu.com directly.
+    - name: Use archive.ubuntu.com
+      if: runner.os == 'Linux'
+      shell: bash
+      run: sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+
+    # Installing them takes about a minute. The cache unpacks the packages' files without running
+    # their setup scripts, which is enough to compile and link, so the release builds, whose
+    # AppImage bundles some of these libraries, install them properly. The runner has
+    # build-essential and file already.
+    - name: Restore Tauri's Linux packages
+      if: runner.os == 'Linux' && inputs.windows != 'true' && inputs.cache-packages == 'true'
+      uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
+      with:
+        packages: libayatana-appindicator3-dev libfuse2 librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
+        version: "1"
+
     - name: Install Tauri's Linux packages
-      if: runner.os == 'Linux' && inputs.windows != 'true'
+      if: runner.os == 'Linux' && inputs.windows != 'true' && inputs.cache-packages != 'true'
       shell: bash
       run: |
-        sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
         sudo apt-get update
         sudo apt-get install -y -o Acquire::Retries=3 build-essential file libayatana-appindicator3-dev libfuse2 \
           librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
@@ -34,10 +54,8 @@ runs:
       if: inputs.windows == 'true'
       shell: bash
       run: |
-        sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
         sudo apt-get update
         sudo apt-get install -y -o Acquire::Retries=3 clang lld llvm nsis libayatana-appindicator3-dev
-
     - name: Install cargo-xwin
       if: inputs.windows == 'true'
       uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29

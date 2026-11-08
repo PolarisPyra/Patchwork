@@ -1,18 +1,24 @@
 name: CI
 
-# Checks every push to main, every pull request, and a run started by hand, with what
-# `scripts/release.sh` checks before a release: the web app's types and formatting, rustfmt, clippy,
-# the Rust tests, and that the generated wire types are committed. It runs on the Ubuntu the
-# AppImage is built on, so a Linux build problem shows here rather than at release. When a push to
-# main passes, the Release workflow starts: it updates the release pull request, or tags and
-# publishes a release whose pull request was just merged.
+# Checks every push to main and a run started by hand with what `scripts/release.sh` checks before a
+# release: the web app's types and formatting, rustfmt, clippy, the Rust tests, and that the
+# generated wire types are committed. It runs on the Ubuntu the AppImage is built on, so a Linux
+# build problem shows here rather than at release. When a push to main passes, the Release workflow
+# starts: it updates the release pull request, or tags and publishes a release whose pull request
+# was just merged.
+#
+# Pull requests are not checked: the only ones are the release pull request's, one commit of the
+# version and notes on top of a commit these checks passed on, and GitHub holds a run for it until
+# someone approves it.
 #
 # Actions are pinned to commits; the comment after each names the version it was.
 
 on:
   push:
     branches: [main]
-  pull_request:
+    # Nothing these check, such as the links the Release workflow commits to the website after a
+    # release.
+    paths-ignore: ["site/**", "docs/**", "**.md"]
   workflow_dispatch:
 
 permissions:
@@ -27,6 +33,9 @@ concurrency:
 env:
   # The same compiler the Release workflow builds with.
   RUST_TOOLCHAIN: "1.99.0"
+  # No debug info in the check and test builds, which nothing here debugs: it was most of the Rust
+  # cache, which took longer to restore than the checks took to run.
+  CARGO_PROFILE_DEV_DEBUG: "0"
 
 jobs:
   check:
@@ -39,8 +48,9 @@ jobs:
         with:
           rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
           rust-components: rustfmt, clippy
+          cache-packages: "true"
 
-      # Saved only from main, so every branch and pull request starts from main's.
+      # Saved only from main, so a run by hand on another branch starts from main's.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: ci

@@ -18,8 +18,8 @@ name: Release
 # Run it by hand (Actions → Release → Run workflow) to build every platform without publishing
 # anything, to try a change to the build before releasing.
 #
-# A run on main also saves the dependency caches, which a tag's run can restore: a cold build costs
-# about 50 of the private repo's counted minutes.
+# A run on main also saves the dependency caches, which a tag's run can restore: without them, the
+# macOS build alone takes over six minutes.
 #
 # Actions are pinned to commits, so a moved tag can't change what runs next to the secrets. The
 # comment after each names the version it was.
@@ -180,7 +180,7 @@ jobs:
 
   windows:
     # Cross-compiled on Linux with cargo-xwin, which builds it in half the time a Windows runner
-    # takes and counts half the minutes. Ubuntu 24.04 has the NSIS that Tauri's installer needs.
+    # takes. Ubuntu 24.04 has the NSIS that Tauri's installer needs.
     needs: cut
     if: >-
       !cancelled() && !failure() && (github.ref_type == 'tag'
@@ -239,9 +239,8 @@ jobs:
           if-no-files-found: error
 
   macos:
-    # macos-15 runs on Apple silicon, so the build is native arm64. Its minutes count ten times
-    # against the private repo's allowance, so its timeout is the tightest, and it builds only for a
-    # release or a run by hand: its build is quick without a cache.
+    # macos-15 runs on Apple silicon, so the build is native arm64. Like the others, it builds only
+    # for a release or a run by hand, and saves its cache only on main.
     needs: cut
     if: >-
       !cancelled() && !failure() && (github.ref_type == 'tag'
@@ -260,6 +259,11 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: release-macos
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build
         id: build

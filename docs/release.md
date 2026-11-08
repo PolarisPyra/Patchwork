@@ -28,17 +28,16 @@ Installed copies (0.10.10 and newer)    read latest.json, download, check SHA-25
 The repo is public. Each GitHub release carries every installer and the `latest.json` the app's
 updater reads. The updater and the README's download links reach the newest one through
 `github.com/PolarisPyra/Patchwork/releases/latest/download/<name>`, which needed the names to stop
-carrying a version (see [Versions](#versions) and `scripts/bundle-names.sh`).
+carrying a version (see [Versions](#versions) and `ci-build` in `scripts/release.sh`).
 
 These files do all of it:
 
 | File | What it does |
 | --- | --- |
-| `scripts/release.sh` | Cuts a release, in CI or on your machine, and does the build and publish steps in CI |
+| `scripts/release.sh` | Cuts a release, in CI or on your machine, and does the build and publish steps in CI. It also checks commit messages for the `commit-msg` hook, writes each release's notes from them, and reads and writes `CHANGELOG.md` |
 | `.github/workflows/release.yml` | Keeps the release pull request up to date after a push that passed, tags it once merged, builds each platform with `scripts/release.sh`, and publishes a tag |
-| `.github/workflows/ci.yml` | Checks every push to `main` and every pull request, and runs by hand |
+| `.github/workflows/ci.yml` | Checks every push to `main` that changes more than the website or docs, and runs by hand |
 | `.github/actions/setup` | The runner setup both workflows share: Linux packages, Rust, pnpm, Node |
-| `scripts/changelog.sh` | Checks commit messages, writes each release's notes from them, and reads and writes `CHANGELOG.md` |
 | `docs/changelog-style.md` | The rules for changelog entries |
 
 `scripts/release.sh --help` lists its commands.
@@ -136,7 +135,7 @@ it, and run `scripts/release.sh notes 26.1.0` to publish it to the GitHub releas
 
 ## Cut a release
 
-A release is a pull request you merge. Every push to `main` runs the CI workflow's checks (see
+A release is a pull request you merge. Each push to `main` runs the CI workflow's checks (see
 [The CI workflow](#the-ci-workflow)). When they pass, the Release workflow starts and looks at the
 commits since the last tag, up to the commit the checks passed on. If any has a `Changelog:`
 paragraph other than `none`, it (`scripts/release.sh ci-pr`):
@@ -201,14 +200,21 @@ prints the download links. Ctrl-C stops only the watching, not the build.
 
 ## The CI workflow
 
-`.github/workflows/ci.yml` checks every push to `main` and every pull request, and runs when
-started by hand, on the `ubuntu-22.04` runner the AppImage is built on: it builds the web app, runs
-`pnpm check` and `cargo test --workspace`, and fails if the generated wire types differ from the
-committed ones. These are the checks `scripts/release.sh` runs before a release. A push to `main`
-that passes starts the Release workflow (the merge of the release pull request starts it before
-the checks; see [Cut a release](#cut-a-release)). Its Rust cache is saved only from `main`. A newer run on
-the same branch cancels an older one. What the workflows push or open with their own token, such as
-the release pull request or the website's links, starts no run.
+`.github/workflows/ci.yml` checks every push to `main`, and runs when started by hand, on the
+`ubuntu-22.04` runner the AppImage is built on: it builds the web app, runs `pnpm check` and
+`cargo test --workspace`, and fails if the generated wire types differ from the committed ones.
+These are the checks `scripts/release.sh` runs before a release. A push to `main` that passes starts
+the Release workflow (the merge of the release pull request starts it before the checks; see
+[Cut a release](#cut-a-release)). A newer run on the same branch cancels an older one.
+
+- A push that only changes `site/`, `docs/`, or Markdown files, such as the website's links after a
+  release, runs no checks, and so does not update the release pull request either.
+- Pull requests are not checked. The only ones are the release pull request's, whose commit only
+  adds the version and notes to one the checks passed on, and GitHub held each run for it until
+  someone approved it.
+- Its Rust cache is saved only from `main`, and built without debug info
+  (`CARGO_PROFILE_DEV_DEBUG`), which nothing there needs, to keep it small. Tauri's Linux packages come from the Actions cache too, unpacked without their
+  setup scripts; the release builds install them properly, since the AppImage bundles some of them.
 
 ## The Release workflow
 
@@ -256,7 +262,8 @@ To check the build without releasing, run the workflow by hand from the Actions 
 Most of each build is compiling the Rust dependencies. A tag's run can restore caches saved on
 `main`, but not ones saved by another tag, so the dependency caches are saved only on `main`:
 
-- A release from a merge runs on `main`, so it saves the Linux and Windows caches as it builds. A
+- A release from a merge runs on `main`, so it saves the Linux, Windows, and macOS caches as it
+  builds. A
   run by hand on `main` builds them without publishing anything, to save them before a tag from
   your machine after a change to a Cargo file.
 - Tag runs restore those caches and save none.
@@ -265,7 +272,6 @@ Most of each build is compiling the Rust dependencies. A tag's run can restore c
 - The Windows job also caches the Windows SDK and C runtime that `cargo-xwin` downloads from
   Microsoft, for x86_64 only (`XWIN_ARCH`), keyed on the `cargo-xwin` version. Without it the
   download alone took 15 minutes on a runner.
-- macOS has no cache. Its build is short, and its minutes count ten times.
 
 ### Actions limits
 
@@ -273,16 +279,17 @@ The workflow is built to stay inside the free plan's Actions limits, whichever p
 
 - **Artifacts for a day.** The build jobs' artifacts only carry the files to the release job, so
   they are kept for one day and not compressed.
-- **Caches only from `main`.** See [Caches](#caches). The repo's cache storage is 10 GB; the Linux
-  and Windows dependency caches fit in it, and older ones are evicted on their own.
-- **Minutes.** The free plan has 2,000 a month. macOS minutes count ten times; the Windows
+- **Caches only from `main`.** See [Caches](#caches). The repo's cache storage is 10 GB; the CI,
+  Linux, Windows, and macOS dependency caches fit in it, and older ones are evicted on their own.
+- **Minutes.** A public repo's runs on standard runners don't count. A private one's free plan
+  has 2,000 a month, and macOS minutes count ten times there; the Windows
   installer is built on Linux, so its minutes count once (on a Windows runner they counted twice,
   and its build took twice as long). Without caches, v0.10.16 took about 13 minutes on Linux, 17 on
   Windows, and 2 on macOS, about 70 counted minutes; with Windows built on Linux that is about 50.
-  A change to the Rust dependencies costs one cache build of Linux and Windows. Each job has a
+  A change to the Rust dependencies costs one cache build of each platform. Each job has a
   timeout (macOS and Windows 30 minutes, Linux 45, release 10). A second
   run for the same ref waits for the first, so a release is never stopped halfway through
-  publishing. Each push to `main` costs its CI run, about 5 minutes with the cache, plus a minute
+  publishing. Each push to `main` costs its CI run, about 3 minutes with the cache, plus a minute
   for the Release run's first job and another to update the release pull request. Each release
   adds its builds.
 
@@ -303,9 +310,8 @@ Patchwork.app.tar.gz
 `/releases/latest/download/<name>` answers the latest release's copy, and
 `/releases/download/<tag>/<name>` one release's, which never changes. Tauri names each bundle after
 the version it built, and `ci-build` takes the version out of the name before anything is published
-or signed (`scripts/bundle-names.sh`), so a file keeps one name from release to release. The updater
-does not read the name for a version: it picks its file by suffix, so it finds its download either
-way.
+or signed, so a file keeps one name from release to release. The updater does not read the name
+for a version: it picks its file by suffix, so it finds its download either way.
 
 `latest.json` has the shape of GitHub's release API, plus each file's signature. `body` is the
 release's section of `CHANGELOG.md`:
@@ -424,7 +430,7 @@ file name stays the same. The release script prints the links for the release it
 - **Discord changelog**: every time you cut a release, write Discord release notes
   and end the reply with them in one fenced `markdown` code block, so the formatting survives
   copying. They come in addition to `CHANGELOG.md`, not instead of it. Write them from the
-  release's section of `CHANGELOG.md` (`scripts/changelog.sh section <version>`), in this shape:
+  release's section of `CHANGELOG.md`, in this shape:
   - A `## Patchwork v<version>` heading, then `**Fixed**`, `**Added**`, `**Changed**`, and
     `**Note**` sections, in that order, leaving out any that are empty. No emoji.
   - Plain `-` bullets, one per user-visible change. Say what the user sees and does, in everyday
