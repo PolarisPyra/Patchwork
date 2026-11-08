@@ -1,6 +1,14 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "~/api/invoke";
-import type { Folder, Project, ProjectChanged } from "~/api/types";
+import type {
+  DirListing,
+  Folder,
+  Machine,
+  Project,
+  ProjectChanged,
+  SshHost,
+  SshTest,
+} from "~/api/types";
 
 export const projectsApi = {
   /** Registers an existing folder; also makes it the active project. */
@@ -11,6 +19,16 @@ export const projectsApi = {
   renameProject: (id: string, name: string) => invoke<void>("rename_project", { id, name }),
   relocateProject: (id: string, path: string) => invoke<void>("relocate_project", { id, path }),
   isFolder: (path: string) => invoke<boolean>("is_folder", { path }),
+  /** The machines the Add Project dialog offers: this computer, then the SSH hosts in the config. */
+  listMachines: () => invoke<Machine[]>("list_machines"),
+  /** The sub-folders of `path`, or this computer's home folder when it is null. */
+  browseDir: (path: string | null) => invoke<DirListing>("browse_dir", { path }),
+  /** The hosts in `~/.ssh/config`, read only. */
+  listSshHosts: () => invoke<SshHost[]>("list_ssh_hosts"),
+  /** Logs in to a configured host with keys only, to show whether it answers. */
+  testSshHost: (name: string) => invoke<SshTest>("test_ssh_host", { name }),
+  /** Opens `~/.ssh/config` in the editor; fails when there is none. */
+  openSshConfig: () => invoke<void>("open_ssh_config"),
   removeProject: (id: string) => invoke<void>("remove_project", { id }),
   listFolders: () => invoke<Folder[]>("list_folders"),
   createFolder: (projectId: string, name: string) =>

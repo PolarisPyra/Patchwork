@@ -3,6 +3,7 @@
 //! files and links on the desktop, the systemd scope agents run in, the range a command runs in, the process table,
 //! Patchwork's own folders, and time.
 
+pub mod browse;
 pub mod dirs;
 mod environment;
 mod host;
@@ -12,6 +13,7 @@ pub(crate) mod contained;
 pub(crate) mod processes;
 pub(crate) mod scope;
 mod shells;
+pub mod ssh;
 pub(crate) mod time;
 
 pub use host::{hide_console, host_command, host_env, path_var};
