@@ -62,7 +62,7 @@ function Ring({
           r={r}
           fill="none"
           strokeWidth={stroke}
-          className="stroke-selected-muted"
+          className="stroke-border-strong"
         />
         {p > 0 && (
           <circle
