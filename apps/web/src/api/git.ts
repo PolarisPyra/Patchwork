@@ -1,5 +1,12 @@
 import { invoke } from "~/api/invoke";
-import type { FileChange, GitCommit, GitSyncState, PullRequest } from "~/api/types";
+import type {
+  FileChange,
+  GitCommit,
+  GitSyncState,
+  HunkAction,
+  PullRequest,
+  TurnTrees,
+} from "~/api/types";
 
 export const gitApi = {
   gitBranch: (projectId: string) => invoke<string | null>("git_branch", { projectId }),
@@ -11,6 +18,18 @@ export const gitApi = {
   acceptFile: (projectId: string, path: string) => invoke<void>("accept_file", { projectId, path }),
   /** "Reject": restores the file to HEAD (deletes it if untracked). */
   revertFile: (projectId: string, path: string) => invoke<void>("revert_file", { projectId, path }),
+  /** Stages, unstages, or discards one change of a file's diff, given as its text from its `@@` line
+   * on: the reply's diff when `turn` is given. */
+  applyHunk: (
+    projectId: string,
+    path: string,
+    turn: TurnTrees | null,
+    hunk: string,
+    action: HunkAction,
+  ) => invoke<void>("apply_hunk", { projectId, path, turn, hunk, action }),
+  /** Which changes of a file's diff are staged, in its order. */
+  stagedHunks: (projectId: string, path: string, turn: TurnTrees | null) =>
+    invoke<boolean[]>("staged_hunks", { projectId, path, turn }),
   /** Where the branch stands against its remote, and its open pull request. */
   gitSyncState: (projectId: string) => invoke<GitSyncState>("git_sync_state", { projectId }),
   /** The branch's and its upstream's commits, newest first in graph order. */

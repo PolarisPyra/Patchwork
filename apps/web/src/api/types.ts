@@ -108,6 +108,7 @@ import type {
   GitCommit,
   GitRef,
   GitSyncState,
+  HunkAction,
   ProjectChanged,
   PullRequest,
 } from "~/bindings/workspace";
@@ -149,6 +150,7 @@ export type {
   GitSyncState,
   Goal,
   GoalStatus,
+  HunkAction,
   ImportScan,
   ImportSource,
   Integrations,

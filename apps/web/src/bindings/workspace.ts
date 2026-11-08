@@ -85,6 +85,11 @@ ahead: number, behind: number,
 pullRequest: PullRequest | null, };
 
 /**
+ * What to do with one change of a file's diff.
+ */
+export type HunkAction = "stage" | "unstage" | "discard";
+
+/**
  * How a file a reply produced is shown.
  */
 export type PreviewKind = "image" | "video" | "text" | "other";

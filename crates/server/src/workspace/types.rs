@@ -104,3 +104,13 @@ pub struct ProjectChanged {
     /// None when `git status` failed, so the last good list stays.
     pub changes: Option<Vec<FileChange>>,
 }
+
+/// What to do with one change of a file's diff.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "workspace.ts")]
+#[serde(rename_all = "camelCase")]
+pub enum HunkAction {
+    Stage,
+    Unstage,
+    Discard,
+}

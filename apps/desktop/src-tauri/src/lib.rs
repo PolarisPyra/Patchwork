@@ -419,6 +419,8 @@ pub fn run() {
             commands::git::open_pull_request,
             commands::git::pull_request_feedback,
             commands::git::conflict_prompt,
+            commands::git::apply_hunk,
+            commands::git::staged_hunks,
             commands::files::open_in_editor,
             commands::files::reveal_file,
             commands::files::open_url,

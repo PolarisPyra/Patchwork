@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowSquareOutIcon,
+  CaretDownIcon,
+  CaretUpIcon,
+  ChatTextIcon,
   CheckIcon,
   PlusIcon,
   CodeIcon,
@@ -8,11 +11,12 @@ import {
   XIcon,
 } from "@phosphor-icons/react";
 import Spinner from "~/components/Spinner";
-import { api, onProjectChanged, type FileChange, type Message } from "~/api";
+import { api, onProjectChanged, type FileChange, type HunkAction, type Message } from "~/api";
 import { useImageSrc } from "~/hooks/useImageSrc";
 import CodeView from "~/features/canvas/components/CodeView";
 import DiffView from "~/features/canvas/components/DiffView";
 import PlanView from "~/features/canvas/components/PlanView";
+import { clearReview, reviewMessage, useReview } from "~/features/canvas/review";
 import { describeFile, splitLines } from "~/lib/highlight";
 import { useFileMedia } from "~/hooks/useFileMedia";
 import { copyText } from "~/lib/clipboard";
@@ -32,6 +36,8 @@ export interface CanvasProps {
   onClose: () => void;
   /** Called after Apply/Reject succeeds so the parent can refresh git state. */
   onChangesUpdated: () => void;
+  /** Sends the review notes, as one message, to the agent. */
+  onSendReview: (text: string) => void;
 }
 
 /** A load result tagged with the project+path it belongs to, so stale results are ignored. */
@@ -49,16 +55,22 @@ export default function Canvas({
   changes,
   onClose,
   onChangesUpdated,
+  onSendReview,
 }: CanvasProps) {
   const [tab, setTab] = useState<CanvasTab>(initialTab ?? (path ? "code" : "plan"));
   const [file, setFile] = useState<Loaded<string> | null>(null);
   const [diffResult, setDiffResult] = useState<Loaded<string> | null>(null);
+  const [stagedResult, setStagedResult] = useState<Loaded<boolean[]> | null>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const review = useReview(projectId);
   const [reloadToken, setReloadToken] = useState(0);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const key = `${projectId}\u0000${path ?? ""}`;
+  // A file the reply changed shows what its turn did, which stays after a commit.
+  const turn = message?.turn && path && message.files.includes(path) ? message.turn : null;
   // An image gets an Image tab and a video a Video tab in place of Code and Diff, as the backend
   // judges what may be previewed, and each opens on it from either.
   const media = useFileMedia(projectId, path ? [path] : []);
@@ -83,8 +95,6 @@ export default function Canvas({
           if (live) setFile({ key, error: errorText(e) });
         },
       );
-      // A file the reply changed shows what its turn did, which stays after a commit.
-      const turn = message?.turn && message.files.includes(path) ? message.turn : null;
       (turn ? api.turnFileDiff(projectId, turn, path) : api.gitFileDiff(projectId, path)).then(
         (value) => {
           if (live) setDiffResult({ key, value });
@@ -93,11 +103,19 @@ export default function Canvas({
           if (live) setDiffResult({ key, error: errorText(e) });
         },
       );
+      api.stagedHunks(projectId, path, turn).then(
+        (value) => {
+          if (live) setStagedResult({ key, value });
+        },
+        () => {
+          if (live) setStagedResult({ key, value: [] });
+        },
+      );
     }
     return () => {
       live = false;
     };
-  }, [key, projectId, path, reloadToken, message?.turn, message?.files]);
+  }, [key, projectId, path, reloadToken, turn]);
 
   // The workspace's watcher reports settled bursts of changes. Reload when one touched this file,
   // or `.git`, since staging and commits change its diff.
@@ -128,6 +146,7 @@ export default function Canvas({
 
   const code = file?.key === key ? file : null;
   const diff = diffResult?.key === key ? diffResult : null;
+  const staged = stagedResult?.key === key ? stagedResult.value : undefined;
   const change = changes.find((c) => c.path === path);
 
   const name = path ? baseName(path) : "No file selected";
@@ -136,13 +155,12 @@ export default function Canvas({
   const content = code?.value;
   const lineCount = content === undefined ? null : splitLines(content).length;
   const planCount = message?.plan.length ?? 0;
-  const diffCount =
-    message?.turn && path && message.files.includes(path)
-      ? (diff?.value ?? "").split("\n").filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---) /.test(l))
-          .length
-      : change
-        ? change.additions + change.deletions
-        : 0;
+  const diffCount = turn
+    ? (diff?.value ?? "").split("\n").filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---) /.test(l))
+        .length
+    : change
+      ? change.additions + change.deletions
+      : 0;
 
   const tabs: { id: CanvasTab; label: string; count: number }[] = !path
     ? [{ id: "plan", label: "Plan", count: planCount }]
@@ -197,6 +215,31 @@ export default function Canvas({
     void runAction(() => api.revertFile(projectId, path));
   }
 
+  /** Stages, unstages, or discards one change, asking before a discard. */
+  function actOnHunk(hunk: string, action: HunkAction) {
+    if (!path) return;
+    if (action === "discard" && !window.confirm(`Discard this change to ${name}?`)) return;
+    void runAction(() => api.applyHunk(projectId, path, turn, hunk, action));
+  }
+
+  /** Scrolls the next or previous change to the top of the view. */
+  function jumpToChange(step: 1 | -1) {
+    const panel = body.current;
+    if (!panel) return;
+    const top = panel.getBoundingClientRect().top;
+    const offsets = [...panel.querySelectorAll<HTMLElement>("[data-hunk]")].map(
+      (el) => el.getBoundingClientRect().top - top,
+    );
+    const target =
+      step === 1 ? offsets.find((o) => o > 1) : [...offsets].reverse().find((o) => o < -1);
+    if (target !== undefined) panel.scrollBy({ top: target });
+  }
+
+  function sendReview() {
+    onSendReview(reviewMessage(review));
+    clearReview(projectId);
+  }
+
   function renderBody(): ReactNode {
     if (activeTab === "plan" || !path) {
       return <PlanView message={message} />;
@@ -246,7 +289,14 @@ export default function Canvas({
     return activeTab === "code" ? (
       <CodeView path={path} content={result.value ?? ""} />
     ) : (
-      <DiffView diff={result.value ?? ""} />
+      <DiffView
+        diff={result.value ?? ""}
+        projectId={projectId}
+        path={path}
+        staged={staged}
+        busy={busy}
+        onHunk={actOnHunk}
+      />
     );
   }
 
@@ -275,6 +325,12 @@ export default function Canvas({
           )}
         </div>
         <div className="flex items-center gap-2 flex-none">
+          {review.length > 0 && (
+            <button className="btn btn-primary" onClick={sendReview}>
+              <ChatTextIcon size={14} />
+              Send review ({review.length})
+            </button>
+          )}
           {path && (
             <>
               <button className="btn" onClick={openInEditor}>
@@ -320,9 +376,29 @@ export default function Canvas({
             {t.count > 0 && <span className="badge tabular-nums">{t.count}</span>}
           </button>
         ))}
+        {activeTab === "diff" && (
+          <span className="ml-auto flex flex-none gap-1">
+            <button
+              className="btn-icon"
+              aria-label="Previous change"
+              title="Previous change"
+              onClick={() => jumpToChange(-1)}
+            >
+              <CaretUpIcon size={16} />
+            </button>
+            <button
+              className="btn-icon"
+              aria-label="Next change"
+              title="Next change"
+              onClick={() => jumpToChange(1)}
+            >
+              <CaretDownIcon size={16} />
+            </button>
+          </span>
+        )}
       </nav>
 
-      <div role="tabpanel" className="flex-1 min-h-0 overflow-auto selectable">
+      <div ref={body} role="tabpanel" className="flex-1 min-h-0 overflow-auto selectable">
         {renderBody()}
       </div>
 

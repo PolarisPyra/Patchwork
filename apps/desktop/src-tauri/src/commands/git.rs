@@ -115,3 +115,33 @@ pub(crate) async fn conflict_prompt(server: Srv<'_>, project_id: String) -> Res<
     let server = server.inner().clone();
     blocking(move || server.conflict_prompt(&project_id)).await?
 }
+
+/// Stages, unstages, or discards one change of a file's diff: the reply's when `turn` is given.
+#[tauri::command]
+pub(crate) async fn apply_hunk(
+    server: Srv<'_>,
+    project_id: String,
+    path: String,
+    turn: Option<TurnTrees>,
+    hunk: String,
+    action: workspace::HunkAction,
+) -> Res<()> {
+    let root = server.project_root(&project_id)?;
+    blocking(move || workspace::apply_hunk(&root, &path, turn.as_ref(), &hunk, action))
+        .await?
+        .map_err(String::from)
+}
+
+/// Which changes of a file's diff are staged, in its order.
+#[tauri::command]
+pub(crate) async fn staged_hunks(
+    server: Srv<'_>,
+    project_id: String,
+    path: String,
+    turn: Option<TurnTrees>,
+) -> Res<Vec<bool>> {
+    let root = server.project_root(&project_id)?;
+    blocking(move || workspace::staged_hunks(&root, &path, turn.as_ref()))
+        .await?
+        .map_err(String::from)
+}

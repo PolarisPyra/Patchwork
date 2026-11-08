@@ -51,11 +51,11 @@ fn git_succeeds(root: &str, args: &[&str]) -> bool {
     git_raw(root, args).is_ok_and(|o| o.status.success())
 }
 
-fn is_untracked(root: &str, rel: &str) -> bool {
+pub(super) fn is_untracked(root: &str, rel: &str) -> bool {
     !git_succeeds(root, &["ls-files", "--error-unmatch", "--", rel])
 }
 
-fn has_head(root: &str) -> bool {
+pub(super) fn has_head(root: &str) -> bool {
     git_succeeds(root, &["rev-parse", "--verify", "-q", "HEAD"])
 }
 

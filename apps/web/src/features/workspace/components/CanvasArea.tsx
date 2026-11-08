@@ -38,6 +38,7 @@ export default function CanvasArea({
   changes,
   onClose,
   onChangesUpdated,
+  onSendReview,
 }: {
   canvas: CanvasState | null;
   /** The row the panel sits at the right of, which bounds its width. */
@@ -45,6 +46,7 @@ export default function CanvasArea({
   changes: FileChange[];
   onClose: () => void;
   onChangesUpdated: () => void;
+  onSendReview: (projectId: string, text: string) => void;
 }) {
   const Canvas = canvasModule?.default ?? LazyCanvas;
   const [width, setWidth] = useState<number | null>(null);
@@ -108,6 +110,7 @@ export default function CanvasArea({
             changes={changes}
             onClose={onClose}
             onChangesUpdated={onChangesUpdated}
+            onSendReview={(text) => onSendReview(canvas.projectId, text)}
           />
         </Suspense>
       </div>

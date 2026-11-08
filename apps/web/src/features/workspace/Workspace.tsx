@@ -622,6 +622,15 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
               changes={changes}
               onClose={() => setCanvas(null)}
               onChangesUpdated={() => void refreshGit()}
+              onSendReview={(reviewProject, text) => {
+                // The open thread gets it when it works in that project, else a new task does.
+                if (selected?.projectId === reviewProject) {
+                  const id = selected.id;
+                  attempt(() => sendTo(id, text));
+                } else {
+                  attempt(() => startThread(reviewProject, newThreadOptions(), "Review", text));
+                }
+              }}
             />
           </div>
 
