@@ -1,5 +1,5 @@
 import { StarIcon } from "@phosphor-icons/react";
-import { apiProviderName, isMac, type AgentKind, type ModelOption } from "~/api";
+import { apiModelPlace, apiProviderName, isMac, type AgentKind, type ModelOption } from "~/api";
 import ProviderLogos from "~/components/ProviderLogos";
 
 const PROVIDER_NAMES: Record<AgentKind, string> = {
@@ -84,7 +84,9 @@ export default function ModelRow({
             {item.id === null
               ? (item.defaultModel ?? "CLI default")
               : kind === "api"
-                ? (apiProviderName(item.id) ?? PROVIDER_NAMES[kind])
+                ? [apiProviderName(item.id) ?? PROVIDER_NAMES[kind], apiModelPlace(item.id)]
+                    .filter(Boolean)
+                    .join(" · ")
                 : PROVIDER_NAMES[kind]}
           </span>
         </span>
