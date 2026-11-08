@@ -35,11 +35,44 @@ Editorial rules:
 - Do not copy and truncate the user's message.
 - Avoid quotes, labels, filler, and trailing punctuation.";
 
-/// A title for a thread that starts with `message`, from the provider the thread runs on:
-/// Claude, Codex, or its API provider with `model`. Other agents use Claude, else Codex. None
-/// when none answers.
-pub fn generate(message: &str, agent: AgentKind, model: Option<&str>) -> Option<String> {
+/// Who writes titles, from Settings → Tokens.
+pub struct Writer {
+    /// An API model that writes every title, tried before the chat's own provider.
+    pub model: Option<String>,
+    /// Only a local model writes titles, so a chat's first message never leaves for one.
+    pub local_only: bool,
+}
+
+/// Whether the API model `model`, or the default one, runs on a local provider.
+fn runs_locally(model: Option<&str>) -> bool {
+    model
+        .map(String::from)
+        .or_else(crate::provider::api::config::default_model)
+        .and_then(|m| crate::provider::api::config::resolve(&m))
+        .is_some_and(|(provider, _)| provider.local)
+}
+
+/// A title for a thread that starts with `message`: from the writer's model when it has one,
+/// else from the provider the thread runs on: Claude, Codex, or its API provider with `model`.
+/// Other agents use Claude, else Codex. With `local_only`, only a local model is asked. None when
+/// none answers.
+pub fn generate(
+    message: &str,
+    agent: AgentKind,
+    model: Option<&str>,
+    writer: &Writer,
+) -> Option<String> {
     let message: String = message.chars().take(MAX_MESSAGE_CHARS).collect();
+    if let Some(title_model) = writer.model.as_deref()
+        && (!writer.local_only || runs_locally(Some(title_model)))
+        && let Some(title) = from_api(&message, Some(title_model))
+    {
+        return Some(title);
+    }
+    let chat_is_local = agent == AgentKind::Api && runs_locally(model);
+    if writer.local_only && !chat_is_local {
+        return None;
+    }
     if agent == AgentKind::Api {
         return from_api(&message, model);
     }

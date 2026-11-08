@@ -20,6 +20,8 @@ pub enum Theme {
     Light,
     #[default]
     Dark,
+    /// Dark with true-black backgrounds, for OLED screens.
+    Oled,
     System,
 }
 
@@ -357,6 +359,12 @@ pub struct TokenSettings {
     /// Names a new chat or task with a title its provider writes from the first message,
     /// rather than that message's first line.
     pub generate_titles: bool,
+    /// An API model, `provider/model`, that writes every title, so a local model can name chats
+    /// that run in the cloud. None leaves each chat's title to its own provider.
+    pub title_model: Option<String>,
+    /// Titles are written only by a local model: `title_model`, or the chat's own model when it
+    /// runs locally. Without one, a chat keeps its first line as its title.
+    pub titles_local_only: bool,
 }
 
 impl Default for TokenSettings {
@@ -373,6 +381,8 @@ impl Default for TokenSettings {
             antigravity_compact_window: 0,
             default_models: HashMap::new(),
             generate_titles: true,
+            title_model: None,
+            titles_local_only: false,
         }
     }
 }

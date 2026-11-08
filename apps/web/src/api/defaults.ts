@@ -60,6 +60,8 @@ export const DEFAULT_SETTINGS: Settings = {
     antigravityCompactWindow: 0,
     defaultModels: {},
     generateTitles: true,
+    titleModel: null,
+    titlesLocalOnly: false,
   },
   notifications: { goalComplete: true, taskComplete: true },
   updates: { checkEveryMinutes: 10 },

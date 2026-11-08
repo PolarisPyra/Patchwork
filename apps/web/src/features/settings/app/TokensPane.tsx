@@ -142,6 +142,29 @@ export default function TokensPane({ settings, updateSettings }: PaneProps) {
           onChange={(generateTitles) => update({ generateTitles })}
         />
       </TokenRow>
+      {tokens.generateTitles && (
+        <>
+          <TokenRow title="Write titles with">
+            <DefaultModel
+              kind="api"
+              label="Write titles with"
+              empty="The chat's model"
+              value={tokens.titleModel ?? undefined}
+              onChange={(id) => update({ titleModel: id ?? null })}
+            />
+          </TokenRow>
+          <TokenRow
+            title="Only local models write titles"
+            desc="A chat's first message never leaves this computer or your network for a title"
+          >
+            <TokenSwitch
+              label="Only local models write titles"
+              on={tokens.titlesLocalOnly}
+              onChange={(titlesLocalOnly) => update({ titlesLocalOnly })}
+            />
+          </TokenRow>
+        </>
+      )}
       {connected.map((kind) => {
         const key = COMPACT_SETTINGS[kind];
         const value = tokens[key];

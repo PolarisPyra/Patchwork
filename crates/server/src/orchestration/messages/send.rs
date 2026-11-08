@@ -74,13 +74,18 @@ impl Server {
         let server = Arc::downgrade(self);
         let thread_id = thread_id.to_string();
         let text = text.to_string();
-        let enabled = self.store.settings().tokens.generate_titles;
+        let tokens = self.store.settings().tokens;
+        let writer = title::Writer {
+            model: tokens.title_model.clone(),
+            local_only: tokens.titles_local_only,
+        };
+        let enabled = tokens.generate_titles;
         std::thread::spawn(move || {
             let first_line = title_from(&text);
             let generated = if !enabled || first_line.starts_with('/') || text.trim().is_empty() {
                 None
             } else {
-                title::generate(&text, agent, model.as_deref())
+                title::generate(&text, agent, model.as_deref(), &writer)
             };
             let generated = generated.unwrap_or(first_line);
             let Some(server) = server.upgrade() else {

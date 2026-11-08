@@ -187,7 +187,7 @@ cursorWidth: number, scrollback: number, copyOnSelection: boolean, rightClickBeh
  */
 fastScrollSensitivity: number, };
 
-export type Theme = "light" | "dark" | "system";
+export type Theme = "light" | "dark" | "oled" | "system";
 
 /**
  * Settings that trade a little convenience for fewer tokens spent.
@@ -242,7 +242,17 @@ defaultModels: { [key in AgentKind]?: string },
  * Names a new chat or task with a title its provider writes from the first message,
  * rather than that message's first line.
  */
-generateTitles: boolean, };
+generateTitles: boolean, 
+/**
+ * An API model, `provider/model`, that writes every title, so a local model can name chats
+ * that run in the cloud. None leaves each chat's title to its own provider.
+ */
+titleModel: string | null, 
+/**
+ * Titles are written only by a local model: `title_model`, or the chat's own model when it
+ * runs locally. Without one, a chat keeps its first line as its title.
+ */
+titlesLocalOnly: boolean, };
 
 /**
  * How Patchwork keeps itself up to date.
