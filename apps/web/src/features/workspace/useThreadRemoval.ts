@@ -9,6 +9,13 @@ import { displayTitle } from "~/lib/util";
 // How long an archived row takes to collapse out of the list. Matches the sidebar's Collapse.
 const ARCHIVE_COLLAPSE_MS = 120;
 
+/** A permanent delete waiting on the dialog: the chats or tasks, and the title and sentence it shows. */
+export interface PendingDelete {
+  ids: string[];
+  title: string;
+  description: string;
+}
+
 interface ThreadRemoval {
   threads: Thread[];
   folders: Folder[];
@@ -128,29 +135,45 @@ export function useThreadRemoval({
     });
   };
 
-  /** Asks, then deletes an archived chat or task for good. */
-  const deleteArchived = async (id: string) => {
-    const title = threads.find((t) => t.id === id)?.title ?? "";
-    const ok = await confirm(
-      `Delete ${displayTitle(title)} permanently? Its messages cannot be recovered.`,
-      { title: "Delete", kind: "warning" },
-    );
-    if (ok) attempt(() => deleteThread(id));
-  };
+  /** The archived chats or tasks waiting on the delete dialog, with the words it shows. */
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
 
-  /** Asks once, then deletes the picked archived chats or tasks for good. */
-  const deleteArchivedMany = async (ids: string[]) => {
-    if (ids.length === 1) return deleteArchived(ids[0]);
-    const ok = await confirm(
-      `Delete ${ids.length} items permanently? Their messages cannot be recovered.`,
-      { title: "Delete", kind: "warning" },
-    );
-    if (!ok) return;
-    setSelectedRows([]);
-    attempt(async () => {
-      for (const id of ids) await deleteThread(id);
+  /** Asks before deleting the picked archived chats or tasks for good. */
+  const deleteArchivedMany = (ids: string[]) => {
+    if (ids.length === 0) return;
+    if (ids.length === 1) {
+      const title = threads.find((t) => t.id === ids[0])?.title ?? "";
+      setPendingDelete({
+        ids,
+        title: `Delete ${displayTitle(title)}?`,
+        description: "Its messages cannot be recovered.",
+      });
+      return;
+    }
+    const picked = threads.filter((t) => ids.includes(t.id));
+    const chats = picked.filter((t) => t.projectId === null).length;
+    const tasks = picked.length - chats;
+    const counts = [
+      chats > 0 && `${chats} ${chats === 1 ? "chat" : "chats"}`,
+      tasks > 0 && `${tasks} ${tasks === 1 ? "task" : "tasks"}`,
+    ];
+    setPendingDelete({
+      ids,
+      title: `Delete ${counts.filter(Boolean).join(" and ")}?`,
+      description: "Their messages cannot be recovered.",
     });
   };
 
-  return { leavingIds, removeTargets, deleteArchivedMany };
+  /** Deletes the pending archived chats or tasks when confirmed, and drops the request either way. */
+  const answerDelete = (ok: boolean) => {
+    const pending = pendingDelete;
+    setPendingDelete(null);
+    if (!ok || !pending) return;
+    if (pending.ids.length > 1) setSelectedRows([]);
+    attempt(async () => {
+      for (const id of pending.ids) await deleteThread(id);
+    });
+  };
+
+  return { leavingIds, removeTargets, deleteArchivedMany, pendingDelete, answerDelete };
 }

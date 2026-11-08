@@ -153,7 +153,13 @@ export default function ArchivedView({
             label: "Delete permanently",
             Icon: TrashIcon,
             danger: true,
-            onSelect: () => onDeleteArchived([t.id]),
+            // A right-click on a picked row deletes every picked row; on any other row, that row alone.
+            onSelect: () =>
+              onDeleteArchived(
+                isPicked(t.id)
+                  ? picked.flatMap((p) => (p.kind === "thread" ? [p.id] : []))
+                  : [t.id],
+              ),
           },
         ])
       }

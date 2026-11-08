@@ -39,6 +39,14 @@
 .btn-success:hover:not(:disabled) {
   filter: brightness(0.92);
 }
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--text-on-accent);
+}
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
 .btn-ghost {
   background: transparent;
   border-color: transparent;

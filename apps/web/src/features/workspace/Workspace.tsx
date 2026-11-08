@@ -15,6 +15,7 @@ import { lastCompactWindow } from "~/components/CompactPicker";
 import { lastEffort } from "~/components/EffortPicker";
 import Chat from "~/features/chat";
 import AddProjectDialog from "~/features/workspace/components/AddProjectDialog";
+import DeleteDialog from "~/features/workspace/components/DeleteDialog";
 import ChatBackgroundDialog from "~/features/workspace/components/ChatBackgroundDialog";
 import CommandPalette from "~/features/workspace/components/CommandPalette";
 import SettingsDialog from "~/features/settings/SettingsDialog";
@@ -286,20 +287,21 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
       await syncProjects(updateSettings);
     });
 
-  const { leavingIds, removeTargets, deleteArchivedMany } = useThreadRemoval({
-    threads,
-    folders,
-    projects: settings.projects,
-    selected,
-    treeRowsRef,
-    updateSettings,
-    reload,
-    removeFolder,
-    setThreadArchived,
-    deleteThread,
-    selectThread: (id) => selectThread(id),
-    attempt,
-  });
+  const { leavingIds, removeTargets, deleteArchivedMany, pendingDelete, answerDelete } =
+    useThreadRemoval({
+      threads,
+      folders,
+      projects: settings.projects,
+      selected,
+      treeRowsRef,
+      updateSettings,
+      reload,
+      removeFolder,
+      setThreadArchived,
+      deleteThread,
+      selectThread: (id) => selectThread(id),
+      attempt,
+    });
 
   /** Ctrl+W and Delete act on picked rows: in the archive they delete them, elsewhere they remove them. */
   const removePicked = (targets: Target[]) =>
@@ -702,6 +704,14 @@ export default function Workspace({ settings, updateSettings, toggleTheme }: Wor
       )}
       {addProjectOpen && (
         <AddProjectDialog onAdd={addProjectAt} onClose={() => setAddProjectOpen(false)} />
+      )}
+      {pendingDelete && (
+        <DeleteDialog
+          title={pendingDelete.title}
+          description={pendingDelete.description}
+          onDelete={() => answerDelete(true)}
+          onCancel={() => answerDelete(false)}
+        />
       )}
       {backgroundFor !== null && backgroundThread && (
         <ChatBackgroundDialog
