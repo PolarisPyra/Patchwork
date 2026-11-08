@@ -8,7 +8,7 @@ import {
   PlusIcon,
   SparkleIcon,
 } from "@phosphor-icons/react";
-import { api, type FileChange, type GitSyncState } from "~/api";
+import { api, onProjectChanged, type FileChange, type GitSyncState } from "~/api";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import Spinner from "~/components/Spinner";
 import { useMissingFiles } from "~/hooks/useMissingFiles";
@@ -161,6 +161,14 @@ export default function ChangesView({
     api.gitSyncState(projectId).then(setSync, () => setSync(null));
   }, [projectId]);
   useEffect(refreshSync, [refreshSync, branch, hasChanges]);
+  // Git run elsewhere, such as a push or fetch in a terminal, moves the branch too.
+  useEffect(() => {
+    if (!projectId) return;
+    const unlisten = onProjectChanged((e) => {
+      if (e.projectId === projectId && e.paths.some((p) => p.startsWith(".git/"))) refreshSync();
+    });
+    return () => void unlisten.then((stop) => stop());
+  }, [projectId, refreshSync]);
 
   function refreshAll() {
     onRefreshChanges();

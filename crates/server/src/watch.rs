@@ -1,6 +1,7 @@
 //! Watches a project the way an editor's git view does: the working tree minus what git ignores,
-//! plus the top level of `.git` for commits, staging and checkouts. A burst of events is
-//! reported once, after it settles, with when each path changed.
+//! plus the top level of `.git` for commits, staging and checkouts, and its branches and tags for
+//! pushes and fetches. A burst of events is reported once, after it settles, with when each path
+//! changed.
 //!
 //! How folders are watched depends on the platform: inotify watches one folder at a time, so
 //! Linux adds a watch per folder git keeps; FSEvents and ReadDirectoryChangesW watch a whole tree
@@ -179,8 +180,9 @@ impl Filter {
         Self { ignored }
     }
 
-    /// Whether a change to `path`, which is `rel` under the root, is reported. In `.git` only
-    /// its top level counts, without git's index lock and watchman's cookie files.
+    /// Whether a change to `path`, which is `rel` under the root, is reported. In `.git` its top
+    /// level counts, without git's index lock and watchman's cookie files, and so do its branches
+    /// and tags, which is all a push changes. Patchwork's own refs for reply snapshots don't.
     fn keeps(&self, path: &Path, rel: &Path) -> bool {
         let mut parts = rel.iter();
         let Some(first) = parts.next() else {
@@ -190,6 +192,12 @@ impl Filter {
             let Some(name) = parts.next() else {
                 return false;
             };
+            if name == "refs" {
+                let kept = parts
+                    .next()
+                    .is_some_and(|kind| kind == "heads" || kind == "remotes" || kind == "tags");
+                return kept && rel.extension().is_none_or(|ext| ext != "lock");
+            }
             return parts.next().is_none() && name != "index.lock" && !is_cookie(name);
         }
         if is_cookie(rel.file_name().unwrap_or_default()) {
@@ -230,13 +238,17 @@ mod linux {
 
     use super::walker;
 
-    /// Watches every folder of the working tree that git keeps, and the top level of `.git`.
+    /// Watches every folder of the working tree that git keeps, the top level of `.git`, and its
+    /// branches and tags.
     pub(super) fn watch_project(watcher: &mut RecommendedWatcher, root: &Path) {
         watch_tree(watcher, root);
         // In a linked worktree `.git` is a file, and only the working tree is watched.
         let git_dir = root.join(".git");
         if git_dir.is_dir() {
             let _ = watcher.watch(&git_dir, RecursiveMode::NonRecursive);
+            for refs in ["heads", "remotes", "tags"] {
+                let _ = watcher.watch(&git_dir.join("refs").join(refs), RecursiveMode::Recursive);
+            }
         }
     }
 
