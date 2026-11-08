@@ -1,6 +1,6 @@
 //! Each chat's own log, `chat-<thread id>.log` in the launch's folder, beside its other logs:
 //! what the agent was sent and did, each reply's end, and the agent's own traffic, at the level
-//! set for Chats in Settings → Logging.
+//! set for Chats in Settings → General → Logs.
 //!
 //! Only a chat with a problem gets its file. Its lines are held in memory, the newest
 //! `HELD_BYTES`, until it logs a warning or an error, and from then on are written as they come.

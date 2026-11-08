@@ -20,7 +20,7 @@ export const TASKS_GROUP_PREFIX = "tasks:";
 
 export interface SidebarProps {
   view: SidebarView;
-  /** The agents switched on in Settings → Providers; the usage footer lists only these. */
+  /** The agents switched on in Settings → Cloud providers; the usage footer lists only these. */
   connectedAgents: AgentKind[];
   /** Project of the current context (null: a chat without a project). */
   project: Project | null;
@@ -82,6 +82,6 @@ export interface SidebarProps {
   onClearChangeFocus: () => void;
   /** Opens the command palette. */
   onOpenPalette: () => void;
-  /** Chat menus have Open logs (Settings → Logging). */
+  /** Chat menus have Open logs (Settings → General → Logs). */
   threadLogsMenu: boolean;
 }

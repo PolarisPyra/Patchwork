@@ -15,7 +15,7 @@
 //! ```
 //!
 //! Each line reads `2026-10-26 12:17:29.562 [info] message`, and each log is set to Trace,
-//! Debug, Info, Warning, Error or Off in Settings → Logging, or from the Output panel. A full
+//! Debug, Info, Warning, Error or Off in Settings → General → Logs, or from the Output panel. A full
 //! log moves to `<name>.1.log` and so on, keeping six files of up to 5 MB.
 //!
 //! For agents, Info has each process's start, CLI version and exit; Warning, output nothing
@@ -50,7 +50,7 @@ use std::path::Path;
 
 use crate::settings::{LogLevel, LoggingSettings};
 
-/// A log written to the launch's folder at the level set for it in Settings → Logging.
+/// A log written to the launch's folder at the level set for it in Settings → General → Logs.
 trait LaunchLog {
     /// Starts the log's writer thread in `session`, the launch's folder.
     fn init(&self, session: &Path);
@@ -59,7 +59,7 @@ trait LaunchLog {
 }
 
 /// Every log but `main.log`, which the desktop shell writes, with its level in `levels`. A new
-/// log is a row here, its field in `LoggingSettings`, and its row in Settings → Logging.
+/// log is a row here, its field in `LoggingSettings`, and its row in Settings → General → Logs.
 fn launch_logs(levels: &LoggingSettings) -> [(&'static dyn LaunchLog, LogLevel); 4] {
     [
         (&AGENT_LOG, levels.agents),

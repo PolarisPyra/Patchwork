@@ -13,7 +13,7 @@ import { TokenRow, TokenSwitch } from "~/features/settings/controls";
 import { AGENT_KINDS, errorText } from "~/lib/util";
 
 /**
- * Settings → Hooks: plugin bundles of hooks that run on turn events and the apps they ask for. A bundle
+ * Settings → Extensions → Hooks: plugin bundles of hooks that run on turn events and the apps they ask for. A bundle
  * is a folder with a `hooks.json`, or a `plugin.json` when it carries more; a Codex plugin bundle works
  * as it is because the manifest is the same shape.
  */

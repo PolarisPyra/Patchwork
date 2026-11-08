@@ -42,7 +42,7 @@ impl BuiltinHook {
         }
     }
 
-    /// What the hook does, as Settings → Hooks shows it.
+    /// What the hook does, as Settings → Extensions → Hooks shows it.
     pub fn description(self) -> &'static str {
         match self {
             BuiltinHook::BoundedWaits => "Refuses waits with no time limit",

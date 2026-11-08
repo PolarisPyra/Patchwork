@@ -16,7 +16,7 @@ const RANK: Record<LogLevel, number> = {
 };
 let level: LogLevel = "info";
 
-/** Follows Settings → Logging. */
+/** Follows Settings → General → Logs. */
 export function setRendererLogLevel(next: LogLevel) {
   level = next;
 }

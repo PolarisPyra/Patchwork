@@ -111,7 +111,7 @@ export function Segmented<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
-      className="inline-flex overflow-hidden rounded-[var(--radius-sm)] border border-border-strong"
+      className="inline-grid grid-flow-col auto-cols-fr overflow-hidden rounded-[var(--radius-sm)] border border-border-strong"
     >
       {options.map((o) => (
         <button
@@ -119,7 +119,7 @@ export function Segmented<T extends string>({
           type="button"
           role="radio"
           aria-checked={value === o.value}
-          className={`grid h-6 w-auto cursor-pointer place-items-center border-none px-2.5 py-0 text-[length:var(--fs-sm)] whitespace-nowrap tabular-nums [&+&]:border-l [&+&]:border-border-strong ${value === o.value ? "bg-selected text-fg" : "bg-transparent text-fg-muted hover:bg-hover hover:text-fg"}`}
+          className={`grid h-6 cursor-pointer place-items-center border-none px-4 py-0 text-[length:var(--fs-sm)] whitespace-nowrap tabular-nums [&+&]:border-l [&+&]:border-border-strong ${value === o.value ? "bg-selected text-fg" : "bg-transparent text-fg-muted hover:bg-hover hover:text-fg"}`}
           onClick={() => onChange(o.value)}
         >
           {o.label}

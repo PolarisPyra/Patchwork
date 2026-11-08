@@ -1,28 +1,25 @@
 import { memo, useState, type ReactNode } from "react";
 import {
   ArrowCircleUpIcon,
-  BooksIcon,
   ClockIcon,
-  DownloadSimpleIcon,
+  CloudIcon,
+  DesktopTowerIcon,
   FolderSimpleIcon,
   GaugeIcon,
   GearSixIcon,
+  HardDrivesIcon,
   KeyboardIcon,
   PlugIcon,
-  PlugsConnectedIcon,
   PuzzlePieceIcon,
-  RobotIcon,
-  ScrollIcon,
   ShieldCheckIcon,
-  TerminalIcon,
   TerminalWindowIcon,
   XIcon,
   type Icon,
 } from "@phosphor-icons/react";
 import AgentsPane from "~/features/settings/agents/AgentsPane";
-import CliPane from "~/features/settings/providers/CliPane";
 import GeneralPane from "~/features/settings/app/GeneralPane";
 import ImportsPane from "~/features/settings/system/ImportsPane";
+import InferencePane from "~/features/settings/providers/InferencePane";
 import KeybindingsPane from "~/features/settings/app/KeybindingsPane";
 import LoggingPane from "~/features/settings/system/LoggingPane";
 import McpServersPane from "~/features/settings/providers/mcp/McpServersPane";
@@ -32,9 +29,11 @@ import ProjectsPane from "~/features/settings/system/ProjectsPane";
 import ProvidersPane from "~/features/settings/providers/ProvidersPane";
 import ScheduledPane from "~/features/settings/agents/ScheduledPane";
 import SkillsPane from "~/features/settings/agents/SkillsPane";
+import SshPane from "~/features/settings/system/SshPane";
 import TerminalPane from "~/features/settings/app/TerminalPane";
 import TokensPane from "~/features/settings/app/TokensPane";
 import UpdatesPane from "~/features/settings/system/UpdatesPane";
+import { SectionHeading, Segmented } from "~/features/settings/controls";
 import { logoUrl } from "~/features/settings/logo";
 import type { PaneProps } from "~/features/settings/types";
 
@@ -58,7 +57,32 @@ interface SettingsDialogProps extends PaneProps {
 
 type Pane = (props: Omit<SettingsDialogProps, "onClose">) => ReactNode;
 
-/** The panes, in groups under a heading, so the list reads in a few short runs. */
+type ExtensionTab = "agents" | "skills" | "hooks";
+
+const EXTENSION_TABS: { value: ExtensionTab; label: string }[] = [
+  { value: "agents", label: "Agents" },
+  { value: "skills", label: "Skills" },
+  { value: "hooks", label: "Hooks" },
+];
+
+/** Settings → Extensions: what agents can be given, one kind at a time: custom agents, skills,
+ * and hooks. */
+function Extensions({ settings, updateSettings }: Omit<SettingsDialogProps, "onClose">) {
+  const [tab, setTab] = useState<ExtensionTab>("agents");
+  return (
+    <>
+      <div className="mb-3 border-b border-border pt-1 pb-3">
+        <Segmented label="Extensions" value={tab} options={EXTENSION_TABS} onChange={setTab} />
+      </div>
+      {tab === "agents" && <AgentsPane />}
+      {tab === "skills" && <SkillsPane settings={settings} updateSettings={updateSettings} />}
+      {tab === "hooks" && <PluginsPane settings={settings} updateSettings={updateSettings} />}
+    </>
+  );
+}
+
+/** The panes, in groups under a heading, so the list reads in a few short runs. A pane too small
+ * for its own entry is drawn under a heading at the end of a related one. */
 const GROUPS: {
   label: string;
   sections: { id: string; label: string; Icon: Icon; Pane: Pane }[];
@@ -66,47 +90,71 @@ const GROUPS: {
   {
     label: "General",
     sections: [
-      { id: "general", label: "General", Icon: GearSixIcon, Pane: GeneralPane },
+      {
+        id: "general",
+        label: "General",
+        Icon: GearSixIcon,
+        Pane: (props) => (
+          <>
+            <GeneralPane {...props} />
+            <SectionHeading>Logs</SectionHeading>
+            <LoggingPane {...props} />
+          </>
+        ),
+      },
       { id: "shortcuts", label: "Shortcuts", Icon: KeyboardIcon, Pane: () => <KeybindingsPane /> },
       { id: "updates", label: "Updates", Icon: ArrowCircleUpIcon, Pane: UpdatesPane },
     ],
   },
   {
+    label: "Models",
+    sections: [
+      {
+        id: "providers",
+        label: "Cloud providers",
+        Icon: CloudIcon,
+        Pane: ProvidersPane,
+      },
+      { id: "inference", label: "Local providers", Icon: DesktopTowerIcon, Pane: InferencePane },
+      { id: "tokens", label: "AI Tokenomics", Icon: GaugeIcon, Pane: TokensPane },
+    ],
+  },
+  {
     label: "Agents",
     sections: [
-      { id: "providers", label: "Providers", Icon: PlugsConnectedIcon, Pane: ProvidersPane },
+      { id: "extensions", label: "Extensions", Icon: PuzzlePieceIcon, Pane: Extensions },
       {
         id: "mcp",
         label: "MCP Servers",
         Icon: PlugIcon,
         Pane: ({ settings }) => <McpServersPane appIcon={logoUrl(settings.logo)} />,
       },
-      { id: "custom-agents", label: "Agents", Icon: RobotIcon, Pane: () => <AgentsPane /> },
-      { id: "skills", label: "Skills", Icon: BooksIcon, Pane: SkillsPane },
-      { id: "hooks", label: "Hooks", Icon: PuzzlePieceIcon, Pane: PluginsPane },
-      { id: "clis", label: "CLIs", Icon: TerminalIcon, Pane: () => <CliPane /> },
       {
         id: "permissions",
         label: "Permissions",
         Icon: ShieldCheckIcon,
         Pane: ({ focus, ...props }) => <PermissionsPane {...props} focus={focus ?? null} />,
       },
-      { id: "tokens", label: "AI Tokenomics", Icon: GaugeIcon, Pane: TokensPane },
     ],
   },
   {
-    label: "Projects",
+    label: "Workspace",
     sections: [
-      { id: "projects", label: "Projects", Icon: FolderSimpleIcon, Pane: ProjectsPane },
+      {
+        id: "projects",
+        label: "Projects",
+        Icon: FolderSimpleIcon,
+        Pane: (props) => (
+          <>
+            <ProjectsPane {...props} />
+            <SectionHeading>Imports</SectionHeading>
+            <ImportsPane {...props} />
+          </>
+        ),
+      },
       { id: "scheduled", label: "Scheduled", Icon: ClockIcon, Pane: ScheduledPane },
-      { id: "imports", label: "Imports", Icon: DownloadSimpleIcon, Pane: ImportsPane },
-    ],
-  },
-  {
-    label: "System",
-    sections: [
       { id: "terminal", label: "Terminal", Icon: TerminalWindowIcon, Pane: TerminalPane },
-      { id: "logging", label: "Logging", Icon: ScrollIcon, Pane: LoggingPane },
+      { id: "ssh", label: "SSH", Icon: HardDrivesIcon, Pane: () => <SshPane /> },
     ],
   },
 ];
