@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowClockwiseIcon, MagnifyingGlassIcon, PlusIcon } from "@phosphor-icons/react";
+import { ArrowClockwiseIcon, MagnifyingGlassIcon } from "@phosphor-icons/react";
 import {
   api,
   type ApiProvider,
@@ -20,12 +20,16 @@ type HealthMap = Partial<Record<string, ProviderHealth>>;
 // then refreshes it in place, instead of flashing every row back to "Checking…".
 const healthCache = new Map<string, ProviderHealth>();
 
+/** The preset a found server is saved as, which picks its logo: only LM Studio has one. */
+const presetOf = (d: DiscoveredServer) => (d.name === "LM Studio" ? "lmstudio" : "custom");
+
 /** A custom provider prefilled from a server found on this computer, so Add opens the editor ready
  * to save. */
 function fromDiscovered(d: DiscoveredServer): ApiProvider {
   return {
     ...blank({ id: "custom", name: "", baseUrl: "", models: [] }),
     local: true,
+    preset: presetOf(d),
     name: d.name,
     baseUrl: d.baseUrl,
     models: d.models.map((id) => ({ id, name: null })),
@@ -297,13 +301,12 @@ export default function LocalProviders({
           {unsaved.map((d) => (
             <button
               key={d.baseUrl}
-              className={`${PROVIDER_TILE} border-dashed border-border-strong bg-transparent text-fg-muted hover:text-fg`}
+              className={`${PROVIDER_TILE} border-border bg-panel text-fg`}
               aria-label={`Add ${d.name}`}
               title={d.baseUrl}
               onClick={() => onEdit(fromDiscovered(d))}
             >
-              <PlusIcon size={12} aria-hidden="true" className="absolute top-2 right-2" />
-              <ProviderLogos kind="api" preset="custom" size={22} />
+              <ProviderLogos kind="api" preset={presetOf(d)} size={22} />
               <span className="max-w-full truncate">{d.name}</span>
             </button>
           ))}

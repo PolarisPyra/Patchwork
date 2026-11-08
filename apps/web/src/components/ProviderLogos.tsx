@@ -11,6 +11,7 @@ import fireworksIcon from "../../../../assets/fireworks-color.svg";
 import grokIcon from "../../../../assets/grok.svg";
 import groqIcon from "../../../../assets/groq.svg";
 import kimiIcon from "../../../../assets/kimi.svg";
+import lmstudioIcon from "../../../../assets/lmstudio.svg";
 import metaIcon from "../../../../assets/meta-color.svg";
 import minimaxIcon from "../../../../assets/minimax-color.svg";
 import mistralIcon from "../../../../assets/mistral-color.svg";
@@ -48,6 +49,8 @@ const PRESET_LOGOS: Record<string, { src: string; mono?: true }> = {
   cerebras: { src: cerebrasIcon, mono: true },
   openrouter: { src: openrouterIcon, mono: true },
   perplexity: { src: perplexityIcon },
+  // A server found on this computer is `custom`, except LM Studio.
+  lmstudio: { src: lmstudioIcon, mono: true },
 };
 
 /** Brand-ish marks for the supported agents (and the import sources T3 Code and OpenCode). An API

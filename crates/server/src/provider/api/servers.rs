@@ -195,11 +195,17 @@ pub fn use_local_model() -> Result<String, String> {
         let view = config::save(provider, KeyChange::Keep)?;
         return Ok(format!("{}/{model}", view.provider.id));
     }
+    // The preset picks the logo, and of the servers found here only LM Studio has one.
+    let preset = if server.name == "LM Studio" {
+        "lmstudio"
+    } else {
+        "custom"
+    };
     let view = config::save(
         ApiProvider {
             id: String::new(),
             name: server.name,
-            preset: "custom".into(),
+            preset: preset.into(),
             base_url: server.base_url,
             enabled: true,
             local: true,
