@@ -1,7 +1,7 @@
 {
   "name": "patchwork-desktop",
   "private": true,
-  "version": "26.11.30",
+  "version": "26.11.31",
   "license": "MIT",
   "type": "module",
   "scripts": {

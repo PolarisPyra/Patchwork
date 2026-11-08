@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.31] - 2026-11-08
+
+### Added
+
+- In the archive, Shift+click selects every chat and task from the last row you clicked down to the one you shift-clicked, the same as in the task list, so a run of them can be deleted together.
+
+### Changed
+
+- Deleting archived chats or tasks for good now asks in a dialog that names what will go, such as "Delete 2 chats?", and Enter keeps them. Right-clicking a selected row in the archive deletes every selected chat or task, the same as the Delete key does.
+
 ## [26.11.30] - 2026-11-08
 
 ### Added
