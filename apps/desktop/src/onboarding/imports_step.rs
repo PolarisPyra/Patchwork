@@ -6,12 +6,10 @@ use std::sync::Arc;
 use gpui::{AnyElement, Context, Role, Window, div, prelude::*, px};
 use patchwork_server::import::{ImportScan, ImportSource};
 
-use super::{
-    IMPORTS_STEP, ImportProgress, ImportResult, Onboarding, OnboardingEvent, choice_row, heading,
-    key_id, row_end, tick,
-};
+use super::{IMPORTS_STEP, ImportProgress, ImportResult, Onboarding, OnboardingEvent};
+use super::rows::{choice_row, heading, key_id, row_end, tick};
 use crate::settings::projects::{import_sources, source_agent, source_label};
-use crate::theme::{FS_SM, Theme};
+use crate::ui::theme::{FS_SM, Theme};
 use crate::ui::{agent_logo, badge, spinner};
 
 impl Onboarding {

@@ -2,8 +2,9 @@
 
 use gpui::{AnyElement, Context, FontWeight, Role, SharedString, Toggled, div, prelude::*, px};
 
-use super::{ImportResult, Onboarding, heading, picked};
-use crate::theme::{FS_LG, RADIUS, Theme};
+use super::{ImportResult, Onboarding};
+use super::rows::{heading, picked};
+use crate::ui::theme::{FS_LG, RADIUS, Theme};
 use crate::ui::{agent_label, badge, icon};
 
 fn describe_import(imported: Option<ImportResult>) -> String {

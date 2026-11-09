@@ -16,7 +16,7 @@ use patchwork_server::Server;
 use crate::chat::text_area::{Changed, TextArea};
 use crate::settings::SettingsDialog;
 use crate::settings::sigils::SIGILS_PAGE;
-use crate::theme::{FS_MD, FS_SM, FS_XS, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_MD, FS_SM, FS_XS, RADIUS_SM, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, tooltip};
 
 /// Where the user's keys are kept: a command's key, or null for one they unbound.
@@ -447,7 +447,7 @@ pub struct ShortcutsState {
     search: Option<Entity<TextArea>>,
     overrides: Option<Overrides>,
     pub recording: Option<&'static str>,
-    pub recording_sigil: Option<crate::sigils::SigilKind>,
+    pub recording_sigil: Option<crate::ui::sigils::SigilKind>,
     pub refused: Option<String>,
     fixed_note: Option<&'static str>,
 }
@@ -551,7 +551,7 @@ pub fn render(
                 let mut area = TextArea::new("Search by name or key", "Search shortcuts", cx);
                 area.single_line = true;
                 area.text_color = t.text;
-                area.placeholder_color = crate::theme::input_placeholder();
+                area.placeholder_color = crate::ui::theme::input_placeholder();
                 area.selection_color = t.accent.opacity(0.3);
                 area
             });

@@ -10,8 +10,8 @@ use gpui::{
 };
 use patchwork_server::workspace::HunkAction;
 
-use super::Canvas;
-use crate::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
+use super::{Canvas};
+use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
 use crate::ui::{BtnKind, btn, button, icon, tooltip};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -278,7 +278,7 @@ impl Canvas {
         let (rows, hunks) = parse_diff(diff);
         self.hunk_children.clear();
         if rows.is_empty() {
-            return super::centered(div())
+            return super::body::centered(div())
                 .text_color(t.text_muted)
                 .child("No changes in this file.")
                 .into_any_element();
@@ -381,7 +381,7 @@ impl Canvas {
             .py(px(12.))
             .min_w_full()
             .font_family(FONT_MONO)
-            .text_size(px(crate::theme::FS_MD))
+            .text_size(px(crate::ui::theme::FS_MD))
             .line_height(relative(1.65))
             .text_color(t.text)
             .children(children)
@@ -455,7 +455,7 @@ impl Canvas {
                     .gap(px(4.))
                     .pr(px(12.))
                     .pl(px(8.))
-                    .font_family(crate::theme::FONT_UI)
+                    .font_family(crate::ui::theme::FONT_UI)
                     .text_size(px(FS_XS))
                     .child(
                         hunk_button(
@@ -562,7 +562,7 @@ impl Canvas {
             .border_color(t.border)
             .bg(t.bg_panel)
             .p(px(8.))
-            .font_family(crate::theme::FONT_UI)
+            .font_family(crate::ui::theme::FONT_UI)
             .text_size(px(FS_SM))
             .line_height(relative(1.5))
             .child(
@@ -644,7 +644,7 @@ impl Canvas {
             .bg(t.bg_panel)
             .px(px(12.))
             .py(px(8.))
-            .font_family(crate::theme::FONT_UI)
+            .font_family(crate::ui::theme::FONT_UI)
             .text_size(px(FS_SM))
             .line_height(relative(1.5))
             .child(icon("chat-text", 14.).mt(px(2.)).text_color(t.accent_text))

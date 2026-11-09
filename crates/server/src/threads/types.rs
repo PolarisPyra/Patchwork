@@ -124,3 +124,6 @@ pub struct Goal {
     pub token_budget: Option<u64>,
     pub time_used_seconds: Option<u64>,
 }
+
+/// The error for a chat or task that no longer exists. People see chat for either.
+pub(crate) const NOT_FOUND: &str = "Chat not found";

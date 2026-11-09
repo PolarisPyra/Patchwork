@@ -2,12 +2,33 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::PoisonError;
+use std::sync::{Mutex, OnceLock, PoisonError};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use super::{CONFIG_DIR, DIR, live_servers, pool, serve_relay, WRITE};
+use super::{live_servers, pool, serve_relay};
+
+// The limits MCP servers run within, the config folder, and the lock on the config files.
+// the running servers, and the lock on the config files.
+const CONFIG_DIR: &str = "mcp";
+pub(super) const PROTOCOL: &str = "2025-06-18";
+/// Starting a server and listing its tools; `npx` may download the server first.
+pub(super) const START_TIMEOUT: Duration = Duration::from_secs(90);
+pub(super) const CALL_TIMEOUT: Duration = Duration::from_secs(600);
+/// Stderr kept to explain a server that failed to start.
+pub(super) const STDERR_TAIL: usize = 2000;
+/// The longest tool name endpoints accept.
+pub(super) const MAX_NAME: usize = 64;
+/// The most tools a request may offer: OpenAI's limit, which other endpoints share.
+pub(super) const MAX_TOOLS: usize = 128;
+/// How often a call checks whether its turn was stopped.
+pub(super) const POLL: Duration = Duration::from_millis(200);
+
+static DIR: OnceLock<PathBuf> = OnceLock::new();
+/// Serializes changes to the config files.
+static WRITE: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

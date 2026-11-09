@@ -11,7 +11,7 @@ use gpui::{
 };
 
 use super::Panel;
-use crate::theme::{FS_SM, RADIUS_SM, theme};
+use crate::ui::theme::{FS_SM, RADIUS_SM, theme};
 use crate::ui::{BtnKind, btn, icon, spinner};
 
 /// How long Live waits after a capture finishes before taking the next. A capture itself takes

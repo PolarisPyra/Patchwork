@@ -9,9 +9,9 @@ use gpui::{
 };
 
 use crate::chat::text_area::{BackspaceEmpty, Changed, Submitted, TextArea};
-use crate::menu::{Dismissed, Menu, MenuItem};
+use crate::ui::menu::{Dismissed, Menu, MenuItem};
 use crate::settings::SettingsDialog;
-use crate::theme::{FONT_MONO, FS_MD, FS_SM, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FONT_MONO, FS_MD, FS_SM, RADIUS_SM, Theme, theme};
 use crate::ui::{button, icon};
 
 /// What a text field does with its text when it is left or Enter is pressed.
@@ -334,7 +334,7 @@ impl SettingsDialog {
                 area.single_line = !kind.lines;
                 area.masked = kind.masked;
                 area.text_color = t.text;
-                area.placeholder_color = crate::theme::input_placeholder();
+                area.placeholder_color = crate::ui::theme::input_placeholder();
                 area.selection_color = t.accent.opacity(0.3);
                 area.set_text(value, cx);
                 area
@@ -654,7 +654,7 @@ pub fn list_box(rows: Vec<AnyElement>, t: &Theme) -> Div {
         .flex()
         .flex_col()
         .overflow_hidden()
-        .rounded(px(crate::theme::RADIUS))
+        .rounded(px(crate::ui::theme::RADIUS))
         .border_1()
         .border_color(border)
         .children(rows.into_iter().enumerate().map(move |(i, row)| {

@@ -9,7 +9,7 @@ use gpui::{
 use patchwork_server::threads::Thread;
 
 use crate::chat::text_area::{Changed, Submitted, TextArea};
-use crate::theme::{RADIUS, RADIUS_SM, theme};
+use crate::ui::theme::{RADIUS, RADIUS_SM, theme};
 use crate::ui::{AGENT_KINDS, agent_label, icon, popup_shadow};
 use crate::workspace::Workspace;
 

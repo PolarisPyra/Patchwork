@@ -8,7 +8,7 @@ use patchwork_server::threads::{Message, StepStatus, ToolCall};
 
 use crate::chat::lineage::{is_active, status_label, title_of};
 use crate::chat::timeline::tool_label;
-use crate::theme::{FS_XS, RADIUS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_XS, RADIUS, RADIUS_SM, Theme};
 use crate::ui::{agent_logo, button, full_elapsed, icon, now_ms};
 use crate::workspace::Workspace;
 

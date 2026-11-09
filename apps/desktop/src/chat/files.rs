@@ -11,7 +11,7 @@ use patchwork_server::threads::Message;
 use patchwork_server::workspace::{FileChange, FileMedia, PreviewKind, file_media, missing_files};
 
 use crate::canvas::CanvasTab;
-use crate::theme::{FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
 use crate::ui::{BtnKind, base_name, btn, button, dir_name, icon, tooltip};
 use crate::workspace::{View, Workspace};
 
@@ -34,6 +34,8 @@ pub struct ReplyFiles {
     pub media: Option<Vec<FileMedia>>,
     /// The paths and the git state it was loaded for, so a change to either loads it again.
     loaded_for: (Vec<String>, u64),
+    /// Whether a load is under way.
+    pub loading: bool,
 }
 
 impl Workspace {
@@ -58,6 +60,7 @@ impl Workspace {
         for m in stale {
             let entry = self.reply_files.entry(m.id.clone()).or_default();
             entry.loaded_for = (m.files.clone(), generation);
+            entry.loading = true;
             let root = root.clone();
             let load = cx.background_spawn(async move {
                 let turn = m.turn.as_ref().and_then(|turn| {
@@ -78,6 +81,7 @@ impl Workspace {
                         files.turn_files = turn;
                         files.missing = missing;
                         files.media = media;
+                        files.loading = false;
                         cx.notify();
                     }
                 });

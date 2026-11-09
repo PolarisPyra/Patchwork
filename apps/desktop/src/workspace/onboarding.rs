@@ -5,7 +5,7 @@ use gpui::{AnyElement, Context, Focusable, Window, div, prelude::*, px, relative
 
 use super::Workspace;
 use crate::onboarding::{Onboarding, OnboardingEvent};
-use crate::theme::{FONT_UI, FS_MD, theme};
+use crate::ui::theme::{FONT_UI, FS_MD, theme};
 
 impl Workspace {
     pub(super) fn onboarding_view(

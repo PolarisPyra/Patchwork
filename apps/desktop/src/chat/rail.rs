@@ -9,7 +9,7 @@ use gpui::{
 };
 use patchwork_server::threads::{Message, Role as MessageRole};
 
-use crate::theme::{FS_LG, FS_MD, RADIUS_LG, Theme};
+use crate::ui::theme::{FS_LG, FS_MD, RADIUS_LG, Theme};
 use crate::ui::{button, popup_shadow};
 use crate::workspace::Workspace;
 

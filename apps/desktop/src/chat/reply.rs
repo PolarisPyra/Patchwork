@@ -9,7 +9,7 @@ use gpui::{
 };
 use patchwork_server::threads::{Message, MessageStatus, Part, Role as MessageRole, StepStatus, Thread};
 
-use crate::theme::{FONT_MONO, FS_MD, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
+use crate::ui::theme::{FONT_MONO, FS_MD, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
 use crate::ui::{button, format_clock, full_elapsed, icon, now_ms, spinner};
 use crate::workspace::Workspace;
 

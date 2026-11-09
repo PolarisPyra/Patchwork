@@ -8,7 +8,7 @@ use std::sync::Arc;
 use gpui::{AnyElement, Context, Div, Hsla, Role, SharedString, div, prelude::*, px};
 use patchwork_server::threads::{CheckStatus, Message, TurnChecks};
 
-use crate::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
+use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
 use crate::ui::{BtnKind, btn, button, full_elapsed, icon, spinner, tooltip};
 use crate::workspace::Workspace;
 

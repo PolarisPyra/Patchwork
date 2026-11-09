@@ -1,10 +1,21 @@
 //! Sessions found in another agent's files, and turning one into a thread.
 
+/// `format!`s a line into the import log, `logging::IMPORT_LOG`.
+macro_rules! ilog {
+    ($($arg:tt)*) => {
+        $crate::logging::IMPORT_LOG.write(
+            $crate::settings::LogLevel::Info,
+            "",
+            &$crate::logging::Source::default(),
+            $crate::logging::Data::Text(format!($($arg)*)),
+        )
+    };
+}
+pub(crate) use ilog;
 use std::path::Path;
 
 use super::{ImportSource, antigravity, claude, codex, opencode, t3};
 
-use super::ilog;
 use crate::provider::AgentKind;
 use crate::system::new_id;
 use crate::threads::{Role, MessageStatus, AccessMode, Message, Thread};

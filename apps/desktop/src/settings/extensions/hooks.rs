@@ -7,7 +7,7 @@ use patchwork_server::plugins::{self, HookEvent, Plugin, PluginHook, PluginHookH
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{switch, token_row};
-use crate::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
 use crate::ui::{AGENT_KINDS, BtnKind, agent_label, btn, icon};
 
 use super::{empty, list_box};

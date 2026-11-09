@@ -11,7 +11,10 @@ use crate::system::now_ms;
 use crate::threads::{CheckStatus, MessageStatus, TurnChecks};
 use crate::Server;
 
-use super::{KEEP, LIMIT, MOST, command, failures, run, tests_ran, Command};
+use super::{KEEP, LIMIT, command, failures, run, tests_ran, Command};
+
+/// Most failures listed for one run.
+const MOST: usize = 12;
 
 impl Server {
     /// Runs the project's check command for the reply `message_id` of `thread_id`, on a thread of

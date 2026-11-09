@@ -8,8 +8,8 @@ use gpui::{
 use patchwork_server::threads::{MessageStatus, Role as MessageRole};
 
 use super::{View, Workspace, is_busy};
-use crate::menu::{Dismissed, Menu, MenuItem};
-use crate::theme::{ACTIVITY_BAR_W, FS_XS, RADIUS, RADIUS_SM, STATUSBAR_H, TOOLBAR_H, Theme, theme};
+use crate::ui::menu::{Dismissed, Menu, MenuItem};
+use crate::ui::theme::{ACTIVITY_BAR_W, FS_XS, RADIUS, RADIUS_SM, STATUSBAR_H, TOOLBAR_H, Theme, theme};
 use crate::ui::{agent_label, button, display_title, icon, project_tile, spinner};
 
 /// The toolbar's left padding, which lines the project tile up with the activity bar's icons.

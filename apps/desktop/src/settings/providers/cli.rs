@@ -5,10 +5,10 @@ use gpui::{AnyElement, Context, FontWeight, Role, SharedString, Window, div, pre
 use patchwork_server::provider::cli_info::InfoCommand;
 use patchwork_server::provider::{AgentKind, ModelOption, antigravity, claude, codex, opencode};
 
-use super::tildify;
+use super::rows::{tildify};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
-use crate::theme::{FONT_MONO, FS_LG, FS_SM, FS_XS, RADIUS, RADIUS_SM, theme};
+use crate::ui::theme::{FONT_MONO, FS_LG, FS_SM, FS_XS, RADIUS, RADIUS_SM, theme};
 use crate::ui::{BtnKind, agent_label, agent_logo, btn, icon, icon_button};
 
 /// The field the rows are searched with.

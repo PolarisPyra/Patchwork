@@ -8,7 +8,7 @@ use patchwork_server::provider::mcp::{self, McpServer};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
-use crate::theme::{FS_SM, theme};
+use crate::ui::theme::{FS_SM, theme};
 use crate::ui::{BtnKind, btn};
 
 use super::{pairs_text, target};

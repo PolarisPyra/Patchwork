@@ -4,8 +4,9 @@
 use gpui::{AnyElement, Context, Div, FontWeight, Role, Toggled, div, prelude::*, px};
 use patchwork_server::provider::AgentKind;
 
-use super::{AGENT_KINDS, Onboarding, Probe, choice_row, heading, key_id, picked, row_end, tick};
-use crate::theme::{FS_SM, RADIUS, Theme};
+use super::{AGENT_KINDS, Onboarding, Probe};
+use super::rows::{choice_row, heading, key_id, picked, row_end, tick};
+use crate::ui::theme::{FS_SM, RADIUS, Theme};
 use crate::ui::{agent_label, agent_logo, badge, button, icon, spinner};
 
 impl Onboarding {

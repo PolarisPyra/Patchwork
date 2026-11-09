@@ -12,7 +12,7 @@ use gpui::{AnyElement, Context, FontWeight, SharedString, div, prelude::*, px};
 use crate::chat::markdown::markdown;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{minutes_stepper, token_row};
-use crate::theme::{FS_SM, theme};
+use crate::ui::theme::{FS_SM, theme};
 use crate::ui::{BtnKind, btn, button, icon};
 
 const LATEST_RELEASE: &str =

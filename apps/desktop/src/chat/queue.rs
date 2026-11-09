@@ -9,7 +9,7 @@ use gpui::{Context, Div, FontWeight, Role, Stateful, div, prelude::*, px};
 use patchwork_server::threads::Message;
 
 use crate::chat::goal::strip_action;
-use crate::theme::{FS_SM, FS_XS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_SM, FS_XS, RADIUS_SM, Theme};
 use crate::ui::{button, icon, tooltip};
 use crate::workspace::{Workspace, is_working};
 

@@ -7,7 +7,7 @@ use gpui::{AnyElement, Context, FontWeight, SharedString, Window, div, prelude::
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, letter_badge, token_row};
-use crate::theme::{FONT_MONO, FS_SM, FS_XS, theme};
+use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, theme};
 use crate::ui::{BtnKind, btn, icon, icon_button};
 
 use super::{AGENT_SIGIL, empty, example, filter_chip, list_box};

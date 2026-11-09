@@ -10,7 +10,7 @@ use patchwork_server::system::ssh::{self, SshHost, SshTest};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::alert;
-use crate::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS_SM, theme};
+use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS_SM, theme};
 use crate::ui::{BtnKind, btn, icon, spinner};
 
 #[derive(Default)]

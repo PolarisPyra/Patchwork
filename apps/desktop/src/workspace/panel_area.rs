@@ -9,7 +9,7 @@ use patchwork_server::settings::Settings;
 
 use super::Workspace;
 use crate::panel::{Panel, PanelEvent, PanelTab};
-use crate::theme::{STATUSBAR_H, TOOLBAR_H};
+use crate::ui::theme::{STATUSBAR_H, TOOLBAR_H};
 
 const PANEL_MIN: f32 = 120.;
 const PANEL_MAX_FRACTION: f32 = 0.8;

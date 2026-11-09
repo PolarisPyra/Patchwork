@@ -674,3 +674,26 @@ impl Agent {
         Ok(())
     }
 }
+
+/// An error a provider answered with, as one readable line.
+pub fn error_text(status: u16, body: &Value, raw: &str) -> String {
+    let error = &body["error"];
+    let message = error["message"]
+        .as_str()
+        .or_else(|| error.as_str())
+        .or_else(|| body["message"].as_str())
+        .or_else(|| body["detail"].as_str())
+        .map(String::from)
+        .unwrap_or_else(|| raw.trim().chars().take(300).collect());
+    let hint = match status {
+        401 | 403 => " Check the API key in Settings → API Providers.",
+        402 => " The account may be out of credit.",
+        404 => " Check the base URL and the model id.",
+        _ => "",
+    };
+    match status {
+        0 => message,
+        _ if message.is_empty() => format!("The provider answered {status}.{hint}"),
+        _ => format!("{message} ({status}).{hint}"),
+    }
+}

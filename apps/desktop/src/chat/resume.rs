@@ -6,7 +6,7 @@ use gpui::{Context, Div, div, prelude::*, px};
 use patchwork_server::provider::AgentKind;
 use patchwork_server::threads::{Role as MessageRole, Thread};
 
-use crate::theme::{FS_SM, RADIUS, Theme};
+use crate::ui::theme::{FS_SM, RADIUS, Theme};
 use crate::ui::{BtnKind, btn, checkbox, compact_elapsed, format_tokens, now_ms};
 use crate::workspace::{Workspace, is_working};
 

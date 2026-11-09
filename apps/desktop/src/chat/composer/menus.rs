@@ -10,7 +10,7 @@ use patchwork_server::provider::{AgentKind, ModelOption};
 use patchwork_server::threads::AccessMode;
 
 use super::{Composer, Picks};
-use crate::theme::{FS_SM, FS_XS, Theme};
+use crate::ui::theme::{FS_SM, FS_XS, Theme};
 use crate::ui::{button, format_tokens, icon, menu_item, popup};
 
 /// The chips that open a menu.

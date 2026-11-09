@@ -4,8 +4,8 @@
 use gpui::{AnyElement, Context, KeyDownEvent, SharedString, div, prelude::*, px};
 
 use crate::settings::SettingsDialog;
-use crate::sigils::{SIGIL_KINDS, Sigils, default_sigil, save};
-use crate::theme::{FS_SM, RADIUS_SM, Theme};
+use crate::ui::sigils::{SIGIL_KINDS, Sigils, default_sigil, save};
+use crate::ui::theme::{FS_SM, RADIUS_SM, Theme};
 use crate::ui::{button, icon, tooltip};
 
 pub const SIGILS_PAGE: &str = "Sigils";

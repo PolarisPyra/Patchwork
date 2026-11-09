@@ -5,7 +5,7 @@
 use gpui::{Context, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px, relative};
 use patchwork_server::threads::{BackgroundTask, TaskStatus};
 
-use crate::theme::{FS_SM, RADIUS, Theme};
+use crate::ui::theme::{FS_SM, RADIUS, Theme};
 use crate::ui::{button, icon, now_ms, spinner, tooltip};
 use crate::workspace::Workspace;
 

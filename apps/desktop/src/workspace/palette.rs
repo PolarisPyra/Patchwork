@@ -12,7 +12,7 @@ use patchwork_server::threads::{MessageStatus, Role as MessageRole};
 
 use crate::chat::text_area::{Arrow, Changed, Submitted, TextArea};
 use crate::settings::shortcuts::key_label;
-use crate::theme::{FONT_MONO, FS_LG, FS_MD, FS_XS, RADIUS, RADIUS_LG, theme};
+use crate::ui::theme::{FONT_MONO, FS_LG, FS_MD, FS_XS, RADIUS, RADIUS_LG, theme};
 use crate::ui::{display_title, icon, overflows, popup_shadow, scrollbar};
 use crate::workspace::Workspace;
 
@@ -173,7 +173,7 @@ impl Palette {
             );
             field.single_line = true;
             field.text_color = t.text;
-            field.placeholder_color = crate::theme::input_placeholder();
+            field.placeholder_color = crate::ui::theme::input_placeholder();
             field.selection_color = t.accent.opacity(0.3);
             field
         });

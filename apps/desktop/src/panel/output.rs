@@ -12,7 +12,7 @@ use patchwork_server::settings::{LogLevel, LoggingSettings};
 
 use super::Panel;
 use super::cells::ordered;
-use crate::theme::{FONT_MONO, FS_SM, Theme, theme};
+use crate::ui::theme::{FONT_MONO, FS_SM, Theme, theme};
 use crate::ui::agent_label;
 
 /// How often a shown log is read for new lines.

@@ -13,10 +13,10 @@ use gpui::{
 use patchwork_server::threads::AccessMode;
 use patchwork_server::workspace::{FileChange, GitCommit, GitSyncState, PullRequest};
 
-use super::graph;
+use super::{graph};
 use crate::chat::text_area::{Changed, Submitted, TextArea};
-use crate::menu::{Dismissed, Menu, MenuItem};
-use crate::theme::{RADIUS_SM, Theme, theme};
+use crate::ui::menu::{Dismissed, Menu, MenuItem};
+use crate::ui::theme::{RADIUS_SM, Theme, theme};
 use crate::ui::{base_name, button, dir_name, icon, scrollbar, spinner, tooltip};
 use crate::workspace::Workspace;
 

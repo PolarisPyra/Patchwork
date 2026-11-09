@@ -12,10 +12,10 @@ use gpui::{
 };
 use patchwork_server::provider::{AgentKind, ProviderSlashCommand};
 
-use super::Composer;
+use super::{Composer};
 use super::menus::{Menu, Roles};
-use crate::sigils::{SigilKind, Sigils, default_sigil};
-use crate::theme::{FONT_MONO, FS_SM, RADIUS, Theme};
+use crate::ui::sigils::{SigilKind, Sigils, default_sigil};
+use crate::ui::theme::{FONT_MONO, FS_SM, RADIUS, Theme};
 use crate::ui::{button, icon, popup_shadow};
 
 /// Most files the menu offers at once.

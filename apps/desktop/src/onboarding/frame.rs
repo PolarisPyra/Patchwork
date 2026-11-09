@@ -10,7 +10,7 @@ use super::{
     IMPORTS_STEP, LAST_STEP, LOGO_BLUE, LOGO_PINK, LOGO_VIOLET, Onboarding, OnboardingEvent,
     PROJECTS_STEP, STEPS, agent_step, imports_step, projects_step, ready_step,
 };
-use crate::theme::{FS_LG, FS_SM, FS_XL, FS_XXL, RADIUS_LG, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_LG, FS_SM, FS_XL, FS_XXL, RADIUS_LG, RADIUS_SM, Theme, theme};
 use crate::ui::{BtnKind, btn, icon, icon_button, spinner, tooltip};
 
 /// The logo's colours as a fill, from `a` to `b`.

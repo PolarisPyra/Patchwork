@@ -29,6 +29,7 @@
 //! disk. The thread writes each burst of records out as soon as it arrives, so a killed app
 //! loses at most the records still queued.
 
+mod debug_log;
 mod files;
 mod render;
 mod report;
@@ -36,52 +37,9 @@ mod scrub;
 pub mod system;
 mod thread_log;
 
+pub use debug_log::*;
 use files::session;
 pub use files::{session_dir, channels, LogChunk, read, export};
 pub use render::{now_text};
 pub use scrub::{Json};
 pub use thread_log::{THREAD_LOG, ThreadLog};
-
-mod debug_log;
-
-pub use debug_log::*;
-
-use std::path::Path;
-
-use crate::settings::{LogLevel, LoggingSettings};
-
-/// A log written to the launch's folder at the level set for it in Settings → General → Logs.
-trait LaunchLog {
-    /// Starts the log's writer thread in `session`, the launch's folder.
-    fn init(&self, session: &Path);
-    /// Follows the setting.
-    fn set_level(&self, level: LogLevel);
-}
-
-/// Every log but `main.log`, which the desktop shell writes, with its level in `levels`. A new
-/// log is a row here, its field in `LoggingSettings`, and its row in Settings → General → Logs.
-fn launch_logs(levels: &LoggingSettings) -> [(&'static dyn LaunchLog, LogLevel); 4] {
-    [
-        (&AGENT_LOG, levels.agents),
-        (&WINDOW_LOG, levels.window),
-        (&IMPORT_LOG, levels.imports),
-        (&THREAD_LOG, levels.threads),
-    ]
-}
-
-/// Starts every log in `session`, this launch's folder, at the levels set. Called once when the
-/// server opens.
-pub fn start(session: &Path, levels: &LoggingSettings) {
-    for (log, _) in launch_logs(levels) {
-        log.init(session);
-    }
-    follow(levels);
-}
-
-/// Sets how much each log records.
-pub fn follow(levels: &LoggingSettings) {
-    for (log, level) in launch_logs(levels) {
-        log.set_level(level);
-    }
-    set_app_level(levels.app);
-}

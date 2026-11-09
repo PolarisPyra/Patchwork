@@ -6,7 +6,11 @@ use std::path::Path;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
-use super::KEEP;
+/// How long the check command may run before it is stopped. Long enough for a cold build, short
+/// enough that a hung command does not hold the reply's card at "Running" forever.
+pub const LIMIT: Duration = Duration::from_secs(5 * 60);
+/// Most of the output kept with a reply. The end is what names the failures.
+pub(super) const KEEP: usize = 16 << 10;
 
 /// What a check command came to.
 #[derive(Debug, Clone, PartialEq, Eq)]

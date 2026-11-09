@@ -16,16 +16,4 @@ mod t3;
 mod sessions;
 
 pub use sessions::*;
-
-/// `format!`s a line into the import log, `logging::IMPORT_LOG`.
-macro_rules! ilog {
-    ($($arg:tt)*) => {
-        $crate::logging::IMPORT_LOG.write(
-            $crate::settings::LogLevel::Info,
-            "",
-            &$crate::logging::Source::default(),
-            $crate::logging::Data::Text(format!($($arg)*)),
-        )
-    };
-}
-pub(crate) use ilog;
+pub(crate) use sessions::ilog;

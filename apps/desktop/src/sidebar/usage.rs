@@ -13,7 +13,7 @@ use gpui::{
 use patchwork_server::provider::{AgentKind, AgentStatus, detect_agent};
 use patchwork_server::usage::ProviderUsage;
 
-use crate::theme::{FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
 use crate::ui::{agent_label, agent_logo, button, icon, now_ms, popup_shadow, spinner, tooltip};
 use crate::workspace::Workspace;
 

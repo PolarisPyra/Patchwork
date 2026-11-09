@@ -11,7 +11,7 @@ use gpui::{
 };
 use patchwork_server::backgrounds::{BackgroundImage, BackgroundStrength, ChatBackground};
 
-use crate::theme::Theme;
+use crate::ui::theme::Theme;
 use crate::workspace::Workspace;
 
 /// What a preset paints over its base.

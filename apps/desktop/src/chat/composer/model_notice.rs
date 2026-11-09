@@ -7,9 +7,9 @@ use patchwork_server::provider::AgentKind;
 use patchwork_server::provider::api::{config, servers};
 use patchwork_server::threads::AttachmentKind;
 
-use super::Composer;
+use super::{Composer};
 use super::menus::{Menu, Pick};
-use crate::theme::{FS_SM, RADIUS, Theme};
+use crate::ui::theme::{FS_SM, RADIUS, Theme};
 use crate::ui::{BtnKind, btn, icon, spinner};
 
 /// The most other models offered when the server stopped serving the chat's.

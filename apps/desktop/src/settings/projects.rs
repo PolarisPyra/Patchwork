@@ -10,7 +10,7 @@ use patchwork_server::provider::AgentKind;
 
 use crate::settings::controls::{alert, section_heading, switch, token_row};
 use crate::settings::{SettingsDialog, SettingsEvent};
-use crate::theme::{FONT_MONO, FS_SM, FS_XS, theme};
+use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, theme};
 use crate::ui::{AGENT_KINDS, BtnKind, agent_label, agent_logo, btn, icon_button, tooltip};
 
 #[derive(Default)]

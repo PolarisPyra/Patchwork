@@ -7,12 +7,12 @@ use std::sync::mpsc::{self, Sender};
 use std::sync::OnceLock;
 
 use crate::provider::AgentKind;
-use crate::settings::LogLevel;
+use crate::settings::{LogLevel, LoggingSettings};
 use crate::system::now_ms;
 
 use super::files::LogFile;
 use super::render::render;
-use super::{LaunchLog, THREAD_LOG};
+use super::THREAD_LOG;
 
 /// The agent logs, `agent-<agent>.log`, with `agents.log` for records from no agent. A record
 /// about a chat goes to its thread log too.
@@ -218,4 +218,40 @@ fn write_record(dir: &Path, files: &mut HashMap<&'static str, LogFile>, record: 
             .or_insert_with(|| LogFile::new(dir.join(file)))
             .append(&line);
     }
+}
+
+/// A log written to the launch's folder at the level set for it in Settings → General → Logs.
+pub(super) trait LaunchLog {
+    /// Starts the log's writer thread in `session`, the launch's folder.
+    fn init(&self, session: &Path);
+    /// Follows the setting.
+    fn set_level(&self, level: LogLevel);
+}
+
+/// Every log but `main.log`, which the desktop shell writes, with its level in `levels`. A new
+/// log is a row here, its field in `LoggingSettings`, and its row in Settings → General → Logs.
+fn launch_logs(levels: &LoggingSettings) -> [(&'static dyn LaunchLog, LogLevel); 4] {
+    [
+        (&AGENT_LOG, levels.agents),
+        (&WINDOW_LOG, levels.window),
+        (&IMPORT_LOG, levels.imports),
+        (&THREAD_LOG, levels.threads),
+    ]
+}
+
+/// Starts every log in `session`, this launch's folder, at the levels set. Called once when the
+/// server opens.
+pub fn start(session: &Path, levels: &LoggingSettings) {
+    for (log, _) in launch_logs(levels) {
+        log.init(session);
+    }
+    follow(levels);
+}
+
+/// Sets how much each log records.
+pub fn follow(levels: &LoggingSettings) {
+    for (log, level) in launch_logs(levels) {
+        log.set_level(level);
+    }
+    set_app_level(levels.app);
 }

@@ -8,7 +8,7 @@ use patchwork_server::settings::{CursorStyle, TerminalSettings};
 
 use super::input::ensure_contrast;
 use super::terminal::Metrics;
-use crate::theme::Theme;
+use crate::ui::theme::Theme;
 
 /// The ANSI colors for the dark and light themes.
 const ANSI_DARK: [u32; 16] = [

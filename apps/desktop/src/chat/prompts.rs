@@ -10,7 +10,7 @@ use gpui::{
 };
 use patchwork_server::threads::{ApprovalStatus, MessageStatus, Role as MessageRole};
 
-use crate::theme::{FS_MD, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_MD, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
 use crate::ui::button;
 use crate::workspace::{Workspace, is_working};
 

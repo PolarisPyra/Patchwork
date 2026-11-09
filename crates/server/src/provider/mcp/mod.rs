@@ -18,9 +18,12 @@ pub use config::{
     McpServer, ServerView, ToolInfo, TurnTool, init, dir, list, save, remove, restart,
     shared_servers, identity, same_server,
 };
-use config::{read_config, resolved, restart_changed};
+use config::{
+    CALL_TIMEOUT, MAX_NAME, MAX_TOOLS, POLL, PROTOCOL, START_TIMEOUT, STDERR_TAIL, read_config,
+    resolved, restart_changed,
+};
 pub use pool::{tool_budget, turn_tools, probe, call};
-use pool::{pool, live_servers, Entry, Notices, announce, Answer, Waiters};
+use pool::{pool, live_servers, Notices, announce, Answer, Waiters};
 use stdio::{StdioServer};
 use http::{HttpServer};
 pub use relay::{
@@ -28,29 +31,3 @@ pub use relay::{
     set_tool_handler,
 };
 use relay::serve_relay;
-
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Duration;
-
-// The limits MCP servers run within, and the state every server shares: the config folder,
-// the running servers, and the lock on the config files.
-const CONFIG_DIR: &str = "mcp";
-const PROTOCOL: &str = "2025-06-18";
-/// Starting a server and listing its tools; `npx` may download the server first.
-const START_TIMEOUT: Duration = Duration::from_secs(90);
-const CALL_TIMEOUT: Duration = Duration::from_secs(600);
-/// Stderr kept to explain a server that failed to start.
-const STDERR_TAIL: usize = 2000;
-/// The longest tool name endpoints accept.
-const MAX_NAME: usize = 64;
-/// The most tools a request may offer: OpenAI's limit, which other endpoints share.
-const MAX_TOOLS: usize = 128;
-/// How often a call checks whether its turn was stopped.
-const POLL: Duration = Duration::from_millis(200);
-
-static DIR: OnceLock<PathBuf> = OnceLock::new();
-static POOL: OnceLock<Mutex<HashMap<String, Arc<Entry>>>> = OnceLock::new();
-/// Serializes changes to the config files.
-static WRITE: Mutex<()> = Mutex::new(());

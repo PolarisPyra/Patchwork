@@ -7,8 +7,8 @@ use gpui::{
 };
 
 use super::Workspace;
-use crate::background_picker::{BackgroundPicker, PickerEvent};
-use crate::theme::{FS_LG, RADIUS_LG, theme};
+use crate::ui::background_picker::{BackgroundPicker, PickerEvent};
+use crate::ui::theme::{FS_LG, RADIUS_LG, theme};
 use crate::ui::{display_title, icon_button, popup_shadow};
 
 pub struct BackgroundDialog {

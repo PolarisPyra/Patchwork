@@ -13,10 +13,12 @@ use patchwork_server::provider::api::config::{
 };
 use patchwork_server::provider::api::servers;
 
-use super::{PromptOf, form, status_badge, tile, tile_grid};
+use super::{PromptOf, form};
+use super::rows::{status_badge};
+use super::pickers::{tile, tile_grid};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert, switch};
-use crate::theme::{FONT_MONO, FS_SM, RADIUS_SM, theme};
+use crate::ui::theme::{FONT_MONO, FS_SM, RADIUS_SM, theme};
 use crate::ui::{BtnKind, btn, icon, provider_logo, spinner};
 
 /// The field a moved server's new address is typed in.

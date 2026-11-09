@@ -1,22 +1,14 @@
-//! The building blocks every view uses: icons, buttons, the spinner, and the formatting helpers, so
-//! text reads the same everywhere.
+//! The controls every view is built from: icons, buttons, the spinner, scrollbars, popups, menus' rows, checkboxes, tooltips and badges.
 
 use std::f32::consts::TAU;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex, OnceLock};
-
-use base64::Engine;
+use std::sync::OnceLock;
 use std::time::Instant;
-
 use gpui::{
-    Anchor, AnyElement, App, BoxShadow, Div, ElementId, Hsla, Image, ImageFormat, IntoElement,
-    ParentElement, PathBuilder, Role, SharedString, Stateful, StyleRefinement, Styled, Toggled,
-    Window, anchored, canvas, deferred, div, img, point, prelude::*, px,
+    Anchor, App, BoxShadow, Div, ElementId, Hsla, IntoElement, ParentElement, PathBuilder, Role,
+    SharedString, Stateful, StyleRefinement, Styled, Toggled, Window, anchored, canvas, deferred,
+    div, point, prelude::*, px,
 };
-use patchwork_server::provider::AgentKind;
-use patchwork_server::provider::api::config::ApiProvider;
-
-use crate::theme::{FS_MD, RADIUS, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_MD, RADIUS, RADIUS_SM, Theme, theme};
 
 /// A Phosphor icon by its kebab-case name, as `@phosphor-icons/react` draws it at `size`.
 pub fn icon(name: &str, size: f32) -> Icon {
@@ -24,7 +16,7 @@ pub fn icon(name: &str, size: f32) -> Icon {
 }
 
 /// A one-colour SVG asset, `size` square.
-fn mono_svg(path: SharedString, size: f32) -> Icon {
+pub(super) fn mono_svg(path: SharedString, size: f32) -> Icon {
     Icon {
         path,
         style: StyleRefinement::default(),
@@ -37,8 +29,8 @@ fn mono_svg(path: SharedString, size: f32) -> Icon {
 /// follows its button's hover colour. A colour set on the icon itself wins.
 #[derive(IntoElement)]
 pub struct Icon {
-    path: SharedString,
-    style: StyleRefinement,
+    pub(super) path: SharedString,
+    pub(super) style: StyleRefinement,
 }
 
 impl Styled for Icon {
@@ -71,7 +63,7 @@ impl RenderOnce for Icon {
 /// Drawn just inside its edge, as a shadow outside would fill a control with no background.
 pub fn focus_ring(s: StyleRefinement) -> StyleRefinement {
     s.shadow(vec![BoxShadow {
-        color: crate::theme::border_focus(),
+        color: crate::ui::theme::border_focus(),
         offset: point(px(0.), px(0.)),
         blur_radius: px(0.),
         spread_radius: px(2.),
@@ -171,250 +163,6 @@ pub fn spinner(size: f32, color: Hsla) -> impl IntoElement {
         .child(ring)
 }
 
-/// An agent's mark (`components/ProviderLogos.tsx`). A one-colour mark takes the text colour.
-/// An API chat shows its provider's preset mark, found from the `provider/model` id.
-pub fn agent_logo(kind: AgentKind, model: Option<&str>, size: f32) -> AnyElement {
-    let (file, mono) = match kind {
-        AgentKind::Claude => ("claude-color.svg", false),
-        AgentKind::Codex => ("openai.svg", true),
-        AgentKind::Antigravity => ("gemini-color.svg", false),
-        AgentKind::OpenCode => ("opencode.svg", true),
-        AgentKind::Api => {
-            let provider = model.and_then(api_provider_of);
-            return provider_logo(
-                provider.as_ref().map_or("", |p| p.preset.as_str()),
-                provider.as_ref().and_then(|p| p.logo.as_deref()),
-                size,
-            );
-        }
-    };
-    logo_file(file, mono, size)
-}
-
-fn logo_file(file: &str, mono: bool, size: f32) -> AnyElement {
-    let path = SharedString::from(format!("logos/{file}"));
-    if mono {
-        mono_svg(path, size).into_any_element()
-    } else {
-        img(path).size(px(size)).flex_none().into_any_element()
-    }
-}
-
-/// An API provider's mark: the picture it was given, else its preset's, else a plug.
-pub fn provider_logo(preset: &str, logo: Option<&str>, size: f32) -> AnyElement {
-    if let Some(image) = logo.and_then(logo_image) {
-        return img(image).size(px(size)).flex_none().into_any_element();
-    }
-    match preset_logo(preset) {
-        Some((file, mono)) => logo_file(file, mono, size),
-        None => icon("plugs-connected", size).into_any_element(),
-    }
-}
-
-/// A `data:image/…;base64,` logo as an image, decoded once.
-fn logo_image(url: &str) -> Option<Arc<Image>> {
-    static DECODED: OnceLock<Mutex<HashMap<String, Arc<Image>>>> = OnceLock::new();
-    let decoded = DECODED.get_or_init(Default::default);
-    let mut decoded = decoded.lock().ok()?;
-    if let Some(image) = decoded.get(url) {
-        return Some(Arc::clone(image));
-    }
-    let (head, data) = url.strip_prefix("data:")?.split_once(";base64,")?;
-    let format = ImageFormat::from_mime_type(head)?;
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(data)
-        .ok()?;
-    let image = Arc::new(Image::from_bytes(format, bytes));
-    decoded.insert(url.to_string(), Arc::clone(&image));
-    Some(image)
-}
-
-/// The API providers by id, read at the first API model drawn and again after Settings changes
-/// them.
-fn api_providers() -> Arc<HashMap<String, ApiProvider>> {
-    let mut cached = PROVIDERS.lock().unwrap_or_else(|e| e.into_inner());
-    Arc::clone(cached.get_or_insert_with(|| {
-        Arc::new(
-            patchwork_server::provider::api::config::providers()
-                .into_iter()
-                .map(|p| (p.id.clone(), p))
-                .collect(),
-        )
-    }))
-}
-
-static PROVIDERS: Mutex<Option<Arc<HashMap<String, ApiProvider>>>> = Mutex::new(None);
-
-/// Reads the API providers again, after one was added, changed or removed.
-pub fn reload_api_providers() {
-    *PROVIDERS.lock().unwrap_or_else(|e| e.into_inner()) = None;
-}
-
-/// The provider of a `provider/model` id (`apiProviderOf`).
-fn api_provider_of(model: &str) -> Option<ApiProvider> {
-    api_providers().get(model.split('/').next()?).cloned()
-}
-
-/// The name of the API provider a `provider/model` id belongs to.
-pub fn api_provider_name(model: &str) -> Option<String> {
-    api_provider_of(model).map(|p| p.name)
-}
-
-/// Where a local provider's model runs: "this computer", or the machine its server is on.
-pub fn api_model_place(model: &str) -> Option<String> {
-    let provider = api_provider_of(model).filter(|p| p.local)?;
-    let rest = provider.base_url.split("://").nth(1)?;
-    let host = rest.split(['/', '?']).next()?;
-    let host = match host.rsplit_once(':') {
-        Some((name, port)) if port.chars().all(|c| c.is_ascii_digit()) => name,
-        _ => host,
-    };
-    Some(match host {
-        "localhost" | "127.0.0.1" | "[::1]" | "0.0.0.0" => "this computer".into(),
-        other => other.into(),
-    })
-}
-
-/// The mark of an API provider preset (`PRESET_LOGOS`).
-fn preset_logo(preset: &str) -> Option<(&'static str, bool)> {
-    Some(match preset {
-        "deepseek" => ("deepseek-color.svg", false),
-        "openai" => ("openai.svg", true),
-        "gemini" => ("gemini-color.svg", false),
-        "xai" => ("grok.svg", true),
-        "mistral" => ("mistral-color.svg", false),
-        "zai" => ("zai.svg", true),
-        "llama" => ("meta-color.svg", false),
-        "moonshot" => ("kimi.svg", true),
-        "dashscope" => ("qwen-color.svg", false),
-        "minimax" => ("minimax-color.svg", false),
-        "groq" => ("groq.svg", true),
-        "together" => ("together-color.svg", false),
-        "fireworks" => ("fireworks-color.svg", false),
-        "cerebras" => ("cerebras.svg", true),
-        "openrouter" => ("openrouter.svg", true),
-        "perplexity" => ("perplexity-color.svg", false),
-        "lmstudio" => ("lmstudio.svg", true),
-        _ => return None,
-    })
-}
-
-/// The agents in the order the pickers and the task list show them (`AGENT_KINDS`).
-pub const AGENT_KINDS: [AgentKind; 5] = [
-    AgentKind::Claude,
-    AgentKind::Codex,
-    AgentKind::Antigravity,
-    AgentKind::OpenCode,
-    AgentKind::Api,
-];
-
-/// The agent's name, as `AGENT_LABELS` gives it.
-pub fn agent_label(kind: AgentKind) -> &'static str {
-    match kind {
-        AgentKind::Claude => "Claude Code",
-        AgentKind::Codex => "Codex",
-        AgentKind::Antigravity => "Antigravity CLI",
-        AgentKind::OpenCode => "OpenCode CLI",
-        AgentKind::Api => "API",
-    }
-}
-
-/// `title` as a file name, as `slugFileName` makes it.
-pub fn slug_file_name(title: &str, fallback: &str) -> String {
-    let lower = title.to_lowercase();
-    let words: Vec<&str> = lower
-        .split(|c: char| !c.is_ascii_lowercase() && !c.is_ascii_digit())
-        .filter(|w| !w.is_empty())
-        .collect();
-    let slug = words.join("-");
-    format!("{}.md", if slug.is_empty() { fallback } else { &slug })
-}
-
-/// The first letter capitalised, as the task list shows a title.
-pub fn display_title(title: &str) -> String {
-    let mut chars = title.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().chain(chars).collect(),
-        None => String::new(),
-    }
-}
-
-pub fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
-}
-
-/// Compact age: "now", "5m", "3h", "2d".
-pub fn format_relative(ts: u64) -> String {
-    let minutes = now_ms().saturating_sub(ts) / 60_000;
-    match minutes {
-        0 => "now".into(),
-        1..60 => format!("{minutes}m"),
-        _ if minutes / 60 < 24 => format!("{}h", minutes / 60),
-        _ => format!("{}d", minutes / 60 / 24),
-    }
-}
-
-/// "9:05 PM", in local time.
-pub fn format_clock(ts: u64) -> String {
-    use chrono::{Local, TimeZone, Timelike};
-    match Local.timestamp_millis_opt(ts as i64).single() {
-        Some(d) => {
-            let h = d.hour();
-            let twelve = if h % 12 == 0 { 12 } else { h % 12 };
-            let half = if h < 12 { "AM" } else { "PM" };
-            format!("{twelve}:{:02} {half}", d.minute())
-        }
-        None => String::new(),
-    }
-}
-
-/// "42s", "12m", "1.5h", "14h": a duration in a sentence.
-pub fn compact_elapsed(ms: u64) -> String {
-    let s = ms / 1000;
-    if s < 60 {
-        return format!("{s}s");
-    }
-    if s < 3600 {
-        return format!("{}m", s / 60);
-    }
-    let h = s as f64 / 3600.;
-    if h < 10. {
-        let h = format!("{h:.1}");
-        format!("{}h", h.strip_suffix(".0").unwrap_or(&h))
-    } else {
-        format!("{}h", s / 3600)
-    }
-}
-
-/// "42s", "1m 05s", "2h 03m".
-pub fn full_elapsed(ms: u64) -> String {
-    let s = ms / 1000;
-    if s < 60 {
-        format!("{s}s")
-    } else if s < 3600 {
-        format!("{}m {:02}s", s / 60, s % 60)
-    } else {
-        format!("{}h {:02}m", s / 3600, (s % 3600) / 60)
-    }
-}
-
-/// "812", "66.4k", "612k", "1.2m".
-pub fn format_tokens(n: u64) -> String {
-    let trim = |s: String| s.strip_suffix(".0").map(str::to_string).unwrap_or(s);
-    if n < 1000 {
-        n.to_string()
-    } else if n < 100_000 {
-        trim(format!("{:.1}", n as f64 / 1000.)) + "k"
-    } else if n < 1_000_000 {
-        format!("{}k", (n as f64 / 1000.).round())
-    } else {
-        trim(format!("{:.1}", n as f64 / 1_000_000.)) + "m"
-    }
-}
-
 /// The tile a project is drawn with (`ProjectTile`): its first two letters on a colour picked from
 /// its name, so each project keeps its colour.
 pub fn project_tile(name: &str, size: f32, cx: &App) -> Div {
@@ -489,7 +237,14 @@ pub fn list_scrollbar(state: &gpui::ListState, width: f32, inset: f32, color: Hs
     thumb(view, max, scrolled, width, inset, color)
 }
 
-fn thumb(view: f32, max: f32, scrolled: f32, width: f32, inset: f32, color: Hsla) -> Option<Div> {
+pub(super) fn thumb(
+    view: f32,
+    max: f32,
+    scrolled: f32,
+    width: f32,
+    inset: f32,
+    color: Hsla,
+) -> Option<Div> {
     if max <= 0. || view <= 0. {
         return None;
     }
@@ -638,7 +393,7 @@ pub fn tooltip(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) 
     }
 }
 
-struct Tooltip(SharedString);
+pub(super) struct Tooltip(pub(super) SharedString);
 
 impl Render for Tooltip {
     fn render(&mut self, _: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
@@ -651,7 +406,7 @@ impl Render for Tooltip {
             .bg(t.bg_elevated)
             .px(px(6.))
             .py(px(2.))
-            .text_size(px(crate::theme::FS_SM))
+            .text_size(px(crate::ui::theme::FS_SM))
             .line_height(px(16.))
             .text_color(t.text)
             .shadow(popup_shadow(t))
@@ -670,16 +425,6 @@ pub fn mix(a: Hsla, b: Hsla, pct: f32) -> Hsla {
         a: a.a * p + b.a * (1. - p),
     }
     .into()
-}
-
-/// A path's last part (`baseName`).
-pub fn base_name(path: &str) -> &str {
-    path.rsplit(['/', '\\']).next().unwrap_or(path)
-}
-
-/// A path's folder, or "" at the top (`dirName`).
-pub fn dir_name(path: &str) -> &str {
-    path.rfind('/').map_or("", |i| &path[..i])
 }
 
 /// `.btn`'s variants: the plain button and the coloured ones.
@@ -725,7 +470,7 @@ pub fn btn(
 }
 
 /// `filter: brightness(0.92)`.
-fn darken(c: Hsla) -> Hsla {
+pub(super) fn darken(c: Hsla) -> Hsla {
     Hsla { l: c.l * 0.92, ..c }
 }
 
@@ -739,7 +484,7 @@ pub fn badge(text: impl Into<SharedString>, t: &Theme) -> Div {
         .px(px(6.))
         .rounded(px(RADIUS_SM))
         .bg(t.bg_selected_muted)
-        .text_size(px(crate::theme::FS_XS))
+        .text_size(px(crate::ui::theme::FS_XS))
         .text_color(t.text_muted)
         .child(text.into())
 }

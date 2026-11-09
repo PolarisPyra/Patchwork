@@ -9,7 +9,7 @@ use patchwork_server::settings::{Settings, TokenSettings};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{choice, segmented, switch, token_row};
-use crate::theme::{FS_SM, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_SM, RADIUS_SM, Theme, theme};
 use crate::ui::{AGENT_KINDS, agent_label, format_tokens, icon};
 
 /// Context sizes offered by the token settings.

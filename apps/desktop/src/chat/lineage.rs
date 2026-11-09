@@ -12,7 +12,7 @@ use gpui::{
 use patchwork_server::provider::AgentKind;
 use patchwork_server::threads::{Role as MessageRole, StepStatus, Thread, ToolCall};
 
-use crate::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_LG, Theme};
+use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_LG, Theme};
 use crate::ui::{agent_logo, button, full_elapsed, icon, now_ms, popup, popup_shadow, spinner};
 use crate::workspace::{Workspace, is_working};
 

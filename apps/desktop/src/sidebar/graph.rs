@@ -12,8 +12,8 @@ use patchwork_server::threads::Thread;
 use patchwork_server::workspace::GitCommit;
 
 use super::changes::ChangesView;
-use crate::menu::MenuItem;
-use crate::theme::{RADIUS_SM, Theme};
+use crate::ui::menu::MenuItem;
+use crate::ui::theme::{RADIUS_SM, Theme};
 use crate::ui::{agent_logo, button, mix, tooltip};
 
 const FS_XS: f32 = 12.;

@@ -12,4 +12,5 @@ mod request;
 mod turn;
 mod vision;
 
+pub use request::error_text;
 pub use turn::*;

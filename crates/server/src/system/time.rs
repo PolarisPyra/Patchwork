@@ -1,4 +1,4 @@
-//! Timestamp helpers. Agent CLIs record times as RFC 3339 strings.
+//! Timestamps and ids for what Patchwork records. Agent CLIs record times as RFC 3339 strings.
 
 /// The time now, in epoch milliseconds.
 pub fn now_ms() -> u64 {
@@ -64,6 +64,10 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
     let d = doy - (153 * mp + 2) / 5 + 1;
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     (yoe + era * 400 + i64::from(m <= 2), m, d)
+}
+/// An id for a record Patchwork creates.
+pub fn new_id() -> String {
+    uuid::Uuid::new_v4().to_string()
 }
 
 #[cfg(test)]

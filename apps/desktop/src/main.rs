@@ -1,21 +1,12 @@
 //! Patchwork's native window: the same app as the desktop webview, drawn with GPUI over the same
 //! server, folders and database.
 
-mod add_project;
-mod assets;
-mod background_picker;
 mod canvas;
 mod chat;
-mod highlight;
-mod menu;
 mod onboarding;
-mod palette;
 mod panel;
-mod prompt;
 mod settings;
 mod sidebar;
-mod sigils;
-mod theme;
 mod ui;
 mod workspace;
 
@@ -34,7 +25,8 @@ use gpui::{
 use patchwork_server::Server;
 use patchwork_server::system::Dirs;
 
-use crate::theme::Theme;
+use crate::ui::theme::Theme;
+use crate::ui::{assets, prompt, sigils, theme};
 use crate::workspace::Workspace;
 
 actions!(

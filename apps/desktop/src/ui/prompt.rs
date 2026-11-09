@@ -8,7 +8,7 @@ use gpui::{
     SharedString, Window, div, prelude::*, px,
 };
 
-use crate::theme::{FS_LG, FS_MD, RADIUS, RADIUS_SM, theme};
+use crate::ui::theme::{FS_LG, FS_MD, RADIUS, RADIUS_SM, theme};
 use crate::ui::popup_shadow;
 
 pub fn build(

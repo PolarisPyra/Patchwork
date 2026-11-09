@@ -14,7 +14,7 @@ use patchwork_server::provider::api::config::{
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
-use crate::theme::{FONT_MONO, FS_SM, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FONT_MONO, FS_SM, RADIUS_SM, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, icon_button, provider_logo, spinner};
 
 /// Cloud endpoints to start a provider from: id, name, address, and the models of one that has no

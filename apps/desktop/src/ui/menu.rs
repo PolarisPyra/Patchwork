@@ -10,7 +10,7 @@ use gpui::{
     Point, Role, SharedString, Toggled, Window, anchored, deferred, div, prelude::*, px,
 };
 
-use crate::theme::{RADIUS, RADIUS_SM, theme};
+use crate::ui::theme::{RADIUS, RADIUS_SM, theme};
 use crate::ui::{icon, popup_shadow};
 
 /// What a row does when it is picked.

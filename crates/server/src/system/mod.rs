@@ -18,14 +18,9 @@ pub(crate) mod time;
 
 pub use host::{hide_console, host_command, host_env, path_var};
 pub use dirs::{Dirs, dirs};
-pub use time::now_ms;
+pub use time::{new_id, now_ms};
 pub use environment::{ENV_READ, find_program, login_env, login_var, search_path};
 pub use shells::{
     available_shells, command_shell, effective_shell, find_shell, is_posix, login_shell,
     shell_args, shell_command, shell_name,
 };
-
-/// An id for a record Patchwork creates.
-pub fn new_id() -> String {
-    uuid::Uuid::new_v4().to_string()
-}

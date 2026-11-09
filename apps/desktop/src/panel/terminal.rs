@@ -18,7 +18,7 @@ use patchwork_server::terminal::{AttachedTerminal, FrameSink, TerminalFrame};
 use super::Panel;
 use super::cells::{draw_screen, line_at, ordered, word_at};
 use super::input::{Mouse, key_bytes, mouse_bytes};
-use crate::theme::{FONT_MONO, theme};
+use crate::ui::theme::{FONT_MONO, theme};
 
 /// The page this window's shells are attached as.
 const PAGE: &str = "native";

@@ -8,7 +8,7 @@ use patchwork_server::threads::{
     ApprovalStatus, MessageStatus, NewThread, Part, PlanStep, Role as MessageRole, StepStatus,
 };
 
-use crate::theme::{FS_SM, RADIUS, Theme};
+use crate::ui::theme::{FS_SM, RADIUS, Theme};
 use crate::ui::{BtnKind, btn, button, icon, mix, spinner};
 use crate::workspace::{Workspace, is_working};
 

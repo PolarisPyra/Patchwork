@@ -3,12 +3,15 @@
 //! touch its row and the messages that actually changed, since a streaming turn updates its
 //! message on every event.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use rusqlite::{Connection, OptionalExtension, params};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 
-use super::{enc, err};
+use super::migrations;
+use super::legacy;
 use super::settings::{load_settings, save_settings};
 use super::threads::{load_folders, load_threads, save_message, save_thread_row, thread_state_keys};
 use crate::projects::Folder;
@@ -28,7 +31,7 @@ pub(super) struct Inner {
 
 impl Store {
     pub fn open(dir: PathBuf) -> Result<Self, String> {
-        let mut conn = super::open(&dir)?;
+        let mut conn = open(&dir)?;
         // A turn that was streaming when the app quit can never finish.
         conn.execute(
             "UPDATE messages SET status = ?1 WHERE status = ?2",
@@ -433,4 +436,51 @@ impl Store {
         inner.folders.retain(|f| f.project_id != project_id);
         Ok(())
     }
+}
+
+pub(super) const DB_FILE: &str = "patchwork.db";
+
+/// Opens the database in `dir`, creating it if need be, with the schema up to date. A new
+/// database takes in the settings and threads of the old JSON files, if they are there.
+fn open(dir: &Path) -> Result<Connection, String> {
+    std::fs::create_dir_all(dir).map_err(err)?;
+    let mut conn = Connection::open(dir.join(DB_FILE)).map_err(err)?;
+    // With WAL, NORMAL syncs at checkpoints instead of every commit. A commit made a 4 ms fsync,
+    // under the store's lock, for each tool event of a streaming reply. The database cannot be
+    // corrupted this way; a power cut or OS crash can lose only the last commits.
+    conn.execute_batch(
+        "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;",
+    )
+    .map_err(err)?;
+    let from = migrations::run(&mut conn)?;
+    if from == 0 {
+        legacy::import_legacy_json(&mut conn, dir)?;
+    }
+    Ok(conn)
+}
+
+pub(super) fn err(e: impl std::fmt::Display) -> String {
+    format!("Database error: {e}")
+}
+
+/// Enums are stored as their serde name, e.g. `"claude"`.
+pub(super) fn enc<T: Serialize>(value: &T) -> String {
+    match serde_json::to_value(value) {
+        Ok(serde_json::Value::String(s)) => s,
+        other => other.map(|v| v.to_string()).unwrap_or_default(),
+    }
+}
+
+pub(super) fn dec<T: DeserializeOwned>(s: String) -> rusqlite::Result<T> {
+    serde_json::from_value(serde_json::Value::String(s)).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+    })
+}
+
+pub(super) fn json<T: Serialize>(value: &T) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| "[]".into())
+}
+
+pub(super) fn from_json<T: DeserializeOwned + Default>(s: String) -> T {
+    serde_json::from_str(&s).unwrap_or_default()
 }

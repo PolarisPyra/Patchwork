@@ -6,10 +6,11 @@ use patchwork_server::provider::mcp::{self, McpServer, clis};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, letter_badge, switch};
-use crate::theme::{FONT_MONO, FS_LG, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FONT_MONO, FS_LG, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
 use crate::ui::{BtnKind, btn, icon_button};
 
-use super::{Card, Client, Draft, Own, logo_disc, tildify};
+use super::{Card, Client, Draft, Own, tildify};
+use super::rows::{logo_disc};
 
 /// The field the tools are filtered with.
 const TOOLS_FILTER: &str = "mcp-tools-filter";

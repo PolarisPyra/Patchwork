@@ -6,7 +6,7 @@ use std::ops::Range;
 
 use gpui::{FontStyle, HighlightStyle, Hsla};
 
-use crate::theme::Theme;
+use crate::ui::theme::Theme;
 
 /// Files longer than this are shown without highlighting.
 pub const MAX_HIGHLIGHT_LINES: usize = 5000;

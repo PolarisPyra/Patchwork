@@ -15,7 +15,7 @@ use patchwork_server::projects::Project;
 use patchwork_server::system::browse::{self, DirEntry, DirListing, Machine};
 
 use crate::chat::text_area::{Arrow, Changed, Submitted, TextArea};
-use crate::theme::{FONT_MONO, FS_MD, FS_SM, FS_XS, RADIUS, RADIUS_LG, theme};
+use crate::ui::theme::{FONT_MONO, FS_MD, FS_SM, FS_XS, RADIUS, RADIUS_LG, theme};
 use crate::ui::{BtnKind, btn, icon, icon_button, popup_shadow, spinner, tooltip};
 
 /// The dialog closed: with the project it added, or with none.
@@ -65,7 +65,7 @@ impl AddProject {
             let mut field = TextArea::new("", "Folder path", cx);
             field.single_line = true;
             field.text_color = t.text;
-            field.placeholder_color = crate::theme::input_placeholder();
+            field.placeholder_color = crate::ui::theme::input_placeholder();
             field.selection_color = t.accent.opacity(0.3);
             field
         });
@@ -312,7 +312,7 @@ impl Render for AddProject {
                         .px(px(20.))
                         .border_b_1()
                         .border_color(t.border)
-                        .text_size(px(crate::theme::FS_LG))
+                        .text_size(px(crate::ui::theme::FS_LG))
                         .font_weight(FontWeight::SEMIBOLD)
                         .child("Add a project"),
                 )

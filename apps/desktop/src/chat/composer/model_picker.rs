@@ -9,11 +9,11 @@ use gpui::{
 use patchwork_server::Server;
 use patchwork_server::provider::{AgentKind, ModelOption};
 
-use super::Composer;
+use super::{Composer};
 use super::menus::Pick;
 use crate::ui::AGENT_KINDS;
 use crate::chat::text_area::TextArea;
-use crate::theme::{FS_SM, Theme};
+use crate::ui::theme::{FS_SM, Theme};
 use crate::ui::{
     agent_label, agent_logo, api_model_place, api_provider_name, button, icon, popup_shadow,
     spinner,
@@ -690,7 +690,7 @@ impl Composer {
             .iter()
             .find(|m| m.id == model)
             .is_some_and(|m| m.is_legacy && !favorites.contains(&row_key(agent, m)));
-        let t = *crate::theme::theme(cx);
+        let t = *crate::ui::theme::theme(cx);
         let search = cx.new(|cx| {
             let mut field = TextArea::new("Search models...", "Search models", cx);
             field.single_line = true;

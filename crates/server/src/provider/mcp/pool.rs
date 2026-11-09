@@ -3,15 +3,17 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
 use super::{
-    CALL_TIMEOUT, HttpServer, MAX_NAME, MAX_TOOLS, McpServer, POLL, POOL, PROTOCOL, read_config,
+    CALL_TIMEOUT, HttpServer, MAX_NAME, MAX_TOOLS, McpServer, POLL, PROTOCOL, read_config,
     resolved, restart_changed, START_TIMEOUT, StdioServer, ToolInfo, TurnTool,
 };
+
+static POOL: OnceLock<Mutex<HashMap<String, Arc<Entry>>>> = OnceLock::new();
 
 pub(super) fn pool() -> std::sync::MutexGuard<'static, HashMap<String, Arc<Entry>>> {
     POOL.get_or_init(Default::default)

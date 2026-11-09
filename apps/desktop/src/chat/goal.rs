@@ -7,7 +7,7 @@ use gpui::{Context, FontWeight, Role, SharedString, Stateful, div, prelude::*, p
 use patchwork_server::provider::AgentKind;
 use patchwork_server::threads::{Goal, GoalStatus};
 
-use crate::theme::{FS_SM, FS_XS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_SM, FS_XS, RADIUS_SM, Theme};
 use crate::ui::{button, format_tokens, full_elapsed, icon, now_ms, tooltip};
 use crate::workspace::{Workspace, is_working};
 

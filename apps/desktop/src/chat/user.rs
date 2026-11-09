@@ -13,7 +13,7 @@ use gpui::{
 use patchwork_server::threads::{Attachment, AttachmentKind, Message};
 
 use crate::chat::markdown::{FindIn, markdown_found};
-use crate::theme::{FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
 use crate::ui::{button, format_clock, icon, tooltip};
 use crate::workspace::{Workspace, is_working};
 
@@ -350,6 +350,8 @@ pub fn user_message(
                     .items_center()
                     .gap(px(4.))
                     .px(px(8.))
+                    // As tall as Restore, so the message keeps its height when it comes or goes.
+                    .min_h(px(24.))
                     .text_size(px(FS_XS))
                     .text_color(t.text_subtle)
                     .children(restore)

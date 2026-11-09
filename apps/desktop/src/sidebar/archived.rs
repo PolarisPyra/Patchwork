@@ -8,8 +8,9 @@ use gpui::{
 use patchwork_server::threads::Thread;
 
 use super::menu::Target;
-use super::{FS_SM, FS_XS, empty_row, indent_guide, tree_row, twistie};
-use crate::theme::{RADIUS_SM, theme};
+use super::{FS_SM, FS_XS, empty_row, twistie};
+use super::tree::{indent_guide, tree_row};
+use crate::ui::theme::{RADIUS_SM, theme};
 use crate::ui::{agent_label, agent_logo, button, display_title, icon, scrollbar};
 use crate::workspace::Workspace;
 

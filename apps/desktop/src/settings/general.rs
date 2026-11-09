@@ -11,12 +11,12 @@ use gpui::{
 use patchwork_server::backgrounds::{BackgroundStrength, ChatBackground};
 use patchwork_server::settings::{LogLevel, LoggingSettings, Theme as ThemeSetting};
 
-use crate::background_picker::{BackgroundPicker, PickerEvent};
+use crate::ui::background_picker::{BackgroundPicker, PickerEvent};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{
     alert, choice, dropdown_chip, section_heading, segmented, switch, token_row,
 };
-use crate::theme::{RADIUS_SM, theme};
+use crate::ui::theme::{RADIUS_SM, theme};
 use crate::ui::{BtnKind, btn, tooltip};
 
 const THEMES: [(ThemeSetting, &str); 4] = [

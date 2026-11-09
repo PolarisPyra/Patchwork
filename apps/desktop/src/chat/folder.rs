@@ -7,7 +7,7 @@ use std::sync::Arc;
 use gpui::{Context, Div, FontWeight, div, prelude::*, px};
 
 use crate::chat::goal::strip_action;
-use crate::theme::{FS_SM, FS_XS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_SM, FS_XS, RADIUS_SM, Theme};
 use crate::ui::{icon, tooltip};
 use crate::workspace::Workspace;
 

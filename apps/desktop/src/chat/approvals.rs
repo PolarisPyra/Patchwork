@@ -13,7 +13,7 @@ use patchwork_server::threads::{Approval, ApprovalStatus, Message};
 
 use crate::chat::secret::secret_card;
 use crate::settings::permissions::{kind_label, scope_name};
-use crate::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
 use crate::ui::{button, icon, popup};
 use crate::workspace::Workspace;
 
@@ -568,7 +568,7 @@ impl Workspace {
                 .justify_center()
                 .rounded(px(RADIUS_SM))
                 .border_1()
-                .text_size(px(crate::theme::FS_MD))
+                .text_size(px(crate::ui::theme::FS_MD))
                 .child(label)
         };
         let (hover, accent_hover) = (t.bg_hover, t.accent_hover);

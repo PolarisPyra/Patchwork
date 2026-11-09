@@ -13,7 +13,7 @@ use patchwork_server::skills::{self, Skill};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{letter_badge, switch, token_row};
-use crate::theme::{FS_SM, theme};
+use crate::ui::theme::{FS_SM, theme};
 use crate::ui::{BtnKind, btn, icon};
 
 use super::{SKILL_SIGIL, empty, example, filter_chip, list_box};

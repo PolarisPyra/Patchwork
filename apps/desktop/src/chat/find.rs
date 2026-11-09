@@ -15,7 +15,7 @@ use patchwork_server::threads::{Message, Role as MessageRole, Thread};
 use crate::chat::markdown::{FindIn, find_in};
 use crate::chat::text_area::{Changed, Submitted, SubmittedBack, TextArea};
 use crate::chat::timeline::{Step, steps_of};
-use crate::theme::{FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
 use crate::ui::{button, icon};
 use crate::workspace::Workspace;
 
@@ -96,7 +96,7 @@ impl Workspace {
                     let mut field = TextArea::new("Find", "Find in chat", cx);
                     field.single_line = true;
                     field.text_color = t.text;
-                    field.placeholder_color = crate::theme::input_placeholder();
+                    field.placeholder_color = crate::ui::theme::input_placeholder();
                     field.selection_color = t.accent.opacity(0.3);
                     field
                 });

@@ -11,7 +11,7 @@ use gpui::{
 };
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
-use crate::theme::{FONT_MONO, FS_LG, FS_MD, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FONT_MONO, FS_LG, FS_MD, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
 use crate::ui::{button, icon};
 
 /// One block with the margins CSS gives it; adjacent margins collapse into the larger one.
@@ -682,7 +682,7 @@ fn chip_spans(text: &str, at_start: bool) -> Vec<(Range<usize>, char)> {
 
 /// A code block's text coloured for its language, when one is named and known.
 fn highlighted(code: &str, lang: &str, t: &Theme) -> StyledText {
-    let Some(grammar) = crate::highlight::grammar_for_lang(lang) else {
+    let Some(grammar) = crate::ui::highlight::grammar_for_lang(lang) else {
         return StyledText::new(code.to_string());
     };
     let lines: Vec<&str> = code.split('\n').collect();
@@ -690,7 +690,7 @@ fn highlighted(code: &str, lang: &str, t: &Theme) -> StyledText {
     let mut at = 0;
     for (line, line_runs) in lines
         .iter()
-        .zip(crate::highlight::highlight_lines(&lines, grammar, t))
+        .zip(crate::ui::highlight::highlight_lines(&lines, grammar, t))
     {
         runs.extend(
             line_runs

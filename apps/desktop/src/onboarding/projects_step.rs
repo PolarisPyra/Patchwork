@@ -9,9 +9,10 @@ use gpui::{
 };
 use patchwork_server::Server;
 
-use super::{Onboarding, OnboardingEvent, picked};
+use super::{Onboarding, OnboardingEvent};
+use super::rows::{picked};
 use crate::settings::controls::input_box;
-use crate::theme::{FONT_MONO, FS_LG, FS_SM, RADIUS, RADIUS_LG, RADIUS_SM, Theme};
+use crate::ui::theme::{FONT_MONO, FS_LG, FS_SM, RADIUS, RADIUS_LG, RADIUS_SM, Theme};
 use crate::ui::{BtnKind, btn, button, icon};
 
 impl Onboarding {

@@ -6,7 +6,7 @@ use gpui::{
 };
 use patchwork_server::threads::{Message, MessageStatus, Part, Role as MessageRole, Thread};
 
-use crate::theme::{FS_XS, Theme};
+use crate::ui::theme::{FS_XS, Theme};
 use crate::ui::{format_tokens, list_scrollbar, spinner};
 use crate::workspace::{Workspace, is_busy};
 

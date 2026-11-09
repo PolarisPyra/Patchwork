@@ -14,7 +14,7 @@ use patchwork_server::threads::AccessMode;
 
 use crate::settings::controls::{FieldKind, alert, chip, choice, select_box, switch};
 use crate::settings::{SettingsDialog, SettingsEvent};
-use crate::theme::{FS_SM, FS_XS, Theme, theme};
+use crate::ui::theme::{FS_SM, FS_XS, Theme, theme};
 use crate::ui::{AGENT_KINDS, BtnKind, agent_label, btn, icon, icon_button, tooltip};
 
 const MODES: [(AccessMode, &str); 4] = [
