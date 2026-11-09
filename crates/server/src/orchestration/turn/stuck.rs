@@ -2,6 +2,8 @@
 //! and again and getting the same answer, so the turn can be stopped before it burns through
 //! tokens. Agents have their own guards for this, but not every model or plugin trips them.
 
+// Rust guideline compliant 2026-10-09
+
 use std::collections::HashMap;
 
 use crate::threads::ToolCall;
@@ -37,7 +39,7 @@ impl Repeats {
         let call = format!("{}\0{}", tool.name, tool.summary);
         self.calls
             .entry(tool.id.clone())
-            .or_insert((tool.name.clone(), call, false));
+            .or_insert_with(|| (tool.name.clone(), call, false));
     }
 
     /// Records a finished call. Returns its tool's name once the agent has made the same call

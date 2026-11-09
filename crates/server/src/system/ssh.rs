@@ -1,6 +1,9 @@
 //! The SSH hosts in the user's `~/.ssh/config`, read only: Patchwork lists them and checks that one
 //! answers, and never writes the config itself.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::io::Read;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -11,8 +14,8 @@ use serde::Serialize;
 use super::fs::home_dir;
 
 /// A `Host` alias from `~/.ssh/config`, with what its block sets.
-#[derive(Serialize)]
-pub struct SshHost {
+#[derive(Debug, Serialize)]
+pub struct Host {
     pub name: String,
     pub hostname: Option<String>,
     pub user: Option<String>,
@@ -20,9 +23,9 @@ pub struct SshHost {
 }
 
 /// Whether a host let Patchwork in with a key, without asking anything.
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SshTest {
+pub struct Test {
     pub ok: bool,
     /// How long the login took, when it worked.
     pub latency_ms: Option<u32>,
@@ -33,6 +36,7 @@ pub struct SshTest {
 /// How long a test may take before it is stopped, whatever stage it is in.
 const TEST_LIMIT: Duration = Duration::from_secs(10);
 
+#[must_use]
 pub fn config_path() -> Option<PathBuf> {
     home_dir().map(|home| home.join(".ssh").join("config"))
 }
@@ -40,11 +44,12 @@ pub fn config_path() -> Option<PathBuf> {
 /// The `Host` aliases in `~/.ssh/config`, each with its `HostName`, `User` and `Port`. Wildcard
 /// patterns (`*`, `?`) and negations are skipped, since they are not hosts to pick. `Include`d
 /// files are not followed.
-pub fn hosts() -> Vec<SshHost> {
+#[must_use]
+pub fn hosts() -> Vec<Host> {
     let Some(text) = config_path().and_then(|p| std::fs::read_to_string(p).ok()) else {
         return Vec::new();
     };
-    let mut hosts: Vec<SshHost> = Vec::new();
+    let mut hosts: Vec<Host> = Vec::new();
     // Indices into `hosts` for the aliases of the Host block being read, so its options fill them.
     let mut current: Vec<usize> = Vec::new();
     for line in text.lines() {
@@ -67,7 +72,7 @@ pub fn hosts() -> Vec<SshHost> {
                         continue;
                     }
                     current.push(hosts.len());
-                    hosts.push(SshHost {
+                    hosts.push(Host {
                         name: alias.to_string(),
                         hostname: None,
                         user: None,
@@ -101,12 +106,19 @@ pub fn hosts() -> Vec<SshHost> {
     hosts
 }
 
+/// Checks that key-only SSH login works for a config alias `name`.
+///
 /// Logs in to `name` and runs `true`, with keys only (`BatchMode`), so a host that would ask for a
 /// password or to trust a new key fails instead of waiting. Only an alias from the config is
 /// accepted, so the name can never be read as an ssh option.
-pub fn test(name: &str) -> Result<SshTest, String> {
+///
+/// # Errors
+///
+/// Returns an error when the name is not a host in `~/.ssh/config`, or `ssh` cannot be started or
+/// waited on.
+pub fn test(name: &str) -> Result<Test, Error> {
     if !hosts().iter().any(|h| h.name == name) {
-        return Err(format!("{name} is not a host in ~/.ssh/config"));
+        return Err(format!("{name} is not a host in ~/.ssh/config").into());
     }
     let started = Instant::now();
     let mut child = super::host_command("ssh")
@@ -133,18 +145,19 @@ pub fn test(name: &str) -> Result<SshTest, String> {
             let _ = child.wait();
             break None;
         }
+        // How often the test checks whether `ssh` has finished.
         std::thread::sleep(Duration::from_millis(50));
     };
     let elapsed = started.elapsed().as_millis().min(u128::from(u32::MAX)) as u32;
     let Some(status) = status else {
-        return Ok(SshTest {
+        return Ok(Test {
             ok: false,
             latency_ms: None,
             error: Some(format!("No answer within {} seconds", TEST_LIMIT.as_secs())),
         });
     };
     if status.success() {
-        return Ok(SshTest {
+        return Ok(Test {
             ok: true,
             latency_ms: Some(elapsed),
             error: None,
@@ -159,9 +172,8 @@ pub fn test(name: &str) -> Result<SshTest, String> {
         .lines()
         .map(str::trim)
         .rfind(|l| !l.is_empty())
-        .map(str::to_string)
-        .unwrap_or_else(|| format!("ssh exited with {status}"));
-    Ok(SshTest {
+        .map_or_else(|| format!("ssh exited with {status}"), str::to_string);
+    Ok(Test {
         ok: false,
         latency_ms: None,
         error: Some(reason),

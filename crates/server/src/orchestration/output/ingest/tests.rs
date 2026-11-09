@@ -1,3 +1,7 @@
+//! Tests for finding the files a turn changed.
+
+// Rust guideline compliant 2026-10-09
+
 use std::io::BufRead;
 use crate::threads::AccessMode;
 use std::sync::Mutex;

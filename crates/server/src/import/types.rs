@@ -1,5 +1,7 @@
 //! Conversations other apps saved, offered for import.
 
+// Rust guideline compliant 2026-10-09
+
 use serde::{Deserialize, Serialize};
 
 /// Where imported conversations come from: an agent CLI's own session

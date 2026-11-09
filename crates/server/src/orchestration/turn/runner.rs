@@ -1,6 +1,8 @@
 //! The `Runner`: the agent processes up in each thread, and handing a message to one, stopping
 //! one, or stopping them all.
 
+// Rust guideline compliant 2026-10-09
+
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -18,6 +20,7 @@ use crate::system::scope;
 use crate::workspace;
 
 /// What became of a message sent to a thread.
+#[derive(Debug)]
 pub enum Delivery {
     /// Written to the running turn.
     Steered,
@@ -47,6 +50,12 @@ pub struct Runner {
     pub(in crate::orchestration) grants: Mutex<HashMap<String, Vec<Target>>>,
     /// The commands Patchwork's own agent runs, which outlive its turns as background jobs.
     pub(in crate::orchestration) jobs: crate::orchestration::tasks::jobs::Jobs,
+}
+
+impl std::fmt::Debug for Runner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Runner").finish_non_exhaustive()
+    }
 }
 
 impl Runner {
@@ -93,7 +102,7 @@ impl Runner {
         turns
             .iter()
             .filter(|(_, turn)| !turn.idle.load(Ordering::SeqCst))
-            .map(|(id, turn)| (id.clone(), turn.attribution.clone()))
+            .map(|(id, turn)| (id.clone(), Arc::clone(&turn.attribution)))
             .collect()
     }
 
@@ -155,8 +164,8 @@ impl Runner {
                 .map(|turn| {
                     (
                         turn.root.clone(),
-                        turn.idle.clone(),
-                        turn.attribution.clone(),
+                        Arc::clone(&turn.idle),
+                        Arc::clone(&turn.attribution),
                     )
                 })
         };
@@ -223,7 +232,7 @@ impl Runner {
             return Delivery::Queued;
         }
         let turn_id = turn
-            .native_turn
+            .native
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone();
@@ -280,8 +289,9 @@ impl Runner {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some(turn) = turns.get(thread_id) {
             stop_turn(turn);
-            let (pid, exited, scope) = (turn.pid, turn.exited.clone(), turn.scope.clone());
+            let (pid, exited, scope) = (turn.pid, Arc::clone(&turn.exited), turn.scope.clone());
             let grace = if last_line.is_some_and(|line| write_line(&turn.stdin, &line)) {
+                // Time for the agent to act on its last line before it is stopped.
                 Duration::from_millis(300)
             } else {
                 Duration::ZERO
@@ -310,7 +320,7 @@ impl Runner {
             return;
         };
         let turn_id = turn
-            .native_turn
+            .native
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone();
@@ -332,12 +342,13 @@ impl Runner {
         } else {
             Duration::ZERO
         };
-        let (pid, exited, scope) = (turn.pid, turn.exited.clone(), turn.scope.clone());
-        let interrupts = turn.interrupts.clone();
+        let (pid, exited, scope) = (turn.pid, Arc::clone(&turn.exited), turn.scope.clone());
+        let interrupts = Arc::clone(&turn.interrupts);
         std::thread::spawn(move || {
             let deadline = Instant::now() + wait;
             let done = || exited.load(Ordering::SeqCst) || interrupts.answered(asked);
             while !done() && Instant::now() < deadline {
+                // How often the stop checks whether the agent exited or answered, while it waits.
                 std::thread::sleep(Duration::from_millis(50));
             }
             if !done() {
@@ -359,14 +370,15 @@ impl Runner {
             .values()
             .map(|turn| {
                 turn.cancelled.store(true, Ordering::SeqCst);
-                (turn.pid, turn.exited.clone())
+                (turn.pid, Arc::clone(&turn.exited))
             })
             .collect();
-        running
-            .iter()
-            .for_each(|(pid, _)| workspace::signal_process_group(*pid, workspace::SIGTERM));
+        for (pid, _) in &running {
+            workspace::signal_process_group(*pid, workspace::SIGTERM);
+        }
         let deadline = Instant::now() + QUIT_GRACE;
         while Instant::now() < deadline && running.iter().any(|(_, e)| !e.load(Ordering::SeqCst)) {
+            // How often quitting checks whether every agent has exited, while it waits.
             std::thread::sleep(Duration::from_millis(50));
         }
         running

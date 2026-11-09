@@ -1,5 +1,7 @@
 //! Deciding a request against the rules, and suggesting a rule for it.
 
+// Rust guideline compliant 2026-10-09
+
 use std::path::{Path, PathBuf};
 
 use super::command::{command_prefix, split_command};
@@ -56,10 +58,13 @@ enum Answer {
     Open,
 }
 
+/// The permission rules' verdict on `target`, or None when the user must be asked.
+///
 /// The rules' answer to `target` in a thread of `project` (None for a chat) working in `root`, or
 /// None when the user is to be asked. Deny and ask rules win when they cover any part of the
 /// request; allow rules have to cover all of it, and reading in a `skills` folder needs none.
 /// Then the scope's default for the kind decides, then the default for everywhere.
+#[must_use]
 pub fn decide(
     settings: &PermissionSettings,
     project: Option<&str>,
@@ -73,9 +78,12 @@ pub fn decide(
     }
 }
 
+/// The rules' verdict on `target` for an access mode that would otherwise run it.
+///
 /// The rules' answer to `target` when the access mode would run it without asking: deny rules
 /// and a deny default still refuse it, and ask rules ask unless `asks` is false, as in full
 /// access, which never asks.
+#[must_use]
 pub fn unasked(
     settings: &PermissionSettings,
     project: Option<&str>,
@@ -91,6 +99,8 @@ pub fn unasked(
     }
 }
 
+/// The deny and ask rules of one kind that `opencode run` is told at launch.
+///
 /// The deny and ask rules of one kind that hold in a thread, for an agent that has to be told at
 /// launch what to ask about: `opencode run` (1.x), which cannot ask Patchwork mid-turn. Codex,
 /// Claude, and Antigravity read the rules at each call instead (see `permissions::hook`).
@@ -105,6 +115,7 @@ pub struct Guarded {
 
 impl Guarded {
     /// Whether every request of the kind is guarded.
+    #[must_use]
     pub fn all(&self) -> bool {
         self.denied || self.patterns().any(|p| p == "*")
     }
@@ -115,6 +126,7 @@ impl Guarded {
     }
 
     /// Whether a request of the kind may be refused, rather than only asked about.
+    #[must_use]
     pub fn refuses(&self) -> bool {
         self.denied || !self.deny.is_empty()
     }
@@ -122,6 +134,7 @@ impl Guarded {
 
 /// The kinds a thread of `project` (None for a chat) has deny or ask rules for, or denies by
 /// default.
+#[must_use]
 pub fn guarded(settings: &PermissionSettings, project: Option<&str>) -> Vec<Guarded> {
     let empty = ScopeRules::default();
     let local = match project {
@@ -163,6 +176,7 @@ pub fn guarded(settings: &PermissionSettings, project: Option<&str>) -> Vec<Guar
 
 /// Whether `a` and `b` guard the same calls in every chat and project, so agents launched with
 /// one need not start again for the other.
+#[must_use]
 pub fn same_guards(a: &PermissionSettings, b: &PermissionSettings) -> bool {
     let mut projects = a.projects.keys().chain(b.projects.keys());
     guarded(a, None) == guarded(b, None)
@@ -246,14 +260,11 @@ fn answer(
         };
         let mut first = None;
         for unit in &units {
-            match allowing(unit) {
-                Some(rule) => {
-                    first.get_or_insert(rule);
-                }
-                None => {
-                    first = None;
-                    break;
-                }
+            if let Some(rule) = allowing(unit) {
+                first.get_or_insert(rule);
+            } else {
+                first = None;
+                break;
             }
         }
         if let Some(rule) = first {
@@ -279,9 +290,12 @@ fn answer(
     Answer::Open
 }
 
+/// The patterns "Always allow" saves for `target`, or none if unsafe.
+///
 /// The patterns "Always allow" saves for `target`: the thread's own folder or the folder outside
 /// it, each command's leading words, the web host, or the MCP server. Empty when a rule could not
 /// safely cover it, such as a command with a substitution or a redirect.
+#[must_use]
 pub fn suggest(target: &Target, root: &Path) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut add = |p: String| {
@@ -329,12 +343,14 @@ pub fn suggest(target: &Target, root: &Path) -> Vec<String> {
 
 /// Whether `b` asks for what `a` did: the same kind and the same commands, paths, hosts, or tools.
 /// A request that names nothing, as Codex's file changes do, matches any of its kind.
+#[must_use]
 pub fn same_request(a: &Target, b: &Target, root: &Path) -> bool {
     a.kind == b.kind && (b.resources.is_empty() || units(a, root).0 == units(b, root).0)
 }
 
 /// A server or tool name as OpenCode puts it in a tool's id: anything but letters, digits, `_`,
 /// and `-` becomes `_`.
+#[must_use]
 pub fn opencode_name(name: &str) -> String {
     name.chars()
         .map(|c| {

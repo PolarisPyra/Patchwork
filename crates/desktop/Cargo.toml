@@ -1,0 +1,37 @@
+[package]
+name = "patchwork"
+description = "Patchwork's native window, drawn with GPUI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-server.workspace = true
+
+base64 = { workspace = true, default-features = true }
+chrono = { workspace = true, features = ["clock"] }
+futures = { workspace = true, default-features = true }
+gpui = { workspace = true, default-features = true }
+gpui_platform = { workspace = true, default-features = true, features = ["font-kit", "wayland", "x11"] }
+image = { workspace = true, features = ["png", "jpeg", "webp"] }
+log = { workspace = true, default-features = true }
+# The global allocator: it is faster than the system one on the allocation-heavy paths of
+# layout and text shaping.
+mimalloc = { workspace = true, default-features = true }
+pulldown-cmark.workspace = true
+rust-embed = { workspace = true, default-features = true, features = ["include-exclude"] }
+serde_json = { workspace = true, default-features = true }
+syntect.workspace = true
+# Syntax definitions for syntect beyond its own set, such as TypeScript and TOML.
+two-face = { workspace = true, features = ["syntect-onig"] }
+unicode-segmentation = { workspace = true, default-features = true }
+ureq = { workspace = true, default-features = true, features = ["json"] }
+vt100 = { workspace = true, default-features = true }
+
+[lints]
+workspace = true

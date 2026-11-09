@@ -1,6 +1,8 @@
 //! Claude Code's task list, which it keeps with `TaskCreate` and `TaskUpdate` and Patchwork shows as
 //! the reply's plan.
 
+// Rust guideline compliant 2026-10-09
+
 use std::collections::HashMap;
 
 use serde_json::Value;
@@ -11,6 +13,7 @@ use crate::threads::StepStatus;
 use crate::provider::step_status;
 
 /// One task: the id Claude gave it, once its `TaskCreate` result names it, and its step.
+#[derive(Debug)]
 struct Todo {
     id: Option<String>,
     step: PlanStep,
@@ -18,7 +21,7 @@ struct Todo {
 
 /// Every task Claude has made in this process. Each call names one task, and a new task's id only
 /// comes back in its call's result, so the whole list is kept here to show it as one plan.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct TaskList {
     todos: Vec<Todo>,
     /// A `TaskCreate` call waiting for its result, by call id, with its task's index.

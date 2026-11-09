@@ -1,5 +1,7 @@
 //! Signals to process groups and the user's editor. All functions are blocking.
 
+// Rust guideline compliant 2026-10-09
+
 use crate::Error;
 use std::path::Path;
 use std::process::Stdio;
@@ -39,6 +41,11 @@ pub const SIGKILL: i32 = 9;
 #[cfg(not(unix))]
 pub const SIGTERM: i32 = 15;
 
+/// Opens the file `rel` of the project at `root` in an editor.
+///
+/// # Errors
+///
+/// Returns an error when none of the known editors or the system opener can be started.
 pub fn open_in_editor(root: &str, rel: &str, token: Option<&str>) -> Result<(), Error> {
     let path = Path::new(root).join(rel);
     let fallback = if cfg!(target_os = "macos") {
@@ -121,7 +128,7 @@ fn raise_editor(program: &str, path: &Path) {
         program.to_lowercase()
     };
     let script = format!(
-        r#"const file = {file}, app = {app}, own = {own};
+        r"const file = {file}, app = {app}, own = {own};
 let done = false;
 function raise(w) {{
   if (done || !w.normalWindow || w.pid === own || !w.caption.includes(file)) return;
@@ -137,7 +144,7 @@ function watch(w) {{
 }}
 workspace.windowList().forEach(watch);
 workspace.windowAdded.connect(watch);
-"#,
+",
         file = serde_json::to_string(&file).unwrap_or_default(),
         app = serde_json::to_string(&app).unwrap_or_default(),
         own = std::process::id(),

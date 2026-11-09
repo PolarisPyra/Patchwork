@@ -1,7 +1,9 @@
 //! The agent going idle between messages: whether it can, and the turn's end when it does.
 
+// Rust guideline compliant 2026-10-09
+
 use std::sync::atomic::Ordering;
-use std::sync::PoisonError;
+use std::sync::{Arc, PoisonError};
 
 use crate::plugins::HookEvent;
 use crate::orchestration::AgentEvent;
@@ -17,17 +19,15 @@ use crate::orchestration::turn::end::{hold_unanswered, plugin_hooks, record_turn
 use crate::orchestration::turn::start::Turn;
 
 /// Whether Claude, having ended its reply cleanly, can stay up for the next message.
-pub(super) fn can_idle(turn: &Turn, goal: &Option<Goal>, stream_error: &Option<String>) -> bool {
+pub(super) fn can_idle(turn: &Turn, goal: Option<&Goal>, stream_error: Option<&String>) -> bool {
     stream_error.is_none() && !turn.cancelled.load(Ordering::SeqCst) && stays_up(turn, goal)
 }
 
 /// Whether the agent's process can stay up once its reply has ended. Only Claude keeps its process
 /// between messages, and a goal still to be pursued keeps the turn going instead.
-pub(super) fn stays_up(turn: &Turn, goal: &Option<Goal>) -> bool {
+pub(super) fn stays_up(turn: &Turn, goal: Option<&Goal>) -> bool {
     turn.agent == AgentKind::Claude
-        && !goal
-            .as_ref()
-            .is_some_and(|g| matches!(g.status, GoalStatus::Active | GoalStatus::Paused))
+        && !goal.is_some_and(|g| matches!(g.status, GoalStatus::Active | GoalStatus::Paused))
 }
 
 /// Completes the replies not yet completed, with the files they changed, and marks the turn
@@ -36,22 +36,22 @@ pub(super) fn stays_up(turn: &Turn, goal: &Option<Goal>) -> bool {
 /// stopped, its unanswered requests lapse, and the queued messages wait for the user. `error`
 /// when the last reply failed: it ends as failed, with it.
 pub(super) fn go_idle(
-    turn: &mut Turn,
+    turn: &Turn,
     segments: &[String],
     completed: &mut usize,
     unsaved: &mut Unsaved,
     stopped: bool,
-    error: Option<String>,
+    error: Option<&str>,
 ) {
     turn.save_text(unsaved);
     let after = workspace::git_changes(&turn.root).unwrap_or_default();
     let changed = attribution::lock(&turn.attribution).settle(after);
-    changed.into_iter().for_each(|path| {
+    for path in changed {
         turn.publish(AgentEvent::FileTouched {
             message_id: turn.message_id.clone(),
             path,
         });
-    });
+    }
     record_turn(turn, &segments[*completed..]);
     let last = segments.len().saturating_sub(1);
     segments
@@ -62,7 +62,7 @@ pub(super) fn go_idle(
             let (status, error) = if stopped && at == last {
                 (MessageStatus::Cancelled, None)
             } else if at == last && error.is_some() {
-                (MessageStatus::Error, error.clone())
+                (MessageStatus::Error, error.map(String::from))
             } else {
                 (MessageStatus::Complete, None)
             };
@@ -106,7 +106,7 @@ pub(super) fn go_idle(
             .collect();
         hold_unanswered(turn, &unanswered);
         let (server, thread_id, root, agent) = (
-            turn.server.clone(),
+            Arc::clone(&turn.server),
             turn.thread_id.clone(),
             turn.root.clone(),
             turn.agent,
@@ -138,9 +138,9 @@ pub(super) fn go_idle(
         .handed_over
         .lock()
         .unwrap_or_else(PoisonError::into_inner);
-    queued.iter().for_each(|message| {
+    for message in &queued {
         handed_over.remove(&message.message_id);
-    });
+    }
     drop(handed_over);
     // A call the user allowed through a hook was allowed for this reply only.
     turn.server

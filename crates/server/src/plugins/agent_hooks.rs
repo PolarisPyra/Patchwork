@@ -2,6 +2,8 @@
 //! running the tool hooks around its calls. Each agent CLI gets them in the shape it reads: see
 //! `provider::hooks`.
 
+// Rust guideline compliant 2026-10-09
+
 use std::io::{Read, Write};
 use std::process::Stdio;
 use std::time::{Duration, Instant};
@@ -39,6 +41,7 @@ pub enum HookAction {
 impl AgentHook {
     /// Whether the hook runs for a call to `tool`. A matcher is a regular expression over the whole
     /// tool name, so `Bash` is that tool alone and `Edit|Write` either.
+    #[must_use]
     pub fn matches(&self, tool: &str) -> bool {
         self.matcher.as_deref().is_none_or(|matcher| {
             regex::Regex::new(&format!("^(?:{matcher})$")).is_ok_and(|re| re.is_match(tool))
@@ -48,6 +51,7 @@ impl AgentHook {
 
 /// The hooks of the enabled plugins that the agent runs, rather than Patchwork. A built-in hook
 /// this version does not carry is left out.
+#[must_use]
 pub fn agent_hooks(settings: &Settings) -> Vec<AgentHook> {
     list(settings)
         .into_iter()
@@ -64,7 +68,10 @@ pub fn agent_hooks(settings: &Settings) -> Vec<AgentHook> {
                     name, timeout_secs, ..
                 } => {
                     let Some(builtin) = BuiltinHook::from_name(&name) else {
-                        log::warn!("plugin hook {}: no built-in hook {name}", hook.event.name());
+                        log::warn!(
+                            event = hook.event.name(), name:%;
+                            "plugin hook {{event}}: no built-in hook {{name}}"
+                        );
                         return None;
                     };
                     (HookAction::Builtin { hook: builtin }, timeout_secs)
@@ -84,11 +91,14 @@ pub fn agent_hooks(settings: &Settings) -> Vec<AgentHook> {
         .collect()
 }
 
+/// Runs a tool hook for Patchwork's own agent, returning the refusal reason if any.
+///
 /// Runs a tool hook for Patchwork's own agent the way Claude Code runs one, and returns the reason
 /// the call is refused, or None to let it run. A built-in hook runs in-process. A command gets
 /// `input` as JSON on stdin, and exit code 2 with a reason on stderr, or a `deny` decision on
 /// stdout, refuses the call; one that fails or runs past its timeout lets the call run, as in the
 /// CLIs.
+#[must_use]
 pub fn run_tool_hook(hook: &AgentHook, input: &Value, root: &str) -> Option<String> {
     match &hook.action {
         HookAction::Builtin { hook: builtin } => builtin.check(input),
@@ -101,7 +111,9 @@ fn run_command(hook: &AgentHook, command: &str, input: &Value, root: &str) -> Op
     let mut cmd = crate::system::shell_command(command)?;
     cmd.current_dir(root);
     let (mut child, range) = crate::system::contained::spawn(cmd, Stdio::piped())
-        .inspect_err(|e| log::warn!("plugin hook {event} did not start: {e}"))
+        .inspect_err(
+            |e| log::warn!(event:%, error:% = e; "plugin hook {{event}} did not start: {{error}}"),
+        )
         .ok()?;
     let read = |pipe: Option<Box<dyn Read + Send>>| {
         std::thread::spawn(move || {
@@ -139,13 +151,14 @@ fn run_command(hook: &AgentHook, command: &str, input: &Value, root: &str) -> Op
                 range.stop();
                 break status;
             }
+            // Short, so a quick hook returns at once instead of after a fixed wait.
             Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
             _ => {
                 range.stop();
                 let _ = child.wait();
                 log::warn!(
-                    "plugin hook {event} ran past {}s and was stopped",
-                    hook.timeout_secs
+                    event:%, timeout = hook.timeout_secs;
+                    "plugin hook {{event}} ran past {{timeout}}s and was stopped"
                 );
                 return None;
             }
@@ -179,7 +192,7 @@ fn run_command(hook: &AgentHook, command: &str, input: &Value, root: &str) -> Op
             }
         }
         _ => {
-            log::warn!("plugin hook {event} failed: {}", stderr.trim());
+            log::warn!(event:%, stderr = stderr.trim(); "plugin hook {{event}} failed: {{stderr}}");
             None
         }
     }

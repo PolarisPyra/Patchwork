@@ -1,5 +1,7 @@
 //! How a turn ends: its final status saved and published, the plugins' turn hooks, and the next queued message started.
 
+// Rust guideline compliant 2026-10-09
+
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::PoisonError;
@@ -19,10 +21,6 @@ use crate::orchestration::goal::clear_command;
 use crate::orchestration::output::stream::publish;
 use crate::orchestration::turn::start::{Turn, TurnRequest};
 
-/// Ends a turn whose agent has exited: forgets it, completes each of its messages, then starts
-/// the turn that drops its goal or answers the steering messages it never took. When the agent lost
-/// the session the turn resumed (`session_lost`), the turn runs again in a new session instead,
-/// given the conversation so far as a transcript.
 /// How an agent's turn ended, as `finish` needs to record it.
 pub(in crate::orchestration) struct TurnEnd {
     pub(in crate::orchestration) status: MessageStatus,
@@ -81,7 +79,7 @@ pub(in crate::orchestration) fn hold_unanswered(turn: &Turn, ids: &[String]) {
             });
     });
     if let Err(e) = saved {
-        log::warn!("failed to hold the unanswered steering messages: {e}");
+        log::warn!(error:% = e; "failed to hold the unanswered steering messages: {{error}}");
         return;
     }
     turn.server
@@ -90,7 +88,7 @@ pub(in crate::orchestration) fn hold_unanswered(turn: &Turn, ids: &[String]) {
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .retain(|id| !ids.contains(id));
-    ids.iter().for_each(|id| {
+    for id in ids {
         publish(
             &turn.server,
             &turn.thread_id,
@@ -99,9 +97,19 @@ pub(in crate::orchestration) fn hold_unanswered(turn: &Turn, ids: &[String]) {
                 queued: true,
             },
         );
-    });
+    }
 }
 
+/// Ends a turn whose agent has exited.
+///
+/// Forgets the turn, completes each of its messages, then starts the turn that drops its goal or
+/// answers the steering messages it never took. When the agent lost the session the turn resumed
+/// (`session_lost`), the turn runs again in a new session instead, given the conversation so far as
+/// a transcript.
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "the turn ends here, so its handles are dropped as it finishes"
+)]
 pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: TurnEnd) {
     let TurnEnd {
         status,
@@ -151,9 +159,9 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
             .handed_over
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        queued.iter().for_each(|message| {
+        for message in &queued {
             handed_over.remove(&message.message_id);
-        });
+        }
         (unanswered, queued)
     };
     // Taken from the queue, so marked queued here: the sender may not have saved the flag yet.
@@ -178,7 +186,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
             t.context_pending = true;
         });
         if let Err(e) = reset {
-            log::warn!("failed to drop a lost session: {e}");
+            log::warn!(error:% = e; "failed to drop a lost session: {{error}}");
         } else {
             turn.publish(AgentEvent::MessageRemoved {
                 message_id: turn.message_id.clone(),
@@ -196,7 +204,9 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
             );
             match started {
                 Ok(()) => return,
-                Err(e) => log::warn!("failed to rerun the turn in a new session: {e}"),
+                Err(e) => {
+                    log::warn!(error:% = e; "failed to rerun the turn in a new session: {{error}}");
+                }
             }
         }
     }
@@ -204,13 +214,13 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
     // Earlier messages of the turn were answered in full before a steer moved it on. None are
     // left when the agent went idle after its last reply, which was completed then.
     if let Some((last, earlier)) = segments.split_last() {
-        earlier.iter().for_each(|id| {
+        for id in earlier {
             turn.publish(AgentEvent::TurnCompleted {
                 message_id: id.clone(),
                 status: MessageStatus::Complete,
                 error: None,
             });
-        });
+        }
         turn.publish(AgentEvent::TurnCompleted {
             message_id: last.clone(),
             status,
@@ -225,7 +235,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
     // On a thread of its own, so a slow hook does not hold up the next turn.
     {
         let (server, thread_id, root) = (
-            turn.server.clone(),
+            Arc::clone(&turn.server),
             turn.thread_id.clone(),
             turn.root.clone(),
         );
@@ -241,8 +251,8 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
             for event in [ended, HookEvent::SessionEnd] {
                 plugin_hooks(&server, event, &thread_id, &root, agent, Some(status));
             }
-        });
-    }
+        })
+    };
 
     // The agent drops the goal in a turn of its own; unanswered steers wait for that
     // system turn instead, and queued messages for the end of it.
@@ -251,25 +261,32 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         match server.send_message(turn.thread_id.clone(), command.into(), vec![], false) {
             Ok(_) => {
                 let runner = &server.runner;
-                unanswered.iter().for_each(|f| {
-                    let _ = runner.enqueue(
-                        &turn.thread_id,
-                        FollowUpInput {
-                            message_id: &f.message_id,
-                            text: &f.text,
-                            attachments: &f.attachments,
-                            images: &f.images,
-                        },
-                    );
-                });
+                for f in &unanswered {
+                    {
+                        let _ = runner.enqueue(
+                            &turn.thread_id,
+                            FollowUpInput {
+                                message_id: &f.message_id,
+                                text: &f.text,
+                                attachments: &f.attachments,
+                                images: &f.images,
+                            },
+                        );
+                    }
+                }
                 return;
             }
-            Err(e) => log::warn!("failed to clear the goal in the agent's session: {e}"),
+            Err(e) => {
+                log::warn!(
+                    error:% = e;
+                    "failed to clear the goal in the agent's session: {{error}}"
+                );
+            }
         }
     }
     // Unanswered steers have already been delivered, so clear their pending UI state
     // before continuing them in a new turn.
-    unanswered.iter().for_each(|f| {
+    for f in &unanswered {
         publish(
             &turn.server,
             &turn.thread_id,
@@ -278,7 +295,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
                 queued: false,
             },
         );
-    });
+    }
     if !unanswered.is_empty() {
         let text = unanswered
             .iter()
@@ -303,7 +320,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
                 images,
             },
         ) {
-            log::warn!("failed to start the turn for queued messages: {e}");
+            log::warn!(error:% = e; "failed to start the turn for queued messages: {{error}}");
         }
     } else if !cancelled
         && status == MessageStatus::Complete
@@ -341,7 +358,7 @@ pub(in crate::orchestration) fn plugin_hooks(
         status: status.as_deref(),
     };
     for failure in crate::plugins::run_hooks(&server.store.settings(), &context) {
-        log::warn!("plugin hook {} {failure}", event.name());
+        log::warn!(event = event.name(), failure:%; "plugin hook {{event}} {{failure}}");
     }
 }
 
@@ -363,7 +380,7 @@ pub(in crate::orchestration) fn log_cli_version(agent: AgentKind) {
             return;
         }
         logged.push(agent);
-    }
+    };
     std::thread::spawn(move || {
         let version = provider::cli_version(agent).unwrap_or_else(|| "unknown".into());
         let source = Source {

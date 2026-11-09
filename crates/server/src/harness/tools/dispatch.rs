@@ -1,5 +1,8 @@
 //! Running a tool by name, and capping what it returns to the model.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::path::Path;
 
 use super::files::{READ_LINES, edit_file, glob, grep, list_dir, read_file, write_file};
@@ -15,15 +18,15 @@ use crate::computer;
 pub const MAX_RESULT: usize = 40_000;
 
 /// An integer argument.
-fn number(args: &Value, key: &str) -> Result<i32, String> {
+fn number(args: &Value, key: &str) -> Result<i32, Error> {
     args[key]
         .as_i64()
-        .map(|n| n.clamp(i32::MIN as i64, i32::MAX as i64) as i32)
-        .ok_or_else(|| format!("{key} is required"))
+        .map(|n| n.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32)
+        .ok_or_else(|| format!("{key} is required").into())
 }
 
 /// Takes a screenshot and returns its path, for the model to read as an image.
-fn computer_screenshot() -> Result<String, String> {
+fn computer_screenshot() -> Result<String, Error> {
     let dir = crate::system::dirs().cache.join("screenshots");
     let path = crate::computer::screenshot_to_file(&dir)?;
     Ok(format!(
@@ -34,7 +37,12 @@ fn computer_screenshot() -> Result<String, String> {
 
 /// Runs a file, search, shell, or web tool. Ok carries the result for the model; Err a failure
 /// the model is told about. Neither is cut to `MAX_RESULT` yet.
-pub fn run(name: &str, args: &Value, root: &Path) -> Result<String, String> {
+///
+/// # Errors
+///
+/// Returns an error when `name` is not a known tool, when a required argument is missing, or when
+/// the tool itself fails.
+pub fn run(name: &str, args: &Value, root: &Path) -> Result<String, Error> {
     let path = || {
         args["path"]
             .as_str()
@@ -118,13 +126,14 @@ pub fn run(name: &str, args: &Value, root: &Path) -> Result<String, String> {
             };
             computer::perform(&action).map(|()| computer::describe(&action))
         }
-        other => Err(format!("There is no tool named {other}")),
+        other => Err(format!("There is no tool named {other}").into()),
     }?;
     Ok(result)
 }
 
 /// Cuts a long result to its start and end. `saved` is the file the whole of it was written to,
 /// which the note in its middle points the model at.
+#[must_use]
 pub fn cap(text: String, saved: Option<&Path>) -> String {
     if text.len() <= MAX_RESULT {
         return text;

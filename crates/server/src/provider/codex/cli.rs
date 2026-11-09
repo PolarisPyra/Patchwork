@@ -1,7 +1,12 @@
+//! What the installed Codex CLI offers: version, feature flags, and models.
+//!
 //! What the installed Codex CLI offers, read from the CLI itself: its version, its feature
 //! flags, its model catalog, and the read-only diagnostics commands. Patchwork asks the binary
 //! rather than keeping a copy of these lists, so a newer Codex shows up as it is.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::path::PathBuf;
 
 use crate::provider::cli_info::{self, InfoCommand};
@@ -9,24 +14,30 @@ use crate::provider::{find_binary, located_or};
 use crate::provider::{AgentKind, CodexFeature, CodexInfo, CodexModel};
 
 /// The Codex CLI in use: the one the user located, else `codex` on PATH.
+#[must_use]
 pub fn binary() -> Option<PathBuf> {
     located_or(AgentKind::Codex, || find_binary("codex"))
 }
 
 /// Runs the Codex CLI with `args`. See `cli_info::run`.
-fn run(args: &[&str]) -> Result<String, String> {
+fn run(args: &[&str]) -> Result<String, Error> {
     let binary = binary().ok_or("The Codex CLI is not installed")?;
     cli_info::run(&binary, args)
 }
 
 /// The CLI's version line, e.g. `codex-cli 0.163.0-alpha.11.1`.
-pub fn version() -> Result<String, String> {
+///
+/// # Errors
+///
+/// Returns an error when the Codex CLI is not installed or `codex --version` fails.
+pub fn version() -> Result<String, Error> {
     let text = run(&["--version"])?;
     Ok(text.lines().next().unwrap_or_default().trim().to_string())
 }
 
 /// Parses `codex features list`. Each line is a flag name, its stage, and whether it is on;
 /// the stage may be two words, as in `under development`.
+#[must_use]
 pub fn parse_features(text: &str) -> Vec<CodexFeature> {
     text.lines()
         .filter_map(|line| {
@@ -52,13 +63,18 @@ pub fn parse_features(text: &str) -> Vec<CodexFeature> {
 }
 
 /// Reads the CLI's feature flags, sorted by name.
-pub fn features() -> Result<Vec<CodexFeature>, String> {
+///
+/// # Errors
+///
+/// Returns an error when the Codex CLI is not installed or `codex features list` fails.
+pub fn features() -> Result<Vec<CodexFeature>, Error> {
     let mut features = parse_features(&run(&["features", "list"])?);
     features.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(features)
 }
 
 /// Parses `codex debug models`, which prints `{ "models": [ … ] }`.
+#[must_use]
 pub fn parse_models(text: &str) -> Vec<CodexModel> {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(text) else {
         return Vec::new();
@@ -106,7 +122,9 @@ pub fn parse_models(text: &str) -> Vec<CodexModel> {
             Some(CodexModel {
                 slug,
                 display_name: display,
-                context_window: model.get("context_window").and_then(|v| v.as_u64()),
+                context_window: model
+                    .get("context_window")
+                    .and_then(serde_json::Value::as_u64),
                 efforts,
                 speed_tiers,
                 multi_agent: model
@@ -121,6 +139,7 @@ pub fn parse_models(text: &str) -> Vec<CodexModel> {
 
 /// The models in the CLI's catalog, from `codex debug models`, each with the reasoning levels it
 /// takes.
+#[must_use]
 pub fn models() -> Vec<CodexModel> {
     run(&["debug", "models"])
         .map(|text| parse_models(&text))
@@ -128,7 +147,11 @@ pub fn models() -> Vec<CodexModel> {
 }
 
 /// The CLI's version, flags, and models, for the Settings pane.
-pub fn info() -> Result<CodexInfo, String> {
+///
+/// # Errors
+///
+/// Returns an error when the Codex CLI is not installed.
+pub fn info() -> Result<CodexInfo, Error> {
     let path = binary().ok_or("The Codex CLI is not installed")?;
     Ok(CodexInfo {
         path: path.to_string_lossy().into_owned(),
@@ -139,7 +162,12 @@ pub fn info() -> Result<CodexInfo, String> {
 }
 
 /// Runs one of the read-only diagnostics commands. See `cli_info::command`.
-pub fn command(kind: InfoCommand) -> Result<String, String> {
+///
+/// # Errors
+///
+/// Returns an error when Codex does not offer that command, is not installed, or the command fails,
+/// times out, or prints nothing.
+pub fn command(kind: InfoCommand) -> Result<String, Error> {
     cli_info::check(
         "Codex",
         kind,
@@ -222,7 +250,7 @@ not a feature line
                 .any(|model| model.context_window.is_some())
         );
         let doctor = command(InfoCommand::Doctor).expect("codex doctor answers");
-        assert!(!doctor.trim().is_empty());
+        assert_ne!(doctor.trim(), "");
         eprintln!(
             "{}: {} flags ({} stable, {} on), {} models",
             info.version,

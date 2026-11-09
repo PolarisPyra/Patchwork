@@ -1,6 +1,7 @@
-//! Debug logs, for people to send with a bug report. Each launch writes a folder,
-//! `<config>/logs/<YYYYMMDDTHHMMSS>` in local time, and the newest `KEEP_SESSIONS` are kept. The
-//! folder holds only files, so it zips and reads as it is:
+//! Debug logs, for people to send with a bug report.
+//!
+//! Each launch writes a folder, `<config>/logs/<YYYYMMDDTHHMMSS>` in local time, and the newest
+//! `KEEP_SESSIONS` are kept. The folder holds only files, so it zips and reads as it is:
 //!
 //! ```text
 //! 20261026T121729/
@@ -29,6 +30,8 @@
 //! disk. The thread writes each burst of records out as soon as it arrives, so a killed app
 //! loses at most the records still queued.
 
+// Rust guideline compliant 2026-10-09
+
 mod debug_log;
 mod files;
 mod render;
@@ -37,9 +40,17 @@ mod scrub;
 pub mod system;
 mod thread_log;
 
-pub use debug_log::*;
+#[doc(inline)]
+pub use debug_log::{
+    AGENT_LOG, Data, DebugLog, IMPORT_LOG, Source, WINDOW_LOG, app_logs, follow, start,
+};
+use debug_log::{LaunchLog, Record, may_report_error};
 use files::session;
+#[doc(inline)]
 pub use files::{session_dir, channels, LogChunk, read, export};
+#[doc(inline)]
 pub use render::{now_text};
+#[doc(inline)]
 pub use scrub::{Json};
+#[doc(inline)]
 pub use thread_log::{THREAD_LOG, ThreadLog};

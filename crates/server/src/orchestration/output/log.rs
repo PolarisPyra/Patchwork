@@ -4,6 +4,9 @@
 //! and Trace, the text the person and the agent wrote. Streamed text is left to the agent's own
 //! traffic, which the chat's log also takes.
 
+// Rust guideline compliant 2026-10-09
+
+use std::fmt::Write as _;
 use crate::logging::{Data, Source, THREAD_LOG};
 use crate::settings::LogLevel;
 use crate::threads::{MessageStatus, Role, StepStatus};
@@ -42,7 +45,7 @@ fn describe(event: &AgentEvent) -> Option<(LogLevel, &'static str, Option<&str>,
         AgentEvent::MessageStarted { message } => {
             let role = match message.role {
                 Role::User => "from the person",
-                _ => "from the agent",
+                Role::Assistant => "from the agent",
             };
             let text = format!(
                 "{role}, {:?}, {} attachments: {}",
@@ -56,10 +59,10 @@ fn describe(event: &AgentEvent) -> Option<(LogLevel, &'static str, Option<&str>,
         AgentEvent::ToolStarted { message_id, tool } => {
             let mut text = format!("{} {}", tool.name, tool.id);
             if let Some(parent) = &tool.parent {
-                text.push_str(&format!(" inside {parent}"));
+                let _ = write!(text, " inside {parent}");
             }
             if trace {
-                text.push_str(&format!(": {}", tool.summary));
+                let _ = write!(text, ": {}", tool.summary);
             }
             let level = if tool.status == StepStatus::Error {
                 Warning
@@ -104,7 +107,7 @@ fn describe(event: &AgentEvent) -> Option<(LogLevel, &'static str, Option<&str>,
         } => {
             let mut text = format!("{} ({:?}, {})", approval.title, approval.kind, approval.id);
             if trace {
-                text.push_str(&format!(": {}", approval.detail));
+                let _ = write!(text, ": {}", approval.detail);
             }
             (Info, "approval requested", Some(message_id), text)
         }
@@ -273,7 +276,7 @@ fn describe(event: &AgentEvent) -> Option<(LogLevel, &'static str, Option<&str>,
             };
             let mut text = format!("{status:?}");
             if let Some(error) = error {
-                text.push_str(&format!(": {error}"));
+                let _ = write!(text, ": {error}");
             }
             (level, "reply ended", Some(message_id), text)
         }

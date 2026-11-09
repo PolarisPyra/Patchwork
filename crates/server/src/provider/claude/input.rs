@@ -1,5 +1,7 @@
 //! What Patchwork sends Claude Code: its arguments, and the lines it writes to its stdin.
 
+// Rust guideline compliant 2026-10-09
+
 use std::collections::HashMap;
 
 use serde_json::Value;
@@ -51,12 +53,14 @@ pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
 }
 
 /// The stream-json input line carrying the prompt and any attached images.
+#[must_use]
 pub fn user_message(text: &str, images: &[Image]) -> String {
     user_line(text, images, None)
 }
 
 /// A message for a turn that is already running. `priority: "now"` asks Claude to
 /// take it before its next step rather than after the turn.
+#[must_use]
 pub fn steer_message(text: &str, images: &[Image]) -> String {
     user_line(text, images, Some("now"))
 }
@@ -81,12 +85,13 @@ pub(super) fn user_line(text: &str, images: &[Image], priority: Option<&str>) ->
     message.to_string()
 }
 
-/// The answer to ExitPlanMode: the plan was taken, so Claude stops here.
+/// The answer to `ExitPlanMode`: the plan was taken, so Claude stops here.
 pub(super) const PLAN_CAPTURED: &str = "The client captured your proposed plan. Stop here and wait for the \
 user's feedback or implementation request in a later turn.";
 
 /// Asks Claude to move the call `tool_id` (a subagent working in the foreground) to the
 /// background, where it keeps working; Claude answers with a control response.
+#[must_use]
 pub fn background_task(tool_id: &str, request_id: &str) -> String {
     serde_json::json!({
         "type": "control_request",
@@ -97,6 +102,7 @@ pub fn background_task(tool_id: &str, request_id: &str) -> String {
 }
 
 /// Asks Claude to stop one of its subagents.
+#[must_use]
 pub fn stop_task(task_id: &str) -> String {
     serde_json::json!({
         "type": "control_request",
@@ -108,6 +114,7 @@ pub fn stop_task(task_id: &str) -> String {
 
 /// Asks Claude to stop its reply. It ends the reply with a `result` whose `terminal_reason` is
 /// `aborted_streaming` or `aborted_tools`, and stays up for the next message.
+#[must_use]
 pub fn interrupt() -> String {
     serde_json::json!({
         "type": "control_request",
@@ -119,6 +126,7 @@ pub fn interrupt() -> String {
 
 /// Answers go back in the tool's input, each under its question's text, with several picks
 /// joined by commas.
+#[must_use]
 pub fn approval_reply(
     reply: &Value,
     allow: bool,

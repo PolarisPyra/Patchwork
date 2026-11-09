@@ -1,5 +1,7 @@
 //! Git changes in the open project.
 
+// Rust guideline compliant 2026-10-09
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

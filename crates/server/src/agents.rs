@@ -1,3 +1,5 @@
+//! Custom agents: role files a chat can summon with `&name`.
+//!
 //! Custom agents: Markdown files in `agents` in the config folder, or in a project's
 //! `.patchwork/agents`, each a role an agent takes on when a message summons it as `&name`. The
 //! name is the file's name without `.md`; the frontmatter gives a title (`name`), a description,
@@ -8,6 +10,9 @@
 //!
 //! The agents folder, the agents in it, and summoning one into a turn.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
@@ -56,11 +61,15 @@ impl Server {
     }
 
     /// Makes `role` the chat's custom agent, or none; the agent is told with the next message.
-    pub fn set_thread_role(&self, id: &str, role: Option<String>) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the chat's changes cannot be saved to the database.
+    pub fn set_thread_role(&self, id: &str, role: Option<String>) -> Result<(), Error> {
         let mut changed = false;
         self.store.update_thread(id, |t| {
             if t.role != role {
-                t.role = role.clone();
+                t.role.clone_from(&role);
                 t.role_pending = true;
                 changed = true;
             }
@@ -112,7 +121,7 @@ impl Server {
                     model: Some(offered),
                 },
             }),
-            Err(e) => log::warn!("failed to switch to the agent's model: {e}"),
+            Err(e) => log::warn!(error:% = e; "failed to switch to the agent's model: {{error}}"),
         }
     }
 
@@ -164,7 +173,7 @@ impl Server {
             }
         });
         if let Err(e) = saved {
-            log::warn!("failed to save the chat's agent: {e}");
+            log::warn!(error:% = e; "failed to save the chat's agent: {{error}}");
         } else if switched.is_some() {
             self.emit(AgentEventEnvelope {
                 thread_id: thread_id.into(),
@@ -183,6 +192,14 @@ pub struct Library {
     agents: RwLock<Arc<[Agent]>>,
     on_change: Mutex<Option<OnChange>>,
     watcher: Mutex<Option<crate::skills::Watcher>>,
+}
+
+impl std::fmt::Debug for Library {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Library")
+            .field("dir", &self.dir)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Library {
@@ -208,9 +225,9 @@ impl Library {
                 *library
                     .watcher
                     .lock()
-                    .unwrap_or_else(PoisonError::into_inner) = Some(watcher)
+                    .unwrap_or_else(PoisonError::into_inner) = Some(watcher);
             }
-            Err(e) => log::warn!("{e}"),
+            Err(e) => log::warn!(error:% = e; "{{error}}"),
         }
         library
     }
@@ -241,7 +258,13 @@ impl Library {
     }
 
     /// Adds `name.md` to the agents folder, for the user to fill in.
-    pub fn create(&self, name: &str) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `name` is not letters and digits joined by `-` or `_` and starting
+    /// with a letter, when an agent with that name already exists, or when the file cannot be
+    /// written.
+    pub fn create(&self, name: &str) -> Result<(), Error> {
         if !summonable(name) {
             return Err("Use letters and digits joined by - or _, starting with a letter".into());
         }
@@ -254,11 +277,14 @@ impl Library {
             .create_new(true)
             .open(&path)
             .and_then(|mut file| std::io::Write::write_all(&mut file, template.as_bytes()))
-            .map_err(|e| match e.kind() {
-                std::io::ErrorKind::AlreadyExists => {
-                    format!("There is already an agent named {name}")
-                }
-                _ => e.to_string(),
+            .map_err(|e| {
+                (match e.kind() {
+                    std::io::ErrorKind::AlreadyExists => {
+                        format!("There is already an agent named {name}")
+                    }
+                    _ => e.to_string(),
+                })
+                .into()
             })
     }
 
@@ -278,8 +304,8 @@ impl Library {
             if *current == agents {
                 return;
             }
-            *current = agents.clone();
-        }
+            *current = Arc::clone(&agents);
+        };
         if let Some(on_change) = self
             .on_change
             .lock()
@@ -295,6 +321,7 @@ impl Library {
 const PROJECT_DIR: &str = ".patchwork/agents";
 
 /// What a chat's agent has been told of the chat's standing role, before a message.
+#[derive(Debug, Clone, Copy)]
 pub enum Standing<'a> {
     /// Nothing new: it knows the role, or there is none.
     Told,
@@ -304,15 +331,19 @@ pub enum Standing<'a> {
     Removed,
 }
 
+#[derive(Debug)]
 pub struct Summoned {
     pub text: String,
     /// The primary agent the message summoned, which is the chat's agent from now on.
     pub role: Option<String>,
 }
 
+/// `text` with the roles it summons appended, plus the chat's standing role.
+///
 /// `text` with the roles it summons as `&name` after it, each once and in order, and the chat's
 /// standing role when the agent must be told of it. The roles go last, so a message that starts
 /// with a command still does. A message sent again, in a new turn, keeps the roles it has.
+#[must_use]
 pub fn summon(agents: &[Agent], text: String, standing: Standing) -> Summoned {
     let written = text
         .split_once("\n\n<agent")
@@ -332,7 +363,6 @@ pub fn summon(agents: &[Agent], text: String, standing: Standing) -> Summoned {
     let mut roles = Vec::new();
     if role.is_none() {
         match standing {
-            Standing::Told => {}
             Standing::Untold(name) => roles.extend(
                 agents
                     .iter()
@@ -340,7 +370,7 @@ pub fn summon(agents: &[Agent], text: String, standing: Standing) -> Summoned {
                     .map(|agent| block(agent, "In this chat")),
             ),
             Standing::Removed if !text.contains(REMOVED) => roles.push(REMOVED.to_string()),
-            Standing::Removed => {}
+            Standing::Told | Standing::Removed => {}
         }
     }
     for agent in summoned.into_iter().filter(|a| !has(a)) {
@@ -440,6 +470,7 @@ pub fn offered<'a>(wanted: &str, mut ids: impl Iterator<Item = &'a str>) -> Opti
 
 impl Agent {
     /// What the agent is for, which a CLI reads to pick it as a subagent.
+    #[must_use]
     pub fn about(&self) -> &str {
         self.description
             .as_deref()
@@ -448,10 +479,17 @@ impl Agent {
     }
 }
 
+/// Writes the agent file `cli` reads at launch, and returns its path.
+///
 /// Writes `content` to `name` in the `agents` folder of `cli`'s launch folder in the cache, one
 /// per project, which `cli` reads at launch for the project at `root`, unless the file holds it
 /// already, and returns the file's path.
-pub fn launch_file(cli: &str, root: &str, name: &str, content: &str) -> std::io::Result<PathBuf> {
+pub(crate) fn launch_file(
+    cli: &str,
+    root: &str,
+    name: &str,
+    content: &str,
+) -> std::io::Result<PathBuf> {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     root.hash(&mut hasher);
     let dir = crate::skills::cli_dir(cli)

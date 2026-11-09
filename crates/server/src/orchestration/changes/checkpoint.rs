@@ -1,8 +1,13 @@
-//! Snapshots of a project's files, taken as each turn starts and ends, and restoring one. A
-//! snapshot is a git tree of every file git does not ignore, built in a temporary index so the
-//! user's own index and branches are untouched, and kept alive by a ref under `refs/patchwork`.
-//! The pair around a turn is what the turn changed, whatever happens to the files later.
+//! Snapshots of a project's files, taken as each turn starts and ends, and restoring one.
+//!
+//! A snapshot is a git tree of every file git does not ignore, built in a temporary index so the
+//! user's own index and branches are untouched, and kept alive by a ref under `refs/patchwork`. The
+//! pair around a turn is what the turn changed, whatever happens to the files later.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
+use std::fmt::Write as _;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -36,7 +41,7 @@ fn run(
     index: Option<&Path>,
     args: &[&str],
     input: Option<&[u8]>,
-) -> Result<Output, String> {
+) -> Result<Output, Error> {
     let mut cmd = crate::system::host_command("git");
     cmd.args(args)
         .current_dir(root)
@@ -63,18 +68,19 @@ fn run(
             "git {}: {}",
             args.join(" "),
             String::from_utf8_lossy(&out.stderr).trim()
-        ))
+        )
+        .into())
     }
 }
 
-fn git(root: &str, args: &[&str]) -> Result<String, String> {
+fn git(root: &str, args: &[&str]) -> Result<String, Error> {
     let out = run(root, None, args, None)?;
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
 /// A tree of the project's files as they are now. The user's index is copied first, so git only
 /// re-reads the files that changed since it was last refreshed.
-fn snapshot(root: &str) -> Result<String, String> {
+fn snapshot(root: &str) -> Result<String, Error> {
     let index = PathBuf::from(root).join(git(root, &["rev-parse", "--git-path", "index"])?);
     let temp = PathBuf::from(root).join(git(
         root,
@@ -106,7 +112,7 @@ pub(in crate::orchestration) fn capture(root: &str, thread_id: &str, message_id:
         )
     });
     if let Err(e) = taken {
-        log::warn!("failed to take a checkpoint: {e}");
+        log::warn!(error:% = e; "failed to take a checkpoint: {{error}}");
     }
 }
 
@@ -130,7 +136,7 @@ pub(in crate::orchestration) fn record_end(
     )
     .ok()?;
     let after = snapshot(root)
-        .map_err(|e| log::warn!("failed to snapshot a turn's end: {e}"))
+        .map_err(|e| log::warn!(error:% = e; "failed to snapshot a turn's end: {{error}}"))
         .ok()?;
     for id in replies {
         let _ = git(root, &["update-ref", &end_ref(thread_id, id), &after]);
@@ -170,7 +176,7 @@ fn turn_diff_fields(
     turn: &TurnTrees,
     format: &str,
     paths: &[String],
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, Error> {
     let mut args = vec![
         "diff-tree",
         "-r",
@@ -192,7 +198,11 @@ fn turn_diff_fields(
 }
 
 /// What the turn did to each of `paths` (project-relative), and where each file stands now.
-pub fn turn_files(root: &str, turn: &TurnTrees, paths: &[String]) -> Result<Vec<TurnFile>, String> {
+///
+/// # Errors
+///
+/// Returns an error when a `git` command that compares the turn's snapshots fails.
+pub fn turn_files(root: &str, turn: &TurnTrees, paths: &[String]) -> Result<Vec<TurnFile>, Error> {
     // `A\0path\0` pairs, and `added\tdeleted\tpath\0` lines (`-` for binary files).
     let status: Vec<String> = turn_diff_fields(root, turn, "--name-status", paths)?;
     let status: std::collections::HashMap<&str, &str> = status
@@ -236,10 +246,10 @@ pub fn turn_files(root: &str, turn: &TurnTrees, paths: &[String]) -> Result<Vec<
     )?;
     let known = String::from_utf8_lossy(&known.stdout).into_owned();
     let mut known = known.lines();
-    let names: String = present
-        .iter()
-        .map(|p| format!("{}\n", Path::new(root).join(p).display()))
-        .collect();
+    let names: String = present.iter().fold(String::new(), |mut names, p| {
+        let _ = writeln!(names, "{}", Path::new(root).join(p).display());
+        names
+    });
     let now = run(
         root,
         None,
@@ -280,7 +290,11 @@ pub fn turn_files(root: &str, turn: &TurnTrees, paths: &[String]) -> Result<Vec<
 }
 
 /// The turn's diff of one project-relative file, in `git diff` form.
-pub fn turn_file_diff(root: &str, turn: &TurnTrees, path: &str) -> Result<String, String> {
+///
+/// # Errors
+///
+/// Returns an error when `git diff` between the turn's snapshots fails.
+pub fn turn_file_diff(root: &str, turn: &TurnTrees, path: &str) -> Result<String, Error> {
     git(
         root,
         &[
@@ -308,7 +322,12 @@ pub fn list(root: &str, thread_id: &str) -> Vec<String> {
 
 /// Puts the project's files back as they were before the turn for `message_id`: files changed or
 /// deleted since are rewritten, and files created since are deleted. Ignored files are left alone.
-pub fn restore(root: &str, thread_id: &str, message_id: &str) -> Result<(), String> {
+///
+/// # Errors
+///
+/// Returns an error when the message has no checkpoint, when `git` fails to snapshot or compare the
+/// project, or when a file cannot be removed or restored.
+pub fn restore(root: &str, thread_id: &str, message_id: &str) -> Result<(), Error> {
     let saved = git(
         root,
         &[
@@ -318,7 +337,7 @@ pub fn restore(root: &str, thread_id: &str, message_id: &str) -> Result<(), Stri
             &ref_name(thread_id, message_id),
         ],
     )
-    .map_err(|_| "This message has no checkpoint to restore")?;
+    .map_err(|_discarded| "This message has no checkpoint to restore")?;
     let now = snapshot(root)?;
     let diff = run(
         root,
@@ -361,10 +380,17 @@ pub fn restore(root: &str, thread_id: &str, message_id: &str) -> Result<(), Stri
     Ok(())
 }
 
+/// Reverses one turn's changes to `files`, leaving the rest of the project untouched.
+///
 /// Takes back what one turn did to `files`, leaving the rest of the project as it is: the turn's
 /// own diff of them is applied to the files on disk in reverse. When a file changed since in a
 /// way the reverse no longer fits, nothing is touched.
-pub fn undo(root: &str, turn: &TurnTrees, files: &[String]) -> Result<(), String> {
+///
+/// # Errors
+///
+/// Returns an error when the reply changed no files, when `git` fails, or when the reply's changes
+/// were edited since and no longer reverse cleanly.
+pub fn undo(root: &str, turn: &TurnTrees, files: &[String]) -> Result<(), Error> {
     // Without paths the diff would cover the whole project.
     if files.is_empty() {
         return Err("This reply changed no files".into());
@@ -394,7 +420,8 @@ pub fn undo(root: &str, turn: &TurnTrees, files: &[String]) -> Result<(), String
     .map_err(|e| {
         format!(
             "The reply's changes were edited since, so they can't be taken back cleanly. {}",
-            e.trim_start_matches("git apply --reverse --check -: ")
+            e.to_string()
+                .trim_start_matches("git apply --reverse --check -: ")
         )
     })?;
     run(&top, None, &["apply", "--reverse", "-"], Some(&patch))?;
@@ -407,10 +434,10 @@ pub fn remove(root: &str, thread_id: &str, message_ids: Option<&[String]>) {
         Some(ids) => ids.to_vec(),
         None => list(root, thread_id),
     };
-    ids.into_iter().for_each(|id| {
+    for id in ids {
         let _ = git(root, &["update-ref", "-d", &ref_name(thread_id, &id)]);
         let _ = git(root, &["update-ref", "-d", &end_ref(thread_id, &id)]);
-    });
+    }
     // Replies have end snapshots but no snapshot of their own, so they are not in `list`.
     if message_ids.is_none() {
         let ends = git(
@@ -453,7 +480,12 @@ impl Server {
     /// files go back to how they were before that turn, and the message and the ones after it
     /// leave the thread. The agent starts a new session next turn, given the remaining messages
     /// as a transcript, since its own session still holds the undone turns.
-    pub fn restore_checkpoint(&self, thread_id: &str, message_id: &str) -> Result<Thread, String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a turn is running, when the chat is not a project task or is unknown,
+    /// when the message is not found, or when restoring the checkpoint or saving the chat fails.
+    pub fn restore_checkpoint(&self, thread_id: &str, message_id: &str) -> Result<Thread, Error> {
         if self.runner.is_running(thread_id) {
             return Err("Stop the running turn before restoring a checkpoint".into());
         }
@@ -485,7 +517,12 @@ impl Server {
 
     /// Takes back the files one reply changed, as `undo` does, while the thread and its other
     /// replies stay as they are. The changes it undoes show up as uncommitted ones.
-    pub fn undo_reply(&self, thread_id: &str, message_id: &str) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a turn is running, when the chat is not a project task or is unknown,
+    /// when the reply is not found or has no snapshot, or when `git` cannot reverse its changes.
+    pub fn undo_reply(&self, thread_id: &str, message_id: &str) -> Result<(), Error> {
         if self.runner.is_running(thread_id) {
             return Err("Stop the running turn before undoing a reply".into());
         }

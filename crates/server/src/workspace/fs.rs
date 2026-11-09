@@ -1,6 +1,8 @@
 //! Project folders and the files in them: creating, resolving, and reading. All functions are
 //! blocking.
 
+// Rust guideline compliant 2026-10-09
+
 use crate::Error;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -12,7 +14,7 @@ use crate::system::new_id;
 /// Largest file `read_file` returns.
 const MAX_READ_BYTES: u64 = 2 * 1024 * 1024;
 
-pub fn make_project(path: &str) -> Result<Project, Error> {
+pub(crate) fn make_project(path: &str) -> Result<Project, Error> {
     let canonical = std::fs::canonicalize(path).map_err(|e| format!("Cannot open {path}: {e}"))?;
     if !canonical.is_dir() {
         return Err(format!("{path} is not a folder").into());
@@ -29,7 +31,7 @@ pub fn make_project(path: &str) -> Result<Project, Error> {
     })
 }
 
-pub fn create_project_dir(parent: &str, name: &str) -> Result<Project, Error> {
+pub(crate) fn create_project_dir(parent: &str, name: &str) -> Result<Project, Error> {
     let name = name.trim();
     if name.is_empty() || name == "." || name == ".." || name.contains(['/', '\\']) {
         return Err("Project name must be a single folder name".into());
@@ -56,6 +58,11 @@ pub fn create_project_dir(parent: &str, name: &str) -> Result<Project, Error> {
 }
 
 /// Joins `rel` onto the project root and rejects anything that resolves outside it.
+///
+/// # Errors
+///
+/// Returns an error when the root or the joined path does not exist, or the path resolves outside
+/// the project.
 pub fn resolve_inside(root: &str, rel: &str) -> Result<PathBuf, Error> {
     let root = std::fs::canonicalize(root).map_err(|e| e.to_string())?;
     let path = std::fs::canonicalize(root.join(rel)).map_err(|e| format!("{rel}: {e}"))?;
@@ -67,6 +74,7 @@ pub fn resolve_inside(root: &str, rel: &str) -> Result<PathBuf, Error> {
 }
 
 /// The paths of `rels` that no longer exist in the project. A broken link still exists.
+#[must_use]
 pub fn missing_files(root: &str, rels: &[String]) -> Vec<String> {
     rels.iter()
         .filter(|rel| std::fs::symlink_metadata(Path::new(root).join(rel)).is_err())
@@ -74,6 +82,12 @@ pub fn missing_files(root: &str, rels: &[String]) -> Vec<String> {
         .collect()
 }
 
+/// The text of the project file `rel`.
+///
+/// # Errors
+///
+/// Returns an error when the path is outside the project, is not a file, cannot be read, is larger
+/// than 2 MB, or is binary.
 pub fn read_file(root: &str, rel: &str) -> Result<String, Error> {
     let path = resolve_inside(root, rel)?;
     if !path.is_file() {

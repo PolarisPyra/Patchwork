@@ -1,5 +1,7 @@
 //! Plugin bundles: their hooks and the apps they name.
 
+// Rust guideline compliant 2026-10-09
+
 use serde::{Deserialize, Serialize};
 
 use crate::provider::AgentKind;

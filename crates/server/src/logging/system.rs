@@ -1,7 +1,11 @@
+//! Machine and build details attached to bug reports and exported logs.
+//!
 //! What Patchwork runs on, for a bug report: the app's build, the platform, the desktop session,
 //! the hardware's size, the environment the window reads, and each agent CLI's path and version.
 //! It is worked out once per launch, written to the launch's `system.json`, and put in exported
 //! logs and each chat's report. It names no user or machine, and the home folder reads `~`.
+
+// Rust guideline compliant 2026-10-09
 
 use std::path::Path;
 use std::sync::OnceLock;
@@ -43,7 +47,7 @@ pub fn record(session: &Path) {
     let session = session.to_path_buf();
     std::thread::spawn(move || {
         let report = report();
-        log::info!("system: {}", summary(report));
+        log::info!(system:% = summary(report); "system: {{system}}");
         let written = serde_json::to_string_pretty(report)
             .map_err(|e| e.to_string())
             .and_then(|text| {
@@ -51,7 +55,7 @@ pub fn record(session: &Path) {
                 std::fs::write(session.join("system.json"), text).map_err(|e| e.to_string())
             });
         if let Err(e) = written {
-            log::warn!("could not write system.json: {e}");
+            log::warn!(error:% = e; "could not write system.json: {{error}}");
         }
     });
 }
@@ -72,7 +76,7 @@ pub fn report() -> &'static Value {
             "distro": distro(),
             "kernel": read_trimmed("/proc/sys/kernel/osrelease"),
             "webview": WEBVIEW.get(),
-            "cpus": std::thread::available_parallelism().map(|n| n.get()).ok(),
+            "cpus": std::thread::available_parallelism().map(std::num::NonZero::get).ok(),
             "memoryMb": memory_mb(),
             "locale": std::env::var("LANG").ok(),
             "shell": std::env::var("SHELL").ok(),

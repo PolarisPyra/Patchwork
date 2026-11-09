@@ -1,5 +1,7 @@
 //! Which agents there are, what each one offers, and what an installed CLI reports about itself.
 
+// Rust guideline compliant 2026-10-09
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

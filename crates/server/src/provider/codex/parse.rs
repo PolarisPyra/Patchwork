@@ -1,5 +1,7 @@
 //! Reads what `codex app-server` sends back into agent events.
 
+// Rust guideline compliant 2026-10-09
+
 use serde_json::{Value, json};
 
 use crate::provider::{GoalCommand, goal_command};
@@ -63,7 +65,7 @@ fn codex_item(
                     ));
                 }
                 Some("completed") if completed => {
-                    out.push(tool_finished(message_id, thread, false, ""))
+                    out.push(tool_finished(message_id, thread, false, ""));
                 }
                 _ => {}
             }
@@ -273,6 +275,7 @@ fn subagent_kind(name: &str, spec: &TurnSpec) -> String {
 }
 
 /// What a subagent's own frames add to its thread: its text, and the calls it makes.
+#[must_use]
 pub fn subagent_events(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<AgentEvent> {
     let mut out = Vec::new();
     if let Some(kind @ ("item/started" | "item/completed")) = v["method"].as_str() {
@@ -292,6 +295,8 @@ pub fn subagent_events(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Agen
         .collect()
 }
 
+/// The background task a still-running Codex call becomes when its turn completes.
+///
 /// The background task an open Codex call becomes when its turn completes with the call still
 /// running: a command, or a subagent thread. Codex has no request that stops one, so the task has
 /// no id to stop it by and is listed without a stop button. Its only stop is the turn's own Stop,
@@ -390,6 +395,7 @@ fn codex_questions(questions: &Value) -> Vec<Question> {
 }
 
 /// Maps one JSON-RPC message from `codex app-server`.
+#[must_use]
 pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
     let mut out = Vec::new();
     let params = &v["params"];

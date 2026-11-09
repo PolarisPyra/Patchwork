@@ -1,6 +1,8 @@
 //! What a file a reply produced looks like: an image to draw, source text the diff list keeps, or
 //! a card. Paths are judged by name and size, and nothing is read but the metadata.
 
+// Rust guideline compliant 2026-10-09
+
 use std::path::{Component, Path};
 
 use serde::Serialize;
@@ -114,6 +116,10 @@ fn media_of(root: &Path, base: &Path, rel: &str) -> FileMedia {
 
 /// What each of `rels` is shown as, for a reply's cards. Paths past `MAX_MEDIA_PATHS` are left out,
 /// so they fall back to the text list.
+///
+/// # Errors
+///
+/// Returns an error when the project root cannot be resolved.
 pub fn file_media(root: &str, rels: &[String]) -> Result<Vec<FileMedia>, Error> {
     let canonical = std::fs::canonicalize(root).map_err(|e| e.to_string())?;
     Ok(rels

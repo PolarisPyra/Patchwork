@@ -1,9 +1,14 @@
+//! Scheduled tasks: prompts that start on a schedule, with next-run and missed-run handling.
+//!
 //! Scheduled tasks: a prompt that starts a task on a schedule, the way Codex and Claude desktop
 //! run theirs. The schedule is one of a fixed few shapes, so its next run can be worked out from
 //! the local clock without a cron parser.
 //!
 //! When a schedule next runs, and what to do about a run that was missed.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::sync::Arc;
 
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone};
@@ -19,7 +24,7 @@ use crate::Server;
 /// A scheduled task: a prompt that starts a task at a fixed time.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ScheduledTask {
+pub struct Task {
     pub id: String,
     pub name: String,
     pub prompt: String,
@@ -37,13 +42,13 @@ pub struct ScheduledTask {
     pub created_at: i64,
     /// The newest few runs, newest first.
     #[serde(default)]
-    pub recent_runs: Vec<ScheduledRun>,
+    pub recent_runs: Vec<Run>,
 }
 
 /// One time a scheduled task's slot came round.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ScheduledRun {
+pub struct Run {
     /// When it started, or for a skipped run the slot it missed, in Unix milliseconds.
     pub at: i64,
     pub thread_id: Option<String>,
@@ -106,6 +111,7 @@ pub enum Weekday {
 }
 
 impl Weekday {
+    #[must_use]
     pub fn from_chrono(day: chrono::Weekday) -> Self {
         match day {
             chrono::Weekday::Mon => Weekday::Mon,
@@ -119,6 +125,7 @@ impl Weekday {
     }
 
     /// `Mon`, `Tue`, … for a list row.
+    #[must_use]
     pub fn short(self) -> &'static str {
         match self {
             Weekday::Mon => "Mon",
@@ -137,10 +144,10 @@ impl Server {
     ///
     /// A task whose project no longer exists runs as a chat, so a deleted project does not stop
     /// the schedule without saying so.
-    pub fn start_scheduled_task(
+    pub(crate) fn start_scheduled_task(
         self: &Arc<Self>,
-        task: &crate::scheduled::ScheduledTask,
-    ) -> Result<Thread, String> {
+        task: &crate::scheduled::Task,
+    ) -> Result<Thread, Error> {
         let project_id = task.project_id.clone().filter(|id| {
             self.store
                 .settings()
@@ -171,7 +178,7 @@ impl Server {
         {
             self.delete_thread(&thread.id);
             self.emit(AgentEventEnvelope {
-                thread_id: thread.id.clone(),
+                thread_id: thread.id,
                 event: AgentEvent::ThreadDeleted,
             });
             return Err(error);
@@ -180,7 +187,7 @@ impl Server {
         // and the task's own name is what the list should show. This comes after the message so
         // the naming a new thread gets from its first line cannot take the name back.
         self.store
-            .update_thread(&thread.id, |t| t.title = task.name.clone())?;
+            .update_thread(&thread.id, |t| t.title.clone_from(&task.name))?;
         self.emit(AgentEventEnvelope {
             thread_id: thread.id.clone(),
             event: AgentEvent::TitleUpdated {
@@ -192,14 +199,24 @@ impl Server {
     }
 
     /// Adds a task or replaces the one with its id, and returns it as saved. See `prepare`.
-    pub fn save_scheduled_task(&self, task: ScheduledTask) -> Result<ScheduledTask, String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the task has no name or prompt, its schedule has no valid `HH:MM`
+    /// time, or saving it fails.
+    pub fn save_scheduled_task(&self, task: Task) -> Result<Task, Error> {
         let task = prepare(task)?;
         self.store.save_scheduled_task(&task)?;
         Ok(task)
     }
 
     /// Starts one scheduled task now, whatever its schedule says.
-    pub fn run_scheduled_task(self: &Arc<Self>, id: &str) -> Result<Thread, String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the scheduled task no longer exists, its thread cannot be created or
+    /// started, or recording the run fails.
+    pub fn run_scheduled_task(self: &Arc<Self>, id: &str) -> Result<Thread, Error> {
         let task = self
             .store
             .scheduled_tasks()
@@ -240,9 +257,15 @@ impl Server {
             match scheduled::action(task, now) {
                 scheduled::Action::Wait => {}
                 scheduled::Action::Skip => {
-                    log::info!("scheduled task {} missed its time; skipped", task.name);
+                    log::info!(
+                        task:% = task.name;
+                        "scheduled task {{task}} missed its time; skipped"
+                    );
                     if let Err(e) = self.store.scheduled_task_skipped(&task.id, next()) {
-                        log::warn!("scheduled task {}: {e}", task.id);
+                        log::warn!(
+                            task:% = task.id, error:% = e;
+                            "scheduled task {{task}}: {{error}}"
+                        );
                     }
                 }
                 // It stays due, so the next tick tries again.
@@ -256,16 +279,25 @@ impl Server {
                             Ok(thread.id.as_str()),
                         );
                         if let Err(e) = ran {
-                            log::warn!("scheduled task {}: {e}", task.id);
+                            log::warn!(
+                                task:% = task.id, error:% = e;
+                                "scheduled task {{task}}: {{error}}"
+                            );
                         }
                         started.push(task.name.clone());
                     }
                     Err(e) => {
-                        log::warn!("scheduled task {} did not start: {e}", task.name);
+                        log::warn!(
+                            task:% = task.name, error:% = e;
+                            "scheduled task {{task}} did not start: {{error}}"
+                        );
                         // Record the attempt so a task that cannot start does not retry every tick.
-                        let _ =
-                            self.store
-                                .scheduled_task_ran(&task.id, now, next(), Err(e.as_str()));
+                        let _ = self.store.scheduled_task_ran(
+                            &task.id,
+                            now,
+                            next(),
+                            Err(e.to_string().as_str()),
+                        );
                     }
                 },
             }
@@ -297,10 +329,11 @@ fn next_day(day: NaiveDate, schedule: &Schedule) -> NaiveDate {
 
 /// The first run strictly after `from`, in local time. `None` when the schedule is malformed
 /// (a time that is not `HH:MM`), which the editor refuses to save.
+#[must_use]
 pub fn next_after(schedule: &Schedule, from: NaiveDateTime) -> Option<NaiveDateTime> {
     match schedule {
         Schedule::Hourly { interval_hours } => {
-            let hours = (*interval_hours).clamp(1, 24 * 7) as i64;
+            let hours = i64::from((*interval_hours).clamp(1, 24 * 7));
             Some(from + Duration::hours(hours))
         }
         Schedule::Daily { time } => {
@@ -346,6 +379,7 @@ fn day_allowed(schedule: &Schedule, day: NaiveDate) -> bool {
 
 /// The first run after `now`, as Unix milliseconds. A time the clocks jump over runs an hour
 /// later, once the clock has moved past it.
+#[must_use]
 pub fn next_run_at(schedule: &Schedule, now: DateTime<Local>) -> Option<i64> {
     let next = next_after(schedule, now.naive_local())?;
     Local
@@ -361,7 +395,7 @@ pub fn next_run_at(schedule: &Schedule, now: DateTime<Local>) -> Option<i64> {
 
 /// `task` as it is saved: given an id if it has none, checked, and rescheduled from now, so a
 /// change to the time takes effect at once.
-pub fn prepare(mut task: ScheduledTask) -> Result<ScheduledTask, String> {
+pub(crate) fn prepare(mut task: Task) -> Result<Task, Error> {
     if task.id.trim().is_empty() {
         task.id = new_id();
     }
@@ -380,6 +414,7 @@ pub fn prepare(mut task: ScheduledTask) -> Result<ScheduledTask, String> {
 }
 
 /// A one-line description of the schedule for a list row, e.g. `Weekdays at 09:00`.
+#[must_use]
 pub fn describe(schedule: &Schedule) -> String {
     match schedule {
         Schedule::Hourly { interval_hours } => {
@@ -416,7 +451,8 @@ pub enum Action {
 
 /// What to do with `task` at `now_ms`. A task with no next run waits, so saving one does not
 /// fire it.
-pub fn action(task: &ScheduledTask, now_ms: i64) -> Action {
+#[must_use]
+pub fn action(task: &Task, now_ms: i64) -> Action {
     match task.next_run_at {
         Some(at) if task.enabled && at <= now_ms => {
             if now_ms - at <= CATCH_UP_WITHIN_MS {
@@ -504,7 +540,7 @@ mod tests {
 
     #[test]
     fn a_task_runs_when_due_and_skips_a_slot_long_gone() {
-        let task = |enabled: bool, next_run_at: Option<i64>| ScheduledTask {
+        let task = |enabled: bool, next_run_at: Option<i64>| Task {
             id: "t".into(),
             name: "n".into(),
             prompt: "p".into(),

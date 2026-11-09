@@ -1,7 +1,12 @@
+//! What the installed OpenCode offers: version, models, settings, and diagnostics.
+//!
 //! What the installed OpenCode offers, read from the CLI itself: its version, its models, the
 //! settings in the config files it reads, and its read-only diagnostics commands. OpenCode has no
 //! feature flags and no `doctor`; `debug paths` and `debug agents` stand in for it.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use serde_json::Value;
 
 use super::{models, opencode_bin};
@@ -20,14 +25,16 @@ const COMMANDS: &[InfoCommand] = &[
 const MAX_VALUE: usize = 80;
 
 /// Runs OpenCode with `args`. See `cli_info::run`.
-fn run(args: &[&str]) -> Result<String, String> {
+fn run(args: &[&str]) -> Result<String, Error> {
     let binary = opencode_bin().ok_or("OpenCode is not installed")?;
     cli_info::run(&binary, args)
 }
 
-/// Parses `opencode debug config`, a JSON list of the config sources OpenCode read. Each file's
-/// top-level keys become one setting each, in the order OpenCode reads the files; folders are
-/// left out, since `debug paths` shows them.
+/// Parses `opencode debug config`, a JSON list of the config sources OpenCode read.
+///
+/// Each file's top-level keys become one setting each, in the order OpenCode reads the files;
+/// folders are left out, since `debug paths` shows them.
+#[must_use]
 pub fn parse_settings(text: &str) -> Vec<CliSetting> {
     let Ok(Value::Array(sources)) = serde_json::from_str::<Value>(text) else {
         return Vec::new();
@@ -70,7 +77,7 @@ fn summarize(value: &Value) -> String {
 
 /// Parses `opencode debug agents` into one line per agent the user can see: its name, whether it
 /// is a primary agent or a subagent, and its description.
-pub fn parse_agents(text: &str) -> Result<String, String> {
+pub(crate) fn parse_agents(text: &str) -> Result<String, Error> {
     let agents: Vec<Value> =
         serde_json::from_str(text).map_err(|e| format!("Could not read OpenCode's agents: {e}"))?;
     let lines: Vec<String> = agents
@@ -95,11 +102,16 @@ pub fn parse_agents(text: &str) -> Result<String, String> {
 }
 
 /// The CLI's path, version, settings and models, for the Settings pane.
-pub fn info() -> Result<CliInfo, String> {
+///
+/// # Errors
+///
+/// Returns an error when OpenCode is not installed.
+pub fn info() -> Result<CliInfo, Error> {
     let path = opencode_bin().ok_or("OpenCode is not installed")?;
-    let version = run(&["--version"])
-        .map(|text| text.lines().next().unwrap_or_default().trim().to_string())
-        .unwrap_or_else(|_| "unknown".into());
+    let version = run(&["--version"]).map_or_else(
+        |_| "unknown".into(),
+        |text| text.lines().next().unwrap_or_default().trim().to_string(),
+    );
     Ok(CliInfo {
         path: path.to_string_lossy().into_owned(),
         version,
@@ -112,7 +124,12 @@ pub fn info() -> Result<CliInfo, String> {
 
 /// Runs one of the read-only diagnostics commands. See `cli_info::command`. The agents come as
 /// JSON with each agent's whole prompt, so they are read into a list instead.
-pub fn command(kind: InfoCommand) -> Result<String, String> {
+///
+/// # Errors
+///
+/// Returns an error when OpenCode does not offer that command, is not installed, or the command
+/// fails, times out, or prints nothing useful, including agent output that cannot be read.
+pub fn command(kind: InfoCommand) -> Result<String, Error> {
     cli_info::check("OpenCode", kind, COMMANDS)?;
     if kind == InfoCommand::Agents {
         return parse_agents(&run(&["debug", "agents"])?);

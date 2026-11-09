@@ -1,5 +1,7 @@
 //! The plugins folder, and the plugins in it.
 
+// Rust guideline compliant 2026-10-09
+
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
@@ -62,7 +64,7 @@ mod tests {
         dir
     }
 
-    fn settings_with(plugins_dir: PathBuf, disabled: &[&str]) -> Settings {
+    fn settings_with(plugins_dir: &Path, disabled: &[&str]) -> Settings {
         Settings {
             plugins_dir: Some(plugins_dir.to_string_lossy().into_owned()),
             disabled_plugins: disabled.iter().map(|id| (*id).to_string()).collect(),
@@ -103,7 +105,7 @@ mod tests {
                 "apps": { "apps": { "figma": { "id": "asdk_figma", "required": true }, "linear": { "id": "asdk_linear" } } }
             }"#,
         );
-        let plugins = list(&settings_with(root, &[]));
+        let plugins = list(&settings_with(&root, &[]));
         assert_eq!(plugins.len(), 1);
         let plugin = &plugins[0];
         assert_eq!(plugin.id, "codexish");
@@ -172,7 +174,7 @@ mod tests {
             &root.join("demo/.app.json"),
             r#"{"apps":{"figma":{"id":"asdk_figma","required":true}}}"#,
         );
-        let plugins = list(&settings_with(root, &[]));
+        let plugins = list(&settings_with(&root, &[]));
         assert_eq!(plugins[0].hooks.len(), 1);
         assert_eq!(plugins[0].hooks[0].event, HookEvent::Stop);
         assert_eq!(plugins[0].apps.len(), 1);
@@ -188,7 +190,7 @@ mod tests {
             &root.join("demo/.patchwork-plugin/plugin.json"),
             r#"{"name":"Demo","apps":[],"hooks":{"hooks":{"stop":[{"hooks":[{"type":"command","command":"true"}]}]}}}"#,
         );
-        let plugins = list(&settings_with(root, &[]));
+        let plugins = list(&settings_with(&root, &[]));
         assert_eq!(plugins.len(), 1);
         assert!(plugins[0].apps.is_empty());
         assert_eq!(plugins[0].hooks.len(), 1);
@@ -226,7 +228,7 @@ mod tests {
             agent: "claude",
             status: Some("complete"),
         };
-        let failures = run_hooks(&settings_with(root.clone(), &[]), &context);
+        let failures = run_hooks(&settings_with(&root, &[]), &context);
         assert_eq!(failures, ["Demo: broke"]);
         assert_eq!(
             std::fs::read_to_string(project.join("hook.txt")).expect("the hook wrote"),
@@ -238,7 +240,7 @@ mod tests {
         );
         // A disabled plugin runs nothing.
         std::fs::remove_file(project.join("hook.txt")).expect("remove");
-        assert!(run_hooks(&settings_with(root, &["demo"]), &context).is_empty());
+        assert!(run_hooks(&settings_with(&root, &["demo"]), &context).is_empty());
         assert!(!project.join("hook.txt").exists());
     }
 
@@ -259,7 +261,7 @@ mod tests {
             status: None,
         };
         let started = std::time::Instant::now();
-        let failures = run_hooks(&settings_with(root, &[]), &context);
+        let failures = run_hooks(&settings_with(&root, &[]), &context);
         assert!(started.elapsed() < Duration::from_secs(10));
         assert_eq!(failures.len(), 1);
         assert!(failures[0].starts_with("Slow: "));
@@ -276,7 +278,7 @@ mod tests {
                 "preToolUse":[{"hooks":[{"type":"builtin","name":"boundedWaits","timeoutSec":10}]}]
             }}"#,
         );
-        let plugins = list(&settings_with(root, &[]));
+        let plugins = list(&settings_with(&root, &[]));
         assert_eq!(plugins.len(), 1);
         let plugin = &plugins[0];
         assert_eq!(plugin.id, "patchwork");
@@ -310,6 +312,6 @@ mod tests {
             &root.join("plain/skills/one/SKILL.md"),
             "---\nname: one\n---\n",
         );
-        assert!(list(&settings_with(root, &[])).is_empty());
+        assert!(list(&settings_with(&root, &[])).is_empty());
     }
 }

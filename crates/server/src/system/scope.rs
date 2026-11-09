@@ -4,6 +4,8 @@
 //! Each build of the app has its own slice inside that one, so it can stop the
 //! agents a crashed run of itself left behind without touching another build's.
 
+// Rust guideline compliant 2026-10-09
+
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -132,7 +134,7 @@ fn limit_slice() {
         // Lifts the no-swap limit that earlier builds set on the slice for this boot.
         "MemorySwapMax=infinity",
     ]) {
-        log::warn!("could not set the memory limit on {SLICE}");
+        log::warn!(slice = SLICE; "could not set the memory limit on {{slice}}");
     }
 }
 

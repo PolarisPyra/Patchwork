@@ -1,6 +1,8 @@
 //! One change of a file's diff at a time: staging it, taking it back out of the index, or
 //! discarding it from the file, and which of a file's changes are staged.
 
+// Rust guideline compliant 2026-10-09
+
 use std::io::Write;
 use std::process::Stdio;
 
@@ -102,6 +104,11 @@ fn toplevel(root: &str) -> Result<String, Error> {
 
 /// Stages, unstages, or discards the change of the file's diff whose text, from its `@@` line
 /// on, is `hunk`. Refused when the file changed so that the change is no longer in its diff.
+///
+/// # Errors
+///
+/// Returns an error when the file's diff cannot be read, the change is no longer in it, the change
+/// is not staged and cannot be unstaged, or `git apply` refuses it.
 pub fn apply_hunk(
     root: &str,
     rel: &str,
@@ -147,6 +154,11 @@ pub fn apply_hunk(
 
 /// Which changes of the file's diff are staged, in its order. Empty when the file has nothing
 /// staged, which also leaves out a reply's changes that were committed since.
+///
+/// # Errors
+///
+/// Returns an error when the repository's top-level folder cannot be found or the file's diff
+/// cannot be read.
 pub fn staged_hunks(root: &str, rel: &str, turn: Option<&TurnTrees>) -> Result<Vec<bool>, Error> {
     if is_untracked(root, rel) || git(root, &["diff", "--cached", "--quiet", "--", rel]).is_ok() {
         return Ok(Vec::new());

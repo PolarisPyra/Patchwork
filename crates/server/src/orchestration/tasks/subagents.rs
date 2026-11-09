@@ -1,4 +1,8 @@
 //! Subagents a turn starts: their own threads, moving them to the background, and stopping one.
+
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -51,7 +55,7 @@ impl Runner {
             if turn.agent != AgentKind::Claude || turn.cancelled.load(Ordering::SeqCst) {
                 return;
             }
-            (turn.stdin.clone(), turn.controls.clone())
+            (Arc::clone(&turn.stdin), Arc::clone(&turn.controls))
         };
         let answers: Vec<_> = subagents
             .iter()
@@ -75,15 +79,20 @@ impl Runner {
             })
             .collect();
         let deadline = Instant::now() + BACKGROUND_WAIT;
-        answers.into_iter().for_each(|answer| {
+        for answer in answers {
             let left = deadline.saturating_duration_since(Instant::now());
             let _ = answer.recv_timeout(left);
-        });
+        }
     }
 
     /// Stops one subagent of the running turn, leaving the rest of the turn going, or a command
     /// Patchwork's own agent moved to the background.
-    pub fn stop_subagent(&self, thread_id: &str, tool_id: &str) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the command already finished, when the chat has no running turn, when
+    /// the subagent cannot be stopped, or when the turn no longer accepts input.
+    pub fn stop_subagent(&self, thread_id: &str, tool_id: &str) -> Result<(), Error> {
         if let Some(stopped) = self.jobs.stop_listed(thread_id, tool_id) {
             return stopped
                 .then_some(())
@@ -168,7 +177,7 @@ pub(in crate::orchestration) fn open_child(turn: &Turn, tool: &ToolCall) -> Opti
         pinned: false,
     };
     if let Err(e) = turn.server.store.insert_threads(vec![thread.clone()]) {
-        log::warn!("failed to save a subagent's thread: {e}");
+        log::warn!(error:% = e; "failed to save a subagent's thread: {{error}}");
         return None;
     }
     let thread_id = thread.id.clone();

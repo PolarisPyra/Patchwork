@@ -1,5 +1,7 @@
 //! What agents may do without asking, by scope.
 
+// Rust guideline compliant 2026-10-09
+
 use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};

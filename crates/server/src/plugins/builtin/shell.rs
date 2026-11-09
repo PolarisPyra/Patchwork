@@ -2,6 +2,10 @@
 //! quotes and escapes removed, the operators between commands, comments, heredocs, and the scripts
 //! that `$(…)` and backticks run.
 
+// Rust guideline compliant 2026-10-09
+
+use std::fmt::Write as _;
+
 /// A piece of a command line.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
@@ -283,12 +287,12 @@ impl Lexer {
                             '$' if self.starts("$((") => self.arithmetic(&mut text),
                             '$' if self.peek(1) == Some('(') => {
                                 let script = self.substitution();
-                                text.push_str(&format!("$({script})"));
+                                let _ = write!(text, "$({script})");
                                 subs.push(script);
                             }
                             '`' => {
                                 let script = self.backtick();
-                                text.push_str(&format!("`{script}`"));
+                                let _ = write!(text, "`{script}`");
                                 subs.push(script);
                             }
                             _ => {
@@ -309,7 +313,7 @@ impl Lexer {
                 '$' if self.starts("$((") => self.arithmetic(&mut text),
                 '$' if self.peek(1) == Some('(') => {
                     let script = self.substitution();
-                    text.push_str(&format!("$({script})"));
+                    let _ = write!(text, "$({script})");
                     subs.push(script);
                 }
                 '$' if self.peek(1) == Some('{') => {
@@ -323,7 +327,7 @@ impl Lexer {
                 }
                 '`' => {
                     let script = self.backtick();
-                    text.push_str(&format!("`{script}`"));
+                    let _ = write!(text, "`{script}`");
                     subs.push(script);
                 }
                 _ => {

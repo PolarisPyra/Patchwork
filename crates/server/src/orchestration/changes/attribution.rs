@@ -9,6 +9,8 @@
 //! than a file in none, since the Changes view still lists it. A change no call covers yet waits,
 //! since some agents report a call only once it is done.
 
+// Rust guideline compliant 2026-10-09
+
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::path::Path;
@@ -164,9 +166,9 @@ impl Attribution {
             .filter(|(path, times)| times.iter().any(|&at| self.cover(path, at) > Cover::No))
             .map(|(path, _)| path.clone())
             .collect();
-        covered.iter().for_each(|path| {
+        for path in &covered {
             self.pending.remove(path);
-        });
+        }
         covered
     }
 
@@ -323,14 +325,13 @@ fn claims(replies: &[&[Candidate]]) -> Vec<Vec<Outcome>> {
                 .iter()
                 .map(|candidate| match candidate.cover {
                     Cover::No => Outcome::Waits,
-                    Cover::Named => Outcome::Claimed,
                     Cover::Yes if named.contains(candidate.path.as_str()) => Outcome::Taken,
                     Cover::Yes
                         if claimants.get(candidate.path.as_str()).copied().unwrap_or(0) > 1 =>
                     {
                         Outcome::Taken
                     }
-                    Cover::Yes => Outcome::Claimed,
+                    Cover::Named | Cover::Yes => Outcome::Claimed,
                 })
                 .collect()
         })

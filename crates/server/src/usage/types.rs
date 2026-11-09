@@ -1,5 +1,7 @@
 //! Subscription usage limits per provider.
 
+// Rust guideline compliant 2026-10-09
+
 use serde::Serialize;
 
 use crate::provider::AgentKind;

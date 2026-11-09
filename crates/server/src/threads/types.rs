@@ -1,5 +1,7 @@
 //! Threads, their goals, and how much they may do unasked.
 
+// Rust guideline compliant 2026-10-09
+
 use serde::{Deserialize, Serialize};
 
 use crate::provider::{AgentKind, ProviderSlashCommand};
@@ -22,6 +24,10 @@ pub enum AccessMode {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate fact about the chat, stored as its own column"
+)]
 pub struct Thread {
     pub id: String,
     /// None for a chat without a project; it runs in a private scratch folder.
@@ -42,7 +48,7 @@ pub struct Thread {
     /// the plan lacks per-chat backgrounds.
     #[serde(default)]
     pub background: Option<ChatBackground>,
-    /// Claude session_id / Codex thread_id used to resume the conversation.
+    /// Claude `session_id` / Codex `thread_id` used to resume the conversation.
     pub session_id: Option<String>,
     pub created_at: u64,
     pub messages: Vec<Message>,

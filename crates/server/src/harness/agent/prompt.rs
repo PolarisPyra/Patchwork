@@ -1,5 +1,8 @@
 //! The system prompt the agent runs with: Patchwork's guidance, the plan-mode and computer-use parts, the project's instructions, and the provider's own prompt from Settings.
 
+// Rust guideline compliant 2026-10-09
+
+use std::fmt::Write as _;
 use std::path::Path;
 use super::Request;
 
@@ -18,19 +21,20 @@ pub(super) fn system_prompt(request: &Request, root_dir: &Path) -> String {
         std::env::consts::OS,
     );
     if let Some(instructions) = &request.instructions {
-        prompt.push_str(&format!("\n\n{instructions}"));
+        let _ = write!(prompt, "\n\n{instructions}");
     }
     if request.plan {
-        prompt.push_str(&format!("\n\n{PLAN_MODE}"));
+        let _ = write!(prompt, "\n\n{PLAN_MODE}");
     } else if crate::computer::enabled() {
-        prompt.push_str(&format!("\n\n{COMPUTER_USE}"));
+        let _ = write!(prompt, "\n\n{COMPUTER_USE}");
     }
     for name in ["AGENTS.md", "CLAUDE.md"] {
         if let Ok(text) = std::fs::read_to_string(root_dir.join(name)) {
             let text: String = text.chars().take(MAX_INSTRUCTIONS).collect();
-            prompt.push_str(&format!(
+            let _ = write!(
+                prompt,
                 "\n\nThe project's instructions, from {name}:\n\n{text}"
-            ));
+            );
             break;
         }
     }
@@ -38,7 +42,7 @@ pub(super) fn system_prompt(request: &Request, root_dir: &Path) -> String {
     // override it.
     let custom = request.system_prompt.trim();
     if !custom.is_empty() {
-        prompt.push_str(&format!("\n\n{custom}"));
+        let _ = write!(prompt, "\n\n{custom}");
     }
     prompt
 }

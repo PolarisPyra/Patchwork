@@ -1,5 +1,8 @@
 //! The running servers: starting them, their tools, and calling those tools for an API turn.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Sender};
@@ -39,16 +42,13 @@ pub(super) fn live_servers() -> Vec<(String, Arc<Conn>)> {
         servers
             .into_iter()
             .map(|(name, config)| {
-                let entry = pool
-                    .entry(name.clone())
-                    .or_insert_with(|| {
-                        Arc::new(Entry {
-                            config,
-                            conn: Mutex::new(None),
-                            notices: Arc::default(),
-                        })
+                let entry = Arc::clone(pool.entry(name.clone()).or_insert_with(|| {
+                    Arc::new(Entry {
+                        config,
+                        conn: Mutex::new(None),
+                        notices: Arc::default(),
                     })
-                    .clone();
+                }));
                 (name, entry)
             })
             .collect()
@@ -110,6 +110,7 @@ fn ready_servers() -> Vec<(String, McpServer, Arc<Conn>)> {
 
 /// The tools of every running server, for a turn, up to `tool_budget`. Plan mode gets only
 /// the read-only ones.
+#[must_use]
 pub fn turn_tools(plan: bool) -> Vec<TurnTool> {
     let mut taken = std::collections::HashSet::new();
     let mut out = Vec::new();
@@ -138,7 +139,12 @@ pub fn turn_tools(plan: bool) -> Vec<TurnTool> {
 }
 
 /// Starts a server just to list its tools, then stops it.
-pub fn probe(config: &McpServer) -> Result<Vec<ToolInfo>, String> {
+///
+/// # Errors
+///
+/// Returns an error when the server cannot be started or does not answer the initialize and
+/// tool-list requests.
+pub fn probe(config: &McpServer) -> Result<Vec<ToolInfo>, Error> {
     Conn::start(config, Arc::default()).map(|conn| conn.tool_infos())
 }
 
@@ -157,12 +163,17 @@ fn clean(name: &str) -> String {
 
 /// Calls a tool, giving up once `stopped` says the turn was stopped. Ok carries its result for
 /// the model; Err a failure the model is told about.
+///
+/// # Errors
+///
+/// Returns an error when the server is not running, cannot be reached again, the request fails or
+/// times out, the turn is stopped, or the tool reports an error.
 pub fn call(
     server: &str,
     tool: &str,
     arguments: &Value,
     stopped: &dyn Fn() -> bool,
-) -> Result<String, String> {
+) -> Result<String, Error> {
     let entry = pool()
         .get(server)
         .cloned()
@@ -176,7 +187,7 @@ pub fn call(
             entry
                 .connect()?
                 .request("tools/call", params, CALL_TIMEOUT, stopped)
-                .map_err(|_| e)?
+                .map_err(|_discarded| e)?
         }
         other => other?,
     };
@@ -186,15 +197,15 @@ pub fn call(
         .flatten()
         .map(|part| match part["type"].as_str() {
             Some("text") => part["text"].as_str().unwrap_or_default().to_string(),
-            Some("resource") => part["resource"]["text"]
-                .as_str()
-                .map(String::from)
-                .unwrap_or_else(|| {
+            Some("resource") => part["resource"]["text"].as_str().map_or_else(
+                || {
                     format!(
                         "(resource {})",
                         part["resource"]["uri"].as_str().unwrap_or_default()
                     )
-                }),
+                },
+                String::from,
+            ),
             Some("resource_link") => {
                 format!("(resource {})", part["uri"].as_str().unwrap_or_default())
             }
@@ -209,7 +220,7 @@ pub fn call(
         text
     };
     if result["isError"] == true {
-        Err(text)
+        Err(text.into())
     } else {
         Ok(text)
     }
@@ -218,7 +229,7 @@ pub fn call(
 pub(super) struct Entry {
     pub(super) config: McpServer,
     /// None until started; held while starting, so callers wait for one start.
-    pub(super) conn: Mutex<Option<Result<Arc<Conn>, String>>>,
+    pub(super) conn: Mutex<Option<Result<Arc<Conn>, Error>>>,
     /// Where the server's notifications go: the CLIs sharing it. Kept across restarts.
     pub(super) notices: Notices,
 }
@@ -235,15 +246,17 @@ pub(super) fn announce(notices: &Notices, notice: &Value) {
 }
 
 impl Entry {
-    pub(super) fn connect(&self) -> Result<Arc<Conn>, String> {
+    pub(super) fn connect(&self) -> Result<Arc<Conn>, Error> {
         let mut conn = self.conn.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some(Ok(c)) = conn.as_ref()
             && !c.alive()
         {
             *conn = None;
         }
-        conn.get_or_insert_with(|| Conn::start(&self.config, self.notices.clone()).map(Arc::new))
-            .clone()
+        conn.get_or_insert_with(|| {
+            Conn::start(&self.config, Arc::clone(&self.notices)).map(Arc::new)
+        })
+        .clone()
     }
 
     fn drop_conn(&self) {
@@ -272,7 +285,7 @@ enum Transport {
 }
 
 impl Conn {
-    fn start(config: &McpServer, notices: Notices) -> Result<Conn, String> {
+    fn start(config: &McpServer, notices: Notices) -> Result<Conn, Error> {
         let transport = match (&config.command, &config.url) {
             (Some(command), _) => Transport::Stdio(StdioServer::spawn(
                 command,
@@ -352,13 +365,13 @@ impl Conn {
     }
 
     /// A start failure, with the end of the server's stderr when it has any.
-    fn explain(&self, error: String) -> String {
+    fn explain(&self, error: Error) -> Error {
         match &self.transport {
             Transport::Stdio(s) => {
                 let tail = s.stderr.lock().unwrap_or_else(PoisonError::into_inner);
                 match tail.trim() {
                     "" => error,
-                    tail => format!("{error}: {tail}"),
+                    tail => format!("{error}: {tail}").into(),
                 }
             }
             Transport::Http(_) => error,
@@ -373,7 +386,7 @@ impl Conn {
         params: Value,
         timeout: Duration,
         stopped: &dyn Fn() -> bool,
-    ) -> Result<Value, String> {
+    ) -> Result<Value, Error> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let mut message = json!({"jsonrpc": "2.0", "id": id, "method": method});
         // A request without params leaves them out; some servers refuse a null.
@@ -404,16 +417,17 @@ impl Conn {
                             reason.into()
                         } else {
                             format!("The MCP server did not answer in {} s", timeout.as_secs())
+                                .into()
                         });
                     }
                 }
             }
         };
         if let Some(error) = reply.get("error") {
-            return Err(error["message"]
+            return Err((error["message"]
                 .as_str()
-                .map(String::from)
-                .unwrap_or_else(|| error.to_string()));
+                .map_or_else(|| error.to_string(), String::from))
+            .into());
         }
         Ok(reply["result"].clone())
     }
@@ -450,5 +464,5 @@ impl Conn {
 }
 
 /// Where a request's answer arrives.
-pub(super) type Answer = mpsc::Receiver<Result<Value, String>>;
-pub(super) type Waiters = Arc<Mutex<HashMap<u64, Sender<Result<Value, String>>>>>;
+pub(super) type Answer = mpsc::Receiver<Result<Value, Error>>;
+pub(super) type Waiters = Arc<Mutex<HashMap<u64, Sender<Result<Value, Error>>>>>;

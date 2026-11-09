@@ -5,6 +5,8 @@
 //! imported as transcripts, which the first turn of the thread sends to the agent as context.
 //! The database is only ever opened read-only.
 
+// Rust guideline compliant 2026-10-09
+
 use rusqlite::{Connection, OpenFlags, params};
 use serde_json::Value;
 
@@ -31,7 +33,7 @@ pub fn sessions(agent: AgentKind) -> Vec<Session> {
     Connection::open_with_flags(path, flags)
         .and_then(|conn| read(&conn, agent))
         .unwrap_or_else(|e| {
-            log::warn!("couldn't read OpenCode sessions: {e}");
+            log::warn!(error:% = e; "couldn't read OpenCode sessions: {{error}}");
             ilog!("OpenCode: couldn't read the database: {e}");
             vec![]
         })
@@ -151,7 +153,7 @@ fn v2_session_messages(conn: &Connection, session: &str) -> rusqlite::Result<Vec
                 .collect();
             (Role::Assistant, texts.join("\n\n"))
         };
-        push_merged(&mut out, role, text, at as u64);
+        push_merged(&mut out, role, &text, at as u64);
     }
     Ok(out)
 }
@@ -192,7 +194,7 @@ fn session_messages(conn: &Connection, session: &str) -> rusqlite::Result<Vec<Se
                 texts.extend(p["text"].as_str().map(String::from));
             }
         }
-        push_merged(&mut out, role, texts.join("\n\n"), at as u64);
+        push_merged(&mut out, role, &texts.join("\n\n"), at as u64);
     }
     Ok(out)
 }

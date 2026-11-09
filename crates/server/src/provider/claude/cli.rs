@@ -1,8 +1,13 @@
+//! What the installed Claude Code offers: version, feature gates, and models.
+//!
 //! What the installed Claude Code offers, read from the CLI itself: its version, the feature gates
 //! and model catalog it has cached, and the read-only diagnostics commands. Claude Code has no
 //! command that lists its gates or models, so Patchwork reads the files the CLI itself keeps
 //! rather than a copy of either list, and a newer Claude Code shows up as it is.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
@@ -12,12 +17,13 @@ use crate::provider::{find_binary, located_or};
 use crate::provider::{AgentKind, ClaudeFeature, ClaudeInfo, ClaudeModel};
 
 /// The Claude Code in use: the one the user located, else `claude` on PATH.
+#[must_use]
 pub fn binary() -> Option<PathBuf> {
     located_or(AgentKind::Claude, || find_binary("claude"))
 }
 
 /// The CLI's version line, e.g. `2.1.310 (Claude Code)`.
-fn version(binary: &Path) -> Result<String, String> {
+fn version(binary: &Path) -> Result<String, Error> {
     let text = cli_info::run(binary, &["--version"])?;
     Ok(text.lines().next().unwrap_or_default().trim().to_string())
 }
@@ -25,10 +31,15 @@ fn version(binary: &Path) -> Result<String, String> {
 /// Longest a gate's value may be on its line in the pane.
 const MAX_VALUE: usize = 40;
 
-/// The feature gates Claude Code has resolved and cached in its settings file. The CLI asks
-/// GrowthBook for them and writes the answer to `.claude.json`, so this is the set the CLI is
-/// running with, not a list of names compiled into it.
-pub fn features() -> Result<Vec<ClaudeFeature>, String> {
+/// The feature gates Claude Code has resolved and cached in its settings file.
+///
+/// The CLI asks GrowthBook for them and writes the answer to `.claude.json`, so this is the set the
+/// CLI is running with, not a list of names compiled into it.
+///
+/// # Errors
+///
+/// Returns an error when Claude Code's settings file cannot be read or is not valid JSON.
+pub fn features() -> Result<Vec<ClaudeFeature>, Error> {
     let file = crate::provider::claude::settings_file();
     let text = std::fs::read_to_string(&file)
         .map_err(|e| format!("Could not read {}: {e}", file.display()))?;
@@ -80,9 +91,12 @@ fn truncate(text: &str, chars: usize) -> &str {
     }
 }
 
+/// The models in the newest catalog Claude Code has cached.
+///
 /// The models in the newest catalog Claude Code has cached, with the terminal's catalog preferred
 /// when the CLI and the desktop app have each fetched one. The CLI fetches the catalog from the
 /// API and keeps it in `cache/model-catalog`.
+#[must_use]
 pub fn models() -> Vec<ClaudeModel> {
     let Some(dir) =
         crate::provider::claude::home().map(|home| home.join("cache").join("model-catalog"))
@@ -150,7 +164,11 @@ fn parse_model(model: &Value) -> Option<ClaudeModel> {
 }
 
 /// The CLI's path and version, its gates and models, for the Settings pane.
-pub fn info() -> Result<ClaudeInfo, String> {
+///
+/// # Errors
+///
+/// Returns an error when Claude Code is not installed.
+pub fn info() -> Result<ClaudeInfo, Error> {
     let path = binary().ok_or("Claude Code is not installed")?;
     Ok(ClaudeInfo {
         version: version(&path).unwrap_or_else(|_| "unknown".into()),
@@ -161,7 +179,12 @@ pub fn info() -> Result<ClaudeInfo, String> {
 }
 
 /// Runs one of the read-only diagnostics commands. See `cli_info::command`.
-pub fn command(kind: InfoCommand) -> Result<String, String> {
+///
+/// # Errors
+///
+/// Returns an error when Claude Code does not offer that command, is not installed, or the command
+/// fails, times out, or prints nothing.
+pub fn command(kind: InfoCommand) -> Result<String, Error> {
     cli_info::check(
         "Claude Code",
         kind,
@@ -300,7 +323,7 @@ mod tests {
                 .any(|model| model.context_window.is_some())
         );
         let doctor = command(InfoCommand::Doctor).expect("claude doctor answers");
-        assert!(!doctor.trim().is_empty());
+        assert_ne!(doctor.trim(), "");
         eprintln!(
             "{}: {} gates ({} on), {} models",
             info.version,

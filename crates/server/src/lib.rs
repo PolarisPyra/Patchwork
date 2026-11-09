@@ -1,6 +1,8 @@
 //! Patchwork's backend. The desktop app calls these methods and receives
 //! agent events from them.
 
+// Rust guideline compliant 2026-10-09
+
 /// The app's version, the workspace's in `Cargo.toml`.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -8,7 +10,7 @@ pub mod agents;
 pub mod backgrounds;
 pub mod checks;
 pub mod computer;
-pub mod error;
+mod error;
 pub mod git;
 pub mod harness;
 pub mod import;
@@ -38,9 +40,8 @@ use persistence::Store;
 
 use crate::orchestration::AgentEventEnvelope;
 
+#[doc(inline)]
 pub use error::Error;
-
-pub type Res<T> = Result<T, String>;
 
 /// Receives every agent event, e.g. to forward it to the UI.
 pub type EventSink = Box<dyn Fn(AgentEventEnvelope) + Send + Sync>;
@@ -51,8 +52,6 @@ pub struct Server {
     runner: Runner,
     /// Parent of the scratch folders that project-less chats run in.
     chats_dir: PathBuf,
-    /// Images pasted into a chat, saved as files so they attach like dropped ones.
-    pasted_dir: PathBuf,
     /// Pictures picked as chat backgrounds, copied so they stay when the originals move.
     backgrounds_dir: PathBuf,
     /// Where an agent CLI's install script is saved while it runs.
@@ -72,10 +71,21 @@ pub struct Server {
     secrets: secrets::Waiters,
 }
 
+impl std::fmt::Debug for Server {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Server").finish_non_exhaustive()
+    }
+}
+
 impl Server {
     /// `dirs` are Patchwork's folders (see `system::dirs`); `data_dir` is the app's own folder,
     /// which holds chat scratch folders.
-    pub fn open(dirs: system::Dirs, data_dir: &Path, sink: EventSink) -> Res<Arc<Self>> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the database cannot be opened or read, or when recovering the turns an
+    /// earlier run left unfinished fails.
+    pub fn open(dirs: &system::Dirs, data_dir: &Path, sink: EventSink) -> Result<Arc<Self>, Error> {
         system::dirs::init(dirs.clone());
         crate::provider::api::config::init(&dirs.config);
         provider::mcp::init(&dirs.config);
@@ -89,7 +99,7 @@ impl Server {
         std::thread::spawn(terminal::sweep);
         secrets::keep_swept();
         let logs = logging::session_dir(&dirs.logs);
-        let store = Store::open(dirs.data)?;
+        let store = Store::open(&dirs.data)?;
         logging::start(&logs, &store.settings().logging);
         logging::system::record(&logs);
         orchestration::turn::recovery::recover(&store)?;
@@ -98,7 +108,6 @@ impl Server {
             usage: usage::UsageCache::default(),
             runner: Runner::default(),
             chats_dir: data_dir.join("chats"),
-            pasted_dir: data_dir.join("pasted"),
             backgrounds_dir: data_dir.join("backgrounds"),
             installers_dir: data_dir.join("installers"),
             worktrees_dir: data_dir.join("worktrees"),
@@ -122,7 +131,7 @@ impl Server {
             Some(server) if tool == secrets::TOOL => server
                 .runner
                 .request_secret(&server, thread_id, args, stopped),
-            Some(_) => Err(format!("Patchwork has no tool {tool}")),
+            Some(_) => Err(format!("Patchwork has no tool {tool}").into()),
             None => Err("Patchwork is closing".into()),
         }));
         Ok(server)

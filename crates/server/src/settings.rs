@@ -1,5 +1,8 @@
 //! The app's settings: their shape, and saving them.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
@@ -25,6 +28,10 @@ pub enum Theme {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate setting the user turns on or off"
+)]
 pub struct Integrations {
     pub github: bool,
     pub terminal: bool,
@@ -34,6 +41,10 @@ pub struct Integrations {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate setting the user turns on or off"
+)]
 pub struct Settings {
     pub onboarded: bool,
     pub theme: Theme,
@@ -114,6 +125,7 @@ pub struct CheckSettings {
 
 impl CheckSettings {
     /// Whether `project_id` runs its checks after every task.
+    #[must_use]
     pub fn on(&self, project_id: &str) -> bool {
         self.projects
             .get(project_id)
@@ -125,6 +137,10 @@ impl CheckSettings {
 /// The integrated terminal: its environment, font, cursor, and scrollback, with their defaults.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate setting the user turns on or off"
+)]
 pub struct TerminalSettings {
     /// Variables added to the shell's environment; null removes one. Values may use
     /// `${env:NAME}` and `${workspaceFolder}`.
@@ -311,6 +327,10 @@ impl Default for NotificationSettings {
 /// Settings that trade a little convenience for fewer tokens spent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate setting the user turns on or off"
+)]
 pub struct TokenSettings {
     /// Shows the token counts under each finished reply.
     pub show_usage: bool,
@@ -372,6 +392,7 @@ impl Default for TokenSettings {
 
 impl TokenSettings {
     /// The context size at which `agent` compacts by default; 0 leaves it to the agent.
+    #[must_use]
     pub fn compact_window(&self, agent: AgentKind) -> u64 {
         match agent {
             AgentKind::Claude => self.claude_compact_window,
@@ -386,10 +407,15 @@ impl TokenSettings {
 impl Server {
     /// Watches the skills folder in place of any watch before, passing the skills to
     /// `on_change` after each settled burst of changes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the skills watcher cannot be created or cannot watch the skills
+    /// folder.
     pub fn watch_skills(
         self: &Arc<Self>,
         on_change: impl Fn(Vec<skills::Skill>) + Send + 'static,
-    ) -> Result<(), String> {
+    ) -> Result<(), Error> {
         let mut current = self
             .skills_watch
             .lock()
@@ -413,7 +439,12 @@ impl Server {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 
-    pub fn save_settings(self: &Arc<Self>, settings: Settings) -> Result<(), String> {
+    /// Saves `settings` and applies what changed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the settings cannot be written to the database.
+    pub fn save_settings(self: &Arc<Self>, settings: Settings) -> Result<(), Error> {
         crate::logging::follow(&settings.logging);
         let old = self.store.settings();
         let guards_changed = !permissions::same_guards(&old.permissions, &settings.permissions);
@@ -422,7 +453,7 @@ impl Server {
         let changed = changed_sections(&old, &settings);
         self.store.update_settings(|s| *s = settings)?;
         if !changed.is_empty() {
-            log::info!("settings changed: {}", changed.join(", "));
+            log::info!(changed:% = changed.join(", "); "settings changed: {{changed}}");
         }
         // A rule the user just added may answer requests already waiting.
         self.runner.apply_rules(self);

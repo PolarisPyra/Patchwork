@@ -6,6 +6,8 @@
 //! - `settings`, `threads`: how each table's rows map to the app's types.
 //! - `legacy`: data from before the database, or from before it moved.
 
+// Rust guideline compliant 2026-10-09
+
 mod legacy;
 mod migrations;
 mod scheduled;
@@ -13,9 +15,9 @@ mod settings;
 mod store;
 mod threads;
 
-pub use legacy::adopt_old_dir;
+#[doc(inline)]
 pub use store::Store;
-use store::{DB_FILE, dec, enc, err, from_json, json};
+use store::{dec, enc, err, from_json, json};
 
 #[cfg(test)]
 mod tests;

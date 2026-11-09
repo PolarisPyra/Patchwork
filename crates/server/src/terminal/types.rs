@@ -1,6 +1,8 @@
 //! What the terminal panel is sent: the terminals, an attached window's screen and output, and the
 //! shells it can start.
 
+// Rust guideline compliant 2026-10-09
+
 use serde::Serialize;
 
 /// A terminal, running or ended, as the panel lists it.

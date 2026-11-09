@@ -1,6 +1,10 @@
+//! Hooks Patchwork hands to each agent CLI.
+//!
 //! Handing hooks to each agent CLI: which events each one runs, the command that starts
 //! Patchwork's own binary as a hook, where each CLI reads its hooks from, what it puts in a
 //! call, and the answer it expects.
+
+// Rust guideline compliant 2026-10-09
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
@@ -14,9 +18,12 @@ use crate::plugins::builtin;
 use crate::plugins::{AgentHook, HookAction, HookEvent};
 use crate::provider::{AgentKind, TurnSpec};
 
-/// Whether `agent` runs hooks on `event` itself. Patchwork runs the turn's own events for every
-/// agent; Claude Code and Codex run all the others, Antigravity its session start and tool calls,
-/// and Patchwork's own agent its tool calls. OpenCode has no hooks of this kind.
+/// Whether `agent` runs hooks on `event` itself.
+///
+/// Patchwork runs the turn's own events for every agent; Claude Code and Codex run all the others,
+/// Antigravity its session start and tool calls, and Patchwork's own agent its tool calls. OpenCode
+/// has no hooks of this kind.
+#[must_use]
 pub fn runs(agent: AgentKind, event: HookEvent) -> bool {
     if event.runs_in_patchwork() {
         return false;
@@ -32,11 +39,14 @@ pub fn runs(agent: AgentKind, event: HookEvent) -> bool {
     }
 }
 
+/// The shell command that runs Patchwork's own binary with `args`.
+///
 /// The command that starts Patchwork's own binary with `args`, quoted for the shell `agent` runs
 /// hooks in: a POSIX shell for most. On Windows Codex runs them in PowerShell, which reads a quoted
 /// path as a string rather than a program unless `&` calls it, and Antigravity's shell may be cmd,
 /// PowerShell, or Git Bash, where a path with forward slashes and no spaces runs in each; elsewhere
 /// Antigravity's `exec` is for a POSIX shell.
+#[must_use]
 pub fn patchwork_command(agent: AgentKind, args: &[&str]) -> Option<String> {
     let exe = std::env::current_exe().ok()?;
     let path = exe.to_string_lossy();
@@ -53,6 +63,7 @@ pub fn patchwork_command(agent: AgentKind, args: &[&str]) -> Option<String> {
 }
 
 /// The command `agent` runs for `hook`: the plugin's own, or Patchwork's binary for a built-in.
+#[must_use]
 pub fn command_line(hook: &AgentHook, agent: AgentKind) -> Option<String> {
     match &hook.action {
         HookAction::Command { command } => Some(command.clone()),
@@ -65,6 +76,7 @@ pub fn command_line(hook: &AgentHook, agent: AgentKind) -> Option<String> {
 
 /// The hooks `agent` runs, in the `hooks.json` shape Claude Code and Antigravity read:
 /// `{ "hooks": { "PreToolUse": [ { "matcher": …, "hooks": [ … ] } ] } }`.
+#[must_use]
 pub fn hooks_json(hooks: &[AgentHook], agent: AgentKind) -> Value {
     let mut by_event = serde_json::Map::new();
     for hook in hooks.iter().filter(|hook| runs(agent, hook.event)) {
@@ -93,6 +105,8 @@ pub fn hooks_json(hooks: &[AgentHook], agent: AgentKind) -> Value {
 /// own agent `bash`, and Antigravity the rest.
 pub const SHELL_TOOLS: &str = "Bash|bash|run_command|execute_command|shell";
 
+/// Extracts the shell command from an agent's tool-call payload.
+///
 /// The shell command a tool call runs, as each agent gives it to its hooks: Claude Code, Codex and
 /// Patchwork's own agent in `tool_input.command` (Codex at times as its words), and Antigravity in
 /// `toolCall.args`. None for a call that runs no command.
@@ -119,6 +133,7 @@ pub fn shell_command(call: &Value) -> Option<String> {
 
 /// What a `preToolUse` hook prints for `agent`: a refusal with its reason, or the answer that lets
 /// the call go on as the agent's mode decides.
+#[must_use]
 pub fn answer(agent: AgentKind, refusal: Option<String>) -> String {
     match (agent, refusal) {
         (AgentKind::Antigravity, Some(reason)) => {
@@ -136,11 +151,14 @@ pub fn answer(agent: AgentKind, refusal: Option<String>) -> String {
     }
 }
 
+/// Builds the `-c` overrides that install Codex's permission and plugin hooks.
+///
 /// `-c` overrides with the hooks Codex runs: Patchwork's permission hook before the tools a rule
 /// can answer for (the shell, file patches, and MCP tools), and the plugins' hooks. The permission
 /// hook is installed for every turn, guarded or not, because it asks Patchwork on each call: a
 /// rule added, changed, or removed while the turn runs then decides the calls that follow, with no
 /// relaunch. Codex only runs a hook it trusts, so their hashes are trusted too.
+#[must_use]
 pub fn codex_args(spec: &TurnSpec) -> Vec<String> {
     // Each event's groups, in the order Codex numbers them.
     let mut events: Vec<(String, Vec<String>)> = Vec::new();
@@ -186,19 +204,18 @@ pub fn codex_args(spec: &TurnSpec) -> Vec<String> {
         .iter()
         .map(|(event, groups)| format!("hooks.{event}=[{}]", groups.join(",")))
         .collect();
-    match codex_trust(&overrides, spec.root) {
-        Some(trust) => overrides
+    if let Some(trust) = codex_trust(&overrides, spec.root) {
+        overrides
             .into_iter()
             .chain(std::iter::once(trust))
             .flat_map(|config| ["-c".to_string(), config])
-            .collect(),
-        None => {
-            log::warn!(
-                "Codex did not list Patchwork's hooks, so deny rules are not enforced and plugin \
-                 hooks do not run"
-            );
-            Vec::new()
-        }
+            .collect()
+    } else {
+        log::warn!(
+            "Codex did not list Patchwork's hooks, so deny rules are not enforced and plugin \
+             hooks do not run"
+        );
+        Vec::new()
     }
 }
 
@@ -286,6 +303,7 @@ fn list_codex_hooks(overrides: &[String], root: &str) -> Option<Vec<(String, Str
             }
         }
     });
+    // A CLI that has not listed its hooks by then is not going to; the turn starts without them.
     let listed = rx.recv_timeout(Duration::from_secs(30)).ok();
     let _ = child.kill();
     let _ = child.wait();
@@ -307,6 +325,7 @@ pub const PROMPT_ARG: &str = "--system-prompt-hook";
 const PROMPT_ENV: &str = "PATCHWORK_SYSTEM_PROMPT";
 
 /// Environment for an Antigravity turn: the system prompt its session start hook hands over.
+#[must_use]
 pub fn antigravity_env(spec: &TurnSpec) -> Vec<(&'static str, String)> {
     antigravity_prompt(spec)
         .map(|text| (PROMPT_ENV, text.to_string()))
@@ -320,6 +339,7 @@ fn antigravity_prompt<'a>(spec: &TurnSpec<'a>) -> Option<&'a str> {
 
 /// Runs the session start hook: answers Antigravity with the system prompt as a system message,
 /// which it adds to the conversation before the first model call.
+#[must_use]
 pub fn run_prompt_hook() -> i32 {
     let answer = match std::env::var(PROMPT_ENV) {
         Ok(text) if !text.trim().is_empty() => {
@@ -333,11 +353,14 @@ pub fn run_prompt_hook() -> i32 {
     0
 }
 
+/// The folder passed to Antigravity with `--add-dir`, holding its hooks file.
+///
 /// The folder Antigravity is given with `--add-dir`, or None when there is nothing to put in it:
 /// the hooks file it loads from there (the system prompt at session start, Patchwork's permission
 /// hook before each tool call, and the plugins' hooks). Rules such as a `GEMINI.md` in that folder
 /// are not read, so the prompt goes through a hook. Each hooks file has a folder of its own, named
 /// by its hash, so turns that differ do not share a file.
+#[must_use]
 pub fn antigravity_dir(spec: &TurnSpec) -> Option<std::path::PathBuf> {
     let hooks = antigravity_hooks(spec)?;
     // FNV-1a, 64-bit, so the folder's name stays the same across builds.
@@ -386,7 +409,7 @@ fn antigravity_hooks(spec: &TurnSpec) -> Option<String> {
     }
     if hooks["hooks"]
         .as_object()
-        .is_none_or(|events| events.is_empty())
+        .is_none_or(serde_json::Map::is_empty)
     {
         return None;
     }

@@ -1,5 +1,9 @@
 //! Running the model's tool calls: Patchwork's own tools, MCP tools, the plugins' tool hooks, and asking the user.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
+use std::fmt::Write as _;
 use serde_json::{Value, json};
 use crate::plugins::HookEvent;
 use crate::permissions::Target;
@@ -94,7 +98,7 @@ impl Agent {
                         None => true,
                     };
                     if let Some(stale) = stale {
-                        (Err(stale), true, false)
+                        (Err(stale.into()), true, false)
                     } else if allowed
                         && name == "read_file"
                         && let Some(image) = self.read_image(&args)
@@ -123,7 +127,8 @@ impl Agent {
             }
         };
         let text = match result {
-            Ok(text) | Err(text) => self.fit(&call.id, text),
+            Ok(text) => self.fit(&call.id, text),
+            Err(e) => self.fit(&call.id, e.to_string()),
         };
         // The call has run, so a refusal here only tells the model.
         let mut text = match self.run_hooks(HookEvent::PostToolUse, &call.name, &args, Some(&text))
@@ -132,7 +137,7 @@ impl Agent {
             None => text,
         };
         if let Some(nudge) = self.repeated(&call.name, &args) {
-            text.push_str(&format!("\n\n{nudge}"));
+            let _ = write!(text, "\n\n{nudge}");
         }
         let mut done =
             json!({"type": "api.tool_done", "id": call.id, "error": error, "output": text});
@@ -193,7 +198,7 @@ impl Agent {
             return;
         }
         let root = &self.root;
-        let results: Vec<(String, Result<String, String>)> = std::thread::scope(|s| {
+        let results: Vec<(String, Result<String, Error>)> = std::thread::scope(|s| {
             let running: Vec<_> = reads
                 .iter()
                 .map(|(call, args)| {
@@ -304,7 +309,7 @@ impl Agent {
 
     /// Opens the image `read_file` was pointed at for the model to see, or None when the path is
     /// not an image.
-    pub(super) fn read_image(&mut self, args: &Value) -> Option<Result<String, String>> {
+    pub(super) fn read_image(&mut self, args: &Value) -> Option<Result<String, Error>> {
         let path = crate::system::fs::resolve(&self.root, args["path"].as_str()?);
         let path = path.to_str()?;
         crate::threads::image_media_type(path)?;
@@ -327,7 +332,7 @@ impl Agent {
         index: usize,
         id: &str,
         args: &Value,
-    ) -> Result<String, String> {
+    ) -> Result<String, Error> {
         let tool = &self.request.mcp_tools[index];
         let asks = match self.request.mode {
             AccessMode::FullAccess => false,
@@ -352,7 +357,7 @@ impl Agent {
             .ok_or("The turn ended before the tool finished")?;
         let output = reply["output"].as_str().unwrap_or_default().to_string();
         if reply["error"] == true {
-            Err(output)
+            Err(output.into())
         } else {
             Ok(output)
         }
@@ -360,7 +365,7 @@ impl Agent {
 
     /// Has Patchwork ask the user for a secret, which is theirs to answer, so it is not approved
     /// first, and waits for where it was saved.
-    fn request_secret(&mut self, id: &str, args: &Value) -> Result<String, String> {
+    fn request_secret(&mut self, id: &str, args: &Value) -> Result<String, Error> {
         self.call_own(
             id,
             crate::secrets::TOOL,
@@ -377,7 +382,7 @@ impl Agent {
         tool: &str,
         args: &Value,
         ended: &str,
-    ) -> Result<String, String> {
+    ) -> Result<String, Error> {
         emit(&json!({
             "type": "api.mcp_call", "id": id, "server": crate::provider::mcp::OWN_SERVER,
             "tool": tool, "arguments": args,
@@ -385,7 +390,7 @@ impl Agent {
         let reply = self.wait(id).ok_or(ended)?;
         let output = reply["output"].as_str().unwrap_or_default().to_string();
         if reply["error"] == true {
-            Err(output)
+            Err(output.into())
         } else {
             Ok(output)
         }
@@ -409,7 +414,7 @@ impl Agent {
         self.wait(id).is_some_and(|reply| reply["allow"] == true)
     }
 
-    pub(super) fn ask(&mut self, id: &str, args: &Value) -> Result<String, String> {
+    pub(super) fn ask(&mut self, id: &str, args: &Value) -> Result<String, Error> {
         let questions: Vec<Value> = args["questions"]
             .as_array()
             .cloned()

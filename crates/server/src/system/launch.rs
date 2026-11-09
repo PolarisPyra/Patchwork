@@ -1,6 +1,10 @@
+//! Starting other programs on the user's desktop: files, links, editors, file manager.
+//!
 //! Starting other programs on the user's desktop: opening files, links, and editors, and showing
 //! a file in the file manager. On Wayland a window a program opens is only raised if the request
 //! carries an activation token from the compositor, so these pass one on when there is one.
+
+// Rust guideline compliant 2026-10-09
 
 #[cfg(target_os = "linux")]
 use crate::Error;
@@ -18,6 +22,10 @@ pub fn pass_token(cmd: &mut Command, token: Option<&str>) {
 
 /// Opens `target`, a path or a link, in the user's default app through `xdg-open`. Its launcher is
 /// reaped in the background.
+///
+/// # Errors
+///
+/// Returns an error when `xdg-open` cannot be started.
 #[cfg(target_os = "linux")]
 pub fn xdg_open(target: &std::ffi::OsStr, token: Option<&str>) -> std::io::Result<()> {
     let mut cmd = crate::system::host_command("xdg-open");
@@ -34,6 +42,11 @@ pub fn xdg_open(target: &std::ffi::OsStr, token: Option<&str>) -> std::io::Resul
 
 /// Shows `path` selected in the file manager, through `org.freedesktop.FileManager1`, which takes
 /// the token as its startup id. Without that service, opens the folder holding `path`.
+///
+/// # Errors
+///
+/// Returns an error when the path cannot be made into a file URI, or when neither the file manager
+/// nor `xdg-open` can show it.
 #[cfg(target_os = "linux")]
 pub fn reveal(path: &std::path::Path, token: Option<&str>) -> Result<(), Error> {
     let uri = url::Url::from_file_path(path)
@@ -69,12 +82,26 @@ pub unsafe fn wayland_token(display: *mut std::ffi::c_void) -> Option<String> {
     match unsafe { request_token(display) } {
         Ok(token) => Some(token),
         Err(e) => {
-            log::warn!("Could not get an activation token, so the window may open behind: {e}");
+            log::warn!(
+                error:% = e;
+                "Could not get an activation token, so the window may open behind: {{error}}"
+            );
             None
         }
     }
 }
 
+/// Asks the compositor behind `display` for an activation token.
+///
+/// # Errors
+///
+/// Returns an error when the compositor has no activation protocol, the round trip fails, or no
+/// token comes back.
+///
+/// # Safety
+///
+/// The same as [`wayland_token`]: `display` must be a live `wl_display` whose connection only the
+/// calling thread reads from.
 #[cfg(target_os = "linux")]
 unsafe fn request_token(
     display: *mut std::ffi::c_void,
@@ -110,7 +137,7 @@ unsafe fn request_token(
             _: &mut Self,
             _: &XdgActivationV1,
             _: xdg_activation_v1::Event,
-            _: &(),
+            (): &(),
             _: &Connection,
             _: &QueueHandle<Self>,
         ) {
@@ -119,15 +146,15 @@ unsafe fn request_token(
 
     impl Dispatch<XdgActivationTokenV1, ()> for Token {
         fn event(
-            token: &mut Self,
+            state: &mut Self,
             _: &XdgActivationTokenV1,
             event: xdg_activation_token_v1::Event,
-            _: &(),
+            (): &(),
             _: &Connection,
             _: &QueueHandle<Self>,
         ) {
             if let xdg_activation_token_v1::Event::Done { token: value } = event {
-                token.0 = Some(value);
+                state.0 = Some(value);
             }
         }
     }

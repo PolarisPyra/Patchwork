@@ -1,5 +1,7 @@
 //! Keeping secrets and bulk out of the logs: keys and tokens are redacted, and long strings and texts are cut.
 
+// Rust guideline compliant 2026-10-09
+
 use std::fmt;
 use std::sync::LazyLock;
 use regex::Regex;
@@ -35,7 +37,7 @@ pub(super) fn scrub(json: &mut Json, secret: bool) {
 
 /// `apiKey`, `x-api-key`, `access_token`, `password`, `headers` and the like.
 fn is_secret(key: &str) -> bool {
-    let key: String = key.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    let key: String = key.chars().filter(char::is_ascii_alphanumeric).collect();
     let key = key.to_ascii_lowercase();
     [
         "apikey",
@@ -100,6 +102,7 @@ pub(super) fn cut(s: &str, max: usize) -> String {
 }
 
 /// JSON that keeps an object's fields in the order they were written.
+#[derive(Debug)]
 pub enum Json {
     Null,
     Bool(bool),
@@ -145,29 +148,29 @@ struct JsonVisitor;
 impl<'de> Visitor<'de> for JsonVisitor {
     type Value = Json;
 
-    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("JSON")
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("JSON")
     }
     fn visit_unit<E>(self) -> Result<Json, E> {
         Ok(Json::Null)
     }
-    fn visit_bool<E>(self, b: bool) -> Result<Json, E> {
-        Ok(Json::Bool(b))
+    fn visit_bool<E>(self, v: bool) -> Result<Json, E> {
+        Ok(Json::Bool(v))
     }
-    fn visit_i64<E>(self, n: i64) -> Result<Json, E> {
-        Ok(Json::Number(n.into()))
+    fn visit_i64<E>(self, v: i64) -> Result<Json, E> {
+        Ok(Json::Number(v.into()))
     }
-    fn visit_u64<E>(self, n: u64) -> Result<Json, E> {
-        Ok(Json::Number(n.into()))
+    fn visit_u64<E>(self, v: u64) -> Result<Json, E> {
+        Ok(Json::Number(v.into()))
     }
-    fn visit_f64<E>(self, n: f64) -> Result<Json, E> {
-        Ok(serde_json::Number::from_f64(n).map_or(Json::Null, Json::Number))
+    fn visit_f64<E>(self, v: f64) -> Result<Json, E> {
+        Ok(serde_json::Number::from_f64(v).map_or(Json::Null, Json::Number))
     }
-    fn visit_str<E>(self, s: &str) -> Result<Json, E> {
-        Ok(Json::String(s.into()))
+    fn visit_str<E>(self, v: &str) -> Result<Json, E> {
+        Ok(Json::String(v.into()))
     }
-    fn visit_string<E>(self, s: String) -> Result<Json, E> {
-        Ok(Json::String(s))
+    fn visit_string<E>(self, v: String) -> Result<Json, E> {
+        Ok(Json::String(v))
     }
     fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Json, A::Error> {
         let mut items = Vec::new();

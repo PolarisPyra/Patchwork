@@ -4,13 +4,17 @@
 //! One file holds what it takes to work out what went wrong in the chat, and like the logs it has
 //! no secrets and names no user.
 
+// Rust guideline compliant 2026-10-09
+
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
+
+use serde::Deserialize as _;
 
 use crate::provider::{self, AgentKind};
 use crate::system::fs::home_dir;
 use crate::threads::{Message, StepStatus, Thread};
-use crate::{Res, Server};
+use crate::{Error, Server};
 
 use super::render::local_time;
 use super::scrub::{cut, redact, scrubbed};
@@ -26,7 +30,12 @@ const MAX_TOOL_OUTPUT: usize = 600;
 
 impl Server {
     /// Writes the report of `thread_id` and returns its path.
-    pub fn thread_report(&self, thread_id: &str) -> Res<PathBuf> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the chat is unknown, when the settings cannot be serialized, or when
+    /// the chat log writer is missing, has stopped, or cannot write the report file.
+    pub fn thread_report(&self, thread_id: &str) -> Result<PathBuf, Error> {
         let thread = self
             .store
             .thread(thread_id)
@@ -42,11 +51,11 @@ impl Server {
             "Patchwork chat report, {}",
             local_time(crate::system::now_ms())
         );
-        section(&mut text, "System", &pretty(report().clone()));
+        section(&mut text, "System", &pretty(report()));
         section(&mut text, "Chat", &chat(&thread, project));
         section(&mut text, "Replies", &replies(&thread.messages));
         section(&mut text, "This launch's warnings and errors", &problems());
-        section(&mut text, "Settings", &pretty(settings));
+        section(&mut text, "Settings", &pretty(&settings));
         let earlier = earlier(thread_id);
         if !earlier.is_empty() {
             section(&mut text, "Earlier launches", &earlier);
@@ -59,7 +68,7 @@ impl Server {
         }
 
         let path = THREAD_LOG.report(&thread.id, text)?;
-        log::info!("wrote a chat's report: {}", path.display());
+        log::info!(path:% = path.display(); "wrote a chat's report: {{path}}");
         Ok(path)
     }
 }
@@ -69,8 +78,8 @@ fn section(text: &mut String, title: &str, body: &str) {
 }
 
 /// `value` as indented JSON, secrets removed and long strings cut.
-fn pretty(value: serde_json::Value) -> String {
-    serde_json::from_value::<Json>(value)
+fn pretty(value: &serde_json::Value) -> String {
+    Json::deserialize(value)
         .map(scrubbed)
         .and_then(|json| serde_json::to_string_pretty(&json))
         .unwrap_or_else(|e| format!("could not be written: {e}"))
@@ -78,13 +87,14 @@ fn pretty(value: serde_json::Value) -> String {
 
 /// The chat's settings and state, with the CLI its agent runs now. Patchwork runs its own agent,
 /// which has no CLI to ask: its command is Patchwork itself, and asking it would start the app.
-fn chat(thread: &Thread, project: Option<Res<String>>) -> String {
+fn chat(thread: &Thread, project: Option<Result<String, Error>>) -> String {
     let (cli, version) = if thread.agent == AgentKind::Api {
         ("built in".to_string(), Some(crate::VERSION.to_string()))
     } else {
-        let cli = provider::agent_command(thread.agent)
-            .map(|command| shown(Path::new(command.get_program())))
-            .unwrap_or_else(|e| e);
+        let cli = provider::agent_command(thread.agent).map_or_else(
+            |e| e.to_string(),
+            |command| shown(Path::new(command.get_program())),
+        );
         (cli, provider::cli_version(thread.agent))
     };
     let project = match project {
@@ -92,7 +102,7 @@ fn chat(thread: &Thread, project: Option<Res<String>>) -> String {
         Some(Err(e)) => format!("unavailable: {e}"),
         None => "none (a chat)".into(),
     };
-    pretty(serde_json::json!({
+    pretty(&serde_json::json!({
         "id": thread.id,
         "title": thread.title,
         "project": project,

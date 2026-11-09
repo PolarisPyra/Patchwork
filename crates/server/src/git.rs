@@ -1,8 +1,14 @@
+//! Source Control git operations: commits, pushes, pull requests, and agent prompts.
+//!
 //! Git from the Source Control view, with the agents in it: committing, pushing, and opening
 //! pull requests; which thread and replies each commit came from; and the prompts that hand a
 //! pull request's feedback, or a merge's conflicts, to an agent. A message the user leaves
 //! empty, and a pull request's text, are written by the model that writes titles.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
+use std::fmt::Write as _;
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -38,12 +44,17 @@ impl Server {
     /// staged patch when `message` is blank. The commit is recorded as the open thread's, with
     /// its replies whose changes it took in, for the graph. Returns the commit's short hash and
     /// its subject.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the project is unknown, when `git` fails to stage or commit, or when
+    /// `message` is blank and no model writes one.
     pub fn commit_changes(
         &self,
         project_id: &str,
         thread_id: Option<&str>,
         message: &str,
-    ) -> Result<(String, String), String> {
+    ) -> Result<(String, String), Error> {
         let root = self.project_root(project_id)?;
         workspace::stage_all(&root)?;
         let message = match message.trim() {
@@ -54,7 +65,10 @@ impl Server {
         if let Some(thread_id) = thread_id
             && let Err(e) = self.record_commit(&root, thread_id, &hash)
         {
-            log::warn!("could not record the thread of commit {hash}: {e}");
+            log::warn!(
+                hash:%, error:% = e;
+                "could not record the thread of commit {{hash}}: {{error}}"
+            );
         }
         let subject = message.lines().next().unwrap_or_default().to_string();
         Ok((hash.chars().take(7).collect(), subject))
@@ -62,7 +76,7 @@ impl Server {
 
     /// Records that `hash` was committed from the thread, with the replies since its last
     /// commit that changed a file the commit has.
-    fn record_commit(&self, root: &str, thread_id: &str, hash: &str) -> Result<(), String> {
+    fn record_commit(&self, root: &str, thread_id: &str, hash: &str) -> Result<(), Error> {
         let files = workspace::run_git(
             root,
             &["show", "--name-only", "--relative", "--format=", hash],
@@ -122,12 +136,16 @@ impl Server {
 
     /// The branch's and its upstream's commits, each with the thread Patchwork committed it
     /// from and that thread's replies in it, if any.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the project is unknown or `git log` fails.
     pub fn git_log(
         &self,
         project_id: &str,
         skip: usize,
         limit: usize,
-    ) -> Result<Vec<GitCommit>, String> {
+    ) -> Result<Vec<GitCommit>, Error> {
         let root = self.project_root(project_id)?;
         let mut commits = workspace::git_log(&root, skip, limit)?;
         for commit in &mut commits {
@@ -142,10 +160,15 @@ impl Server {
     /// A prompt with what the branch's open pull request needs: its failed checks with the end
     /// of each failed job's log, and its reviews and comments. Returned with the thread that
     /// made the branch's newest commit Patchwork recorded, to send it to.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the project is unknown, when `gh` fails, or when the branch has no
+    /// open pull request.
     pub fn pull_request_feedback(
         &self,
         project_id: &str,
-    ) -> Result<(Option<String>, String), String> {
+    ) -> Result<(Option<String>, String), Error> {
         let root = self.project_root(project_id)?;
         let fields = "number,url,state,statusCheckRollup,comments,reviews";
         let pr = workspace::gh(&root, &["pr", "view", "--json", fields])?;
@@ -166,7 +189,7 @@ impl Server {
             let mut text = String::from("## Failed checks\n");
             for check in failed.iter().take(FAILED_JOBS) {
                 let name = check["name"].as_str().or(check["context"].as_str());
-                text.push_str(&format!("\n### {}\n", name.unwrap_or("Check")));
+                let _ = write!(text, "\n### {}\n", name.unwrap_or("Check"));
                 let url = check["detailsUrl"].as_str().or(check["targetUrl"].as_str());
                 let log = url
                     .and_then(job_id)
@@ -175,8 +198,12 @@ impl Server {
                     })
                     .filter(|log| !log.trim().is_empty());
                 match (log, url) {
-                    (Some(log), _) => text.push_str(&format!("```\n{}\n```\n", log_tail(&log))),
-                    (None, Some(url)) => text.push_str(&format!("Its log is at {url}\n")),
+                    (Some(log), _) => {
+                        let _ = write!(text, "```\n{}\n```\n", log_tail(&log));
+                    }
+                    (None, Some(url)) => {
+                        let _ = writeln!(text, "Its log is at {url}");
+                    }
                     (None, None) => text.push_str("It left no log.\n"),
                 }
             }
@@ -250,7 +277,12 @@ impl Server {
 
     /// A prompt for an agent to resolve the project's merge conflicts: what git stopped in, the
     /// two sides, and each conflicted file's conflicts as they stand.
-    pub fn conflict_prompt(&self, project_id: &str) -> Result<String, String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the project is unknown, when `git` fails, or when no file has a
+    /// conflict.
+    pub fn conflict_prompt(&self, project_id: &str) -> Result<String, Error> {
         let root = self.project_root(project_id)?;
         let files = workspace::run_git(
             &root,
@@ -262,8 +294,7 @@ impl Server {
         }
         let describe = |rev: &str| {
             workspace::run_git(&root, &["log", "-1", "--format=%h %s", rev])
-                .map(|s| s.trim().to_string())
-                .unwrap_or_else(|_| rev.to_string())
+                .map_or_else(|_| rev.to_string(), |s| s.trim().to_string())
         };
         let has =
             |rev: &str| workspace::run_git(&root, &["rev-parse", "--verify", "-q", rev]).is_ok();
@@ -275,13 +306,14 @@ impl Server {
         ]
         .into_iter()
         .find(|(rev, _)| has(rev))
-        .map_or(("applying changes".to_string(), None), |(rev, what)| {
-            (what.to_string(), Some(describe(rev)))
-        });
+        .map_or_else(
+            || ("applying changes".to_string(), None),
+            |(rev, what)| (what.to_string(), Some(describe(rev))),
+        );
         let branch = workspace::git_branch(&root).unwrap_or_else(|| "HEAD".into());
         let mut sides = format!("- Ours: {branch} at {}", describe("HEAD"));
         if let Some(theirs) = theirs {
-            sides.push_str(&format!("\n- Theirs: {theirs}"));
+            let _ = write!(sides, "\n- Theirs: {theirs}");
         }
 
         let mut conflicts = String::new();
@@ -293,7 +325,7 @@ impl Server {
             } else {
                 format!("```\n{}\n```", workspace::truncated(&hunks, FILE_CONFLICTS))
             };
-            conflicts.push_str(&format!("\n### {file}\n{body}\n"));
+            let _ = write!(conflicts, "\n### {file}\n{body}\n");
         }
         let prompt = format!(
             "Git stopped during {operation} with conflicts in {} file(s). Resolve them.\n\n{sides}\n\n\
@@ -311,38 +343,48 @@ impl Server {
 
     /// Stages every change and has a model write a commit message for it, to edit before
     /// committing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the project is unknown, when `git` fails to stage the changes or read
+    /// them, or when no model writes a message.
     pub fn write_commit_message(
         &self,
         project_id: &str,
         thread_id: Option<&str>,
-    ) -> Result<String, String> {
+    ) -> Result<String, Error> {
         let root = self.project_root(project_id)?;
         workspace::stage_all(&root)?;
         self.staged_message(&root, thread_id)
     }
 
-    fn staged_message(&self, root: &str, thread_id: Option<&str>) -> Result<String, String> {
+    fn staged_message(&self, root: &str, thread_id: Option<&str>) -> Result<String, Error> {
         let summary = workspace::staged_summary(root)?;
         self.write(thread_id, COMMIT_PROMPT, COMMIT_SCHEMA, &summary)
             .and_then(|answer| commit_message(&answer))
-            .ok_or_else(|| "No model wrote a commit message. Type one to commit.".to_string())
+            .ok_or_else(|| "No model wrote a commit message. Type one to commit.".into())
     }
 
     /// Opens a pull request for the pushed branch into the default branch, with a title and
     /// body a model writes from its commits, or gh's own from the commits when none answers.
     /// An open one is returned as it is.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the project is unknown, when `git` cannot summarize the branch, or
+    /// when `gh` fails to create the pull request.
     pub fn open_pull_request(
         &self,
         project_id: &str,
         thread_id: Option<&str>,
-    ) -> Result<PullRequest, String> {
+    ) -> Result<PullRequest, Error> {
         let root = self.project_root(project_id)?;
         let (base, summary) = workspace::branch_summary(&root)?;
         let text = self
             .write(thread_id, PR_PROMPT, PR_SCHEMA, &summary)
             .and_then(|answer| pull_request_text(&answer));
         let text = text.as_ref().map(|(t, b)| (t.as_str(), b.as_str()));
-        Ok(workspace::create_pull_request(&root, &base, text)?)
+        workspace::create_pull_request(&root, &base, text)
     }
 
     /// Asks the title writer from Settings, else the open thread's provider and model.
@@ -472,7 +514,7 @@ fn conflict_hunks(text: &str) -> String {
     for (i, line) in text.lines().enumerate() {
         if line.starts_with("<<<<<<<") {
             inside = true;
-            out.push_str(&format!("[line {}]\n", i + 1));
+            let _ = writeln!(out, "[line {}]", i + 1);
         }
         if inside {
             out.push_str(line);

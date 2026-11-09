@@ -1,5 +1,8 @@
 //! Launch arguments for Claude Code turns.
 
+// Rust guideline compliant 2026-10-09
+
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use crate::agents::{self, Agent};
@@ -7,12 +10,15 @@ use crate::plugins::AgentHook;
 use crate::provider::AgentKind;
 use crate::settings::Settings;
 
+/// Builds the arguments that configure Claude's system prompt, skills, and hooks.
+///
 /// Arguments that append the checklist and shell instructions to Claude's system prompt, and load
 /// Patchwork's skills and the plugins' hooks from the `claude` folder as a plugin. Claude records
 /// a conversation's system prompt on its first request and resumes with that record, so a prompt
 /// edited in Settings would never reach a chat already started; with the record off the prompt
 /// is built on each request, and the cache still holds it while it stays the same.
 /// `instructions` is what is appended: Patchwork's instructions for Claude.
+#[must_use]
 pub fn launch_args(settings: &Settings, hooks: &[AgentHook], instructions: String) -> Vec<String> {
     let mut args = vec![
         "--system-prompt-snapshot".to_string(),
@@ -36,7 +42,7 @@ fn write_hooks(file: &Path, hooks: &[AgentHook]) {
     let config = crate::provider::hooks::hooks_json(hooks, AgentKind::Claude);
     if config["hooks"]
         .as_object()
-        .is_none_or(|events| events.is_empty())
+        .is_none_or(serde_json::Map::is_empty)
     {
         let _ = std::fs::remove_file(file);
         return;
@@ -52,12 +58,13 @@ fn write_hooks(file: &Path, hooks: &[AgentHook]) {
         .map_or(Ok(()), std::fs::create_dir_all)
         .and_then(|()| std::fs::write(file, text));
     if let Err(e) = written {
-        log::warn!("could not write Claude's plugin hooks: {e}");
+        log::warn!(error:% = e; "could not write Claude's plugin hooks: {{error}}");
     }
 }
 
 /// `--agents` with the custom agents, so Claude can start them as subagents by name. They go
 /// in a file, since a long list could pass the size an argument may have.
+#[must_use]
 pub fn agents_args(agents: &[Agent], root: &str) -> Vec<String> {
     if agents.is_empty() {
         return Vec::new();
@@ -88,17 +95,19 @@ pub fn agents_args(agents: &[Agent], root: &str) -> Vec<String> {
     ) {
         Ok(file) => vec!["--agents".to_string(), file.to_string_lossy().into_owned()],
         Err(e) => {
-            log::warn!("failed to hand Claude the custom agents: {e}");
+            log::warn!(error:% = e; "failed to hand Claude the custom agents: {{error}}");
             Vec::new()
         }
     }
 }
 
-/// Environment for Claude's process. The claude.ai connectors are left out, since their tool
-/// lists and instructions are added to the context again whenever a session resumes. Claude only
-/// offers its task list tools to newer models when asked, and they are what fills the plan above
-/// the chat box. A set compact window, the chat's or Settings', makes Claude compact once its
-/// context reaches it.
+/// Environment for Claude's process.
+///
+/// The claude.ai connectors are left out, since their tool lists and instructions are added to the
+/// context again whenever a session resumes. Claude only offers its task list tools to newer models
+/// when asked, and they are what fills the plan above the chat box. A set compact window, the
+/// chat's or Settings', makes Claude compact once its context reaches it.
+#[must_use]
 pub fn launch_env(compact_window: u64) -> Vec<(&'static str, String)> {
     let mut env = vec![
         ("ENABLE_CLAUDEAI_MCP_SERVERS", "false".to_string()),
@@ -117,12 +126,15 @@ pub fn launch_env(compact_window: u64) -> Vec<(&'static str, String)> {
 /// would change how bash starts or which shell Claude runs.
 const NOT_IN_ENV_FILE: [&str; 5] = ["PATH", "SHELL", "BASH_ENV", "ENV", crate::system::ENV_READ];
 
+/// Writes the file Claude Code sources before each Bash command, and returns its path.
+///
 /// A file of what the user's shell sets up beyond Patchwork's own environment, which Claude Code
 /// sources before each Bash command (`CLAUDE_ENV_FILE`). Its commands run in bash, whose startup
 /// files are the ones Claude reads, so without it they would miss what `.zshrc` or `config.fish`
 /// exports. Only the commands read it, so a key exported there does not change which account
 /// Claude itself uses. Readable only by the user, since exports can hold secrets. None when the
 /// shell adds nothing or the file can't be written.
+#[must_use]
 pub fn shell_env_file() -> Option<PathBuf> {
     let text: String = crate::system::login_env()
         .iter()
@@ -130,32 +142,44 @@ pub fn shell_env_file() -> Option<PathBuf> {
             !NOT_IN_ENV_FILE.contains(&key.as_str())
                 && std::env::var(key).ok().as_deref() != Some(value.as_str())
         })
-        .map(|(key, value)| format!("export {key}='{}'\n", value.replace('\'', r"'\''")))
-        .collect();
+        .fold(String::new(), |mut text, (key, value)| {
+            let _ = writeln!(text, "export {key}='{}'", value.replace('\'', r"'\''"));
+            text
+        });
     if text.is_empty() {
         return None;
     }
     let file = crate::system::dirs().cache.join("shell-env.sh");
     if std::fs::read_to_string(&file).ok().as_deref() != Some(text.as_str()) {
         crate::system::fs::write_private(&file, &text)
-            .inspect_err(|e| log::warn!("could not write the shell environment for Claude: {e}"))
+            .inspect_err(|e| {
+                log::warn!(
+                    error:% = e;
+                    "could not write the shell environment for Claude: {{error}}"
+                );
+            })
             .ok()?;
     }
     Some(file)
 }
 
+/// The matcher for the Claude tools a permission rule can answer.
+///
 /// The tools a permission rule can answer in Claude, as the matcher of the hook that asks
 /// Patchwork before each of them. The rest of Claude's tools, such as `TodoWrite`, have no rule
 /// and are left to Claude.
 pub const PERMISSION_TOOLS: &str =
     "^(Bash|Edit|Write|MultiEdit|NotebookEdit|Read|Glob|Grep|LS|WebFetch|mcp__.*)$";
 
+/// Builds the `--settings` argument that installs Patchwork's permission hook.
+///
 /// `--settings` with Patchwork's permission hook, which asks the app before every call a rule can
 /// answer. Installed on every turn, whether or not a rule guards anything yet, so a rule saved
 /// while the turn runs decides the calls after it: the hook asks at each call, and the app reads
 /// its rules then. This is also the only way to gate a call in full access, which auto-approves
 /// every tool before asking anything (`--permission-prompt-tool` is never consulted). Empty when
 /// there is no relay for the hook to ask.
+#[must_use]
 pub fn permission_args() -> Vec<String> {
     if crate::provider::mcp::relay_endpoint().is_none() {
         return Vec::new();

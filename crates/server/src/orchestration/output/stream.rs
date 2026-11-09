@@ -1,4 +1,8 @@
 //! Streaming agent output to the frontend, and saving events onto the stored thread.
+
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use crate::Server;
 use crate::orchestration::AgentEvent;
 use crate::orchestration::AgentEventEnvelope;
@@ -61,7 +65,7 @@ impl Turn {
             text: std::mem::take(&mut unsaved.text),
         };
         if let Err(e) = save_event(&self.server, &self.thread_id, &event) {
-            log::warn!("failed to save agent text: {e}");
+            log::warn!(error:% = e; "failed to save agent text: {{error}}");
         }
     }
 
@@ -77,7 +81,7 @@ impl Turn {
             ended_at: Some(now_ms()),
         };
         if let Err(e) = save_event(&self.server, &self.thread_id, &event) {
-            log::warn!("failed to save agent reasoning: {e}");
+            log::warn!(error:% = e; "failed to save agent reasoning: {{error}}");
         }
     }
 }
@@ -86,7 +90,7 @@ impl Turn {
 pub(crate) fn publish(server: &Server, thread_id: &str, event: AgentEvent) {
     let event = settle_late(server, thread_id, event);
     if let Err(e) = save_event(server, thread_id, &event) {
-        log::warn!("failed to save agent event: {e}");
+        log::warn!(error:% = e; "failed to save agent event: {{error}}");
     }
     server.emit(AgentEventEnvelope {
         thread_id: thread_id.into(),
@@ -135,7 +139,7 @@ pub(in crate::orchestration) fn save_event(
     server: &Server,
     thread_id: &str,
     event: &AgentEvent,
-) -> Result<(), String> {
+) -> Result<(), Error> {
     if let AgentEvent::MessageRemoved { .. } = event {
         return server.store.update_thread(thread_id, |t| apply(t, event));
     }
@@ -206,23 +210,23 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
             return;
         }
         AgentEvent::GoalUpdated { goal } => {
-            thread.goal = goal.clone();
+            thread.goal.clone_from(goal);
             return;
         }
         AgentEvent::SlashCommandsUpdated { commands } => {
-            thread.slash_commands = commands.clone();
+            thread.slash_commands.clone_from(commands);
             return;
         }
         AgentEvent::RoleChanged { role } => {
-            thread.role = role.clone();
+            thread.role.clone_from(role);
             return;
         }
         AgentEvent::ModelChanged { model } => {
-            thread.model = model.clone();
+            thread.model.clone_from(model);
             return;
         }
         AgentEvent::TitleUpdated { title } => {
-            thread.title = title.clone();
+            thread.title.clone_from(title);
             return;
         }
         AgentEvent::MessageRemoved { message_id } => {
@@ -299,7 +303,7 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
                 };
             }
         }
-        AgentEvent::PlanUpdated { steps, .. } => msg.plan = steps.clone(),
+        AgentEvent::PlanUpdated { steps, .. } => msg.plan.clone_from(steps),
         AgentEvent::Usage { usage, .. } => msg.usage = Some(*usage),
         AgentEvent::MessageQueued { queued, .. } => {
             msg.queued = *queued;
@@ -372,8 +376,8 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
             ..
         } => {
             if let Some(approval) = msg.approvals.iter_mut().find(|a| a.id == *approval_id) {
-                approval.answers = answers.clone();
-                approval.rule = rule.clone();
+                approval.answers.clone_from(answers);
+                approval.rule.clone_from(rule);
                 approval.auto = *auto;
                 approval.status = if *allowed {
                     ApprovalStatus::Allowed
@@ -401,7 +405,7 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
         AgentEvent::TurnCompleted { status, error, .. } => {
             end_thinking(msg);
             msg.status = *status;
-            msg.error = error.clone();
+            msg.error.clone_from(error);
             msg.finished_at = Some(now_ms());
             // Unanswered requests lapse with the turn.
             msg.approvals

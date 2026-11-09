@@ -1,5 +1,8 @@
 //! Antigravity CLI (`agy --output-format stream-json`).
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::path::PathBuf;
 
 use serde_json::Value;
@@ -29,6 +32,7 @@ use super::TurnSpec;
 
 /// The Antigravity CLI: the one the user located, else `agy` on PATH or in the usual install
 /// folders, else where Antigravity's Windows installer puts it by default.
+#[must_use]
 pub fn antigravity_bin() -> Option<PathBuf> {
     located_or(AgentKind::Antigravity, || {
         find_binary("agy").or_else(|| {
@@ -41,6 +45,7 @@ pub fn antigravity_bin() -> Option<PathBuf> {
 }
 
 /// `~/.gemini`, where the earlier Gemini CLI saved its chats for the import to read.
+#[must_use]
 pub fn home() -> Option<PathBuf> {
     home_dir().map(|h| h.join(".gemini"))
 }
@@ -57,6 +62,7 @@ pub fn auth(status: &mut AgentStatus) {
 }
 
 /// The models the CLI offers, from `agy models`, which prints each as its id and name.
+#[must_use]
 pub fn models() -> Vec<ModelOption> {
     let Some(listed) = probe(AgentKind::Antigravity, &["models"]).filter(|p| p.success) else {
         return Vec::new();
@@ -84,11 +90,16 @@ const INFO_COMMANDS: &[InfoCommand] = &[
 ];
 
 /// The CLI's path, version and models, for the Settings pane.
-pub fn info() -> Result<CliInfo, String> {
+///
+/// # Errors
+///
+/// Returns an error when the Antigravity CLI is not installed.
+pub fn info() -> Result<CliInfo, Error> {
     let path = antigravity_bin().ok_or("The Antigravity CLI is not installed")?;
-    let version = cli_info::run(&path, &["--version"])
-        .map(|text| text.lines().next().unwrap_or_default().trim().to_string())
-        .unwrap_or_else(|_| "unknown".into());
+    let version = cli_info::run(&path, &["--version"]).map_or_else(
+        |_| "unknown".into(),
+        |text| text.lines().next().unwrap_or_default().trim().to_string(),
+    );
     Ok(CliInfo {
         path: path.to_string_lossy().into_owned(),
         version,
@@ -98,7 +109,12 @@ pub fn info() -> Result<CliInfo, String> {
 }
 
 /// Runs one of the read-only diagnostics commands. See `cli_info::command`.
-pub fn command(kind: InfoCommand) -> Result<String, String> {
+///
+/// # Errors
+///
+/// Returns an error when Antigravity has no such command, when its CLI is not installed, or when
+/// the command fails or takes too long.
+pub fn command(kind: InfoCommand) -> Result<String, Error> {
     cli_info::check("Antigravity", kind, INFO_COMMANDS)?;
     let binary = antigravity_bin().ok_or("The Antigravity CLI is not installed")?;
     cli_info::command(&binary, kind)
@@ -136,6 +152,7 @@ pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
 
 /// Maps one line of `agy --output-format stream-json`: `init`, then a `step_update` per step
 /// transition or text delta, then `result`. Each payload sits under its event's name.
+#[must_use]
 pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
     let mut out = Vec::new();
     match v["event"].as_str() {

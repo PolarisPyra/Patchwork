@@ -3,6 +3,8 @@
 //! object. Stopping it sends SIGTERM to all of it, then SIGKILL to what is left after
 //! [`STOP_GRACE`]. Windows has no SIGTERM, so the job ends at once there.
 
+// Rust guideline compliant 2026-10-09
+
 use std::io;
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
@@ -78,6 +80,7 @@ impl Range {
             std::thread::spawn(move || {
                 let deadline = Instant::now() + STOP_GRACE;
                 while group_alive(pid) && Instant::now() < deadline {
+                    // How often the group is checked while it is given time to exit.
                     std::thread::sleep(Duration::from_millis(20));
                 }
                 signal_process_group(pid, SIGKILL);

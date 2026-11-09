@@ -1,12 +1,14 @@
-//! Local model servers: finding one that moved, setting one up in a step, and which of its models
-//! read images.
+//! Local model servers: finding one that moved, and which of its models read images.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::HashMap;
 use std::time::Duration;
 
 use serde_json::{Value, json};
 
-use super::config::{self, ApiModel, ApiProvider, KeyChange};
+use super::config::{self, ApiProvider};
 
 /// Ports well-known local servers listen on: Ollama, LM Studio, llama.cpp, vLLM, and others.
 const KNOWN_PORTS: &[u16] = &[11434, 1234, 8080, 8081, 8000, 5000];
@@ -96,10 +98,17 @@ fn listening_ports() -> Vec<u16> {
     ports
 }
 
+/// Finds a saved server's new address, saves it, and returns the base URL.
+///
 /// Finds where a saved server moved on its machine: the well-known ports on its host, and on
 /// this computer every port something listens on, for a server that serves one of its models.
 /// Saves and returns the new base URL.
-pub fn relocate(id: &str) -> Result<String, String> {
+///
+/// # Errors
+///
+/// Returns an error when the provider is no longer saved, its base URL is not valid, no server on
+/// that host serves its models, or saving the new address fails.
+pub fn relocate(id: &str) -> Result<String, Error> {
     let provider = config::provider(id).ok_or("That provider is no longer saved")?;
     let provider = config::with_headers(provider);
     let (scheme, host, port, path) =
@@ -115,6 +124,7 @@ pub fn relocate(id: &str) -> Result<String, String> {
         paths.push("/v1");
     }
     let wanted: Vec<&str> = provider.models.iter().map(|m| m.id.as_str()).collect();
+    // A local server answers in milliseconds; a closed port must not hold up the search.
     let agent = agent(Duration::from_millis(1200));
     // Every port at once, read back in order so the well-known ports win.
     let found = std::thread::scope(|scope| {
@@ -141,94 +151,12 @@ pub fn relocate(id: &str) -> Result<String, String> {
         return Err(format!(
             "No server on {host} serves {}'s models. Start it, or change its address.",
             provider.name
-        ));
+        )
+        .into());
     };
     config::move_to(id, &base)?;
-    log::info!("{} moved to {base}", provider.name);
+    log::info!(provider:% = provider.name, base:%; "{{provider}} moved to {{base}}");
     Ok(base)
-}
-
-/// Sets up a local model in one step: the first model server that answers on this computer,
-/// reusing the saved provider that points at it, and returns one of its models as
-/// `provider/model`.
-pub fn use_local_model() -> Result<String, String> {
-    let mut servers = config::discover();
-    let Some(found) = servers
-        .iter()
-        .position(|s| s.models.iter().any(|m| chats(m)))
-    else {
-        return Err(match servers.first() {
-            Some(s) => format!("{} has no chat model loaded. Load one, then try again.", s.name),
-            None => "No model server answered on this computer. Start Ollama, LM Studio, or llama.cpp, then try again.".into(),
-        });
-    };
-    let server = servers.swap_remove(found);
-    let first = server
-        .models
-        .iter()
-        .find(|m| chats(m))
-        .cloned()
-        .unwrap_or_default();
-    let saved = config::providers()
-        .into_iter()
-        .find(|p| p.base_url.trim_end_matches('/') == server.base_url);
-    if let Some(saved) = saved {
-        let model = saved
-            .models
-            .iter()
-            .find(|m| server.models.contains(&m.id))
-            .map(|m| m.id.clone());
-        if saved.enabled
-            && let Some(model) = &model
-        {
-            return Ok(format!("{}/{model}", saved.id));
-        }
-        let mut provider = config::with_headers(saved);
-        provider.enabled = true;
-        let model = model.unwrap_or_else(|| {
-            provider.models.push(ApiModel {
-                id: first.clone(),
-                name: None,
-            });
-            first
-        });
-        let view = config::save(provider, KeyChange::Keep)?;
-        return Ok(format!("{}/{model}", view.provider.id));
-    }
-    // The preset picks the logo, and of the servers found here only LM Studio has one.
-    let preset = if server.name == "LM Studio" {
-        "lmstudio"
-    } else {
-        "custom"
-    };
-    let view = config::save(
-        ApiProvider {
-            id: String::new(),
-            name: server.name,
-            preset: preset.into(),
-            base_url: server.base_url,
-            enabled: true,
-            local: true,
-            models: server
-                .models
-                .into_iter()
-                .filter(|m| chats(m))
-                .map(|id| ApiModel { id, name: None })
-                .collect(),
-            headers: Vec::new(),
-            key_env: None,
-            key_store: None,
-            logo: None,
-            system_prompt: String::new(),
-        },
-        KeyChange::Keep,
-    )?;
-    Ok(format!("{}/{first}", view.provider.id))
-}
-
-/// A model that chats, not one that only embeds text.
-fn chats(model: &str) -> bool {
-    !model.to_ascii_lowercase().contains("embed")
 }
 
 /// Which of `models` read images, by what the server's engine says: LM Studio's model list,

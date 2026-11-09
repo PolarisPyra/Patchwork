@@ -1,5 +1,7 @@
 //! Claude Code transcripts: `~/.claude/projects/<escaped cwd>/<session id>.jsonl`.
 
+// Rust guideline compliant 2026-10-09
+
 use serde_json::Value;
 
 use super::{Session, SessionMessage, ilog, push_merged};
@@ -111,10 +113,10 @@ fn parse(text: &str, sidechain: bool) -> Option<Session> {
                 let content = &v["message"]["content"];
                 if kind == "user" {
                     if let Some(text) = user_text(content) {
-                        push_merged(&mut messages, Role::User, text, at);
+                        push_merged(&mut messages, Role::User, &text, at);
                     }
                 } else {
-                    push_merged(&mut messages, Role::Assistant, assistant_text(content), at);
+                    push_merged(&mut messages, Role::Assistant, &assistant_text(content), at);
                 }
             }
             _ => {}

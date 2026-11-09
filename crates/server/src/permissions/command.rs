@@ -1,5 +1,7 @@
 //! Reading a shell command line the way a rule names it: its program and subcommand, past assignments and wrappers.
 
+// Rust guideline compliant 2026-10-09
+
 /// Programs whose first argument names what they do, so a rule names both.
 const SUBCOMMANDS: [&str; 16] = [
     "git",

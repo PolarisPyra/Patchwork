@@ -1,6 +1,9 @@
+//! Tests for the database: adopting old data, and what survives a reopen.
+
+// Rust guideline compliant 2026-10-09
+
 use std::path::PathBuf;
 
-use super::DB_FILE;
 use super::*;
 use crate::provider::AgentKind;
 use crate::system::new_id;
@@ -69,26 +72,6 @@ fn thread(messages: Vec<Message>) -> Thread {
 }
 
 #[test]
-fn old_dir_is_adopted_once() {
-    let (old, new) = (temp_dir(), temp_dir().join("patchwork"));
-    let store = Store::open(old.clone()).unwrap();
-    store.update_settings(|s| s.onboarded = true).unwrap();
-    drop(store);
-
-    adopt_old_dir(&old, &new).unwrap();
-    assert!(!old.exists());
-    assert!(Store::open(new.clone()).unwrap().settings().onboarded);
-
-    // A database already in the new folder wins.
-    std::fs::create_dir_all(&old).unwrap();
-    std::fs::write(old.join(DB_FILE), "stale").unwrap();
-    adopt_old_dir(&old, &new).unwrap();
-    assert!(old.join(DB_FILE).exists());
-    let _ = std::fs::remove_dir_all(&old);
-    let _ = std::fs::remove_dir_all(new.parent().unwrap());
-}
-
-#[test]
 fn legacy_json_moves_into_sqlite() {
     let dir = temp_dir();
     std::fs::write(
@@ -103,7 +86,7 @@ fn legacy_json_moves_into_sqlite() {
     )
     .unwrap();
 
-    let store = Store::open(dir.clone()).unwrap();
+    let store = Store::open(&dir).unwrap();
     let s = store.settings();
     assert_eq!(s.agents, [AgentKind::Codex]);
     assert_eq!(s.projects[0].path, "/x");
@@ -117,7 +100,7 @@ fn legacy_json_moves_into_sqlite() {
 #[test]
 fn thread_changes_survive_reopen_and_delete_cascades() {
     let dir = temp_dir();
-    let store = Store::open(dir.clone()).unwrap();
+    let store = Store::open(&dir).unwrap();
     let t = thread(vec![message("a", MessageStatus::Complete)]);
     store.insert_threads(vec![t.clone()]).unwrap();
     store
@@ -133,7 +116,7 @@ fn thread_changes_survive_reopen_and_delete_cascades() {
         .unwrap();
     drop(store);
 
-    let store = Store::open(dir.clone()).unwrap();
+    let store = Store::open(&dir).unwrap();
     let loaded = store.thread(&t.id).unwrap();
     assert_eq!(loaded.title, "renamed");
     assert_eq!(loaded.slash_commands[0].name, "review");
@@ -163,12 +146,12 @@ fn thread_changes_survive_reopen_and_delete_cascades() {
 #[test]
 fn computer_use_is_a_setting_and_a_mirror() {
     let dir = temp_dir();
-    let store = Store::open(dir.clone()).unwrap();
+    let store = Store::open(&dir).unwrap();
     assert!(!store.settings().computer_use, "off until it is turned on");
     store.update_settings(|s| s.computer_use = true).unwrap();
     drop(store);
 
-    let store = Store::open(dir.clone()).unwrap();
+    let store = Store::open(&dir).unwrap();
     assert!(store.settings().computer_use);
     store.update_settings(|s| s.computer_use = false).unwrap();
     assert!(!store.settings().computer_use);
@@ -182,11 +165,11 @@ fn computer_use_is_a_setting_and_a_mirror() {
 
 #[test]
 fn scheduled_tasks_survive_reopen() {
-    use crate::scheduled::{Schedule, ScheduledTask, Weekday};
+    use crate::scheduled::{Schedule, Task, Weekday};
 
     let dir = temp_dir();
-    let store = Store::open(dir.clone()).unwrap();
-    let task = ScheduledTask {
+    let store = Store::open(&dir).unwrap();
+    let task = Task {
         id: String::new(),
         name: "Weekly report".into(),
         prompt: "Report on what landed.".into(),
@@ -210,7 +193,7 @@ fn scheduled_tasks_survive_reopen() {
     assert!(saved.next_run_at.is_some(), "a saved task is scheduled");
     drop(store);
 
-    let store = Store::open(dir.clone()).unwrap();
+    let store = Store::open(&dir).unwrap();
     let tasks = store.scheduled_tasks();
     assert_eq!(tasks.len(), 1);
     assert_eq!(tasks[0].name, "Weekly report");
@@ -253,11 +236,11 @@ fn scheduled_tasks_survive_reopen() {
 
 #[test]
 fn a_task_without_a_name_or_a_time_is_refused() {
-    use crate::scheduled::{Schedule, ScheduledTask};
+    use crate::scheduled::{Schedule, Task};
 
     let dir = temp_dir();
-    let store = Store::open(dir.clone()).unwrap();
-    let task = |name: &str, time: &str| ScheduledTask {
+    let store = Store::open(&dir).unwrap();
+    let task = |name: &str, time: &str| Task {
         id: String::new(),
         name: name.into(),
         prompt: "p".into(),
@@ -272,8 +255,8 @@ fn a_task_without_a_name_or_a_time_is_refused() {
         created_at: 0,
         recent_runs: Vec::new(),
     };
-    assert!(crate::scheduled::prepare(task("", "09:00")).is_err());
-    assert!(crate::scheduled::prepare(task("n", "nine")).is_err());
+    crate::scheduled::prepare(task("", "09:00")).unwrap_err();
+    crate::scheduled::prepare(task("n", "nine")).unwrap_err();
     assert!(store.scheduled_tasks().is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -283,7 +266,7 @@ fn a_task_without_a_name_or_a_time_is_refused() {
 #[test]
 fn a_replys_checks_survive_reopen() {
     let dir = temp_dir();
-    let store = Store::open(dir.clone()).unwrap();
+    let store = Store::open(&dir).unwrap();
     let mut t = thread(vec![message("done", MessageStatus::Complete)]);
     t.messages[0].checks = Some(crate::threads::TurnChecks {
         status: crate::threads::CheckStatus::Failed,
@@ -302,7 +285,7 @@ fn a_replys_checks_survive_reopen() {
     store.insert_threads(vec![t.clone()]).unwrap();
     drop(store);
 
-    let store = Store::open(dir.clone()).unwrap();
+    let store = Store::open(&dir).unwrap();
     let loaded = store.thread(&t.id).unwrap();
     let checks = loaded.messages[0].checks.clone().expect("kept");
     assert_eq!(checks.status, crate::threads::CheckStatus::Failed);

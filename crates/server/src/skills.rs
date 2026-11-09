@@ -3,6 +3,10 @@
 //!
 //! The skills folder: listing, mentioning, and mirroring skills into each agent, and watching for changes.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
@@ -76,6 +80,7 @@ pub fn list(dir: &Path) -> Vec<Skill> {
 }
 
 /// The skills in the skills folder, each marked enabled unless switched off in Settings.
+#[must_use]
 pub fn all(settings: &Settings) -> Vec<Skill> {
     let mut skills = list(&dir(settings));
     for skill in &mut skills {
@@ -85,6 +90,7 @@ pub fn all(settings: &Settings) -> Vec<Skill> {
     skills
 }
 
+#[must_use]
 pub fn enabled(settings: &Settings) -> Vec<Skill> {
     all(settings).into_iter().filter(|s| s.enabled).collect()
 }
@@ -126,6 +132,7 @@ pub fn mentioned(text: &str) -> impl Iterator<Item = &str> {
 
 /// The first skill a message names as `$name`, and the text it goes with: the text after the
 /// name when the message starts with it, or else the whole message as written.
+#[must_use]
 pub fn invoked<'a>(text: &'a str, skills: &[Skill]) -> Option<(Skill, &'a str)> {
     let skill = mentioned(text)
         .find_map(|name| skills.iter().find(|s| s.name == name))?
@@ -141,6 +148,7 @@ pub fn invoked<'a>(text: &'a str, skills: &[Skill]) -> Option<(Skill, &'a str)> 
 /// The message as the agent should get it when it invokes `skill`: Claude runs the skill as a
 /// command of the `claude` plugin, Codex reads a `$name` mention, and the rest are told
 /// which `SKILL.md` to follow.
+#[must_use]
 pub fn invocation(agent: AgentKind, skill: &Skill, rest: &str) -> String {
     let text = match agent {
         AgentKind::Claude => format!("/{PLUGIN}:{} {rest}", skill.name),
@@ -167,6 +175,8 @@ pub(crate) fn cli_dir(cli: &str) -> PathBuf {
     crate::system::dirs().launch(cli)
 }
 
+/// Syncs a CLI's `skills` folder with the enabled skills, and returns the CLI's folder.
+///
 /// Makes the `skills` folder in a CLI's folder hold a copy of each enabled skill and nothing
 /// else, and returns the CLI's folder. The copies are brought up to date on every launch, so
 /// switched-off skills stay out. They are copies rather than links, since Windows needs a
@@ -190,8 +200,8 @@ pub fn sync(settings: &Settings, cli: &str) -> Option<PathBuf> {
     for (name, folder) in &wanted {
         if let Err(e) = mirror(folder, &skills.join(name)) {
             log::warn!(
-                "failed to copy the {} skill for {cli}: {e}",
-                name.to_string_lossy()
+                skill:% = name.to_string_lossy(), cli:%, error:% = e;
+                "failed to copy the {{skill}} skill for {{cli}}: {{error}}"
             );
         }
     }
@@ -246,6 +256,7 @@ const AGENT_SKILLS: [&str; 8] = [
 
 /// Every folder agents read skills from, which they may read without asking: Patchwork's skills
 /// folder, each CLI's copies of the enabled skills, and the agents' own skills folders.
+#[must_use]
 pub fn folders(settings: &Settings) -> Vec<PathBuf> {
     let mut out = vec![dir(settings)];
     out.extend(
@@ -260,6 +271,7 @@ pub fn folders(settings: &Settings) -> Vec<PathBuf> {
 }
 
 /// Watches the skills folder until dropped.
+#[derive(Debug)]
 pub struct Watcher {
     _watcher: notify::RecommendedWatcher,
 }
@@ -269,7 +281,12 @@ const SETTLE: std::time::Duration = std::time::Duration::from_millis(200);
 
 /// Watches `dir` and everything in it, following links, and runs `on_change` on a thread of its
 /// own once each burst of changes settles.
-pub fn watch(dir: &Path, on_change: impl Fn() + Send + 'static) -> Result<Watcher, String> {
+///
+/// # Errors
+///
+/// Returns an error when the watcher cannot be created, cannot watch `dir`, or its thread cannot be
+/// started.
+pub fn watch(dir: &Path, on_change: impl Fn() + Send + 'static) -> Result<Watcher, Error> {
     let (tx, rx) = std::sync::mpsc::channel();
     let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
         if !res.is_ok_and(|e| matches!(e.kind, notify::EventKind::Access(_))) {
@@ -294,6 +311,7 @@ pub fn watch(dir: &Path, on_change: impl Fn() + Send + 'static) -> Result<Watche
 }
 
 /// What Patchwork's own agent is told about the skills, which it reads with its file tools.
+#[must_use]
 pub fn instructions(skills: &[Skill]) -> Option<String> {
     if skills.is_empty() {
         return None;
@@ -303,9 +321,9 @@ pub fn instructions(skills: &[Skill]) -> Option<String> {
          skill, read its SKILL.md first and follow it.",
     );
     for skill in skills {
-        text.push_str(&format!("\n- {} ({})", skill.name, skill.path));
+        let _ = write!(text, "\n- {} ({})", skill.name, skill.path);
         if let Some(description) = &skill.description {
-            text.push_str(&format!(": {description}"));
+            let _ = write!(text, ": {description}");
         }
     }
     Some(text)

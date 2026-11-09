@@ -1,4 +1,8 @@
 //! Messages sent while a turn runs: steered into it, or queued for the next turn.
+
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -20,6 +24,7 @@ pub(in crate::orchestration) struct FollowUp {
 }
 
 /// A message to hold for a running turn, borrowed from the caller.
+#[derive(Debug, Clone, Copy)]
 pub struct FollowUpInput<'a> {
     pub message_id: &'a str,
     pub text: &'a str,
@@ -36,7 +41,7 @@ pub(in crate::orchestration) type Queue = Arc<Mutex<Vec<FollowUp>>>;
 impl Runner {
     /// Holds a message for the next turn of the one running in `thread_id`, even when the agent
     /// could take it now. False when no turn is running there.
-    pub fn enqueue(&self, thread_id: &str, input: FollowUpInput<'_>) -> Result<bool, String> {
+    pub(crate) fn enqueue(&self, thread_id: &str, input: FollowUpInput<'_>) -> Result<bool, Error> {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         // An idle agent is not replying, so there is nothing to wait for.
         let Some(turn) = turns
@@ -137,7 +142,7 @@ impl Runner {
         }
         let follow_up = queue.remove(index);
         let turn_id = turn
-            .native_turn
+            .native
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone();

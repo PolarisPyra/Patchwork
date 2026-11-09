@@ -1,3 +1,7 @@
+//! Tests for Claude Code's arguments and how its stream is parsed into events.
+
+// Rust guideline compliant 2026-10-09
+
 use super::*;
 
 use super::parse::{claude_ended_status, claude_task_status};

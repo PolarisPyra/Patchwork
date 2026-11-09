@@ -1,6 +1,9 @@
 //! A message and what it carries: its parts, tool calls, approvals, attachments and usage.
 
-use std::collections::{HashMap};
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -42,7 +45,7 @@ pub enum StepStatus {
 #[serde(rename_all = "camelCase")]
 pub struct ToolCall {
     pub id: String,
-    /// e.g. "Bash", "Edit", "command_execution"
+    /// e.g. "Bash", "Edit", "`command_execution`"
     pub name: String,
     /// Short single-line description, e.g. the command or file path.
     pub summary: String,
@@ -81,6 +84,7 @@ pub struct EditLines {
 pub const MAX_TOOL_OUTPUT: usize = 16 << 10;
 
 /// `output` cut to `MAX_TOOL_OUTPUT` bytes at a character boundary; None when empty.
+#[must_use]
 pub fn tool_output(output: &str) -> Option<String> {
     let output = output.trim_end();
     if output.is_empty() {
@@ -147,6 +151,7 @@ pub enum TaskStatus {
 
 impl TaskStatus {
     /// Whether the task still runs, so it is listed under the background.
+    #[must_use]
     pub fn is_live(self) -> bool {
         matches!(self, Self::Running | Self::Waiting)
     }
@@ -211,7 +216,7 @@ pub enum ApprovalStatus {
 #[serde(rename_all = "camelCase")]
 pub struct Approval {
     pub id: String,
-    /// e.g. "Run command", "Edit files", "Use WebFetch".
+    /// e.g. "Run command", "Edit files", "Use `WebFetch`".
     pub title: String,
     /// The command, paths, or other detail being approved.
     pub detail: String,
@@ -279,6 +284,7 @@ pub struct Attachment {
 }
 
 /// Media type for the image formats the agents accept, by file extension.
+#[must_use]
 pub fn image_media_type(path: &str) -> Option<&'static str> {
     let ext = path.rsplit_once('.')?.1.to_ascii_lowercase();
     match ext.as_str() {
@@ -292,7 +298,7 @@ pub fn image_media_type(path: &str) -> Option<&'static str> {
 
 impl Attachment {
     /// Classifies a path that exists on disk.
-    pub fn from_path(path: &str) -> Result<Self, String> {
+    pub(crate) fn from_path(path: &str) -> Result<Self, Error> {
         let meta = std::fs::metadata(path).map_err(|e| format!("{path}: {e}"))?;
         let kind = if meta.is_dir() {
             AttachmentKind::Folder
@@ -303,8 +309,7 @@ impl Attachment {
         };
         let name = std::path::Path::new(path)
             .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| path.to_string());
+            .map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned());
         Ok(Self {
             kind,
             path: path.to_string(),
@@ -460,7 +465,7 @@ pub struct TurnChecks {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckFailure {
-    /// What failed, as it reads in the output ("tests::it_works", "FAIL src/app.test.ts").
+    /// What failed, as it reads in the output ("`tests::it_works`", "FAIL src/app.test.ts").
     pub name: String,
     /// The line or two that says why, when the output gave one.
     #[serde(default)]

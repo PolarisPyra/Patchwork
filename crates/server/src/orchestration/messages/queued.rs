@@ -1,6 +1,9 @@
 //! The messages queued behind a running turn: taking one back, editing it, sending it later or
 //! as a steer.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::sync::Arc;
 
 use crate::orchestration::{Delivery, FollowUpInput, TurnRequest};
@@ -12,7 +15,12 @@ use crate::Server;
 
 impl Server {
     /// Takes back a message sent mid-turn that has not started yet, so it can be edited.
-    pub fn remove_queued(&self, thread_id: &str, message_id: &str) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the chat is unknown, when the message was already sent, or when the
+    /// removal cannot be saved.
+    pub fn remove_queued(&self, thread_id: &str, message_id: &str) -> Result<(), Error> {
         let thread = self.thread(thread_id)?;
         let Some(message) = thread.messages.iter().find(|m| m.id == message_id) else {
             // Makes startup cleanup safe to retry if an app refresh overlaps another cleanup.
@@ -37,13 +45,18 @@ impl Server {
     }
 
     /// Updates a queued message without changing its position or id.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when an attachment image cannot be read or is over 5 MB, when the chat is
+    /// unknown, when the message is no longer queued, or when the edit cannot be saved.
     pub fn edit_queued(
         &self,
         thread_id: &str,
         message_id: &str,
         text: String,
         attachments: Vec<Attachment>,
-    ) -> Result<(), String> {
+    ) -> Result<(), Error> {
         let images = provider::load_images(&attachments)?;
         let thread = self.thread(thread_id)?;
         let original = thread
@@ -73,8 +86,8 @@ impl Server {
                 .iter_mut()
                 .find(|m| m.id == message_id && m.queued)
             {
-                m.text = edited.text.clone();
-                m.attachments = edited.attachments.clone();
+                m.text.clone_from(&edited.text);
+                m.attachments.clone_from(&edited.attachments);
             }
         })?;
         orchestration::publish(
@@ -95,14 +108,20 @@ impl Server {
                 .thread(&thread_id)
                 .is_some_and(|t| t.messages.iter().any(|m| m.queued));
             if queued && let Err(e) = server.resume_queued(&thread_id) {
-                log::warn!("failed to send queued messages: {e}");
+                log::warn!(error:% = e; "failed to send queued messages: {{error}}");
             }
         });
     }
 
     /// Sends persisted queued messages in their original order, as one message: to the idle
     /// agent when one is up, as a normal message would go, otherwise in a new turn.
-    pub fn resume_queued(self: &Arc<Self>, thread_id: &str) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a turn is already running, when the chat is unknown or has no queued
+    /// messages, when an attachment image cannot be read, or when the queue cannot be saved or the
+    /// turn cannot be started.
+    pub fn resume_queued(self: &Arc<Self>, thread_id: &str) -> Result<(), Error> {
         if self.runner.is_running(thread_id) {
             return Err("This turn is already running".into());
         }
@@ -124,7 +143,7 @@ impl Server {
                 .filter(|m| queued.iter().any(|q| q.id == m.id))
                 .for_each(|m| m.queued = false);
         })?;
-        queued.iter().for_each(|m| {
+        for m in &queued {
             orchestration::publish(
                 self,
                 thread_id,
@@ -132,8 +151,8 @@ impl Server {
                     message_id: m.id.clone(),
                     queued: false,
                 },
-            )
-        });
+            );
+        }
         let first = &queued[0].id;
         let input = FollowUpInput {
             message_id: first,
@@ -168,7 +187,7 @@ impl Server {
                     .filter(|m| queued.iter().any(|q| q.id == m.id))
                     .for_each(|m| m.queued = true);
             })?;
-            queued.iter().for_each(|m| {
+            for m in &queued {
                 orchestration::publish(
                     self,
                     thread_id,
@@ -176,15 +195,20 @@ impl Server {
                         message_id: m.id.clone(),
                         queued: true,
                     },
-                )
-            });
+                );
+            }
             return Err(error);
         }
         Ok(())
     }
 
     /// Promotes an existing queued message into the running turn.
-    pub fn steer_queued(&self, thread_id: &str, message_id: &str) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the chat or the message is unknown, or when the message is no longer
+    /// queued or could not be sent to the running turn.
+    pub fn steer_queued(&self, thread_id: &str, message_id: &str) -> Result<(), Error> {
         let thread = self.thread(thread_id)?;
         if !thread.messages.iter().any(|m| m.id == message_id) {
             return Err("Message not found".into());

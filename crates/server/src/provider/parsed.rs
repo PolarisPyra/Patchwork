@@ -1,5 +1,7 @@
 //! What an agent CLI's output is read into, and the helpers each CLI's parser builds it with.
 
+// Rust guideline compliant 2026-10-09
+
 use serde_json::Value;
 use crate::orchestration::AgentEvent;
 use crate::system::now_ms;
@@ -48,9 +50,10 @@ pub enum TaskEvent {
 
 /// What one JSONL line means for the turn.
 #[derive(Debug)]
-// Each event is built once and moved straight into the turn, so boxing the large variant would
-// only add an allocation per event.
-#[allow(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "each event is built once and moved straight into the turn, so boxing the large variant would only add an allocation per event"
+)]
 pub enum Parsed {
     Event(AgentEvent),
     SessionId(String),

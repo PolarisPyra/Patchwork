@@ -1,5 +1,8 @@
 //! Installing an agent CLI with its official script.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::path::PathBuf;
 
 use crate::provider::AgentKind;
@@ -12,7 +15,13 @@ impl Server {
     /// OpenCode are kept from editing the shell profile; Antigravity's script always adds its
     /// folder to it, with no way to opt out. On Windows only the Antigravity CLI is set up, with
     /// its PowerShell script.
-    pub fn install_cli(&self, kind: AgentKind) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the agent has no CLI to install on this system, the home folder or
+    /// installer folder is unavailable, the installer cannot be downloaded or run, or it finishes
+    /// without leaving the CLI in place.
+    pub fn install_cli(&self, kind: AgentKind) -> Result<(), Error> {
         let windows = cfg!(windows);
         if windows && kind != AgentKind::Antigravity {
             return Err(
@@ -68,7 +77,8 @@ impl Server {
             return Err(format!(
                 "Download failed: {}",
                 String::from_utf8_lossy(&fetch.stderr).trim()
-            ));
+            )
+            .into());
         }
         let mut cmd = crate::system::host_command(shell);
         if windows {
@@ -106,7 +116,8 @@ impl Server {
             return Err(format!(
                 "The install did not finish: {}",
                 String::from_utf8_lossy(&run.stderr).trim()
-            ));
+            )
+            .into());
         }
         Ok(())
     }

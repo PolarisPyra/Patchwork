@@ -2,6 +2,8 @@
 //! process only while it is still the one that was read, so a pid the system has since handed to
 //! another program is never hit. Windows has no such table here.
 
+// Rust guideline compliant 2026-10-09
+
 /// One running process, with when it started, which tells it apart from a later process given the
 /// same pid.
 #[derive(Debug, Clone, PartialEq, Eq)]

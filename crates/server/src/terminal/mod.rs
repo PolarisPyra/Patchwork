@@ -5,6 +5,8 @@
 //! attaches again and gets the screen back. One no window shows is closed after two hours idle
 //! at its prompt, and closing one ends every process it started.
 
+// Rust guideline compliant 2026-10-09
+
 mod activity;
 mod launch;
 mod pty;
@@ -12,7 +14,11 @@ mod range;
 mod session;
 mod types;
 
+#[doc(inline)]
 pub use launch::{Launch, launch, shells};
+#[doc(inline)]
 pub use range::sweep;
+#[doc(inline)]
 pub use session::{FrameSink, Terminals};
+#[doc(inline)]
 pub use types::{AttachedTerminal, TerminalFrame, TerminalInfo, TerminalShell};

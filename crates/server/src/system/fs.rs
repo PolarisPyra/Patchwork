@@ -1,6 +1,9 @@
 //! Paths on the user's machine: the home folder, resolving a path the user or an agent typed, and
 //! writing a private file.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::path::{Component, Path, PathBuf};
 
 pub fn home_dir() -> Option<PathBuf> {
@@ -10,6 +13,7 @@ pub fn home_dir() -> Option<PathBuf> {
 }
 
 /// `path` resolved against the root, with `.` and `..` folded away.
+#[must_use]
 pub fn resolve(root: &Path, path: &str) -> PathBuf {
     let path = path.trim();
     let expanded = match path.strip_prefix("~/") {
@@ -36,6 +40,7 @@ pub fn resolve(root: &Path, path: &str) -> PathBuf {
 
 /// Whether `name` can be a file's name as it is: not hidden, and without a path separator or a
 /// character Windows refuses.
+#[must_use]
 pub fn is_plain_file_name(name: &str) -> bool {
     !name.is_empty()
         && !name.starts_with('.')
@@ -43,7 +48,7 @@ pub fn is_plain_file_name(name: &str) -> bool {
 }
 
 /// Writes `text` through a temporary file, readable only by the user.
-pub fn write_private(path: &Path, text: &str) -> Result<(), String> {
+pub(crate) fn write_private(path: &Path, text: &str) -> Result<(), Error> {
     use std::io::Write;
     let dir = path.parent().ok_or("No config folder")?;
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
@@ -55,11 +60,12 @@ pub fn write_private(path: &Path, text: &str) -> Result<(), String> {
     let mut file = options.open(&tmp).map_err(|e| e.to_string())?;
     file.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
     file.sync_all().map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, path).map_err(|e| e.to_string())
+    std::fs::rename(&tmp, path).map_err(|e| (e.to_string()).into())
 }
 
 /// The JSON file at `path`, or the default when there is none. A file that does not parse is kept
 /// as `<name>.bad` before the default is used, so the next save cannot lose what it held.
+#[must_use]
 pub fn read_json_or_default<T: serde::de::DeserializeOwned + Default>(path: &Path) -> T {
     let Ok(text) = std::fs::read_to_string(path) else {
         return T::default();
@@ -71,13 +77,14 @@ pub fn read_json_or_default<T: serde::de::DeserializeOwned + Default>(path: &Pat
             bad.push(".bad");
             let kept = std::fs::copy(path, &bad).is_ok();
             log::warn!(
-                "{} is not valid JSON ({e}){}",
-                path.display(),
-                if kept {
+                path:% = path.display(),
+                error:% = e,
+                kept = if kept {
                     "; a copy was kept beside it as .bad"
                 } else {
                     ""
-                }
+                };
+                "{{path}} is not valid JSON ({{error}}){{kept}}"
             );
             T::default()
         }

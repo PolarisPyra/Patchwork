@@ -1,5 +1,8 @@
 //! The servers in `mcp/`: reading and saving them, their stored secrets, and matching a CLI's servers against them.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock, PoisonError};
@@ -69,7 +72,7 @@ pub(super) struct Config {
 }
 
 /// A server as the settings show it, without its environment and header values.
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerView {
     pub name: String,
@@ -86,14 +89,14 @@ pub struct ServerView {
 }
 
 /// A server's tool, as the settings list it.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolInfo {
     pub name: String,
     pub description: String,
 }
 
 /// A tool as an API turn offers it to the model.
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnTool {
     /// `mcp__server__tool`, cut to what endpoints accept.
@@ -113,7 +116,7 @@ pub fn init(config_dir: &Path) {
     });
     std::thread::spawn(|| {
         if let Err(e) = serve_relay() {
-            log::warn!("MCP relay for the CLIs did not start: {e}");
+            log::warn!(error:% = e; "MCP relay for the CLIs did not start: {{error}}");
         }
     });
 }
@@ -148,6 +151,7 @@ pub(super) fn read_config() -> Config {
     Config { mcp_servers }
 }
 
+#[must_use]
 pub fn list() -> Vec<ServerView> {
     let servers = read_config().mcp_servers;
     let pool = pool();
@@ -177,7 +181,7 @@ pub fn list() -> Vec<ServerView> {
                         ("error", Vec::new(), Some("The server exited".into()))
                     }
                     Ok(Some(Ok(conn))) => ("ready", conn.tool_infos(), None),
-                    Ok(Some(Err(e))) => ("error", Vec::new(), Some(e.clone())),
+                    Ok(Some(Err(e))) => ("error", Vec::new(), Some(e.to_string())),
                 },
             };
             ServerView {
@@ -194,7 +198,13 @@ pub fn list() -> Vec<ServerView> {
 }
 
 /// Adds or changes a server; `previous` is its old name when renamed.
-pub fn save(name: String, previous: Option<String>, server: McpServer) -> Result<(), String> {
+///
+/// # Errors
+///
+/// Returns an error when the name is empty or not a plain file name, the server has neither a
+/// command nor an `http(s)` URL, or storing its secrets or writing or removing its config file
+/// fails.
+pub fn save(name: &str, previous: Option<String>, server: McpServer) -> Result<(), Error> {
     let name = name.trim().to_string();
     if name.is_empty() {
         return Err("Give the server a name".into());
@@ -294,7 +304,12 @@ pub(super) fn resolved(name: &str, server: &McpServer) -> McpServer {
     server
 }
 
-pub fn remove(name: &str) -> Result<(), String> {
+/// Removes the MCP server `name` and stops it.
+///
+/// # Errors
+///
+/// Returns an error when the server's config file cannot be deleted.
+pub fn remove(name: &str) -> Result<(), Error> {
     let _guard = WRITE.lock().unwrap_or_else(PoisonError::into_inner);
     remove_file(name)?;
     pool().remove(name);
@@ -308,14 +323,14 @@ pub fn restart(name: &str) {
     restart_changed();
 }
 
-fn write_server(name: &str, server: &McpServer) -> Result<(), String> {
+fn write_server(name: &str, server: &McpServer) -> Result<(), Error> {
     let text = serde_json::to_string_pretty(server).map_err(|e| e.to_string())?;
     crate::system::fs::write_private(&file(name), &text)
 }
 
-fn remove_file(name: &str) -> Result<(), String> {
+fn remove_file(name: &str) -> Result<(), Error> {
     match std::fs::remove_file(file(name)) {
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string().into()),
         _ => Ok(()),
     }
 }
@@ -329,6 +344,7 @@ pub(super) fn restart_changed() {
 
 /// Patchwork's enabled servers set to be shared that run as a command, as they run, for a
 /// CLI's servers to be matched against.
+#[must_use]
 pub fn shared_servers() -> Vec<(String, McpServer)> {
     read_config()
         .mcp_servers
@@ -361,6 +377,7 @@ pub fn identity(server: &McpServer) -> String {
 
 /// Whether a CLI's server is the same as one of Patchwork's: the same command, arguments,
 /// and environment, so it would be a second copy of it.
+#[must_use]
 pub fn same_server(cli: &McpServer, ours: &McpServer) -> bool {
     let command = |s: &McpServer| s.command.as_deref().map(str::trim).map(String::from);
     command(cli).is_some()

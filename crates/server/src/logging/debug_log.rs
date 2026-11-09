@@ -1,5 +1,7 @@
 //! The debug log: what is recorded, for which agent, and writing it.
 
+// Rust guideline compliant 2026-10-09
+
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -54,6 +56,7 @@ pub fn app_logs(level: log::Level) -> bool {
     level as u8 <= APP_LEVEL.load(Ordering::Relaxed)
 }
 
+#[derive(Debug)]
 pub struct DebugLog {
     writer: OnceLock<Sender<Record>>,
     level: AtomicU8,
@@ -62,7 +65,7 @@ pub struct DebugLog {
 }
 
 /// What a record carries, made into text on the writer thread.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Data {
     /// A line an agent sent or printed, in full.
     Line(String),
@@ -81,7 +84,7 @@ pub(super) struct Record {
 }
 
 /// Where a record comes from: the agent, its process, and the thread and reply it works on.
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Source {
     pub agent: Option<AgentKind>,
     pub pid: Option<u32>,

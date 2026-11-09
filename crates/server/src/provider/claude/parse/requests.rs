@@ -1,5 +1,7 @@
 //! The control requests Claude Code sends while a turn runs: permission prompts and questions, read into approvals.
 
+// Rust guideline compliant 2026-10-09
+
 use serde_json::Value;
 use crate::permissions::Target;
 use crate::permissions::PermissionKind;
@@ -91,7 +93,7 @@ pub(crate) fn claude_target(tool: &str, input: &Value, root: &str) -> Option<Tar
     }
 }
 
-/// AskUserQuestion's questions. Claude takes each answer back under the question's text.
+/// `AskUserQuestion`'s questions. Claude takes each answer back under the question's text.
 fn claude_questions(input: &Value) -> Vec<Question> {
     let questions = input["questions"].as_array().map_or(&[][..], Vec::as_slice);
     questions

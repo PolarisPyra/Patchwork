@@ -1,5 +1,7 @@
 //! The loop that reads the agent's stdout for one turn and hands each event on.
 
+// Rust guideline compliant 2026-10-09
+
 use std::collections::{HashMap, HashSet};
 use std::io::BufReader;
 use std::process::Child;
@@ -260,18 +262,11 @@ pub(in crate::orchestration) fn ingest(
                     // next message, as after any reply; Codex exits once its stdin closes. Until
                     // the agent is idle or has exited, Stop still sends SIGTERM if it hangs.
                     if turn.cancelled.load(Ordering::SeqCst) && turn.interrupts.waiting() {
-                        if stays_up(&turn, &goal) {
+                        if stays_up(&turn, goal.as_ref()) {
                             turn.interrupts.answer();
                             // An error in the stopped reply does not carry over to the next one.
                             stream_error = None;
-                            go_idle(
-                                &mut turn,
-                                &segments,
-                                &mut completed,
-                                &mut unsaved,
-                                true,
-                                None,
-                            );
+                            go_idle(&turn, &segments, &mut completed, &mut unsaved, true, None);
                         } else if turn.agent == AgentKind::Codex {
                             turn.stdin
                                 .lock()
@@ -279,7 +274,7 @@ pub(in crate::orchestration) fn ingest(
                                 .take();
                         } else {
                             // What it left running toward a goal or in the background stops too.
-                            terminate(pid, turn.exited.clone());
+                            terminate(pid, Arc::clone(&turn.exited));
                         }
                         continue;
                     }
@@ -304,10 +299,7 @@ pub(in crate::orchestration) fn ingest(
                     }
                     // The finished turn can no longer be steered; until Codex starts the
                     // next one, messages wait for the run to end.
-                    *turn
-                        .native_turn
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner) = None;
+                    *turn.native.lock().unwrap_or_else(PoisonError::into_inner) = None;
                     if stream_error.is_some() {
                         goal_run = false;
                     }
@@ -321,29 +313,22 @@ pub(in crate::orchestration) fn ingest(
                     // Claude stays up idle for the next message, so its session and connectors
                     // are not set up again for each one. It takes messages meanwhile, including
                     // while a task it started keeps running.
-                    if can_idle(&turn, &goal, &stream_error) {
-                        go_idle(
-                            &mut turn,
-                            &segments,
-                            &mut completed,
-                            &mut unsaved,
-                            false,
-                            None,
-                        );
+                    if can_idle(&turn, goal.as_ref(), stream_error.as_ref()) {
+                        go_idle(&turn, &segments, &mut completed, &mut unsaved, false, None);
                     } else if !background.keeps_stdin_open() {
                         end_input(&turn, goal_run, &goal_round);
-                    } else if can_idle(&turn, &goal, &None) {
+                    } else if can_idle(&turn, goal.as_ref(), None) {
                         // A reply that failed while a command it started runs on ends now, with its
                         // error. Claude stays up with the command, as after a reply that did not fail,
                         // since the command would otherwise hold the reply open until it ends.
                         let error = stream_error.take().map(|e| with_remedy(turn.agent, e));
                         go_idle(
-                            &mut turn,
+                            &turn,
                             &segments,
                             &mut completed,
                             &mut unsaved,
                             false,
-                            error,
+                            error.as_deref(),
                         );
                     }
                 }
@@ -375,7 +360,10 @@ pub(in crate::orchestration) fn ingest(
                     }
                 }
                 Parsed::SteerRejected(message) => {
-                    log::warn!("the agent did not take the steering message: {message}");
+                    log::warn!(
+                        message:%;
+                        "the agent did not take the steering message: {{message}}"
+                    );
                     let refused = turn
                         .steers
                         .lock()
@@ -436,16 +424,9 @@ pub(in crate::orchestration) fn ingest(
                         && goal
                             .as_ref()
                             .is_some_and(|g| g.status == GoalStatus::Active);
-                    if ended && can_idle(&turn, &goal, &stream_error) {
+                    if ended && can_idle(&turn, goal.as_ref(), stream_error.as_ref()) {
                         if completed < segments.len() {
-                            go_idle(
-                                &mut turn,
-                                &segments,
-                                &mut completed,
-                                &mut unsaved,
-                                false,
-                                None,
-                            );
+                            go_idle(&turn, &segments, &mut completed, &mut unsaved, false, None);
                         }
                     } else if ended && !background.keeps_stdin_open() {
                         end_input(&turn, goal_run, &goal_round);
@@ -456,7 +437,7 @@ pub(in crate::orchestration) fn ingest(
                     if let Err(e) =
                         store.update_thread(&turn.thread_id, |t| t.session_id = Some(id.clone()))
                     {
-                        log::warn!("failed to save session id: {e}");
+                        log::warn!(error:% = e; "failed to save session id: {{error}}");
                     }
                     turn.session_id = Some(id);
                 }
@@ -474,16 +455,9 @@ pub(in crate::orchestration) fn ingest(
                         publish_event(&turn, &mut children, &mut unsaved, event);
                     }
                     // A reply that has ended goes idle, or closes stdin, once no task holds it open.
-                    if ended && can_idle(&turn, &goal, &stream_error) {
+                    if ended && can_idle(&turn, goal.as_ref(), stream_error.as_ref()) {
                         if completed < segments.len() {
-                            go_idle(
-                                &mut turn,
-                                &segments,
-                                &mut completed,
-                                &mut unsaved,
-                                false,
-                                None,
-                            );
+                            go_idle(&turn, &segments, &mut completed, &mut unsaved, false, None);
                         }
                     } else if ended && !background.keeps_stdin_open() {
                         end_input(&turn, goal_run, &goal_round);
@@ -511,10 +485,7 @@ pub(in crate::orchestration) fn ingest(
                 Parsed::TurnStarted(id) => {
                     ended = false;
                     goal_round.fetch_add(1, Ordering::SeqCst);
-                    *turn
-                        .native_turn
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner) = Some(id);
+                    *turn.native.lock().unwrap_or_else(PoisonError::into_inner) = Some(id);
                 }
                 Parsed::Compacting => {
                     turn.save_text(&mut unsaved);
@@ -603,7 +574,7 @@ pub(in crate::orchestration) fn ingest(
                                 stream_error = Some(format!(
                                     "Stopped: the agent called {name} {LOOP_LIMIT} times in a row without getting anywhere."
                                 ));
-                                terminate(pid, turn.exited.clone());
+                                terminate(pid, Arc::clone(&turn.exited));
                             }
                             if let Some(owner) = tool_owner.get(tool_id) {
                                 message_id.clone_from(owner);
@@ -649,7 +620,7 @@ pub(in crate::orchestration) fn ingest(
         publish_event(&turn, &mut children, &mut unsaved, event);
     }
     let exit = child.wait().ok();
-    let status = exit.map_or("unknown".into(), |s| s.to_string());
+    let status = exit.map_or_else(|| "unknown".into(), |s| s.to_string());
     // A turn the user stopped, or the app quit, ends by signal: that is not a failure.
     let stopped = turn.cancelled.load(Ordering::SeqCst);
     let level = if stopped || exit.is_some_and(|s| s.success()) {
@@ -679,7 +650,7 @@ pub(in crate::orchestration) fn ingest(
         (MessageStatus::Complete, None)
     };
     // Subagents end with the agent that ran them.
-    children.drain().for_each(|(_, child)| {
+    for (_, child) in children.drain() {
         publish(
             &turn.server,
             &child.thread_id,
@@ -689,17 +660,17 @@ pub(in crate::orchestration) fn ingest(
                 error: None,
             },
         );
-    });
+    }
 
     if !idle_untouched {
         let after = workspace::git_changes(&turn.root).unwrap_or_default();
         let changed = attribution::lock(&turn.attribution).settle(after);
-        changed.into_iter().for_each(|path| {
+        for path in changed {
             turn.publish(AgentEvent::FileTouched {
                 message_id: turn.message_id.clone(),
                 path,
             });
-        });
+        }
     }
 
     // An agent that was idle held no goal, and a turn that replaced it may have set one since.

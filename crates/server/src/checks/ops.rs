@@ -1,6 +1,9 @@
 //! Running the check command for a reply: who may start a run, the run itself, and what the
 //! reply's card shows while it runs and once it ends.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::path::Path;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
@@ -20,10 +23,17 @@ impl Server {
     /// Runs the project's check command for the reply `message_id` of `thread_id`, on a thread of
     /// its own, publishing each change as it happens. The person's explicit request, so it runs
     /// even for a project whose checks are otherwise off.
-    pub fn run_checks(self: &Arc<Self>, thread_id: &str, message_id: &str) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the checks are already running for this reply.
+    pub fn run_checks(self: &Arc<Self>, thread_id: &str, message_id: &str) -> Result<(), Error> {
         let claim = claim(message_id).ok_or("The checks are still running for this reply.")?;
-        let (server, thread, message) =
-            (self.clone(), thread_id.to_string(), message_id.to_string());
+        let (server, thread, message) = (
+            Arc::clone(self),
+            thread_id.to_string(),
+            message_id.to_string(),
+        );
         std::thread::spawn(move || {
             check_turn(&server, &thread, &message, true);
             drop(claim);
@@ -44,8 +54,11 @@ impl Server {
         let Some(claim) = claim(message_id) else {
             return;
         };
-        let (server, thread, message) =
-            (self.clone(), thread_id.to_string(), message_id.to_string());
+        let (server, thread, message) = (
+            Arc::clone(self),
+            thread_id.to_string(),
+            message_id.to_string(),
+        );
         std::thread::spawn(move || {
             check_turn(&server, &thread, &message, false);
             drop(claim);
@@ -98,7 +111,7 @@ fn check_turn(server: &Arc<Server>, thread_id: &str, message_id: &str, asked: bo
                 message_id: message_id.to_string(),
                 checks,
             },
-        )
+        );
     };
     check_project(&server.store, &project_id, &root, asked, now_ms(), &emit);
 }
@@ -131,8 +144,7 @@ pub(super) fn check_project(
                 failures: Vec::new(),
                 output: None,
                 note: Some(format!(
-                    "No check command in this project. Looked for {}",
-                    WHAT
+                    "No check command in this project. Looked for {WHAT}"
                 )),
                 enabled,
                 at,
@@ -218,7 +230,7 @@ pub(super) fn finish_within(
             duration_ms: 0,
             failures: Vec::new(),
             output: None,
-            note: Some(e),
+            note: Some(e.to_string()),
             enabled,
             at,
         },

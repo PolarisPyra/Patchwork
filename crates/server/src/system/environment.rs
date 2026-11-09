@@ -8,6 +8,8 @@
 //! environment (`shell_command`), so they find the same tools a terminal does without re-reading
 //! the startup files. A change to them reaches Patchwork when it starts again.
 
+// Rust guideline compliant 2026-10-09
+
 use std::ffi::OsString;
 use std::io::Read;
 #[cfg(unix)]
@@ -42,22 +44,23 @@ const LAUNCHER_OWNED: [&str; 1] = ["PATCHWORK_"];
 
 static LOGIN_ENV: OnceLock<Arc<Vec<(String, String)>>> = OnceLock::new();
 
+/// The user's shell environment variables, read once and cached for the session.
+///
 /// The variables the user's shell sets up, read on first use, which [`crate::Server::open`] makes
 /// at launch, and kept until Patchwork quits; a caller that comes while the read runs waits for
 /// it. Empty when the shell can't be read, on Windows, whose apps get the PATH from the registry,
 /// and in a process started with them already.
 pub fn login_env() -> Arc<Vec<(String, String)>> {
-    LOGIN_ENV
-        .get_or_init(|| {
-            if cfg!(windows) || std::env::var_os(ENV_READ).is_some() {
-                return Arc::default();
-            }
-            Arc::new(read_login_env().unwrap_or_default())
-        })
-        .clone()
+    Arc::clone(LOGIN_ENV.get_or_init(|| {
+        if cfg!(windows) || std::env::var_os(ENV_READ).is_some() {
+            return Arc::default();
+        }
+        Arc::new(read_login_env().unwrap_or_default())
+    }))
 }
 
 /// `name` as the user's shell sets it, else as Patchwork has it. None if unset or empty.
+#[must_use]
 pub fn login_var(name: &str) -> Option<String> {
     login_env()
         .iter()
@@ -77,6 +80,7 @@ pub fn search_path() -> Option<OsString> {
 }
 
 /// The program `name` on [`search_path`].
+#[must_use]
 pub fn find_program(name: &str) -> Option<PathBuf> {
     let cwd = std::env::current_dir().unwrap_or_default();
     which::which_in(name, search_path(), cwd).ok()
@@ -120,19 +124,15 @@ fn read_shell(shell: &str) -> Option<Vec<(String, String)>> {
     if crate::system::shell_name(shell) == "bash" {
         flags.push(&["-i", "-c"]);
     }
-    let readings: Vec<Vec<(String, String)>> = flags
-        .iter()
-        .filter_map(|flags| probe(shell, flags))
-        .collect();
-    let mut readings = readings.into_iter();
+    let mut readings = flags.iter().filter_map(|flags| probe(shell, flags));
     let Some(mut vars) = readings.next().or_else(|| probe(shell, &["-l", "-c"])) else {
-        log::warn!("could not read the environment {shell} sets up");
+        log::warn!(shell:%; "could not read the environment {{shell}} sets up");
         return None;
     };
     for extra in readings {
         join(&mut vars, extra);
     }
-    log::info!("read the {} variables {shell} sets up", vars.len());
+    log::info!(count = vars.len(), shell:%; "read the {{count}} variables {{shell}} sets up");
     Some(vars)
 }
 
@@ -190,13 +190,13 @@ fn probe(shell: &str, flags: &[&str]) -> Option<Vec<(String, String)>> {
         cmd.pre_exec(|| {
             libc::setsid();
             Ok(())
-        });
-    }
+        })
+    };
     let mut child = cmd.spawn().ok()?;
     let mut pipe = child.stdout.take()?;
     let out = Arc::new(Mutex::new(Vec::new()));
     let reader = {
-        let out = out.clone();
+        let out = Arc::clone(&out);
         std::thread::spawn(move || {
             let mut chunk = [0u8; 16 << 10];
             while let Ok(n) = pipe.read(&mut chunk) {
@@ -225,6 +225,7 @@ fn probe(shell: &str, flags: &[&str]) -> Option<Vec<(String, String)>> {
         }
         match child.try_wait() {
             Ok(Some(_)) => break Some(true),
+            // Short, so a fast shell returns at once instead of after a fixed wait.
             Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
             _ => break None,
         }
@@ -235,8 +236,10 @@ fn probe(shell: &str, flags: &[&str]) -> Option<Vec<(String, String)>> {
             std::thread::spawn(move || child.wait());
         }
         Some(true) => {
+            // Time for the reader to take the rest of the output after the shell exits.
             let grace = Instant::now() + Duration::from_secs(1);
             while !reader.is_finished() && Instant::now() < grace {
+                // Short, so the reader is joined as soon as it finishes.
                 std::thread::sleep(Duration::from_millis(10));
             }
         }
@@ -244,13 +247,13 @@ fn probe(shell: &str, flags: &[&str]) -> Option<Vec<(String, String)>> {
             #[cfg(unix)]
             // SAFETY: kill only sends a signal; the group is the one this child leads.
             unsafe {
-                libc::kill(-(child.id() as i32), libc::SIGKILL);
-            }
+                libc::kill(-(child.id() as i32), libc::SIGKILL)
+            };
             let _ = child.kill();
             let _ = child.wait();
             log::warn!(
-                "{shell} {} did not print its environment in time",
-                flags.join(" ")
+                shell:%, flags:% = flags.join(" ");
+                "{{shell}} {{flags}} did not print its environment in time"
             );
             return None;
         }

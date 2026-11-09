@@ -1,5 +1,7 @@
 //! Claude Code's `/goal`: reading a goal command, and how the evaluator judged a reply.
 
+// Rust guideline compliant 2026-10-09
+
 use serde_json::Value;
 use crate::threads::GoalStatus;
 use crate::provider::GoalUpdate;
@@ -36,9 +38,12 @@ pub(super) fn goal_from_command(text: &str) -> Option<GoalUpdate> {
     })
 }
 
-/// Where Claude's goal stands once its run has ended. The stream does not say whether the
-/// evaluator found the goal met, judged it impossible, or gave up on a loop that made no
-/// progress, so this reads the evaluator's last verdict from the session transcript.
+/// Where Claude's goal stands once its run has ended.
+///
+/// The stream does not say whether the evaluator found the goal met, judged it impossible, or gave
+/// up on a loop that made no progress, so this reads the evaluator's last verdict from the session
+/// transcript.
+#[must_use]
 pub fn goal_outcome(session_id: &str, objective: &str) -> GoalStatus {
     let file = format!("{session_id}.jsonl");
     let transcript = home()

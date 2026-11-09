@@ -1,14 +1,19 @@
+//! Project file watching: working-tree, `.git`, branch, and tag changes, reported once per burst.
+//!
 //! Watches a project the way an editor's git view does: the working tree minus what git ignores,
 //! plus the top level of `.git` for commits, staging and checkouts, and its branches and tags for
 //! pushes and fetches. A burst of events is reported once, after it settles, with when each path
 //! changed.
 //!
 //! How folders are watched depends on the platform: inotify watches one folder at a time, so
-//! Linux adds a watch per folder git keeps; FSEvents and ReadDirectoryChangesW watch a whole tree
+//! Linux adds a watch per folder git keeps; FSEvents and `ReadDirectoryChangesW` watch a whole tree
 //! for the price of one, so other platforms watch the root and drop ignored paths as they arrive.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::BTreeMap;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Component, Path};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
 use std::sync::{Arc, Mutex, PoisonError, Weak};
 use std::time::{Duration, Instant};
@@ -37,6 +42,7 @@ pub struct Change {
 }
 
 /// Watches until dropped.
+#[derive(Debug)]
 pub struct ProjectWatcher {
     _watcher: Arc<Mutex<RecommendedWatcher>>,
 }
@@ -45,10 +51,14 @@ impl ProjectWatcher {
     /// Starts watching `root`. Folders are added on a thread of the watcher's own, so this
     /// returns at once. `on_change` runs on that thread with what a burst changed; events that
     /// arrive meanwhile wait for the next call.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the file watcher or its thread cannot be created.
     pub fn start(
         root: &Path,
         on_change: impl FnMut(Vec<Change>) + Send + 'static,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, Error> {
         // Events name paths under the root as the system resolves it, such as `/private/var`
         // for `/var` on macOS.
         let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
@@ -61,7 +71,7 @@ impl ProjectWatcher {
         let weak = Arc::downgrade(&watcher);
         std::thread::Builder::new()
             .name("project-watch".into())
-            .spawn(move || run(root, weak, rx, on_change))
+            .spawn(move || run(&root, &weak, &rx, on_change))
             .map_err(|e| e.to_string())?;
         Ok(Self { _watcher: watcher })
     }
@@ -71,23 +81,24 @@ type Received = (Instant, notify::Result<Event>);
 
 /// The watcher's thread. It ends once the watcher is dropped, which closes the channel.
 fn run(
-    root: PathBuf,
-    watcher: Weak<Mutex<RecommendedWatcher>>,
-    rx: Receiver<Received>,
+    root: &Path,
+    watcher: &Weak<Mutex<RecommendedWatcher>>,
+    rx: &Receiver<Received>,
     mut on_change: impl FnMut(Vec<Change>),
 ) {
     let Some(shared) = watcher.upgrade() else {
         return;
     };
-    backend::watch_project(&mut lock(&shared), &root);
+    backend::watch_project(&mut lock(&shared), root);
     drop(shared);
-    let filter = Filter::new(&root);
+    let filter = Filter::new(root);
 
     let mut changed: BTreeMap<String, Instant> = BTreeMap::new();
     let mut since: Option<Instant> = None;
     loop {
         let wait = match since {
             Some(start) => MAX_WAIT.saturating_sub(start.elapsed()).min(SETTLE),
+            // With nothing pending, wake rarely; any change ends the wait at once.
             None => Duration::from_secs(3600),
         };
         let received = if wait.is_zero() {
@@ -102,7 +113,7 @@ fn run(
                 }
                 let before = changed.len();
                 for path in &event.paths {
-                    let Ok(rel) = path.strip_prefix(&root) else {
+                    let Ok(rel) = path.strip_prefix(root) else {
                         continue;
                     };
                     if !filter.keeps(path, rel) {
@@ -112,7 +123,7 @@ fn run(
                     if created_dir && let Some(shared) = watcher.upgrade() {
                         // Files written into a new folder before its watch was in place.
                         for inside in backend::dir_created(&mut lock(&shared), path) {
-                            if let Ok(rel) = inside.strip_prefix(&root) {
+                            if let Ok(rel) = inside.strip_prefix(root) {
                                 changed.insert(git_path(rel), at);
                             }
                         }
@@ -296,7 +307,7 @@ mod tree {
     /// Watches the whole project, `.git` included, in one recursive watch.
     pub(super) fn watch_project(watcher: &mut RecommendedWatcher, root: &Path) {
         if let Err(e) = watcher.watch(root, RecursiveMode::Recursive) {
-            log::warn!("failed to watch {}: {e}", root.display());
+            log::warn!(path:% = root.display(), error:% = e; "failed to watch {{path}}: {{error}}");
         }
     }
 

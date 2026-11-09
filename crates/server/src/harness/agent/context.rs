@@ -1,5 +1,9 @@
 //! Keeping the conversation inside the model's context: cutting old tool results and images when a request is too long, and summarizing it.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
+use std::fmt::Write as _;
 use serde_json::{Value, json};
 use super::request::{Failure, Reply};
 use super::{Agent, emit};
@@ -125,11 +129,12 @@ fn summary_request(messages: &[Value]) -> Value {
             };
             for call in m["tool_calls"].as_array().into_iter().flatten() {
                 let function = &call["function"];
-                text.push_str(&format!(
+                let _ = write!(
+                    text,
                     "\n[called {} with {}]",
                     function["name"].as_str().unwrap_or_default(),
                     function["arguments"].as_str().unwrap_or_default()
-                ));
+                );
             }
             let who = match m["role"].as_str() {
                 Some("assistant") => "Agent",
@@ -145,7 +150,7 @@ fn summary_request(messages: &[Value]) -> Value {
 
 /// The summary as the conversation's first message, then the kept messages. When the first of them
 /// is the user's, the summary joins it, since some endpoints refuse two user messages in a row.
-fn with_summary(summary: String, mut tail: Vec<Value>) -> Vec<Value> {
+fn with_summary(summary: &str, mut tail: Vec<Value>) -> Vec<Value> {
     let Some(first) = tail.first_mut().filter(|m| m["role"] == "user") else {
         let mut messages = vec![json!({"role": "user", "content": summary})];
         messages.extend(tail);
@@ -163,7 +168,7 @@ fn with_summary(summary: String, mut tail: Vec<Value>) -> Vec<Value> {
 
 impl Agent {
     /// Summarizes the conversation and keeps the summary and its latest messages.
-    pub(super) fn compact(&mut self) -> Result<(), String> {
+    pub(super) fn compact(&mut self) -> Result<(), Error> {
         if self.messages.is_empty() {
             emit(&json!({"type": "api.text", "delta": "There is nothing to compact yet."}));
             return Ok(());
@@ -174,7 +179,7 @@ impl Agent {
 
     /// Summarizes the conversation before the next request once it reached the size to compact
     /// at, so the request starts small again.
-    pub(super) fn compact_if_full(&mut self) -> Result<(), String> {
+    pub(super) fn compact_if_full(&mut self) -> Result<(), Error> {
         let at = self.compact_at();
         // When the system prompt and tools alone fill that much, summarizing frees nothing.
         if at == 0 || at <= self.fixed_size() || self.context.max(self.estimate()) < at {
@@ -222,7 +227,7 @@ impl Agent {
     /// Replaces the conversation with the model's summary of it, followed by its latest messages
     /// as they were. With `resume`, the user's latest message follows too, as the request to
     /// answer; without it, the summary is the reply.
-    pub(super) fn summarize(&mut self, resume: bool) -> Result<(), String> {
+    pub(super) fn summarize(&mut self, resume: bool) -> Result<(), Error> {
         let latest = resume
             .then(|| self.messages.iter().rev().find(|m| m["role"] == "user"))
             .flatten()
@@ -259,14 +264,15 @@ impl Agent {
         // A kept user message is the latest one, so it is not repeated.
         let latest = latest.filter(|_| tail.iter().all(|m| m["role"] != "user"));
         if let Some(latest) = latest {
-            summary.push_str(&format!(
+            let _ = write!(
+                summary,
                 "\n\nThe user's latest message, which the work above was answering:\n\n{latest}"
-            ));
+            );
         }
         if !tail.is_empty() {
             summary.push_str("\n\nThe latest messages follow as they were.");
         }
-        self.messages = with_summary(summary, tail);
+        self.messages = with_summary(&summary, tail);
         self.context = 0;
         Ok(())
     }
@@ -336,7 +342,7 @@ impl Agent {
             let reply = self.complete(false);
             self.messages = history;
             match reply {
-                Err(Failure::Context(_)) if self.drop_oldest() => continue,
+                Err(Failure::Context(_)) if self.drop_oldest() => {}
                 reply => return reply,
             }
         }
@@ -344,7 +350,7 @@ impl Agent {
 
     /// Retries a request the provider refused for the conversation's size or its images, after
     /// making it fit: images out, then old tool output cut, then the whole thing summarized.
-    pub(super) fn recover(&mut self, mut failure: Failure) -> Result<Reply, String> {
+    pub(super) fn recover(&mut self, mut failure: Failure) -> Result<Reply, Error> {
         let (mut imageless, mut stage, mut summarized) = (false, 0, false);
         loop {
             match failure {

@@ -6,6 +6,9 @@
 //! whenever it changes, which ends a task whose own end never reached us. Codex reports a command
 //! or subagent only through the call that started it. One still open when its turn completes is
 //! listed, but Codex never reports it ending, so it holds nothing and the turn ends with it.
+
+// Rust guideline compliant 2026-10-09
+
 use std::collections::HashMap;
 
 use crate::provider::TaskEvent;

@@ -1,3 +1,7 @@
+//! Tests for the Codex app-server messages Patchwork sends and parses.
+
+// Rust guideline compliant 2026-10-09
+
 use super::*;
 use std::collections::HashMap;
 

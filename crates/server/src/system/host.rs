@@ -1,13 +1,16 @@
 //! Programs on the user's system: the command and environment they run with.
 
+// Rust guideline compliant 2026-10-09
+
 #[cfg(windows)]
 use std::path::PathBuf;
 
-/// A command for a program on the user's system. The AppImage's launcher points the library,
-/// Python, GTK and data paths into the AppImage for Patchwork itself; agents, git, and the other
-/// programs Patchwork starts get the user's own paths back. A copy restarted into an update
-/// inherits the previous copy's paths too, so entries in any AppImage mount (`/tmp/.mount_*`)
-/// are removed, not only the ones in `APPDIR`.
+/// A command for a program on the user's system.
+///
+/// The AppImage's launcher points the library, Python, GTK and data paths into the AppImage for
+/// Patchwork itself; agents, git, and the other programs Patchwork starts get the user's own paths
+/// back. A copy restarted into an update inherits the previous copy's paths too, so entries in any
+/// AppImage mount (`/tmp/.mount_*`) are removed, not only the ones in `APPDIR`.
 pub fn host_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
     let mut cmd = std::process::Command::new(program);
     hide_console(&mut cmd);
@@ -24,10 +27,13 @@ pub fn host_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Comma
     cmd
 }
 
-/// The PATH to find programs on. On Windows that is the PATH as the system now has it, read from
-/// the registry ahead of the one Patchwork started with: installers write the registry, and a
-/// running app never sees it change, so a CLI installed after Patchwork opened would not be found
-/// until it restarted. Read at most every few seconds.
+/// The PATH to find programs on.
+///
+/// On Windows that is the PATH as the system now has it, read from the registry ahead of the one
+/// Patchwork started with: installers write the registry, and a running app never sees it change,
+/// so a CLI installed after Patchwork opened would not be found until it restarted. Read at most
+/// every few seconds.
+#[must_use]
 pub fn path_var() -> Option<std::ffi::OsString> {
     #[cfg(windows)]
     {
@@ -38,6 +44,7 @@ pub fn path_var() -> Option<std::ffi::OsString> {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some((at, path)) = cache.as_ref()
+            // Long enough to serve a burst of calls, short enough to see a newly installed program.
             && at.elapsed() < Duration::from_secs(3)
         {
             return path.clone();
@@ -50,6 +57,8 @@ pub fn path_var() -> Option<std::ffi::OsString> {
     std::env::var_os("PATH")
 }
 
+/// Starts a Windows console program with a hidden console of its own.
+///
 /// Starts a console program on Windows with a console of its own that has no window. Patchwork
 /// has no console, so without this every program it starts, and every program an agent starts
 /// in turn, opens a console window. Their children share the hidden console.
@@ -134,11 +143,12 @@ fn expand_windows_vars(value: &str, var: &dyn Fn(&str) -> Option<String>) -> Str
 }
 
 /// Patchwork's environment as `host_command` passes it on, without the AppImage's paths.
+#[must_use]
 pub fn host_env() -> Vec<(std::ffi::OsString, std::ffi::OsString)> {
     let changes: std::collections::HashMap<_, _> = host_env_changes().into_iter().collect();
     std::env::vars_os()
         .filter_map(|(key, value)| match changes.get(&key) {
-            Some(Some(changed)) => Some((key, changed.into())),
+            Some(Some(replaced)) => Some((key, replaced.into())),
             Some(None) => None,
             None => Some((key, value)),
         })

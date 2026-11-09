@@ -1,10 +1,63 @@
 [workspace]
 resolver = "3"
-members = ["crates/server", "apps/desktop"]
+members = ["crates/server", "crates/desktop"]
 
 # The app's version, which Settings → Updates compares with the latest release.
 [workspace.package]
 version = "26.11.30"
+edition = "2024"
+rust-version = "1.90"
+license = "MIT"
+repository = "https://github.com/PolarisPyra/Patchwork"
+readme = "README.md"
+keywords = ["agents", "desktop", "gpui"]
+categories = ["development-tools"]
+
+# Every crate the workspace uses, so all members resolve to the same version. Features are turned
+# on by the member that needs them.
+[workspace.dependencies]
+patchwork-server = { path = "crates/server" }
+
+base64 = { version = "0.22", default-features = false }
+chrono = { version = "0.4", default-features = false }
+enigo = { version = "0.6", default-features = false }
+futures = { version = "0.3", default-features = false }
+globset = { version = "0.4", default-features = false }
+gpui = { git = "https://github.com/zed-industries/zed", rev = "d2a4fb6ded7c470be25d1541281da3882495b65b", default-features = false }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "d2a4fb6ded7c470be25d1541281da3882495b65b", default-features = false }
+ignore = { version = "0.4", default-features = false }
+image = { version = "0.25", default-features = false }
+keyring = { version = "3", default-features = false }
+libc = { version = "0.2", default-features = false }
+log = { version = "0.4", default-features = false, features = ["kv"] }
+mimalloc = { version = "0.1", default-features = false }
+notify = { version = "8", default-features = false }
+portable-pty = { version = "0.9", default-features = false }
+pulldown-cmark = { version = "0.13", default-features = false }
+regex = { version = "1", default-features = false }
+rusqlite = { version = "0.37", default-features = false }
+rust-embed = { version = "8", default-features = false }
+serde = { version = "1.0", default-features = false }
+serde_json = { version = "1.0", default-features = false }
+sha2 = { version = "0.10", default-features = false }
+syntect = { version = "5.3", default-features = false, features = ["parsing", "regex-onig"] }
+thiserror = { version = "2", default-features = false }
+toml = { version = "1.1", default-features = false }
+two-face = { version = "0.5", default-features = false }
+unicode-segmentation = { version = "1", default-features = false }
+ureq = { version = "3", default-features = false }
+url = { version = "2", default-features = false }
+uuid = { version = "1", default-features = false }
+vt100 = { version = "0.16", default-features = false }
+wayland-client = { version = "0.31", default-features = false }
+wayland-protocols = { version = "0.32", default-features = false }
+which = { version = "7", default-features = false }
+windows-sys = { version = "0.60", default-features = false }
+winreg = { version = "0.56", default-features = false }
+x11rb = { version = "0.13", default-features = false }
+xcap = { version = "0.9", default-features = false }
+zbus = { version = "5", default-features = false }
+zip = { version = "2", default-features = false }
 
 # Debug builds of the app are optimized too: unoptimized, GPUI takes about 50ms to lay out a
 # frame, so resizing and scrolling stutter. The other workspace crates stay unoptimized.
@@ -13,3 +66,60 @@ opt-level = 2
 
 [profile.dev.package.patchwork]
 opt-level = 1
+
+[workspace.lints.rust]
+ambiguous_negative_literals = "warn"
+missing_debug_implementations = "warn"
+redundant_imports = "warn"
+redundant_lifetimes = "warn"
+trivial_numeric_casts = "warn"
+unsafe_op_in_unsafe_fn = "warn"
+unused_lifetimes = "warn"
+
+[workspace.lints.clippy]
+cargo = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+correctness = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
+allow_attributes_without_reason = "warn"
+as_pointer_underscore = "warn"
+assertions_on_result_states = "warn"
+clone_on_ref_ptr = "warn"
+deref_by_slicing = "warn"
+disallowed_script_idents = "warn"
+empty_drop = "warn"
+empty_enum_variants_with_brackets = "warn"
+empty_structs_with_brackets = "warn"
+fn_to_numeric_cast_any = "warn"
+if_then_some_else_none = "warn"
+map_err_ignore = "warn"
+redundant_type_annotations = "warn"
+renamed_function_params = "warn"
+semicolon_outside_block = "warn"
+undocumented_unsafe_blocks = "warn"
+unnecessary_safety_comment = "warn"
+unnecessary_safety_doc = "warn"
+unneeded_field_pattern = "warn"
+unused_result_ok = "warn"
+too_long_first_doc_paragraph = "warn"
+literal_string_with_formatting_args = "allow"
+# GPUI, zbus and the platform crates pull in several versions of the same crates, which the
+# workspace can't unify.
+multiple_crate_versions = "allow"
+# Pixel, scroll and column math converts between `f32`, `usize` and the integer sizes all over the
+# UI; the values are bounded by what fits on a screen.
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+# Its fix replaces `assert!(x.is_empty())` with a comparison against a typed empty array, which
+# reads worse and says no more when it fails.
+assert_is_empty = "allow"
+# Only the app calls these with maps, always built with the standard hasher.
+implicit_hasher = "allow"
+# Views are one element tree per function and the turn parsers one match over every event;
+# splitting either only moves the lines apart.
+too_many_lines = "allow"

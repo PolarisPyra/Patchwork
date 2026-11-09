@@ -1,5 +1,7 @@
 //! The login shells agents and the terminal run in.
 
+// Rust guideline compliant 2026-10-09
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -9,9 +11,11 @@ use crate::system::{find_program, host_command, login_env, path_var, search_path
 /// systemd's placeholder for accounts without a shell.
 const NOT_AGENT_SHELLS: [&str; 2] = ["git-shell", "systemd-home-fallback-shell"];
 
-/// Shells from /etc/shells that are installed, for the shell choice in settings. Entries that
-/// resolve to the same binary (such as /bin/zsh and /usr/bin/zsh) are listed once, under the
-/// real path when /etc/shells has it. Windows has no such file, so its shells are looked for.
+/// Shells from /etc/shells that are installed, for the shell choice in settings.
+///
+/// Entries that resolve to the same binary (such as /bin/zsh and /usr/bin/zsh) are listed once,
+/// under the real path when /etc/shells has it. Windows has no such file, so its shells are looked
+/// for.
 pub fn available_shells() -> Vec<String> {
     if cfg!(windows) {
         return windows_shells();
@@ -46,7 +50,9 @@ pub fn available_shells() -> Vec<String> {
 /// The login shell in the passwd database for the current user. Windows has none.
 #[cfg(unix)]
 pub fn login_shell() -> Option<String> {
-    let mut buf = vec![0 as libc::c_char; 4096];
+    // Room for the passwd entry's strings, which are a few hundred bytes in practice. A longer
+    // entry makes `getpwuid_r` fail with `ERANGE`, and no shell is found.
+    let mut buf = vec![libc::c_char::default(); 4096];
     // SAFETY: passwd is plain C data, so the all-zero bit pattern is a valid value; getpwuid_r
     // overwrites it before it is read.
     let mut entry: libc::passwd = unsafe { std::mem::zeroed() };
@@ -56,10 +62,10 @@ pub fn login_shell() -> Option<String> {
     let rc = unsafe {
         libc::getpwuid_r(
             libc::getuid(),
-            &mut entry,
+            &raw mut entry,
             buf.as_mut_ptr(),
             buf.len(),
-            &mut found,
+            &raw mut found,
         )
     };
     if rc != 0 || found.is_null() {
@@ -116,9 +122,11 @@ fn windows_shells() -> Vec<String> {
         .collect()
 }
 
-/// The user's shell: the login shell, otherwise the SHELL environment variable. On Windows, which
-/// has no login shell, the best installed one comes before SHELL, which Git Bash sets to a path
-/// only it can read. None when nothing is known.
+/// The user's shell: the login shell, otherwise the SHELL environment variable.
+///
+/// On Windows, which has no login shell, the best installed one comes before SHELL, which Git Bash
+/// sets to a path only it can read. None when nothing is known.
+#[must_use]
 pub fn effective_shell() -> Option<String> {
     let windows_default = cfg!(windows)
         .then(|| available_shells().first().cloned())
@@ -132,6 +140,7 @@ pub fn effective_shell() -> Option<String> {
 const POSIX_SHELLS: [&str; 5] = ["sh", "bash", "zsh", "dash", "ksh"];
 
 /// A shell's program name, such as `zsh` for `/usr/bin/zsh` or `pwsh` for `pwsh.exe`.
+#[must_use]
 pub fn shell_name(shell: &str) -> String {
     Path::new(shell)
         .file_stem()
@@ -141,11 +150,13 @@ pub fn shell_name(shell: &str) -> String {
 }
 
 /// Whether `shell` reads POSIX commands, as fish and Nushell do not.
+#[must_use]
 pub fn is_posix(shell: &str) -> bool {
     POSIX_SHELLS.contains(&shell_name(shell).as_str())
 }
 
 /// The installed shell named `name`, from the PATH the user's shell sets up.
+#[must_use]
 pub fn find_shell(name: &str) -> Option<String> {
     find_program(name).map(|path| path.to_string_lossy().into_owned())
 }
@@ -162,10 +173,13 @@ pub fn command_shell() -> Option<String> {
     find_shell("bash").or_else(|| Some("/bin/sh".into()))
 }
 
-/// A command that runs `command` in [`command_shell`] and exits. The shell skips its startup
-/// files, which may print, prompt or start tmux, and runs in the environment they set up instead
-/// ([`login_env`]), with the PATH a terminal has. Output stays plain text, without colour or a
-/// pager waiting for keys. The caller picks the folder, pipes and process group.
+/// A command that runs `command` in [`command_shell`] and exits.
+///
+/// The shell skips its startup files, which may print, prompt or start tmux, and runs in the
+/// environment they set up instead ([`login_env`]), with the PATH a terminal has. Output stays
+/// plain text, without colour or a pager waiting for keys. The caller picks the folder, pipes and
+/// process group.
+#[must_use]
 pub fn shell_command(command: &str) -> Option<Command> {
     let shell = command_shell()?;
     let mut cmd = host_command(&shell);

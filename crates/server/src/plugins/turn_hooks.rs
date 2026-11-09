@@ -1,5 +1,8 @@
 //! The hooks Patchwork runs itself around a turn, for every agent, with the turn in their environment.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::io::Read;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
@@ -7,6 +10,7 @@ use crate::settings::Settings;
 use super::{HookEvent, PluginHookHandler, list};
 
 /// The turn a hook runs for, as its environment tells it.
+#[derive(Debug)]
 pub struct HookContext<'a> {
     pub event: HookEvent,
     pub thread_id: &'a str,
@@ -17,9 +21,12 @@ pub struct HookContext<'a> {
     pub status: Option<&'a str>,
 }
 
+/// Runs the enabled plugins' command hooks for an event, returning the failures.
+///
 /// Runs the enabled plugins' command hooks for `context.event`, one after another, in the user's
 /// shell, or bash where it is not a POSIX one, in the project folder. Returns
 /// `"<plugin name>: <why>"` for each one that failed; a failed hook never stops the turn.
+#[must_use]
 pub fn run_hooks(settings: &Settings, context: &HookContext<'_>) -> Vec<String> {
     let commands: Vec<(String, String, u64)> = list(settings)
         .into_iter()
@@ -58,7 +65,7 @@ pub fn run_hooks(settings: &Settings, context: &HookContext<'_>) -> Vec<String> 
 
 /// Runs one hook command in a range of its own, stopping it and all it started at its timeout,
 /// and what it left running once it exits. Its output goes to the log.
-fn run_command(command: &str, timeout_secs: u64, context: &HookContext<'_>) -> Result<(), String> {
+fn run_command(command: &str, timeout_secs: u64, context: &HookContext<'_>) -> Result<(), Error> {
     let mut cmd = crate::system::shell_command(command).ok_or("there is no shell to run it in")?;
     cmd.current_dir(context.root)
         .env("PATCHWORK_EVENT", context.event.name())
@@ -93,11 +100,12 @@ fn run_command(command: &str, timeout_secs: u64, context: &HookContext<'_>) -> R
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status,
+            // Short, so a quick hook returns at once instead of after a fixed wait.
             Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
             _ => {
                 range.stop();
                 let _ = child.wait();
-                return Err(format!("ran past {timeout_secs}s and was stopped"));
+                return Err(format!("ran past {timeout_secs}s and was stopped").into());
             }
         }
     };
@@ -107,7 +115,7 @@ fn run_command(command: &str, timeout_secs: u64, context: &HookContext<'_>) -> R
     let stderr = stderr.join().unwrap_or_default();
     let stdout = stdout.trim();
     if !stdout.is_empty() {
-        log::info!("plugin hook {}: {stdout}", context.event.name());
+        log::info!(event = context.event.name(), stdout:%; "plugin hook {{event}}: {{stdout}}");
     }
     if status.success() {
         Ok(())
@@ -116,7 +124,7 @@ fn run_command(command: &str, timeout_secs: u64, context: &HookContext<'_>) -> R
         Err(if stderr.is_empty() {
             "exited with an error".into()
         } else {
-            stderr.to_string()
+            stderr.to_string().into()
         })
     }
 }

@@ -1,47 +1,19 @@
 //! Data from before the database existed, or from before it moved: the old config folder, and
 //! the JSON files that preceded SQLite.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::path::Path;
 
 use rusqlite::Connection;
 use serde::de::DeserializeOwned;
 
 use super::err;
-use super::DB_FILE;
 use super::settings::save_settings;
 use super::threads::{save_message, save_thread_row};
 use crate::settings::Settings;
 use crate::threads::Thread;
-
-/// Moves the database and legacy JSON files from `old` into `new`, once:
-/// only when `new` has no database yet. Earlier builds kept them in the
-/// app-identifier config folder.
-pub fn adopt_old_dir(old: &Path, new: &Path) -> Result<(), String> {
-    if old == new || new.join(DB_FILE).exists() || !old.is_dir() {
-        return Ok(());
-    }
-    std::fs::create_dir_all(new).map_err(err)?;
-    let wal = format!("{DB_FILE}-wal");
-    let shm = format!("{DB_FILE}-shm");
-    let names = [
-        DB_FILE,
-        &wal,
-        &shm,
-        "settings.json",
-        "threads.json",
-        "settings.json.bak",
-        "threads.json.bak",
-    ];
-    for name in names {
-        let from = old.join(name);
-        if from.exists() {
-            std::fs::rename(&from, new.join(name)).map_err(err)?;
-        }
-    }
-    // Leave the old folder only if something else is still in it.
-    let _ = std::fs::remove_dir(old);
-    Ok(())
-}
 
 fn load_json<T: DeserializeOwned + Default>(path: &Path) -> T {
     std::fs::read_to_string(path)
@@ -52,7 +24,7 @@ fn load_json<T: DeserializeOwned + Default>(path: &Path) -> T {
 
 /// Moves `settings.json` / `threads.json` from before SQLite into a new database,
 /// keeping the old files as `*.json.bak`.
-pub(super) fn import_legacy_json(conn: &mut Connection, dir: &Path) -> Result<(), String> {
+pub(super) fn import_legacy_json(conn: &mut Connection, dir: &Path) -> Result<(), Error> {
     let settings_path = dir.join("settings.json");
     let threads_path = dir.join("threads.json");
     if !settings_path.exists() && !threads_path.exists() {

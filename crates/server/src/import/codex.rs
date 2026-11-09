@@ -1,6 +1,8 @@
 //! Codex rollout files: `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl`.
 //! Archived sessions live elsewhere and are not imported.
 
+// Rust guideline compliant 2026-10-09
+
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -107,13 +109,13 @@ fn parse(reader: impl BufRead) -> Option<Session> {
                     Some("UserMessage") => push_merged(
                         &mut items,
                         Role::User,
-                        joined_text(&item["content"], "text"),
+                        &joined_text(&item["content"], "text"),
                         at,
                     ),
                     Some("AgentMessage") => push_merged(
                         &mut items,
                         Role::Assistant,
-                        joined_text(&item["content"], "Text"),
+                        &joined_text(&item["content"], "Text"),
                         at,
                     ),
                     _ => {}
@@ -121,11 +123,11 @@ fn parse(reader: impl BufRead) -> Option<Session> {
             }
             Some("user_message") => {
                 let text = p["message"].as_str().unwrap_or_default().to_string();
-                push_merged(&mut legacy, Role::User, text, at);
+                push_merged(&mut legacy, Role::User, &text, at);
             }
             Some("agent_message") => {
                 let text = p["message"].as_str().unwrap_or_default().to_string();
-                push_merged(&mut legacy, Role::Assistant, text, at);
+                push_merged(&mut legacy, Role::Assistant, &text, at);
             }
             _ => {}
         }

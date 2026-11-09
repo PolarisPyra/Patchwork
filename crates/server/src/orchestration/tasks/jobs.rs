@@ -4,6 +4,9 @@
 //! `job_output` and stops with `job_kill`, and the user stops from the list. What a command
 //! leaves running after it exits is held too, and every job is stopped when the app quits.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::Path;
@@ -74,6 +77,10 @@ struct State {
     /// Output pipes still open.
     open: u8,
     /// The command's exit code once it has exited: None inside when a signal ended it.
+    #[expect(
+        clippy::option_option,
+        reason = "None until it exits, then its code, which a signal leaves out"
+    )]
     exit: Option<Option<i32>>,
     /// The message the job is listed under, once it is in the background.
     listed: Option<String>,
@@ -315,7 +322,7 @@ pub(in crate::orchestration) fn call(
     tool: &str,
     args: &Value,
     stopped: &dyn Fn() -> bool,
-) -> Result<String, String> {
+) -> Result<String, Error> {
     let jobs = &server.runner.jobs;
     let named = || {
         let id = args["job_id"]
@@ -340,6 +347,7 @@ pub(in crate::orchestration) fn call(
                 while state.exit.is_none() && Instant::now() < deadline && !stopped() {
                     state = job
                         .changed
+                        // Wakes to check `stopped` even when the job sends no change.
                         .wait_timeout(state, Duration::from_millis(50))
                         .unwrap_or_else(PoisonError::into_inner)
                         .0;
@@ -356,7 +364,7 @@ pub(in crate::orchestration) fn call(
             })
         }
         "job_list" => Ok(jobs.list(&from.thread_id)),
-        _ => Err(format!("Unknown tool {tool}")),
+        _ => Err(format!("Unknown tool {tool}").into()),
     }
 }
 
@@ -367,7 +375,7 @@ fn bash(
     from: &Origin,
     args: &Value,
     stopped: &dyn Fn() -> bool,
-) -> Result<String, String> {
+) -> Result<String, Error> {
     let command = args["command"]
         .as_str()
         .ok_or_else(|| "command is required".to_string())?;
@@ -441,6 +449,7 @@ fn bash(
         }
         state = job
             .changed
+            // Wakes to check the deadline even when the job sends no change.
             .wait_timeout(state, Duration::from_millis(50))
             .unwrap_or_else(PoisonError::into_inner)
             .0;

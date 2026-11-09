@@ -1,6 +1,9 @@
 //! Running a project's check command: through the shell an agent's commands run in, in the
 //! project's folder, with a time limit, keeping the end of what it printed.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::io::Read;
 use std::path::Path;
 use std::process::Stdio;
@@ -27,7 +30,11 @@ pub struct Outcome {
 
 /// Runs `command` in `root`, stopping it after `limit`. Output is kept to its last [`KEEP`]
 /// bytes; anything after that is read and dropped, so a chatty command still finishes.
-pub fn run(root: &str, command: &str, limit: Duration) -> Result<Outcome, String> {
+///
+/// # Errors
+///
+/// Returns an error when no shell is found, the command does not start, or waiting for it fails.
+pub fn run(root: &str, command: &str, limit: Duration) -> Result<Outcome, Error> {
     let mut cmd = crate::system::shell_command(command)
         .ok_or_else(|| "No shell was found to run the check in.".to_string())?;
     cmd.current_dir(Path::new(root))
@@ -51,6 +58,7 @@ pub fn run(root: &str, command: &str, limit: Duration) -> Result<Outcome, String
                 range.stop();
                 break (Some(status), false);
             }
+            // How often the check is looked at; its own output shows progress meanwhile.
             Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(50)),
             Ok(None) => {
                 // All of it, so a runner that started a server or a watcher takes it along.
@@ -58,7 +66,7 @@ pub fn run(root: &str, command: &str, limit: Duration) -> Result<Outcome, String
                 let _ = child.wait();
                 break (None, true);
             }
-            Err(e) => return Err(format!("The check command could not be waited for: {e}")),
+            Err(e) => return Err(format!("The check command could not be waited for: {e}").into()),
         }
     };
     let duration = started.elapsed();
@@ -132,7 +140,7 @@ mod tests {
         assert!(outcome.passed);
         assert!(!outcome.timed_out);
         assert!(outcome.output.contains("hello"));
-        std::fs::remove_dir_all(root).ok();
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
@@ -146,7 +154,7 @@ mod tests {
         .expect("the shell runs");
         assert!(!outcome.passed);
         assert!(outcome.output.contains("AssertionError"));
-        std::fs::remove_dir_all(root).ok();
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
@@ -161,7 +169,7 @@ mod tests {
         assert!(outcome.timed_out);
         assert!(!outcome.passed);
         assert!(outcome.duration < Duration::from_secs(10));
-        std::fs::remove_dir_all(root).ok();
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
@@ -180,6 +188,6 @@ mod tests {
         );
         assert!(outcome.output.contains("line 4000"));
         assert!(!outcome.output.contains("line 1 padded"));
-        std::fs::remove_dir_all(root).ok();
+        let _ = std::fs::remove_dir_all(root);
     }
 }

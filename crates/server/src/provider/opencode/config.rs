@@ -1,5 +1,7 @@
 //! Setting OpenCode up: its binary, sign-in and models, and the config Patchwork passes it with permissions, skills and agents.
 
+// Rust guideline compliant 2026-10-09
+
 use std::path::PathBuf;
 use std::sync::{Mutex, PoisonError};
 use serde_json::{Value, json};
@@ -13,6 +15,7 @@ use crate::provider::probe;
 use super::action;
 
 /// `opencode` on PATH or in the usual install folders, else where its installer puts it.
+#[must_use]
 pub fn opencode_bin() -> Option<PathBuf> {
     located_or(AgentKind::OpenCode, || {
         find_binary("opencode").or_else(|| {
@@ -91,10 +94,12 @@ const GUARDED: [&str; 6] = [
     "doom_loop",
 ];
 
-/// Permission rules for the access mode, as `OPENCODE_CONFIG_CONTENT`. A run cannot answer a
-/// prompt, so an "ask" rule refuses the call and the run goes on. Without rules OpenCode keeps its
-/// own: full access approves them with `--auto`, and auto lets OpenCode decide. Patchwork's deny
-/// rules are added as they are, since a run cannot ask Patchwork either.
+/// Permission rules for the access mode, as `OPENCODE_CONFIG_CONTENT`.
+///
+/// A run cannot answer a prompt, so an "ask" rule refuses the call and the run goes on. Without
+/// rules OpenCode keeps its own: full access approves them with `--auto`, and auto lets OpenCode
+/// decide. Patchwork's deny rules are added as they are, since a run cannot ask Patchwork either.
+#[must_use]
 pub fn permission_config(spec: &TurnSpec) -> Option<Value> {
     let mut rules = serde_json::Map::new();
     let edit = match spec.mode {
@@ -133,12 +138,13 @@ pub fn permission_config(spec: &TurnSpec) -> Option<Value> {
 
 /// The user's system prompt for `opencode run`, in a file its `instructions` loads into the system
 /// prompt. 2.x gets it from the bridge instead (see `bridge.rs`).
+#[must_use]
 pub fn instructions_config(spec: &TurnSpec) -> Option<Value> {
     let text = spec.instructions?;
     match crate::agents::launch_file("opencode", spec.root, "system-prompt.md", text) {
         Ok(file) => Some(json!({ "instructions": [file] })),
         Err(e) => {
-            log::warn!("could not write OpenCode's system prompt: {e}");
+            log::warn!(error:% = e; "could not write OpenCode's system prompt: {{error}}");
             None
         }
     }
@@ -146,11 +152,13 @@ pub fn instructions_config(spec: &TurnSpec) -> Option<Value> {
 
 /// 2.x leaves out its `todowrite` tool unless asked, and that tool is what fills the plan above
 /// the chat box.
+#[must_use]
 pub fn todo_config() -> Option<Value> {
     Some(json!({ "experimental": { "todo": true } }))
 }
 
 /// The skills folder for 2.x's `skills.paths`.
+#[must_use]
 pub fn skills_config(spec: &TurnSpec) -> Option<Value> {
     spec.skills_dir
         .map(|dir| json!({ "skills": { "paths": [dir] } }))
@@ -158,6 +166,7 @@ pub fn skills_config(spec: &TurnSpec) -> Option<Value> {
 
 /// The custom agents as OpenCode subagents, which it can start by name. `build` and
 /// `plan` are left to OpenCode, since every turn runs as one of them.
+#[must_use]
 pub fn agents_config(spec: &TurnSpec) -> Option<Value> {
     // Listing the models runs OpenCode, so only when an agent names one.
     let models = if spec.agents.iter().any(|a| a.model.is_some()) {

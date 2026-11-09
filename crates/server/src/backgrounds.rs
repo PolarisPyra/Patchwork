@@ -1,13 +1,16 @@
 //! Chat backgrounds: the one every chat shows, kept in Settings, a chat's own, and the pictures
 //! picked for them, which Patchwork keeps in its own folder.
 
+// Rust guideline compliant 2026-10-09
+
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use image::{GenericImageView, ImageFormat, imageops::FilterType};
 use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::{Res, Server};
+use crate::{Error, Server};
 
 /// What shows behind a chat's messages.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -70,14 +73,27 @@ fn name_key(file: &str) -> String {
 
 impl Server {
     /// Gives a chat a background of its own, or None to show the one every chat shares.
-    pub fn set_thread_background(&self, id: &str, background: Option<ChatBackground>) -> Res<()> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the chat's changes cannot be saved to the database.
+    pub fn set_thread_background(
+        &self,
+        id: &str,
+        background: Option<ChatBackground>,
+    ) -> Result<(), Error> {
         self.store
-            .update_thread(id, |t| t.background = background.clone())
+            .update_thread(id, move |t| t.background = background)
     }
 
     /// Copies a picture into Patchwork's folder, so the background stays when the original is
     /// moved or deleted. Returns the copy's file name.
-    pub fn import_background_image(&self, path: &str) -> Res<String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the picture cannot be read, or for any reason
+    /// `import_background_bytes` fails.
+    pub fn import_background_image(&self, path: &str) -> Result<String, Error> {
         let bytes = std::fs::read(path).map_err(|e| format!("couldn't read {path}: {e}"))?;
         let name = Path::new(path).file_stem().and_then(|n| n.to_str());
         self.import_background_bytes(bytes, name)
@@ -86,9 +102,18 @@ impl Server {
     /// Saves a picture's bytes in Patchwork's folder, shrunk when it is larger than `MAX_SIDE`.
     /// The copy is named after the bytes, so the same picture picked again is kept once; `name`
     /// is what the picker calls it. Returns the copy's file name.
-    pub fn import_background_bytes(&self, bytes: Vec<u8>, name: Option<&str>) -> Res<String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the bytes are not a PNG, JPEG, WebP or GIF picture, or when the
+    /// backgrounds folder or the copy cannot be written or the picture cannot be shrunk.
+    pub fn import_background_bytes(
+        &self,
+        bytes: Vec<u8>,
+        name: Option<&str>,
+    ) -> Result<String, Error> {
         let not_picture = || "That is not a PNG, JPEG, WebP or GIF picture".to_owned();
-        let format = image::guess_format(&bytes).map_err(|_| not_picture())?;
+        let format = image::guess_format(&bytes).map_err(|_discarded| not_picture())?;
         if ![
             ImageFormat::Png,
             ImageFormat::Jpeg,
@@ -97,33 +122,35 @@ impl Server {
         ]
         .contains(&format)
         {
-            return Err(not_picture());
+            return Err(not_picture().into());
         }
-        let hash: String = Sha256::digest(&bytes)[..16]
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect();
+        let hash: String =
+            Sha256::digest(&bytes)[..16]
+                .iter()
+                .fold(String::new(), |mut hash, b| {
+                    let _ = write!(hash, "{b:02x}");
+                    hash
+                });
         std::fs::create_dir_all(&self.backgrounds_dir).map_err(|e| e.to_string())?;
         let existing = self.background_files()?.into_iter().find(|f| {
             Path::new(f)
                 .file_stem()
                 .is_some_and(|stem| stem == hash.as_str())
         });
-        let file = match existing {
-            Some(file) => file,
-            None => {
-                // A GIF is kept as it is: shrinking it would keep only its first frame.
-                let (bytes, format) = if format == ImageFormat::Gif {
-                    (bytes, format)
-                } else {
-                    shrink(bytes, format).map_err(|e| format!("couldn't read the picture: {e}"))?
-                };
-                let extension = format.extensions_str().first().copied().unwrap_or("img");
-                let file = format!("{hash}.{extension}");
-                std::fs::write(self.backgrounds_dir.join(&file), bytes)
-                    .map_err(|e| format!("couldn't save the picture: {e}"))?;
-                file
-            }
+        let file = if let Some(file) = existing {
+            file
+        } else {
+            // A GIF is kept as it is: shrinking it would keep only its first frame.
+            let (bytes, format) = if format == ImageFormat::Gif {
+                (bytes, format)
+            } else {
+                shrink(bytes, format).map_err(|e| format!("couldn't read the picture: {e}"))?
+            };
+            let extension = format.extensions_str().first().copied().unwrap_or("img");
+            let file = format!("{hash}.{extension}");
+            std::fs::write(self.backgrounds_dir.join(&file), bytes)
+                .map_err(|e| format!("couldn't save the picture: {e}"))?;
+            file
         };
         if let Some(name) = name.map(str::trim).filter(|n| !n.is_empty())
             && self.store.state(&name_key(&file)).is_none()
@@ -134,7 +161,11 @@ impl Server {
     }
 
     /// The pictures in Patchwork's backgrounds folder, oldest first.
-    pub fn list_background_images(&self) -> Res<Vec<BackgroundImage>> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the backgrounds folder cannot be read.
+    pub fn list_background_images(&self) -> Result<Vec<BackgroundImage>, Error> {
         Ok(self
             .background_files()?
             .into_iter()
@@ -154,10 +185,15 @@ impl Server {
     /// background, and the shared background, if it was this picture, to the plain window color.
     /// The picture waits in a folder of its own until Patchwork next opens, so
     /// `restore_background_image` can take the deletion back.
-    pub fn remove_background_image(&self, file: &str) -> Res<RemovedBackground> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `file` names a path rather than a plain file name, when the picture
+    /// cannot be moved aside, or when a chat or the settings cannot be saved.
+    pub fn remove_background_image(&self, file: &str) -> Result<RemovedBackground, Error> {
         // A name with a folder in it could reach a file outside the backgrounds folder.
         if Path::new(file).file_name().and_then(|n| n.to_str()) != Some(file) {
-            return Err(format!("{file} is not a background picture"));
+            return Err(format!("{file} is not a background picture").into());
         }
         let removed_dir = self.removed_backgrounds_dir();
         std::fs::create_dir_all(&removed_dir).map_err(|e| e.to_string())?;
@@ -190,10 +226,15 @@ impl Server {
 
     /// Takes back `remove_background_image`: the picture returns, and so does every background it
     /// was, unless another background was picked there since.
-    pub fn restore_background_image(&self, removed: &RemovedBackground) -> Res<()> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the file name contains a path, when the picture cannot be moved back
+    /// into the backgrounds folder, or when a chat or the settings cannot be saved.
+    pub fn restore_background_image(&self, removed: &RemovedBackground) -> Result<(), Error> {
         let file = removed.file.as_str();
         if Path::new(file).file_name().and_then(|n| n.to_str()) != Some(file) {
-            return Err(format!("{file} is not a background picture"));
+            return Err(format!("{file} is not a background picture").into());
         }
         std::fs::rename(
             self.removed_backgrounds_dir().join(file),
@@ -231,11 +272,14 @@ impl Server {
             if !self.backgrounds_dir.join(&file).exists()
                 && let Err(e) = self.store.clear_state(&name_key(&file))
             {
-                log::warn!("couldn't forget the name of background {file}: {e}");
+                log::warn!(
+                    file:%, error:% = e;
+                    "couldn't forget the name of background {{file}}: {{error}}"
+                );
             }
         }
         if let Err(e) = std::fs::remove_dir_all(&dir) {
-            log::warn!("couldn't delete the removed backgrounds: {e}");
+            log::warn!(error:% = e; "couldn't delete the removed backgrounds: {{error}}");
         }
     }
 
@@ -244,11 +288,11 @@ impl Server {
     }
 
     /// The file names in the backgrounds folder, oldest first. None yet when it doesn't exist.
-    fn background_files(&self) -> Res<Vec<String>> {
+    fn background_files(&self) -> Result<Vec<String>, Error> {
         let entries = match std::fs::read_dir(&self.backgrounds_dir) {
             Ok(entries) => entries,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(e) => return Err(e.to_string()),
+            Err(e) => return Err(e.to_string().into()),
         };
         let mut files: Vec<(std::time::SystemTime, String)> = entries
             .flatten()
@@ -265,7 +309,7 @@ impl Server {
 
 /// Keeps a picture's bytes as they are when it fits in `MAX_SIDE`, else scales it down to fit and
 /// saves it again: as a JPEG, or a PNG when it has see-through parts.
-fn shrink(bytes: Vec<u8>, format: ImageFormat) -> Result<(Vec<u8>, ImageFormat), String> {
+fn shrink(bytes: Vec<u8>, format: ImageFormat) -> Result<(Vec<u8>, ImageFormat), Error> {
     let picture = image::load_from_memory_with_format(&bytes, format).map_err(|e| e.to_string())?;
     let (width, height) = picture.dimensions();
     if width.max(height) <= MAX_SIDE {

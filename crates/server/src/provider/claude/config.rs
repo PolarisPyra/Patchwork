@@ -1,5 +1,7 @@
 //! Where Claude Code keeps its settings and login, and the models it offers.
 
+// Rust guideline compliant 2026-10-09
+
 use std::path::PathBuf;
 
 use serde_json::Value;
@@ -18,6 +20,7 @@ pub fn home() -> Option<PathBuf> {
 }
 
 /// Claude Code's settings file: `.claude.json` in `CLAUDE_CONFIG_DIR`, or in the home folder.
+#[must_use]
 pub fn settings_file() -> PathBuf {
     match std::env::var_os("CLAUDE_CONFIG_DIR") {
         Some(dir) => PathBuf::from(dir).join(".claude.json"),
@@ -45,6 +48,7 @@ pub fn auth(status: &mut AgentStatus) {
 }
 
 /// Read only model settings, without launching an inference request.
+#[must_use]
 pub fn configured_model() -> Option<String> {
     if let Ok(model) = std::env::var("ANTHROPIC_MODEL")
         && !model.trim().is_empty()
@@ -58,6 +62,7 @@ pub fn configured_model() -> Option<String> {
 
 /// Current Claude models, from the catalog the CLI caches, each with the thinking levels and
 /// context window it gives them, so a model that cannot think gets no level.
+#[must_use]
 pub fn models() -> Vec<ModelOption> {
     crate::provider::claude::cli::models()
         .into_iter()

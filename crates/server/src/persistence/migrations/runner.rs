@@ -1,5 +1,8 @@
 //! Running the migrations a database has not had, and checking its history.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use rusqlite::{Connection, params};
 
 struct Migration {
@@ -126,20 +129,21 @@ const MIGRATIONS: &[Migration] = &[
     },
 ];
 
-fn fail(m: &Migration, e: impl std::fmt::Display) -> String {
+fn fail(m: &Migration, e: impl std::fmt::Display) -> Error {
     format!(
         "Database error: migration {:04}_{} failed: {e}",
         m.id, m.name
     )
+    .into()
 }
 
-fn db(e: impl std::fmt::Display) -> String {
-    format!("Database error: {e}")
+fn db(e: impl std::fmt::Display) -> Error {
+    format!("Database error: {e}").into()
 }
 
 /// Brings the schema up to date. Returns how many migrations had run before, so 0 means the
 /// database is new.
-pub(in crate::persistence) fn run(conn: &mut Connection) -> Result<usize, String> {
+pub(in crate::persistence) fn run(conn: &mut Connection) -> Result<usize, Error> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS schema_migrations (
              id INTEGER PRIMARY KEY,
@@ -169,7 +173,7 @@ pub(in crate::persistence) fn run(conn: &mut Connection) -> Result<usize, String
 
 /// A database made before `schema_migrations` existed only has `user_version`. Its first
 /// `user_version` migrations are written into the table, under the names they have now.
-fn record_earlier_builds(conn: &mut Connection) -> Result<(), String> {
+fn record_earlier_builds(conn: &mut Connection) -> Result<(), Error> {
     let recorded: usize = conn
         .query_row("SELECT COUNT(*) FROM schema_migrations", [], |r| r.get(0))
         .map_err(db)?;
@@ -180,7 +184,7 @@ fn record_earlier_builds(conn: &mut Connection) -> Result<(), String> {
         return Ok(());
     }
     let Some(earlier) = MIGRATIONS.get(..version) else {
-        return Err(newer_build(version));
+        return Err(newer_build(version).into());
     };
     let tx = conn.transaction().map_err(db)?;
     for m in earlier {
@@ -193,7 +197,7 @@ fn record_earlier_builds(conn: &mut Connection) -> Result<(), String> {
     tx.commit().map_err(db)
 }
 
-fn recorded(conn: &Connection) -> Result<Vec<(u32, String)>, String> {
+fn recorded(conn: &Connection) -> Result<Vec<(u32, String)>, Error> {
     let mut stmt = conn
         .prepare("SELECT id, name FROM schema_migrations ORDER BY id")
         .map_err(db)?;
@@ -205,17 +209,18 @@ fn recorded(conn: &Connection) -> Result<Vec<(u32, String)>, String> {
 
 /// The recorded history must be the start of `MIGRATIONS`, in order. Anything else was written
 /// by another build; carrying on could leave the schema half-applied.
-fn check_history(recorded: &[(u32, String)]) -> Result<(), String> {
+fn check_history(recorded: &[(u32, String)]) -> Result<(), Error> {
     for (i, (id, name)) in recorded.iter().enumerate() {
         let Some(known) = MIGRATIONS.get(i) else {
-            return Err(newer_build(i + 1));
+            return Err(newer_build(i + 1).into());
         };
         if known.id != *id || known.name != name {
             return Err(format!(
                 "Database error: the database's migration {id} is \"{name}\", but this version \
                  has \"{}\" there. It was probably written by a different build.",
                 known.name
-            ));
+            )
+            .into());
         }
     }
     Ok(())

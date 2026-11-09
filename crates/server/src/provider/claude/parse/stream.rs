@@ -1,5 +1,7 @@
 //! Reading one stream-json line into agent events.
 
+// Rust guideline compliant 2026-10-09
+
 use serde_json::Value;
 
 use crate::orchestration::AgentEvent;

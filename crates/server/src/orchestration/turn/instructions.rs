@@ -1,6 +1,9 @@
 //! What an agent is told when it starts: to keep its checklist with its own tool, which shell
 //! runs its commands, and the system prompt the user gave it.
 
+// Rust guideline compliant 2026-10-09
+
+use std::fmt::Write as _;
 use crate::provider::AgentKind;
 use crate::settings::Settings;
 
@@ -55,15 +58,10 @@ fn shell_instructions(agent: AgentKind) -> String {
     let mut prompt = String::new();
     let installed = crate::system::available_shells();
     if !installed.is_empty() {
-        prompt.push_str(&format!(
-            "Shells on this machine: {}.",
-            installed.join(", ")
-        ));
+        let _ = write!(prompt, "Shells on this machine: {}.", installed.join(", "));
     }
     if let Some(shell) = crate::provider::agent_shell(agent) {
-        prompt.push_str(&format!(
-            " Shell commands run in {shell}; write them for it."
-        ));
+        let _ = write!(prompt, " Shell commands run in {shell}; write them for it.");
         if crate::system::shell_name(&shell) == "zsh" {
             prompt.push_str(ZSH_NOTES);
         }

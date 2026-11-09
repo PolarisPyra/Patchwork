@@ -1,4 +1,7 @@
 //! Tokens each model request used, summed per message.
+
+// Rust guideline compliant 2026-10-09
+
 use crate::threads::TokenUsage;
 
 /// A model request the agent made during a turn, and the tokens it used.

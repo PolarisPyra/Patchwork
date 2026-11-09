@@ -1,6 +1,8 @@
 //! What the backend streams to the UI while agents work.
 
-use std::collections::{HashMap};
+// Rust guideline compliant 2026-10-09
+
+use std::collections::HashMap;
 
 use serde::Serialize;
 

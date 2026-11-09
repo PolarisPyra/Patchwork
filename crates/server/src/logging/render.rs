@@ -1,5 +1,8 @@
 //! How one record reads in a log file: its time, level, source and text.
 
+// Rust guideline compliant 2026-10-09
+
+use std::fmt::Write as _;
 use chrono::{Local, TimeZone};
 use crate::settings::LogLevel;
 use crate::system::now_ms;
@@ -47,13 +50,13 @@ pub(super) fn render(record: Record) -> Option<String> {
     } = record.source;
     let mut line = format!("{} [{level}] ", local_time(record.at));
     if let Some(pid) = pid {
-        line.push_str(&format!("[pid {pid}] "));
+        let _ = write!(line, "[pid {pid}] ");
     }
     if let Some(thread) = thread {
-        line.push_str(&format!("[thread {}] ", short(thread)));
+        let _ = write!(line, "[thread {}] ", short(thread));
     }
     if let Some(message) = message {
-        line.push_str(&format!("[message {}] ", short(message)));
+        let _ = write!(line, "[message {}] ", short(message));
     }
     if !record.event.is_empty() {
         line.push_str(record.event);
@@ -67,6 +70,7 @@ pub(super) fn render(record: Record) -> Option<String> {
 }
 
 /// The time now as log lines show it, for the desktop shell's `main.log`.
+#[must_use]
 pub fn now_text() -> String {
     local_time(now_ms())
 }

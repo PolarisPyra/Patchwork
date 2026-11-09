@@ -9,6 +9,8 @@
 //! To change the schema, add the next numbered file and list it in `MIGRATIONS`. Never edit
 //! or renumber a released one.
 
+// Rust guideline compliant 2026-10-09
+
 mod runner;
 
 pub(super) use runner::run;

@@ -1,3 +1,7 @@
+//! Tests for the project's git status, reverting files, and reading files inside the project.
+
+// Rust guideline compliant 2026-10-09
+
 use std::path::Path;
 
 use super::git::git;
@@ -45,7 +49,7 @@ fn reports_modified_and_untracked_files() {
     );
 
     assert!(git_file_diff(&root, "a.txt").unwrap().contains("+three"));
-    assert!(!git_file_diff(&root, "b.txt").unwrap().is_empty());
+    assert_ne!(git_file_diff(&root, "b.txt").unwrap(), "");
 
     accept_file(&root, "a.txt").unwrap();
     let changes = git_changes(&root).unwrap();

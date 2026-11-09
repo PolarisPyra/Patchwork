@@ -3,6 +3,8 @@
 //! with the terminal. Every signal reaches only the process that was seen, never a later one
 //! given the same pid.
 
+// Rust guideline compliant 2026-10-09
+
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, PoisonError};
@@ -11,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use super::activity::Activity;
 use super::session::Term;
-use crate::Res;
+use crate::Error;
 use crate::system::processes::{self, Process, Snapshot};
 
 /// How long a process gets to stop after each signal.
@@ -37,21 +39,21 @@ pub(super) fn descendants(term: &Term, table: &Snapshot) -> Vec<Process> {
             members.push(p);
         }
     }
-    *tracked = members.clone();
+    (*tracked).clone_from(&members);
     members
 }
 
 /// Ends what the terminal owns: what the shell started, then the shell, then anything started
 /// meanwhile. Each is asked to stop, and made to a second later. Err names what still runs.
-pub(super) fn close(term: &Term) -> Res<()> {
+pub(super) fn close(term: &Term) -> Result<(), Error> {
     let survivors = stop_descendants(term);
     if !survivors.is_empty() {
-        return Err(still_running(&survivors));
+        return Err(still_running(&survivors).into());
     }
     stop_shell(term)?;
     let survivors = stop_descendants(term);
     if !survivors.is_empty() {
-        return Err(still_running(&survivors));
+        return Err(still_running(&survivors).into());
     }
     Ok(())
 }
@@ -182,7 +184,7 @@ fn wait_for(members: &[Process]) -> Vec<Process> {
     }
 }
 
-fn stop_shell(term: &Term) -> Res<()> {
+fn stop_shell(term: &Term) -> Result<(), Error> {
     for signal in [Signal::Stop, Signal::Kill] {
         if term.exited.load(Ordering::Acquire) {
             return Ok(());
@@ -193,12 +195,14 @@ fn stop_shell(term: &Term) -> Res<()> {
             std::thread::sleep(POLL);
         }
     }
-    match term.exited.load(Ordering::Acquire) {
-        true => Ok(()),
-        false => Err(format!(
+    if term.exited.load(Ordering::Acquire) {
+        Ok(())
+    } else {
+        Err(format!(
             "Could not end the terminal's shell {}",
             term.pid.unwrap_or_default()
-        )),
+        )
+        .into())
     }
 }
 
@@ -308,7 +312,7 @@ pub(super) fn create_dir() -> Option<PathBuf> {
 pub(super) fn record(dir: &Path, shell: &Process) {
     let text = format!("{}\n{}", shell.pid, shell.started);
     if let Err(e) = write_private(&dir.join("shell"), &text) {
-        log::warn!("could not note the terminal's shell: {e}");
+        log::warn!(error:% = e; "could not note the terminal's shell: {{error}}");
     }
 }
 
@@ -359,13 +363,13 @@ pub fn sweep() {
                 if !left.is_empty() {
                     let pids: Vec<String> = left.iter().map(|p| p.pid.to_string()).collect();
                     log::info!(
-                        "ending what a terminal left running when Patchwork was killed: {}",
-                        pids.join(", ")
+                        pids:% = pids.join(", ");
+                        "ending what a terminal left running when Patchwork was killed: {{pids}}"
                     );
                 }
                 let survivors = end(&left);
                 if !survivors.is_empty() {
-                    log::warn!("{}", still_running(&survivors));
+                    log::warn!(survivors:% = still_running(&survivors); "{{survivors}}");
                     kept = true;
                     continue;
                 }

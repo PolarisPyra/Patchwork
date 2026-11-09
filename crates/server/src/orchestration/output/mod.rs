@@ -1,6 +1,8 @@
 //! What an agent reports: reading its output, the events streamed to the UI and saved on the
 //! thread, and the tokens it used.
 
+// Rust guideline compliant 2026-10-09
+
 pub(in crate::orchestration) mod events;
 pub(in crate::orchestration) mod ingest;
 pub(in crate::orchestration) mod log;

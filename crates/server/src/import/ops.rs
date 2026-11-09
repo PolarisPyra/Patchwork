@@ -1,5 +1,8 @@
 //! Importing conversations other apps saved.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::path::Path;
 
 use crate::import::ilog;
@@ -67,13 +70,8 @@ impl Server {
         (found, subagents, new)
     }
 
-    /// Starts the import log's entries for a scan or import.
-    fn start_import_log(&self, what: &str) {
-        ilog!("{what}");
-    }
-
     pub fn scan_imports(&self, source: ImportSource) -> ImportScan {
-        self.start_import_log(&format!("{source:?}: scan started"));
+        ilog!("{source:?}: scan started");
         let (found, subagents, new) = self.importable(
             source,
             &self.store.session_keys(),
@@ -91,8 +89,13 @@ impl Server {
     /// the project if needed. A conversation found by more than one source (a
     /// T3 Code thread is also in the agent's own files) is imported once.
     /// Returns how many threads were added.
-    pub fn import_threads(&self, sources: &[ImportSource]) -> Result<u32, String> {
-        self.start_import_log(&format!("import started: {sources:?}"));
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a session's project folder cannot be added as a project, or when the
+    /// imported threads cannot be saved.
+    pub fn import_threads(&self, sources: &[ImportSource]) -> Result<u32, Error> {
+        ilog!("import started: {sources:?}");
         let mut known = self.store.session_keys();
         let mut imported = self.store.imported_sources();
         let mut threads = Vec::new();
@@ -134,10 +137,9 @@ impl Server {
                         session.cwd
                     );
                     let project = workspace::make_project(&session.cwd)
-                        .map_err(|e| e.to_string())
                         .and_then(|p| self.register_project(p, false))
                         .inspect_err(|e| {
-                            ilog!("{source:?}: couldn't add project {}: {e}", session.cwd)
+                            ilog!("{source:?}: couldn't add project {}: {e}", session.cwd);
                         })?;
                     Some(project.id)
                 };
