@@ -1,3 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["crates/server", "apps/desktop/src-tauri"]
+members = ["crates/server", "apps/desktop/src-tauri", "apps/native"]
+
+# Debug builds of the native app are optimized too: unoptimized, GPUI takes about 50ms to lay out a
+# frame, so resizing and scrolling stutter. The other workspace crates stay unoptimized.
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.dev.package.patchwork-native]
+opt-level = 1

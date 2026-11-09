@@ -181,7 +181,7 @@ pub fn provider(id: &str) -> Option<ApiProvider> {
 }
 
 /// A provider as the settings show it: without its key, but saying whether it has one.
-#[derive(Serialize, TS)]
+#[derive(Clone, Serialize, TS)]
 #[ts(export, export_to = "provider.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderView {
@@ -583,7 +583,7 @@ fn blank() -> ApiProvider {
 
 /// The live health of a saved provider's endpoint, probed on demand so Settings → Providers can
 /// show whether a local server is answering and which models it serves right now.
-#[derive(Serialize, TS)]
+#[derive(Clone, Serialize, TS)]
 #[ts(export, export_to = "provider.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderHealth {
