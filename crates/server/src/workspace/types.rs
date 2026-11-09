@@ -1,10 +1,8 @@
 //! Git changes in the open project.
 
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "workspace.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileChange {
     pub path: String,
@@ -16,8 +14,7 @@ pub struct FileChange {
 }
 
 /// Where the project's branch stands against its remote, for the commit and push button.
-#[derive(Debug, Clone, Default, Serialize, TS)]
-#[ts(export, export_to = "workspace.ts")]
+#[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GitSyncState {
     /// None outside a git repository, or on a detached HEAD.
@@ -35,8 +32,7 @@ pub struct GitSyncState {
     pub pull_request: Option<PullRequest>,
 }
 
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "workspace.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PullRequest {
     pub number: u32,
@@ -50,8 +46,7 @@ pub struct PullRequest {
 }
 
 /// A commit in the Source Control graph.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "workspace.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GitCommit {
     pub hash: String,
@@ -60,7 +55,6 @@ pub struct GitCommit {
     pub subject: String,
     pub author: String,
     /// Author time, in seconds since the epoch.
-    #[ts(type = "number")]
     pub time: i64,
     pub refs: Vec<GitRef>,
     /// Whether a remote branch has it. With no remote, every commit counts as pushed.
@@ -72,8 +66,7 @@ pub struct GitCommit {
 }
 
 /// A reply whose changes went into a commit.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "workspace.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CommitReply {
     pub message_id: String,
@@ -82,8 +75,7 @@ pub struct CommitReply {
 }
 
 /// A name that points at a commit.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "workspace.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GitRef {
     /// Short name, such as `main`, `origin/main`, or `v1.0`.
@@ -93,8 +85,7 @@ pub struct GitRef {
 }
 
 /// A settled burst of file changes in the watched project, with git's state after it.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "workspace.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectChanged {
     pub project_id: String,
@@ -106,8 +97,7 @@ pub struct ProjectChanged {
 }
 
 /// What to do with one change of a file's diff.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "workspace.ts")]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum HunkAction {
     Stage,

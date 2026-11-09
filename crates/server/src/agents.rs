@@ -13,14 +13,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 
 use serde::Serialize;
-use ts_rs::TS;
 
 use crate::orchestration::{AgentEvent, AgentEventEnvelope};
 use crate::Server;
 use crate::{agents, provider};
 
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
-#[ts(export, export_to = "agents.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Agent {
     pub name: String,

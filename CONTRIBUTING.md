@@ -13,8 +13,7 @@ Thanks for helping out. Bug reports, fixes, and new guides are all welcome.
 1. Fork the repo and create a branch for your change.
 2. Keep the change focused. One fix or feature per pull request is easier to review.
 3. Run the checks that match what you changed:
-   - Web (`apps/web`): `pnpm typecheck`, and `pnpm format:check` for TSX changes
-   - Rust (`crates/server`, `apps/desktop`): `cargo clippy --workspace --all-targets` and `cargo test --workspace`
+   - `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace`
 4. Open a pull request. Describe what changed and why, and include a screenshot for UI changes.
 
 ## Commit messages

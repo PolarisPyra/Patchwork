@@ -9,7 +9,6 @@ use std::process::Stdio;
 use std::process::Output;
 
 use serde::Serialize;
-use ts_rs::TS;
 
 use crate::Server;
 use crate::system::new_id;
@@ -140,8 +139,7 @@ pub(in crate::orchestration) fn record_end(
 }
 
 /// Where a file a turn changed stands now.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, TS)]
-#[ts(export, export_to = "orchestration.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TurnFileState {
     /// Still differs from the last commit.
@@ -157,8 +155,7 @@ pub enum TurnFileState {
 }
 
 /// A file a turn changed: lines added and removed by the turn, and where it stands now.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "orchestration.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnFile {
     pub path: String,

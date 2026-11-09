@@ -1,4 +1,109 @@
 #!/usr/bin/env bash
-# Git runs this for each commit once `git config core.hooksPath scripts/hooks` is set, which
-# `pnpm install` does. See scripts/release.sh.
-exec "$(git rev-parse --show-toplevel)/scripts/release.sh" hook "$1"
+# Git runs this for each commit once `git config core.hooksPath scripts/hooks` is set. It turns down
+# a commit that changes the app without a Changelog: paragraph, one without a group, and one that
+# breaks the rules in docs/changelog-style.md, so the author fixes it while it is fresh.
+set -euo pipefail
+
+STYLE=docs/changelog-style.md
+
+die() {
+  echo "$*" >&2
+  exit 1
+}
+# The groups, in the order a section lists them. A paragraph names one; one that names none (from
+# before groups were required) is Changed.
+SECTIONS=(Added Changed Fixed Removed Security)
+# What a release with only internal changes says.
+# Product and platform names whose capitals the identifier checks would flag.
+NAMES='GitHub|GitLab|AppImage|JavaScript|TypeScript|OpenCode|PowerShell|YouTube|macOS|iOS|iPadOS|LaTeX|DeepSeek|OpenAI|OpenRouter|MiniMax|ChatGPT|WebKit|WebView|Node\.js|Next\.js'
+
+is_app_path() {
+  case "$1" in
+    .github/* | scripts/* | docs/* | *.md) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# The text of a message's `Changelog:` paragraph, joined into one line, or nothing.
+paragraph() {
+  awk '
+    /^Changelog:/ { on = 1; sub(/^Changelog:[ \t]*/, "") }
+    on && (/^[ \t]*$/ || /^[A-Za-z-]+-[Bb]y:/) { exit }
+    on { printf "%s%s", (n++ ? " " : ""), $0 }
+  ' <<< "$1" | sed 's/[[:space:]]*$//'
+}
+
+is_none() {
+  [[ "$1" =~ ^[Nn][Oo][Nn][Ee]\.?$ ]]
+}
+
+# The group a paragraph names, or nothing.
+group_of() {
+  local group
+  for group in "${SECTIONS[@]}"; do
+    [[ "$1" == "$group: "* ]] && echo "$group" && return
+  done
+  return 0
+}
+
+# Prints what breaks the style rules in one entry, or nothing.
+problems() {
+  local text="$1" bare
+  bare=$(sed -E "s/($NAMES)//g" <<< "$text")
+  [[ "$text" == *$'\n'* ]] && echo "it has a line break"
+  [[ ${#text} -lt 25 ]] && echo "it is too short to say what changed"
+  [[ "$text" == *'`'* ]] && echo "it has backticks"
+  grep -qE '[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+\.[a-z]{1,5}\b|\b[A-Za-z0-9_-]+\.(tsx?|jsx?|mjs|rs|toml|json|ya?ml|sh|css|html|md)\b' <<< "$bare" &&
+    echo "it names a file"
+  grep -qE '\b[a-z0-9]+_[a-z0-9_]+\b' <<< "$bare" && echo "it has a snake_case name"
+  grep -qE '\b[a-z]+[A-Z][A-Za-z0-9]*\b|\b[A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*\b' <<< "$bare" &&
+    echo "it has a code-style name"
+  grep -qE '\b[0-9]+ ?px\b' <<< "$text" && echo "it gives a pixel size"
+  grep -qiE '\b(refactor(ed|ing|s)?|components?|backend|frontend|crates?|css|ipc|stdout|stderr|props)\b' <<< "$text" &&
+    echo "it uses developer words"
+  return 0
+}
+
+
+commit_msg_hook() {
+  local file="$1" msg subject text found group
+  msg=$(tr -d '\r' < "$file" | grep -v '^#' || true)
+  subject=$(head -n 1 <<< "$msg")
+  [[ "$subject" =~ ^(Release\ v|Merge\ |fixup!\ |squash!\ |amend!\ ) ]] && return 0
+  # An amend's commit also holds what the commit it replaces changed.
+  local base=() path app=()
+  [[ "${GIT_REFLOG_ACTION:-}" == *amend* ]] && git rev-parse --quiet --verify HEAD^ > /dev/null && base=(HEAD^)
+  while IFS= read -r path; do
+    [[ -n "$path" ]] && is_app_path "$path" && app+=("$path")
+  done < <(git diff --cached --name-only ${base[@]+"${base[@]}"})
+  [[ ${#app[@]} -eq 0 ]] && return 0
+  found=$(grep -c '^Changelog:' <<< "$msg" || true)
+  if [[ "$found" -eq 0 ]]; then
+    cat >&2 << EOF
+This commit changes the app (${app[0]}$([[ ${#app[@]} -gt 1 ]] && echo ", and $((${#app[@]} - 1)) more")),
+so its message needs a paragraph for the changelog, which users read in Settings → Updates:
+
+  Changelog: <$(IFS='|' && echo "${SECTIONS[*]}")>: <what users see or can do now, where, and what is different>
+
+or, for a change users can't notice, "Changelog: none". The rules are in $STYLE.
+EOF
+    return 1
+  fi
+  text=$(paragraph "$msg")
+  is_none "$text" && return 0
+  group=$(group_of "$text")
+  [[ -n "$group" ]] || die "The Changelog: paragraph needs its group first, one of ${SECTIONS[*]}: \"Changelog: Fixed: …\"."
+  local issues
+  issues=$(problems "${text#"$group: "}")
+  if [[ -n "$issues" ]]; then
+    {
+      echo "The Changelog: paragraph breaks the rules in $STYLE:"
+      sed 's/^/  - /' <<< "$issues"
+      echo "  $text"
+    } >&2
+    return 1
+  fi
+}
+
+
+commit_msg_hook "$1"

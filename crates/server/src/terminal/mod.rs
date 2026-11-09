@@ -16,11 +16,9 @@ pub use range::sweep;
 pub use session::{FrameSink, Terminals};
 
 use serde::Serialize;
-use ts_rs::TS;
 
 /// A terminal, running or ended, as the panel lists it.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "terminal.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalInfo {
     pub id: u32,
@@ -34,8 +32,7 @@ pub struct TerminalInfo {
 
 /// A window attached to a terminal: what the screen holds so far, and the attachment, which
 /// types into the shell until another window attaches.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "terminal.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AttachedTerminal {
     pub attachment: u32,
@@ -45,8 +42,7 @@ pub struct AttachedTerminal {
 }
 
 /// What an attached window is sent after the screen.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "terminal.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum TerminalFrame {
     Output {
@@ -59,8 +55,7 @@ pub enum TerminalFrame {
 }
 
 /// A shell a terminal can start, for the shell choice on its New terminal button.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "terminal.ts")]
+#[derive(Debug, Clone, Serialize)]
 pub struct TerminalShell {
     pub path: String,
     /// The shell's file name, such as "zsh".

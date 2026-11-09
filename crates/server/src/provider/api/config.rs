@@ -13,7 +13,6 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use ts_rs::TS;
 
 use crate::system::fs::write_private;
 use crate::provider::ModelOption;
@@ -50,8 +49,7 @@ fn keys() -> std::sync::MutexGuard<'static, HashMap<String, String>> {
         .unwrap_or_else(PoisonError::into_inner)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiProvider {
     /// A slug, the part of a model id before its `/`.
@@ -95,8 +93,7 @@ fn yes() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiModel {
     pub id: String,
@@ -105,15 +102,13 @@ pub struct ApiModel {
     pub name: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Header {
     pub name: String,
     pub value: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum KeyStore {
     /// The system credential store.
@@ -181,8 +176,7 @@ pub fn provider(id: &str) -> Option<ApiProvider> {
 }
 
 /// A provider as the settings show it: without its key, but saying whether it has one.
-#[derive(Clone, Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderView {
     #[serde(flatten)]
@@ -583,8 +577,7 @@ fn blank() -> ApiProvider {
 
 /// The live health of a saved provider's endpoint, probed on demand so Settings → Providers can
 /// show whether a local server is answering and which models it serves right now.
-#[derive(Clone, Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderHealth {
     /// The endpoint answered its model list.
@@ -647,8 +640,7 @@ pub fn probe(id: &str) -> Result<ProviderHealth, String> {
 }
 
 /// A local model server found on this machine, offered to prefill the add-server form.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveredServer {
     /// The engine the port is known for, e.g. `Ollama`.

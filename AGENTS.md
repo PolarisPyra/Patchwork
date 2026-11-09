@@ -1,6 +1,6 @@
 # Agent instructions
 
-Rules for coding agents working in the Rust code in this repo (`crates/server` and `apps/desktop/src-tauri`).
+Rules for coding agents working in the Rust code in this repo (`crates/server` and `apps/desktop`).
 
 ## Scratch files
 
@@ -43,11 +43,11 @@ Rules for coding agents working in the Rust code in this repo (`crates/server` a
 
 ## State machines
 
-This holds for the whole app, the React frontend included.
+This holds for the whole app, the UI included.
 
 - **NEVER** write an implicit state machine: state spread across booleans, optionals, refs, or maps that only make sense in some combinations, so a contradictory combination (sending and idle, stopped and running, queued and sent) can exist.
 - **MUST** name the states: one enum (a tagged union in TypeScript) whose variants carry the data each state needs, so a state that should not exist cannot be written.
-- **MUST** move between states in one step. State read and written under different locks, or in different React updates, changes together under one lock or in one update, and a check followed by an act happens in the same critical section.
+- **MUST** move between states in one step. State read and written under different locks, or in different UI updates, changes together under one lock or in one update, and a check followed by an act happens in the same critical section.
 - **MUST** derive what can be derived instead of storing a second copy that can drift, and key per-item state (per chat, per thread, per request) by its item rather than sharing one flag.
 - **MUST** give every state an exit: what a state waits on can fail, time out, or be stopped, so no state is left that nothing ends.
 

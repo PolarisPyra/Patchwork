@@ -3,14 +3,12 @@
 //! are listed so they can be chosen later; nothing here reaches across SSH yet.
 
 use serde::Serialize;
-use ts_rs::TS;
 
 use super::fs::{home_dir, resolve};
 
 /// A machine the Add Project dialog can open a folder on. `local` is this computer, the only one
 /// that can be browsed today; the rest come from `~/.ssh/config` and are shown but not connectable.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "projects.ts")]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Machine {
     /// This computer's hostname, or the `Host` alias from the SSH config.
@@ -21,16 +19,14 @@ pub struct Machine {
 }
 
 /// One sub-folder in a browsed directory.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "projects.ts")]
+#[derive(Serialize)]
 pub struct DirEntry {
     pub name: String,
     pub path: String,
 }
 
 /// A directory's folders, for the in-app folder browser.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "projects.ts")]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DirListing {
     /// The directory being shown, resolved to an absolute path.

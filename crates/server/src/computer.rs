@@ -11,7 +11,6 @@ use base64::Engine as _;
 use enigo::{Axis, Button, Coordinate, Direction, Enigo, Keyboard, Mouse, Settings as EnigoSettings};
 use image::RgbaImage;
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 /// Whether Settings → Permissions has turned computer use on. Kept here so the tool list and the
 /// approval rules can ask without a settings lookup.
@@ -37,8 +36,7 @@ pub fn ensure_enabled() -> Result<(), String> {
 }
 
 /// A screenshot, as a data URL the webview can show, and the screen's size.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "computer.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Screenshot {
     /// `data:image/png;base64,…`

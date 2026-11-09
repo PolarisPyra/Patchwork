@@ -4,7 +4,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use crate::backgrounds::{BackgroundStrength, ChatBackground};
 use crate::permissions::PermissionSettings;
@@ -13,8 +12,7 @@ use crate::provider::AgentKind;
 use crate::Server;
 use crate::{permissions, skills};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Theme {
     Light,
@@ -25,8 +23,7 @@ pub enum Theme {
     System,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Integrations {
     pub github: bool,
@@ -35,8 +32,7 @@ pub struct Integrations {
     pub browser: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
     pub onboarded: bool,
@@ -95,8 +91,7 @@ pub struct Settings {
 
 /// A model that reads images: an API provider's `provider/model`, or a model of a CLI the user
 /// is signed in to, which Patchwork runs on its own for each message with images.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VisionModel {
     pub agent: AgentKind,
@@ -108,8 +103,7 @@ pub struct VisionModel {
 ///
 /// Off for every project until it is turned on: running a test suite after every task is the
 /// person's call, not the app's. A reply shows what the checks made of it only when they ran.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct CheckSettings {
     /// What a project does unless it says otherwise.
@@ -129,8 +123,7 @@ impl CheckSettings {
 }
 
 /// The integrated terminal: its environment, font, cursor, and scrollback, with their defaults.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct TerminalSettings {
     /// Variables added to the shell's environment; null removes one. Values may use
@@ -203,8 +196,7 @@ impl Default for TerminalSettings {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DetectLocale {
     #[default]
@@ -213,8 +205,7 @@ pub enum DetectLocale {
     On,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CursorStyle {
     #[default]
@@ -223,8 +214,7 @@ pub enum CursorStyle {
     Underline,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RightClickBehavior {
     #[default]
@@ -236,8 +226,7 @@ pub enum RightClickBehavior {
 }
 
 /// How much each log in `logs/<launch>/` records.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct LoggingSettings {
     /// `main.log`: Patchwork's own messages.
@@ -271,10 +260,7 @@ impl Default for LoggingSettings {
 
 /// How much a log records; each level includes the ones before it. Below Trace, no
 /// conversation or file content is written.
-#[derive(
-    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS,
-)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LogLevel {
     Off,
@@ -288,8 +274,7 @@ pub enum LogLevel {
 }
 
 /// How Patchwork keeps itself up to date.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct UpdateSettings {
     /// Minutes between checks for a new release: 10 to 60, in steps of 10.
@@ -305,8 +290,7 @@ impl Default for UpdateSettings {
 }
 
 /// Desktop notifications shown while Patchwork is not the focused window.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct NotificationSettings {
     /// When a task's goal is met.
@@ -325,8 +309,7 @@ impl Default for NotificationSettings {
 }
 
 /// Settings that trade a little convenience for fewer tokens spent.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct TokenSettings {
     /// Shows the token counts under each finished reply.

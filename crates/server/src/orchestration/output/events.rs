@@ -3,7 +3,6 @@
 use std::collections::{HashMap};
 
 use serde::Serialize;
-use ts_rs::TS;
 
 use crate::permissions::RuleRef;
 use crate::provider::ProviderSlashCommand;
@@ -12,17 +11,15 @@ use crate::threads::{
     ToolCall, TurnChecks, TurnTrees,
 };
 
-/// Emitted on the Tauri event channel `"agent-event"`.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "orchestration.ts")]
+/// An agent event, which the app applies on its UI thread.
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentEventEnvelope {
     pub thread_id: String,
     pub event: AgentEvent,
 }
 
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "orchestration.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(
     tag = "type",
     rename_all = "camelCase",

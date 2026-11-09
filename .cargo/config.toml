@@ -1,5 +1,0 @@
-# Where ts-rs writes the TypeScript types the webview imports. Each type marked `#[ts(export)]`
-# gets a test that writes it into its domain's file (`export_to`), with the types it uses; `pnpm types` runs them.
-[env]
-TS_RS_EXPORT_DIR = { value = "apps/web/src/bindings", relative = true }
-TS_RS_LARGE_INT = "number"

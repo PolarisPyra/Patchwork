@@ -6,12 +6,10 @@ use std::sync::PoisonError;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use ts_rs::TS;
 
 use super::{CONFIG_DIR, DIR, live_servers, pool, serve_relay, WRITE};
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpServer {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -50,8 +48,7 @@ pub(super) struct Config {
 }
 
 /// A server as the settings show it, without its environment and header values.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerView {
     pub name: String,
@@ -68,16 +65,14 @@ pub struct ServerView {
 }
 
 /// A server's tool, as the settings list it.
-#[derive(Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ToolInfo {
     pub name: String,
     pub description: String,
 }
 
 /// A tool as an API turn offers it to the model.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnTool {
     /// `mcp__server__tool`, cut to what endpoints accept.

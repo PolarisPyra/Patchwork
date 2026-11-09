@@ -1,8 +1,8 @@
-//! Patchwork's backend. The desktop shell exposes these methods as Tauri
-//! commands and forwards agent events to the UI.
+//! Patchwork's backend. The desktop app calls these methods and receives
+//! agent events from them.
 
-/// The app's version, from `tauri.conf.json` (see build.rs).
-pub const VERSION: &str = env!("PATCHWORK_VERSION");
+/// The app's version, the workspace's in `Cargo.toml`.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub mod agents;
 pub mod backgrounds;

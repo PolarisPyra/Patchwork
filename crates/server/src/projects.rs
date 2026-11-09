@@ -4,15 +4,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use crate::system::new_id;
 use crate::threads::title::clean_name;
 use crate::Server;
 use crate::{watch, workspace};
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "projects.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
     pub id: String,
@@ -21,8 +19,7 @@ pub struct Project {
 }
 
 /// A folder inside a project. Its threads are those whose `folder_id` names it.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "projects.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Folder {
     pub id: String,

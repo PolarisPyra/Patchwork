@@ -3,7 +3,6 @@
 use std::collections::{HashMap};
 
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use crate::permissions::{PermissionKind, RuleRef};
 
@@ -12,8 +11,7 @@ use crate::permissions::{PermissionKind, RuleRef};
 /// `Assistant` is the role's name in the provider APIs, not a person: it is whichever agent
 /// answered — Claude, Codex, OpenCode or the API — and that is the thread's `agent`, not the
 /// message's. The values are sent to the providers as they are, so they are not ours to rename.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
     /// What the person wrote.
@@ -22,8 +20,7 @@ pub enum Role {
     Assistant,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MessageStatus {
     Streaming,
@@ -32,8 +29,7 @@ pub enum MessageStatus {
     Cancelled,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum StepStatus {
     Pending,
@@ -42,8 +38,7 @@ pub enum StepStatus {
     Error,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolCall {
     pub id: String,
@@ -76,8 +71,7 @@ pub struct ToolCall {
 }
 
 /// How many lines an edit adds and removes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EditLines {
     pub added: u32,
     pub removed: u32,
@@ -100,8 +94,7 @@ pub fn tool_output(output: &str) -> Option<String> {
 }
 
 /// One step of a reply, in the order it happened.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
@@ -138,8 +131,7 @@ pub enum Part {
 }
 
 /// Where a task the agent started stands.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TaskStatus {
     Running,
@@ -162,8 +154,7 @@ impl TaskStatus {
 
 /// A task the agent started and left running past its reply, such as a background command, a
 /// subagent, or a workflow. It is listed under the message it started in until it ends.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct BackgroundTask {
     /// The id of the tool call that started it.
@@ -186,8 +177,7 @@ pub struct BackgroundTask {
 }
 
 /// A subagent an agent started, e.g. with Claude Code's Task tool.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubAgent {
     /// The subagent type, e.g. "general-purpose" or "Explore".
@@ -201,16 +191,14 @@ pub struct SubAgent {
     pub prompt: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlanStep {
     pub text: String,
     pub status: StepStatus,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ApprovalStatus {
     Pending,
@@ -219,8 +207,7 @@ pub enum ApprovalStatus {
 }
 
 /// An action the agent asked permission for during a turn.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Approval {
     pub id: String,
@@ -253,8 +240,7 @@ pub struct Approval {
 }
 
 /// A question the agent asks the user, with the answers it offers.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Question {
     /// The key its answer goes back under.
@@ -266,16 +252,14 @@ pub struct Question {
     pub multi_select: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QuestionOption {
     pub label: String,
     pub description: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AttachmentKind {
     Image,
@@ -284,8 +268,7 @@ pub enum AttachmentKind {
 }
 
 /// Something dropped into the composer, sent to the agent with the message.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Attachment {
     pub kind: AttachmentKind,
@@ -331,8 +314,7 @@ impl Attachment {
 }
 
 /// Why a safety classifier blocked a reply, as the agent reports it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Refusal {
     /// The policy area, such as `cyber`; None when the agent names none.
@@ -341,8 +323,7 @@ pub struct Refusal {
 }
 
 /// Tokens a reply used, summed over the model requests it made.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenUsage {
     /// Input that was neither read from nor written to the prompt cache.
@@ -355,16 +336,13 @@ pub struct TokenUsage {
     /// How long the last request took to its first token, in milliseconds. Only Patchwork's own
     /// agent measures it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub first_token_ms: Option<u64>,
     /// The last request's output tokens per second after its first token.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
     pub output_per_second: Option<u64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
     pub id: String,
@@ -424,8 +402,7 @@ pub struct Message {
 }
 
 /// Snapshots of a project's files as git tree ids, kept alive by refs under `refs/patchwork`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnTrees {
     pub before: String,
@@ -434,8 +411,7 @@ pub struct TurnTrees {
 
 /// How a turn's check command stands. `NotRun` is not a pass: a reply whose checks were never
 /// run says so, rather than looking like one that passed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum CheckStatus {
     Running,
@@ -448,8 +424,7 @@ pub enum CheckStatus {
 }
 
 /// What a project's check command made of the turn that wrote a reply.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnChecks {
     pub status: CheckStatus,
@@ -482,8 +457,7 @@ pub struct TurnChecks {
 }
 
 /// One thing the check command reported as failing: a test, a check, a build step.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckFailure {
     /// What failed, as it reads in the output ("tests::it_works", "FAIL src/app.test.ts").

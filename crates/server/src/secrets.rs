@@ -11,13 +11,11 @@ use std::time::{Duration, SystemTime};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use ts_rs::TS;
 
 use crate::Server;
 
 /// Where a secret request stands.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "secrets.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SecretStatus {
     Pending,
@@ -30,8 +28,7 @@ pub enum SecretStatus {
 
 /// What makes an approval a request for a secret, whose title is the card's label and whose
 /// detail says what it is for. It never holds the value.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "secrets.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Secret {
     #[serde(default, skip_serializing_if = "Option::is_none")]

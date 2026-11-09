@@ -8,7 +8,6 @@ use std::sync::OnceLock;
 
 use notify::{RecursiveMode, Watcher as _};
 use serde::Serialize;
-use ts_rs::TS;
 
 use crate::provider::AgentKind;
 use crate::settings::Settings;
@@ -37,8 +36,7 @@ pub fn dir(settings: &Settings) -> PathBuf {
     }
 }
 
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "skills.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Skill {
     pub name: String,

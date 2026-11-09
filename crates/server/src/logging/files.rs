@@ -6,7 +6,6 @@ use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use chrono::Local;
-use ts_rs::TS;
 use super::Json;
 use super::scrub::scrubbed;
 
@@ -130,8 +129,7 @@ pub fn channels() -> Vec<String> {
 }
 
 /// What the Output panel reads of a log.
-#[derive(serde::Serialize, TS)]
-#[ts(export, export_to = "logging.ts")]
+#[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LogChunk {
     pub text: String,

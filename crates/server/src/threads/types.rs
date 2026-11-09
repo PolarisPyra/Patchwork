@@ -1,15 +1,13 @@
 //! Threads, their goals, and how much they may do unasked.
 
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use crate::provider::{AgentKind, ProviderSlashCommand};
 use crate::backgrounds::ChatBackground;
 use crate::threads::Message;
 
 /// How much an agent may do without asking.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum AccessMode {
     /// Ask before commands and file changes.
@@ -22,8 +20,7 @@ pub enum AccessMode {
     FullAccess,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Thread {
     pub id: String,
@@ -94,16 +91,14 @@ pub struct Thread {
 }
 
 /// Where a subagent's thread came from.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadParent {
     pub thread_id: String,
     pub tool_id: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum GoalStatus {
     Active,
@@ -115,8 +110,7 @@ pub enum GoalStatus {
 }
 
 /// A condition the agent keeps working toward until it is met (`/goal`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "threads.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Goal {
     pub objective: String,

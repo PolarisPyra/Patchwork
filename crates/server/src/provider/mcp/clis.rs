@@ -12,7 +12,6 @@ use std::sync::{Mutex, OnceLock, PoisonError};
 
 use serde::Serialize;
 use serde_json::Value;
-use ts_rs::TS;
 
 use crate::provider::mcp::{self, McpServer, ToolInfo};
 use crate::projects::Project;
@@ -26,8 +25,7 @@ type Listings = HashMap<String, Option<Result<Vec<ToolInfo>, String>>>;
 static TOOLS: OnceLock<Mutex<Listings>> = OnceLock::new();
 
 /// One CLI's servers, and the file that holds its own servers.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliGroup {
     pub agent: AgentKind,
@@ -37,8 +35,7 @@ pub struct CliGroup {
 
 /// A server as the settings show it. Environment and header values stay out, since they may
 /// hold secrets; only their names are shown.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliServer {
     /// Its identity (see `mcp::identity`), which names it for a refresh, and puts it on the

@@ -6,13 +6,11 @@ use std::path::{Path, PathBuf};
 use image::{GenericImageView, ImageFormat, imageops::FilterType};
 use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
-use ts_rs::TS;
 
 use crate::{Res, Server};
 
 /// What shows behind a chat's messages.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "backgrounds.ts")]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ChatBackground {
     /// The plain window color.
@@ -28,8 +26,7 @@ pub enum ChatBackground {
 }
 
 /// How much of a background shows through the window color laid over it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "backgrounds.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BackgroundStrength {
     Subtle,
@@ -39,8 +36,7 @@ pub enum BackgroundStrength {
 }
 
 /// A picture in Patchwork's backgrounds folder.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "backgrounds.ts")]
+#[derive(Debug, Clone, Serialize)]
 pub struct BackgroundImage {
     /// Its file name, as a `ChatBackground::Image` names it.
     pub file: String,
@@ -53,8 +49,7 @@ pub struct BackgroundImage {
 
 /// A deleted picture, and what showed it, so the deletion can be taken back until Patchwork
 /// closes.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "backgrounds.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemovedBackground {
     pub file: String,

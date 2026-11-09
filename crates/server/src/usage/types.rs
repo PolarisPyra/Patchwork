@@ -1,13 +1,11 @@
 //! Subscription usage limits per provider.
 
 use serde::Serialize;
-use ts_rs::TS;
 
 use crate::provider::AgentKind;
 
 /// One rate-limit window, e.g. the 5-hour session limit.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "usage.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageWindow {
     pub label: String,
@@ -18,8 +16,7 @@ pub struct UsageWindow {
 }
 
 /// Subscription usage limits for one agent, as reported by its provider.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "usage.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderUsage {
     pub kind: AgentKind,

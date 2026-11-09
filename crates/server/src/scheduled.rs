@@ -8,7 +8,6 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone};
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use crate::orchestration::{AgentEvent, AgentEventEnvelope};
 use crate::provider::AgentKind;
@@ -18,8 +17,7 @@ use crate::threads::{AccessMode, NewThread, Thread};
 use crate::Server;
 
 /// A scheduled task: a prompt that starts a task at a fixed time.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "scheduled.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScheduledTask {
     pub id: String,
@@ -43,8 +41,7 @@ pub struct ScheduledTask {
 }
 
 /// One time a scheduled task's slot came round.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "scheduled.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScheduledRun {
     /// When it started, or for a skipped run the slot it missed, in Unix milliseconds.
@@ -54,8 +51,7 @@ pub struct ScheduledRun {
     pub detail: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "scheduled.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RunOutcome {
     Started,
@@ -65,8 +61,7 @@ pub enum RunOutcome {
 }
 
 /// How often a scheduled task runs. The shapes Codex's own tasks use.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "scheduled.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
@@ -92,8 +87,7 @@ pub enum Schedule {
 }
 
 /// A day of the week, written as Codex's schedules write it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "scheduled.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Weekday {
     #[serde(rename = "MO")]
     Mon,

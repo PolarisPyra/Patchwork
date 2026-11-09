@@ -7,13 +7,11 @@ use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use ts_rs::TS;
 
 use super::fs::home_dir;
 
 /// A `Host` alias from `~/.ssh/config`, with what its block sets.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "projects.ts")]
+#[derive(Serialize)]
 pub struct SshHost {
     pub name: String,
     pub hostname: Option<String>,
@@ -22,8 +20,7 @@ pub struct SshHost {
 }
 
 /// Whether a host let Patchwork in with a key, without asking anything.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "projects.ts")]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SshTest {
     pub ok: bool,
