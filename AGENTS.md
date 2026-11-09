@@ -51,6 +51,36 @@ This holds for the whole app, the UI included.
 - **MUST** derive what can be derived instead of storing a second copy that can drift, and key per-item state (per chat, per thread, per request) by its item rather than sharing one flag.
 - **MUST** give every state an exit: what a state waits on can fail, time out, or be stopped, so no state is left that nothing ends.
 
+## Modules
+
+`mod.rs` is a folder's entry point, like `index.js` in Node or `__init__.py` in Python: it registers the folder's files as submodules and chooses what the rest of the crate sees. It never holds code.
+
+```text
+src/
+├── main.rs        mod crypto;
+└── crypto/
+    ├── mod.rs     the index: docs, `mod` and `use` lines only
+    ├── encode.rs
+    └── decode.rs
+```
+
+```rust
+// src/crypto/mod.rs
+//! Encoding and decoding.
+
+mod decode;
+mod encode;
+
+pub use decode::decode;
+pub use encode::encode;
+```
+
+- **MUST** keep `mod.rs` to `//!` docs, `mod` declarations (with `#[cfg(test)]` on `mod tests;`), and `use`/`pub use` lines. **NEVER** put a function, type, const, static, macro, `impl`, or an inline `mod x { … }` block in it.
+- **MUST** put code that the whole folder shares in a named sibling file that owns its concern (`state.rs`, `types.rs`, `config.rs`), and have `mod.rs` re-export it.
+- **MUST** give a sub-folder its own `mod.rs` instead of declaring its files in the parent.
+- **MUST** keep the top of a crate's `src/` to `main.rs` or `lib.rs` and folders; shared code goes in a folder such as `ui/`.
+- **MUST** have sibling files import each other by path (`use super::state::Composer;`) rather than `use super::*`.
+
 ## Imports and dependencies
 
 - **MUST** avoid wildcard imports (`use module::*`) except for preludes, test modules (`use super::*`), and prelude re-exports.

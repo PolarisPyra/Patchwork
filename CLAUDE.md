@@ -11,10 +11,10 @@ Native desktop app in Rust: the UI is drawn with GPUI, over the backend in `crat
 
 ### `apps/desktop/src`
 
-- A folder is one piece of UI (`chat`, `sidebar`, `settings`, `canvas`, `panel`, `workspace`, `onboarding`), with its entry in `mod.rs`. A sub-feature takes the same shape one level down: `chat/composer/`, `settings/{providers,extensions,mcp}/`.
-- Files at the top of `src/` hold only what two or more features use: the shared controls in `ui.rs` (`button`, `icon_button`, `spinner`, `scrollbar`, …), the colours and sizes in `theme.rs`, the embedded icons and fonts in `assets.rs`.
-- New code goes in the feature that uses it. Move it up to the top once a second feature needs it, and down into the feature when only one is left.
-- `assets.rs` embeds `apps/desktop/assets/` (fonts, icons) and the provider logos in the root `assets/`.
+- `src/` holds `main.rs` and folders, never loose files. A folder is one piece of UI (`chat`, `sidebar`, `settings`, `canvas`, `panel`, `workspace`, `onboarding`), with its state and entry view in their own files (`state.rs`, `render.rs`, `view.rs`). A sub-feature takes the same shape one level down: `chat/composer/`, `settings/{providers,extensions,mcp}/`.
+- `ui/` holds only what two or more features use: the shared controls in `ui/controls.rs` (`button`, `icon_button`, `spinner`, `scrollbar`, …), the colours and sizes in `ui/theme.rs`, the embedded icons and fonts in `ui/assets.rs`, and the shared menus, dialogs and text tools.
+- New code goes in the feature that uses it. Move it up into `ui/` once a second feature needs it, and down into the feature when only one is left.
+- `ui/assets.rs` embeds `apps/desktop/assets/` (fonts, icons) and the provider logos in the root `assets/`.
 
 ### `crates/server/src`
 
@@ -27,8 +27,9 @@ Native desktop app in Rust: the UI is drawn with GPUI, over the backend in `crat
 ### Both crates
 
 - A module is one file until it passes about 600 lines or has two clear concerns. Then it becomes `name/mod.rs` plus one file per concern, and `mod.rs` re-exports the public items so callers keep their paths: `provider/claude/{config,input,parse,launch,cli}.rs`, `chat/composer/`.
-- `mod.rs` holds docs, `mod` and `use` lines, and small code the whole folder shares (under about 100 lines), or a feature's entry view.
-- Don't create a file under about 40 lines. Put the code in its only user, or in `mod.rs`. Test fixtures go in the module's `tests.rs`.
+- `mod.rs` is the folder's index and never holds code: only `//!` docs, `mod` lines (with their `#[cfg(test)]`), and `use`/`pub use` re-exports. No functions, types, consts, statics, macros, impls or inline `mod x { … }` blocks; those go in a named file beside it, and a sub-folder gets its own `mod.rs`. See `AGENTS.md`.
+- Don't create a file under about 40 lines. Put the code in its only user, or in the sibling that owns its concern. A folder's own wire types go in its `types.rs`. Test fixtures go in the module's `tests.rs`.
+- Files in a folder import each other's items by path (`use super::state::Composer;`), not `use super::*`.
 
 ## Commands
 

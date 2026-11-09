@@ -23,7 +23,7 @@ The repo is split into `crates/server` and `apps/desktop`:
 - `apps/desktop` — the app, drawn with GPUI (package `patchwork`). It calls `Server` directly and applies its agent events on the UI thread.
   - `src/main.rs` — opens the server and the window; `src/workspace/` — the window: its toolbar, regions and resizing
   - `src/{chat,sidebar,settings,canvas,panel,onboarding}/` — UI, one folder per feature
-  - `src/ui.rs` — the controls the features share; `src/theme.rs` — the colours and sizes; `src/assets.rs` — the icons and fonts it embeds from `assets/`
+  - `src/ui/` — what the features share: the controls (`controls.rs`), the colours and sizes (`theme.rs`), the icons and fonts it embeds from `assets/` (`assets.rs`), and the shared menus, dialogs and text tools
 
 ## Data model
 
