@@ -5,23 +5,23 @@ Native desktop app in Rust: the UI is drawn with GPUI, over the backend in `crat
 ## Layout
 
 - Cargo workspace:
-  - `apps/desktop` (package `patchwork`): the app. It calls `Server` directly.
+  - `crates/desktop` (package `patchwork`): the app. It calls `Server` directly.
   - `crates/server` (`patchwork-server`): providers, persistence, usage, thread import.
 - The app's version is `[workspace.package] version` in the root `Cargo.toml`.
 
-### `apps/desktop/src`
+### `crates/desktop/src`
 
 - `src/` holds `main.rs` and folders, never loose files. A folder is one piece of UI (`chat`, `sidebar`, `settings`, `canvas`, `panel`, `workspace`, `onboarding`), with its state and entry view in their own files (`state.rs`, `render.rs`, `view.rs`). A sub-feature takes the same shape one level down: `chat/composer/`, `settings/{providers,extensions,mcp}/`.
 - `ui/` holds only what two or more features use: the shared controls in `ui/controls.rs` (`button`, `icon_button`, `spinner`, `scrollbar`, …), the colours and sizes in `ui/theme.rs`, the embedded icons and fonts in `ui/assets.rs`, and the shared menus, dialogs and text tools.
 - New code goes in the feature that uses it. Move it up into `ui/` once a second feature needs it, and down into the feature when only one is left.
-- `ui/assets.rs` embeds `apps/desktop/assets/` (fonts, icons) and the provider logos in the root `assets/`.
+- `ui/assets.rs` embeds `crates/desktop/assets/` (fonts, icons) and the provider logos in the root `assets/`.
 
 ### `crates/server/src`
 
 - Folders are domains, not layers. `lib.rs` holds only the module list, `Server`, and `Server::open`; every other module is one domain (`threads`, `projects`, `settings`, `permissions`, `plugins`, `scheduled`, `provider`, `orchestration`, …) and holds its types, its `impl Server` operations, and its logic, so a type is `crate::threads::Thread`. A folder domain splits them into `types.rs` and `ops.rs`; a one-file domain such as `projects.rs` keeps the same order: types first, then the operations, then the logic. There is no `types/` or `server/` folder. A helper another domain calls is `pub(crate)`.
 - Machine-level helpers that no domain owns live in `system/`: the command and environment programs run with, login shells, the home folder and path resolution, opening files on the desktop.
 - A domain's files may reach down to `system/`, `logging/` and other domains' types, never up into `orchestration/` or a `Server` operation; `persistence/` stores what it is given and decides nothing.
-- An area that exists on both sides keeps the same name on each: `crates/server/src/threads/`, `apps/desktop/src/sidebar/` reads `crate::threads`.
+- An area that exists on both sides keeps the same name on each: `crates/server/src/threads/`, `crates/desktop/src/sidebar/` reads `crate::threads`.
 - A hook check Patchwork carries itself is a `BuiltinHook` in `plugins/builtin/`, which a plugin names as `{ "type": "builtin", "name": … }`; it never matches on a command's raw text, it reads it with `plugins/builtin/shell.rs`.
 
 ### Both crates

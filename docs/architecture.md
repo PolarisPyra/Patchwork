@@ -2,7 +2,7 @@
 
 ## Repo layout
 
-The repo is split into `crates/server` and `apps/desktop`:
+The repo is split into `crates/server` and `crates/desktop`:
 
 - `crates/server` — the backend, a Rust crate with no UI dependency
   - `src/lib.rs` — the module list, `Server`, and how it opens. Every other module is one domain, holding its wire types, its `impl Server` operations and its logic: a folder domain splits them into `types.rs` (re-exported from the folder) and `ops.rs`, and a one-file domain keeps them in that order:
@@ -20,7 +20,7 @@ The repo is split into `crates/server` and `apps/desktop`:
   - `src/system/` — the user's machine: the programs Patchwork starts and their environment, login shells, paths, opening files on the desktop
   - `src/logging/` — the debug logs
   - `src/backgrounds.rs` — chat backgrounds
-- `apps/desktop` — the app, drawn with GPUI (package `patchwork`). It calls `Server` directly and applies its agent events on the UI thread.
+- `crates/desktop` — the app, drawn with GPUI (package `patchwork`). It calls `Server` directly and applies its agent events on the UI thread.
   - `src/main.rs` — opens the server and the window; `src/workspace/` — the window: its toolbar, regions and resizing
   - `src/{chat,sidebar,settings,canvas,panel,onboarding}/` — UI, one folder per feature
   - `src/ui/` — what the features share: the controls (`controls.rs`), the colours and sizes (`theme.rs`), the icons and fonts it embeds from `assets/` (`assets.rs`), and the shared menus, dialogs and text tools
@@ -82,7 +82,7 @@ itself: a suite too slow to run every time can be off while the others are on.
 - **When** (`crates/server/src/orchestration/turn/end.rs`). When a turn finishes with `Complete` and its reply changed at least one file. A stopped or failed turn changed nothing to judge.
 - **How** (`crates/server/src/checks/run.rs`). Through the same shell an agent's commands run in, in the project folder, with `CI=1` and colour off. Output keeps its last 16 KB; the process group is killed at 5 minutes, and that is never a pass.
 - **What it means** (`TurnChecks` in `crates/server/src/threads/messages.rs`). `passed`, `failed`, `timedOut`, or `notRun`, with the command, how long it took, one `CheckFailure` per thing that failed (`crates/server/src/checks/parse.rs` reads cargo's, Node's, Jest's, Vitest's, pytest's and Go's shapes), and the tail of the output. A check that did not finish is `timedOut` or `notRun`, never `passed`. A check left running when the app closed is `notRun` at the next start (`turn/recovery.rs`).
-- **What a reply shows** (`apps/desktop/src/chat/checks.rs`). Under the files a reply changed: the outcome, each failure by name, and the output behind a disclosure. Its button runs the command again; its footer turns the project's checks on or off without leaving the chat. A reply shows a card only when checks ran or are running for it, so with them off there is no card at all: the switch is in Settings → Checks, which is one place to look rather than a card in every reply saying it did not check. The result arrives as a `checksRecorded` event, saved on the message like an approval.
+- **What a reply shows** (`crates/desktop/src/chat/checks.rs`). Under the files a reply changed: the outcome, each failure by name, and the output behind a disclosure. Its button runs the command again; its footer turns the project's checks on or off without leaving the chat. A reply shows a card only when checks ran or are running for it, so with them off there is no card at all: the switch is in Settings → Checks, which is one place to look rather than a card in every reply saying it did not check. The result arrives as a `checksRecorded` event, saved on the message like an approval.
 - **Asking another way**. The command palette's "Run checks for the open task" runs them for the reply on screen, whether or not the project has them on, and the card it produces is where they can be turned on.
 
 ## Approvals and questions

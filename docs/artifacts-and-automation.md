@@ -13,7 +13,7 @@ or named days.
   reschedules it from now.
 - `Server::run_due_scheduled_tasks` starts the tasks whose time has come. The desktop app calls it
   every 30 seconds from a thread of its own (`start_scheduled_tasks` in
-  `apps/desktop/src/main.rs`).
+  `crates/desktop/src/main.rs`).
 - A task that starts makes an ordinary thread with the task's name, then sends the prompt as its
   first message, so everything after that is a normal turn: approvals, files, usage.
 - A task that fails to start is logged and its next run recorded, so it does not retry every tick.

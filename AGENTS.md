@@ -1,6 +1,6 @@
 # Agent instructions
 
-Rules for coding agents working in the Rust code in this repo (`crates/server` and `apps/desktop`).
+Rules for coding agents working in the Rust code in this repo (`crates/server` and `crates/desktop`).
 
 ## Scratch files
 
