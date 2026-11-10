@@ -3,6 +3,15 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.35] - 2026-11-10
+
+### Fixed
+
+- The usage popup now shows the weekly Fable ring while Claude Code is working. Before, it only showed the session and weekly rings then, and Refresh did not bring it back.
+- Opening or closing the model, effort, compact, access or agent menu under the chat box no longer moves the cursor into the chat box. It stays where it was.
+- Closing the search bar in a chat no longer moves the cursor into the chat box. It goes back to where it was before you opened the search.
+- Dropping a file on the chat box now closes the usage popup and puts the cursor in the chat box.
+
 ## [26.11.34] - 2026-11-10
 
 ### Added
