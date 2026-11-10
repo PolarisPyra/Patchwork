@@ -1,4 +1,4 @@
-//! Importing conversations other apps saved.
+//! Finding the conversations other apps saved, and importing the ones asked for.
 
 // Rust guideline compliant 2026-10-09
 

@@ -19,7 +19,7 @@
 
 mod detect;
 mod parse;
-mod ops;
+mod reply;
 mod run;
 #[cfg(test)]
 mod tests;
@@ -31,4 +31,4 @@ pub use parse::{failures, tests_ran};
 #[doc(inline)]
 pub use run::{LIMIT, Outcome, run};
 use run::KEEP;
-pub(crate) use ops::worth_checking;
+pub(crate) use reply::worth_checking;

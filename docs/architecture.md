@@ -5,7 +5,7 @@
 The repo is split into `crates/server` and `crates/desktop`:
 
 - `crates/server` — the backend, a Rust crate with no UI dependency
-  - `src/lib.rs` — the module list, `Server`, and how it opens. Every other module is one domain, holding its wire types, its `impl Server` operations and its logic: a folder domain splits them into `types.rs` (re-exported from the folder) and `ops.rs`, and a one-file domain keeps them in that order:
+  - `src/lib.rs` — the module list, `Server`, and how it opens. Every other module is one domain, holding its wire types, its `impl Server` operations and its logic: a folder domain splits them into `types.rs` (re-exported from the folder) and one file per concern, named for what it does (`threads/{lifecycle,list,options}.rs`), and a one-file domain keeps them in that order:
   - `src/threads/` — threads and their messages; `src/projects.rs` — projects and their folders; `src/settings.rs` — the settings
   - `src/provider/` — one module per agent CLI (`claude/`, `codex/`, `antigravity.rs`, `opencode/`, `api/`), finding and probing them (`locate.rs`, `probe.rs`), what a turn sends them (`turn.rs`) and reads back (`parsed.rs`), and handing each one its hooks (`hooks.rs`)
   - `src/orchestration/` — runs turns, grouped by feature, one folder each, with `orchestration/mod.rs` as the index: `turn/` (the `Runner`, starting and ending a turn, its process, turns cut off by a restart), `messages/` (sending, steering and queueing), `output/` (reading agent output into agent events and streaming them), `approvals/`, `changes/` (which files each reply changed, and per-turn checkpoints), `tasks/` (background tasks and subagents), and `goal/`

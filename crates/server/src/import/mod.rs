@@ -6,7 +6,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-mod ops;
+mod scan;
 mod types;
 
 #[doc(inline)]

@@ -7,11 +7,11 @@
 //! source build) cannot replace itself, so it only reports the version.
 
 mod install;
-mod ops;
+mod check;
 mod release;
 mod types;
 
 pub use install::restart_path;
-pub(crate) use ops::Updates;
+pub(crate) use check::Updates;
 pub use release::RELEASES_URL;
 pub use types::{RestartResult, UpdateState, UpdateStatus};

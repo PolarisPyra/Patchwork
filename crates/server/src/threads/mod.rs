@@ -4,7 +4,9 @@
 
 mod attachments;
 mod messages;
-mod ops;
+mod lifecycle;
+mod list;
+mod options;
 pub(crate) mod title;
 mod types;
 
@@ -16,7 +18,7 @@ pub use messages::{
     TokenUsage, ToolCall, tool_output, TurnChecks, TurnTrees,
 };
 #[doc(inline)]
-pub use ops::NewThread;
+pub use lifecycle::NewThread;
 #[doc(inline)]
 pub use title::{title_from, without_leading_attachments};
 #[doc(inline)]
