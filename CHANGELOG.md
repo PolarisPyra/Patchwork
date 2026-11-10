@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.33] - 2026-11-09
+
+### Added
+
+- Patchwork installs new versions on its own again. It checks for one shortly after it starts and then as often as Settings → Updates says, installs it in the background, and shows a card in the top right with a Restart button. A copy that cannot replace itself shows a Download button instead.
+
+### Fixed
+
+- Sending a message no longer opens extra Patchwork windows, and commands no longer hang waiting for a permission check that never answered. Each tool call an agent made had started another copy of Patchwork.
+
 ## [26.11.32] - 2026-11-09
 
 ### Added
