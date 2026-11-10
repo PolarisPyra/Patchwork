@@ -3,6 +3,24 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.36] - 2026-11-10
+
+### Added
+
+- A reply that was cut off because Patchwork quit, restarted for an update, or crashed now carries on by itself the next time Patchwork opens, in the same agent session and with its goal. A reply cut off twice, or one that ended with an error, has a Resume button instead.
+- Settings → General has a new choice for replies that were interrupted when Patchwork closed: resume them at launch always, ask first, or never. With Ask, a card in the top right says how many were interrupted and resumes them when you click Resume.
+- A reply that stopped because you ran out of usage can now wait for the limit: choose Resume when the limit resets under it, and it carries on by itself at that time, even if you restart Patchwork in between.
+
+### Changed
+
+- A running subagent is now listed once, in the lineage card, and no longer also in the list of background tasks under the reply. With the card closed, it is listed under the reply as before.
+- Restarting to install an update no longer warns that tasks are running, because their replies now carry on after the restart. The warning still shows when Settings is set to never resume them.
+- Opening Patchwork while it is already running now brings up the window you have instead of opening a second copy.
+
+### Fixed
+
+- Subagents that keep working after a reply ends now stay under Running agents in the lineage card until they finish. Before, they moved to Previous agents and showed as done the moment the reply ended.
+
 ## [26.11.35] - 2026-11-10
 
 ### Fixed
