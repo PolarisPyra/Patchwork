@@ -3,6 +3,43 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.34] - 2026-11-10
+
+### Added
+
+- The usage popup now shows a ring for Claude Code's weekly Fable limit, with how much is used and when it resets, next to the session and weekly rings.
+- You can now select text in a chat by dragging over it, across messages and code blocks, and copy it with Ctrl+C.
+- Pictures and files can be pasted into the chat box with Ctrl+V or dragged onto it, and they are attached to your message. A copied picture is saved as a file first, so the agent can open it.
+- Double-clicking in a text box selects the word under the pointer, and a triple-click selects the whole line.
+
+### Changed
+
+- When a project's folder is missing, Patchwork keeps looking for it, so plugging in the drive it lives on clears the warning without picking the folder again.
+
+### Fixed
+
+- Clicking anywhere in the composer now puts the cursor in it: the padding, the empty space under your text, or between the controls. Before, only a click on the text line itself worked.
+- A message Patchwork could not send, such as one sent while a reply was still starting, now goes back into the chat box with the reason shown, instead of disappearing.
+- Restoring a checkpoint puts its message back in the chat box even when you have already started typing there, ahead of what you wrote. Before, the message was lost.
+- Your messages keep their spacing in the chat, so indented code and lined-up tables look as you wrote them.
+- Committing, writing a commit message, or asking an agent to fix conflicts or pull request feedback in Source Control no longer lands in another project when you switch projects while it runs.
+- Removing a project or deleting many archived tasks no longer freezes the window, and a project that cannot be removed now says why.
+- A token pasted into a secret request no longer keeps the line break copied with it.
+- Messages waiting to be sent are no longer lost when you stop a reply that was taking several of them at once, or when a goal ends with messages still unanswered.
+- Agents' background commands no longer keep their output in memory after it has been read, so long sessions use less memory.
+- Tasks that run every few hours now keep their interval across a clock change, and a daily task saved during the hour the clocks repeat no longer runs straight away.
+- Very large replies no longer leave their changed files loading forever, and tools that print unusual characters no longer stop answering.
+- The file menu that opens on @ no longer lists another project's files after you switch projects.
+
+### Security
+
+- Permission rules now read a command the way the shell runs it, so an allowed command can no longer hide a refused one behind a comment, brackets, or a wrapper such as env or xargs. An allowed command run from a path in the project, or with settings in front of it, now asks first.
+- Commands that are allowed because they only read, such as search and git diff, now ask first when they are told to run another program or write a file.
+- A link inside a project that points outside it is now treated as outside the project, so the agent asks before reading or changing what it leads to.
+- Codex and Antigravity no longer start a reply without your permission rules when Patchwork cannot set them up; you see why instead.
+- Updates are only installed when the release's description is signed with Patchwork's release key, so an older version cannot be offered as a newer one.
+- Patchwork's database engine, its ZIP reader and its secure connection checks are updated to versions that fix known security problems, including trust in the distrusted emSign certificates.
+
 ## [26.11.33] - 2026-11-09
 
 ### Added
