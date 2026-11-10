@@ -5,8 +5,8 @@
 use std::sync::Arc;
 use std::f32::consts::TAU;
 use gpui::{
-    AnyElement, ClickEvent, Div, Focusable, FontWeight, PathBuilder, Stateful, Window, canvas, div,
-    point, prelude::*, px,
+    AnyElement, ClickEvent, Div, FontWeight, MouseButton, PathBuilder, Stateful, Window, canvas,
+    div, point, prelude::*, px,
 };
 use patchwork_server::threads::Thread;
 use crate::ui::theme::{FS_MD, RADIUS, RADIUS_SM, Theme};
@@ -37,6 +37,9 @@ impl Composer {
 
     /// Opens a chip's menu, as clicking it does.
     pub(super) fn open_menu(&mut self, menu: Menu, window: &mut Window, cx: &mut Context<Self>) {
+        if self.menu.is_none() {
+            self.menu_came_from = window.focused(cx);
+        }
         self.menu = Some(menu);
         self.picker = None;
         self.highlight = usize::MAX;
@@ -61,8 +64,14 @@ impl Composer {
     pub(super) fn close_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
         self.picker = None;
-        let focus = self.editor.read(cx).focus_handle(cx);
-        window.focus(&focus, cx);
+        // Back to where the keys were: picking a model is not a wish to write a message.
+        let back = self.menu_came_from.take().or_else(|| {
+            let workspace = self.workspace.upgrade()?;
+            Some(workspace.read(cx).focus.clone())
+        });
+        if let Some(back) = back {
+            window.focus(&back, cx);
+        }
         cx.notify();
     }
 
@@ -190,6 +199,9 @@ pub(super) fn chip(
         .font_weight(FontWeight::MEDIUM)
         .text_color(t.text_muted)
         .hover(move |s| s.bg(hover).text_color(fg))
+        // A press on a chip opens its menu and leaves the keys where they are; the composer
+        // around it would otherwise take them for its editor.
+        .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
         .child(lead)
         .child(div().max_w(px(180.)).truncate().child(label))
         .child(icon("caret-down", 14.))

@@ -245,6 +245,14 @@ impl Workspace {
         cx.notify();
     }
 
+    /// Closes the popover without taking the keys, for when they are going somewhere else.
+    pub fn dismiss_usage(&mut self, cx: &mut Context<Self>) {
+        if self.usage.open {
+            self.usage.open = false;
+            cx.notify();
+        }
+    }
+
     fn close_usage(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.usage.open = false;
         window.focus(&self.focus, cx);

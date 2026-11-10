@@ -51,6 +51,8 @@ pub struct Composer {
     /// the menu's own chip does not open it again; a press on another chip opens that one.
     pub(super) dismissed: Option<(Menu, Point<Pixels>)>,
     pub(super) menu_focus: FocusHandle,
+    /// What had the keys when a chip's menu opened, which gets them back when it closes.
+    pub(super) menu_came_from: Option<FocusHandle>,
     /// The row under the keyboard, or `usize::MAX` until the open menu is drawn.
     pub(super) highlight: usize,
     /// What each row of the open menu picks, in order, for the keyboard.
@@ -135,6 +137,7 @@ impl Composer {
             menu: None,
             dismissed: None,
             menu_focus: cx.focus_handle(),
+            menu_came_from: None,
             highlight: usize::MAX,
             menu_picks: Vec::new(),
             roles: Roles::Loading,

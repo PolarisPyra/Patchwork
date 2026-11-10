@@ -344,10 +344,20 @@ impl Render for Composer {
                     cx.stop_propagation();
                 }
             }))
-            .on_drop(cx.listener(|this, files: &ExternalPaths, _, cx| {
+            .on_drop(cx.listener(|this, files: &ExternalPaths, window, cx| {
                 this.attach_paths(files.paths(), cx);
+                // A drop is the start of a message: the usage popover goes, as a press outside
+                // it would close it, and the keys come here.
+                if let Some(workspace) = this.workspace.upgrade() {
+                    workspace.update(cx, crate::workspace::Workspace::dismiss_usage);
+                }
+                this.focus(window, cx);
             }))
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                // A chip, or the editor itself, has already answered the press.
+                if window.default_prevented() {
+                    return;
+                }
                 if !editor_focus.is_focused(window) {
                     window.focus(&editor_focus, cx);
                 }
