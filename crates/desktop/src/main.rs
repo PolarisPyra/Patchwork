@@ -1,5 +1,7 @@
 //! Patchwork's window, drawn with GPUI over the server, its folders and its database.
 
+// A release build on Windows opens no console window beside the app.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![expect(
     clippy::unused_self,
     reason = "a view acts through its `Context<Self>`, so some of its methods never read the view itself"
