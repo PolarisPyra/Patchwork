@@ -329,9 +329,12 @@ impl Render for Composer {
                 }
                 let m = &e.keystroke.modifiers;
                 if e.keystroke.key == "up" && m.alt && !m.control && !m.shift && !m.platform {
-                    let _ = this
-                        .workspace
-                        .update(cx, crate::workspace::Workspace::edit_latest_queued);
+                    // Deferred: it reads this composer, which cannot be read from in here.
+                    let workspace = this.workspace.clone();
+                    cx.defer(move |cx| {
+                        let _ =
+                            workspace.update(cx, crate::workspace::Workspace::edit_latest_queued);
+                    });
                     cx.stop_propagation();
                 }
             }))

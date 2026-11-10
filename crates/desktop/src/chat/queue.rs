@@ -1,24 +1,37 @@
 //! Messages sent while the agent was busy, waiting for its turn to end. The agent has not seen them
 //! yet, so each can be taken back to edit or dropped, steer the running turn, or be sent on.
+//! Also what is written and attached in the composer, kept apart for each chat.
 
 // Rust guideline compliant 2026-10-09
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use gpui::{Div, FontWeight, Role, Stateful, div, prelude::*, px};
-use patchwork_server::threads::Message;
+use gpui::{App, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
+use patchwork_server::threads::{Attachment, Message};
 
 use crate::chat::goal::strip_action;
 use crate::ui::theme::{FS_SM, FS_XS, RADIUS_SM, Theme};
 use crate::ui::{button, icon, tooltip};
 use crate::workspace::{Workspace, is_working};
 
+/// What is written and attached in the composer, unsent.
+type Draft = (String, Vec<Attachment>);
+
 /// A queued message being edited in the composer, and the draft the edit set aside.
 pub struct QueuedEdit {
     chat: String,
     id: String,
-    saved: String,
+    saved: Draft,
+}
+
+/// Each chat's draft while another chat is open, so the composer shows only the open chat's.
+#[derive(Default)]
+pub struct ChatDrafts {
+    /// The chat the composer's draft belongs to: `None` is a chat not started yet.
+    shown: Option<String>,
+    kept: HashMap<Option<String>, Draft>,
 }
 
 impl Workspace {
@@ -34,40 +47,71 @@ impl Workspace {
         self.queued_edit.is_some()
     }
 
-    fn composer_text(&self, cx: &Context<Self>) -> String {
-        self.composer.read(cx).editor.read(cx).content.clone()
+    /// The composer's draft. The composer's own handlers defer what leads here: it cannot be
+    /// read or changed from inside one of them.
+    fn composer_draft(&self, cx: &App) -> Draft {
+        self.composer.read(cx).draft(cx)
     }
 
-    fn set_composer_text(&self, text: &str, cx: &mut Context<Self>) {
-        let editor = self.composer.read(cx).editor.clone();
-        editor.update(cx, |e, cx| e.set_text(text, cx));
+    fn set_composer_draft(&self, draft: Draft, cx: &mut Context<Self>) {
+        self.composer
+            .update(cx, |c, cx| c.set_draft(&draft.0, draft.1, cx));
     }
 
-    /// Editing puts a queued message's text in the composer, setting the draft aside.
+    /// The composer shows the open chat's draft: opening another chat, or starting one, keeps
+    /// what was written and attached for the chat left and brings back the other's. An edit of a
+    /// queued message is dropped on the way, and the draft it set aside is the one kept.
+    pub fn sync_chat_draft(&mut self, cx: &mut Context<Self>) {
+        let open = |w: &Self| w.thread.as_ref().map(|t| t.id.clone());
+        if self.chat_drafts.shown == open(self) {
+            return;
+        }
+        // Deferred: the composer is not changed while the chat is drawn.
+        cx.spawn(async move |this, cx| {
+            let _ = this.update(cx, |this, cx| {
+                let now = open(this);
+                if this.chat_drafts.shown == now {
+                    return;
+                }
+                let left = match this.queued_edit.take() {
+                    Some(edit) => edit.saved,
+                    None => this.composer_draft(cx),
+                };
+                let was = std::mem::replace(&mut this.chat_drafts.shown, now.clone());
+                if !left.0.trim().is_empty() || !left.1.is_empty() {
+                    this.chat_drafts.kept.insert(was, left);
+                }
+                let draft = this.chat_drafts.kept.remove(&now).unwrap_or_default();
+                this.set_composer_draft(draft, cx);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// Editing puts a queued message's text and attachments in the composer, setting the draft
+    /// aside.
     fn edit_queued(&mut self, id: &str, cx: &mut Context<Self>) {
         let Some(thread) = &self.thread else {
             return;
         };
-        let Some(text) = thread
-            .messages
-            .iter()
-            .find(|m| m.queued && m.id == id)
-            .map(|m| m.text.clone())
-        else {
+        let Some(message) = thread.messages.iter().find(|m| m.queued && m.id == id) else {
             return;
         };
+        let draft = (message.text.clone(), message.attachments.clone());
         self.queued_edit = Some(QueuedEdit {
             chat: thread.id.clone(),
             id: id.to_string(),
-            saved: self.composer_text(cx),
+            saved: self.composer_draft(cx),
         });
-        self.set_composer_text(&text, cx);
+        self.set_composer_draft(draft, cx);
         cx.notify();
     }
 
     /// Alt+Up in an empty composer edits the latest queued message.
     pub fn edit_latest_queued(&mut self, cx: &mut Context<Self>) {
-        if self.queued_edit.is_some() || !self.composer_text(cx).trim().is_empty() {
+        let (text, attachments) = self.composer_draft(cx);
+        if self.queued_edit.is_some() || !text.trim().is_empty() || !attachments.is_empty() {
             return;
         }
         if let Some(id) = self.queued().last().map(|m| m.id.clone()) {
@@ -78,27 +122,27 @@ impl Workspace {
     /// Puts back the draft the edit set aside.
     fn cancel_queued_edit(&mut self, cx: &mut Context<Self>) {
         if let Some(edit) = self.queued_edit.take() {
-            self.set_composer_text(&edit.saved, cx);
+            self.set_composer_draft(edit.saved, cx);
             cx.notify();
         }
     }
 
-    /// Sends the composer's text as the edited queued message's new text. Its attachments stay.
-    pub fn update_queued(&mut self, text: String, cx: &mut Context<Self>) {
+    /// Saves what the composer holds as the edited queued message: its text, and its attachments
+    /// as they now are. The draft the edit set aside comes back.
+    pub fn update_queued(&mut self, cx: &mut Context<Self>) {
+        let (text, attachments) = self.composer_draft(cx);
+        let text = text.trim().to_string();
+        if text.is_empty() && attachments.is_empty() {
+            return;
+        }
         let Some(edit) = self.queued_edit.take() else {
             return;
         };
-        let attachments = self
-            .thread
-            .as_ref()
-            .and_then(|t| t.messages.iter().find(|m| m.id == edit.id))
-            .map(|m| m.attachments.clone())
-            .unwrap_or_default();
         match self
             .server
             .edit_queued(&edit.chat, &edit.id, text, attachments)
         {
-            Ok(()) => self.set_composer_text(&edit.saved, cx),
+            Ok(()) => self.set_composer_draft(edit.saved, cx),
             Err(e) => {
                 self.error = Some(e.to_string());
                 self.queued_edit = Some(edit);
@@ -177,30 +221,39 @@ impl Workspace {
     }
 
     /// A queued message can be sent while it is being edited: the agent took it, or it was
-    /// steered. What was typed stays in the composer as an ordinary draft, after the draft the
-    /// edit had set aside. Leaving the chat drops the edit and puts the draft back.
+    /// steered. What was typed and attached stays in the composer as an ordinary draft, after the
+    /// draft the edit had set aside. Leaving the chat drops the edit, as `sync_chat_draft` does.
     fn settle_queued_edit(&mut self, cx: &mut Context<Self>) {
         let Some(edit) = &self.queued_edit else {
             return;
         };
         let open = self.thread.as_ref().map(|t| t.id.as_str());
-        let left = open != Some(edit.chat.as_str());
-        if !left && self.queued().iter().any(|m| m.id == edit.id) {
+        if open != Some(edit.chat.as_str()) || self.queued().iter().any(|m| m.id == edit.id) {
             return;
         }
         // Deferred: the composer is not changed while the chat is drawn.
         cx.spawn(async move |this, cx| {
             let _ = this.update(cx, |this, cx| {
-                let Some(edit) = this.queued_edit.take() else {
+                let open = this.thread.as_ref().map(|t| t.id.as_str());
+                let Some(edit) = this
+                    .queued_edit
+                    .take_if(|edit| open == Some(edit.chat.as_str()))
+                else {
                     return;
                 };
-                let typed = this.composer_text(cx);
-                let text = if left || edit.saved.trim().is_empty() {
-                    if left { edit.saved } else { typed }
+                let (typed, attached) = this.composer_draft(cx);
+                let (mut text, mut attachments) = edit.saved;
+                if text.trim().is_empty() {
+                    text = typed;
                 } else {
-                    format!("{}\n\n{typed}", edit.saved)
-                };
-                this.set_composer_text(&text, cx);
+                    text = format!("{text}\n\n{typed}");
+                }
+                for attachment in attached {
+                    if !attachments.iter().any(|a| a.path == attachment.path) {
+                        attachments.push(attachment);
+                    }
+                }
+                this.set_composer_draft((text, attachments), cx);
                 cx.notify();
             });
         })
@@ -208,14 +261,9 @@ impl Workspace {
     }
 }
 
-fn icon_action(
-    id: &'static str,
-    label: &'static str,
-    name: &'static str,
-    t: &Theme,
-) -> Stateful<Div> {
+fn icon_action(id: String, label: &'static str, name: &'static str, t: &Theme) -> Stateful<Div> {
     let (fg, hover) = (t.text, t.bg_hover);
-    button(id, label)
+    button(SharedString::from(id), label)
         .flex_none()
         .size(px(24.))
         .justify_center()
@@ -225,7 +273,110 @@ fn icon_action(
         .child(icon(name, 13.))
 }
 
-/// The queued strip, over the composer, while the chat has queued messages.
+/// One queued message: its text, and the buttons to edit it, steer with it, or take it back.
+/// `first` is the one Ctrl+Enter steers with, which shows its Steer button pressed.
+fn queued_row(
+    w: &Workspace,
+    m: &Message,
+    first: bool,
+    working: bool,
+    t: &Theme,
+    cx: &mut Context<Workspace>,
+) -> Stateful<Div> {
+    let hover = t.bg_hover;
+    let text = if m.text.is_empty() {
+        "Attachments only".to_string()
+    } else {
+        m.text.clone()
+    };
+    let editing = w.queued_edit.as_ref().map(|e| e.id.as_str());
+    let edit_tip = if editing == Some(m.id.as_str()) {
+        "Editing this queued message"
+    } else {
+        "Edit queued message"
+    };
+    let edit = icon_action(
+        format!("queue-edit-{}", m.id),
+        "Edit queued message",
+        "pencil-simple",
+        t,
+    )
+    .tooltip(tooltip(edit_tip));
+    let edit = if editing.is_none() {
+        let id = m.id.clone();
+        edit.on_click(cx.listener(move |w, _, _, cx| w.edit_queued(&id, cx)))
+    } else {
+        edit.opacity(0.4).cursor_default()
+    };
+    let steer = button(
+        SharedString::from(format!("queue-steer-{}", m.id)),
+        "Steer queued message",
+    )
+    .tooltip(tooltip("Send this queued message as a steer"))
+    .flex_none()
+    .h(px(24.))
+    .gap(px(4.))
+    .px(px(6.))
+    .rounded(px(RADIUS_SM))
+    .border_1()
+    .text_size(px(FS_XS))
+    .text_color(t.accent_text)
+    .child(icon("arrow-right", 13.))
+    .child("Steer");
+    let steer = if first && w.steer_pressed {
+        steer.border_color(t.border).bg(hover)
+    } else {
+        steer.border_color(gpui::transparent_black())
+    };
+    let steer = if working {
+        let id = m.id.clone();
+        let border = t.border;
+        steer
+            .hover(move |s| s.border_color(border).bg(hover))
+            .on_click(cx.listener(move |w, _, _, cx| w.steer_queued(&id, cx)))
+    } else {
+        steer
+            .opacity(0.4)
+            .text_color(t.text_subtle)
+            .cursor_default()
+    };
+    let id = m.id.clone();
+    let remove = icon_action(
+        format!("queue-remove-{}", m.id),
+        "Remove queued message",
+        "x",
+        t,
+    )
+    .tooltip(tooltip("Remove queued message"))
+    .on_click(cx.listener(move |w, _, _, cx| w.remove_queued(&id, cx)));
+    div()
+        .id(SharedString::from(format!("queued-{}", m.id)))
+        .role(Role::ListItem)
+        .flex()
+        .min_w_0()
+        .items_center()
+        .gap(px(8.))
+        .border_t_1()
+        .border_color(t.border)
+        .px(px(10.))
+        .py(px(6.))
+        .child(
+            div()
+                .id(SharedString::from(format!("queued-text-{}", m.id)))
+                .tooltip(tooltip(text.clone()))
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .text_color(t.text)
+                .child(text),
+        )
+        .child(edit)
+        .child(steer)
+        .child(remove)
+}
+
+/// The queued strip, over the composer, while the chat has queued messages: a row for each,
+/// oldest first, which is the order they are sent in.
 pub fn queued_strip(
     w: &mut Workspace,
     t: &Theme,
@@ -233,18 +384,25 @@ pub fn queued_strip(
 ) -> Option<Stateful<Div>> {
     w.settle_queued_edit(cx);
     let thread = w.thread.as_ref()?;
-    let first = thread.messages.iter().find(|m| m.queued)?;
+    let queued = w.queued();
+    if queued.is_empty() {
+        return None;
+    }
     let working = is_working(thread);
     let open = w.queue_open;
-    let editing = w.queued_edit.as_ref().map(|e| e.id.clone());
-    let (muted, fg, hover) = (t.text_muted, t.text, t.bg_hover);
-    let text = if first.text.is_empty() {
-        "Attachments only".to_string()
+    let editing = w.queued_edit.is_some();
+    let (muted, fg) = (t.text_muted, t.text);
+    let title = if queued.len() == 1 {
+        "QUEUED MESSAGE".to_string()
     } else {
-        first.text.clone()
+        format!("{} QUEUED MESSAGES", queued.len())
     };
-    let id = first.id.clone();
-    let toggle = button("queue-toggle", "Queued message")
+    let rows: Vec<Stateful<Div>> = queued
+        .iter()
+        .enumerate()
+        .map(|(i, m)| queued_row(w, m, i == 0, working, t, cx))
+        .collect();
+    let toggle = button("queue-toggle", "Queued messages")
         .aria_expanded(open)
         .flex_1()
         .min_w_0()
@@ -260,7 +418,7 @@ pub fn queued_strip(
             div()
                 .text_size(px(FS_XS))
                 .font_weight(FontWeight::SEMIBOLD)
-                .child("QUEUED MESSAGE"),
+                .child(title),
         )
         .child(
             icon(if open { "caret-down" } else { "caret-right" }, 12.)
@@ -276,7 +434,7 @@ pub fn queued_strip(
         .flex_none()
         .items_center()
         .gap(px(8.))
-        .when(editing.is_some(), |d| {
+        .when(editing, |d| {
             d.child(
                 strip_action("queue-cancel-edit", "Cancel edit", t)
                     .on_click(cx.listener(|w, _, _, cx| w.cancel_queued_edit(cx))),
@@ -288,78 +446,6 @@ pub fn queued_strip(
                     .on_click(cx.listener(|w, _, _, cx| w.resume_queued(cx))),
             )
         });
-    let can_edit = editing.is_none();
-    let edit_tip = if editing.as_deref() == Some(id.as_str()) {
-        "Editing this queued message"
-    } else {
-        "Edit queued message"
-    };
-    let pressed = w.steer_pressed;
-    let row = div()
-        .flex()
-        .min_w_0()
-        .items_center()
-        .gap(px(8.))
-        .border_t_1()
-        .border_color(t.border)
-        .px(px(10.))
-        .py(px(6.))
-        .child(
-            div()
-                .id("queued-text")
-                .tooltip(tooltip(text.clone()))
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .text_color(t.text)
-                .child(text),
-        )
-        .child({
-            let edit = icon_action("queue-edit", "Edit queued message", "pencil-simple", t)
-                .tooltip(tooltip(edit_tip));
-            if can_edit {
-                let id = id.clone();
-                edit.on_click(cx.listener(move |w, _, _, cx| w.edit_queued(&id, cx)))
-            } else {
-                edit.opacity(0.4).cursor_default()
-            }
-        })
-        .child({
-            let steer = button("queue-steer", "Steer queued message")
-                .tooltip(tooltip("Send this queued message as a steer"))
-                .flex_none()
-                .h(px(24.))
-                .gap(px(4.))
-                .px(px(6.))
-                .rounded(px(RADIUS_SM))
-                .border_1()
-                .text_size(px(FS_XS))
-                .text_color(t.accent_text)
-                .child(icon("arrow-right", 13.))
-                .child("Steer");
-            let steer = if pressed {
-                steer.border_color(t.border).bg(hover)
-            } else {
-                steer.border_color(gpui::transparent_black())
-            };
-            if working {
-                let id = id.clone();
-                let border = t.border;
-                steer
-                    .hover(move |s| s.border_color(border).bg(hover))
-                    .on_click(cx.listener(move |w, _, _, cx| w.steer_queued(&id, cx)))
-            } else {
-                steer
-                    .opacity(0.4)
-                    .text_color(t.text_subtle)
-                    .cursor_default()
-            }
-        })
-        .child(
-            icon_action("queue-remove", "Remove queued message", "x", t)
-                .tooltip(tooltip("Remove queued message"))
-                .on_click(cx.listener(move |w, _, _, cx| w.remove_queued(&id, cx))),
-        );
     Some(
         div()
             .id("queued")
@@ -386,6 +472,17 @@ pub fn queued_strip(
                     .child(toggle)
                     .child(actions),
             )
-            .when(open, |d| d.child(row)),
+            .when(open, |d| {
+                d.child(
+                    div()
+                        .id("queued-rows")
+                        .role(Role::List)
+                        .aria_label("Queued messages")
+                        // About four rows, then the list scrolls.
+                        .max_h(px(148.))
+                        .overflow_y_scroll()
+                        .children(rows),
+                )
+            }),
     )
 }

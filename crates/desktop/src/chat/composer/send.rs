@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use gpui::{AppContext as _, ClipboardEntry, Context, Focusable, PathPromptOptions, Window};
+use gpui::{App, AppContext as _, ClipboardEntry, Context, Focusable, PathPromptOptions, Window};
 use patchwork_server::Server;
 use patchwork_server::threads::{Attachment, GoalStatus, NewThread};
 use crate::workspace::{Workspace, is_working};
@@ -38,8 +38,9 @@ impl Composer {
             workspace.update(cx, crate::workspace::Workspace::steer_first_queued);
             return;
         }
+        // Deferred: saving the edit reads this composer, which cannot be read from in here.
         if w.editing_queued() {
-            workspace.update(cx, |w, cx| w.update_queued(text, cx));
+            cx.defer(move |cx| workspace.update(cx, Workspace::update_queued));
             return;
         }
         // With a plan ready, sending nothing implements it; anything written refines it.
@@ -107,6 +108,22 @@ impl Composer {
 
     pub fn focus(&self, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.editor.focus_handle(cx), cx);
+    }
+
+    /// What is written and attached, unsent.
+    pub fn draft(&self, cx: &App) -> (String, Vec<Attachment>) {
+        (
+            self.editor.read(cx).content.clone(),
+            self.attachments.clone(),
+        )
+    }
+
+    /// Replaces what is written and attached.
+    pub fn set_draft(&mut self, text: &str, attachments: Vec<Attachment>, cx: &mut Context<Self>) {
+        self.editor.update(cx, |e, cx| e.set_text(text, cx));
+        self.attachments = attachments;
+        self.draft_changed();
+        cx.notify();
     }
 
     /// Puts a restored message back to edit or send again, ahead of anything written since.
