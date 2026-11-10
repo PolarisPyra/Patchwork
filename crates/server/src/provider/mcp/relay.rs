@@ -31,6 +31,15 @@ pub fn set_hook_handler(handler: HookHandler) {
     let _ = HOOK_HANDLER.set(handler);
 }
 
+/// Shows the app's window, for a second launch of the app (see `crate::system::instance`).
+type RaiseHandler = Box<dyn Fn() + Send + Sync>;
+static RAISE_HANDLER: OnceLock<RaiseHandler> = OnceLock::new();
+
+/// Sets what shows the app's window when a second launch asks; called once by the app.
+pub fn set_raise_handler(handler: RaiseHandler) {
+    let _ = RAISE_HANDLER.set(handler);
+}
+
 /// The server Patchwork's own tools are served under, to every agent.
 pub const OWN_SERVER: &str = "patchwork";
 
@@ -110,6 +119,7 @@ pub(super) fn serve_relay() -> Result<(), Error> {
     let token = uuid::Uuid::new_v4().simple().to_string();
     let endpoint = json!({"port": port, "token": token});
     let _ = ENDPOINT.set(endpoint.clone());
+    crate::system::instance::listens(&endpoint);
     crate::system::fs::write_private(
         &crate::system::dirs().state.join(RELAY_FILE),
         &endpoint.to_string(),
@@ -136,6 +146,16 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
         return;
     };
     if hello["token"].as_str() != Some(token) {
+        return;
+    }
+    // A second launch of the app asks this one to come forward, and exits once it has.
+    if hello["raise"] == true {
+        let Some(raise) = RAISE_HANDLER.get() else {
+            return;
+        };
+        raise();
+        let mut stream = stream;
+        let _ = writeln!(stream, "raised");
         return;
     }
     // A permission hook asks once and waits for the answer.

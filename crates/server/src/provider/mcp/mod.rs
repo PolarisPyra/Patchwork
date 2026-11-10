@@ -34,7 +34,7 @@ use http::HttpServer;
 #[doc(inline)]
 pub use relay::{
     OWN_SERVER, PROXY_ARG, relay_endpoint, relay_file, run_proxy, set_hook_handler,
-    set_tool_handler,
+    set_raise_handler, set_tool_handler,
 };
 pub(crate) use relay::call_own;
 use relay::serve_relay;

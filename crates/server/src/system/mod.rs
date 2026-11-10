@@ -12,6 +12,7 @@ pub mod browse;
 pub(crate) mod dirs;
 mod environment;
 mod host;
+pub mod instance;
 pub mod fs;
 pub(crate) mod contained;
 pub(crate) mod processes;
