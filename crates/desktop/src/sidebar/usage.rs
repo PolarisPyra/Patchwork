@@ -30,6 +30,8 @@ const SHOWN_AGENTS: [AgentKind; 4] = [
     AgentKind::Antigravity,
     AgentKind::OpenCode,
 ];
+/// The height of each limit's row, and of the agent tab beside it.
+const ROW_H: f32 = 52.;
 /// How long "Up to date" stands in for the plan badge before the badge comes back.
 const UP_TO_DATE: Duration = Duration::from_millis(1200);
 
@@ -465,9 +467,8 @@ fn popover(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>) -> AnyElem
                 .child(ring(top, 34., 3., t, agent_logo(kind, None, 18.)))
         });
         let refresh = button("usage-refresh", refresh_label)
-            .mt_auto()
-            .w(px(40.))
-            .h(px(28.))
+            .size(px(28.))
+            .flex_none()
             .justify_center()
             .rounded(px(RADIUS_SM))
             .text_color(t.text_muted)
@@ -491,19 +492,24 @@ fn popover(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>) -> AnyElem
         // Every panel shares one place, so the popover keeps the tallest one's height and the
         // tabs stay put while switching.
         let panels = agents.iter().enumerate().map(|(i, &kind)| {
-            agent_usage(
+            agent_usage(kind, w.usage.entries.get(&kind), t, now)
+                .w_full()
+                .flex_none()
+                .when(i > 0, |p| p.ml(relative(-1.)))
+                .when(Some(kind) != current, gpui::Styled::invisible)
+        });
+        let header = current.map(|kind| {
+            usage_header(
                 kind,
                 w.usage.entries.get(&kind),
                 now,
                 w.usage.up_to_date == Some(kind),
+                refresh.into_any_element(),
                 t,
             )
-            .w_full()
-            .flex_none()
-            .when(i > 0, |p| p.ml(relative(-1.)))
-            .when(Some(kind) != current, gpui::Styled::invisible)
         });
-        panel
+        let body = div()
+            .flex()
             .child(
                 div()
                     .id("usage-tabs")
@@ -513,15 +519,19 @@ fn popover(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>) -> AnyElem
                     .flex_none()
                     .flex_col()
                     .items_center()
-                    .gap(px(6.))
-                    .p(px(8.))
+                    // A tab every 52px, as the limits' rows are, so each tab's ring is level
+                    // with a limit's ring.
+                    .gap(px(12.))
+                    .px(px(8.))
+                    .py(px(6.))
+                    .border_t_1()
                     .border_r_1()
                     .border_color(t.border)
                     .bg(t.bg_app.opacity(0.4))
-                    .children(tabs)
-                    .child(refresh),
+                    .children(tabs),
             )
-            .child(div().flex().min_w_0().flex_1().children(panels))
+            .child(div().flex().min_w_0().flex_1().children(panels));
+        panel.flex_col().children(header).child(body)
     };
     deferred(
         div()
@@ -536,33 +546,18 @@ fn popover(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>) -> AnyElem
     .into_any_element()
 }
 
-/// One agent's limits: its name and plan, then a ring for each limit and when it resets.
-fn agent_usage(
+/// The popover's top row: the agent being looked at, its plan or what its last refresh came to,
+/// and the refresh button.
+fn usage_header(
     kind: AgentKind,
     entry: Option<&Entry>,
     now: u64,
     up_to_date: bool,
+    refresh: AnyElement,
     t: &Theme,
-) -> gpui::Stateful<gpui::Div> {
+) -> gpui::Div {
     let usage = entry.and_then(|e| e.usage.as_ref());
-    let status = entry.and_then(|e| e.status.as_ref());
-    let ready = status.is_some_and(|s| s.installed && s.signed_in);
     let limit = limited_until(entry, now);
-    // A rate limit's error reads "trying again in about N min", which the badge counts down
-    // instead, and which is out of date once the wait is over.
-    let rate_limited = usage.is_some_and(|u| u.retry_at.is_some());
-    let note = match entry {
-        None => Some("Loading…".to_string()),
-        Some(_) if !ready => Some(describe_agent(status)),
-        Some(_) if rate_limited => None,
-        Some(_) => usage.and_then(|u| {
-            u.error.clone().or_else(|| {
-                u.windows
-                    .is_empty()
-                    .then(|| "No limits reported".to_string())
-            })
-        }),
-    };
     let badge = if let Some(at) = limit {
         Some(
             div()
@@ -604,14 +599,64 @@ fn agent_usage(
             .and_then(|u| u.plan.clone())
             .map(|plan| crate::ui::badge(plan, t).into_any_element())
     };
+    div()
+        .flex()
+        .flex_none()
+        .h(px(44.))
+        .items_center()
+        .gap(px(8.))
+        .pl(px(14.))
+        .pr(px(8.))
+        .child(
+            div()
+                .min_w_0()
+                .truncate()
+                .font_weight(FontWeight::SEMIBOLD)
+                .child(agent_label(kind)),
+        )
+        .children(badge)
+        .child(div().flex_1())
+        .child(refresh)
+}
+
+/// One agent's limits: a ring for each limit and when it resets.
+fn agent_usage(
+    kind: AgentKind,
+    entry: Option<&Entry>,
+    t: &Theme,
+    now: u64,
+) -> gpui::Stateful<gpui::Div> {
+    let usage = entry.and_then(|e| e.usage.as_ref());
+    let status = entry.and_then(|e| e.status.as_ref());
+    let ready = status.is_some_and(|s| s.installed && s.signed_in);
+    // A rate limit's error reads "trying again in about N min", which the badge counts down
+    // instead, and which is out of date once the wait is over.
+    let rate_limited = usage.is_some_and(|u| u.retry_at.is_some());
+    let note = match entry {
+        None => Some("Loading…".to_string()),
+        Some(_) if !ready => Some(describe_agent(status)),
+        Some(_) if rate_limited => None,
+        Some(_) => usage.and_then(|u| {
+            u.error.clone().or_else(|| {
+                u.windows
+                    .is_empty()
+                    .then(|| "No limits reported".to_string())
+            })
+        }),
+    };
     let windows = usage.into_iter().flat_map(|u| &u.windows).map(|w| {
         div()
             .flex()
+            .flex_none()
+            .h(px(ROW_H))
             .items_center()
-            .gap(px(8.))
+            .gap(px(12.))
+            .px(px(14.))
+            .border_t_1()
+            .border_color(t.border)
             .child(ring(
                 Some(w.used_percent),
-                42.,
+                40.,
                 3.5,
                 t,
                 div()
@@ -623,7 +668,9 @@ fn agent_usage(
                 div()
                     .flex()
                     .flex_col()
+                    .flex_1()
                     .min_w_0()
+                    .gap(px(1.))
                     .child(div().truncate().text_size(px(FS_SM)).child(w.label.clone()))
                     .children(w.resets_at.map(|at| {
                         div()
@@ -644,28 +691,12 @@ fn agent_usage(
         .flex()
         .flex_col()
         .min_w_0()
-        .gap(px(10.))
-        .p(px(10.))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .pb(px(10.))
-                .border_b_1()
-                .border_color(t.border)
-                .child(
-                    div()
-                        .min_w_0()
-                        .flex_1()
-                        .truncate()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child(agent_label(kind)),
-                )
-                .children(badge),
-        )
         .children(note.map(|note| {
             div()
+                .px(px(14.))
+                .py(px(12.))
+                .border_t_1()
+                .border_color(t.border)
                 .text_size(px(FS_SM))
                 .text_color(t.text_muted)
                 .child(note)
