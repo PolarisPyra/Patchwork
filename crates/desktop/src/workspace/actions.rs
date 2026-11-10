@@ -74,6 +74,9 @@ impl Workspace {
                 cx.refresh_windows();
             }
             crate::settings::SettingsEvent::ThreadsChanged => this.reload(cx),
+            crate::settings::SettingsEvent::RestartToUpdate => {
+                super::updates::restart_to_update(&this.server, window, cx);
+            }
             crate::settings::SettingsEvent::Closed => {
                 this.settings_dialog = None;
                 window.focus(&this.focus, cx);

@@ -28,6 +28,7 @@ pub mod skills;
 pub mod system;
 pub mod terminal;
 pub mod threads;
+pub mod updates;
 pub mod usage;
 pub mod watch;
 pub mod workspace;
@@ -69,6 +70,8 @@ pub struct Server {
     pub terminals: terminal::Terminals,
     /// Secret requests waiting for the user.
     secrets: secrets::Waiters,
+    /// Where updating the app stands.
+    updates: updates::Updates,
 }
 
 impl std::fmt::Debug for Server {
@@ -117,6 +120,7 @@ impl Server {
             agents,
             terminals: terminal::Terminals::default(),
             secrets: secrets::Waiters::default(),
+            updates: updates::Updates::default(),
         });
         server.purge_removed_backgrounds();
         let weak = Arc::downgrade(&server);

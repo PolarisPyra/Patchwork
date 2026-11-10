@@ -1,85 +1,54 @@
-//! Settings → Updates: the running version, how often to look for a
-//! new one, and the notes of the newest releases. Installing updates is the desktop package's
-//! job, so this window says it can't, as a copy without the updater does; checking still says
-//! whether a newer release is out and links to it.
+//! Settings → Updates: the running version, where updating stands and the action that moves it
+//! on, how often to look for a new version, and the notes of the newest releases.
 
 // Rust guideline compliant 2026-10-09
 
 use std::collections::HashSet;
-use std::sync::OnceLock;
-use std::time::Duration;
+use std::sync::{Arc, OnceLock};
 
-use gpui::{AnyElement, FontWeight, SharedString, div, prelude::*, px};
+use gpui::{AnyElement, FontWeight, Role, SharedString, div, prelude::*, px};
+use patchwork_server::updates::{RELEASES_URL, UpdateState, UpdateStatus};
 
 use crate::chat::markdown::markdown;
-use crate::settings::SettingsDialog;
 use crate::settings::controls::{minutes_stepper, token_row};
+use crate::settings::{SettingsDialog, SettingsEvent};
 use crate::ui::theme::{FS_SM, theme};
 use crate::ui::{BtnKind, btn, button, icon};
-
-const LATEST_RELEASE: &str =
-    "https://github.com/PolarisPyra/Patchwork/releases/latest/download/latest.json";
-const RELEASES_URL: &str = "https://github.com/PolarisPyra/Patchwork/releases/latest";
-
-/// Where checking stands (`UpdateState`), less the states only an installing copy reaches.
-#[derive(Clone, Default)]
-enum Check {
-    #[default]
-    Idle,
-    Checking,
-    UpToDate,
-    /// A newer release, or an older one when the running version was withdrawn, and its notes.
-    Available {
-        version: String,
-        notes: Option<String>,
-    },
-    Failed(String),
-}
 
 /// The releases opened, by version; None until the pane first draws, which opens the newest.
 #[derive(Default)]
 pub struct UpdatesState {
     open: Option<HashSet<String>>,
-    check: Check,
 }
 
-/// Asks GitHub for the latest release and compares it with the running version. Blocks.
-fn check_latest() -> Check {
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(30)))
-        .user_agent(format!("Patchwork/{}", patchwork_server::VERSION))
-        .build()
-        .into();
-    let release = match agent.get(LATEST_RELEASE).call() {
-        Ok(mut response) => match response.body_mut().read_json::<serde_json::Value>() {
-            Ok(release) => release,
-            Err(e) => {
-                return Check::Failed(format!("The update server sent an unreadable release:{e}"));
-            }
-        },
-        Err(e) => return Check::Failed(format!("Could not reach the update server: {e}")),
-    };
-    let version = release["tag_name"]
-        .as_str()
-        .unwrap_or_default()
-        .trim_start_matches('v')
-        .to_string();
-    let current = patchwork_server::VERSION;
-    let parts = |v: &str| -> Option<Vec<u64>> { v.split('.').map(|p| p.parse().ok()).collect() };
-    let newer = matches!((parts(&version), parts(current)), (Some(a), Some(b)) if a > b);
-    let withdrawn = release["withdrawn"].as_array().is_some_and(|tags| {
-        tags.iter()
-            .filter_map(|tag| tag.as_str())
-            .any(|tag| tag.trim_start_matches('v') == current)
-    });
-    if !newer && !withdrawn {
-        return Check::UpToDate;
+/// Where updating stands, in one line.
+fn status_text(status: &UpdateStatus) -> String {
+    match &status.state {
+        UpdateState::Idle if status.can_install => "Updates install on their own".into(),
+        UpdateState::Idle => "This copy can't install updates".into(),
+        UpdateState::Checking => "Checking for updates…".into(),
+        UpdateState::UpToDate => "Up to date".into(),
+        UpdateState::Available { version } => format!("Patchwork {version} is available"),
+        UpdateState::Downloading {
+            version,
+            downloaded,
+            total,
+        } => {
+            let progress = match total {
+                Some(total) if *total > 0 => format!("{}%", downloaded * 100 / total),
+                // Tenths of a MiB.
+                Some(_) | None => {
+                    let tenths = (downloaded * 10) >> 20;
+                    format!("{}.{} MB", tenths / 10, tenths % 10)
+                }
+            };
+            format!("Downloading Patchwork {version} · {progress}")
+        }
+        UpdateState::Ready { version } => {
+            format!("Patchwork {version} is installed. Restart to use it.")
+        }
+        UpdateState::Failed { message } => message.clone(),
     }
-    let notes = release["body"]
-        .as_str()
-        .filter(|body| !body.trim().is_empty())
-        .map(release_notes);
-    Check::Available { version, notes }
 }
 
 /// A release's section of CHANGELOG.md, its `## [0.2.0] - 2026-01-02` heading read as
@@ -94,24 +63,6 @@ fn release_notes(section: &str) -> String {
     }
 }
 
-impl SettingsDialog {
-    fn check_for_updates(&mut self, cx: &mut Context<Self>) {
-        self.updates.check = Check::Checking;
-        cx.notify();
-        let task = cx.background_spawn(async move { check_latest() });
-        cx.spawn(async move |this, cx| {
-            let check = task.await;
-            this.update(cx, |this, cx| {
-                if let Check::Failed(e) = &check {
-                    log::warn!(error:% = e; "update check failed: {{error}}");
-                }
-                this.updates.check = check;
-                cx.notify();
-            })
-        })
-        .detach();
-    }
-}
 struct Release {
     version: String,
     date: String,
@@ -196,37 +147,50 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             })
     });
     let list: Vec<_> = list.collect();
-    let check = d.updates.check.clone();
-    let status = match &check {
-        Check::Idle => "This copy can't install updates".to_string(),
-        Check::Checking => "Checking for updates…".to_string(),
-        Check::UpToDate => "Up to date".to_string(),
-        Check::Available { version, .. } => format!("Patchwork {version} is available"),
-        Check::Failed(e) => e.clone(),
+    let status = d.server.update_status();
+    let failed = matches!(status.state, UpdateState::Failed { .. });
+    let action = match &status.state {
+        UpdateState::Ready { .. } => btn(
+            "update-action",
+            "Restart to update",
+            BtnKind::Plain,
+            false,
+            &t,
+        )
+        .child("Restart to update")
+        .on_click(cx.listener(|_, _, _, cx| cx.emit(SettingsEvent::RestartToUpdate))),
+        UpdateState::Available { .. } => {
+            btn("update-action", "Download", BtnKind::Plain, false, &t)
+                .child("Download")
+                .on_click(|_, _, cx| cx.open_url(RELEASES_URL))
+        }
+        UpdateState::Idle
+        | UpdateState::Checking
+        | UpdateState::UpToDate
+        | UpdateState::Downloading { .. }
+        | UpdateState::Failed { .. } => {
+            let working = matches!(
+                status.state,
+                UpdateState::Checking | UpdateState::Downloading { .. }
+            );
+            let label = if status.state == UpdateState::Checking {
+                "Checking…"
+            } else {
+                "Check for updates"
+            };
+            btn("update-action", label, BtnKind::Plain, working, &t)
+                .child(label)
+                .when(!working, |b| {
+                    b.on_click(cx.listener(|d, _, _, _| Arc::clone(&d.server).check_for_updates()))
+                })
+        }
     };
-    let action = if let Check::Available { .. } = &check {
-        btn("update-action", "Download", BtnKind::Plain, false, &t)
-            .child("Download")
-            .on_click(|_, _, cx| cx.open_url(RELEASES_URL))
-    } else {
-        let checking = matches!(check, Check::Checking);
-        let label = if checking {
-            "Checking…"
-        } else {
-            "Check for updates"
-        };
-        btn("update-action", label, BtnKind::Plain, checking, &t)
-            .child(label)
-            .when(!checking, |b| {
-                b.on_click(cx.listener(|d, _, _, cx| d.check_for_updates(cx)))
-            })
-    };
-    let notes = match &check {
-        Check::Available {
-            notes: Some(notes), ..
-        } => Some(notes.clone()),
-        _ => None,
-    };
+    // The newer release's notes, which an up-to-date copy has no use for.
+    let notes = status
+        .notes
+        .as_deref()
+        .filter(|_| status.state != UpdateState::UpToDate)
+        .map(release_notes);
     div()
         .flex()
         .flex_col()
@@ -249,13 +213,11 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                         )
                         .child(
                             div()
+                                .id("update-status")
+                                .role(if failed { Role::Alert } else { Role::Status })
                                 .text_size(px(FS_SM))
-                                .text_color(if matches!(check, Check::Failed(_)) {
-                                    t.danger
-                                } else {
-                                    t.text_muted
-                                })
-                                .child(status),
+                                .text_color(if failed { t.danger } else { t.text_muted })
+                                .child(status_text(&status)),
                         ),
                 )
                 .child(action),

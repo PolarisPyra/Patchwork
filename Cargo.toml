@@ -32,6 +32,7 @@ keyring = { version = "3", default-features = false }
 libc = { version = "0.2", default-features = false }
 log = { version = "0.4", default-features = false, features = ["kv"] }
 mimalloc = { version = "0.1", default-features = false }
+minisign-verify = { version = "0.3", default-features = false }
 notify = { version = "8", default-features = false }
 portable-pty = { version = "0.9", default-features = false }
 pulldown-cmark = { version = "0.13", default-features = false }

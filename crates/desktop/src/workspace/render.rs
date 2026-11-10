@@ -134,6 +134,7 @@ impl Render for Workspace {
                     ),
             )
             .children(error)
+            .children(self.update_card(&t, cx))
             .child(
                 self.status_region.clone().cached(
                     StyleRefinement::default()

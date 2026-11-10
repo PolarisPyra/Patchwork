@@ -16,5 +16,6 @@ mod region;
 mod render;
 mod state;
 mod threads;
+mod updates;
 
 pub use state::{SIDEBAR_MAX, SIDEBAR_MIN, SIDEBAR_WIDTH, View, Workspace, is_busy, is_working};

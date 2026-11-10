@@ -42,6 +42,8 @@ enigo = { workspace = true, default-features = true }
 image = { workspace = true, features = ["png", "jpeg", "webp"] }
 # Chat background pictures are named after a hash of their bytes, so the same one is kept once.
 sha2 = { workspace = true, default-features = true }
+# Updates: a release's download is checked against the release key's signature.
+minisign-verify = { workspace = true, default-features = true }
 
 # Screenshots. On Linux they are taken in src/screen.rs with crates the app already builds, since
 # xcap would also build PipeWire, which needs newer headers than the AppImage's build machine has.

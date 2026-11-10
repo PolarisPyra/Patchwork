@@ -30,6 +30,8 @@ pub enum SettingsEvent {
     Changed,
     /// Threads were added or removed; the workspace lists them again.
     ThreadsChanged,
+    /// The user asked to restart into the installed update.
+    RestartToUpdate,
     Closed,
 }
 

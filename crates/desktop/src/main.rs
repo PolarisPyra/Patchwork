@@ -258,6 +258,12 @@ fn main() {
         }
     };
     start_scheduled_tasks(Arc::clone(&server));
+    // A change in where updating stands is drawn by the window, like an agent's events.
+    let (update_sender, mut update_events) = mpsc::unbounded();
+    server.on_update_change(Box::new(move || {
+        let _ = update_sender.unbounded_send(());
+    }));
+    server.start_update_checks();
 
     gpui_platform::application()
         .with_assets(assets::Assets)
@@ -318,6 +324,16 @@ fn main() {
                 while let Some(envelope) = received.next().await {
                     let applied =
                         window.update(cx, |workspace, _, cx| workspace.on_event(envelope, cx));
+                    if applied.is_err() {
+                        break;
+                    }
+                }
+            })
+            .detach();
+            cx.spawn(async move |cx| {
+                while update_events.next().await.is_some() {
+                    let applied =
+                        window.update(cx, |workspace, _, cx| workspace.on_update_change(cx));
                     if applied.is_err() {
                         break;
                     }

@@ -160,6 +160,8 @@ pub struct Workspace {
     pub(super) palette_return: Option<FocusHandle>,
     /// Settings, while open.
     pub(super) settings_dialog: Option<Entity<crate::settings::SettingsDialog>>,
+    /// The version whose update card the user closed.
+    pub(super) update_dismissed: Option<String>,
     /// The Add a project dialog, while open.
     pub(super) add_project: Option<Entity<AddProject>>,
     pub(super) background_dialog: Option<background_dialog::BackgroundDialog>,
@@ -180,6 +182,7 @@ impl Workspace {
     pub fn new(server: Arc<Server>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let settings = server.store.settings();
         let collapsed = server.collapsed_sections().into_iter().collect();
+        let update_dismissed = server.dismissed_update();
         let threads = server.list_threads();
         let folders = server.list_folders();
         let workspace = cx.entity().downgrade();
@@ -297,6 +300,7 @@ impl Workspace {
             palette: None,
             palette_return: None,
             settings_dialog: None,
+            update_dismissed,
             add_project: None,
             background_dialog: None,
             onboarding: None,
