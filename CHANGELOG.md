@@ -3,6 +3,18 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.41] - 2026-11-10
+
+### Changed
+
+- You can now queue as many messages as you like while a reply runs; before, only one could wait. The strip above the chat box shows a row for each, oldest first, with its own Edit, Steer and Remove buttons, and they are all sent together when the reply ends.
+- Each chat now keeps its own unsent message. Opening another chat, or starting a new one, no longer carries over what you were writing: the chat box shows that chat's own text and attachments, and yours are back when you return.
+
+### Fixed
+
+- Patchwork no longer closes when you save an edit to a queued message, or press Alt+Up to edit the latest one. Editing a queued message now also brings its attachments into the chat box, so you can add or remove pictures and files before saving.
+- Editing a queued message no longer fails with "That message has already been promoted" when the message was queued before the reply now running started, such as after pressing Stop or restarting Patchwork. The Steer button on such a message works too.
+
 ## [26.11.40] - 2026-11-10
 
 ### Fixed
