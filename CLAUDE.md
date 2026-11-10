@@ -102,10 +102,14 @@ Measure lag in a debug build you started:
 
 ## Git
 
-- Don't commit until I've reviewed the change and say so. Don't push unless I ask, every time: a commit I asked for is not a push, so leave the work committed on my machine and say it is unpushed.
-- "Push to git", or just "push", is that ask, and it covers the whole job: stage and commit anything uncommitted, with its `Changelog:` paragraph, then push the branch to its remote. Don't ask me again, and don't wait for the review first. Say what went up and whether anything was left out; if there was nothing to commit or push, say that instead.
-- One plain push is all it means. Force-pushing, pushing or moving a tag, rewriting pushed history, and pushing a branch I did not name are each their own request, so never fold one into "push".
-- Never change the version or tag a release unless I ask.
+- Don't commit until I've reviewed the change and say so, and don't push until I ask.
+- "Push to git", or just "push", means ship a release, and covers the whole job without asking again or waiting for review:
+  1. Stage and commit anything uncommitted, with its `Changelog:` paragraph.
+  2. Cut the next version by `docs/release.md`: the CalVer number from the newest tag (the next N this month, 0 in a new month), its `CHANGELOG.md` section from the `Changelog:` paragraphs since that tag, `[workspace.package] version` in `Cargo.toml` with `cargo check` so `Cargo.lock` follows, committed as "Release vYY.M.N" with `Changelog: none`.
+  3. Tag it `vYY.M.N` and push the branch and the tag.
+
+  Say what went up and the version. If nothing changed since the last tag, say so and don't release.
+- Force-pushing, moving or deleting a pushed tag, and rewriting pushed history still need their own ask.
 - Commit subjects are short, sentence-case, and imperative, with no prefix. Describe the user-visible change, for example "Nudge the header project dropdown 2px left".
 - `CHANGELOG.md` is user-facing: the app shows it in Settings → Updates. Every commit that changes the app needs a paragraph in its message starting with `Changelog:` and its group (Added, Changed, Fixed, Removed, or Security), written for users by the rules in `docs/changelog-style.md`: what they see or can do now, where, and what is different, for example "Changelog: Changed: Every loading indicator now uses the steady spinner from the thread list: plan steps, background tasks, … The old one rotated and looked like it shook." A change users can't notice gets `Changelog: none`, and so does a follow-up to a change that hasn't been released yet. The `commit-msg` hook (`git config core.hooksPath scripts/hooks`) enforces both; if it turns a commit down, fix the message rather than bypassing the hook.
 - Keep internal CI and tooling changes out of the changelog. Commit them separately from app changes, so they only touch `.github/`, `scripts/`, `docs/`, or `*.md`, which need no `Changelog:` paragraph. If an internal change has to touch app files, write `Changelog: none`.
