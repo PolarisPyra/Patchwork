@@ -39,6 +39,7 @@ Native desktop app in Rust: the UI is drawn with GPUI, over the backend in `crat
 | Format | `cargo fmt --all` / `cargo fmt --all -- --check` |
 | Lint | `cargo clippy --workspace --all-targets -- -D warnings` |
 | Tests | `cargo test --workspace` |
+| Build the AppImage | `scripts/build.sh` |
 
 CI runs the check form of each of the last three on every push to `main`.
 
@@ -81,7 +82,7 @@ CI runs the check form of each of the last three on every push to `main`.
 
 ## Scripts
 
-- Never add scripts: no shell, Python, or other script files, and no QA checks or harnesses. Not in the repo, not in `scripts/`, and not anywhere else. Run what a task needs inline instead.
+- Never add scripts: no shell, Python, or other script files, and no QA checks or harnesses. Not in the repo, not in `scripts/`, and not anywhere else. Run what a task needs inline instead. The only scripts are `scripts/build.sh`, which builds the AppImage, and `scripts/hooks/`.
 - There is no QA harness. For a UI change, say what to look at in the app, and I check it.
 
 ## Performance checks

@@ -62,12 +62,13 @@ subscription limits, and diagrams or HTML mocks that render right in the chat.
 | Platform | Download |
 | --- | --- |
 | Linux | [`Patchwork_amd64.AppImage`](https://github.com/PolarisPyra/Patchwork/releases/latest/download/Patchwork_amd64.AppImage) |
-| Windows | [`Patchwork_x64-setup.exe`](https://github.com/PolarisPyra/Patchwork/releases/latest/download/Patchwork_x64-setup.exe) |
+| Windows | [`Patchwork_x64.exe`](https://github.com/PolarisPyra/Patchwork/releases/latest/download/Patchwork_x64.exe) |
 | macOS (Apple silicon) | [`Patchwork_aarch64.dmg`](https://github.com/PolarisPyra/Patchwork/releases/latest/download/Patchwork_aarch64.dmg) |
 
 These links always point at the latest version. On Linux, run `chmod +x Patchwork_amd64.AppImage`
-first. After that, Patchwork keeps itself up to date and checks each update's signature before
-installing it.
+first. None of them is signed with a developer certificate, so the first time, choose More info →
+Run anyway on Windows, and on macOS drag Patchwork to Applications, then Control-click it and
+choose Open. Settings → Updates says when a new version is out.
 
 ## Getting started
 

@@ -20,6 +20,14 @@ cargo run -p patchwork
 The debug build optimizes its dependencies (see the root `Cargo.toml`), so the first build takes a
 while and later ones rebuild only what changed.
 
+## Build the AppImage
+
+```sh
+scripts/build.sh
+```
+
+It writes `target/release/Patchwork_amd64.AppImage`; see [Releasing](release.md).
+
 ## Commit hook
 
 ```sh

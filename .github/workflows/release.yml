@@ -1,0 +1,189 @@
+name: Release
+
+# A pushed tag vX.Y.Z builds the Linux AppImage (scripts/build.sh), the Windows exe and the macOS
+# (Apple silicon) disk image, and publishes them as the GitHub release with CHANGELOG.md's section
+# for X.Y.Z as its notes, beside the latest.json the app's update check reads. docs/release.md
+# explains how to cut one.
+#
+# Run it by hand (Actions → Release → Run workflow) to build all three without publishing.
+#
+# Actions are pinned to commits; the comment after each names the version it was.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  RUST_TOOLCHAIN: "1.99.0"
+
+jobs:
+  # Fails before anything builds when the tag does not match the app's version or the changelog
+  # has no notes for it.
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Check the version and notes
+        if: github.ref_type == 'tag'
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          app=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          [ "$version" = "$app" ] || { echo "::error::$GITHUB_REF_NAME, but Cargo.toml says $app"; exit 1; }
+          grep -q "^## \[$version\]" CHANGELOG.md \
+            || { echo "::error::CHANGELOG.md has no section for $version"; exit 1; }
+
+  linux:
+    needs: check
+    # The oldest Ubuntu runner, so the AppImage links against an older glibc and runs on newer
+    # distributions too.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      # appimagetool is itself an AppImage; this lets it run without FUSE.
+      APPIMAGE_EXTRACT_AND_RUN: 1
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install the Linux packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y -o Acquire::Retries=3 libdbus-1-dev libfontconfig-dev \
+            libfreetype-dev libwayland-dev libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - name: Build the AppImage
+        run: scripts/build.sh
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-linux
+          path: target/release/Patchwork_amd64.AppImage
+          if-no-files-found: error
+
+  windows:
+    needs: check
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - name: Build the exe
+        shell: bash
+        run: |
+          cargo build --release -p patchwork
+          cp target/release/patchwork.exe Patchwork_x64.exe
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-windows
+          path: Patchwork_x64.exe
+          if-no-files-found: error
+
+  macos:
+    needs: check
+    # macos-15 runs on Apple silicon, so the build is native arm64.
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      # Patchwork.app holds the binary, its icon made from the logo, and the Info.plist naming
+      # them. It is signed ad hoc, not with a developer certificate.
+      - name: Build the disk image
+        run: |
+          cargo build --release -p patchwork
+          version=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          app=dmg/Patchwork.app
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" icon.iconset
+          cp target/release/patchwork "$app/Contents/MacOS/"
+          for size in 16 32 128 256 512; do
+            sips -z $size $size assets/logo.png --out icon.iconset/icon_${size}x${size}.png
+            [ $size = 512 ] || sips -z $((size * 2)) $((size * 2)) assets/logo.png \
+              --out icon.iconset/icon_${size}x${size}@2x.png
+          done
+          iconutil -c icns icon.iconset -o "$app/Contents/Resources/patchwork.icns"
+          cat > "$app/Contents/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key><string>Patchwork</string>
+            <key>CFBundleDisplayName</key><string>Patchwork</string>
+            <key>CFBundleIdentifier</key><string>dev.patchwork.ade</string>
+            <key>CFBundleExecutable</key><string>patchwork</string>
+            <key>CFBundleIconFile</key><string>patchwork</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleVersion</key><string>$version</string>
+            <key>CFBundleShortVersionString</key><string>$version</string>
+            <key>LSMinimumSystemVersion</key><string>11.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict>
+          </plist>
+          EOF
+          codesign --force --deep --sign - "$app"
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname Patchwork -srcfolder dmg -format UDZO Patchwork_aarch64.dmg
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-macos
+          path: Patchwork_aarch64.dmg
+          if-no-files-found: error
+
+  publish:
+    needs: [linux, windows, macos]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-*
+          path: release
+          merge-multiple: true
+
+      # The release stays a draft until every file is up, so it never becomes the latest with
+      # latest.json naming a file that is not there yet.
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v head="## [$version]" \
+            'index($0, head) == 1 { on = 1; print; next } on && /^## \[/ { exit } on' \
+            CHANGELOG.md > notes.md
+          cd release
+          jq -n --arg tag "$GITHUB_REF_NAME" --rawfile body ../notes.md \
+            '{tag_name: $tag, body: $body, withdrawn: [], assets: [$ARGS.positional[] | {name: .}]}' \
+            --args Patchwork_amd64.AppImage Patchwork_x64.exe Patchwork_aarch64.dmg > latest.json
+          gh release create "$GITHUB_REF_NAME" --draft --title "Patchwork $GITHUB_REF_NAME" \
+            --notes-file ../notes.md \
+            Patchwork_amd64.AppImage Patchwork_x64.exe Patchwork_aarch64.dmg latest.json
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest
