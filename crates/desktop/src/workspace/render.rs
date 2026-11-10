@@ -51,6 +51,15 @@ impl Render for Workspace {
                     window.focus_next(cx);
                 }
             }))
+            // Escape that nothing closed with it, such as a menu or a dialog, takes the focus off
+            // whatever has it: the chat box, a field, a button. Tab brings the chat box back.
+            .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, window, cx| {
+                if e.keystroke.key == "escape" && !this.focus.is_focused(window) {
+                    window.focus(&this.focus, cx);
+                    cx.stop_propagation();
+                    cx.notify();
+                }
+            }))
             .on_action(|_: &crate::FocusPrev, window, cx| window.focus_prev(cx))
             .on_action(|_: &crate::ui::selection::CopySelection, _, cx| {
                 crate::ui::selection::copy(cx);
