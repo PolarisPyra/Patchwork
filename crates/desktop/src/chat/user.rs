@@ -4,7 +4,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -24,13 +24,21 @@ use crate::workspace::{Workspace, is_working};
 const LONG_MESSAGE_CHARS: usize = 20_000;
 const PREVIEW_LINES: usize = 40;
 
-/// The long messages expanded, and the messages of the open thread whose turn can be undone.
+/// The box a sent image fits in. A smaller image shows at its own size, so it stays sharp.
+const TILE_MAX_W: f32 = 260.;
+const TILE_MAX_H: f32 = 180.;
+
+/// The long messages expanded, the messages of the open thread whose turn can be undone, and the
+/// sizes of its sent images.
 #[derive(Default)]
 pub struct UserState {
     expanded: HashSet<String>,
     /// The thread and whether it was working when its checkpoints were asked for.
     checked: Option<(String, bool)>,
     checkpoints: HashSet<String>,
+    /// Each sent image's width and height by path, once read: `None` while it is read, or if it
+    /// cannot be.
+    image_sizes: HashMap<String, Option<(u32, u32)>>,
 }
 
 /// The text with the images written into it as `![name](</path>)` taken out; they show with the
@@ -137,17 +145,30 @@ pub fn attachment_chip(id: impl Into<SharedString>, a: &Attachment, t: &Theme) -
         )
 }
 
-/// A sent image shown large, as a thumbnail; its chip if it cannot be read.
-fn attachment_tile(id: String, a: &Attachment, t: &Theme) -> AnyElement {
+/// A sent image shown large, as a thumbnail; its chip if it cannot be read. With its `size` read,
+/// it shrinks to fit the tile's box and is never enlarged; until then it is the box's height.
+fn attachment_tile(id: String, a: &Attachment, size: Option<(u32, u32)>, t: &Theme) -> AnyElement {
     let chip = attachment_chip(id.clone(), a, t);
     let fallback = std::cell::RefCell::new(Some(chip));
+    // Both sides are set: with only `max_h`, layout works the height out again from the clamped
+    // width and draws a tall image past the space measured for it.
+    let image = match size {
+        Some((width, height)) if width > 0 && height > 0 => {
+            let (width, height) = (width as f32, height as f32);
+            let scale = (TILE_MAX_W / width).min(TILE_MAX_H / height).min(1.);
+            img(PathBuf::from(&a.path))
+                .w(px((width * scale).round()))
+                .h(px((height * scale).round()))
+        }
+        _ => img(PathBuf::from(&a.path))
+            .h(px(TILE_MAX_H))
+            .max_w(px(TILE_MAX_W)),
+    };
     div()
         .id(SharedString::from(id))
         .tooltip(tooltip(a.path.clone()))
         .child(
-            img(PathBuf::from(&a.path))
-                .max_h(px(180.))
-                .max_w(px(260.))
+            image
                 .rounded(px(RADIUS))
                 .border_1()
                 .border_color(t.border)
@@ -163,6 +184,68 @@ fn attachment_tile(id: String, a: &Attachment, t: &Theme) -> AnyElement {
 }
 
 impl Workspace {
+    /// Reads the size of each image sent in the open thread off the main thread, from the file's
+    /// header, once per path. A message whose image size arrives is measured again.
+    pub fn load_image_sizes(&mut self, cx: &mut Context<Self>) {
+        let Some(thread) = self.thread.as_ref() else {
+            return;
+        };
+        let mut paths = Vec::new();
+        for m in &thread.messages {
+            for a in &m.attachments {
+                if a.kind == AttachmentKind::Image && !self.user.image_sizes.contains_key(&a.path) {
+                    self.user.image_sizes.insert(a.path.clone(), None);
+                    paths.push(a.path.clone());
+                }
+            }
+        }
+        if paths.is_empty() {
+            return;
+        }
+        let task = cx.background_spawn(async move {
+            paths
+                .into_iter()
+                .map(|path| {
+                    let size = image::image_dimensions(&path)
+                        .inspect_err(|e| {
+                            log::warn!(
+                                error:% = e;
+                                "could not read the size of a sent image: {{error}}"
+                            );
+                        })
+                        .ok();
+                    (path, size)
+                })
+                .collect::<Vec<_>>()
+        });
+        cx.spawn(async move |this, cx| {
+            let sizes = task.await;
+            let _ = this.update(cx, |this, cx| {
+                let Some(thread) = this.thread.as_ref() else {
+                    return;
+                };
+                let changed: HashSet<&str> = thread
+                    .messages
+                    .iter()
+                    .filter(|m| {
+                        m.attachments
+                            .iter()
+                            .any(|a| sizes.iter().any(|(path, _)| *path == a.path))
+                    })
+                    .map(|m| m.id.as_str())
+                    .collect();
+                for (i, row) in this.transcript_rows.1.iter().enumerate() {
+                    if changed.contains(row.id.as_str()) {
+                        this.transcript_list.remeasure_items(i..i + 1);
+                    }
+                }
+                this.user.image_sizes.extend(sizes);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
     /// Asks off the main thread which messages of the open thread can be restored, again each
     /// time a reply starts or ends.
     pub fn load_checkpoints(&mut self, cx: &mut Context<Self>) {
@@ -311,7 +394,8 @@ pub fn user_message(
             m.attachments.iter().enumerate().map(|(i, a)| {
                 let id = format!("attachment-{}-{i}", m.id);
                 if a.kind == AttachmentKind::Image {
-                    attachment_tile(id, a, t)
+                    let size = w.user.image_sizes.get(&a.path).copied().flatten();
+                    attachment_tile(id, a, size, t)
                 } else {
                     attachment_chip(id, a, t).into_any_element()
                 }
