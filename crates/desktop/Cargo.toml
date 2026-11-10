@@ -31,7 +31,6 @@ syntect.workspace = true
 # Syntax definitions for syntect beyond its own set, such as TypeScript and TOML.
 two-face = { workspace = true, features = ["syntect-onig"] }
 unicode-segmentation = { workspace = true, default-features = true }
-ureq = { workspace = true, default-features = true, features = ["json"] }
 vt100 = { workspace = true, default-features = true }
 
 [lints]

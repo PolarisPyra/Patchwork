@@ -21,7 +21,8 @@ which = { workspace = true, default-features = true }
 libc = { workspace = true, default-features = true }
 thiserror = { workspace = true, default-features = true }
 # `alias` on a variant is for reading old saved names, and the bindings don't need it.
-rusqlite = { workspace = true, default-features = true, features = ["bundled", "fallible_uint"] }
+# No statement cache: nothing calls `prepare_cached`, and it is the only default feature used here.
+rusqlite = { workspace = true, features = ["bundled", "fallible_uint"] }
 ureq = { workspace = true, default-features = true, features = ["json"] }
 # API providers: keys in the system credential store, and the agent's file search tools.
 keyring = { workspace = true, default-features = true, features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
@@ -36,7 +37,8 @@ regex = { workspace = true, default-features = true }
 # Debug log folder names and line times in local time.
 chrono = { workspace = true, features = ["clock"] }
 # Exporting the debug logs as one file to send with a bug report.
-zip = { workspace = true, features = ["deflate"] }
+# `deflate` would also build zopfli, a second compressor that only very high levels use.
+zip = { workspace = true, features = ["deflate-flate2-zlib-rs"] }
 # Computer use: a screenshot of the primary monitor, and the pointer and keyboard under it.
 enigo = { workspace = true, default-features = true }
 image = { workspace = true, features = ["png", "jpeg", "webp"] }
