@@ -172,7 +172,7 @@ pub fn windows_from_event(info: &Value) -> Vec<UsageWindow> {
 }
 
 fn windows(body: &Value) -> Vec<UsageWindow> {
-    WINDOWS
+    let mut out: Vec<UsageWindow> = WINDOWS
         .iter()
         .filter_map(|(key, label)| {
             let w = &body[*key];
@@ -182,7 +182,30 @@ fn windows(body: &Value) -> Vec<UsageWindow> {
                 resets_at: w["resets_at"].as_str().and_then(parse_rfc3339_ms),
             })
         })
-        .collect()
+        .collect();
+    // Newer models, such as Fable, have no key of their own: their weekly limit is a
+    // `weekly_scoped` entry in `limits`, named by the model it covers.
+    for limit in body["limits"].as_array().into_iter().flatten() {
+        if limit["kind"] != "weekly_scoped" {
+            continue;
+        }
+        let (Some(model), Some(used_percent)) = (
+            limit["scope"]["model"]["display_name"].as_str(),
+            limit["percent"].as_f64(),
+        ) else {
+            continue;
+        };
+        let label = format!("Weekly · {model}");
+        if out.iter().any(|w| w.label == label) {
+            continue;
+        }
+        out.push(UsageWindow {
+            label,
+            used_percent,
+            resets_at: limit["resets_at"].as_str().and_then(parse_rfc3339_ms),
+        });
+    }
+    out
 }
 
 #[cfg(test)]
