@@ -134,6 +134,29 @@ impl<'kvs> log::kv::VisitSource<'kvs> for Properties {
     }
 }
 
+/// Runs the helper the first argument names and returns its exit code, or None to open the app.
+/// Without this, every hook or relay an agent starts would open another Patchwork window.
+fn run_helper() -> Option<i32> {
+    use patchwork_server::{harness, permissions, plugins, provider};
+    let arg = std::env::args().nth(1)?;
+    let run: fn() -> i32 = match arg.as_str() {
+        // An OpenCode turn's bridge to `opencode serve`.
+        provider::opencode::bridge::BRIDGE_ARG => provider::opencode::bridge::run,
+        // An API provider's turn, run as Patchwork's own agent.
+        harness::BRIDGE_ARG => harness::run,
+        // Checks a tool call against the permission rules.
+        permissions::hook::HOOK_ARG => permissions::hook::run,
+        // Antigravity's session start, for the system prompt from Settings.
+        provider::hooks::PROMPT_ARG => provider::hooks::run_prompt_hook,
+        // A plugin's built-in hook, such as `boundedWaits`.
+        plugins::builtin::HOOK_ARG => plugins::builtin::run,
+        // Claude Code's and Codex's relay to an MCP server Patchwork runs.
+        provider::mcp::PROXY_ARG => provider::mcp::run_proxy,
+        _ => return None,
+    };
+    Some(run())
+}
+
 fn start_logging(dirs: &Dirs) {
     let folder = patchwork_server::logging::session_dir(&dirs.logs);
     let opened = std::fs::create_dir_all(&folder).and_then(|()| {
@@ -204,6 +227,10 @@ fn prewarm_fonts(cx: &App) {
 }
 
 fn main() {
+    // Agents start this binary as a helper, without the window: a hook, a relay or a bridge.
+    if let Some(code) = run_helper() {
+        std::process::exit(code);
+    }
     // The platform's folders: the XDG ones on Linux, `Library` on macOS, and `AppData` on
     // Windows, the ones earlier versions of Patchwork used.
     let (Some(config), Some(data), Some(cache)) = (
