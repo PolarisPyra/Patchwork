@@ -164,6 +164,7 @@ impl Render for Workspace {
                     .as_ref()
                     .map(|m| Menu::view(m, bars::project_menu_at())),
             )
+            .children(crate::ui::selection::menu(cx))
             .into_any_element()
     }
 }

@@ -1,5 +1,6 @@
 //! Selecting text that is only read: a drag over the chat's text marks it, across paragraphs,
-//! headings, table cells and code, and Ctrl+C copies what is marked.
+//! headings, table cells and code, and Ctrl+C copies what is marked. A double click marks a word,
+//! a triple click the whole paragraph, and a right click opens a menu to copy it.
 
 // Rust guideline compliant 2026-10-09
 
@@ -7,12 +8,13 @@ use std::collections::HashMap;
 use std::ops::Range;
 
 use gpui::{
-    App, Bounds, ClipboardItem, CursorStyle, DispatchPhase, Element, ElementId, GlobalElementId,
-    Hitbox, HitboxBehavior, InspectorElementId, IntoElement, KeyBinding, LayoutId, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString, StyledText,
-    TextLayout, Window, actions, fill, point,
+    AnyElement, App, Bounds, ClipboardItem, CursorStyle, DispatchPhase, Element, ElementId, Entity,
+    GlobalElementId, Hitbox, HitboxBehavior, InspectorElementId, IntoElement, KeyBinding, LayoutId,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString,
+    StyledText, TextLayout, Window, actions, fill, point,
 };
 
+use crate::ui::menu::{Dismissed, Menu, MenuItem};
 use crate::ui::theme::theme;
 
 actions!(selection, [CopySelection]);
@@ -42,9 +44,20 @@ struct Selection {
     dragging: bool,
     /// Where the pointer was when the drag was last worked out: every text hears each move.
     seen: Option<Point<Pixels>>,
+    /// The right-click menu, while open, and where it opened.
+    menu: Option<(Entity<Menu>, Point<Pixels>)>,
 }
 
 impl gpui::Global for Selection {}
+
+/// The right-click menu over the marked text, while it is open.
+pub fn menu(cx: &mut App) -> Option<AnyElement> {
+    let selection = cx.default_global::<Selection>();
+    selection
+        .menu
+        .as_ref()
+        .map(|(menu, at)| Menu::view(menu, *at))
+}
 
 /// Forgets the texts drawn before, as the chat is laid out again and draws the ones now on screen.
 pub fn begin_frame(cx: &mut App) {
@@ -156,13 +169,18 @@ impl Element for Selectable {
 
         let (id, hitbox) = (self.id, prepaint.clone());
         window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
-            if event.button != MouseButton::Left {
-                return;
-            }
             let selection = cx.default_global::<Selection>();
-            match phase {
-                // A press anywhere drops what was marked; the text under it then starts anew.
-                DispatchPhase::Capture => {
+            let hovered = phase == DispatchPhase::Bubble && hitbox.is_hovered(window);
+            let at = || match layout.index_for_position(event.position) {
+                Ok(at) | Err(at) => at,
+            };
+            match event.button {
+                // A press anywhere drops what was marked, unless it is on the open menu, which
+                // keeps it to copy; the text under it then starts anew.
+                MouseButton::Left if phase == DispatchPhase::Capture => {
+                    if selection.menu.is_some() {
+                        return;
+                    }
                     selection.anchor = None;
                     selection.dragging = false;
                     if !selection.marked.is_empty() {
@@ -171,15 +189,34 @@ impl Element for Selectable {
                         window.refresh();
                     }
                 }
-                DispatchPhase::Bubble if hitbox.is_hovered(window) => {
-                    let at = match layout.index_for_position(event.position) {
-                        Ok(at) | Err(at) => at,
-                    };
-                    selection.anchor = Some((id, at));
-                    selection.dragging = true;
-                    selection.seen = None;
+                MouseButton::Left if hovered => {
+                    let (at, text) = (at(), layout.text());
+                    match event.click_count {
+                        0 | 1 => {
+                            selection.anchor = Some((id, at));
+                            selection.dragging = true;
+                            selection.seen = None;
+                        }
+                        2 => selection.mark(id, word_at(&text, at), &text),
+                        _ => selection.mark(id, 0..text.len(), &text),
+                    }
+                    window.refresh();
                 }
-                DispatchPhase::Bubble => {}
+                // A right click keeps what is marked under it, or else marks the word there.
+                MouseButton::Right if hovered => {
+                    let (at, text) = (at(), layout.text());
+                    let on_marked = selection
+                        .marked
+                        .get(&id)
+                        .is_some_and(|range| range.start <= at && at <= range.end);
+                    if !on_marked {
+                        selection.anchor = None;
+                        selection.dragging = false;
+                        selection.mark(id, word_at(&text, at), &text);
+                    }
+                    open_menu(id, text, event.position, window, cx);
+                }
+                _ => {}
             }
         });
         window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
@@ -203,7 +240,79 @@ impl Element for Selectable {
     }
 }
 
+/// Opens the menu for the text `id`, whose words are `text`, at `at`.
+fn open_menu(id: u64, text: String, at: Point<Pixels>, window: &mut Window, cx: &mut App) {
+    let marked = cx.default_global::<Selection>().text.clone();
+    let mut items = Vec::new();
+    if !marked.is_empty() {
+        items.push(
+            MenuItem::new("Copy", move |_, cx| {
+                cx.write_to_clipboard(ClipboardItem::new_string(marked.clone()));
+            })
+            .icon("copy"),
+        );
+    }
+    items.push(MenuItem::new("Select paragraph", move |window, cx| {
+        cx.default_global::<Selection>()
+            .mark(id, 0..text.len(), &text);
+        window.refresh();
+    }));
+    let back = window.focused(cx);
+    let menu = Menu::open("Text", items, window, cx);
+    window
+        .subscribe(&menu, cx, move |_, _: &Dismissed, window, cx| {
+            cx.default_global::<Selection>().menu = None;
+            if let Some(back) = &back {
+                window.focus(back, cx);
+            }
+            window.refresh();
+        })
+        .detach();
+    cx.default_global::<Selection>().menu = Some((menu, at));
+    window.refresh();
+}
+
+/// The word of `text` at byte `at`, or the one character there when it is not in a word.
+fn word_at(text: &str, at: usize) -> Range<usize> {
+    let at = at.min(text.len());
+    if !text.is_char_boundary(at) {
+        return at..at;
+    }
+    let in_word = |c: char| c.is_alphanumeric() || c == '_';
+    let start = text[..at]
+        .char_indices()
+        .rev()
+        .take_while(|&(_, c)| in_word(c))
+        .last()
+        .map_or(at, |(i, _)| i);
+    let end = text[at..]
+        .char_indices()
+        .find(|&(_, c)| !in_word(c))
+        .map_or(text.len(), |(i, _)| at + i);
+    if start < end {
+        return start..end;
+    }
+    text[at..]
+        .chars()
+        .next()
+        .map_or(at..at, |c| at..at + c.len_utf8())
+}
+
 impl Selection {
+    /// Marks `range` of the one text `id`, whose words are `text`, and nothing else.
+    fn mark(&mut self, id: u64, range: Range<usize>, text: &str) {
+        self.marked.clear();
+        self.text.clear();
+        if range.start < range.end
+            && range.end <= text.len()
+            && text.is_char_boundary(range.start)
+            && text.is_char_boundary(range.end)
+        {
+            self.text = text[range.clone()].to_string();
+            self.marked.insert(id, range);
+        }
+    }
+
     /// Marks everything from where the drag began to `position`, text by text, top to bottom.
     fn drag_to(&mut self, position: Point<Pixels>) {
         let Some((anchor, anchor_at)) = self.anchor else {

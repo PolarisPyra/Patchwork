@@ -5,8 +5,8 @@
 use std::ops::Range;
 
 use gpui::{
-    Bounds, EventEmitter, FocusHandle, Hsla, KeyBinding, Pixels, Point, SharedString, Window,
-    WrappedLine, actions, point, prelude::*, px,
+    Bounds, Entity, EventEmitter, FocusHandle, Hsla, KeyBinding, Pixels, Point, SharedString,
+    Window, WrappedLine, actions, point, prelude::*, px,
 };
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -119,6 +119,8 @@ pub struct TextArea {
     /// A menu above the field has Up, Down and Tab, which go to the owner as [`Arrow`] and
     /// [`Tabbed`].
     pub menu_keys: bool,
+    /// The right-click menu, while open, and where it opened.
+    pub(super) menu: Option<(Entity<crate::ui::menu::Menu>, Point<Pixels>)>,
 }
 
 /// What a masked field draws for each character.
@@ -156,6 +158,7 @@ impl TextArea {
             enter_newline: false,
             masked: false,
             menu_keys: false,
+            menu: None,
         }
     }
 

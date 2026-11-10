@@ -50,8 +50,14 @@ impl Render for TextArea {
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
+            .on_mouse_down(MouseButton::Right, cx.listener(Self::open_menu))
             .w_full()
             .child(TextElement { area: cx.entity() })
+            .children(
+                self.menu
+                    .as_ref()
+                    .map(|(menu, at)| crate::ui::menu::Menu::view(menu, *at)),
+            )
     }
 }
 
