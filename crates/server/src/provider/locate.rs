@@ -56,6 +56,10 @@ fn fallback_dirs() -> Vec<PathBuf> {
     if let Some(appdata) = std::env::var_os("APPDATA") {
         dirs.push(PathBuf::from(appdata).join("npm"));
     }
+    // Where Codex's own installer puts its CLI on Windows.
+    if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+        dirs.push(PathBuf::from(local).join(r"Programs\OpenAI\Codex\bin"));
+    }
     // The Codex desktop app on Windows keeps its CLI in a folder named by a hash that changes
     // with each update, so every one is searched, newest first.
     if let Some(entries) = std::env::var_os("LOCALAPPDATA")

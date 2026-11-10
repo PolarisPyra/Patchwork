@@ -3,37 +3,79 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{AnyElement, Div, FontWeight, Role, Toggled, div, prelude::*, px};
+use std::sync::Arc;
+
+use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Toggled, div, prelude::*, px};
 use patchwork_server::provider::AgentKind;
 
 use super::{AGENT_KINDS, Onboarding, Probe};
 use super::rows::{choice_row, heading, key_id, picked, row_end, tick};
 use crate::ui::theme::{FS_SM, RADIUS, Theme};
-use crate::ui::{agent_label, agent_logo, badge, button, icon, spinner};
+use crate::ui::{BtnKind, agent_label, agent_logo, badge, btn, button, icon, spinner};
 
 impl Onboarding {
     /// Detects every agent at once; run again, it shows a CLI installed during setup.
     pub(super) fn check(&mut self, cx: &mut Context<Self>) {
         for kind in AGENT_KINDS {
-            self.probes.entry(kind).or_default().checking = true;
-            let task =
-                cx.background_spawn(async move { patchwork_server::provider::detect_agent(kind) });
-            cx.spawn(async move |this, cx| {
-                let status = task.await;
-                let _ = this.update(cx, |this, cx| {
-                    this.probes.insert(
-                        kind,
-                        Probe {
-                            checking: false,
-                            status: Some(status),
-                        },
-                    );
-                    this.sync_agents();
-                    cx.notify();
-                });
-            })
-            .detach();
+            self.detect(kind, cx);
         }
+    }
+
+    /// Detects one agent.
+    fn detect(&mut self, kind: AgentKind, cx: &mut Context<Self>) {
+        self.probes.entry(kind).or_default().checking = true;
+        let task =
+            cx.background_spawn(async move { patchwork_server::provider::detect_agent(kind) });
+        cx.spawn(async move |this, cx| {
+            let status = task.await;
+            let _ = this.update(cx, |this, cx| {
+                this.probes.insert(
+                    kind,
+                    Probe {
+                        checking: false,
+                        status: Some(status),
+                    },
+                );
+                this.sync_agents();
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Downloads `kind`'s CLI, then detects it again. A CLI that installs is connected once it is
+    /// ready.
+    fn install(&mut self, kind: AgentKind, cx: &mut Context<Self>) {
+        self.installing.insert(kind);
+        self.install_errors.remove(&kind);
+        let server = Arc::clone(&self.server);
+        let task = cx.background_spawn(async move { server.install_cli(kind) });
+        cx.spawn(async move |this, cx| {
+            let installed = task.await;
+            let _ = this.update(cx, |this, cx| {
+                this.installing.remove(&kind);
+                match installed {
+                    Ok(()) => {
+                        if let Some(agents) = this.agents.as_mut()
+                            && !agents.contains(&kind)
+                        {
+                            agents.push(kind);
+                        }
+                        this.detect(kind, cx);
+                    }
+                    Err(e) => {
+                        log::warn!(
+                            agent:? = kind, error:% = e;
+                            "could not install {{agent}}: {{error}}"
+                        );
+                        this.install_errors.insert(kind, e.to_string());
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
         cx.notify();
     }
 
@@ -161,7 +203,14 @@ pub fn agent_step(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) ->
             .and_then(|p| p.status.as_ref())
             .map(|s| s.detail.clone())
             .unwrap_or_default();
+        let missing = probe
+            .filter(|p| !p.checking)
+            .and_then(|p| p.status.as_ref())
+            .is_some_and(|s| !s.installed);
         let mut end = vec![status_badge(probe, t)];
+        if missing {
+            end.push(download_button(this, kind, t, cx));
+        }
         if ready {
             end.push(tick(checked, t));
         }
@@ -175,11 +224,16 @@ pub fn agent_step(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) ->
             t,
         )
         .child(row_end(end));
-        if ready {
+        let row = if ready {
             row.on_click(cx.listener(move |this, _, _, cx| this.toggle_agent(kind, cx)))
         } else {
             row
-        }
+        };
+        div().flex().flex_col().gap(px(6.)).child(row).children(
+            this.install_errors
+                .get(&kind)
+                .map(|e| install_error(kind, e, t)),
+        )
     });
     div()
         .flex()
@@ -207,6 +261,49 @@ pub fn agent_step(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) ->
             s.child(default_agent(this, &selected, t, cx))
         })
         .into_any_element()
+}
+
+/// Downloads a CLI that is not installed. While it runs, it is disabled and shows a spinner.
+fn download_button(
+    this: &Onboarding,
+    kind: AgentKind,
+    t: &Theme,
+    cx: &mut Context<Onboarding>,
+) -> AnyElement {
+    let installing = this.installing.contains(&kind);
+    let name = agent_label(kind);
+    btn(
+        key_id("setup-download", kind),
+        if installing {
+            format!("Installing {name}")
+        } else {
+            format!("Download {name}")
+        },
+        BtnKind::Plain,
+        installing,
+        t,
+    )
+    .when(installing, |b| {
+        b.role(Role::Status)
+            .child(spinner(12., t.text_muted))
+            .child("Installing…")
+    })
+    .when(!installing, |b| {
+        b.child("Download")
+            .on_click(cx.listener(move |this, _, _, cx| this.install(kind, cx)))
+    })
+    .into_any_element()
+}
+
+/// Why `kind`'s last download failed.
+fn install_error(kind: AgentKind, error: &str, t: &Theme) -> impl IntoElement {
+    div()
+        .id(key_id("setup-download-error", kind))
+        .role(Role::Alert)
+        .px(px(16.))
+        .text_size(px(FS_SM))
+        .text_color(t.danger)
+        .child(SharedString::from(error.to_string()))
 }
 
 /// Picks which connected agent new tasks start with.

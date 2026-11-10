@@ -2,7 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use gpui::{EventEmitter, FocusHandle, ScrollHandle, Window, prelude::*};
 use patchwork_server::Server;
@@ -31,7 +31,7 @@ pub(super) const STEPS: [Step; 4] = [
     Step {
         label: "Agent",
         title: "Connect your coding agents",
-        subtitle: "Connect the agents already installed on this computer. You can pick which one runs each task.",
+        subtitle: "Connect the agents on this computer, or download the ones you want. You can pick which one runs each task.",
         helper: "Connect at least one agent to start your first task.",
     },
     Step {
@@ -112,6 +112,9 @@ pub struct Onboarding {
     pub(super) reached: usize,
     pub(super) saving: bool,
     pub(super) probes: HashMap<AgentKind, Probe>,
+    /// Agents whose CLI is downloading, and why the last download of each failed.
+    pub(super) installing: HashSet<AgentKind>,
+    pub(super) install_errors: HashMap<AgentKind, String>,
     /// Connected agents, in `AGENT_KINDS` order, once every probe has answered.
     pub(super) agents: Option<Vec<AgentKind>>,
     /// The agent new tasks start with; saved first in `settings.agents`, which is what marks it.
@@ -168,6 +171,8 @@ impl Onboarding {
             reached: 0,
             saving: false,
             probes: HashMap::new(),
+            installing: HashSet::new(),
+            install_errors: HashMap::new(),
             agents: None,
             scans: Vec::new(),
             scan_run: 0,

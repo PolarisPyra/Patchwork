@@ -20,7 +20,10 @@ pub fn opencode_bin() -> Option<PathBuf> {
     located_or(AgentKind::OpenCode, || {
         find_binary("opencode").or_else(|| {
             home_dir()
-                .map(|h| h.join(".opencode/bin/opencode"))
+                .map(|h| {
+                    h.join(".opencode/bin")
+                        .join(format!("opencode{}", std::env::consts::EXE_SUFFIX))
+                })
                 .filter(|p| p.is_file())
         })
     })

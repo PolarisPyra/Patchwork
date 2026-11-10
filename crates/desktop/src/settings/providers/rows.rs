@@ -8,7 +8,7 @@ use patchwork_server::provider::AgentStatus;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::switch;
 use crate::ui::theme::{FS_SM, Theme, theme};
-use crate::ui::{BtnKind, agent_label, agent_logo, badge, btn, provider_logo};
+use crate::ui::{BtnKind, agent_label, agent_logo, badge, btn, provider_logo, spinner};
 use super::state::{CLI_KINDS, PromptOf};
 use super::cli;
 use super::form;
@@ -127,18 +127,23 @@ impl SettingsDialog {
                     r.child(
                         btn(
                             SharedString::from(format!("install-{key}")),
-                            "Download",
+                            if installing {
+                                format!("Installing {label}")
+                            } else {
+                                format!("Download {label}")
+                            },
                             BtnKind::Plain,
                             installing,
                             &t,
                         )
-                        .child(if installing {
-                            "Installing…"
-                        } else {
-                            "Download"
+                        .when(installing, |b| {
+                            b.role(Role::Status)
+                                .child(spinner(12., t.text_muted))
+                                .child("Installing…")
                         })
                         .when(!installing, |b| {
-                            b.on_click(cx.listener(move |d, _, _, cx| d.install(kind, cx)))
+                            b.child("Download")
+                                .on_click(cx.listener(move |d, _, _, cx| d.install(kind, cx)))
                         }),
                     )
                     .children(self.providers.install_errors.get(&kind).map(|e| {
