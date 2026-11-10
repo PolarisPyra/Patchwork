@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.37] - 2026-11-10
+
+### Added
+
+- In a chat, double-click a word in a message to select it, triple-click to select the whole paragraph, and right-click to copy what is selected. Text boxes, such as the chat box and search, now have a right-click menu to cut, copy, paste and select all.
+
+### Fixed
+
+- Pressing Tab when nothing in particular is selected, such as after closing Settings or search, moves the cursor into the chat box again, as the Jump to the composer shortcut says. Before, it stepped through the sidebar first.
+
 ## [26.11.36] - 2026-11-10
 
 ### Added
