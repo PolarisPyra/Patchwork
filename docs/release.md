@@ -12,6 +12,7 @@ A GitHub release tagged `vYY.M.N` (CalVer: the next N this month, or 0 in a new 
 | `Patchwork_x64.exe` | Windows, the release build of the app |
 | `Patchwork_aarch64.dmg` | macOS on Apple silicon, `Patchwork.app` signed ad hoc |
 | `latest.json` | The release's tag and notes, and each file's address, SHA-256 and signature, which the app's updater reads |
+| `latest.json.minisig` | The release key's signature over `latest.json` |
 
 Its notes are the version's section of `CHANGELOG.md`, which the app also shows in Settings →
 Updates.
@@ -38,6 +39,12 @@ with the release key. The publish job signs each file with the `TAURI_SIGNING_PR
 `SIGNING_KEY` in `crates/server/src/updates/release.rs`, the key the app carries, and stops
 before publishing if it does not check out. Changing the key means changing both, and copies
 already installed keep trusting the old one.
+
+`latest.json` is signed too, as `latest.json.minisig` beside it, and the app reads a release only
+when that signature checks out. Its version and its `withdrawn` list are then the release key's
+word, so an older signed build cannot be passed off as the newest. Editing `latest.json` on a
+published release, to withdraw a version, means signing it again with the release key and
+replacing `latest.json.minisig` with the new signature.
 
 Run the workflow by hand (Actions → Release → Run workflow) to build all three without publishing.
 

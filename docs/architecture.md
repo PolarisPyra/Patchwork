@@ -19,11 +19,12 @@ The repo is split into `crates/server` and `crates/desktop`:
   - `src/workspace/` — git and file access; `src/watch.rs` — watches the open project for file changes (see [File changes](#file-changes))
   - `src/system/` — the user's machine: the programs Patchwork starts and their environment, login shells, paths, opening files on the desktop
   - `src/logging/` — the debug logs
+  - `src/events.rs` — the agent events the backend streams to the UI, which the provider parsers produce and `orchestration/` publishes
   - `src/backgrounds.rs` — chat backgrounds
 - `crates/desktop` — the app, drawn with GPUI (package `patchwork`). It calls `Server` directly and applies its agent events on the UI thread.
   - `src/main.rs` — opens the server and the window; `src/workspace/` — the window: its toolbar, regions and resizing
   - `src/{chat,sidebar,settings,canvas,panel,onboarding}/` — UI, one folder per feature
-  - `src/ui/` — what the features share: the controls (`controls.rs`), the colours and sizes (`theme.rs`), the icons and fonts it embeds from `assets/` (`assets.rs`), and the shared menus, dialogs and text tools
+  - `src/ui/` — what the features share: the controls (`controls.rs`), the colours and sizes (`theme.rs`), the icons and fonts it embeds from `assets/` (`assets.rs`), the text field every input is (`text_area/`), Markdown (`markdown.rs`), chat backgrounds (`backdrop.rs`), and the shared menus, dialogs and text tools
 
 ## Data model
 

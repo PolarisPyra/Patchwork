@@ -177,7 +177,8 @@ jobs:
       # Each file is signed with the release key (the TAURI_SIGNING_PRIVATE_KEY secret and its
       # password), and its signature is checked against the key built into the app, as the app's
       # updater will check it, before anything is published. latest.json then names each file's
-      # address, SHA-256 and signature, which the updater reads.
+      # address, SHA-256 and signature, which the updater reads, and is signed the same way as
+      # latest.json.minisig.
       #
       # The release stays a draft until every file is up, so it never becomes the latest with
       # latest.json naming a file that is not there yet.
@@ -213,9 +214,16 @@ jobs:
           done
           jq -n --arg tag "$GITHUB_REF_NAME" --rawfile body ../notes.md --argjson assets "$assets" \
             '{tag_name: $tag, body: $body, withdrawn: [], assets: $assets}' > latest.json
+          # latest.json is signed too: the app reads its version and the versions it withdraws
+          # from it, and takes neither from a file the release key did not sign.
+          npx --yes @tauri-apps/cli@2.12.3 signer sign --app-version "$version" latest.json > /dev/null
+          base64 -d latest.json.sig > latest.json.minisig
+          minisign -Vq -P "$key" -m latest.json -x latest.json.minisig \
+            || { echo "::error::The signature of latest.json does not check out against the app's key"; exit 1; }
           gh release create "$GITHUB_REF_NAME" --draft --title "Patchwork $GITHUB_REF_NAME" \
             --notes-file ../notes.md \
-            Patchwork_amd64.AppImage Patchwork_x64.exe Patchwork_aarch64.dmg latest.json
+            Patchwork_amd64.AppImage Patchwork_x64.exe Patchwork_aarch64.dmg latest.json \
+            latest.json.minisig
           gh release edit "$GITHUB_REF_NAME" --draft=false --latest
 
   # Points the website's download links at the release just published, deploys the site to
