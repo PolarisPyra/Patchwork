@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use serde_json::{Value, json};
 
-use crate::orchestration::AgentEvent;
+use crate::events::AgentEvent;
 use crate::provider::{AgentKind, AgentStatus, ProviderSlashCommand};
 use crate::threads::{PlanStep, Question, QuestionOption, TokenUsage};
 use crate::permissions::Target;

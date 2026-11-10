@@ -207,8 +207,9 @@ pub struct SigilMenu {
     /// Escape hid the menu; it shows again once the draft changes.
     closed: bool,
     highlight: usize,
-    /// The kind of word last under the caret: its list is read again each time a menu opens.
-    kind: Option<SigilKind>,
+    /// The kind of word last under the caret, and the project it was typed in: its list is read
+    /// again each time a menu opens, and when the project changes under it.
+    kind: Option<(SigilKind, Option<String>)>,
     files: Vec<String>,
     /// The enabled skills' names and descriptions.
     skills: Vec<(String, Option<String>)>,
@@ -234,10 +235,20 @@ impl Composer {
             return;
         };
         let server = Arc::clone(&w.server);
+        let listed = project.clone();
         let task = cx.background_spawn(async move { server.list_files(&project) });
         cx.spawn(async move |this, cx| {
             let files = task.await;
             this.update(cx, |this, cx| {
+                // A listing that arrives after the project changed is another project's files.
+                let current = this
+                    .sigil
+                    .kind
+                    .as_ref()
+                    .and_then(|(_, project)| project.as_ref());
+                if current != Some(&listed) {
+                    return;
+                }
                 match files {
                     Ok(files) => this.sigil.files = files,
                     Err(e) => {
@@ -291,8 +302,13 @@ impl Composer {
                     || matches!(tk.kind, SigilKind::Files | SigilKind::Agents)
             });
         let kind = token.as_ref().map(|tk| tk.kind);
-        if kind != self.sigil.kind {
-            self.sigil.kind = kind;
+        let project = self
+            .workspace
+            .upgrade()
+            .and_then(|w| w.read(cx).project().map(|p| p.id.clone()));
+        let typed = kind.map(|kind| (kind, project));
+        if typed != self.sigil.kind {
+            self.sigil.kind = typed;
             match kind {
                 Some(SigilKind::Files) => self.load_files(cx),
                 Some(SigilKind::Skills) => self.load_skills(cx),

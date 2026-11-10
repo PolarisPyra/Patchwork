@@ -9,7 +9,7 @@ use crate::ui::theme::{FS_XS, Theme};
 use crate::ui::{format_tokens, list_scrollbar, spinner};
 use crate::workspace::{Workspace, is_busy};
 
-use super::markdown::find_in;
+use crate::ui::markdown::find_in;
 use super::reply::{pieces_of, reply_piece};
 use super::timeline::{Step, steps_of};
 use super::{rail, user};

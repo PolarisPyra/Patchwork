@@ -93,12 +93,15 @@ fn pinned_key(thread_id: &str) -> String {
 }
 
 /// The `app_state` keys of a thread's settings, which go when the thread does.
-pub(super) fn thread_state_keys(thread_id: &str) -> [String; 4] {
+pub(super) fn thread_state_keys(thread_id: &str) -> [String; 6] {
     [
         compact_window_key(thread_id),
         background_key(thread_id),
         favorite_key(thread_id),
         pinned_key(thread_id),
+        // What became of its goal, which `orchestration/goal/state.rs` keeps.
+        format!("dismissed-goal:{thread_id}"),
+        format!("held-goal:{thread_id}"),
     ]
 }
 

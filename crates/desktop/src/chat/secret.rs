@@ -11,7 +11,7 @@ use gpui::{AnyElement, Entity, FontWeight, Role, SharedString, div, prelude::*, 
 use patchwork_server::secrets::SecretStatus;
 use patchwork_server::threads::{Approval, ApprovalStatus};
 
-use crate::chat::text_area::{Changed, Submitted, TextArea};
+use crate::ui::text_area::{Changed, Submitted, TextArea};
 use crate::ui::theme::{FONT_MONO, FS_SM, RADIUS, RADIUS_SM, Theme, theme};
 use crate::ui::{BtnKind, btn, icon};
 use crate::workspace::Workspace;
@@ -105,7 +105,7 @@ impl Workspace {
                 match answered {
                     Ok(()) => {
                         if let Some(field) = this.secrets.fields.get(&id) {
-                            field.update(cx, |f, _| f.content.clear());
+                            field.update(cx, |f, cx| f.set_text("", cx));
                         }
                     }
                     Err(e) => {

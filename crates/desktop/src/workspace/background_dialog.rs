@@ -62,7 +62,7 @@ impl Workspace {
                 // The pictures moved the backgrounds that showed them: this chat's, others', and
                 // the one all chats share.
                 PickerEvent::PicturesChanged => {
-                    this.backgrounds = crate::chat::backdrop::Backgrounds::default();
+                    this.backgrounds = crate::ui::backdrop::Backgrounds::default();
                     this.settings = this.server.store.settings();
                     let value = this.server.thread(&id).ok().and_then(|t| t.background);
                     let shared = this.settings.chat_background.clone();

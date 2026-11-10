@@ -13,7 +13,7 @@ use patchwork_server::Server;
 
 use super::{Onboarding, OnboardingEvent};
 use super::rows::picked;
-use crate::settings::controls::input_box;
+use crate::ui::input_box;
 use crate::ui::theme::{FONT_MONO, FS_LG, FS_SM, RADIUS, RADIUS_LG, RADIUS_SM, Theme};
 use crate::ui::{BtnKind, btn, button, icon};
 

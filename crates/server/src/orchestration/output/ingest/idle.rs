@@ -6,7 +6,7 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, PoisonError};
 
 use crate::plugins::HookEvent;
-use crate::orchestration::AgentEvent;
+use crate::events::AgentEvent;
 use crate::provider::AgentKind;
 use crate::threads::Goal;
 use crate::threads::GoalStatus;
@@ -15,6 +15,7 @@ use crate::workspace;
 
 use crate::orchestration::changes::attribution;
 use crate::orchestration::output::stream::Unsaved;
+use crate::orchestration::messages::queue::FollowUp;
 use crate::orchestration::turn::end::{hold_unanswered, plugin_hooks, record_turn};
 use crate::orchestration::turn::start::Turn;
 
@@ -102,7 +103,7 @@ pub(super) fn go_idle(
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .drain(..)
-            .map(|f| f.message_id)
+            .flat_map(|f| f.ids().collect::<Vec<_>>())
             .collect();
         hold_unanswered(turn, &unanswered);
         let (server, thread_id, root, agent) = (
@@ -159,7 +160,7 @@ pub(super) fn go_idle(
     // the queued messages are sent, or wait for the user, by that flag.
     hold_unanswered(
         turn,
-        &queued.into_iter().map(|f| f.message_id).collect::<Vec<_>>(),
+        &queued.iter().flat_map(FollowUp::ids).collect::<Vec<_>>(),
     );
     if !stopped {
         turn.server.send_queued_later(&turn.thread_id);

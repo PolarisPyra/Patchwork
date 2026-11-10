@@ -14,7 +14,7 @@ use patchwork_server::provider::{AgentKind, ModelOption};
 use super::Composer;
 use super::menus::Pick;
 use crate::ui::AGENT_KINDS;
-use crate::chat::text_area::TextArea;
+use crate::ui::text_area::TextArea;
 use crate::ui::theme::{FS_SM, Theme};
 use crate::ui::{
     agent_label, agent_logo, api_model_place, api_provider_name, button, icon, popup_shadow,
@@ -622,7 +622,7 @@ impl Composer {
         cx.subscribe_in(
             &search,
             window,
-            |this, _, _: &crate::chat::text_area::Changed, _, cx| {
+            |this, _, _: &crate::ui::text_area::Changed, _, cx| {
                 this.highlight = 0;
                 cx.notify();
             },
@@ -631,7 +631,7 @@ impl Composer {
         cx.subscribe_in(
             &search,
             window,
-            |this, _, arrow: &crate::chat::text_area::Arrow, _, cx| {
+            |this, _, arrow: &crate::ui::text_area::Arrow, _, cx| {
                 let count = this.menu_picks.len();
                 if count > 0 {
                     this.highlight =
@@ -644,7 +644,7 @@ impl Composer {
         cx.subscribe_in(
             &search,
             window,
-            |this, _, _: &crate::chat::text_area::Submitted, window, cx| {
+            |this, _, _: &crate::ui::text_area::Submitted, window, cx| {
                 if let Some(pick) = this.menu_picks.get(this.highlight).cloned() {
                     this.apply(pick, window, cx);
                 }

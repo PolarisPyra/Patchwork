@@ -4,7 +4,7 @@
 
 use crate::Error;
 use std::collections::BTreeMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufReader, Write};
 use std::process::{Child, ChildStdin, Stdio};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -47,7 +47,7 @@ impl StdioServer {
         {
             let stderr = Arc::clone(&stderr);
             std::thread::spawn(move || {
-                for line in BufReader::new(stderr_pipe).lines().map_while(Result::ok) {
+                for line in crate::system::lossy_lines(BufReader::new(stderr_pipe)) {
                     let mut tail = stderr.lock().unwrap_or_else(PoisonError::into_inner);
                     tail.push_str(&line);
                     tail.push('\n');
@@ -64,7 +64,7 @@ impl StdioServer {
         {
             let (waiters, stdin) = (Arc::clone(&waiters), Arc::clone(&stdin));
             std::thread::spawn(move || {
-                for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                for line in crate::system::lossy_lines(BufReader::new(stdout)) {
                     let Ok(v) = serde_json::from_str::<Value>(&line) else {
                         continue;
                     };

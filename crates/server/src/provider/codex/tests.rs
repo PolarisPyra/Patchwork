@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use serde_json::{Value, json};
 
 use crate::threads::AccessMode;
-use crate::orchestration::AgentEvent;
+use crate::events::AgentEvent;
 
 use crate::threads::TaskStatus;
 use crate::threads::ToolCall;

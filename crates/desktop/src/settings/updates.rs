@@ -9,7 +9,7 @@ use std::sync::{Arc, OnceLock};
 use gpui::{AnyElement, FontWeight, Role, SharedString, div, prelude::*, px};
 use patchwork_server::updates::{RELEASES_URL, UpdateState, UpdateStatus};
 
-use crate::chat::markdown::markdown;
+use crate::ui::markdown::markdown;
 use crate::settings::controls::{minutes_stepper, token_row};
 use crate::settings::{SettingsDialog, SettingsEvent};
 use crate::ui::theme::{FS_SM, theme};

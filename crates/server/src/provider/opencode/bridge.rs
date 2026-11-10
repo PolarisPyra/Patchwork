@@ -479,14 +479,14 @@ impl Server {
             .ok_or("OpenCode's output is unavailable")?;
         // The server's own messages go to the bridge's stderr, where Patchwork keeps the tail.
         std::thread::spawn(move || {
-            for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+            for line in crate::system::lossy_lines(BufReader::new(stderr)) {
                 log_error(&line);
             }
         });
         let (found, url) = mpsc::channel();
         std::thread::spawn(move || {
             let mut found = Some(found);
-            for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            for line in crate::system::lossy_lines(BufReader::new(stdout)) {
                 if let Some(url) = line.split("server listening on").nth(1)
                     && let Some(found) = found.take()
                 {

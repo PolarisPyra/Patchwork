@@ -9,13 +9,13 @@ use serde_json::Value;
 use crate::plugins::HookEvent;
 use crate::provider;
 use crate::Server;
-use crate::orchestration::AgentEvent;
+use crate::events::AgentEvent;
 use crate::provider::AgentKind;
 use crate::threads::MessageStatus;
 use crate::threads::Role;
 use crate::logging::{AGENT_LOG, Data, Source};
 use crate::settings::LogLevel;
-use crate::orchestration::FollowUpInput;
+use crate::orchestration::messages::queue::FollowUp;
 use crate::orchestration::changes::checkpoint;
 use crate::orchestration::goal::clear_command;
 use crate::orchestration::output::stream::publish;
@@ -167,14 +167,14 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
     // Taken from the queue, so marked queued here: the sender may not have saved the flag yet.
     hold_unanswered(
         &turn,
-        &queued.into_iter().map(|f| f.message_id).collect::<Vec<_>>(),
+        &queued.iter().flat_map(FollowUp::ids).collect::<Vec<_>>(),
     );
     if cancelled {
         hold_unanswered(
             &turn,
             &unanswered
                 .iter()
-                .map(|f| f.message_id.clone())
+                .flat_map(FollowUp::ids)
                 .collect::<Vec<_>>(),
         );
         unanswered.clear();
@@ -254,26 +254,21 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         })
     };
 
-    // The agent drops the goal in a turn of its own; unanswered steers wait for that
-    // system turn instead, and queued messages for the end of it.
+    // The agent drops the goal in a turn of its own; unanswered steers wait as queued messages,
+    // as the queued ones do.
     if let Some(command) = clear_in_agent {
         let server = &turn.server;
         match server.send_message(turn.thread_id.clone(), command.into(), vec![], false) {
             Ok(_) => {
-                let runner = &server.runner;
-                for f in &unanswered {
-                    {
-                        let _ = runner.enqueue(
-                            &turn.thread_id,
-                            FollowUpInput {
-                                message_id: &f.message_id,
-                                text: &f.text,
-                                attachments: &f.attachments,
-                                images: &f.images,
-                            },
-                        );
-                    }
-                }
+                // Held as queued messages, all of them: the turn's queue takes one, and the
+                // rest would stay in the thread as sent with nothing to send them.
+                hold_unanswered(
+                    &turn,
+                    &unanswered
+                        .iter()
+                        .flat_map(FollowUp::ids)
+                        .collect::<Vec<_>>(),
+                );
                 return;
             }
             Err(e) => {

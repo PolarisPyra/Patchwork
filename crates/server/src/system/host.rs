@@ -5,6 +5,16 @@
 #[cfg(windows)]
 use std::path::PathBuf;
 
+/// The lines a program writes, with bytes that are not UTF-8 replaced. `BufRead::lines` ends at
+/// the first such line, and a pipe nobody reads then fills and blocks the program writing to it.
+pub(crate) fn lossy_lines(reader: impl std::io::BufRead) -> impl Iterator<Item = String> {
+    reader.split(b'\n').map_while(Result::ok).map(|line| {
+        String::from_utf8_lossy(&line)
+            .trim_end_matches('\r')
+            .to_string()
+    })
+}
+
 /// A command for a program on the user's system.
 ///
 /// The AppImage's launcher points the library, Python, GTK and data paths into the AppImage for

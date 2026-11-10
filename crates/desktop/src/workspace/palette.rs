@@ -11,7 +11,7 @@ use gpui::{
 
 use patchwork_server::threads::{MessageStatus, Role as MessageRole};
 
-use crate::chat::text_area::{Arrow, Changed, Submitted, TextArea};
+use crate::ui::text_area::{Arrow, Changed, Submitted, TextArea};
 use crate::settings::shortcuts::key_label;
 use crate::ui::theme::{FONT_MONO, FS_LG, FS_MD, FS_XS, RADIUS, RADIUS_LG, theme};
 use crate::ui::{display_title, icon, overflows, popup_shadow, scrollbar};

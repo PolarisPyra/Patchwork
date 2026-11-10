@@ -13,8 +13,8 @@ use std::time::Duration;
 use std::time::Instant;
 
 use crate::provider;
-use crate::orchestration::AgentEvent;
-use crate::orchestration::AgentEventEnvelope;
+use crate::events::AgentEvent;
+use crate::events::AgentEventEnvelope;
 use crate::provider::AgentKind;
 use crate::threads::MessageStatus;
 use crate::system::new_id;

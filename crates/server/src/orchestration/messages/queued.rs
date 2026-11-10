@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::orchestration::{Delivery, FollowUpInput, TurnRequest};
 
-use crate::orchestration::AgentEvent;
+use crate::events::AgentEvent;
 use crate::threads::{StepStatus, Attachment};
 use crate::{orchestration, provider};
 use crate::Server;
@@ -72,6 +72,7 @@ impl Server {
                     text: &text,
                     attachments: &attachments,
                     images: &images,
+                    merged: &[],
                 },
             )
         {
@@ -154,11 +155,14 @@ impl Server {
             );
         }
         let first = &queued[0].id;
+        // Held with the first if the agent never answers, so none of them is left as sent.
+        let merged: Vec<String> = queued[1..].iter().map(|m| m.id.clone()).collect();
         let input = FollowUpInput {
             message_id: first,
             text: &text,
             attachments: &attachments,
             images: &images,
+            merged: &merged,
         };
         if !matches!(
             self.runner

@@ -2,8 +2,12 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{Context, Focusable, PathPromptOptions, Window};
-use patchwork_server::threads::{Attachment, AttachmentKind, GoalStatus, NewThread};
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use gpui::{AppContext as _, ClipboardEntry, Context, Focusable, PathPromptOptions, Window};
+use patchwork_server::Server;
+use patchwork_server::threads::{Attachment, GoalStatus, NewThread};
 use crate::workspace::{Workspace, is_working};
 use super::state::Composer;
 use super::sigil_menu;
@@ -108,22 +112,28 @@ impl Composer {
         window.focus(&self.editor.focus_handle(cx), cx);
     }
 
-    /// Puts a restored message back to edit or send again, unless something is written already.
-    pub fn fill_if_empty(
+    /// Puts a restored message back to edit or send again, ahead of anything written since.
+    pub fn fill(
         &mut self,
         text: &str,
         attachments: Vec<Attachment>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.editor.read(cx).content.trim().is_empty() || !self.attachments.is_empty() {
-            return;
-        }
-        // The composer lists images with the other attachments, not inline in the text.
-        let text = crate::chat::user::without_image_markdown(text);
-        self.editor.update(cx, |e, cx| e.set_text(&text, cx));
-        self.attachments = attachments;
+        self.put_back(text, attachments, cx);
         self.focus(window, cx);
+    }
+
+    /// Puts a message that was not sent back, ahead of anything written since.
+    pub fn put_back(&mut self, text: &str, attachments: Vec<Attachment>, cx: &mut Context<Self>) {
+        // The composer lists images with the other attachments, not inline in the text.
+        let mut text = crate::chat::user::without_image_markdown(text);
+        let written = self.editor.read(cx).content.trim().to_string();
+        if !written.is_empty() {
+            text = format!("{text}\n\n{written}");
+        }
+        self.editor.update(cx, |e, cx| e.set_text(&text, cx));
+        self.attachments.splice(0..0, attachments);
         cx.notify();
     }
 
@@ -138,24 +148,49 @@ impl Composer {
             let Ok(Ok(Some(paths))) = paths.await else {
                 return;
             };
+            let _ = this.update(cx, |this, cx| this.attach_paths(&paths, cx));
+        })
+        .detach();
+    }
+
+    /// Attaches the files and folders at `paths`: picked, dropped on the composer, or pasted.
+    pub(super) fn attach_paths(&mut self, paths: &[PathBuf], cx: &mut Context<Self>) {
+        let paths: Vec<String> = paths
+            .iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect();
+        self.attach_with(move |server| Ok(server.attach_paths(&paths)), cx);
+    }
+
+    /// Attaches what `load` brings in, which it reads off the main thread.
+    fn attach_with(
+        &mut self,
+        load: impl FnOnce(&Server) -> Result<Vec<Attachment>, patchwork_server::Error> + Send + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(workspace) = self.workspace.upgrade() else {
+            return;
+        };
+        let server = Arc::clone(&workspace.read(cx).server);
+        let task = cx.background_spawn(async move { load(&server) });
+        cx.spawn(async move |this, cx| {
+            let loaded = task.await;
             let _ = this.update(cx, |this, cx| {
-                for path in paths {
-                    let kind = if folders {
-                        AttachmentKind::Folder
-                    } else if patchwork_server::threads::image_media_type(&path.to_string_lossy())
-                        .is_some()
-                    {
-                        AttachmentKind::Image
-                    } else {
-                        AttachmentKind::File
-                    };
-                    let name = path
-                        .file_name()
-                        .map(|n| n.to_string_lossy().into_owned())
-                        .unwrap_or_default();
-                    let path = path.to_string_lossy().into_owned();
-                    if !this.attachments.iter().any(|a| a.path == path) {
-                        this.attachments.push(Attachment { kind, path, name });
+                match loaded {
+                    Ok(attachments) => {
+                        for attachment in attachments {
+                            if !this.attachments.iter().any(|a| a.path == attachment.path) {
+                                this.attachments.push(attachment);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        if let Some(workspace) = this.workspace.upgrade() {
+                            workspace.update(cx, |w, cx| {
+                                w.error = Some(e.to_string());
+                                cx.notify();
+                            });
+                        }
                     }
                 }
                 cx.notify();
@@ -163,6 +198,78 @@ impl Composer {
         })
         .detach();
     }
+
+    /// Attaches the pictures and files on the clipboard. False when it holds only text, which
+    /// is the editor's to paste.
+    pub(super) fn paste_attachments(&mut self, cx: &mut Context<Self>) -> bool {
+        let (mut paths, mut pictures) = (Vec::new(), Vec::new());
+        for entry in cx
+            .read_from_clipboard()
+            .iter()
+            .flat_map(gpui::ClipboardItem::entries)
+        {
+            match entry {
+                ClipboardEntry::Image(image) => pictures.push(image.bytes.clone()),
+                ClipboardEntry::ExternalPaths(files) => paths.extend(files.paths().iter().cloned()),
+                // A file copied in a file manager comes as its address.
+                ClipboardEntry::String(text) => {
+                    let copied = copied_files(text.text());
+                    if copied.is_empty() && !text.text().trim().is_empty() {
+                        return false;
+                    }
+                    paths.extend(copied);
+                }
+            }
+        }
+        if paths.is_empty() && pictures.is_empty() {
+            return false;
+        }
+        let paths: Vec<String> = paths
+            .iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect();
+        self.attach_with(
+            move |server| {
+                let mut attachments = server.attach_paths(&paths);
+                for picture in &pictures {
+                    attachments.push(server.attach_image(picture)?);
+                }
+                Ok(attachments)
+            },
+            cx,
+        );
+        true
+    }
+}
+
+/// The files `text` names when every line of it is a `file://` address, as a file manager copies
+/// them.
+fn copied_files(text: &str) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    for line in text.lines().filter(|line| !line.trim().is_empty()) {
+        let Some(path) = line.trim().strip_prefix("file://") else {
+            return Vec::new();
+        };
+        // Addresses write a space as `%20`, and any other byte the same way.
+        let mut bytes = Vec::with_capacity(path.len());
+        let mut rest = path.as_bytes();
+        while let Some((&byte, after)) = rest.split_first() {
+            let hex = (byte == b'%')
+                .then(|| after.get(..2))
+                .flatten()
+                .and_then(|hex| std::str::from_utf8(hex).ok())
+                .and_then(|hex| u8::from_str_radix(hex, 16).ok());
+            if let Some(decoded) = hex {
+                bytes.push(decoded);
+                rest = &after[2..];
+            } else {
+                bytes.push(byte);
+                rest = after;
+            }
+        }
+        files.push(PathBuf::from(String::from_utf8_lossy(&bytes).into_owned()));
+    }
+    files
 }
 
 /// Holds the next message for after the running turn, unless the setting makes Enter steer

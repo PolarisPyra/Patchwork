@@ -21,6 +21,17 @@ pub(in crate::orchestration) struct FollowUp {
     pub(in crate::orchestration) text: String,
     pub(in crate::orchestration) attachments: Vec<Attachment>,
     pub(in crate::orchestration) images: Vec<provider::Image>,
+    /// The other user messages whose text this carries, when queued messages went as one.
+    pub(in crate::orchestration) merged: Vec<String>,
+}
+
+impl FollowUp {
+    /// The user messages this carries: its own, then the ones merged into it.
+    pub(in crate::orchestration) fn ids(&self) -> impl Iterator<Item = String> {
+        std::iter::once(&self.message_id)
+            .chain(&self.merged)
+            .cloned()
+    }
 }
 
 /// A message to hold for a running turn, borrowed from the caller.
@@ -30,6 +41,8 @@ pub struct FollowUpInput<'a> {
     pub text: &'a str,
     pub attachments: &'a [Attachment],
     pub images: &'a [provider::Image],
+    /// The other user messages whose text this carries.
+    pub merged: &'a [String],
 }
 
 /// Steering messages written to the agent that it has not yet answered, oldest first.
@@ -63,6 +76,7 @@ impl Runner {
             text: input.text.into(),
             attachments: input.attachments.to_vec(),
             images: input.images.to_vec(),
+            merged: input.merged.to_vec(),
         });
         Ok(true)
     }

@@ -8,7 +8,7 @@ use crate::ui::theme::{FS_SM, FS_XL, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
 use crate::ui::{agent_logo, button, display_title, format_tokens, icon};
 use crate::workspace::Workspace;
 use super::transcript::{sync_transcript, transcript};
-use super::backdrop;
+use crate::ui::backdrop;
 use super::background;
 use super::find;
 use super::folder;
@@ -30,6 +30,7 @@ pub fn render(
     window: &mut Window,
     cx: &mut Context<Workspace>,
 ) -> impl IntoElement + use<> {
+    crate::ui::selection::begin_frame(cx);
     w.load_reply_files(cx);
     w.sync_secret_fields(cx);
     w.load_checkpoints(cx);

@@ -4,7 +4,6 @@
 // Rust guideline compliant 2026-10-09
 
 pub mod approvals;
-pub mod backdrop;
 pub mod background;
 pub mod checks;
 pub mod composer;
@@ -13,7 +12,6 @@ pub mod find;
 pub mod folder;
 pub mod goal;
 pub mod lineage;
-pub mod markdown;
 pub mod plan;
 pub mod prompts;
 pub mod proposed;
@@ -23,7 +21,6 @@ mod reply;
 pub mod resume;
 pub mod secret;
 pub mod subagents;
-pub mod text_area;
 pub mod timeline;
 mod transcript;
 pub mod user;

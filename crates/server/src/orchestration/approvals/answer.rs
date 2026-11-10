@@ -8,7 +8,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, PoisonError};
 
 use crate::orchestration::turn::process::write_line;
-use crate::orchestration::{AgentEvent, Runner, publish};
+use crate::orchestration::{Runner, publish};
+use crate::events::AgentEvent;
 use crate::Server;
 use crate::permissions::{self, Decision, RuleRef, Target};
 use crate::provider;

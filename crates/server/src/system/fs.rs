@@ -38,6 +38,32 @@ pub fn resolve(root: &Path, path: &str) -> PathBuf {
     out
 }
 
+/// `path` with the links in it followed, as far as it exists. A path a link leads out of its
+/// folder is then seen where it really is.
+#[must_use]
+pub fn real(path: &Path) -> PathBuf {
+    let mut rest = Vec::new();
+    let mut existing = path;
+    loop {
+        if let Ok(real) = std::fs::canonicalize(existing) {
+            return rest.iter().rev().fold(real, |path, part| path.join(part));
+        }
+        match (existing.parent(), existing.file_name()) {
+            (Some(parent), Some(name)) => {
+                rest.push(name);
+                existing = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
+    }
+}
+
+/// Whether `path`, resolved against the root, is in the root's folder once links are followed.
+#[must_use]
+pub fn is_inside(root: &Path, path: &str) -> bool {
+    real(&resolve(root, path)).starts_with(real(root))
+}
+
 /// Whether `name` can be a file's name as it is: not hidden, and without a path separator or a
 /// character Windows refuses.
 #[must_use]

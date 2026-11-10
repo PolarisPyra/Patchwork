@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 use crate::provider::TaskEvent;
 use crate::provider::claude::SHELL_TASK;
-use crate::orchestration::AgentEvent;
+use crate::events::AgentEvent;
 use crate::threads::BackgroundTask;
 use crate::threads::TaskStatus;
 

@@ -6,11 +6,11 @@ use std::f32::consts::TAU;
 use std::sync::OnceLock;
 use std::time::Instant;
 use gpui::{
-    Anchor, App, BoxShadow, Div, ElementId, Hsla, IntoElement, PathBuilder, Role, SharedString,
-    Stateful, StyleRefinement, Toggled, Window, anchored, canvas, deferred, div, point, prelude::*,
-    px,
+    Anchor, App, BoxShadow, Div, ElementId, FontWeight, Hsla, IntoElement, PathBuilder, Role,
+    SharedString, Stateful, StyleRefinement, Toggled, Window, anchored, canvas, deferred, div,
+    point, prelude::*, px,
 };
-use crate::ui::theme::{FS_MD, RADIUS, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_MD, FS_SM, RADIUS, RADIUS_SM, Theme, theme};
 
 /// A Phosphor icon by its kebab-case name, as `@phosphor-icons/react` draws it at `size`.
 pub fn icon(name: &str, size: f32) -> Icon {
@@ -494,4 +494,46 @@ pub fn badge(text: impl Into<SharedString>, t: &Theme) -> Div {
         .text_size(px(crate::ui::theme::FS_XS))
         .text_color(t.text_muted)
         .child(text.into())
+}
+
+/// A chip that shows what is picked and opens a menu of the choices (`LogLevelPicker` and the
+/// other dropdowns): `.chip`, a borderless button with its value and a caret.
+pub fn dropdown_chip(
+    id: impl Into<SharedString>,
+    label: impl Into<SharedString>,
+    current: impl Into<SharedString>,
+    open: bool,
+    t: &Theme,
+) -> Stateful<Div> {
+    let (hover, fg) = (t.bg_hover, t.text);
+    button(id.into(), label)
+        .aria_expanded(open)
+        .flex_none()
+        .h(px(28.))
+        .gap(px(4.))
+        .rounded(px(RADIUS_SM))
+        .px(px(6.))
+        .text_size(px(FS_MD))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(t.text_muted)
+        .hover(move |s| s.bg(hover).text_color(fg))
+        .child(div().max_w(px(180.)).truncate().child(current.into()))
+        .child(icon("caret-down", 14.))
+}
+
+/// The input every form shares: one height, border and focus colour.
+pub fn input_box(focused: bool, t: &Theme) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .h(px(28.))
+        .min_w_0()
+        .overflow_hidden()
+        .rounded(px(RADIUS_SM))
+        .border_1()
+        .border_color(if focused { t.accent } else { t.border_strong })
+        .bg(t.bg_editor)
+        .px(px(8.))
+        .text_size(px(FS_SM))
+        .text_color(t.text)
 }

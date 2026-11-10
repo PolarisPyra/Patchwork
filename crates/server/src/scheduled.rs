@@ -14,7 +14,7 @@ use std::sync::Arc;
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone};
 use serde::{Deserialize, Serialize};
 
-use crate::orchestration::{AgentEvent, AgentEventEnvelope};
+use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::provider::AgentKind;
 use crate::scheduled;
 use crate::system::{new_id, now_ms};
@@ -381,10 +381,18 @@ fn day_allowed(schedule: &Schedule, day: NaiveDate) -> bool {
 /// later, once the clock has moved past it.
 #[must_use]
 pub fn next_run_at(schedule: &Schedule, now: DateTime<Local>) -> Option<i64> {
+    // An interval is that many real hours, whatever the clocks do in between.
+    if let Schedule::Hourly { interval_hours } = schedule {
+        let hours = i64::from((*interval_hours).clamp(1, 24 * 7));
+        return Some((now + Duration::hours(hours)).timestamp_millis());
+    }
     let next = next_after(schedule, now.naive_local())?;
-    Local
-        .from_local_datetime(&next)
-        .earliest()
+    // A time the clocks repeat comes twice; the first of them may already be past.
+    let repeated = Local.from_local_datetime(&next);
+    [repeated.earliest(), repeated.latest()]
+        .into_iter()
+        .flatten()
+        .find(|at| *at > now)
         .or_else(|| {
             Local
                 .from_local_datetime(&(next + Duration::hours(1)))

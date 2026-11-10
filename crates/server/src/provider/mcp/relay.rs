@@ -287,6 +287,10 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
 /// Runs the relay a CLI starts: `--mcp-proxy <relay file> <server> [thread]`, with the thread
 /// for Patchwork's own server. It passes stdin to Patchwork and Patchwork's answers to stdout; the
 /// process exits with what this returns.
+#[expect(
+    clippy::print_stderr,
+    reason = "a CLI runs this as a program of its own and shows its stderr; it has no log"
+)]
 pub fn run_proxy() -> i32 {
     let args: Vec<String> = std::env::args().skip(2).collect();
     let (file, server, thread) = match args.as_slice() {

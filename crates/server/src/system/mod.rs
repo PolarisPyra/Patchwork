@@ -12,7 +12,6 @@ pub mod browse;
 pub(crate) mod dirs;
 mod environment;
 mod host;
-pub mod launch;
 pub mod fs;
 pub(crate) mod contained;
 pub(crate) mod processes;
@@ -23,6 +22,7 @@ pub(crate) mod time;
 
 #[doc(inline)]
 pub use host::{hide_console, host_command, host_env, path_var};
+pub(crate) use host::lossy_lines;
 #[cfg(windows)]
 pub(crate) use host::expand_windows_vars;
 #[doc(inline)]

@@ -288,6 +288,7 @@ impl Server {
     /// Permanently deletes a thread and its messages.
     pub fn delete_thread(&self, id: &str) {
         self.runner.cancel(id, None);
+        self.runner.forget_jobs(id);
         self.remove_checkpoints(id);
         self.remove_api_session(id);
         if self

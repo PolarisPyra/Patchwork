@@ -9,7 +9,7 @@ use patchwork_server::Server;
 use patchwork_server::import::{ImportScan, ImportSource};
 use patchwork_server::provider::{AgentKind, AgentStatus};
 use patchwork_server::settings::Settings;
-use crate::chat::text_area::{Changed, Submitted, TextArea};
+use crate::ui::text_area::{Changed, Submitted, TextArea};
 use crate::ui::theme::theme;
 
 /// The agent CLIs setup offers, in the order it lists them (`CLI_KINDS`).

@@ -12,7 +12,7 @@ use crate::ui::theme::{FONT_MONO, FS_MD, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme}
 use crate::ui::{button, format_clock, full_elapsed, icon, now_ms, spinner};
 use crate::workspace::Workspace;
 
-use super::markdown::{self, FindIn, markdown, markdown_part};
+use crate::ui::markdown::{self, FindIn, markdown, markdown_part};
 use super::timeline::{
     CommandResult, Entry, Step, action_of, command_result, details_of, entry_active, entry_label,
     fold_head_of, fold_layout_of, is_goal_cleared_reply, lines_of, shown, steps_of, work_key,

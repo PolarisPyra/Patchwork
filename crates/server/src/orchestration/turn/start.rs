@@ -25,7 +25,7 @@ use crate::provider;
 use crate::system::scope;
 use crate::Server;
 use crate::threads::AccessMode;
-use crate::orchestration::AgentEvent;
+use crate::events::AgentEvent;
 use crate::provider::AgentKind;
 use crate::threads::Attachment;
 use crate::threads::Goal;
@@ -332,6 +332,9 @@ impl Runner {
             ));
             args.extend(crate::provider::claude::launch::permission_args());
             args.extend(crate::provider::claude::launch::agents_args(&agents, &root));
+        }
+        if let Some(why) = provider::hooks::unguarded(agent, &args) {
+            return Err(why.into());
         }
         let input = provider::turn_input(agent, &spec);
         let (mut cmd, scope) = scope::scoped(provider::turn_command(agent)?);

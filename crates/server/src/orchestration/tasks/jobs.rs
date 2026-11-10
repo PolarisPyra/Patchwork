@@ -19,7 +19,7 @@ use serde_json::Value;
 
 use crate::Server;
 use crate::harness::tools::{BASH_TIMEOUT, MAX_BASH_TIMEOUT, bash_command, outcome};
-use crate::orchestration::AgentEvent;
+use crate::events::AgentEvent;
 use crate::orchestration::output::stream::publish;
 use crate::system::contained::{self, Range, STOP_GRACE};
 use crate::system::now_ms;
@@ -239,6 +239,13 @@ impl Job {
     }
 }
 
+impl crate::orchestration::Runner {
+    /// Drops the output kept for the thread's ended jobs, as the thread is deleted.
+    pub(crate) fn forget_jobs(&self, thread_id: &str) {
+        self.jobs.forget(thread_id);
+    }
+}
+
 impl Jobs {
     fn lock(&self) -> MutexGuard<'_, HashMap<String, Arc<Job>>> {
         self.jobs.lock().unwrap_or_else(PoisonError::into_inner)
@@ -284,6 +291,12 @@ impl Jobs {
         for job in &jobs {
             job.end(server, &mut job.lock());
         }
+    }
+
+    /// Drops the thread's jobs that have ended, as the thread is deleted.
+    fn forget(&self, thread_id: &str) {
+        self.lock()
+            .retain(|_, job| job.thread_id != thread_id || job.lock().exit.is_none());
     }
 
     /// The thread's jobs in the background, one a line.
@@ -353,7 +366,15 @@ pub(in crate::orchestration) fn call(
                         .0;
                 }
             }
-            Ok(job.report())
+            let report = job.report();
+            // A job that has ended and been read in full has nothing more to give, so its
+            // output is not kept for the rest of the run.
+            let state = job.lock();
+            if state.exit.is_some() && state.read >= state.cut + state.output.len() {
+                drop(state);
+                jobs.lock().remove(&job.id);
+            }
+            Ok(report)
         }
         "job_kill" => {
             let job = named()?;

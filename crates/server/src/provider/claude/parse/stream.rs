@@ -4,7 +4,7 @@
 
 use serde_json::Value;
 
-use crate::orchestration::AgentEvent;
+use crate::events::AgentEvent;
 use crate::threads::BackgroundTask;
 use crate::system::now_ms;
 use crate::threads::PlanStep;

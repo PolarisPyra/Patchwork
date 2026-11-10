@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use super::state::{agent_keeps, held_key, signature};
 use super::stop::clear_command;
-use crate::orchestration::AgentEvent;
+use crate::events::AgentEvent;
 use crate::orchestration::turn::process::close_stdin_unless_steered;
 use crate::orchestration::turn::start::Turn;
 use crate::provider::{self, AgentKind};

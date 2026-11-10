@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 use gpui::{Focusable, FollowMode, Window, prelude::*};
-use patchwork_server::orchestration::{AgentEvent, AgentEventEnvelope};
+use patchwork_server::events::{AgentEvent, AgentEventEnvelope};
 use patchwork_server::threads::{Attachment, NewThread, Part};
 use super::state::{Workspace, end_thinking, message_mut};
 
@@ -240,15 +240,24 @@ impl Workspace {
             },
         };
         let server = Arc::clone(&self.server);
+        let draft = (id.clone(), text.clone(), attachments.clone());
         let task =
             cx.background_spawn(async move { server.send_message(id, text, attachments, queue) });
         cx.spawn(async move |this, cx| {
             let sent = task.await;
             this.update(cx, |this, cx| {
+                this.reload(cx);
                 if let Err(e) = sent {
                     log::warn!(error:% = e; "could not send the message: {{error}}");
+                    this.error = Some(e.to_string());
+                    // A message refused before it was stored goes back to the composer.
+                    let (id, text, attachments) = draft;
+                    let open = this.thread.as_ref().filter(|t| t.id == id);
+                    if open.is_some_and(|t| !t.messages.iter().any(|m| m.text == text)) {
+                        this.composer
+                            .update(cx, |c, cx| c.put_back(&text, attachments, cx));
+                    }
                 }
-                this.reload(cx);
                 this.transcript_list.set_follow_mode(FollowMode::Tail);
             })
         })
@@ -269,6 +278,7 @@ impl Workspace {
             this.update(cx, |this, cx| {
                 if let Err(e) = sent {
                     log::warn!(error:% = e; "could not send the command: {{error}}");
+                    this.error = Some(e.to_string());
                 }
                 this.reload(cx);
             })

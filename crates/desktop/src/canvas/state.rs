@@ -8,7 +8,7 @@ use gpui::{
 };
 use patchwork_server::threads::{Message, MessageStatus, TurnTrees};
 use patchwork_server::workspace::{FileMedia, PreviewKind};
-use crate::chat::text_area::{Submitted, TextArea};
+use crate::ui::text_area::{Submitted, TextArea};
 use crate::ui::highlight::{MAX_HIGHLIGHT_LINES, Run, highlight_file, split_lines};
 use crate::ui::theme::theme;
 use crate::workspace::Workspace;

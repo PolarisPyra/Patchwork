@@ -57,10 +57,18 @@ fn run(
         cmd.env("GIT_INDEX_FILE", index);
     }
     let mut child = cmd.spawn().map_err(|e| format!("Failed to run git: {e}"))?;
-    if let (Some(input), Some(mut stdin)) = (input, child.stdin.take()) {
-        stdin.write_all(input).map_err(|e| e.to_string())?;
-    }
-    let out = child.wait_with_output().map_err(|e| e.to_string())?;
+    // Written while the output is read: git answers a long input as it reads it, and with both
+    // pipes full each side would wait on the other.
+    let out = std::thread::scope(|scope| {
+        if let (Some(input), Some(mut stdin)) = (input, child.stdin.take()) {
+            scope.spawn(move || {
+                // A git that stopped reading says why in its own error.
+                let _ = stdin.write_all(input);
+            });
+        }
+        child.wait_with_output()
+    })
+    .map_err(|e| e.to_string())?;
     if out.status.success() {
         Ok(out)
     } else {

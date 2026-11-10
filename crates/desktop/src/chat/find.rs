@@ -14,8 +14,8 @@ use gpui::{
 };
 use patchwork_server::threads::{Message, Role as MessageRole, Thread};
 
-use crate::chat::markdown::{FindIn, find_in};
-use crate::chat::text_area::{Changed, Submitted, SubmittedBack, TextArea};
+use crate::ui::markdown::{FindIn, find_in};
+use crate::ui::text_area::{Changed, Submitted, SubmittedBack, TextArea};
 use crate::chat::timeline::{Step, steps_of};
 use crate::ui::theme::{FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
 use crate::ui::{button, icon};

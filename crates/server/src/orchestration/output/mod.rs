@@ -3,7 +3,6 @@
 
 // Rust guideline compliant 2026-10-09
 
-pub(in crate::orchestration) mod events;
 pub(in crate::orchestration) mod ingest;
 pub(in crate::orchestration) mod log;
 pub(in crate::orchestration) mod stream;

@@ -4,8 +4,8 @@
 
 use crate::Error;
 use crate::Server;
-use crate::orchestration::AgentEvent;
-use crate::orchestration::AgentEventEnvelope;
+use crate::events::AgentEvent;
+use crate::events::AgentEventEnvelope;
 use crate::secrets::SecretStatus;
 use crate::threads::ApprovalStatus;
 use crate::threads::Message;

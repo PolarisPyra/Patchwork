@@ -13,7 +13,8 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 
 use crate::Server;
-use crate::orchestration::{AgentEvent, Runner, publish};
+use crate::orchestration::{Runner, publish};
+use crate::events::AgentEvent;
 use crate::secrets::{Secret, SecretAsk, SecretStatus};
 use crate::system::new_id;
 use crate::threads::{Approval, ApprovalStatus, Role};

@@ -15,7 +15,7 @@ use patchwork_server::Server;
 use patchwork_server::projects::Project;
 use patchwork_server::system::browse::{self, DirEntry, DirListing, Machine};
 
-use crate::chat::text_area::{Arrow, Changed, Submitted, TextArea};
+use crate::ui::text_area::{Arrow, Changed, Submitted, TextArea};
 use crate::ui::theme::{FONT_MONO, FS_MD, FS_SM, FS_XS, RADIUS, RADIUS_LG, theme};
 use crate::ui::{BtnKind, btn, icon, icon_button, popup_shadow, spinner, tooltip};
 
@@ -37,6 +37,9 @@ pub struct AddProject {
     last: String,
     index: usize,
     loading: bool,
+    /// Counts the listings asked for, so one that returns after a later one was asked for is
+    /// dropped.
+    browse_seq: u64,
     adding: bool,
     error: Option<String>,
     focus: FocusHandle,
@@ -133,6 +136,7 @@ impl AddProject {
             last: String::new(),
             index: 0,
             loading: true,
+            browse_seq: 0,
             adding: false,
             error: None,
             focus,
@@ -160,10 +164,15 @@ impl AddProject {
     fn browse(&mut self, path: Option<String>, cx: &mut Context<Self>) {
         self.loading = true;
         self.error = None;
+        self.browse_seq += 1;
+        let seq = self.browse_seq;
         let task = cx.background_spawn(async move { browse::browse(path.as_deref()) });
         cx.spawn(async move |this, cx| {
             let listing = task.await;
             this.update(cx, |this, cx| {
+                if this.browse_seq != seq {
+                    return;
+                }
                 match listing {
                     Ok(listing) => {
                         let draft = with_sep(&listing.path);

@@ -365,7 +365,7 @@ fn mode_asks(agent: AgentKind, spec: &TurnSpec, target: &crate::permissions::Tar
             !target
                 .resources
                 .iter()
-                .all(|r| crate::system::fs::resolve(root, r).starts_with(root))
+                .all(|r| crate::system::fs::is_inside(root, r))
         }
         // Claude reads in its own folder without asking.
         (AgentKind::Claude, _) if target.kind == crate::permissions::PermissionKind::Folder => {
@@ -373,7 +373,7 @@ fn mode_asks(agent: AgentKind, spec: &TurnSpec, target: &crate::permissions::Tar
             !target
                 .resources
                 .iter()
-                .all(|r| crate::system::fs::resolve(root, r).starts_with(root))
+                .all(|r| crate::system::fs::is_inside(root, r))
         }
         (AgentKind::OpenCode, mode) => opencode::mode_asks(mode, target.kind),
         _ => true,

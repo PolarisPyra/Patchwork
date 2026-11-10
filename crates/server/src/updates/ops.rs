@@ -33,6 +33,8 @@ enum Check {
 struct Inner {
     shown: UpdateState,
     check: Check,
+    /// Counts the checks started, which tells a check from the one after it.
+    run: u64,
     last_check: Option<Instant>,
     /// The notes of the newer release the last check found.
     notes: Option<String>,
@@ -45,13 +47,14 @@ pub(crate) struct Updates {
     listener: Mutex<Option<Listener>>,
 }
 
-/// Ends a check that stopped without an outcome, as a panic would leave it.
-struct Running<'a>(&'a Updates);
+/// Ends a check that stopped without an outcome, as a panic would leave it. It holds the
+/// check's number, so one that ended properly never ends the check started after it.
+struct Running<'a>(&'a Updates, u64);
 
 impl Drop for Running<'_> {
     fn drop(&mut self) {
         let mut inner = self.0.lock();
-        if inner.check == Check::Idle {
+        if inner.check == Check::Idle || inner.run != self.1 {
             return;
         }
         inner.check = Check::Idle;
@@ -117,6 +120,7 @@ impl Updates {
                 inner.last_check = Some(Instant::now());
                 let waiting = matches!(inner.shown, UpdateState::Ready { .. });
                 if !waiting {
+                    inner.run += 1;
                     inner.check = if manual {
                         inner.shown = UpdateState::Checking;
                         Check::Watched
@@ -154,7 +158,7 @@ impl Updates {
         if !self.begin(manual) {
             return;
         }
-        let _running = Running(self);
+        let _running = Running(self, self.lock().run);
         let release = match release::latest() {
             Ok(release) => release,
             Err(e) => {

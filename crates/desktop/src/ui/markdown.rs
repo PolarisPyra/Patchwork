@@ -14,6 +14,7 @@ use gpui::{
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
 use crate::ui::theme::{FONT_MONO, FS_LG, FS_MD, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
+use crate::ui::selection::{Selectable, selectable, text_id};
 use crate::ui::{button, icon};
 
 /// One block with the margins CSS gives it; adjacent margins collapse into the larger one.
@@ -129,6 +130,8 @@ pub struct Markdown<'a> {
     /// Prefixes the ids of the code blocks' buttons.
     key: SharedString,
     code_blocks: usize,
+    /// How many texts have been drawn, which with the key tells each from the others.
+    texts: usize,
     stack: Vec<(Frame, Vec<Block>)>,
     rows: Vec<Vec<AnyElement>>,
     cells: Vec<AnyElement>,
@@ -229,6 +232,7 @@ fn render(
         t: theme(cx),
         key,
         code_blocks: 0,
+        texts: 0,
         stack: vec![(Frame::Root, Vec::new())],
         rows: Vec::new(),
         cells: Vec::new(),
@@ -268,9 +272,16 @@ fn stack_blocks(blocks: Vec<Block>) -> Div {
 
 impl Markdown<'_> {
     /// The open run as text, with find's matches marked: the current one solid, the rest faint.
-    fn take_inline(&mut self) -> StyledText {
+    /// `text` as one a drag can mark.
+    fn selectable(&mut self, text: StyledText) -> Selectable {
+        self.texts += 1;
+        selectable(text_id(&self.key, self.texts), text)
+    }
+
+    fn take_inline(&mut self) -> Selectable {
         let Some(find) = self.find else {
-            return self.inline.take();
+            let text = self.inline.take();
+            return self.selectable(text);
         };
         let t = self.t;
         let len = self.inline.text.trim_end().len();
@@ -301,7 +312,7 @@ impl Markdown<'_> {
         if let Some(start) = current {
             *find.target.borrow_mut() = Some((text.layout().clone(), start));
         }
-        text
+        self.selectable(text)
     }
 
     /// Adds text to the open run, marking its chips when this message draws them.
@@ -594,6 +605,7 @@ impl Markdown<'_> {
         let (hover, fg) = (t.bg_hover, t.text);
         let copy = code.clone();
         let text = highlighted(code, &lang, t);
+        let text = self.selectable(text);
         let block = div()
             .rounded(px(RADIUS))
             .border_1()

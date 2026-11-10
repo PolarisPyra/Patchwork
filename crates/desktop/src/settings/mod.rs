@@ -23,6 +23,5 @@ mod terminal;
 mod tokens;
 mod updates;
 
-pub(crate) use controls::dropdown_chip;
 pub(crate) use general::LOG_LEVELS;
 pub use dialog::{SettingsDialog, SettingsEvent};

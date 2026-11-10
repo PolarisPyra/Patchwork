@@ -7,7 +7,7 @@
 // Rust guideline compliant 2026-10-09
 
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufReader, Write};
 use std::sync::{Mutex, OnceLock, PoisonError, mpsc};
 use std::time::Duration;
 
@@ -148,6 +148,28 @@ pub fn answer(agent: AgentKind, refusal: Option<String>) -> String {
         .to_string(),
         // Claude Code and Codex go on when the hook says nothing.
         (_, None) => String::new(),
+    }
+}
+
+/// Why a turn started with `args` would run without Patchwork's permission hook.
+///
+/// Without the hook the agent runs without the user's rules, so such a turn is refused rather
+/// than run unguarded. None when the hook is in place, and for the agents that ask Patchwork
+/// another way.
+#[must_use]
+pub fn unguarded(agent: AgentKind, args: &[String]) -> Option<&'static str> {
+    let relay = crate::provider::mcp::relay_file().is_some()
+        && crate::provider::mcp::relay_endpoint().is_some();
+    match agent {
+        AgentKind::Codex | AgentKind::Antigravity if !relay => Some(
+            "Patchwork's permission relay is not running, so this turn would run without your \
+             permission rules. Restart Patchwork and send the message again.",
+        ),
+        AgentKind::Codex if !args.iter().any(|arg| arg.starts_with("hooks.PreToolUse=")) => Some(
+            "Codex did not load Patchwork's permission hook, so this turn would run without your \
+             permission rules. Update Codex, then send the message again.",
+        ),
+        _ => None,
     }
 }
 
@@ -293,7 +315,7 @@ fn list_codex_hooks(overrides: &[String], root: &str) -> Option<Vec<(String, Str
     }
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
-        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+        for line in crate::system::lossy_lines(BufReader::new(stdout)) {
             let Ok(v) = serde_json::from_str::<Value>(&line) else {
                 continue;
             };

@@ -55,6 +55,12 @@ pub(super) struct Download<'a> {
     signature: Signature,
 }
 
+/// latest.json is a few kilobytes of notes and three files' details.
+const MAX_MANIFEST: u64 = 1 << 20;
+
+/// No release file is near this size, so a download that passes it is not one.
+const MAX_DOWNLOAD: u64 = 2 << 30;
+
 fn is_own_asset(name: &str) -> bool {
     let kind = if cfg!(windows) {
         "exe"
@@ -130,15 +136,39 @@ fn agent(timeout: Duration) -> ureq::Agent {
         .into()
 }
 
-/// Asks GitHub for the latest release. Blocks.
+/// Asks GitHub for the latest release, and checks it is signed with the release key. Blocks.
+///
+/// The signature covers the whole of latest.json: its version, the versions it withdraws, and
+/// each file's checksum. Without it, whoever could change that file could name an older signed
+/// build as the newest, or withdraw the running one.
 pub(super) fn latest() -> Result<Release, Error> {
-    let mut response = agent(CHECK_TIMEOUT)
-        .get(LATEST_RELEASE)
-        .call()
-        .map_err(|e| format!("Could not reach the update server: {e}"))?;
-    response
-        .body_mut()
-        .read_json()
+    let agent = agent(CHECK_TIMEOUT);
+    let fetch = |url: &str| {
+        agent
+            .get(url)
+            .call()
+            .map_err(|e| format!("Could not reach the update server: {e}"))?
+            .body_mut()
+            .with_config()
+            .limit(MAX_MANIFEST)
+            .read_to_vec()
+            .map_err(|e| format!("The update server sent an unreadable release: {e}"))
+    };
+    let manifest = fetch(LATEST_RELEASE)?;
+    let signature = fetch(&format!("{LATEST_RELEASE}.minisig"))
+        .map_err(|e| format!("Could not read the signature of the release's description: {e}"))?;
+    read_signed(&manifest, &String::from_utf8_lossy(&signature), SIGNING_KEY)
+}
+
+/// The release `manifest` describes, once `signature` is found to be `key`'s over it.
+fn read_signed(manifest: &[u8], signature: &str, key: &str) -> Result<Release, Error> {
+    let key = PublicKey::from_base64(key).map_err(|e| e.to_string())?;
+    let signature = Signature::decode(signature)
+        .map_err(|e| format!("The release's description has an unreadable signature: {e}"))?;
+    key.verify(manifest, &signature, false).map_err(
+        |_mismatch| "The release's description is not signed with Patchwork's release key.",
+    )?;
+    serde_json::from_slice(manifest)
         .map_err(|e| format!("The update server sent an unreadable release: {e}").into())
 }
 
@@ -152,7 +182,15 @@ impl Download<'_> {
         progress: &dyn Fn(u64, Option<u64>),
     ) -> Result<PathBuf, Error> {
         std::fs::create_dir_all(folder).map_err(|e| format!("Could not save the download: {e}"))?;
-        let name = self.url.rsplit('/').next().unwrap_or("patchwork-update");
+        // The name is the release's to choose, so one that is not a plain file name is not used.
+        let name = self
+            .url
+            .rsplit('/')
+            .next()
+            .filter(|name| {
+                !name.contains(['\\', ':', '?', '#']) && !name.trim_matches('.').is_empty()
+            })
+            .unwrap_or("patchwork-update");
         let path = folder.join(name);
         let result = self.fetch_into(&path, progress);
         if result.is_err() {
@@ -174,7 +212,11 @@ impl Download<'_> {
         let total = response.body().content_length();
         let mut file =
             std::fs::File::create(path).map_err(|e| format!("Could not save the download: {e}"))?;
-        let mut reader = response.body_mut().with_config().limit(u64::MAX).reader();
+        let mut reader = response
+            .body_mut()
+            .with_config()
+            .limit(MAX_DOWNLOAD)
+            .reader();
         let mut hasher = Sha256::new();
         let mut buf = vec![0u8; 1 << 16];
         let (mut downloaded, mut shown) = (0u64, 0u64);

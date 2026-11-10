@@ -2,7 +2,11 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{KeyDownEvent, Focusable, MouseButton, Role, SharedString, Window, div, prelude::*, px};
+use gpui::{
+    ExternalPaths, Focusable, KeyDownEvent, MouseButton, Role, SharedString, Window, div,
+    prelude::*, px,
+};
+use crate::ui::text_area::Paste;
 use crate::chat::user::attachment_chip;
 use crate::ui::theme::{FS_MD, RADIUS, RADIUS_LG, theme};
 use crate::ui::{agent_logo, button, icon, tooltip};
@@ -333,6 +337,15 @@ impl Render for Composer {
                         .update(cx, crate::workspace::Workspace::edit_latest_queued);
                     cx.stop_propagation();
                 }
+            }))
+            // A picture or a file on the clipboard is attached; text is the editor's to paste.
+            .capture_action(cx.listener(|this, _: &Paste, _, cx| {
+                if this.paste_attachments(cx) {
+                    cx.stop_propagation();
+                }
+            }))
+            .on_drop(cx.listener(|this, files: &ExternalPaths, _, cx| {
+                this.attach_paths(files.paths(), cx);
             }))
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                 if !editor_focus.is_focused(window) {

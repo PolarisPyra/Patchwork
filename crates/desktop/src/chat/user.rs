@@ -14,7 +14,7 @@ use gpui::{
 };
 use patchwork_server::threads::{Attachment, AttachmentKind, Message};
 
-use crate::chat::markdown::{FindIn, markdown_found};
+use crate::ui::markdown::{FindIn, markdown_found};
 use crate::ui::theme::{FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
 use crate::ui::{button, format_clock, icon, tooltip};
 use crate::workspace::{Workspace, is_working};
@@ -42,20 +42,18 @@ pub fn without_image_markdown(text: &str) -> String {
         out.push_str(&rest[..start]);
         if let Some(end) = image_end(&rest[start..]) {
             rest = &rest[start + end..];
+            // The space on one side of the image goes with it. Other spacing is the user's:
+            // indented code, aligned tables.
+            if out.ends_with(' ') || out.is_empty() {
+                rest = rest.strip_prefix(' ').unwrap_or(rest);
+            }
         } else {
             out.push_str("![");
             rest = &rest[start + 2..];
         }
     }
     out.push_str(rest);
-    let mut collapsed = String::with_capacity(out.len());
-    for c in out.chars() {
-        if c == ' ' && collapsed.ends_with(' ') {
-            continue;
-        }
-        collapsed.push(c);
-    }
-    collapsed.trim().to_string()
+    out.trim().to_string()
 }
 
 /// The length of the `![label](</absolute/path>)` that `text` starts with.
@@ -241,7 +239,7 @@ impl Workspace {
                     Ok(_) => {
                         this.user.checked = None;
                         this.composer
-                            .update(cx, |c, cx| c.fill_if_empty(&text, attachments, window, cx));
+                            .update(cx, |c, cx| c.fill(&text, attachments, window, cx));
                     }
                     Err(e) => this.error = Some(e.to_string()),
                 }

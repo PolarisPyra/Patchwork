@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use serde_json::Value;
 
 use crate::threads::AccessMode;
-use crate::orchestration::AgentEvent;
+use crate::events::AgentEvent;
 
 use crate::threads::StepStatus;
 

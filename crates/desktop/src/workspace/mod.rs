@@ -12,7 +12,6 @@ mod onboarding;
 mod palette;
 mod panel_area;
 mod projects;
-mod region;
 mod render;
 mod state;
 mod threads;

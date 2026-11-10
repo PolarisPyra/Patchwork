@@ -4,6 +4,8 @@
 // Rust guideline compliant 2026-10-09
 
 mod command;
+#[cfg(test)]
+mod tests;
 mod defaults;
 mod matching;
 

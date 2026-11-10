@@ -21,7 +21,7 @@ which = { workspace = true, default-features = true }
 libc = { workspace = true, default-features = true }
 thiserror = { workspace = true, default-features = true }
 # `alias` on a variant is for reading old saved names, and the bindings don't need it.
-rusqlite = { workspace = true, default-features = true, features = ["bundled"] }
+rusqlite = { workspace = true, default-features = true, features = ["bundled", "fallible_uint"] }
 ureq = { workspace = true, default-features = true, features = ["json"] }
 # API providers: keys in the system credential store, and the agent's file search tools.
 keyring = { workspace = true, default-features = true, features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }

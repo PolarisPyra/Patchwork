@@ -43,10 +43,22 @@ pub(super) fn command_prefix(words: &[String]) -> String {
     }
 }
 
-/// A shell line as its simple commands' words, split at `&&`, `||`, `;`, `|`, `&`, and new lines,
-/// with leading `NAME=value` assignments dropped and `sh -c '…'` unwrapped. The flag is false
-/// when the line does more than its commands show: a substitution, a subshell, or a redirect
-/// other than to /dev/null or another descriptor.
+/// Words the shell reads before a command without their being one: `{ rm x; }`, `then rm x`.
+const RESERVED: [&str; 12] = [
+    "{", "}", "!", "if", "then", "elif", "else", "while", "until", "do", "time", "function",
+];
+
+/// Programs that run the command named after them, so a rule for that command covers them too.
+const WRAPPERS: [&str; 10] = [
+    "env", "command", "builtin", "exec", "eval", "nohup", "nice", "xargs", "sudo", "doas",
+];
+
+/// A shell line as its simple commands' words, split at `&&`, `||`, `;`, `|`, `&`, new lines and
+/// the ends of a subshell or substitution, with comments, reserved words and leading `NAME=value`
+/// assignments dropped, `sh -c '…'` unwrapped, and the command a wrapper such as `env` or `xargs`
+/// runs added as one of its own. The flag is false when the line does more than its commands
+/// show: a substitution, a subshell, an assignment, a quote that never closes, or a redirect other
+/// than to /dev/null or another descriptor.
 pub(super) fn split_command(line: &str) -> (Vec<Vec<String>>, bool) {
     let mut segments: Vec<Vec<String>> = Vec::new();
     let mut words: Vec<String> = Vec::new();
@@ -62,20 +74,38 @@ pub(super) fn split_command(line: &str) -> (Vec<Vec<String>>, bool) {
     };
     while let Some(c) = chars.next() {
         match c {
+            // A comment runs to the end of its line. Read as words, a quote inside it would
+            // swallow the lines after it, which the shell runs.
+            '#' if !in_word => {
+                while chars.peek().is_some_and(|c| *c != '\n') {
+                    chars.next();
+                }
+            }
             '\'' => {
                 in_word = true;
+                let mut closed = false;
                 for c in chars.by_ref() {
                     if c == '\'' {
+                        closed = true;
                         break;
                     }
                     word.push(c);
                 }
+                safe &= closed;
             }
             '"' => {
                 in_word = true;
+                let mut closed = false;
                 while let Some(c) = chars.next() {
                     match c {
-                        '"' => break,
+                        '"' => {
+                            closed = true;
+                            break;
+                        }
+                        // The shell drops a backslash and the new line after it.
+                        '\\' if chars.peek() == Some(&'\n') => {
+                            chars.next();
+                        }
                         '\\' => word.extend(chars.next()),
                         '`' => {
                             safe = false;
@@ -88,17 +118,24 @@ pub(super) fn split_command(line: &str) -> (Vec<Vec<String>>, bool) {
                         _ => word.push(c),
                     }
                 }
+                safe &= closed;
+            }
+            '\\' if chars.peek() == Some(&'\n') => {
+                chars.next();
             }
             '\\' => {
                 in_word = true;
                 word.extend(chars.next());
             }
+            // What a subshell or substitution runs is a command of its own, so a rule for it
+            // still sees it.
             '`' | '(' | ')' => {
                 safe = false;
-                in_word = true;
-                word.push(c);
+                end_word(&mut word, &mut in_word, &mut words);
+                segments.push(std::mem::take(&mut words));
             }
-            '$' if chars.peek() == Some(&'(') => {
+            // `$(…)` substitutes, and `$'…'` spells its text in escapes this does not read.
+            '$' if matches!(chars.peek(), Some('(' | '\'')) => {
                 safe = false;
                 in_word = true;
                 word.push(c);
@@ -160,25 +197,71 @@ pub(super) fn split_command(line: &str) -> (Vec<Vec<String>>, bool) {
     segments.push(words);
 
     let mut out = Vec::new();
-    for mut words in segments {
-        let assignments = words.iter().take_while(|w| is_assignment(w)).count();
-        words.drain(..assignments);
-        if words.is_empty() {
-            continue;
-        }
-        let shell = words[0].rsplit('/').next().unwrap_or_default();
-        if words.len() == 3
-            && matches!(shell, "sh" | "bash" | "zsh" | "dash")
-            && matches!(words[1].as_str(), "-c" | "-lc" | "-ic")
-        {
-            let (inner, inner_safe) = split_command(&words[2]);
-            safe &= inner_safe;
-            out.extend(inner);
-        } else {
-            out.push(words);
-        }
+    for words in &segments {
+        safe &= add_command(words, &mut out);
     }
     (out, safe)
+}
+
+/// Adds the command `words` spell to `out`, and the commands it runs in turn. False when it does
+/// more than they show.
+fn add_command(words: &[String], out: &mut Vec<Vec<String>>) -> bool {
+    let reserved = words
+        .iter()
+        .take_while(|w| RESERVED.contains(&w.as_str()))
+        .count();
+    let words = &words[reserved..];
+    // An assignment can change which program a name runs (`PATH`, `LD_PRELOAD`), so a rule for
+    // the command does not answer for it.
+    let assignments = words.iter().take_while(|w| is_assignment(w)).count();
+    let mut safe = assignments == 0;
+    let words = &words[assignments..];
+    let Some(program) = words.first() else {
+        return safe;
+    };
+    let program = program.rsplit('/').next().unwrap_or_default();
+    if matches!(program, "sh" | "bash" | "zsh" | "dash") {
+        // `-c`, and the forms that carry other flags with it: `-lc`, `-ec`.
+        let flag = words[1..]
+            .iter()
+            .position(|w| w.starts_with('-') && !w.starts_with("--") && w.contains('c'));
+        if let Some((at, script)) = flag.and_then(|at| Some((at, words.get(at + 2)?))) {
+            // Past a word that is not a flag, as in `bash -o pipefail -c …`, the `-c` may be the
+            // shell's or a script's own, so the command stands as written as well.
+            if !words[1..=at].iter().all(|w| w.starts_with('-')) {
+                out.push(words.to_vec());
+            }
+            let (inner, inner_safe) = split_command(script);
+            out.extend(inner);
+            return safe && inner_safe;
+        }
+    }
+    out.push(words.to_vec());
+    if WRAPPERS.contains(&program) {
+        // Past the wrapper's own flags and their numbers: `nice -n 5 rm`.
+        let own = words[1..]
+            .iter()
+            .take_while(|w| w.starts_with('-') || w.parse::<i64>().is_ok())
+            .count();
+        safe &= add_command(&words[1 + own..], out);
+    }
+    safe
+}
+
+/// Whether an argument makes a command that reads by its name run a program or write a file:
+/// `rg --pre`, `git diff --output`, `tree -o`. A rule that allows the command does not allow that.
+pub(super) fn does_more(program: &str, arguments: &[String]) -> bool {
+    let program = program.rsplit('/').next().unwrap_or(program);
+    arguments.iter().any(|word| {
+        let flag = word.split_once('=').map_or(word.as_str(), |(flag, _)| flag);
+        match program {
+            "rg" => matches!(flag, "--pre" | "--hostname-bin"),
+            // git takes any unambiguous start of `--output`.
+            "git" => flag.len() >= 5 && "--output".starts_with(flag),
+            "tree" => flag == "-o",
+            _ => false,
+        }
+    })
 }
 
 fn is_assignment(word: &str) -> bool {

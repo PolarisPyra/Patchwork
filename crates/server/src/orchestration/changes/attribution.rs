@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 
 use crate::orchestration::publish;
 use crate::Server;
-use crate::orchestration::AgentEvent;
+use crate::events::AgentEvent;
 use crate::system::now_ms;
 use crate::threads::{MessageStatus, Role, ToolCall};
 use crate::workspace::FileChange;

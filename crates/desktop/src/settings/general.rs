@@ -15,11 +15,9 @@ use patchwork_server::settings::{LogLevel, LoggingSettings, Theme as ThemeSettin
 
 use crate::ui::background_picker::{BackgroundPicker, PickerEvent};
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{
-    alert, choice, dropdown_chip, section_heading, segmented, switch, token_row,
-};
+use crate::settings::controls::{alert, choice, section_heading, segmented, switch, token_row};
 use crate::ui::theme::{RADIUS_SM, theme};
-use crate::ui::{BtnKind, btn, tooltip};
+use crate::ui::{BtnKind, btn, dropdown_chip, tooltip};
 
 const THEMES: [(ThemeSetting, &str); 4] = [
     (ThemeSetting::Light, "Light"),

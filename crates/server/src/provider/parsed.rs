@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use serde_json::Value;
-use crate::orchestration::AgentEvent;
+use crate::events::AgentEvent;
 use crate::system::now_ms;
 use crate::threads::{
     StepStatus, ToolCall, tool_output, SubAgent, Question, TokenUsage, Goal, BackgroundTask,

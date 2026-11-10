@@ -24,8 +24,6 @@ pub use approvals::answer::ApprovalDecision;
 pub use goal::is_upkeep;
 #[doc(inline)]
 pub use messages::queue::FollowUpInput;
-#[doc(inline)]
-pub use output::events::{AgentEvent, AgentEventEnvelope};
 pub(crate) use output::log::log_event;
 pub(crate) use output::stream::publish;
 pub(crate) use turn::instructions::{agent_instructions, system_prompt};

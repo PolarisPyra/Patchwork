@@ -37,7 +37,7 @@ notify = { version = "8", default-features = false }
 portable-pty = { version = "0.9", default-features = false }
 pulldown-cmark = { version = "0.13", default-features = false }
 regex = { version = "1", default-features = false }
-rusqlite = { version = "0.37", default-features = false }
+rusqlite = { version = "0.41", default-features = false }
 rust-embed = { version = "8", default-features = false }
 serde = { version = "1.0", default-features = false }
 serde_json = { version = "1.0", default-features = false }
@@ -57,7 +57,7 @@ winreg = { version = "0.56", default-features = false }
 x11rb = { version = "0.13", default-features = false }
 xcap = { version = "0.9", default-features = false }
 zbus = { version = "5", default-features = false }
-zip = { version = "2", default-features = false }
+zip = { version = "9", default-features = false }
 
 # Debug builds of the app are optimized too: unoptimized, GPUI takes about 50ms to lay out a
 # frame, so resizing and scrolling stutter. The other workspace crates stay unoptimized.
@@ -100,6 +100,9 @@ redundant_type_annotations = "warn"
 renamed_function_params = "warn"
 semicolon_outside_block = "warn"
 undocumented_unsafe_blocks = "warn"
+print_stderr = "warn"
+print_stdout = "warn"
+unwrap_used = "warn"
 unnecessary_safety_comment = "warn"
 unnecessary_safety_doc = "warn"
 unneeded_field_pattern = "warn"

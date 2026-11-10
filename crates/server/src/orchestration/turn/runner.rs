@@ -207,6 +207,7 @@ impl Runner {
             text,
             attachments,
             images,
+            merged,
         } = input;
         self.background_subagents(thread_id, subagents);
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
@@ -218,6 +219,7 @@ impl Runner {
             text: text.into(),
             attachments: attachments.to_vec(),
             images: images.to_vec(),
+            merged: merged.to_vec(),
         };
         self.handed_over
             .lock()

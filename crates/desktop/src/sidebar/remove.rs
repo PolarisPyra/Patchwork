@@ -3,7 +3,9 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{Context, PromptButton, PromptLevel, Window};
+use std::sync::Arc;
+
+use gpui::{AppContext as _, Context, PromptButton, PromptLevel, Window};
 use patchwork_server::threads::Thread;
 
 use super::menu::Target;
@@ -88,33 +90,43 @@ impl Workspace {
             &["Remove", "Cancel"],
             cx,
         );
+        let server = Arc::clone(&self.server);
         cx.spawn(async move |this, cx| {
             if answer.await != Ok(0) {
                 return;
             }
-            let _ = this.update(cx, |this, cx| {
-                // Projects go first: the server deletes their tasks with them.
-                for id in &projects {
-                    match this.server.remove_project(id) {
-                        Ok(()) => {
-                            if this
-                                .thread
-                                .as_ref()
-                                .is_some_and(|t| t.project_id.as_ref() == Some(id))
-                            {
-                                this.thread = None;
+            // Removing a worktree runs git, which is not for the UI thread.
+            let (removed, failed) = cx
+                .background_spawn(async move {
+                    let mut removed = Vec::new();
+                    let mut failed = None;
+                    // Projects go first: the server deletes their tasks with them.
+                    for id in projects {
+                        match server.remove_project(&id) {
+                            Ok(()) => removed.push(id),
+                            Err(e) => {
+                                log::warn!(error:% = e; "could not remove the project: {{error}}");
+                                failed.get_or_insert_with(|| e.to_string());
                             }
                         }
-                        Err(e) => {
-                            log::warn!(error:% = e; "could not remove the project: {{error}}");
+                    }
+                    for id in &folders {
+                        if let Err(e) = server.remove_folder(id) {
+                            log::warn!(error:% = e; "could not remove the folder: {{error}}");
+                            failed.get_or_insert_with(|| e.to_string());
                         }
                     }
+                    (removed, failed)
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                let open = this.thread.as_ref().and_then(|t| t.project_id.as_ref());
+                if open.is_some_and(|id| removed.contains(id)) {
+                    this.thread = None;
                 }
                 this.settings = this.server.store.settings();
-                for id in &folders {
-                    if let Err(e) = this.server.remove_folder(id) {
-                        log::warn!(error:% = e; "could not remove the folder: {{error}}");
-                    }
+                if failed.is_some() {
+                    this.error = failed;
                 }
                 for id in &threads {
                     this.archive(id, cx);
@@ -174,14 +186,21 @@ impl Workspace {
             &[PromptButton::ok("Delete"), PromptButton::cancel("Keep")],
             cx,
         );
+        let server = Arc::clone(&self.server);
         cx.spawn(async move |this, cx| {
             if answer.await != Ok(0) {
                 return;
             }
+            // Deleting a task drops its checkpoints with git, which is not for the UI thread.
+            let ids = cx
+                .background_spawn(async move {
+                    for id in &ids {
+                        server.delete_thread(id);
+                    }
+                    ids
+                })
+                .await;
             let _ = this.update(cx, |this, cx| {
-                for id in &ids {
-                    this.server.delete_thread(id);
-                }
                 if this.thread.as_ref().is_some_and(|t| ids.contains(&t.id)) {
                     this.thread = None;
                 }

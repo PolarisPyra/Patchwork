@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 
 use crate::provider::{GoalCommand, goal_command};
 use crate::permissions::Target;
-use crate::orchestration::AgentEvent;
+use crate::events::AgentEvent;
 use crate::threads::BackgroundTask;
 use crate::threads::SubAgent;
 use crate::threads::TaskStatus;

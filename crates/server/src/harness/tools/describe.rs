@@ -4,7 +4,7 @@
 
 use std::path::Path;
 use serde_json::{Value, json};
-use crate::system::fs::resolve;
+use crate::system::fs::{real, resolve};
 use crate::permissions::Target;
 use crate::permissions::PermissionKind;
 use crate::threads::AccessMode;
@@ -293,9 +293,12 @@ pub fn approval(
     root: &Path,
 ) -> Option<(String, String, Target, bool)> {
     let path = args["path"].as_str().map(|p| resolve(root, p));
-    if let Some(path) = &path
-        && !path.starts_with(root)
-    {
+    // Where the path really is: a link in the project can lead out of it.
+    let outside = path
+        .as_deref()
+        .map(real)
+        .filter(|path| !path.starts_with(real(root)));
+    if let Some(path) = &outside {
         let asks = mode != AccessMode::FullAccess;
         let shown = path.display().to_string();
         if writes(name) {

@@ -12,7 +12,7 @@ use gpui::{
     prelude::*, px,
 };
 
-use crate::chat::markdown::markdown;
+use crate::ui::markdown::markdown;
 use crate::chat::plan::plan_title;
 use crate::ui::theme::{FS_MD, FS_SM, RADIUS, RADIUS_SM, Theme};
 use crate::ui::{BtnKind, badge, btn, button, icon, popup_shadow, slug_file_name};

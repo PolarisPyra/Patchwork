@@ -4,6 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::system::fs::real;
 use super::command::{command_prefix, split_command};
 use super::matching::{Unit, covers, folder_of, host, shown, units};
 use super::{
@@ -208,7 +209,7 @@ fn answer(
         && target
             .resources
             .iter()
-            .all(|r| folder_of(root, r).starts_with(root))
+            .all(|r| real(&folder_of(root, r)).starts_with(real(root)))
     {
         return Answer::Open;
     }
@@ -242,7 +243,7 @@ fn answer(
             // Agents read their skills without asking.
             if target.kind == PermissionKind::Folder
                 && let Unit::Path(path) = unit
-                && skills.iter().any(|folder| path.starts_with(folder))
+                && skills.iter().any(|folder| path.starts_with(real(folder)))
             {
                 return Some(RuleRef {
                     scope: PermissionScope::Everywhere,

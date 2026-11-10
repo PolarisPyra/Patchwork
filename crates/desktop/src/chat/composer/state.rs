@@ -8,7 +8,7 @@ use gpui::{Entity, FocusHandle, Pixels, Point, WeakEntity, Window, prelude::*};
 use patchwork_server::provider::{AgentKind, ModelOption};
 use patchwork_server::settings::Settings;
 use patchwork_server::threads::{AccessMode, Attachment, NewThread};
-use crate::chat::text_area::{Arrow, Changed, Submitted, Tabbed, TextArea};
+use crate::ui::text_area::{Arrow, Changed, Submitted, Tabbed, TextArea};
 use crate::ui::theme::theme;
 use crate::workspace::Workspace;
 use super::menus::{Menu, Pick, Roles, efforts};

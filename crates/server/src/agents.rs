@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex, PoisonError, RwLock};
 
 use serde::Serialize;
 
-use crate::orchestration::{AgentEvent, AgentEventEnvelope};
+use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::Server;
 use crate::{agents, provider};
 

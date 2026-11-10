@@ -14,11 +14,9 @@ use patchwork_server::projects::Project;
 use patchwork_server::system::new_id;
 
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{
-    FieldKind, choice, dropdown_chip, segmented, select_box, switch, token_row,
-};
+use crate::settings::controls::{FieldKind, choice, segmented, select_box, switch, token_row};
 use crate::ui::theme::{FONT_MONO, FS_SM, RADIUS_SM, Theme, theme};
-use crate::ui::{BtnKind, btn, icon, icon_button, tooltip};
+use crate::ui::{BtnKind, btn, dropdown_chip, icon, icon_button, tooltip};
 
 /// The kinds of request the pane offers rules for (`PERMISSION_KINDS`): its label and an example.
 const PERMISSION_KINDS: [(PermissionKind, &str, &str); 1] =

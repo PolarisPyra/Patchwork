@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use super::state::{held_key, signature};
 use crate::Server;
-use crate::orchestration::{AgentEvent, AgentEventEnvelope};
+use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::provider::AgentKind;
 
 /// Whether `text` is upkeep the app also sends on its own rather than work for the agent: an idle

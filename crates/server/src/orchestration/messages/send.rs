@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::orchestration::{ApprovalDecision, Delivery, FollowUpInput, TurnRequest};
 
-use crate::orchestration::{AgentEventEnvelope, AgentEvent};
+use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::logging::{Data, Source, THREAD_LOG};
 use crate::provider::AgentKind;
 use crate::settings::LogLevel;
@@ -277,6 +277,7 @@ impl Server {
                     text: &text,
                     attachments: &attachments,
                     images: &images,
+                    merged: &[],
                 },
             ) {
                 Ok(true) => Delivery::Queued,
@@ -287,6 +288,7 @@ impl Server {
                         text: &steer_text(),
                         attachments: &attachments,
                         images: &images,
+                        merged: &[],
                     },
                     session_id.as_deref(),
                     &subagents,
@@ -306,6 +308,7 @@ impl Server {
                     text: &steer_text(),
                     attachments: &attachments,
                     images: &images,
+                    merged: &[],
                 },
                 session_id.as_deref(),
                 &subagents,

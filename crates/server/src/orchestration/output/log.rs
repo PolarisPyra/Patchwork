@@ -11,7 +11,7 @@ use crate::logging::{Data, Source, THREAD_LOG};
 use crate::settings::LogLevel;
 use crate::threads::{MessageStatus, Role, StepStatus};
 
-use super::events::{AgentEvent, AgentEventEnvelope};
+use crate::events::{AgentEvent, AgentEventEnvelope};
 
 /// Logs `envelope` to its chat's log.
 pub(crate) fn log_event(envelope: &AgentEventEnvelope) {

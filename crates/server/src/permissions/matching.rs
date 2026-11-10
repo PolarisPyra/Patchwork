@@ -3,10 +3,10 @@
 // Rust guideline compliant 2026-10-09
 
 use std::path::{Path, PathBuf};
-use crate::system::fs::resolve;
+use crate::system::fs::{real, resolve};
 use crate::system::fs::home_dir;
-use super::{PermissionKind, PermissionRule};
-use super::command::split_command;
+use super::{Effect, PermissionKind, PermissionRule};
+use super::command::{does_more, split_command};
 use super::{Target, opencode_name};
 
 /// One part of a request a rule has to cover.
@@ -29,12 +29,13 @@ pub(super) fn units(target: &Target, root: &Path) -> (Vec<Unit>, bool) {
         PermissionKind::Edit => target
             .resources
             .iter()
-            .map(|r| Unit::Path(resolve(root, r)))
+            // Where the path really is: a link in the project can lead out of it.
+            .map(|r| Unit::Path(real(&resolve(root, r))))
             .collect(),
         PermissionKind::Folder => target
             .resources
             .iter()
-            .map(|r| Unit::Path(folder_of(root, r)))
+            .map(|r| Unit::Path(real(&folder_of(root, r))))
             .collect(),
         PermissionKind::Command => target
             .resources
@@ -75,9 +76,9 @@ pub(super) fn covers(rule: &PermissionRule, unit: &Unit, root: &Path) -> bool {
     }
     match unit {
         Unit::Path(path) => match pattern {
-            "." => path.starts_with(root),
-            "~" => home_dir().is_some_and(|home| path.starts_with(home)),
-            _ => path.starts_with(resolve(root, pattern.trim_end_matches(['*', '/']))),
+            "." => path.starts_with(real(root)),
+            "~" => home_dir().is_some_and(|home| path.starts_with(real(&home))),
+            _ => path.starts_with(real(&resolve(root, pattern.trim_end_matches(['*', '/'])))),
         },
         Unit::Command(words) => {
             let wanted: Vec<&str> = pattern.split_whitespace().collect();
@@ -88,14 +89,18 @@ pub(super) fn covers(rule: &PermissionRule, unit: &Unit, root: &Path) -> bool {
                     .zip(words)
                     .enumerate()
                     .all(|(i, (want, word))| {
-                        // The program may be named by its path.
-                        let word = if i == 0 {
+                        // The program may be named by its path, which a rule that refuses or
+                        // asks still covers. One that allows does not: `./ls` is not `ls`.
+                        let word = if i == 0 && rule.effect != Effect::Allow {
                             word.rsplit('/').next().unwrap_or(word)
                         } else {
                             word
                         };
                         *want == word
                     })
+                // Past the words the rule names, the command must still only do what it says.
+                && (rule.effect != Effect::Allow
+                    || !does_more(&words[0], &words[wanted.len()..]))
         }
         Unit::Host(host) => {
             let pattern = pattern.trim_start_matches("*.").to_ascii_lowercase();
@@ -149,6 +154,11 @@ pub(super) fn host(resource: &str) -> String {
         .trim()
         .split_once("://")
         .map_or(resource.trim(), |(_, rest)| rest);
+    // Clients disagree on where the host ends in a URL with a backslash or a blank in it, so
+    // such a URL names no host a rule can answer for.
+    if rest.contains(|c: char| c == '\\' || c.is_whitespace() || c.is_control()) {
+        return String::new();
+    }
     let host = rest.split(['/', '?', '#']).next().unwrap_or_default();
     let host = host.rsplit_once('@').map_or(host, |(_, h)| h);
     let host = host.split(':').next().unwrap_or_default();

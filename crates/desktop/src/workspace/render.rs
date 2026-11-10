@@ -42,6 +42,9 @@ impl Render for Workspace {
             .key_context("Workspace")
             .on_action(|_: &crate::FocusNext, window, cx| window.focus_next(cx))
             .on_action(|_: &crate::FocusPrev, window, cx| window.focus_prev(cx))
+            .on_action(|_: &crate::ui::selection::CopySelection, _, cx| {
+                crate::ui::selection::copy(cx);
+            })
             .on_action(cx.listener(|this, _: &crate::TogglePalette, window, cx| {
                 this.toggle_palette(window, cx);
             }))

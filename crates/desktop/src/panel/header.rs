@@ -97,7 +97,7 @@ impl Panel {
                 let channel = self.output.channel().cloned();
                 let name = channel.as_ref().map(|c| c.name.clone());
                 let mut tools = vec![
-                    crate::settings::dropdown_chip(
+                    crate::ui::dropdown_chip(
                         "output-log",
                         format!("Log: {}", name.as_deref().unwrap_or("none")),
                         name.clone().unwrap_or_else(|| "No logs yet".into()),
@@ -114,7 +114,7 @@ impl Panel {
                         .find(|(l, _)| *l == level)
                         .map_or("", |(_, label)| label);
                     tools.push(
-                        crate::settings::dropdown_chip(
+                        crate::ui::dropdown_chip(
                             "output-level",
                             format!("{} log level: {current}", channel.name),
                             current,

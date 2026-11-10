@@ -17,7 +17,7 @@ use crate::orchestration::turn::start::PendingApproval;
 use crate::orchestration::{Runner, publish, unasked};
 use crate::Server;
 use crate::permissions::{self, Target, Unasked};
-use crate::orchestration::AgentEvent;
+use crate::events::AgentEvent;
 use crate::system::new_id;
 use crate::threads::{AccessMode, Approval, ApprovalStatus, Role};
 

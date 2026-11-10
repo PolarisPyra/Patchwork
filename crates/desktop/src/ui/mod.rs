@@ -4,19 +4,24 @@
 // Rust guideline compliant 2026-10-09
 
 pub mod assets;
+pub mod backdrop;
 pub mod background_picker;
 mod controls;
 mod format;
 pub mod highlight;
 mod logos;
+pub mod markdown;
 pub mod menu;
 pub mod prompt;
+pub mod selection;
 pub mod sigils;
+pub mod text_area;
 pub mod theme;
 
 pub use controls::{
-    BtnKind, above, badge, btn, button, checkbox, focus_ring, icon, icon_button, list_scrollbar,
-    menu_item, mix, overflows, popup, popup_shadow, project_tile, scrollbar, spinner, tooltip,
+    BtnKind, above, badge, btn, button, checkbox, dropdown_chip, focus_ring, icon, icon_button,
+    input_box, list_scrollbar, menu_item, mix, overflows, popup, popup_shadow, project_tile,
+    scrollbar, spinner, tooltip,
 };
 pub use format::{
     base_name, compact_elapsed, dir_name, display_title, format_clock, format_relative,

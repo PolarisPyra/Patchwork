@@ -10,7 +10,7 @@ use std::sync::atomic::Ordering;
 
 use serde_json::Value;
 
-use crate::orchestration::AgentEvent;
+use crate::events::AgentEvent;
 use crate::orchestration::decide;
 use crate::orchestration::output::stream::Unsaved;
 use crate::orchestration::tasks::jobs;

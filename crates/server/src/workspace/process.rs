@@ -63,7 +63,7 @@ pub fn open_in_editor(root: &str, rel: &str, token: Option<&str>) -> Result<(), 
             continue;
         };
         let mut cmd = crate::system::host_command(bin);
-        crate::system::launch::pass_token(&mut cmd, token);
+        pass_token(&mut cmd, token);
         let spawned = cmd
             .arg(&path)
             .stdin(Stdio::null())
@@ -184,4 +184,13 @@ workspace.windowAdded.connect(watch);
         }
         let _ = std::fs::remove_file(&script_path);
     });
+}
+
+/// Passes `token` to a program the app starts. On Wayland a window a program opens is only
+/// raised if the request carries an activation token from the compositor, which the desktop reads
+/// from `XDG_ACTIVATION_TOKEN`.
+fn pass_token(cmd: &mut std::process::Command, token: Option<&str>) {
+    if let Some(token) = token {
+        cmd.env("XDG_ACTIVATION_TOKEN", token);
+    }
 }

@@ -7,7 +7,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use futures::StreamExt;
 use futures::channel::mpsc;
-use gpui::{Entity, FocusHandle, Focusable, ListAlignment, ListState, ScrollHandle, Window, prelude::*};
+use gpui::{
+    AnyElement, Entity, FocusHandle, Focusable, ListAlignment, ListState, ScrollHandle,
+    Subscription, WeakEntity, Window, div, prelude::*,
+};
 use patchwork_server::Server;
 use patchwork_server::permissions::PermissionKind;
 use patchwork_server::projects::{Folder, Project};
@@ -28,7 +31,6 @@ use crate::ui::menu::Menu;
 use crate::workspace::palette::Palette;
 use crate::sidebar::changes::ChangesView;
 use crate::sidebar::menu::{ContextMenu, Renaming, SortUndo};
-use super::region::Region;
 use super::background_dialog;
 use super::panel_area;
 
@@ -136,7 +138,7 @@ pub struct Workspace {
     pub rail: crate::chat::rail::RailState,
     pub proposed: crate::chat::proposed::ProposedPlans,
     pub user: crate::chat::user::UserState,
-    pub backgrounds: crate::chat::backdrop::Backgrounds,
+    pub backgrounds: crate::ui::backdrop::Backgrounds,
     pub checks: crate::chat::checks::ChecksState,
     pub secrets: crate::chat::secret::SecretState,
     /// The resume prompt, while it waits for an answer.
@@ -288,7 +290,7 @@ impl Workspace {
             rail: crate::chat::rail::RailState::new(cx),
             proposed: crate::chat::proposed::ProposedPlans::default(),
             user: crate::chat::user::UserState::default(),
-            backgrounds: crate::chat::backdrop::Backgrounds::default(),
+            backgrounds: crate::ui::backdrop::Backgrounds::default(),
             streamed: HashSet::new(),
             transcript_list: ListState::new(0, ListAlignment::Top, gpui::px(800.)),
             transcript_rows: (None, Vec::new()),
@@ -395,4 +397,36 @@ pub fn is_busy(thread: &Thread) -> bool {
             .messages
             .iter()
             .any(|m| m.background.iter().any(|task| task.status.is_live()))
+}
+
+type Draw = fn(&mut Workspace, &mut Window, &mut Context<Workspace>) -> AnyElement;
+
+/// One part of the workspace drawn as its own view: the sidebar, the chat, the status bar.
+///
+/// GPUI redraws a view that is notified and reuses the last frame of every other cached one.
+/// A scroll notifies the view it happens in, so with the chat in its own region a scroll of the
+/// transcript redraws the chat alone, and the sidebar keeps its frame. Every change to the
+/// workspace notifies each region, since each draws from the workspace's state.
+pub struct Region {
+    workspace: WeakEntity<Workspace>,
+    draw: Draw,
+    _changes: Subscription,
+}
+
+impl Region {
+    pub fn new(workspace: &Entity<Workspace>, draw: Draw, cx: &mut Context<Self>) -> Self {
+        Self {
+            workspace: workspace.downgrade(),
+            draw,
+            _changes: cx.observe(workspace, |_, _, cx| cx.notify()),
+        }
+    }
+}
+
+impl Render for Region {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let draw = self.draw;
+        let body = self.workspace.update(cx, |w, cx| draw(w, window, cx)).ok();
+        div().size_full().flex().children(body)
+    }
 }

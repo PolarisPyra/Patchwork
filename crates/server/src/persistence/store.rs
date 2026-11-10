@@ -226,19 +226,33 @@ impl Store {
             return Ok(());
         };
         f(thread);
-        let tx = inner.conn.transaction().map_err(err)?;
-        save_thread_row(&tx, thread).map_err(err)?;
-        let message = message_id.and_then(|mid| {
-            thread
-                .messages
-                .iter()
-                .enumerate()
-                .find(|(_, m)| m.id == mid)
-        });
-        if let Some((i, m)) = message {
-            save_message(&tx, &thread.id, i, m).map_err(err)?;
+        let conn = &mut inner.conn;
+        let written = (|| {
+            let tx = conn.transaction()?;
+            save_thread_row(&tx, thread)?;
+            let message = message_id.and_then(|mid| {
+                thread
+                    .messages
+                    .iter()
+                    .enumerate()
+                    .find(|(_, m)| m.id == mid)
+            });
+            if let Some((i, m)) = message {
+                save_message(&tx, &thread.id, i, m)?;
+            }
+            tx.commit()
+        })();
+        if let Err(e) = written {
+            // The thread goes back to what is stored, so memory never runs ahead of the disk.
+            // Read back rather than copied first: this runs for every piece of a streamed reply.
+            let stored = load_threads(conn)
+                .ok()
+                .and_then(|threads| threads.into_iter().find(|t| t.id == id));
+            if let Some(stored) = stored {
+                *thread = stored;
+            }
+            return Err(err(e).into());
         }
-        tx.commit().map_err(err)?;
         Ok(())
     }
 
@@ -438,27 +452,27 @@ impl Store {
     ///
     /// Returns an error when the database cannot delete the chat or its saved state.
     pub fn delete_thread(&self, id: &str) -> Result<(), Error> {
-        let mut inner = self.lock();
-        inner
-            .conn
-            .execute("DELETE FROM threads WHERE id = ?1", [id])
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        // All of it or none: a thread row gone with its state left would come back empty.
+        let tx = inner.conn.transaction().map_err(err)?;
+        tx.execute("DELETE FROM threads WHERE id = ?1", [id])
             .map_err(err)?;
         for key in thread_state_keys(id) {
-            inner
-                .conn
-                .execute("DELETE FROM app_state WHERE key = ?1", [key])
+            tx.execute("DELETE FROM app_state WHERE key = ?1", [key])
                 .map_err(err)?;
         }
+        tx.commit().map_err(err)?;
         inner.threads.retain(|t| t.id != id);
         Ok(())
     }
 
     /// Deletes a project's tasks and folders.
     pub(crate) fn delete_project_threads(&self, project_id: &str) -> Result<(), Error> {
-        let mut inner = self.lock();
-        inner
-            .conn
-            .execute("DELETE FROM threads WHERE project_id = ?1", [project_id])
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        let tx = inner.conn.transaction().map_err(err)?;
+        tx.execute("DELETE FROM threads WHERE project_id = ?1", [project_id])
             .map_err(err)?;
         let ids: Vec<String> = inner
             .threads
@@ -467,15 +481,12 @@ impl Store {
             .map(|t| t.id.clone())
             .collect();
         for key in ids.iter().flat_map(|id| thread_state_keys(id)) {
-            inner
-                .conn
-                .execute("DELETE FROM app_state WHERE key = ?1", [key])
+            tx.execute("DELETE FROM app_state WHERE key = ?1", [key])
                 .map_err(err)?;
         }
-        inner
-            .conn
-            .execute("DELETE FROM folders WHERE project_id = ?1", [project_id])
+        tx.execute("DELETE FROM folders WHERE project_id = ?1", [project_id])
             .map_err(err)?;
+        tx.commit().map_err(err)?;
         inner
             .threads
             .retain(|t| t.project_id.as_deref() != Some(project_id));

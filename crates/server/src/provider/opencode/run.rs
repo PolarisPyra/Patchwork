@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use serde_json::Value;
-use crate::orchestration::AgentEvent;
+use crate::events::AgentEvent;
 use crate::threads::{AccessMode, AttachmentKind, PlanStep, TokenUsage};
 use crate::provider::Parsed;
 use crate::provider::ToolStart;

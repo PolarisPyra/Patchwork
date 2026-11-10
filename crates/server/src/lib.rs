@@ -11,6 +11,7 @@ pub mod backgrounds;
 pub mod checks;
 pub mod computer;
 mod error;
+pub mod events;
 pub mod git;
 pub mod harness;
 pub mod import;
@@ -39,7 +40,7 @@ use std::sync::Arc;
 use orchestration::Runner;
 use persistence::Store;
 
-use crate::orchestration::AgentEventEnvelope;
+use crate::events::AgentEventEnvelope;
 
 #[doc(inline)]
 pub use error::Error;
@@ -53,6 +54,8 @@ pub struct Server {
     runner: Runner,
     /// Parent of the scratch folders that project-less chats run in.
     chats_dir: PathBuf,
+    /// Pictures pasted into a message, which exist nowhere else.
+    pasted_dir: PathBuf,
     /// Pictures picked as chat backgrounds, copied so they stay when the originals move.
     backgrounds_dir: PathBuf,
     /// Where an agent CLI's install script is saved while it runs.
@@ -111,6 +114,7 @@ impl Server {
             usage: usage::UsageCache::default(),
             runner: Runner::default(),
             chats_dir: data_dir.join("chats"),
+            pasted_dir: data_dir.join("pasted"),
             backgrounds_dir: data_dir.join("backgrounds"),
             installers_dir: data_dir.join("installers"),
             worktrees_dir: data_dir.join("worktrees"),

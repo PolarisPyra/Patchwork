@@ -15,7 +15,7 @@ use gpui::{
 use patchwork_server::Server;
 use patchwork_server::backgrounds::{BackgroundImage, ChatBackground, RemovedBackground};
 
-use crate::chat::backdrop::{PRESETS, preset_fill};
+use crate::ui::backdrop::{PRESETS, preset_fill};
 use crate::ui::theme::{FS_SM, RADIUS_SM, Theme, theme};
 use crate::ui::{button, focus_ring, icon, spinner, tooltip};
 

@@ -12,6 +12,9 @@ use crate::ui::theme::{FS_SM, FS_XS, RADIUS_SM, Theme};
 use crate::ui::{icon, tooltip};
 use crate::workspace::Workspace;
 
+/// How often a missing folder is looked for again.
+const RECHECK: std::time::Duration = std::time::Duration::from_secs(3);
+
 impl Workspace {
     /// Whether the open project's folder was looked for and not found.
     pub fn folder_missing(&self) -> bool {
@@ -19,7 +22,8 @@ impl Workspace {
         matches!(&self.folder_check, Some((checked, Some(false))) if Some(checked.as_str()) == path)
     }
 
-    /// Looks for the open project's folder off the main thread, once per path.
+    /// Looks for the open project's folder off the main thread, once per path, and keeps looking
+    /// for one that is missing: a drive mounted later brings it back.
     fn check_folder(&mut self, cx: &mut Context<Self>) {
         let Some(path) = self.project().map(|p| p.path.clone()) else {
             return;
@@ -37,13 +41,29 @@ impl Workspace {
             async move { std::path::Path::new(&path).is_dir() }
         });
         cx.spawn(async move |this, cx| {
-            let found = task.await;
-            let _ = this.update(cx, |this, cx| {
-                if let Some((_, seen)) = this.folder_check.as_mut().filter(|(p, _)| *p == path) {
-                    *seen = Some(found);
-                    cx.notify();
+            let mut found = task.await;
+            loop {
+                let watched = this.update(cx, |this, cx| {
+                    let check = this.folder_check.as_mut().filter(|(p, _)| *p == path);
+                    let Some((_, seen)) = check else {
+                        return false;
+                    };
+                    if *seen != Some(found) {
+                        *seen = Some(found);
+                        cx.notify();
+                    }
+                    true
+                });
+                // Ends once the folder is there, or the project is no longer the open one.
+                if found || !watched.unwrap_or(false) {
+                    return;
                 }
-            });
+                cx.background_executor().timer(RECHECK).await;
+                let path = path.clone();
+                found = cx
+                    .background_spawn(async move { std::path::Path::new(&path).is_dir() })
+                    .await;
+            }
         })
         .detach();
     }

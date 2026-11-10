@@ -19,7 +19,7 @@ use crate::provider::Parsed;
 use crate::provider::TaskEvent;
 use crate::provider;
 use crate::system::scope;
-use crate::orchestration::AgentEvent;
+use crate::events::AgentEvent;
 use crate::provider::AgentKind;
 
 /// What kind of output a line is, as its `type` (or JSON-RPC `method`) and any `subtype`.
