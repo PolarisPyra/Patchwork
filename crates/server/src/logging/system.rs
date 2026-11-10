@@ -18,28 +18,16 @@ use crate::system::fs::home_dir;
 /// This launch's report, worked out by the first caller.
 static REPORT: OnceLock<Value> = OnceLock::new();
 
-/// The window's web engine version, which the desktop shell knows.
-static WEBVIEW: OnceLock<String> = OnceLock::new();
-
 /// Environment variables that change how the window draws or how agents start. Their values are
 /// switches and names, never secrets.
-const ENV: [&str; 10] = [
+const ENV: [&str; 6] = [
     "XDG_CURRENT_DESKTOP",
     "XDG_SESSION_TYPE",
     "DESKTOP_SESSION",
-    "GDK_BACKEND",
-    "GDK_SCALE",
-    "WEBKIT_DISABLE_DMABUF_RENDERER",
-    "WEBKIT_DISABLE_COMPOSITING_MODE",
     "LIBGL_ALWAYS_SOFTWARE",
     "APPIMAGE",
     "FLATPAK_ID",
 ];
-
-/// Notes the window's web engine version, before the server opens.
-pub fn set_webview(version: String) {
-    let _ = WEBVIEW.set(version);
-}
 
 /// Writes this launch's `system.json` in `session` and logs a summary to `main.log`, on its own
 /// thread, since asking each agent CLI its version takes a moment.
@@ -75,7 +63,6 @@ pub fn report() -> &'static Value {
             "arch": std::env::consts::ARCH,
             "distro": distro(),
             "kernel": read_trimmed("/proc/sys/kernel/osrelease"),
-            "webview": WEBVIEW.get(),
             "cpus": std::thread::available_parallelism().map(std::num::NonZero::get).ok(),
             "memoryMb": memory_mb(),
             "locale": std::env::var("LANG").ok(),
@@ -100,14 +87,13 @@ fn summary(report: &Value) -> String {
         })
         .unwrap_or_default();
     format!(
-        "Patchwork {} ({}) on {} {}, kernel {}, {} session, webview {}; agents: {}",
+        "Patchwork {} ({}) on {} {}, kernel {}, {} session; agents: {}",
         text("version"),
         text("build"),
         text("distro"),
         text("arch"),
         text("kernel"),
         report["env"]["XDG_SESSION_TYPE"].as_str().unwrap_or("?"),
-        text("webview"),
         if agents.is_empty() {
             "none".into()
         } else {

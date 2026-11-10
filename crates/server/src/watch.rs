@@ -296,7 +296,7 @@ mod linux {
     }
 }
 
-/// FSEvents and ReadDirectoryChangesW watch a whole tree for the price of one folder, so the
+/// `FSEvents` and `ReadDirectoryChangesW` watch a whole tree for the price of one folder, so the
 /// root gets one recursive watch and ignored paths are dropped as their events arrive.
 #[cfg(not(target_os = "linux"))]
 mod tree {

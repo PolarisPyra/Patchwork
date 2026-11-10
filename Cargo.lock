@@ -4402,8 +4402,6 @@ dependencies = [
  "url",
  "uuid",
  "vt100",
- "wayland-client",
- "wayland-protocols",
  "which 7.0.3",
  "windows-sys 0.60.2",
  "winreg 0.56.0",

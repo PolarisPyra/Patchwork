@@ -11,10 +11,9 @@
 use crate::Error;
 use std::path::PathBuf;
 
-use base64::Engine as _;
 use enigo::{Axis, Button, Coordinate, Direction, Enigo, Keyboard, Mouse, Settings as EnigoSettings};
 use image::RgbaImage;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 /// Whether Settings → Permissions has turned computer use on. Kept here so the tool list and the
 /// approval rules can ask without a settings lookup.
@@ -43,12 +42,11 @@ pub fn ensure_enabled() -> Result<(), Error> {
     }
 }
 
-/// A screenshot, as a data URL the webview can show, and the screen's size.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+/// A screenshot, as PNG bytes, and the screen's size.
+#[derive(Debug, Clone)]
 pub struct Screenshot {
-    /// `data:image/png;base64,…`
-    pub data_url: String,
+    /// The picture, encoded as PNG.
+    pub png: Vec<u8>,
     /// The size of the picture, in the screen's own pixels.
     pub width: u32,
     pub height: u32,
@@ -97,7 +95,7 @@ fn left() -> String {
     "left".into()
 }
 
-/// The primary monitor as a PNG data URL, at its own size.
+/// The primary monitor as a PNG, at its own size.
 ///
 /// # Errors
 ///
@@ -114,9 +112,8 @@ pub fn screenshot() -> Result<Screenshot, Error> {
     image
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .map_err(|e| format!("Could not encode the screenshot: {e}"))?;
-    let encoded = base64::engine::general_purpose::STANDARD.encode(&png);
     Ok(Screenshot {
-        data_url: format!("data:image/png;base64,{encoded}"),
+        png,
         width,
         height,
         screen_width,
@@ -127,15 +124,7 @@ pub fn screenshot() -> Result<Screenshot, Error> {
 /// Writes a screenshot to `dir` as PNG and returns the path, for an agent that reads images
 /// with its file tools rather than receiving them inline.
 pub(crate) fn screenshot_to_file(dir: &std::path::Path) -> Result<PathBuf, Error> {
-    let shot = screenshot()?;
-    let encoded = shot
-        .data_url
-        .split_once("base64,")
-        .map(|(_, rest)| rest)
-        .ok_or("The screenshot had no data")?;
-    let png = base64::engine::general_purpose::STANDARD
-        .decode(encoded)
-        .map_err(|e| format!("Could not decode the screenshot: {e}"))?;
+    let png = screenshot()?.png;
     std::fs::create_dir_all(dir).map_err(|e| format!("Could not make {}: {e}", dir.display()))?;
     let path = dir.join(format!("screen-{}.png", crate::system::now_ms()));
     std::fs::write(&path, png).map_err(|e| format!("Could not write {}: {e}", path.display()))?;
@@ -637,13 +626,11 @@ mod tests {
             shot.screen_width,
             shot.screen_height
         );
-        assert!(shot.data_url.starts_with("data:image/png;base64,"));
         assert!(shot.width > 0 && shot.height > 0);
-        // The PNG header, so the base64 really is a picture.
-        let encoded = shot.data_url.split_once("base64,").expect("base64").1;
-        let png = base64::engine::general_purpose::STANDARD
-            .decode(encoded)
-            .expect("base64 decodes");
-        assert_eq!(&png[..8], &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
+        // The PNG header, so the bytes really are a picture.
+        assert_eq!(
+            &shot.png[..8],
+            &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]
+        );
     }
 }

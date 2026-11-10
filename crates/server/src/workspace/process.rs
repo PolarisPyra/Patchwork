@@ -18,9 +18,11 @@ pub fn signal_process_group(pid: u32, signal: i32) {
     unsafe { libc::kill(-(pid as libc::pid_t), signal) };
 }
 
-/// Windows has no signals a console program can be sent, so either one ends the process with
-/// the processes it started, as `taskkill /T` finds them. Agents started through a `.cmd` shim
-/// run under `cmd.exe`, so killing the shim alone would leave the agent running.
+/// Ends the process and the processes it started, as `taskkill /T` finds them.
+///
+/// Windows has no signals a console program can be sent, so either one does this. Agents started
+/// through a `.cmd` shim run under `cmd.exe`, so killing the shim alone would leave the agent
+/// running.
 #[cfg(not(unix))]
 pub fn signal_process_group(pid: u32, _signal: i32) {
     let _ = crate::system::host_command("taskkill")

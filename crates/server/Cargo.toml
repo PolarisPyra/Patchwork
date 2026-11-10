@@ -58,9 +58,6 @@ windows-sys = { workspace = true, default-features = true, features = ["Win32_Fo
 x11rb = { workspace = true, default-features = true, features = ["randr"] }
 zbus = { workspace = true, default-features = true }
 url = { workspace = true, default-features = true }
-# Activation tokens from the Wayland compositor, so the windows a program opens come forward.
-wayland-client = { workspace = true, default-features = true, features = ["system"] }
-wayland-protocols = { workspace = true, default-features = true, features = ["client", "staging"] }
 
 [lints]
 workspace = true

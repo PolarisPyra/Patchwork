@@ -242,11 +242,10 @@ impl Workspace {
             (Target::Thread(id), Act::Export) => return self.export_thread(id, cx),
             (Target::Thread(id), Act::OpenLogs) => {
                 let (server, id) = (Arc::clone(&self.server), id.clone());
-                cx.background_spawn(async move {
-                    let shown = server
-                        .thread_report(&id)
-                        .and_then(|path| patchwork_server::system::launch::reveal(&path, None));
-                    if let Err(e) = shown {
+                let report = cx.background_spawn(async move { server.thread_report(&id) });
+                cx.spawn(async move |_, cx| match report.await {
+                    Ok(path) => cx.update(|cx| cx.reveal_path(&path)),
+                    Err(e) => {
                         log::warn!(error:% = e; "could not show the logs of the chat: {{error}}");
                     }
                 })
@@ -263,16 +262,7 @@ impl Workspace {
                 let Some(project) = self.settings.projects.iter().find(|p| &p.id == id) else {
                     return;
                 };
-                let path = std::path::PathBuf::from(&project.path);
-                cx.background_spawn(async move {
-                    if let Err(e) = patchwork_server::system::launch::reveal(&path, None) {
-                        log::warn!(
-                            path:% = path.display(), error:% = e;
-                            "could not show {{path}}: {{error}}"
-                        );
-                    }
-                })
-                .detach();
+                cx.reveal_path(std::path::Path::new(&project.path));
                 Ok(())
             }
             (Target::Project(_) | Target::Folder(_), Act::Remove) => {

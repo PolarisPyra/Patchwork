@@ -43,7 +43,7 @@ pub enum BackgroundStrength {
 pub struct BackgroundImage {
     /// Its file name, as a `ChatBackground::Image` names it.
     pub file: String,
-    /// Where it is, for the webview to load it.
+    /// Where it is, for the window to load it.
     pub path: String,
     /// The name of the file it was copied from, without its extension. None for a picture saved
     /// before names were kept.

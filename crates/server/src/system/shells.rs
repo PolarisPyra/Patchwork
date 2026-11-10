@@ -82,6 +82,7 @@ pub fn login_shell() -> Option<String> {
 }
 
 #[cfg(not(unix))]
+#[must_use]
 pub fn login_shell() -> Option<String> {
     None
 }

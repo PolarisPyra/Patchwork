@@ -74,7 +74,7 @@ pub fn border_focus() -> Hsla {
     hex(0x0035_74f0)
 }
 
-/// `color-mix(in srgb, fg pct%, bg)`, for the tokens the web UI mixes in place.
+/// `color-mix(in srgb, fg pct%, bg)`, for the tokens mixed from two others.
 fn mix(fg: u32, bg: u32, pct: f32) -> Hsla {
     let (f, b) = (gpui::rgb(fg), gpui::rgb(bg));
     Rgba {

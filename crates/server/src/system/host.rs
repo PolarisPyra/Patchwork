@@ -123,19 +123,16 @@ fn expand_windows_vars(value: &str, var: &dyn Fn(&str) -> Option<String>) -> Str
     while let Some(start) = rest.find('%') {
         out.push_str(&rest[..start]);
         let after = &rest[start + 1..];
-        match after.find('%') {
-            Some(end) => {
-                let name = &after[..end];
-                match var(name) {
-                    Some(v) if !name.is_empty() => out.push_str(&v),
-                    _ => out.push_str(&rest[start..start + end + 2]),
-                }
-                rest = &after[end + 1..];
+        if let Some(end) = after.find('%') {
+            let name = &after[..end];
+            match var(name) {
+                Some(v) if !name.is_empty() => out.push_str(&v),
+                _ => out.push_str(&rest[start..start + end + 2]),
             }
-            None => {
-                out.push_str(&rest[start..]);
-                rest = "";
-            }
+            rest = &after[end + 1..];
+        } else {
+            out.push_str(&rest[start..]);
+            rest = "";
         }
     }
     out.push_str(rest);

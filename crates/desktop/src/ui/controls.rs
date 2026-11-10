@@ -27,7 +27,7 @@ pub(super) fn mono_svg(path: SharedString, size: f32) -> Icon {
     .flex_none()
 }
 
-/// A one-colour SVG drawn in the text colour around it, as `currentColor` is in the web UI, so it
+/// A one-colour SVG drawn in the text colour around it, so it
 /// follows its button's hover colour. A colour set on the icon itself wins.
 #[derive(IntoElement)]
 pub struct Icon {
@@ -222,7 +222,7 @@ pub fn overflows<V: 'static>(
 }
 
 /// A scrollbar thumb for the element `handle` tracks, `width` wide with `inset` of clear space
-/// around it, as the web UI's `::-webkit-scrollbar-thumb` draws one. None when nothing scrolls.
+/// around it. None when nothing scrolls.
 pub fn scrollbar(handle: &gpui::ScrollHandle, width: f32, inset: f32, color: Hsla) -> Option<Div> {
     let view = f32::from(handle.bounds().size.height);
     let max = f32::from(handle.max_offset().y);
@@ -391,7 +391,7 @@ pub fn checkbox(
         .child(label)
 }
 
-/// What the web UI's `title` attribute shows: a small box with `text` beside the pointer.
+/// A tooltip: a small box with `text` beside the pointer.
 pub fn tooltip(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> gpui::AnyView {
     let text = text.into();
     move |_, cx| {

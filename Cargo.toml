@@ -49,8 +49,6 @@ ureq = { version = "3", default-features = false }
 url = { version = "2", default-features = false }
 uuid = { version = "1", default-features = false }
 vt100 = { version = "0.16", default-features = false }
-wayland-client = { version = "0.31", default-features = false }
-wayland-protocols = { version = "0.32", default-features = false }
 which = { version = "7", default-features = false }
 windows-sys = { version = "0.60", default-features = false }
 winreg = { version = "0.56", default-features = false }

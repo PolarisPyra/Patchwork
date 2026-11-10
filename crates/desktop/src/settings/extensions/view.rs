@@ -82,11 +82,16 @@ impl SettingsDialog {
 
     /// Opens `dir` in the file manager, making it first.
     pub(super) fn open_folder(&mut self, dir: PathBuf, cx: &mut Context<Self>) {
-        self.try_run(
+        self.extensions.error = None;
+        self.run(
             move || {
-                std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-                patchwork_server::system::launch::xdg_open(dir.as_os_str(), None)
+                std::fs::create_dir_all(&dir)
+                    .map(|()| dir)
                     .map_err(|e| e.to_string())
+            },
+            |d, made, cx| match made {
+                Ok(dir) => cx.open_with_system(&dir),
+                Err(e) => d.extensions.error = Some(e),
             },
             cx,
         );

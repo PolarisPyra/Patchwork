@@ -1,5 +1,4 @@
-//! Patchwork's native window: the same app as the desktop webview, drawn with GPUI over the same
-//! server, folders and database.
+//! Patchwork's window, drawn with GPUI over the server, its folders and its database.
 
 #![expect(
     clippy::unused_self,
@@ -247,7 +246,7 @@ fn main() {
             prewarm_fonts(cx);
             cx.background_spawn(async { ui::highlight::warm() })
                 .detach();
-            // Grayscale, as the web view draws text (`-webkit-font-smoothing: antialiased`).
+            // Grayscale text, which reads lighter than subpixel on the dark theme.
             cx.set_text_rendering_mode(TextRenderingMode::Grayscale);
             settings::shortcuts::bind_keys(&server, cx);
             cx.set_global(sigils::load(&server));

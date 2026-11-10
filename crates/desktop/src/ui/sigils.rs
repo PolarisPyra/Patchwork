@@ -1,7 +1,7 @@
 //! The characters that open the composer's menus: files, skills, agents and
 //! commands. The user can type a different one for each, but what is sent always uses the
 //! default, which is what the agents and the backend read. The changed ones are kept in the app
-//! state under `sigils`, in the web UI's shape.
+//! state under `sigils`.
 
 // Rust guideline compliant 2026-10-09
 

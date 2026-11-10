@@ -10,7 +10,7 @@ use serde::Serialize;
 use crate::Error;
 
 /// Largest image shown as a thumbnail. A bigger one shows as a card, so a huge file cannot freeze
-/// the webview.
+/// the window.
 const MAX_PREVIEW_BYTES: u64 = 20 * 1024 * 1024;
 
 /// Most paths one `file_media` call looks at. The rest of a long reply stays in the text list.
@@ -20,9 +20,9 @@ const MAX_MEDIA_PATHS: usize = 50;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PreviewKind {
-    /// A thumbnail, for an image a webview draws within `MAX_PREVIEW_BYTES`.
+    /// A thumbnail, for an image within `MAX_PREVIEW_BYTES`.
     Image,
-    /// A player, for a video a webview plays. It streams, so it has no size cap.
+    /// A video. It streams, so it has no size cap.
     Video,
     /// Source or config text. The diff list keeps these, so they get no card.
     Text,
@@ -31,7 +31,7 @@ pub enum PreviewKind {
 }
 
 /// What a file a reply touched looks like now. `size` is 0 for a file that is gone. `absolute` is
-/// the same file by its full path, which the webview needs to load it.
+/// the same file by its full path, which the window needs to load it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct FileMedia {
     pub path: String,
@@ -40,7 +40,7 @@ pub struct FileMedia {
     pub kind: PreviewKind,
 }
 
-/// Images a webview draws. This is not `types::image_media_type`, which decides what a vision
+/// Images shown as thumbnails. This is not `types::image_media_type`, which decides what a vision
 /// model receives, and no provider takes SVG there.
 fn is_previewable_image(ext: &str) -> bool {
     matches!(
@@ -49,7 +49,7 @@ fn is_previewable_image(ext: &str) -> bool {
     )
 }
 
-/// Videos a webview plays, through GStreamer on Linux.
+/// Videos, shown by kind.
 fn is_playable_video(ext: &str) -> bool {
     matches!(ext, "mp4" | "m4v" | "webm" | "mov" | "ogv" | "mkv")
 }

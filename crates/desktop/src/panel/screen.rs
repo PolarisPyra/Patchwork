@@ -6,7 +6,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use base64::Engine;
 use gpui::{
     AnyElement, Image, ImageFormat, ObjectFit, Pixels, Role, Size, Task, Toggled, Window, canvas,
     div, img, prelude::*, px,
@@ -41,15 +40,7 @@ impl Panel {
         let task = cx.background_spawn(async {
             patchwork_server::computer::ensure_enabled()?;
             let shot = patchwork_server::computer::screenshot()?;
-            let data = shot
-                .data_url
-                .split_once(";base64,")
-                .map(|(_, data)| data)
-                .ok_or("The screenshot could not be read")?;
-            let bytes = base64::engine::general_purpose::STANDARD
-                .decode(data)
-                .map_err(|e| e.to_string())?;
-            let image = Arc::new(Image::from_bytes(ImageFormat::Png, bytes));
+            let image = Arc::new(Image::from_bytes(ImageFormat::Png, shot.png));
             Ok::<_, patchwork_server::Error>((image, shot.screen_width, shot.screen_height))
         });
         self.screen.capture = Some(cx.spawn(async move |this, cx| {

@@ -35,9 +35,6 @@ const MINIMAL_ENV: [&str; 12] = [
     "SystemRoot",
 ];
 
-/// Variables Patchwork sets on itself, which a shell should not start with.
-const OWN_ENV: [&str; 1] = ["WEBKIT_DISABLE_DMABUF_RENDERER"];
-
 /// The shells offered after the user's own, each where the PATH finds it.
 const SHELL_CANDIDATES: [&str; 6] = ["zsh", "bash", "fish", "pwsh", "powershell", "cmd"];
 
@@ -125,7 +122,6 @@ pub fn launch(
         .filter(|(key, _)| {
             terminal.inherit_env || cfg!(windows) || MINIMAL_ENV.contains(&key.as_str())
         })
-        .filter(|(key, _)| !OWN_ENV.contains(&key.as_str()))
         .collect();
 
     // The settings' variables, resolved against that environment; null removes one.

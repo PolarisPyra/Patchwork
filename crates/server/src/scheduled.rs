@@ -568,7 +568,7 @@ mod tests {
         assert_eq!(action(&task(true, Some(slot)), day_late + 1), Action::Skip);
     }
 
-    /// The JSON the web UI reads and writes, which is what the database holds too.
+    /// The JSON the database holds, which older versions read too.
     #[test]
     fn a_schedule_is_written_in_the_shape_the_ui_reads() {
         let hourly = serde_json::to_string(&Schedule::Hourly { interval_hours: 3 }).expect("json");
