@@ -3,6 +3,13 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.40] - 2026-11-10
+
+### Fixed
+
+- A picture sent with a message, or with a steer, no longer hides behind the message's text: the text now sits below it. Small pictures show at their own size instead of being blown up, so they stay sharp, and larger ones shrink to fit with their shape kept.
+- Copying text selected in a chat now keeps a list's numbers and bullets, with nested items indented, and a table pastes as rows with its cells side by side. A drag can also start on a list's number or bullet. Before, the numbers and bullets were left out and each table cell went on its own line.
+
 ## [26.11.39] - 2026-11-10
 
 ### Changed
