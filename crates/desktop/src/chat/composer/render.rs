@@ -338,6 +338,8 @@ impl Render for Composer {
                 if !editor_focus.is_focused(window) {
                     window.focus(&editor_focus, cx);
                 }
+                // Without this the workspace, which is focusable too, takes the focus back.
+                window.prevent_default();
             })
             .children(sigil_menu)
             .when(!attachments.is_empty(), |c| {
