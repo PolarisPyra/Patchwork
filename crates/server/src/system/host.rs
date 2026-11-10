@@ -117,7 +117,7 @@ fn windows_path() -> Option<std::ffi::OsString> {
 
 /// `%NAME%` references in a registry value, replaced with the values `var` gives them.
 #[cfg(windows)]
-fn expand_windows_vars(value: &str, var: &dyn Fn(&str) -> Option<String>) -> String {
+pub(crate) fn expand_windows_vars(value: &str, var: &dyn Fn(&str) -> Option<String>) -> String {
     let mut out = String::new();
     let mut rest = value;
     while let Some(start) = rest.find('%') {

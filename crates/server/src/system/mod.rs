@@ -23,6 +23,8 @@ pub(crate) mod time;
 
 #[doc(inline)]
 pub use host::{hide_console, host_command, host_env, path_var};
+#[cfg(windows)]
+pub(crate) use host::expand_windows_vars;
 #[doc(inline)]
 pub use dirs::{Dirs, dirs};
 #[doc(inline)]

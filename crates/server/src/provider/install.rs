@@ -41,8 +41,8 @@ impl Server {
     ///
     /// A script is saved before it runs, so the file that runs is the one that was fetched. Codex
     /// and OpenCode are kept from editing the shell profile; Antigravity's script always adds its
-    /// folder to it. On Windows the Codex and Antigravity installers add their folder to the
-    /// user's PATH, as they do when run by hand.
+    /// folder to it. On Windows the CLI's folder is put on the user's PATH, so a terminal opened
+    /// afterwards finds it.
     ///
     /// # Errors
     ///
@@ -72,8 +72,92 @@ impl Server {
             )
             .into());
         }
+        #[cfg(windows)]
+        if let Some(folder) = bin.parent() {
+            add_to_user_path(folder)?;
+        }
         log::info!(agent:? = kind, path:% = bin.display(); "installed {{agent}} at {{path}}");
         Ok(())
+    }
+}
+
+/// Puts `folder` at the end of the user's PATH unless it is on it, and tells running programs,
+/// so a terminal opened from now on finds the CLI.
+///
+/// Claude's installer only says to add its folder by hand, and OpenCode's archive has no
+/// installer; Codex's and Antigravity's add their own, which this then finds there.
+#[cfg(windows)]
+fn add_to_user_path(folder: &Path) -> Result<(), Error> {
+    use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, KEY_SET_VALUE, RegType};
+    use winreg::types::FromRegValue;
+    use winreg::{RegKey, RegValue};
+
+    let failed = |e: std::io::Error| format!("Could not add {} to PATH: {e}", folder.display());
+    let env = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey_with_flags("Environment", KEY_READ | KEY_SET_VALUE)
+        .map_err(failed)?;
+    // The value keeps its type, so `%NAME%` entries in an expandable one go on working.
+    let (current, vtype) = match env.get_raw_value("Path") {
+        Ok(raw) => (String::from_reg_value(&raw).map_err(failed)?, raw.vtype),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            (String::new(), RegType::REG_EXPAND_SZ)
+        }
+        Err(e) => return Err(failed(e).into()),
+    };
+    let wanted = folder.to_string_lossy();
+    let same = |entry: &str| {
+        let entry = crate::system::expand_windows_vars(entry, &|name| std::env::var(name).ok());
+        entry
+            .trim_end_matches('\\')
+            .eq_ignore_ascii_case(wanted.trim_end_matches('\\'))
+    };
+    if current.split(';').any(same) {
+        return Ok(());
+    }
+    let current = current.trim_end_matches(';');
+    let updated = if current.is_empty() {
+        wanted.into_owned()
+    } else {
+        format!("{current};{wanted}")
+    };
+    let bytes: Vec<u8> = updated
+        .encode_utf16()
+        .chain([0])
+        .flat_map(u16::to_le_bytes)
+        .collect();
+    env.set_raw_value(
+        "Path",
+        &RegValue {
+            bytes: bytes.into(),
+            vtype,
+        },
+    )
+    .map_err(failed)?;
+    announce_environment();
+    Ok(())
+}
+
+/// Tells running programs that the user's environment changed, as the System Properties dialog
+/// does, so Explorer passes the new PATH to the terminals it starts.
+#[cfg(windows)]
+fn announce_environment() {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        HWND_BROADCAST, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_SETTINGCHANGE,
+    };
+    let area: Vec<u16> = "Environment".encode_utf16().chain([0]).collect();
+    let mut reply = 0;
+    // SAFETY: `area` is a NUL-terminated UTF-16 string that outlives the call, which only reads
+    // it, and `reply` is a valid place for the one value it writes.
+    unsafe {
+        SendMessageTimeoutW(
+            HWND_BROADCAST,
+            WM_SETTINGCHANGE,
+            0,
+            area.as_ptr() as isize,
+            SMTO_ABORTIFHUNG,
+            5000,
+            &raw mut reply,
+        );
     }
 }
 
