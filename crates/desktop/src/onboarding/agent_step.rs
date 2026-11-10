@@ -207,13 +207,18 @@ pub fn agent_step(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) ->
             .filter(|p| !p.checking)
             .and_then(|p| p.status.as_ref())
             .is_some_and(|s| !s.installed);
-        let mut end = vec![status_badge(probe, t)];
+        // The badges and ticks stay in one column from row to row: the download button goes
+        // before the badge, and a row with no tick keeps its space.
+        let mut end = Vec::new();
         if missing {
             end.push(download_button(this, kind, t, cx));
         }
-        if ready {
-            end.push(tick(checked, t));
-        }
+        end.push(status_badge(probe, t));
+        end.push(if ready {
+            tick(checked, t)
+        } else {
+            div().size(px(18.)).flex_none().into_any_element()
+        });
         let row = choice_row(
             key_id("setup-agent", kind),
             agent_label(kind),
