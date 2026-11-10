@@ -81,6 +81,11 @@ struct Entry {
     /// The numbers came from the agent itself during a turn, not from a fetch.
     reported: bool,
     usage: ProviderUsage,
+    /// When the provider was last asked. A turn's report resets `fetched`, not this.
+    asked: Option<Instant>,
+    /// Whether the provider has been asked at all. An agent reports only some of the limits
+    /// during a turn: a limit for one model, such as Fable, comes only from asking.
+    complete: bool,
     /// No requests before this, after a rate limit.
     blocked_until: Option<Instant>,
 }
@@ -110,22 +115,49 @@ impl UsageCache {
             // Only an explicit refresh fetches; opening the popup shows the last numbers.
             // Numbers the agent reported are as current as a fetch, so they are not
             // fetched again, even on refresh, while fresh.
-            let fresh = age < FRESH_FOR && e.reported;
-            if !refresh || blocked || age < MIN_REFRESH || fresh {
+            let since_asked = e.asked.map(|at| now.saturating_duration_since(at));
+            let asked_lately = |within: Duration| since_asked.is_some_and(|d| d < within);
+            // The limits a turn does not report go stale under its reports, so the reports
+            // only stand in for a fetch while the last one is recent too.
+            let fresh = age < FRESH_FOR && e.reported && asked_lately(FRESH_FOR);
+            let keep = if e.complete {
+                !refresh || age < MIN_REFRESH || fresh
+            } else {
+                // Known only from a turn's reports so far: ask once, without waiting for a
+                // refresh, for the limits the reports leave out.
+                asked_lately(MIN_REFRESH)
+            };
+            if blocked || keep {
                 return e.usage.clone();
             }
         }
         let result = fetch();
         let mut entries = lock();
-        // Numbers the agent reported while this fetched are newer than anything it brought back.
-        if let Some(e) = entries.get(&kind).filter(|e| e.reported && e.fetched > now) {
+        // Numbers the agent reported while this fetched are newer than what it brought back,
+        // but the fetch has the limits a report leaves out.
+        if let Some(e) = entries
+            .get_mut(&kind)
+            .filter(|e| e.reported && e.fetched > now)
+        {
+            if let Ok(fetched) = result {
+                for window in fetched.windows {
+                    if !e.usage.windows.iter().any(|w| w.label == window.label) {
+                        e.usage.windows.push(window);
+                    }
+                }
+                e.complete = true;
+            }
+            e.asked = Some(now);
             return e.usage.clone();
         }
+        let complete = entries.get(&kind).is_some_and(|e| e.complete);
         let entry = match result {
             Ok(usage) => Entry {
                 fetched: now,
                 reported: false,
                 usage,
+                asked: Some(now),
+                complete: true,
                 blocked_until: None,
             },
             Err(failure) => {
@@ -142,6 +174,8 @@ impl UsageCache {
                     fetched: now,
                     reported: false,
                     usage,
+                    asked: Some(now),
+                    complete,
                     blocked_until: wait.map(|d| now + d),
                 }
             }
@@ -179,6 +213,8 @@ impl UsageCache {
                 fetched: Instant::now(),
                 reported: true,
                 usage,
+                asked: previous.as_ref().and_then(|e| e.asked),
+                complete: previous.as_ref().is_some_and(|e| e.complete),
                 blocked_until: previous.and_then(|e| e.blocked_until),
             },
         );
