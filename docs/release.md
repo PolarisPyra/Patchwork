@@ -25,11 +25,16 @@ Updates.
    [Changelog style](changelog-style.md).
 2. Set `[workspace.package] version` in the root `Cargo.toml` to `YY.M.N`, and run `cargo check`
    so `Cargo.lock` follows.
-3. Commit both, tag the commit `vYY.M.N`, and push the branch and the tag.
+3. Commit both and run `git pull --rebase origin main`, since the last release's workflow pushed a
+   commit of its own to `main`. Push `main`, then tag the release commit
+   `vYY.M.N` and push the tag. Tagging after the branch is up keeps a tag from landing on a
+   commit that is not on `main`.
 
 The tag starts the Release workflow (`.github/workflows/release.yml`). It stops before building if
 the tag and `Cargo.toml` disagree or the changelog has no section for the version, then builds
 the three files and publishes the release.
+Once it is published, the workflow points the website's download links at it and pushes that
+change to `main` as "Point the website's downloads at vYY.M.N", so pull before the next release.
 
 ## Signing
 

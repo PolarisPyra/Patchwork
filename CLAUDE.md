@@ -106,7 +106,7 @@ Measure lag in a debug build you started:
 - "Push to git", or just "push", means ship a release, and covers the whole job without asking again or waiting for review:
   1. Stage and commit anything uncommitted, with its `Changelog:` paragraph.
   2. Cut the next version by `docs/release.md`: the CalVer number from the newest tag (the next N this month, 0 in a new month), its `CHANGELOG.md` section from the `Changelog:` paragraphs since that tag, `[workspace.package] version` in `Cargo.toml` with `cargo check` so `Cargo.lock` follows, committed as "Release vYY.M.N" with `Changelog: none`.
-  3. Tag it `vYY.M.N` and push the branch and the tag.
+  3. Run `git pull --rebase origin main`: each release's workflow pushes a commit of its own to `main` (the website's download links), so the remote is usually one ahead. Then push `main`, and only once that succeeds, tag the release commit `vYY.M.N` and push the tag, so a tag never goes up on a commit that isn't on `main`.
 
   Say what went up and the version. If nothing changed since the last tag, say so and don't release.
 - Force-pushing, moving or deleting a pushed tag, and rewriting pushed history still need their own ask.
