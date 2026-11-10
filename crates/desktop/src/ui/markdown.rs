@@ -142,6 +142,8 @@ pub struct Markdown<'a> {
     chips: bool,
     at_start: bool,
     find: Option<&'a FindIn>,
+    /// The bullet or number of the list item just opened, which its first text copies.
+    item_prefix: Option<String>,
 }
 
 /// Lays `source` out as blocks, inheriting the surrounding text size and colour.
@@ -172,6 +174,9 @@ pub fn markdown_part(
 ) -> Div {
     render(source, key.into(), false, after_cut, find, cx)
 }
+
+/// How far a list's items sit in from its bullets and numbers.
+const LIST_INDENT: f32 = 22.;
 
 /// The bottom margin of the blocks `parts_of` cuts after.
 const CUT_MB: f32 = 8.;
@@ -242,6 +247,7 @@ fn render(
         chips,
         at_start: true,
         find,
+        item_prefix: None,
     };
     for event in Parser::new_ext(source, options()) {
         md.event(event);
@@ -275,7 +281,11 @@ impl Markdown<'_> {
     /// `text` as one a drag can mark.
     fn selectable(&mut self, text: StyledText) -> Selectable {
         self.texts += 1;
-        selectable(text_id(&self.key, self.texts), text)
+        let text = selectable(text_id(&self.key, self.texts), text);
+        match self.item_prefix.take() {
+            Some(prefix) => text.prefix(prefix, px(LIST_INDENT)),
+            None => text,
+        }
     }
 
     fn take_inline(&mut self) -> Selectable {
@@ -409,7 +419,23 @@ impl Markdown<'_> {
                         Vec::new(),
                     ));
                 }
-                Tag::Item => self.stack.push((Frame::Item, Vec::new())),
+                Tag::Item => {
+                    // Copied as it is drawn: `- ` or `3. `, indented two spaces per list it is in.
+                    let depth = self
+                        .stack
+                        .iter()
+                        .filter(|(frame, _)| matches!(frame, Frame::List { .. }))
+                        .count();
+                    if let Some((Frame::List { start, items }, _)) = self.stack.last() {
+                        let marker = match start {
+                            Some(n) => format!("{}. ", n + items.len() as u64),
+                            None => "- ".to_string(),
+                        };
+                        self.item_prefix =
+                            Some("  ".repeat(depth.saturating_sub(1)) + marker.as_str());
+                    }
+                    self.stack.push((Frame::Item, Vec::new()));
+                }
                 Tag::Table(_) => {
                     self.flush_paragraph();
                     self.rows.clear();
@@ -463,6 +489,8 @@ impl Markdown<'_> {
                 }
                 TagEnd::Item => {
                     self.flush_paragraph();
+                    // An empty item's marker stays with it.
+                    self.item_prefix = None;
                     if let Some((_, blocks)) = self.stack.pop()
                         && let Some((Frame::List { items, .. }, _)) = self.stack.last_mut()
                     {
@@ -476,6 +504,11 @@ impl Markdown<'_> {
                 }
                 TagEnd::TableCell => {
                     let text = self.take_inline();
+                    let text = if self.cells.is_empty() {
+                        text
+                    } else {
+                        text.after_tab()
+                    };
                     self.cells.push(text.into_any_element());
                 }
                 TagEnd::TableHead | TagEnd::TableRow => {
@@ -562,11 +595,8 @@ impl Markdown<'_> {
 
     fn end_list(&mut self, start: Option<u64>, items: Vec<Div>) {
         let t = self.t;
-        let list = div()
-            .flex()
-            .flex_col()
-            .pl(px(22.))
-            .children(items.into_iter().enumerate().map(|(i, item)| {
+        let list = div().flex().flex_col().pl(px(LIST_INDENT)).children(
+            items.into_iter().enumerate().map(|(i, item)| {
                 let marker = match start {
                     Some(n) => div()
                         .absolute()
@@ -582,7 +612,8 @@ impl Markdown<'_> {
                         .text_color(t.text),
                 };
                 div().relative().min_w_0().child(marker).child(item)
-            }));
+            }),
+        );
         self.push(list, 0., 8.);
     }
 

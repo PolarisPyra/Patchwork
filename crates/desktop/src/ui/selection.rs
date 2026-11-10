@@ -28,6 +28,8 @@ pub fn bindings() -> Vec<KeyBinding> {
 struct Drawn {
     id: u64,
     layout: TextLayout,
+    prefix: Option<SharedString>,
+    after_tab: bool,
 }
 
 /// What is marked, and the texts a drag can reach.
@@ -77,11 +79,39 @@ pub fn copy(cx: &mut App) {
 pub struct Selectable {
     id: u64,
     text: StyledText,
+    prefix: Option<SharedString>,
+    /// How far left of the text its prefix is drawn: a press there starts a drag too.
+    gutter: Pixels,
+    after_tab: bool,
 }
 
 /// Wraps `text` so a drag can mark it.
 pub fn selectable(id: u64, text: StyledText) -> Selectable {
-    Selectable { id, text }
+    Selectable {
+        id,
+        text,
+        prefix: None,
+        gutter: Pixels::ZERO,
+        after_tab: false,
+    }
+}
+
+impl Selectable {
+    /// What is drawn beside the text rather than in it, such as a list item's bullet or number,
+    /// copied before the text when it is marked from its start. It is drawn within `gutter` to the
+    /// left of the text, and a drag can start on it.
+    pub fn prefix(mut self, prefix: impl Into<SharedString>, gutter: Pixels) -> Self {
+        self.prefix = Some(prefix.into());
+        self.gutter = gutter;
+        self
+    }
+
+    /// Copies a tab rather than a line break between the text before this one and it, as a
+    /// table's cells after the first in their row.
+    pub fn after_tab(mut self) -> Self {
+        self.after_tab = true;
+        self
+    }
 }
 
 impl IntoElement for Selectable {
@@ -125,6 +155,9 @@ impl Element for Selectable {
     ) -> Hitbox {
         self.text
             .prepaint(id, inspector_id, bounds, request_layout, window, cx);
+        let mut bounds = bounds;
+        bounds.origin.x -= self.gutter;
+        bounds.size.width += self.gutter;
         window.insert_hitbox(bounds, HitboxBehavior::Normal)
     }
 
@@ -165,14 +198,20 @@ impl Element for Selectable {
         selection.drawn.push(Drawn {
             id: self.id,
             layout: layout.clone(),
+            prefix: self.prefix.clone(),
+            after_tab: self.after_tab,
         });
 
         let (id, hitbox) = (self.id, prepaint.clone());
         window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
             let selection = cx.default_global::<Selection>();
             let hovered = phase == DispatchPhase::Bubble && hitbox.is_hovered(window);
-            let at = || match layout.index_for_position(event.position) {
-                Ok(at) | Err(at) => at,
+            // A press on the prefix, left of the text, counts as one at the start of its line.
+            let at = || {
+                let x = event.position.x.max(layout.bounds().left());
+                match layout.index_for_position(point(x, event.position.y)) {
+                    Ok(at) | Err(at) => at,
+                }
             };
             match event.button {
                 // A press anywhere drops what was marked, unless it is on the open menu, which
@@ -364,18 +403,25 @@ impl Selection {
             ((to, to_at), (from, anchor_at))
         };
         self.marked.clear();
-        let mut pieces = Vec::new();
+        self.text.clear();
         for (i, drawn) in self.drawn.iter().enumerate().take(last + 1).skip(first) {
             let text = drawn.layout.text();
             let start = if i == first { first_at } else { 0 };
             let end = if i == last { last_at } else { text.len() };
             let (start, end) = (start.min(text.len()), end.min(text.len()));
             if start < end && text.is_char_boundary(start) && text.is_char_boundary(end) {
-                pieces.push(text[start..end].to_string());
+                if !self.marked.is_empty() {
+                    self.text.push(if drawn.after_tab { '\t' } else { '\n' });
+                }
+                if start == 0
+                    && let Some(prefix) = &drawn.prefix
+                {
+                    self.text.push_str(prefix);
+                }
+                self.text.push_str(&text[start..end]);
                 self.marked.insert(drawn.id, start..end);
             }
         }
-        self.text = pieces.join("\n");
     }
 }
 
