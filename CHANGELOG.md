@@ -3,6 +3,13 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.39] - 2026-11-10
+
+### Changed
+
+- The usage popup has a new layout. The agent's name, plan and the Refresh button are in a row across the top, each limit has its own row, and the agent rings on the left line up with the limit rings beside them.
+- The chat box now lights up while you hold a file, folder or picture over it, so you can see it will take the drop.
+
 ## [26.11.38] - 2026-11-10
 
 ### Added
