@@ -1,10 +1,23 @@
 //! Sessions found in another agent's files, and turning one into a thread.
 
+// Rust guideline compliant 2026-10-09
+
+/// `format!`s a line into the import log, `logging::IMPORT_LOG`.
+macro_rules! ilog {
+    ($($arg:tt)*) => {
+        $crate::logging::IMPORT_LOG.write(
+            $crate::settings::LogLevel::Info,
+            "",
+            &$crate::logging::Source::default(),
+            $crate::logging::Data::Text(format!($($arg)*)),
+        )
+    };
+}
+pub(crate) use ilog;
 use std::path::Path;
 
 use super::{ImportSource, antigravity, claude, codex, opencode, t3};
 
-use super::ilog;
 use crate::provider::AgentKind;
 use crate::system::new_id;
 use crate::threads::{Role, MessageStatus, AccessMode, Message, Thread};
@@ -42,6 +55,7 @@ pub struct SessionMessage {
 }
 
 /// Every conversation `source` has saved on disk, in no particular order.
+///
 /// Unreadable files and conversations without a user message are skipped.
 /// `default_agent` continues the imported transcripts, which no agent can resume.
 pub fn sessions(source: ImportSource, default_agent: AgentKind) -> Vec<Session> {
@@ -85,7 +99,7 @@ impl SessionMessage {
 }
 
 /// Appends assistant text to the previous assistant message, or starts a new one.
-pub(super) fn push_merged(messages: &mut Vec<SessionMessage>, role: Role, text: String, at: u64) {
+pub(super) fn push_merged(messages: &mut Vec<SessionMessage>, role: Role, text: &str, at: u64) {
     let text = text.trim().to_string();
     if text.is_empty() {
         return;
@@ -101,6 +115,7 @@ pub(super) fn push_merged(messages: &mut Vec<SessionMessage>, role: Role, text: 
 
 /// A conversation becomes a chat rather than a project when its folder is gone
 /// or is one of T3 Code's chat scratch folders (`~/.t3/scratch`).
+#[must_use]
 pub fn is_chat_folder(cwd: &Path) -> bool {
     !cwd.is_dir()
         || crate::system::fs::home_dir()
@@ -108,6 +123,7 @@ pub fn is_chat_folder(cwd: &Path) -> bool {
 }
 
 /// Converts an imported session into a stored thread.
+#[must_use]
 pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
     let title = session
         .title
@@ -188,6 +204,7 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
 
 /// The imported conversation as text for the agent's first turn: the newest messages that fit
 /// in `MAX_CONTEXT_BYTES`, each labelled with who wrote it.
+#[must_use]
 pub fn transcript(messages: &[Message]) -> String {
     let mut turns = Vec::new();
     let mut size = 0;

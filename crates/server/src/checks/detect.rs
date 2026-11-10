@@ -5,6 +5,8 @@
 //! them has nothing to run, and its replies say so by saying nothing rather than by claiming a
 //! pass.
 
+// Rust guideline compliant 2026-10-09
+
 use std::path::Path;
 
 /// A check command, and how it was arrived at, for a person to read.
@@ -21,6 +23,7 @@ impl Command {
 }
 
 /// The check command for the project at `root`, or None when there is nothing to run.
+#[must_use]
 pub fn command(root: &Path) -> Option<Command> {
     node_scripts(root)
         .or_else(|| file(root, "Cargo.toml").then(|| Command::new("cargo test")))
@@ -99,9 +102,8 @@ fn make(root: &Path) -> Option<Command> {
     let text = std::fs::read_to_string(root.join("Makefile")).ok()?;
     let has = |target: &str| {
         text.lines().any(|line| {
-            let (name, rest) = match line.split_once(':') {
-                Some(split) => split,
-                None => return false,
+            let Some((name, rest)) = line.split_once(':') else {
+                return false;
             };
             // A rule, not a variable (`VAR := x`) or a continuation of another rule.
             name.trim() == target && !rest.starts_with('=')
@@ -143,14 +145,14 @@ mod tests {
             r#"{"scripts":{"test":"node --test","check":"tsc && node --test"}}"#,
         )]);
         assert_eq!(command(&dir), Some(Command::new("npm run check")));
-        std::fs::remove_dir_all(dir).ok();
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
     fn a_test_script_runs_as_the_package_manager_runs_it() {
         let dir = project(&[("package.json", r#"{"scripts":{"test":"node --test"}}"#)]);
         assert_eq!(command(&dir), Some(Command::new("npm test")));
-        std::fs::remove_dir_all(dir).ok();
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -160,14 +162,14 @@ mod tests {
             ("Cargo.toml", "[package]\nname = \"x\"\n"),
         ]);
         assert_eq!(command(&dir), Some(Command::new("cargo test")));
-        std::fs::remove_dir_all(dir).ok();
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
     fn a_cargo_project_runs_its_tests() {
         let dir = project(&[("Cargo.toml", "[package]\nname = \"x\"\n")]);
         assert_eq!(command(&dir), Some(Command::new("cargo test")));
-        std::fs::remove_dir_all(dir).ok();
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -182,7 +184,7 @@ mod tests {
             command(&dir),
             Some(Command::new(format!("{interpreter} -m pytest -q")))
         );
-        std::fs::remove_dir_all(dir).ok();
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -191,15 +193,15 @@ mod tests {
         assert_eq!(command(&rules), Some(Command::new("make check")));
         let variables = project(&[("Makefile", "check := 1\nall:\n\techo hi\n")]);
         assert_eq!(command(&variables), None);
-        std::fs::remove_dir_all(rules).ok();
-        std::fs::remove_dir_all(variables).ok();
+        let _ = std::fs::remove_dir_all(rules);
+        let _ = std::fs::remove_dir_all(variables);
     }
 
     #[test]
     fn an_empty_folder_has_nothing_to_run() {
         let dir = project(&[]);
         assert_eq!(command(&dir), None);
-        std::fs::remove_dir_all(dir).ok();
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -216,6 +218,6 @@ mod tests {
             "npm test"
         };
         assert_eq!(command(&dir), Some(Command::new(expected)));
-        std::fs::remove_dir_all(dir).ok();
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

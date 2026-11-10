@@ -1,5 +1,8 @@
 //! Antigravity's quota, from its own `/usage` command.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use serde_json::Value;
 
 use crate::provider::probe_until;
@@ -8,7 +11,7 @@ use crate::system::now_ms;
 use crate::provider::AgentKind;
 use crate::usage::{UsageWindow, ProviderUsage};
 
-pub fn usage(mut out: ProviderUsage) -> Result<ProviderUsage, String> {
+pub fn usage(mut out: ProviderUsage) -> Result<ProviderUsage, Error> {
     // The CLI prints one JSON object and then keeps running, so stop once that object is complete.
     let p = probe_until(
         AgentKind::Antigravity,
@@ -16,7 +19,7 @@ pub fn usage(mut out: ProviderUsage) -> Result<ProviderUsage, String> {
         |stdout| serde_json::from_str::<Value>(stdout.trim()).is_ok(),
     )
     .ok_or("Antigravity CLI is not installed")?;
-    let v: Value = serde_json::from_str(p.stdout.trim()).map_err(|_| {
+    let v: Value = serde_json::from_str(p.stdout.trim()).map_err(|_discarded| {
         let message = p.stderr.lines().last().unwrap_or("Usage could not be read");
         message.to_string()
     })?;

@@ -8,6 +8,9 @@
 //! file per chat holds all there is to send. A file past `MAX_BYTES` drops its oldest lines, and
 //! a chat used over several launches has a file in each.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -43,6 +46,7 @@ pub(super) const LOG_START: &str = "== Chat log ==";
 /// The chats' logs. A record about a chat in the agent log reaches here too, at this log's level.
 pub static THREAD_LOG: ThreadLog = ThreadLog::new();
 
+#[derive(Debug)]
 pub struct ThreadLog {
     writer: OnceLock<Sender<Message>>,
     dir: OnceLock<PathBuf>,
@@ -55,7 +59,7 @@ enum Message {
     Report {
         thread: String,
         report: String,
-        done: Sender<Result<PathBuf, String>>,
+        done: Sender<Result<PathBuf, Error>>,
     },
 }
 
@@ -134,7 +138,7 @@ impl ThreadLog {
 
     /// Writes `thread`'s file in this launch's folder with `report` at the top, followed by
     /// `LOG_START` and the chat's log, and returns its path.
-    pub(super) fn report(&self, thread: &str, report: String) -> Result<PathBuf, String> {
+    pub(super) fn report(&self, thread: &str, report: String) -> Result<PathBuf, Error> {
         let tx = self.writer.get().ok_or("There are no logs yet")?;
         let (done, answer) = mpsc::channel();
         tx.send(Message::Report {
@@ -142,10 +146,10 @@ impl ThreadLog {
             report,
             done,
         })
-        .map_err(|_| "The chat log has stopped".to_string())?;
+        .map_err(|_discarded| "The chat log has stopped".to_string())?;
         answer
             .recv_timeout(REPORT_WAIT)
-            .map_err(|_| "The chat log did not answer".to_string())?
+            .map_err(|_discarded| "The chat log did not answer".to_string())?
     }
 
     /// `thread`'s files in the kept launches before this one, oldest first.
@@ -235,9 +239,9 @@ impl Writer {
         }
     }
 
-    fn report(&mut self, thread: &str, report: &str) -> Result<PathBuf, String> {
+    fn report(&mut self, thread: &str, report: &str) -> Result<PathBuf, Error> {
         if !valid(thread) {
-            return Err(format!("Not a chat: {thread}"));
+            return Err(format!("Not a chat: {thread}").into());
         }
         let path = log_path(&self.dir, thread);
         self.chats

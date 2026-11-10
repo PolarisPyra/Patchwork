@@ -1,9 +1,11 @@
 //! The calls an agent asks to make: those its access mode runs without asking, the tools Patchwork
 //! serves it, and the approvals the user answers.
 
+// Rust guideline compliant 2026-10-09
+
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::PoisonError;
+use std::sync::{Arc, PoisonError};
 use std::sync::atomic::Ordering;
 
 use serde_json::Value;
@@ -53,8 +55,8 @@ pub(super) fn screen(turn: &Turn, item: Parsed) -> Option<Parsed> {
 
 /// Runs a call to an MCP tool off the reading thread and writes its result back to the agent.
 pub(super) fn call_tool(turn: &Turn, id: Value, server: String, tool: String, arguments: Value) {
-    let stdin = turn.stdin.clone();
-    let (cancelled, exited) = (turn.cancelled.clone(), turn.exited.clone());
+    let stdin = Arc::clone(&turn.stdin);
+    let (cancelled, exited) = (Arc::clone(&turn.cancelled), Arc::clone(&turn.exited));
     let thread_id = turn.thread_id.clone();
     // Patchwork's own agent has its commands run here, so they can outlive it.
     let job = (turn.agent == AgentKind::Api
@@ -62,7 +64,7 @@ pub(super) fn call_tool(turn: &Turn, id: Value, server: String, tool: String, ar
         && jobs::TOOLS.contains(&tool.as_str()))
     .then(|| {
         (
-            turn.server.clone(),
+            Arc::clone(&turn.server),
             jobs::Origin {
                 thread_id: turn.thread_id.clone(),
                 message_id: turn.message_id.clone(),

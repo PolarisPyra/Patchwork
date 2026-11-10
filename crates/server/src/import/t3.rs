@@ -4,6 +4,8 @@
 //! or Codex thread id, so imported threads resume the original conversation.
 //! The database is only ever opened read-only.
 
+// Rust guideline compliant 2026-10-09
+
 use rusqlite::{Connection, OpenFlags, params};
 use serde_json::Value;
 
@@ -30,7 +32,7 @@ pub fn sessions() -> Vec<Session> {
     Connection::open_with_flags(path, flags)
         .and_then(|conn| read(&conn))
         .unwrap_or_else(|e| {
-            log::warn!("couldn't read T3 Code threads: {e}");
+            log::warn!(error:% = e; "couldn't read T3 Code threads: {{error}}");
             ilog!("T3: couldn't read the database: {e}");
             vec![]
         })
@@ -112,7 +114,7 @@ fn read(conn: &Connection) -> rusqlite::Result<Vec<Session>> {
                 .and_then(parse_rfc3339_ms)
                 .unwrap_or(created_at);
             let text = m["text"].as_str().unwrap_or_default().to_string();
-            push_merged(&mut msgs, role, text, at);
+            push_merged(&mut msgs, role, &text, at);
         }
 
         out.push(Session {
@@ -120,10 +122,7 @@ fn read(conn: &Connection) -> rusqlite::Result<Vec<Session>> {
             session_id,
             imported: false,
             // A thread run in a T3 worktree resumes from that worktree.
-            cwd: payload["worktreePath"]
-                .as_str()
-                .map(String::from)
-                .unwrap_or(root),
+            cwd: payload["worktreePath"].as_str().map_or(root, String::from),
             title: Some(title).filter(|t| t != "New thread"),
             model: payload["modelSelection"]["model"]
                 .as_str()

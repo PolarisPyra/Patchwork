@@ -1,5 +1,7 @@
 //! OpenCode 1.x: a turn is one `opencode run --format json`, whose JSON lines are read into agent events.
 
+// Rust guideline compliant 2026-10-09
+
 use serde_json::Value;
 use crate::orchestration::AgentEvent;
 use crate::threads::{AccessMode, AttachmentKind, PlanStep, TokenUsage};
@@ -55,6 +57,7 @@ pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
 
 /// Maps one line of `opencode run --format json`: a `step_start`, then the step's `reasoning`,
 /// `text` and finished `tool_use` parts, then a `step_finish` with its token counts.
+#[must_use]
 pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
     if uses_serve() {
         return parse_serve(v, spec, message_id);

@@ -1,9 +1,7 @@
 node_modules
 dist
 /target
-apps/desktop/src-tauri/gen
 .env
-.release-notes
 # Scratch work: extractions, throwaway clones, screenshots, check output. See AGENTS.md.
 /research
 # Local agent settings and editor and OS files.

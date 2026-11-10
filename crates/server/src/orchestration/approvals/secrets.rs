@@ -1,8 +1,11 @@
 //! An agent's request for a secret (see `crate::secrets`): a private card in its reply, which the
 //! turn waits on until the user saves or declines it, the turn ends, or the agent's time runs out.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::HashMap;
-use std::sync::PoisonError;
+use std::sync::{Arc, PoisonError};
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
@@ -22,13 +25,13 @@ impl Runner {
     /// Shows the agent's request for a secret in the thread's running turn and waits for the
     /// answer, or until the turn ends, `stopped`, or the time the agent gave runs out. Returns the
     /// tool's result for the agent, which holds where the secret is but never the secret.
-    pub fn request_secret(
+    pub(crate) fn request_secret(
         &self,
         server: &Server,
         thread_id: &str,
         args: &Value,
         stopped: &dyn Fn() -> bool,
-    ) -> Result<String, String> {
+    ) -> Result<String, Error> {
         let ask = SecretAsk::parse(args)?;
         let ended = || "This turn is no longer running".to_string();
         let message_id = server
@@ -45,7 +48,7 @@ impl Runner {
         let flags = {
             let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
             let turn = turns.get(thread_id).ok_or_else(ended)?;
-            [turn.cancelled.clone(), turn.exited.clone()]
+            [Arc::clone(&turn.cancelled), Arc::clone(&turn.exited)]
         };
         let approval = Approval {
             id: new_id(),
@@ -91,7 +94,7 @@ impl Runner {
                     // The user answered just now, and the answer is on its way.
                     break answers
                         .recv_timeout(Duration::from_secs(5))
-                        .map_err(|_| status);
+                        .map_err(|_discarded| status);
                 }
                 Err(RecvTimeoutError::Disconnected) => break Err(SecretStatus::Cancelled),
             }

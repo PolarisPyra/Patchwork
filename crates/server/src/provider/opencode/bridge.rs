@@ -1,9 +1,14 @@
+//! Bridge that runs an OpenCode 2.x turn through a private `opencode serve`.
+//!
 //! Runs one OpenCode 2.x turn through a private `opencode serve`, so the turn can ask for
 //! approvals, ask questions, and take steering messages. Patchwork starts this bridge as the
 //! turn's process: the first stdin line is the turn, later lines are replies and steering
 //! messages, and stdout carries the session's server events as JSON lines, plus `bridge.*`
 //! lines of its own. The bridge and its server end with the turn.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, Stdio};
@@ -24,7 +29,7 @@ const START_TIMEOUT: Duration = Duration::from_secs(30);
 const COMMANDS_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// The turn, as the first stdin line.
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Request {
     /// The `opencode` binary.
@@ -57,7 +62,7 @@ pub struct Request {
 /// The session's instruction entry that holds the user's system prompt.
 const PROMPT_ENTRY: &str = "patchwork-system-prompt";
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct SlashCommand {
     pub name: String,
     /// What follows the name, OpenCode's `$ARGUMENTS`.
@@ -65,6 +70,7 @@ pub struct SlashCommand {
 }
 
 /// Runs the bridge; the process exits with what this returns.
+#[must_use]
 pub fn run() -> i32 {
     let (tx, rx) = mpsc::channel();
     let mut first = String::new();
@@ -113,7 +119,7 @@ enum Msg {
     StreamClosed,
 }
 
-fn turn(request: &Request, tx: &Sender<Msg>, rx: &Receiver<Msg>) -> Result<(), String> {
+fn turn(request: &Request, tx: &Sender<Msg>, rx: &Receiver<Msg>) -> Result<(), Error> {
     let server = Server::start(request)?;
     let api = Api::new(&server.url, &server.password);
     let session_id = match &request.session_id {
@@ -209,7 +215,7 @@ fn turn(request: &Request, tx: &Sender<Msg>, rx: &Receiver<Msg>) -> Result<(), S
 
 /// Starts the turn: `/compact` compacts the session, a command the folder has runs as that
 /// command, and any other message is a prompt.
-fn send(api: &Api, session_id: &str, request: &Request) -> Result<(), String> {
+fn send(api: &Api, session_id: &str, request: &Request) -> Result<(), Error> {
     // Only a command waits for the list; any other turn lists the commands alongside.
     let known = match &request.command {
         Some(command) if command.name != "compact" => commands(api),
@@ -243,6 +249,7 @@ fn commands(api: &Api) -> Vec<String> {
         if !list.is_empty() || started.elapsed() > COMMANDS_TIMEOUT {
             break list;
         }
+        // OpenCode fills its command list soon after it starts; poll often until it does.
         std::thread::sleep(Duration::from_millis(100));
     };
     emit(&json!({"type": "bridge.commands", "commands": list}));
@@ -315,7 +322,7 @@ fn command(api: &Api, session_id: &str, line: &str, steers: &mut HashSet<String>
         _ => Ok(()),
     };
     if let Err(message) = result {
-        log_error(&message);
+        log_error(&message.to_string());
     }
 }
 
@@ -346,7 +353,7 @@ fn model_ref(request: &Request) -> Option<Value> {
 /// Streams the server's events in a thread: the session's own go to stdout, with each tool
 /// event carrying the tool's name and input, which OpenCode sends only once. A step whose
 /// context reached `compact_window` has the session compacted at its next safe point.
-fn events(api: &Api, session_id: &str, compact_window: u64, tx: Sender<Msg>) -> Result<(), String> {
+fn events(api: &Api, session_id: &str, compact_window: u64, tx: Sender<Msg>) -> Result<(), Error> {
     let response = api.stream("/api/event")?;
     let session_id = session_id.to_string();
     let api = api.clone();
@@ -401,7 +408,7 @@ fn events(api: &Api, session_id: &str, compact_window: u64, tx: Sender<Msg>) -> 
                                 compacting = true;
                                 let _ = tx.send(Msg::Compaction(true));
                             }
-                            Err(message) => log_error(&message),
+                            Err(message) => log_error(&message.to_string()),
                         }
                     }
                 }
@@ -444,7 +451,7 @@ struct Server {
 }
 
 impl Server {
-    fn start(request: &Request) -> Result<Self, String> {
+    fn start(request: &Request) -> Result<Self, Error> {
         let password = format!(
             "{}{}",
             uuid::Uuid::new_v4().simple(),
@@ -494,7 +501,7 @@ impl Server {
         };
         server.url = url
             .recv_timeout(START_TIMEOUT)
-            .map_err(|_| "OpenCode's server did not start".to_string())?;
+            .map_err(|_discarded| "OpenCode's server did not start".to_string())?;
         Ok(server)
     }
 }
@@ -527,6 +534,7 @@ impl Api {
         let credentials =
             base64::engine::general_purpose::STANDARD.encode(format!("opencode:{password}"));
         Api {
+            // For short requests to the local server; streams use the agent without a limit.
             agent: config(Some(Duration::from_secs(30))),
             stream_agent: config(None),
             base: base.trim_end_matches('/').to_string(),
@@ -534,7 +542,7 @@ impl Api {
         }
     }
 
-    fn get(&self, path: &str) -> Result<Value, String> {
+    fn get(&self, path: &str) -> Result<Value, Error> {
         let response = self
             .agent
             .get(format!("{}{path}", self.base))
@@ -543,7 +551,7 @@ impl Api {
         read(path, response)
     }
 
-    fn post(&self, path: &str, body: &Value) -> Result<Value, String> {
+    fn post(&self, path: &str, body: &Value) -> Result<Value, Error> {
         let response = self
             .agent
             .post(format!("{}{path}", self.base))
@@ -552,7 +560,7 @@ impl Api {
         read(path, response)
     }
 
-    fn put(&self, path: &str, body: &Value) -> Result<Value, String> {
+    fn put(&self, path: &str, body: &Value) -> Result<Value, Error> {
         let response = self
             .agent
             .put(format!("{}{path}", self.base))
@@ -561,7 +569,7 @@ impl Api {
         read(path, response)
     }
 
-    fn patch(&self, path: &str, body: &Value) -> Result<Value, String> {
+    fn patch(&self, path: &str, body: &Value) -> Result<Value, Error> {
         let response = self
             .agent
             .patch(format!("{}{path}", self.base))
@@ -570,7 +578,7 @@ impl Api {
         read(path, response)
     }
 
-    fn delete(&self, path: &str) -> Result<Value, String> {
+    fn delete(&self, path: &str) -> Result<Value, Error> {
         let response = self
             .agent
             .delete(format!("{}{path}", self.base))
@@ -579,7 +587,7 @@ impl Api {
         read(path, response)
     }
 
-    fn stream(&self, path: &str) -> Result<impl Read + Send + 'static, String> {
+    fn stream(&self, path: &str) -> Result<impl Read + Send + 'static, Error> {
         let response = self
             .stream_agent
             .get(format!("{}{path}", self.base))
@@ -587,10 +595,7 @@ impl Api {
             .call()
             .map_err(|e| format!("OpenCode's event stream failed: {e}"))?;
         if !response.status().is_success() {
-            return Err(format!(
-                "OpenCode's event stream answered {}",
-                response.status()
-            ));
+            return Err(format!("OpenCode's event stream answered {}", response.status()).into());
         }
         Ok(response.into_body().into_reader())
     }
@@ -600,7 +605,7 @@ impl Api {
 fn read(
     path: &str,
     response: Result<ureq::http::Response<ureq::Body>, ureq::Error>,
-) -> Result<Value, String> {
+) -> Result<Value, Error> {
     let mut response = response.map_err(|e| format!("OpenCode request {path} failed: {e}"))?;
     let status = response.status();
     let text = response.body_mut().read_to_string().unwrap_or_default();
@@ -608,6 +613,6 @@ fn read(
     if status.is_success() {
         return Ok(body);
     }
-    let message = body["message"].as_str().map_or(text.clone(), String::from);
-    Err(format!("OpenCode refused {path} ({status}): {message}"))
+    let message = body["message"].as_str().map_or(text, String::from);
+    Err(format!("OpenCode refused {path} ({status}): {message}").into())
 }

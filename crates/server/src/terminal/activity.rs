@@ -3,6 +3,8 @@
 //! each time the shell shows its prompt and each time it runs a command. Output never counts as
 //! either.
 
+// Rust guideline compliant 2026-10-09
+
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
 
@@ -54,7 +56,7 @@ impl ShellActivity {
         let record = self.read();
         let mut seen = self.seen.lock().unwrap_or_else(PoisonError::into_inner);
         if record != seen.observed {
-            seen.observed = record.clone();
+            seen.observed.clone_from(&record);
             seen.revision += 1;
         }
         let mut parts = record.trim_end_matches('\n').split(':');
@@ -126,7 +128,7 @@ pub(super) fn prepare(launch: &mut Launch, dir: &Path) -> Option<ShellActivity> 
             seen: Mutex::default(),
         }),
         Err(e) => {
-            log::warn!("could not write the terminal's prompt hooks: {e}");
+            log::warn!(error:% = e; "could not write the terminal's prompt hooks: {{error}}");
             None
         }
     }

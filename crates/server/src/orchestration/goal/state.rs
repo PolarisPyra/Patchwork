@@ -1,6 +1,9 @@
 //! What the app keeps about a thread's goal: how the agent's reports change it, which goal the
 //! user dismissed, and which one Claude still holds.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use crate::persistence::Store;
 use crate::provider::{AgentKind, GoalUpdate};
 use crate::system::now_ms;
@@ -19,7 +22,7 @@ pub(crate) fn is_dismissed(store: &Store, thread_id: &str, goal: &Goal) -> bool 
     dismissed.as_deref() == Some(signature(goal).as_str())
 }
 
-pub(crate) fn clear_dismissal(store: &Store, thread_id: &str) -> Result<(), String> {
+pub(crate) fn clear_dismissal(store: &Store, thread_id: &str) -> Result<(), Error> {
     store.set_state(&dismissal_key(thread_id), "")
 }
 
@@ -50,7 +53,7 @@ pub(crate) fn update_releases_held(
     let releases = matches!(update, GoalUpdate::Cleared)
         && current.is_some_and(|g| held.as_deref() == Some(signature(g).as_str()));
     if releases && let Err(e) = store.set_state(&held_key(thread_id), "") {
-        log::warn!("failed to forget a held goal: {e}");
+        log::warn!(error:% = e; "failed to forget a held goal: {{error}}");
     }
     releases
 }

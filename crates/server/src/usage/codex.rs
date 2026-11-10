@@ -1,6 +1,9 @@
 //! Codex subscription limits. Codex records its latest rate limits in each
 //! session's rollout file (`token_count` events), so the newest one is used.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
@@ -17,7 +20,7 @@ const RECENT_FILES: usize = 30;
 /// Bytes read per step back from the end of a rollout; rollouts can be hundreds of MB.
 const TAIL_CHUNK: u64 = 256 * 1024;
 
-pub fn usage(mut out: ProviderUsage) -> Result<ProviderUsage, String> {
+pub fn usage(mut out: ProviderUsage) -> Result<ProviderUsage, Error> {
     let sessions = provider::codex::home()
         .map(|h| h.join("sessions"))
         .ok_or("Codex home not found")?;

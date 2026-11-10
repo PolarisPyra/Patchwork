@@ -1,8 +1,13 @@
-//! Secrets an agent asks the user for. The agent calls [`TOOL`], a private card in the chat takes
-//! the value, and the agent is told only the path of an owner-only file holding it, which it reads
-//! inside the command that needs it. The value never enters the thread, the logs or the model's
-//! context. Each file is deleted a day after it was written.
+//! Secrets an agent asks the user for.
+//!
+//! The agent calls [`TOOL`], a private card in the chat takes the value, and the agent is told only
+//! the path of an owner-only file holding it, which it reads inside the command that needs it. The
+//! value never enters the thread, the logs or the model's context. Each file is deleted a day after
+//! it was written.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -11,13 +16,11 @@ use std::time::{Duration, SystemTime};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use ts_rs::TS;
 
 use crate::Server;
 
 /// Where a secret request stands.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "secrets.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SecretStatus {
     Pending,
@@ -30,8 +33,7 @@ pub enum SecretStatus {
 
 /// What makes an approval a request for a secret, whose title is the card's label and whose
 /// detail says what it is for. It never holds the value.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "secrets.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Secret {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -55,6 +57,7 @@ const DEFAULT_WAIT: Duration = Duration::from_secs(10 * 60);
 const MAX_WAIT: Duration = Duration::from_secs(60 * 60);
 
 /// The tool's arguments, as JSON Schema.
+#[must_use]
 pub fn input_schema() -> Value {
     json!({"type": "object", "properties": {
         "label": {"type": "string", "description": "The card's title, such as \"GitHub token\"."},
@@ -65,6 +68,7 @@ pub fn input_schema() -> Value {
 }
 
 /// What the agent asked for, read from the tool's arguments.
+#[derive(Debug)]
 pub struct SecretAsk {
     pub label: String,
     pub reason: String,
@@ -74,7 +78,12 @@ pub struct SecretAsk {
 }
 
 impl SecretAsk {
-    pub fn parse(args: &Value) -> Result<Self, String> {
+    /// Reads a secret request from the arguments of a tool call.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the arguments give no label.
+    pub fn parse(args: &Value) -> Result<Self, Error> {
         let text = |key: &str| {
             args[key]
                 .as_str()
@@ -86,6 +95,7 @@ impl SecretAsk {
         let wait = args["timeoutMs"]
             .as_u64()
             .map_or(DEFAULT_WAIT, Duration::from_millis)
+            // At least a second, so a tiny timeout from the model cannot close the request before it shows.
             .clamp(Duration::from_secs(1), MAX_WAIT);
         Ok(Self {
             label,
@@ -97,6 +107,7 @@ impl SecretAsk {
 }
 
 /// The tool's result for the agent: where the secret is, or why there is none.
+#[must_use]
 pub fn tool_result(status: SecretStatus, file: Option<&Path>) -> String {
     match (status, file) {
         (SecretStatus::Saved, Some(file)) => json!({
@@ -114,7 +125,7 @@ pub fn tool_result(status: SecretStatus, file: Option<&Path>) -> String {
 
 /// The requests waiting for the user, by id, each with its thread and what it is answered
 /// through: the file's path, or None when declined.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Waiters(Mutex<HashMap<String, Waiter>>);
 
 /// A request's thread, and what it is answered through.
@@ -142,19 +153,24 @@ impl Waiters {
 impl Server {
     /// Answers the agent's request `request_id` in the thread: `Some` saves the value to a file
     /// only the user can read and tells the agent its path, and None declines.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the request is no longer waiting in that thread, the value is empty,
+    /// or the secret file cannot be written.
     pub fn answer_secret(
         &self,
         thread_id: &str,
         request_id: &str,
         value: Option<String>,
-    ) -> Result<(), String> {
+    ) -> Result<(), Error> {
         let gone = || "This request is no longer waiting for an answer".to_string();
         let mut waiters = self.secrets.lock();
-        if !waiters
+        if waiters
             .get(request_id)
-            .is_some_and(|(thread, _)| thread == thread_id)
+            .is_none_or(|(thread, _)| thread != thread_id)
         {
-            return Err(gone());
+            return Err(gone().into());
         }
         let file = match value {
             Some(value) if value.is_empty() => return Err("Enter the secret first".into()),
@@ -167,14 +183,14 @@ impl Server {
             if let Some(file) = file {
                 let _ = std::fs::remove_file(file);
             }
-            return Err(gone());
+            return Err(gone().into());
         }
         Ok(())
     }
 }
 
 /// Writes `value` to a new file in a folder only the user can open, readable only by them.
-fn store(value: &str) -> Result<PathBuf, String> {
+fn store(value: &str) -> Result<PathBuf, Error> {
     use std::io::Write;
     let failed = |e: std::io::Error| format!("Could not save the secret: {e}");
     let dir = crate::system::dirs().state.join(FOLDER);
@@ -183,7 +199,7 @@ fn store(value: &str) -> Result<PathBuf, String> {
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).map_err(failed)?;
-    }
+    };
     let path = dir.join(crate::system::new_id());
     let partial = path.with_extension("partial");
     let mut options = std::fs::OpenOptions::new();
@@ -196,7 +212,7 @@ fn store(value: &str) -> Result<PathBuf, String> {
     });
     if let Err(e) = written.and_then(|()| std::fs::rename(&partial, &path)) {
         let _ = std::fs::remove_file(&partial);
-        return Err(failed(e));
+        return Err(failed(e).into());
     }
     Ok(path)
 }
@@ -223,7 +239,7 @@ fn sweep() {
             .and_then(|modified| SystemTime::now().duration_since(modified).ok())
             .is_some_and(|age| age > KEEP);
         if old && let Err(e) = std::fs::remove_file(entry.path()) {
-            log::warn!("could not delete an expired secret file: {e}");
+            log::warn!(error:% = e; "could not delete an expired secret file: {{error}}");
         }
     }
 }

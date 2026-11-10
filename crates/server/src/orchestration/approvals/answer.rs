@@ -1,6 +1,9 @@
 //! Answering the approvals a turn waits on: by the user, or by the permission rules once they
 //! change.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::HashMap;
 use std::sync::{Arc, PoisonError};
 
@@ -13,6 +16,7 @@ use crate::threads::{ApprovalStatus, Question};
 
 /// The user's answer to an approval request: whether it was allowed, any answers to questions,
 /// and the rule the user saved with it.
+#[derive(Debug)]
 pub struct ApprovalDecision<'a> {
     pub approval_id: &'a str,
     pub allow: bool,
@@ -61,12 +65,12 @@ pub(in crate::orchestration) fn unasked(
 
 impl Runner {
     /// Sends the user's answer to a pending approval and records it.
-    pub fn respond(
+    pub(crate) fn respond(
         &self,
         server: &Arc<Server>,
         thread_id: &str,
         decision: ApprovalDecision<'_>,
-    ) -> Result<(), String> {
+    ) -> Result<(), Error> {
         self.resolve(server, thread_id, decision, false)
     }
 
@@ -111,7 +115,7 @@ impl Runner {
         thread_id: &str,
         decision: ApprovalDecision<'_>,
         auto: bool,
-    ) -> Result<(), String> {
+    ) -> Result<(), Error> {
         let ApprovalDecision {
             approval_id,
             allow,
@@ -125,14 +129,14 @@ impl Runner {
                     .lock()
                     .unwrap_or_else(PoisonError::into_inner)
                     .remove(approval_id)
-                    .map(|pending| (turn.agent, turn.stdin.clone(), pending))
+                    .map(|pending| (turn.agent, Arc::clone(&turn.stdin), pending))
             })
         };
         // No turn is waiting for this one: the app closed under it, or the reply it belonged to
         // ended. The answer still counts, and a question is answered by asking it again in a new
         // turn, so a request the person can still read above the composer can still be answered.
         let Some((agent, stdin, pending)) = waited else {
-            return answer_in_new_turn(server, thread_id, approval_id, allow, answers, rule, auto);
+            return answer_in_new_turn(server, thread_id, approval_id, allow, &answers, rule, auto);
         };
         // A permission hook holds the call until it hears the answer.
         if pending.reply.get("hook").is_some() {
@@ -178,10 +182,10 @@ fn answer_in_new_turn(
     thread_id: &str,
     approval_id: &str,
     allow: bool,
-    answers: HashMap<String, Vec<String>>,
+    answers: &HashMap<String, Vec<String>>,
     rule: Option<RuleRef>,
     auto: bool,
-) -> Result<(), String> {
+) -> Result<(), Error> {
     // The request as stored: one already answered, or one this chat never had, is refused rather
     // than answered a second time.
     let (message_id, questions) = server
@@ -199,7 +203,7 @@ fn answer_in_new_turn(
         .ok_or("This request was already answered")?;
     // Said before it is recorded, so a turn that cannot start leaves the request waiting for
     // another try rather than answered and lost.
-    if allow && let Some(text) = answer_message(&questions, &answers) {
+    if allow && let Some(text) = answer_message(&questions, answers) {
         server.send_message(thread_id.to_string(), text, Vec::new(), false)?;
     }
     let status = if allow {
@@ -214,7 +218,7 @@ fn answer_in_new_turn(
                 continue;
             };
             approval.status = status;
-            approval.answers = recorded.clone();
+            approval.answers.clone_from(&recorded);
             approval.rule.clone_from(&rule);
             approval.auto = auto;
             break;

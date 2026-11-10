@@ -1,4 +1,7 @@
 //! Starting and stopping the agent process, reading its output, and writing to its stdin.
+
+// Rust guideline compliant 2026-10-09
+
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Write;
@@ -98,7 +101,7 @@ fn write_all(mut pipe: ChildStdin, lines: &mpsc::Receiver<String>, source: &Sour
                 source,
                 Data::Text(e.to_string()),
             );
-            log::warn!("failed to write to agent: {e}");
+            log::warn!(error:% = e; "failed to write to agent: {{error}}");
             return;
         }
     }
@@ -223,7 +226,7 @@ pub(in crate::orchestration) fn next_line(reader: &mut impl BufRead) -> Option<S
         if !oversized && line.len() + chunk.len() > MAX_LINE_BYTES {
             oversized = true;
             line = Vec::new();
-            log::warn!("dropped agent output line over {MAX_LINE_BYTES} bytes");
+            log::warn!(limit = MAX_LINE_BYTES; "dropped agent output line over {{limit}} bytes");
         }
         if !oversized {
             line.extend_from_slice(chunk);
@@ -240,7 +243,7 @@ pub(in crate::orchestration) fn next_line(reader: &mut impl BufRead) -> Option<S
 }
 
 /// Reads all of stderr but keeps only roughly the last `STDERR_TAIL_BYTES`.
-pub(in crate::orchestration) fn read_stderr_tail(stderr: ChildStderr, source: Source) -> String {
+pub(in crate::orchestration) fn read_stderr_tail(stderr: ChildStderr, source: &Source) -> String {
     let mut reader = BufReader::new(stderr);
     let mut tail = String::new();
     let mut line = Vec::new();
@@ -249,7 +252,7 @@ pub(in crate::orchestration) fn read_stderr_tail(stderr: ChildStderr, source: So
         AGENT_LOG.write(
             LogLevel::Debug,
             "stderr",
-            &source,
+            source,
             Data::Text(text.trim_end().into()),
         );
         tail.push_str(&text);

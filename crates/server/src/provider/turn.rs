@@ -1,5 +1,8 @@
 //! What a turn sends an agent CLI: the turn's spec, its prompt and images, its arguments, environment and stdin, and the lines that steer, interrupt or answer it.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::HashMap;
 use std::path::Path;
 use serde_json::Value;
@@ -8,6 +11,7 @@ use super::{antigravity, api, claude, codex, opencode, AgentKind};
 use super::Parsed;
 
 /// What one turn runs with.
+#[derive(Debug)]
 pub struct TurnSpec<'a> {
     pub root: &'a str,
     /// The thread the turn runs in, which Patchwork's own tools act for.
@@ -42,7 +46,7 @@ pub struct TurnSpec<'a> {
 }
 
 /// An attached image, base64-encoded for the agent's input.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Image {
     pub media_type: &'static str,
     pub data: String,
@@ -52,7 +56,12 @@ pub struct Image {
 const MAX_IMAGE_BYTES: u64 = 5 * 1024 * 1024;
 
 /// Reads and encodes every image attachment.
-pub fn load_images(attachments: &[Attachment]) -> Result<Vec<Image>, String> {
+///
+/// # Errors
+///
+/// Returns an error when an image attachment is not a supported image type, cannot be read, or is
+/// larger than 5 MB.
+pub fn load_images(attachments: &[Attachment]) -> Result<Vec<Image>, Error> {
     use base64::Engine;
     attachments
         .iter()
@@ -63,17 +72,18 @@ pub fn load_images(attachments: &[Attachment]) -> Result<Vec<Image>, String> {
                 .map_err(|e| format!("{}: {e}", a.name))?
                 .len();
             if size > MAX_IMAGE_BYTES {
-                return Err(format!("{} is larger than 5 MB", a.name));
+                return Err(format!("{} is larger than 5 MB", a.name).into());
             }
             let bytes = std::fs::read(&a.path).map_err(|e| format!("{}: {e}", a.name))?;
             let data = base64::engine::general_purpose::STANDARD.encode(bytes);
-            Ok(Image { media_type, data })
+            Ok::<_, Error>(Image { media_type, data })
         })
         .collect()
 }
 
 /// The prompt the agent reads: the message, then the paths of what was attached,
 /// so the agent can open files and folders with its own tools.
+#[must_use]
 pub fn prompt(spec: &TurnSpec) -> String {
     prompt_text(spec.text, spec.attachments)
 }
@@ -105,16 +115,20 @@ pub(super) fn prompt_text(text: &str, attachments: &[Attachment]) -> String {
         .to_string()
 }
 
+/// A message's text, attachments, and images as a provider receives them.
+///
 /// The stdin line that adds a message to a turn that is already running, or None when
 /// the agent cannot take one now and the message waits for the turn to end. Antigravity reads
 /// its whole prompt up front; Codex needs the turn's id, which it reports once started.
 /// A message's content as a provider receives it: its text, attachments, and decoded images.
+#[derive(Debug, Clone, Copy)]
 pub struct Prompt<'a> {
     pub text: &'a str,
     pub attachments: &'a [Attachment],
     pub images: &'a [Image],
 }
 
+#[must_use]
 pub fn steer_input(
     agent: AgentKind,
     prompt: Prompt<'_>,
@@ -146,12 +160,14 @@ pub fn steer_input(
 }
 
 /// The stdin line that pauses the agent's goal, for agents that pursue it on their own.
+#[must_use]
 pub fn goal_pause(agent: AgentKind, session_id: &str) -> Option<String> {
     (agent == AgentKind::Codex).then(|| codex::goal_pause(session_id))
 }
 
 /// The stdin line that stops the agent's reply without ending its process, for agents that can.
 /// Codex needs the id of the turn it is running.
+#[must_use]
 pub fn interrupt(
     agent: AgentKind,
     session_id: Option<&str>,
@@ -165,11 +181,13 @@ pub fn interrupt(
 }
 
 /// The stdin line that stops one subagent, for agents that can.
+#[must_use]
 pub fn stop_subagent(agent: AgentKind, task_id: &str) -> Option<String> {
     (agent == AgentKind::Claude).then(|| claude::stop_task(task_id))
 }
 
 /// `/goal`, alone or with arguments, which runs as a turn of its own.
+#[must_use]
 pub fn is_goal_command(text: &str) -> bool {
     text.trim_start()
         .strip_prefix("/goal")
@@ -178,6 +196,7 @@ pub fn is_goal_command(text: &str) -> bool {
 
 /// What a `/goal` message asks: `/goal` alone shows the goal; `clear` (or one of Claude's aliases
 /// for it), `pause`, and `resume` act on it; anything else is a new objective.
+#[derive(Debug)]
 pub enum GoalCommand<'a> {
     Show,
     Clear,
@@ -187,11 +206,13 @@ pub enum GoalCommand<'a> {
 }
 
 /// The words after `/goal`, or None when `text` is no `/goal` message.
+#[must_use]
 pub fn goal_argument(text: &str) -> Option<&str> {
     is_goal_command(text).then(|| text.trim()["/goal".len()..].trim())
 }
 
 /// What the `/goal` message `text` asks, or None when it is none.
+#[must_use]
 pub fn goal_command(text: &str) -> Option<GoalCommand<'_>> {
     let arg = goal_argument(text)?;
     Some(match arg.to_lowercase().as_str() {
@@ -204,6 +225,7 @@ pub fn goal_command(text: &str) -> Option<GoalCommand<'_>> {
 }
 
 /// Command-line arguments for one turn.
+#[must_use]
 pub fn turn_args(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
     match agent {
         AgentKind::Claude => [
@@ -226,6 +248,7 @@ pub fn turn_args(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
 }
 
 /// Environment for one turn's agent process, on top of the app's own.
+#[must_use]
 pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)> {
     match agent {
         // The bridge sets up its own server, which inherits this environment. 2.x takes the
@@ -257,6 +280,7 @@ pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)
 
 /// Lines written to the agent's stdin when the turn starts. Empty means the
 /// agent takes no input, and stdin is closed.
+#[must_use]
 pub fn turn_input(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
     match agent {
         // Claude only runs `/goal` from a text-only message, so a goal names its attachments by
@@ -276,6 +300,7 @@ pub fn turn_input(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
 }
 
 /// Maps one line of the agent's JSONL output.
+#[must_use]
 pub fn parse_line(agent: AgentKind, v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
     let parsed = match agent {
         AgentKind::Claude => claude::parse(v, spec.root, message_id),
@@ -356,6 +381,7 @@ fn mode_asks(agent: AgentKind, spec: &TurnSpec, target: &crate::permissions::Tar
 }
 
 /// The stdin line answering an approval, from the `reply` the parser attached to it.
+#[must_use]
 pub fn approval_reply(
     agent: AgentKind,
     reply: &Value,

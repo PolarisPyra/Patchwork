@@ -4,6 +4,8 @@
 //! loop. The scripts `sh -c` and its kin, `eval`, `$(…)` and a shell's heredoc run are read too,
 //! and one that `timeout` runs has its limit.
 
+// Rust guideline compliant 2026-10-09
+
 use super::shell::{self, Command, Token};
 
 const UNBOUNDED: &str = "This wait/poll loop has no time limit. Wrap it in timeout N (for example \

@@ -3,6 +3,8 @@
 //! its screen back. The window attached last types into the shell. One no window holds is closed
 //! once it has sat idle at its prompt for [`UNATTENDED`].
 
+// Rust guideline compliant 2026-10-09
+
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -14,7 +16,7 @@ use portable_pty::{ChildKiller, MasterPty};
 
 use super::activity::{self, Activity, ShellActivity};
 use super::{AttachedTerminal, Launch, TerminalFrame, TerminalInfo, pty, range};
-use crate::Res;
+use crate::Error;
 use crate::system::processes::{self, Process};
 
 /// Where a window gets a terminal's frames; false once the window is gone.
@@ -90,9 +92,20 @@ struct Idle {
     revision: u64,
 }
 
+impl std::fmt::Debug for Terminals {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Terminals").finish_non_exhaustive()
+    }
+}
+
 impl Terminals {
     /// Starts the shell [`super::launch`] picked at the size of the view, attached to `page`,
     /// whose frames go to `sink`. It blocks while the shell starts, so call it off the main thread.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the shell cannot be started in a pseudo-terminal, or when its output
+    /// or input cannot be attached.
     pub fn spawn(
         &self,
         mut launch: Launch,
@@ -100,7 +113,7 @@ impl Terminals {
         rows: u16,
         page: &str,
         sink: FrameSink,
-    ) -> Res<AttachedTerminal> {
+    ) -> Result<AttachedTerminal, Error> {
         let id = self.next.fetch_add(1, Ordering::Relaxed) + 1;
         let begun = Instant::now();
         let view = pty::size(cols, rows);
@@ -130,7 +143,7 @@ impl Terminals {
                 let mut killer = killer;
                 let _ = killer.kill();
                 remove(dir.as_deref());
-                return Err(e);
+                return Err(e.into());
             }
         };
         let attachment = self.attachments.fetch_add(1, Ordering::Relaxed) + 1;
@@ -173,18 +186,19 @@ impl Terminals {
         self.open
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .insert(id, term.clone());
+            .insert(id, Arc::clone(&term));
         log::info!(
-            "terminal {id}: started {} {} in {} ({} ms)",
-            launch.shell,
-            launch.args.join(" "),
-            launch.cwd.display(),
-            begun.elapsed().as_millis()
+            id:%,
+            shell:% = launch.shell,
+            args:% = launch.args.join(" "),
+            cwd:% = launch.cwd.display(),
+            millis:% = begun.elapsed().as_millis();
+            "terminal {{id}}: started {{shell}} {{args}} in {{cwd}} ({{millis}} ms)"
         );
         pty::pump(id, term, reader, child);
-        let open = self.open.clone();
+        let open = Arc::clone(&self.open);
         if !self.reclaiming.swap(true, Ordering::Relaxed) {
-            std::thread::spawn(move || reclaim(open));
+            std::thread::spawn(move || reclaim(&open));
         }
         Ok(AttachedTerminal {
             attachment,
@@ -209,7 +223,11 @@ impl Terminals {
 
     /// Attaches `page` to terminal `id`: the screen so far, then its frames go to `sink`. The
     /// page types into the shell from now on.
-    pub fn attach(&self, id: u32, page: &str, sink: FrameSink) -> Res<AttachedTerminal> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the terminal has closed or is closing.
+    pub fn attach(&self, id: u32, page: &str, sink: FrameSink) -> Result<AttachedTerminal, Error> {
         let term = self.get(id)?;
         let mut state = term.lock();
         if state.closing {
@@ -245,7 +263,12 @@ impl Terminals {
     }
 
     /// Types `data` into the shell, from the attachment that types into it.
-    pub fn write(&self, id: u32, attachment: u32, data: &str) -> Res<()> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the terminal has closed, another window types into it, or writing to
+    /// the shell fails.
+    pub fn write(&self, id: u32, attachment: u32, data: &str) -> Result<(), Error> {
         let term = self.get(id)?;
         term.lock().control(attachment, &term)?;
         if let Some(activity) = &term.activity {
@@ -255,29 +278,39 @@ impl Terminals {
         writer
             .write_all(data.as_bytes())
             .and_then(|()| writer.flush())
-            .map_err(|e| e.to_string())
+            .map_err(|e| (e.to_string()).into())
     }
 
     /// Follows the view's size, so full-screen programs lay out to it.
-    pub fn resize(&self, id: u32, attachment: u32, cols: u16, rows: u16) -> Res<()> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the terminal has closed, another window types into it, or resizing the
+    /// pseudo-terminal fails.
+    pub fn resize(&self, id: u32, attachment: u32, cols: u16, rows: u16) -> Result<(), Error> {
         let term = self.get(id)?;
         let size = pty::size(cols, rows);
         {
             let mut state = term.lock();
             state.control(attachment, &term)?;
             state.model.screen_mut().set_size(size.rows, size.cols);
-        }
+        };
         term.master
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .resize(size)
-            .map_err(|e| e.to_string())
+            .map_err(|e| (e.to_string()).into())
     }
 
     /// Closes terminal `id`, ending its shell and every process it started. It blocks for up
     /// to a few seconds, so call it off the main thread. A close that fails leaves the terminal
     /// closed to windows and is tried again a minute later.
-    pub fn close(&self, id: u32) -> Res<()> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the shell or a process it started is still running after being asked
+    /// to stop.
+    pub fn close(&self, id: u32) -> Result<(), Error> {
         close(&self.open, id)
     }
 
@@ -289,7 +322,7 @@ impl Terminals {
         }
     }
 
-    fn get(&self, id: u32) -> Res<Arc<Term>> {
+    fn get(&self, id: u32) -> Result<Arc<Term>, Error> {
         self.open
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -315,7 +348,7 @@ impl Term {
 
     /// Marks the shell ended with `code` and tells the windows attached.
     pub(super) fn exit_frame(&self, id: u32, code: Option<u32>) {
-        log::info!("terminal {id}: exited with {code:?}");
+        log::info!(id:%, code:?; "terminal {{id}}: exited with {{code}}");
         let mut state = self.lock();
         state.info.running = false;
         state.info.exit_code = code;
@@ -331,7 +364,7 @@ impl State {
     }
 
     /// Whether `attachment` may type into the running shell; input voids what was seen.
-    fn control(&mut self, attachment: u32, term: &Term) -> Res<()> {
+    fn control(&mut self, attachment: u32, term: &Term) -> Result<(), Error> {
         if self.closing || term.exited.load(Ordering::Acquire) {
             return Err("The terminal has closed".into());
         }
@@ -413,7 +446,7 @@ fn terms(open: &Mutex<HashMap<u32, Arc<Term>>>) -> Vec<Arc<Term>> {
         .collect()
 }
 
-fn close(open: &Mutex<HashMap<u32, Arc<Term>>>, id: u32) -> Res<()> {
+fn close(open: &Mutex<HashMap<u32, Arc<Term>>>, id: u32) -> Result<(), Error> {
     let Some(term) = open
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
@@ -437,19 +470,19 @@ fn close(open: &Mutex<HashMap<u32, Arc<Term>>>, id: u32) -> Res<()> {
         state.followers.clear();
         state.controller = None;
         state.invalidate();
-    }
+    };
     match range::close(&term) {
         Ok(()) => {
             open.lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .remove(&id);
             remove(term.dir.as_deref());
-            log::info!("terminal {id}: closed");
+            log::info!(id:%; "terminal {{id}}: closed");
             Ok(())
         }
         Err(e) => {
             term.lock().retry_at = Some(Instant::now() + RETRY_CLOSE);
-            log::warn!("terminal {id}: {e}");
+            log::warn!(id:%, error:% = e; "terminal {{id}}: {{error}}");
             Err(e)
         }
     }
@@ -457,18 +490,18 @@ fn close(open: &Mutex<HashMap<u32, Arc<Term>>>, id: u32) -> Res<()> {
 
 /// Closes terminals no window has held while they sat idle for [`UNATTENDED`], each seen idle
 /// at every check with nothing new recorded, and tries again closes that failed.
-fn reclaim(open: Arc<Mutex<HashMap<u32, Arc<Term>>>>) {
+fn reclaim(open: &Arc<Mutex<HashMap<u32, Arc<Term>>>>) {
     loop {
         std::thread::sleep(OBSERVE_EVERY);
         let ids: Vec<(u32, Arc<Term>)> = open
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .iter()
-            .map(|(id, term)| (*id, term.clone()))
+            .map(|(id, term)| (*id, Arc::clone(term)))
             .collect();
         for (id, term) in ids {
             if observe(&term) {
-                let open = open.clone();
+                let open = Arc::clone(open);
                 std::thread::spawn(move || close(&open, id));
             }
         }
@@ -526,6 +559,6 @@ fn remove(dir: Option<&Path>) {
     if let Some(dir) = dir
         && let Err(e) = std::fs::remove_dir_all(dir)
     {
-        log::warn!("could not remove the terminal's folder: {e}");
+        log::warn!(error:% = e; "could not remove the terminal's folder: {{error}}");
     }
 }

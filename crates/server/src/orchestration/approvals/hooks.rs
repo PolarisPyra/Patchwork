@@ -2,9 +2,11 @@
 //! `permissions::hook`): a deny rule refuses the call, and an ask rule holds it until the user
 //! answers in the transcript, like any approval.
 
+// Rust guideline compliant 2026-10-09
+
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::PoisonError;
+use std::sync::{Arc, PoisonError};
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::Duration;
@@ -103,10 +105,10 @@ impl Runner {
                         message_id: message_id.clone(),
                         reply: json!({"hook": approval.id}),
                         target: Some(target.clone()),
-                        root: root.clone(),
+                        root,
                     },
                 );
-            [turn.cancelled.clone(), turn.exited.clone()]
+            [Arc::clone(&turn.cancelled), Arc::clone(&turn.exited)]
         };
         let id = approval.id.clone();
         publish(
@@ -118,6 +120,7 @@ impl Runner {
             },
         );
         loop {
+            // Wakes once a second to see whether the turn was stopped while the approval waits.
             match rx.recv_timeout(Duration::from_secs(1)) {
                 Ok(true) => {
                     // The agent may still ask about the call itself; it was answered here.

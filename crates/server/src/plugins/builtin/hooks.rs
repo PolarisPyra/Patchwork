@@ -1,5 +1,7 @@
 //! The built-in hooks by name, and running one as its own process.
 
+// Rust guideline compliant 2026-10-09
+
 use std::io::{Read, Write};
 
 use serde::{Deserialize, Serialize};
@@ -22,6 +24,7 @@ pub enum BuiltinHook {
 }
 
 impl BuiltinHook {
+    #[must_use]
     pub fn from_name(name: &str) -> Option<BuiltinHook> {
         match name {
             "boundedWaits" => Some(BuiltinHook::BoundedWaits),
@@ -29,6 +32,7 @@ impl BuiltinHook {
         }
     }
 
+    #[must_use]
     pub fn name(self) -> &'static str {
         match self {
             BuiltinHook::BoundedWaits => "boundedWaits",
@@ -36,6 +40,7 @@ impl BuiltinHook {
     }
 
     /// The tools the hook is for when its plugin names none, as a matcher.
+    #[must_use]
     pub fn matcher(self) -> &'static str {
         match self {
             BuiltinHook::BoundedWaits => crate::provider::hooks::SHELL_TOOLS,
@@ -43,6 +48,7 @@ impl BuiltinHook {
     }
 
     /// What the hook does, as Settings → Extensions → Hooks shows it.
+    #[must_use]
     pub fn description(self) -> &'static str {
         match self {
             BuiltinHook::BoundedWaits => "Refuses waits with no time limit",
@@ -51,6 +57,7 @@ impl BuiltinHook {
 
     /// Why the call `input` describes is refused, or None to let it run. `input` is the call as
     /// the agent gives it to its hooks.
+    #[must_use]
     pub fn check(self, input: &Value) -> Option<String> {
         match self {
             BuiltinHook::BoundedWaits => {
@@ -78,6 +85,6 @@ pub fn run() -> i32 {
     let mut stdout = std::io::stdout();
     let _ = stdout
         .write_all(answer.as_bytes())
-        .and_then(|_| stdout.flush());
+        .and_then(|()| stdout.flush());
     0
 }

@@ -1,10 +1,12 @@
 //! The app's settings: their shape, and saving them.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use crate::backgrounds::{BackgroundStrength, ChatBackground};
 use crate::permissions::PermissionSettings;
@@ -13,8 +15,7 @@ use crate::provider::AgentKind;
 use crate::Server;
 use crate::{permissions, skills};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Theme {
     Light,
@@ -25,9 +26,12 @@ pub enum Theme {
     System,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate setting the user turns on or off"
+)]
 pub struct Integrations {
     pub github: bool,
     pub terminal: bool,
@@ -35,9 +39,12 @@ pub struct Integrations {
     pub browser: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate setting the user turns on or off"
+)]
 pub struct Settings {
     pub onboarded: bool,
     pub theme: Theme,
@@ -95,8 +102,7 @@ pub struct Settings {
 
 /// A model that reads images: an API provider's `provider/model`, or a model of a CLI the user
 /// is signed in to, which Patchwork runs on its own for each message with images.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VisionModel {
     pub agent: AgentKind,
@@ -108,8 +114,7 @@ pub struct VisionModel {
 ///
 /// Off for every project until it is turned on: running a test suite after every task is the
 /// person's call, not the app's. A reply shows what the checks made of it only when they ran.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct CheckSettings {
     /// What a project does unless it says otherwise.
@@ -120,6 +125,7 @@ pub struct CheckSettings {
 
 impl CheckSettings {
     /// Whether `project_id` runs its checks after every task.
+    #[must_use]
     pub fn on(&self, project_id: &str) -> bool {
         self.projects
             .get(project_id)
@@ -129,9 +135,12 @@ impl CheckSettings {
 }
 
 /// The integrated terminal: its environment, font, cursor, and scrollback, with their defaults.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate setting the user turns on or off"
+)]
 pub struct TerminalSettings {
     /// Variables added to the shell's environment; null removes one. Values may use
     /// `${env:NAME}` and `${workspaceFolder}`.
@@ -203,8 +212,7 @@ impl Default for TerminalSettings {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DetectLocale {
     #[default]
@@ -213,8 +221,7 @@ pub enum DetectLocale {
     On,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CursorStyle {
     #[default]
@@ -223,8 +230,7 @@ pub enum CursorStyle {
     Underline,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RightClickBehavior {
     #[default]
@@ -236,8 +242,7 @@ pub enum RightClickBehavior {
 }
 
 /// How much each log in `logs/<launch>/` records.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct LoggingSettings {
     /// `main.log`: Patchwork's own messages.
@@ -271,10 +276,7 @@ impl Default for LoggingSettings {
 
 /// How much a log records; each level includes the ones before it. Below Trace, no
 /// conversation or file content is written.
-#[derive(
-    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS,
-)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LogLevel {
     Off,
@@ -288,8 +290,7 @@ pub enum LogLevel {
 }
 
 /// How Patchwork keeps itself up to date.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct UpdateSettings {
     /// Minutes between checks for a new release: 10 to 60, in steps of 10.
@@ -305,8 +306,7 @@ impl Default for UpdateSettings {
 }
 
 /// Desktop notifications shown while Patchwork is not the focused window.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct NotificationSettings {
     /// When a task's goal is met.
@@ -325,9 +325,12 @@ impl Default for NotificationSettings {
 }
 
 /// Settings that trade a little convenience for fewer tokens spent.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate setting the user turns on or off"
+)]
 pub struct TokenSettings {
     /// Shows the token counts under each finished reply.
     pub show_usage: bool,
@@ -389,6 +392,7 @@ impl Default for TokenSettings {
 
 impl TokenSettings {
     /// The context size at which `agent` compacts by default; 0 leaves it to the agent.
+    #[must_use]
     pub fn compact_window(&self, agent: AgentKind) -> u64 {
         match agent {
             AgentKind::Claude => self.claude_compact_window,
@@ -403,10 +407,15 @@ impl TokenSettings {
 impl Server {
     /// Watches the skills folder in place of any watch before, passing the skills to
     /// `on_change` after each settled burst of changes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the skills watcher cannot be created or cannot watch the skills
+    /// folder.
     pub fn watch_skills(
         self: &Arc<Self>,
         on_change: impl Fn(Vec<skills::Skill>) + Send + 'static,
-    ) -> Result<(), String> {
+    ) -> Result<(), Error> {
         let mut current = self
             .skills_watch
             .lock()
@@ -430,7 +439,12 @@ impl Server {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 
-    pub fn save_settings(self: &Arc<Self>, settings: Settings) -> Result<(), String> {
+    /// Saves `settings` and applies what changed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the settings cannot be written to the database.
+    pub fn save_settings(self: &Arc<Self>, settings: Settings) -> Result<(), Error> {
         crate::logging::follow(&settings.logging);
         let old = self.store.settings();
         let guards_changed = !permissions::same_guards(&old.permissions, &settings.permissions);
@@ -439,7 +453,7 @@ impl Server {
         let changed = changed_sections(&old, &settings);
         self.store.update_settings(|s| *s = settings)?;
         if !changed.is_empty() {
-            log::info!("settings changed: {}", changed.join(", "));
+            log::info!(changed:% = changed.join(", "); "settings changed: {{changed}}");
         }
         // A rule the user just added may answer requests already waiting.
         self.runner.apply_rules(self);

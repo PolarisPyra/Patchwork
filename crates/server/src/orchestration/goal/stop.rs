@@ -1,5 +1,8 @@
 //! Stopping a goal: the message that has the agent drop it, and clearing it from the thread.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::sync::Arc;
 
 use super::state::{held_key, signature};
@@ -9,6 +12,7 @@ use crate::provider::AgentKind;
 
 /// Whether `text` is upkeep the app also sends on its own rather than work for the agent: an idle
 /// `/compact`, or the message that has the agent drop its goal.
+#[must_use]
 pub fn is_upkeep(text: &str) -> bool {
     let text = text.trim();
     text == "/compact"
@@ -30,7 +34,12 @@ impl Server {
     /// Clears the goal, in the agent's session too, so the agent does not pick it up again.
     /// A goal's final status remains in the thread until the user clears it. The agent's own
     /// instructions are still cleared when pursuit ends (see `settle`).
-    pub fn stop_goal(self: &Arc<Self>, thread_id: &str) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a turn is running, or when the goal's dismissal or held state cannot
+    /// be saved or the stop message cannot be sent.
+    pub fn stop_goal(self: &Arc<Self>, thread_id: &str) -> Result<(), Error> {
         let Some(thread) = self.store.thread(thread_id) else {
             return Ok(());
         };

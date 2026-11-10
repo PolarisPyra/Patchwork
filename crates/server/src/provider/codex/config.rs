@@ -1,5 +1,7 @@
 //! Where Codex keeps its settings, login and sessions, and the models it offers.
 
+// Rust guideline compliant 2026-10-09
+
 use std::path::{Path, PathBuf};
 
 use crate::provider::AgentKind;
@@ -47,6 +49,7 @@ pub fn configured_model() -> Option<String> {
 
 /// Current Codex models, the ones the CLI's own catalog shows in its picker, each with the
 /// reasoning levels it gives them: `extra` and `ultra` are on newer models only.
+#[must_use]
 pub fn models() -> Vec<ModelOption> {
     crate::provider::codex::cli::models()
         .into_iter()
@@ -63,6 +66,7 @@ pub fn models() -> Vec<ModelOption> {
 }
 
 /// `(modified time, path)` of every rollout file under `dir`.
+#[must_use]
 pub fn rollout_files(dir: &Path) -> Vec<(std::time::SystemTime, PathBuf)> {
     let mut out = Vec::new();
     let mut stack = vec![dir.to_path_buf()];

@@ -6,6 +6,8 @@
 //! what failed and, when the output says why on the next line, keeps that too; the whole output is
 //! kept beside it, so a person can see the rest.
 
+// Rust guideline compliant 2026-10-09
+
 use std::collections::HashSet;
 
 use crate::threads::CheckFailure;

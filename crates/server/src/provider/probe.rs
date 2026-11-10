@@ -1,5 +1,7 @@
 //! Asking an agent CLI about itself: running it briefly with a time limit, and reading its version, sign-in and models.
 
+// Rust guideline compliant 2026-10-09
+
 use std::io::Read;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
@@ -15,6 +17,7 @@ use super::{agent_command, located};
 /// Upper bound for any single agent CLI probe (`--version`, `auth status`, ...).
 pub(super) const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
+#[derive(Debug)]
 pub struct Probe {
     pub success: bool,
     pub stdout: String,
@@ -23,10 +26,13 @@ pub struct Probe {
 
 /// Runs the agent CLI with `args`. Returns None if it cannot start or exceeds
 /// `PROBE_TIMEOUT` (the process group is killed in that case).
+#[must_use]
 pub fn probe(kind: AgentKind, args: &[&str]) -> Option<Probe> {
     probe_until(kind, args, |_| false)
 }
 
+/// Runs a CLI probe and stops it early once `done` accepts the output.
+///
 /// Like `probe`, but also ends the process once `done` accepts the stdout so far, and returns
 /// that output as a success. Some CLIs print their answer and then keep running, so waiting
 /// for them to exit would only ever reach the timeout.
@@ -36,6 +42,7 @@ pub fn probe_until(kind: AgentKind, args: &[&str], done: impl Fn(&str) -> bool) 
 }
 
 /// Like `probe`, but runs in `dir` and allows `timeout`.
+#[must_use]
 pub fn probe_in(kind: AgentKind, args: &[&str], dir: &Path, timeout: Duration) -> Option<Probe> {
     let mut cmd = agent_command(kind).ok()?;
     cmd.current_dir(dir);
@@ -72,6 +79,7 @@ fn run_probe(
                 stop(&mut child);
                 break true;
             }
+            // Short, so the probe ends as soon as the CLI prints what it was waiting for.
             Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
             _ => {
                 stop(&mut child);
@@ -131,6 +139,7 @@ fn text(buf: &Mutex<Vec<u8>>) -> String {
     String::from_utf8_lossy(&bytes).into_owned()
 }
 
+#[must_use]
 pub fn detect_agent(kind: AgentKind) -> AgentStatus {
     let mut status = AgentStatus {
         kind,
@@ -167,6 +176,7 @@ pub fn detect_agent(kind: AgentKind) -> AgentStatus {
 }
 
 /// The CLI's version, as `--version` prints it.
+#[must_use]
 pub fn cli_version(kind: AgentKind) -> Option<String> {
     probe(kind, &["--version"])
         .filter(|p| p.success)
@@ -183,6 +193,7 @@ fn version_in(stdout: &str) -> Option<String> {
 }
 
 /// Models offered for `kind`, starting with the CLI default.
+#[must_use]
 pub fn list_models(kind: AgentKind) -> Vec<ModelOption> {
     let (default_model, models) = match kind {
         AgentKind::Claude => (claude::configured_model(), claude::models()),

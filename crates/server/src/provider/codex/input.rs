@@ -1,5 +1,8 @@
 //! What Patchwork sends `codex app-server`: its arguments, and the JSON-RPC requests that start, steer and stop a turn.
 
+// Rust guideline compliant 2026-10-09
+
+use std::fmt::Write as _;
 use std::collections::HashMap;
 
 use serde_json::{Value, json};
@@ -16,9 +19,11 @@ use crate::provider::TurnSpec;
 
 use super::{configured_model, models};
 
-/// `codex app-server` speaks JSON-RPC on stdio; `turn_input` starts the conversation. Codex leaves
-/// out its `update_plan` tool unless asked, and that tool is what fills the plan above the chat box.
-/// Its `request_user_input` tool, the question card, works only in plan mode unless enabled.
+/// `codex app-server` speaks JSON-RPC on stdio; `turn_input` starts the conversation.
+///
+/// Codex leaves out its `update_plan` tool unless asked, and that tool is what fills the plan above
+/// the chat box. Its `request_user_input` tool, the question card, works only in plan mode unless
+/// enabled.
 pub fn turn_args() -> Vec<String> {
     [
         "app-server",
@@ -32,6 +37,7 @@ pub fn turn_args() -> Vec<String> {
 }
 
 /// A set compact window makes Codex compact once its context reaches it.
+#[must_use]
 pub fn compact_args(spec: &TurnSpec) -> Vec<String> {
     if spec.compact_window == 0 {
         return Vec::new();
@@ -44,6 +50,7 @@ pub fn compact_args(spec: &TurnSpec) -> Vec<String> {
 
 /// `-c` overrides that give Codex the custom agents as roles its `spawn_agent` starts by name.
 /// A role's instructions and model live in a file of their own, which the role points to.
+#[must_use]
 pub fn agents_args(spec: &TurnSpec) -> Vec<String> {
     let models = models();
     let mut args = Vec::new();
@@ -56,7 +63,7 @@ pub fn agents_args(spec: &TurnSpec) -> Vec<String> {
             .as_deref()
             .and_then(|m| crate::agents::offered(m, models.iter().filter_map(|o| o.id.as_deref())))
         {
-            role.push_str(&format!("model = {}\n", json!(model)));
+            let _ = writeln!(role, "model = {}", json!(model));
         }
         let file = match crate::agents::launch_file(
             "codex",
@@ -66,7 +73,10 @@ pub fn agents_args(spec: &TurnSpec) -> Vec<String> {
         ) {
             Ok(file) => file,
             Err(e) => {
-                log::warn!("failed to hand Codex the {} agent: {e}", agent.name);
+                log::warn!(
+                    agent:% = agent.name, error:% = e;
+                    "failed to hand Codex the {{agent}} agent: {{error}}"
+                );
                 continue;
             }
         };
@@ -101,6 +111,7 @@ pub(super) fn thread_params(spec: &TurnSpec, resume: Option<&str>) -> Value {
 }
 
 /// Handshake, then start or resume the thread. `turn/start` follows once the thread id is known.
+#[must_use]
 pub fn turn_input(spec: &TurnSpec) -> Vec<String> {
     let thread = thread_params(spec, spec.session_id);
     let method = match spec.session_id {
@@ -196,6 +207,7 @@ pub(super) const GOAL_REQUEST: u64 = 10;
 /// Request id of the goal requests around a goal's turn; only their goal is kept.
 pub(super) const GOAL_SETUP: u64 = 11;
 
+#[must_use]
 pub fn goal_pause(thread_id: &str) -> String {
     json!({"id": GOAL_SETUP, "method": "thread/goal/set", "params": {
         "threadId": thread_id, "status": "paused",
@@ -310,6 +322,7 @@ fn input_items(text: &str, attachments: &[Attachment], skills_dir: Option<&str>)
 pub(super) const STEER_REQUEST: u64 = 4;
 
 /// `turn/steer` adds input to the turn that is running now, identified by its native id.
+#[must_use]
 pub fn steer_input(
     thread_id: &str,
     turn_id: &str,
@@ -328,6 +341,7 @@ pub(super) const INTERRUPT_REQUEST: u64 = 13;
 
 /// `turn/interrupt` stops the turn running now; Codex ends it with `turn/completed` and the
 /// status `interrupted`.
+#[must_use]
 pub fn interrupt(thread_id: &str, turn_id: &str) -> String {
     json!({"id": INTERRUPT_REQUEST, "method": "turn/interrupt", "params": {
         "threadId": thread_id,
@@ -337,6 +351,7 @@ pub fn interrupt(thread_id: &str, turn_id: &str) -> String {
 }
 
 /// A question's reply carries the answers by question id; declining it answers none.
+#[must_use]
 pub fn approval_reply(
     reply: &Value,
     allow: bool,

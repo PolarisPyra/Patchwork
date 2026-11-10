@@ -1,21 +1,7 @@
-# Artifacts, scheduled tasks, plugins, and computer use
+# Scheduled tasks, plugins, and computer use
 
-Four features that sit around the agents. Each one is off or empty until it is used, and none of
+Three features that sit around the agents. Each one is off or empty until it is used, and none of
 them changes how a turn is run.
-
-## Artifacts
-
-`apps/web/src/features/chat/Artifact.tsx` draws two kinds of fence in a reply:
-
-| Language | What happens |
-| --- | --- |
-| `mermaid` | Drawn with Mermaid, loaded the first time a reply has a diagram. A diagram that fails says so in one line instead of showing a trace. |
-| `html`, `htm`, `svg`, `xhtml` | Run in an `iframe` with `sandbox="allow-scripts"`, so it cannot read the app, its storage, or the cookies of anything else. |
-
-Every provider's replies go through `Markdown.tsx`, so the same two fences are drawn whatever the
-agent wrote. A block has a toggle back to its source, and the frame reports its own height so a
-short artifact does not leave an empty box. A frame cannot be measured from the app's side: the
-height arrives as a message from the artifact.
 
 ## Scheduled tasks
 
@@ -25,9 +11,9 @@ or named days.
 
 - The row is in `scheduled_tasks` (`crates/server/src/persistence/scheduled.rs`), and saving a task
   reschedules it from now.
-- `Server::run_due_scheduled_tasks` starts the tasks whose time has come. The desktop shell calls it
+- `Server::run_due_scheduled_tasks` starts the tasks whose time has come. The desktop app calls it
   every 30 seconds from a thread of its own (`start_scheduled_tasks` in
-  `apps/desktop/src-tauri/src/lib.rs`).
+  `crates/desktop/src/main.rs`).
 - A task that starts makes an ordinary thread with the task's name, then sends the prompt as its
   first message, so everything after that is a normal turn: approvals, files, usage.
 - A task that fails to start is logged and its next run recorded, so it does not retry every tick.
@@ -107,7 +93,7 @@ the tool list and the approval rules can ask without a database read.
   On Linux it is the desktop portal under Wayland, cut to the primary monitor that XWayland
   reports, and the root window under X11. It uses `zbus` and `x11rb`, which the app already builds
   for notifications and the clipboard. `xcap` is not used on Linux, since it would also build
-  PipeWire's bindings, which need newer headers than the Ubuntu the AppImage is built on.
+  PipeWire's bindings, which need newer headers than the Ubuntu CI builds on.
 - The capture is never scaled: it is written at the screen's own size, either as a `data:` URL
   (for the pane) or to a PNG (for the agent, which reads it with `read_file`).
 - A capture takes a moment on Wayland: the portal round-trip is about two and a half seconds on a 4K

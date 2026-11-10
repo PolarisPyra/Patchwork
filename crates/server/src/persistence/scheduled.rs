@@ -1,6 +1,9 @@
 //! The `scheduled_tasks` table: a prompt, its schedule, and when it last and next runs; and
 //! `scheduled_task_runs`, the newest few runs of each.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::HashMap;
 
 use rusqlite::{OptionalExtension, params};
@@ -8,7 +11,7 @@ use rusqlite::{OptionalExtension, params};
 use super::{dec, enc, err, json};
 use super::store::{Inner, Store};
 use crate::provider::AgentKind;
-use crate::scheduled::{RunOutcome, Schedule, ScheduledRun, ScheduledTask};
+use crate::scheduled::{RunOutcome, Schedule, Run, Task};
 use crate::system::now_ms;
 use crate::threads::AccessMode;
 
@@ -30,7 +33,7 @@ struct Row {
     created_at: i64,
 }
 
-pub(super) fn load(inner: &Inner) -> Result<Vec<ScheduledTask>, String> {
+pub(super) fn load(inner: &Inner) -> Result<Vec<Task>, Error> {
     let mut stmt = inner
         .conn
         .prepare(
@@ -64,7 +67,7 @@ pub(super) fn load(inner: &Inner) -> Result<Vec<ScheduledTask>, String> {
             let schedule: Schedule = serde_json::from_str(&row.schedule)
                 .map_err(|e| format!("Database error: scheduled task {}: {e}", row.id))?;
             let recent_runs = runs.remove(&row.id).unwrap_or_default();
-            Ok(ScheduledTask {
+            Ok(Task {
                 id: row.id,
                 name: row.name,
                 prompt: row.prompt,
@@ -84,7 +87,7 @@ pub(super) fn load(inner: &Inner) -> Result<Vec<ScheduledTask>, String> {
 }
 
 /// The newest runs of every task, newest first, by task id, in one query.
-fn recent_runs(inner: &Inner) -> crate::Res<HashMap<String, Vec<ScheduledRun>>> {
+fn recent_runs(inner: &Inner) -> Result<HashMap<String, Vec<Run>>, Error> {
     let mut stmt = inner
         .conn
         .prepare(
@@ -102,7 +105,7 @@ fn recent_runs(inner: &Inner) -> crate::Res<HashMap<String, Vec<ScheduledRun>>> 
         .query_map([RECENT_RUNS], |row| {
             Ok((
                 row.get::<_, String>(0)?,
-                ScheduledRun {
+                Run {
                     at: row.get(1)?,
                     thread_id: row.get(2)?,
                     outcome: dec(row.get::<_, String>(3)?)?,
@@ -111,7 +114,7 @@ fn recent_runs(inner: &Inner) -> crate::Res<HashMap<String, Vec<ScheduledRun>>> 
             ))
         })
         .map_err(err)?;
-    let mut runs: HashMap<String, Vec<ScheduledRun>> = HashMap::new();
+    let mut runs: HashMap<String, Vec<Run>> = HashMap::new();
     for row in rows {
         let (task_id, run) = row.map_err(err)?;
         runs.entry(task_id).or_default().push(run);
@@ -120,7 +123,7 @@ fn recent_runs(inner: &Inner) -> crate::Res<HashMap<String, Vec<ScheduledRun>>> 
 }
 
 /// Adds a run to a task's history and drops all but its newest few.
-fn record_run(inner: &Inner, task_id: &str, run: &ScheduledRun) -> Result<(), String> {
+fn record_run(inner: &Inner, task_id: &str, run: &Run) -> Result<(), Error> {
     inner
         .conn
         .execute(
@@ -148,7 +151,7 @@ fn record_run(inner: &Inner, task_id: &str, run: &ScheduledRun) -> Result<(), St
     Ok(())
 }
 
-fn save(inner: &Inner, task: &ScheduledTask) -> Result<(), String> {
+fn save(inner: &Inner, task: &Task) -> Result<(), Error> {
     inner
         .conn
         .execute(
@@ -181,26 +184,35 @@ fn save(inner: &Inner, task: &ScheduledTask) -> Result<(), String> {
 }
 
 impl Store {
-    pub fn scheduled_tasks(&self) -> Vec<ScheduledTask> {
+    pub fn scheduled_tasks(&self) -> Vec<Task> {
         let inner = self.lock();
         match load(&inner) {
             Ok(tasks) => tasks,
             Err(e) => {
                 // A row that cannot be read would otherwise stop every schedule without a word,
                 // and the timer would look like it was working.
-                log::error!("scheduled tasks could not be read: {e}");
+                log::error!(error:% = e; "scheduled tasks could not be read: {{error}}");
                 Vec::new()
             }
         }
     }
 
     /// Adds a task, or replaces the one with its id.
-    pub fn save_scheduled_task(&self, task: &ScheduledTask) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the database write fails.
+    pub fn save_scheduled_task(&self, task: &Task) -> Result<(), Error> {
         let inner = self.lock();
         save(&inner, task)
     }
 
-    pub fn remove_scheduled_task(&self, id: &str) -> Result<(), String> {
+    /// Deletes the scheduled task `id` and its runs.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the database cannot delete the task or its runs.
+    pub fn remove_scheduled_task(&self, id: &str) -> Result<(), Error> {
         let inner = self.lock();
         inner
             .conn
@@ -215,13 +227,13 @@ impl Store {
 
     /// Records that a task was started at `at`, and will next start at `next`. `started` is the
     /// thread it started, or why it did not start one.
-    pub fn scheduled_task_ran(
+    pub(crate) fn scheduled_task_ran(
         &self,
         id: &str,
         at: i64,
         next: Option<i64>,
         started: Result<&str, &str>,
-    ) -> Result<(), String> {
+    ) -> Result<(), Error> {
         let inner = self.lock();
         let changed = inner
             .conn
@@ -234,13 +246,13 @@ impl Store {
             return Err("The scheduled task no longer exists".into());
         }
         let run = match started {
-            Ok(thread_id) => ScheduledRun {
+            Ok(thread_id) => Run {
                 at,
                 thread_id: Some(thread_id.to_string()),
                 outcome: RunOutcome::Started,
                 detail: None,
             },
-            Err(why) => ScheduledRun {
+            Err(why) => Run {
                 at,
                 thread_id: None,
                 outcome: RunOutcome::Failed,
@@ -252,7 +264,7 @@ impl Store {
 
     /// Records that a task's slot went by too long ago to run late, and moves it on to `next`.
     /// The skipped run is dated by the slot it missed.
-    pub fn scheduled_task_skipped(&self, id: &str, next: Option<i64>) -> Result<(), String> {
+    pub(crate) fn scheduled_task_skipped(&self, id: &str, next: Option<i64>) -> Result<(), Error> {
         let inner = self.lock();
         let missed: Option<i64> = inner
             .conn
@@ -271,7 +283,7 @@ impl Store {
                 params![id, next],
             )
             .map_err(err)?;
-        let run = ScheduledRun {
+        let run = Run {
             at: missed.unwrap_or_else(|| now_ms() as i64),
             thread_id: None,
             outcome: RunOutcome::Skipped,

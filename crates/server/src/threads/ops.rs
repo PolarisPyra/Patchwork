@@ -1,5 +1,8 @@
 //! Creating, listing, changing and removing threads.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use crate::provider::AgentKind;
 use crate::system::{now_ms, new_id};
 use crate::threads::{MessageStatus, AccessMode, ApprovalStatus, Message, Thread};
@@ -9,7 +12,7 @@ use crate::settings::LogLevel;
 use crate::Server;
 
 /// The options for a new task or chat, as the desktop app sends them.
-#[derive(serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NewThread {
     /// Chosen by the window that asked, so the row can be drawn before this call returns. A
@@ -71,12 +74,20 @@ impl Server {
     }
 
     /// One thread with all its messages.
-    pub fn thread(&self, id: &str) -> Result<Thread, String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no thread has that id.
+    pub fn thread(&self, id: &str) -> Result<Thread, Error> {
         Ok(self.store.thread(id).ok_or(super::NOT_FOUND)?)
     }
 
     /// Puts `ids` in `folder_id` (None: the top level) in their new order.
-    pub fn reorder_threads(&self, ids: &[String], folder_id: Option<&str>) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the folder is unknown or the new order cannot be saved.
+    pub fn reorder_threads(&self, ids: &[String], folder_id: Option<&str>) -> Result<(), Error> {
         if let Some(folder_id) = folder_id {
             self.folder(folder_id)?;
         }
@@ -88,11 +99,21 @@ impl Server {
         self.store.state(LAST_THREAD_KEY)
     }
 
-    pub fn set_last_thread_id(&self, id: &str) -> Result<(), String> {
+    /// Remembers `id` as the chat open last, to open it at the next launch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the value cannot be saved to the database.
+    pub fn set_last_thread_id(&self, id: &str) -> Result<(), Error> {
         self.store.set_state(LAST_THREAD_KEY, id)
     }
 
-    pub fn create_thread(&self, new: NewThread) -> Result<Thread, String> {
+    /// Makes a new chat and stores it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the project is unknown or the thread cannot be saved.
+    pub fn create_thread(&self, new: NewThread) -> Result<Thread, Error> {
         let NewThread {
             id,
             project_id,
@@ -162,7 +183,11 @@ impl Server {
     /// Starts a new thread with the conversation of `thread_id` up to and including `message_id`,
     /// and the same agent and settings. Its first turn gives the agent that conversation as a
     /// transcript, in a session of its own, so the original thread goes on unchanged.
-    pub fn fork_thread(&self, thread_id: &str, message_id: &str) -> Result<Thread, String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the thread or the message is not found, or the fork cannot be saved.
+    pub fn fork_thread(&self, thread_id: &str, message_id: &str) -> Result<Thread, Error> {
         let source = self.thread(thread_id)?;
         let end = source
             .messages
@@ -207,7 +232,13 @@ impl Server {
         Ok(thread)
     }
 
-    pub fn rename_thread(&self, id: &str, title: &str) -> Result<(), String> {
+    /// Renames the chat `id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the title is empty, the thread is unknown, or the change cannot be
+    /// saved.
+    pub fn rename_thread(&self, id: &str, title: &str) -> Result<(), Error> {
         let title = clean_name(title)?;
         self.thread(id)?;
         self.store.update_thread(id, |t| t.title = title)?;
@@ -216,7 +247,11 @@ impl Server {
     }
 
     /// Moves a thread to the archive, or back to the task list. Archiving stops its running turn.
-    pub fn set_thread_archived(&self, id: &str, archived: bool) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the thread is unknown or the change cannot be saved.
+    pub fn set_thread_archived(&self, id: &str, archived: bool) -> Result<(), Error> {
         self.thread(id)?;
         if archived {
             self.runner.cancel(id, None);
@@ -228,13 +263,22 @@ impl Server {
     }
 
     /// Lists a chat or task under Favorites at the top of the sidebar, or back in its usual spot.
-    pub fn set_thread_favorite(&self, id: &str, favorite: bool) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the thread is unknown or the change cannot be saved.
+    pub fn set_thread_favorite(&self, id: &str, favorite: bool) -> Result<(), Error> {
         self.thread(id)?;
         self.store.update_thread(id, |t| t.favorite = favorite)
     }
 
     /// Lists a task first in its project, or back in its folder. Only tasks in a project pin.
-    pub fn set_thread_pinned(&self, id: &str, pinned: bool) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the thread is not in a project, is unknown, or the change cannot be
+    /// saved.
+    pub fn set_thread_pinned(&self, id: &str, pinned: bool) -> Result<(), Error> {
         if pinned && self.thread(id)?.project_id.is_none() {
             return Err("Only tasks in a project can be pinned".into());
         }
@@ -254,7 +298,7 @@ impl Server {
             let _ = std::fs::remove_dir_all(self.chat_dir(id));
         }
         if let Err(e) = self.store.delete_thread(id) {
-            log::warn!("failed to delete thread: {e}");
+            log::warn!(error:% = e; "failed to delete thread: {{error}}");
         }
         // Its subagents' threads go with it.
         let children = self
@@ -264,7 +308,7 @@ impl Server {
             .filter(|t| t.parent.as_ref().is_some_and(|p| p.thread_id == id));
         children.for_each(|child| {
             if let Err(e) = self.store.delete_thread(&child.id) {
-                log::warn!("failed to delete a subagent's thread: {e}");
+                log::warn!(error:% = e; "failed to delete a subagent's thread: {{error}}");
             }
         });
     }
@@ -272,12 +316,17 @@ impl Server {
     /// Sets the thread's model. The agent can only change before the first message,
     /// since the conversation session belongs to one CLI. An imported chat has no session yet,
     /// so it can take any agent until its first turn.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the thread is unknown, its agent would change after the conversation
+    /// has started, or the change cannot be saved.
     pub fn set_thread_model(
         &self,
         id: &str,
         agent: AgentKind,
         model: Option<String>,
-    ) -> Result<(), String> {
+    ) -> Result<(), Error> {
         let thread = self.thread(id)?;
         if thread.agent != agent && !thread.messages.is_empty() && !thread.context_pending {
             return Err("The agent can't change after the conversation has started".into());
@@ -300,7 +349,11 @@ impl Server {
     }
 
     /// Takes effect from the thread's next turn.
-    pub fn set_thread_access_mode(&self, id: &str, mode: AccessMode) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the thread is unknown or the change cannot be saved.
+    pub fn set_thread_access_mode(&self, id: &str, mode: AccessMode) -> Result<(), Error> {
         let thread = self.thread(id)?;
         self.store.update_thread(id, |t| t.access_mode = mode)?;
         // An idle agent was started with the old setting.
@@ -312,7 +365,11 @@ impl Server {
     }
 
     /// Takes effect from the thread's next turn.
-    pub fn set_thread_plan_mode(&self, id: &str, on: bool) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the thread is unknown or the change cannot be saved.
+    pub fn set_thread_plan_mode(&self, id: &str, on: bool) -> Result<(), Error> {
         let thread = self.thread(id)?;
         self.store.update_thread(id, |t| t.plan_mode = on)?;
         // An idle agent was started with the old setting.
@@ -324,16 +381,17 @@ impl Server {
     }
 
     /// Takes effect from the thread's next turn.
-    pub fn set_thread_effort(&self, id: &str, effort: Option<String>) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the thread is unknown or the change cannot be saved.
+    pub fn set_thread_effort(&self, id: &str, effort: Option<&str>) -> Result<(), Error> {
         let thread = self.thread(id)?;
         self.store
-            .update_thread(id, |t| t.effort = effort.clone())?;
+            .update_thread(id, |t| t.effort = effort.map(String::from))?;
         // An idle agent was started with the old setting.
-        if thread.effort != effort {
-            note(
-                id,
-                format!("effort {}", effort.as_deref().unwrap_or("default")),
-            );
+        if thread.effort.as_deref() != effort {
+            note(id, format!("effort {}", effort.unwrap_or("default")));
             self.runner.retire_idle(id);
         }
         Ok(())
@@ -341,7 +399,11 @@ impl Server {
 
     /// Takes effect from the thread's next turn, or the API agent's next step. None follows
     /// Settings → Tokens.
-    pub fn set_thread_compact_window(&self, id: &str, window: Option<u64>) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the thread is unknown or the change cannot be saved.
+    pub fn set_thread_compact_window(&self, id: &str, window: Option<u64>) -> Result<(), Error> {
         let thread = self.thread(id)?;
         self.store
             .update_thread(id, |t| t.compact_window = window)?;
@@ -360,7 +422,11 @@ impl Server {
 
     /// Clears a chat: any running turn is cancelled, then its messages and agent session are
     /// deleted. The chat stays in the sidebar, empty.
-    pub fn clear_thread(&self, thread_id: &str) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the thread's messages and session cannot be deleted from the database.
+    pub fn clear_thread(&self, thread_id: &str) -> Result<(), Error> {
         // The agent process goes too, since it holds the session being deleted.
         self.stop_turn(thread_id, false);
         self.remove_checkpoints(thread_id);

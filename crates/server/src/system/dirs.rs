@@ -1,6 +1,8 @@
 //! Patchwork's folders on the machine, split by who owns what is in them, and the move from the
 //! single config folder older versions kept everything in.
 
+// Rust guideline compliant 2026-10-09
+
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
@@ -85,6 +87,7 @@ impl Dirs {
 
     /// The folder each CLI is launched with: its copies of the enabled skills, its agents, and
     /// Claude's plugin hooks.
+    #[must_use]
     pub fn launch(&self, cli: &str) -> PathBuf {
         self.cache.join("launch").join(cli)
     }
@@ -92,6 +95,7 @@ impl Dirs {
     /// Moves what older versions kept in the config folder to the folder it belongs in now, and
     /// deletes what nothing reads any more. Something already in its new place stays and the old
     /// copy is left. Returns what could not be moved, to log once the logger runs.
+    #[must_use]
     pub fn adopt_old_layout(&self) -> Vec<String> {
         let old = &self.config;
         let mut failed = Vec::new();
@@ -163,7 +167,7 @@ impl Dirs {
             }
             let written = if super::fs::is_plain_file_name(&name) {
                 serde_json::to_string_pretty(&server)
-                    .map_err(|e| e.to_string())
+                    .map_err(|e| e.to_string().into())
                     .and_then(|text| {
                         super::fs::write_private(&dir.join(format!("{name}.json")), &text)
                     })

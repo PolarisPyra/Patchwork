@@ -1,17 +1,19 @@
-//! Computer use: a screenshot of the screen, and the pointer and keyboard underneath it. This is
-//! what an agent needs to drive another application, the way Claude's and Codex's computer use
-//! does, and it is off unless Settings → Permissions turns it on.
+//! Computer use: a screenshot of the screen, and the pointer and keyboard underneath it.
+//!
+//! This is what an agent needs to drive another application, the way Claude's and Codex's computer
+//! use does, and it is off unless Settings → Permissions turns it on.
 //!
 //! A screenshot comes back as PNG at the screen's own size, never scaled. Input actions are the
 //! small set a model can ask for: move, click, type, press a key, scroll.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::path::PathBuf;
 
-use base64::Engine as _;
 use enigo::{Axis, Button, Coordinate, Direction, Enigo, Keyboard, Mouse, Settings as EnigoSettings};
 use image::RgbaImage;
-use serde::{Deserialize, Serialize};
-use ts_rs::TS;
+use serde::Deserialize;
 
 /// Whether Settings → Permissions has turned computer use on. Kept here so the tool list and the
 /// approval rules can ask without a settings lookup.
@@ -28,7 +30,11 @@ pub fn enabled() -> bool {
 }
 
 /// Refuses while computer use is off, so a stray call cannot look at the screen or act on it.
-pub fn ensure_enabled() -> Result<(), String> {
+///
+/// # Errors
+///
+/// Returns an error when computer use is turned off in Settings.
+pub fn ensure_enabled() -> Result<(), Error> {
     if enabled() {
         Ok(())
     } else {
@@ -36,13 +42,11 @@ pub fn ensure_enabled() -> Result<(), String> {
     }
 }
 
-/// A screenshot, as a data URL the webview can show, and the screen's size.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "computer.ts")]
-#[serde(rename_all = "camelCase")]
+/// A screenshot, as PNG bytes, and the screen's size.
+#[derive(Debug, Clone)]
 pub struct Screenshot {
-    /// `data:image/png;base64,…`
-    pub data_url: String,
+    /// The picture, encoded as PNG.
+    pub png: Vec<u8>,
     /// The size of the picture, in the screen's own pixels.
     pub width: u32,
     pub height: u32,
@@ -91,8 +95,13 @@ fn left() -> String {
     "left".into()
 }
 
-/// The primary monitor as a PNG data URL, at its own size.
-pub fn screenshot() -> Result<Screenshot, String> {
+/// The primary monitor as a PNG, at its own size.
+///
+/// # Errors
+///
+/// Returns an error when the screen cannot be listed or captured, or the picture cannot be encoded
+/// as PNG.
+pub fn screenshot() -> Result<Screenshot, Error> {
     let Capture {
         image,
         screen_width,
@@ -103,9 +112,8 @@ pub fn screenshot() -> Result<Screenshot, String> {
     image
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .map_err(|e| format!("Could not encode the screenshot: {e}"))?;
-    let encoded = base64::engine::general_purpose::STANDARD.encode(&png);
     Ok(Screenshot {
-        data_url: format!("data:image/png;base64,{encoded}"),
+        png,
         width,
         height,
         screen_width,
@@ -115,16 +123,8 @@ pub fn screenshot() -> Result<Screenshot, String> {
 
 /// Writes a screenshot to `dir` as PNG and returns the path, for an agent that reads images
 /// with its file tools rather than receiving them inline.
-pub fn screenshot_to_file(dir: &std::path::Path) -> Result<PathBuf, String> {
-    let shot = screenshot()?;
-    let encoded = shot
-        .data_url
-        .split_once("base64,")
-        .map(|(_, rest)| rest)
-        .ok_or("The screenshot had no data")?;
-    let png = base64::engine::general_purpose::STANDARD
-        .decode(encoded)
-        .map_err(|e| format!("Could not decode the screenshot: {e}"))?;
+pub(crate) fn screenshot_to_file(dir: &std::path::Path) -> Result<PathBuf, Error> {
+    let png = screenshot()?.png;
     std::fs::create_dir_all(dir).map_err(|e| format!("Could not make {}: {e}", dir.display()))?;
     let path = dir.join(format!("screen-{}.png", crate::system::now_ms()));
     std::fs::write(&path, png).map_err(|e| format!("Could not write {}: {e}", path.display()))?;
@@ -132,7 +132,7 @@ pub fn screenshot_to_file(dir: &std::path::Path) -> Result<PathBuf, String> {
 }
 
 /// The keys a model names in an action, mapped to the keyboard's own.
-fn key(name: &str) -> Result<enigo::Key, String> {
+fn key(name: &str) -> Result<enigo::Key, Error> {
     let key = match name.trim().to_lowercase().as_str() {
         "enter" | "return" => enigo::Key::Return,
         "tab" => enigo::Key::Tab,
@@ -152,7 +152,7 @@ fn key(name: &str) -> Result<enigo::Key, String> {
             let mut chars = other.chars();
             match (chars.next(), chars.next()) {
                 (Some(c), None) => enigo::Key::Unicode(c),
-                _ => return Err(format!("Unknown key: {name}")),
+                _ => return Err(format!("Unknown key: {name}").into()),
             }
         }
     };
@@ -160,28 +160,28 @@ fn key(name: &str) -> Result<enigo::Key, String> {
 }
 
 /// A modifier a model names, mapped to the keyboard's own.
-fn modifier(name: &str) -> Result<enigo::Key, String> {
+fn modifier(name: &str) -> Result<enigo::Key, Error> {
     match name.trim().to_lowercase().as_str() {
         "ctrl" | "control" => Ok(enigo::Key::Control),
         "shift" => Ok(enigo::Key::Shift),
         "alt" | "option" => Ok(enigo::Key::Alt),
         "meta" | "cmd" | "command" | "super" | "win" => Ok(enigo::Key::Meta),
-        _ => Err(format!("Unknown modifier: {name}")),
+        _ => Err(format!("Unknown modifier: {name}").into()),
     }
 }
 
-fn pointer() -> Result<Enigo, String> {
+fn pointer() -> Result<Enigo, Error> {
     Enigo::new(&EnigoSettings::default())
-        .map_err(|e| format!("Could not take control of the pointer: {e}"))
+        .map_err(|e| format!("Could not take control of the pointer: {e}").into())
 }
 
 /// Performs one action on the pointer or keyboard.
-pub fn perform(action: &Action) -> Result<(), String> {
+pub(crate) fn perform(action: &Action) -> Result<(), Error> {
     let mut enigo = pointer()?;
     match action {
         Action::Move { x, y } => enigo
             .move_mouse(*x, *y, Coordinate::Abs)
-            .map_err(|e| format!("Could not move the pointer: {e}")),
+            .map_err(|e| format!("Could not move the pointer: {e}").into()),
         Action::Click {
             x,
             y,
@@ -192,7 +192,7 @@ pub fn perform(action: &Action) -> Result<(), String> {
                 "left" => Button::Left,
                 "middle" => Button::Middle,
                 "right" => Button::Right,
-                other => return Err(format!("Unknown mouse button: {other}")),
+                other => return Err(format!("Unknown mouse button: {other}").into()),
             };
             enigo
                 .move_mouse(*x, *y, Coordinate::Abs)
@@ -207,7 +207,9 @@ pub fn perform(action: &Action) -> Result<(), String> {
             }
             Ok(())
         }
-        Action::Type { text } => enigo.text(text).map_err(|e| format!("Could not type: {e}")),
+        Action::Type { text } => enigo
+            .text(text)
+            .map_err(|e| format!("Could not type: {e}").into()),
         Action::Key {
             key: name,
             modifiers,
@@ -223,7 +225,7 @@ pub fn perform(action: &Action) -> Result<(), String> {
             for m in &held {
                 result = enigo
                     .key(*m, Direction::Press)
-                    .map_err(|e| format!("Could not hold a modifier: {e}"));
+                    .map_err(|e| format!("Could not hold a modifier: {e}").into());
                 if result.is_err() {
                     break;
                 }
@@ -232,7 +234,7 @@ pub fn perform(action: &Action) -> Result<(), String> {
             if result.is_ok() {
                 result = enigo
                     .key(target, Direction::Click)
-                    .map_err(|e| format!("Could not press {name}: {e}"));
+                    .map_err(|e| format!("Could not press {name}: {e}").into());
             }
             // Whatever went down comes back up, however the press went.
             for m in pressed.iter().rev() {
@@ -248,12 +250,13 @@ pub fn perform(action: &Action) -> Result<(), String> {
             };
             enigo
                 .scroll(*amount, axis)
-                .map_err(|e| format!("Could not scroll: {e}"))
+                .map_err(|e| format!("Could not scroll: {e}").into())
         }
     }
 }
 
 /// A one-line description of an action, for the chat's tool rows and the log.
+#[must_use]
 pub fn describe(action: &Action) -> String {
     match action {
         Action::Move { x, y } => format!("Move the pointer to {x}, {y}"),
@@ -302,7 +305,7 @@ struct Capture {
 
 /// The primary monitor: the one at the origin, failing that the first.
 #[cfg(not(target_os = "linux"))]
-fn capture() -> Result<Capture, String> {
+fn capture() -> Result<Capture, Error> {
     let monitors = xcap::Monitor::all().map_err(|e| format!("Could not list the screens: {e}"))?;
     let monitor = monitors
         .iter()
@@ -323,7 +326,7 @@ fn capture() -> Result<Capture, String> {
 
 /// The desktop portal on Wayland, where an app may not read the screen itself, and X11 otherwise.
 #[cfg(target_os = "linux")]
-fn capture() -> Result<Capture, String> {
+fn capture() -> Result<Capture, Error> {
     if std::env::var_os("WAYLAND_DISPLAY").is_some() {
         linux::portal()
     } else {
@@ -344,6 +347,7 @@ mod linux {
     use zbus::zvariant::{OwnedValue, Value};
 
     use super::Capture;
+    use crate::Error;
 
     const PORTAL: &str = "org.freedesktop.portal.Desktop";
 
@@ -354,7 +358,7 @@ mod linux {
     /// The whole desktop, through `org.freedesktop.portal.Screenshot`. The portal answers with a
     /// signal on a request object, so that is subscribed to before the call, or a quick answer
     /// could arrive before anyone listens.
-    pub fn portal() -> Result<Capture, String> {
+    pub fn portal() -> Result<Capture, Error> {
         let unreachable = |e: zbus::Error| format!("Could not reach the screenshot portal: {e}");
         let conn = Connection::session().map_err(unreachable)?;
         let sender = conn
@@ -394,7 +398,7 @@ mod linux {
         });
         let message = received
             .recv_timeout(PORTAL_TIMEOUT)
-            .map_err(|_| "The screenshot portal did not answer")?
+            .map_err(|_discarded| "The screenshot portal did not answer")?
             .ok_or("The screenshot portal closed without answering")?;
         let (code, mut results): (u32, HashMap<String, OwnedValue>) = message
             .body()
@@ -462,8 +466,9 @@ mod linux {
                 .find(|m| m.primary)
                 .or_else(|| monitors.iter().find(|m| m.x == 0 && m.y == 0))
                 .or_else(|| monitors.first())
-                .map(|m| (m.x, m.y, m.width, m.height))
-                .unwrap_or((0, 0, screen_width, screen_height));
+                .map_or((0, 0, screen_width, screen_height), |m| {
+                    (m.x, m.y, m.width, m.height)
+                });
             Layout {
                 x,
                 y,
@@ -495,7 +500,7 @@ mod linux {
     }
 
     /// The primary monitor, read from the root window.
-    pub fn x11() -> Result<Capture, String> {
+    pub fn x11() -> Result<Capture, Error> {
         let failed = |e: &dyn std::fmt::Display| format!("Could not capture the screen: {e}");
         let (conn, screen_num) =
             x11rb::connect(None).map_err(|e| format!("Could not reach the display: {e}"))?;
@@ -524,20 +529,16 @@ mod linux {
             .map(|f| f.bits_per_pixel);
         let pixels = usize::from(width) * usize::from(height);
         if bits != Some(32) || reply.data.len() < pixels * 4 {
-            return Err(format!(
-                "The display's {}-bit pixels are not supported",
-                reply.depth
-            ));
+            return Err(
+                format!("The display's {}-bit pixels are not supported", reply.depth).into(),
+            );
         }
         let msb = setup.image_byte_order == ImageOrder::MSB_FIRST;
         let rgba = reply.data[..pixels * 4]
             .as_chunks::<4>()
             .0
             .iter()
-            .flat_map(|&[a, b, c, d]| match msb {
-                true => [b, c, d, 255],
-                false => [c, b, a, 255],
-            })
+            .flat_map(|&[a, b, c, d]| if msb { [b, c, d, 255] } else { [c, b, a, 255] })
             .collect();
         let image = RgbaImage::from_raw(width.into(), height.into(), rgba)
             .ok_or("The screen's pixels did not fill the picture")?;
@@ -555,12 +556,12 @@ mod tests {
 
     #[test]
     fn names_map_to_keys() {
-        assert!(key("Enter").is_ok());
-        assert!(key("esc").is_ok());
-        assert!(key("a").is_ok());
-        assert!(key("not-a-key").is_err());
-        assert!(modifier("ctrl").is_ok());
-        assert!(modifier("Hyper").is_err());
+        key("Enter").unwrap();
+        key("esc").unwrap();
+        key("a").unwrap();
+        key("not-a-key").unwrap_err();
+        modifier("ctrl").unwrap();
+        modifier("Hyper").unwrap_err();
     }
 
     #[test]
@@ -625,13 +626,11 @@ mod tests {
             shot.screen_width,
             shot.screen_height
         );
-        assert!(shot.data_url.starts_with("data:image/png;base64,"));
         assert!(shot.width > 0 && shot.height > 0);
-        // The PNG header, so the base64 really is a picture.
-        let encoded = shot.data_url.split_once("base64,").expect("base64").1;
-        let png = base64::engine::general_purpose::STANDARD
-            .decode(encoded)
-            .expect("base64 decodes");
-        assert_eq!(&png[..8], &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
+        // The PNG header, so the bytes really are a picture.
+        assert_eq!(
+            &shot.png[..8],
+            &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]
+        );
     }
 }

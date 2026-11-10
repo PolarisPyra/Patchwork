@@ -1,5 +1,8 @@
 //! Starting a turn in Patchwork's own harness, and reading the lines it writes.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::HashMap;
 
 use serde_json::{Value, json};
@@ -24,6 +27,7 @@ pub fn auth(status: &mut AgentStatus) {
     };
 }
 
+#[must_use]
 pub fn turn_args() -> Vec<String> {
     vec![crate::harness::BRIDGE_ARG.into()]
 }
@@ -86,6 +90,7 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
     request.to_string()
 }
 
+#[must_use]
 pub fn steer_line(text: &str, images: &[Image]) -> String {
     // `/compact` alone summarizes the conversation where the turn is, and the turn carries on.
     if images.is_empty() && text.trim() == "/compact" {
@@ -99,19 +104,22 @@ pub fn steer_line(text: &str, images: &[Image]) -> String {
 }
 
 /// A new compact window for the turn under way, which it compacts by from its next step.
+#[must_use]
 pub fn compact_window_line(window: u64) -> String {
     json!({"type": "compactWindow", "window": window}).to_string()
 }
 
 /// The result of an MCP tool call, for the agent.
-pub fn mcp_reply(id: &Value, result: Result<String, String>) -> String {
+#[must_use]
+pub fn mcp_reply(id: &Value, result: Result<String, Error>) -> String {
     let (output, error) = match result {
         Ok(text) => (text, false),
-        Err(text) => (text, true),
+        Err(error) => (error.to_string(), true),
     };
     json!({"type": "reply", "id": id, "output": output, "error": error}).to_string()
 }
 
+#[must_use]
 pub fn approval_reply(
     reply: &Value,
     allow: bool,

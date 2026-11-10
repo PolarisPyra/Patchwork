@@ -1,6 +1,8 @@
 //! A goal while turns pursue it: how long the agent's input stays open while Codex works toward
 //! one, and how the goal is settled once a turn ends.
 
+// Rust guideline compliant 2026-10-09
+
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -26,7 +28,11 @@ pub(in crate::orchestration) fn end_input(turn: &Turn, goal_run: bool, round: &A
         return;
     }
     let armed = round.fetch_add(1, Ordering::SeqCst) + 1;
-    let (round, stdin, steers) = (round.clone(), turn.stdin.clone(), turn.steers.clone());
+    let (round, stdin, steers) = (
+        Arc::clone(round),
+        Arc::clone(&turn.stdin),
+        Arc::clone(&turn.steers),
+    );
     std::thread::spawn(move || {
         std::thread::sleep(CODEX_GOAL_GRACE);
         if round.load(Ordering::SeqCst) == armed {
@@ -76,7 +82,7 @@ pub(in crate::orchestration) fn settle(
                         .store
                         .set_state(&held_key(&turn.thread_id), &signature(g))
                 {
-                    log::warn!("failed to note a held goal: {e}");
+                    log::warn!(error:% = e; "failed to note a held goal: {{error}}");
                 }
                 GoalStatus::Complete
             } else {
@@ -98,7 +104,7 @@ pub(in crate::orchestration) fn settle(
     // Keep the final goal state visible until the user closes it. Clear the agent's internal
     // goal instructions when pursuit ends, while retaining the app-side status for the banner.
     let user_stopped = cancelled
-        && goal.as_ref().filter(pursued).is_some()
+        && goal.as_ref().as_ref().is_some_and(pursued)
         && thread.as_ref().is_some_and(|t| t.archived_at.is_none());
     let done = next
         .as_ref()

@@ -1,6 +1,9 @@
 //! What a new app session does with the goals and replies the last one left behind: replies
 //! that were cut off end with an error, and goals are dismissed or paused.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use crate::persistence::Store;
 use crate::threads::CheckStatus;
 use crate::threads::GoalStatus;
@@ -11,7 +14,7 @@ use crate::orchestration::goal;
 /// dismisses them, including cached reports from the provider on its next run. Unfinished
 /// goals survive, paused if their agent was interrupted by quitting, and replies that were
 /// still streaming end with an error.
-pub(crate) fn recover(store: &Store) -> Result<(), String> {
+pub(crate) fn recover(store: &Store) -> Result<(), Error> {
     for mut thread in store.threads() {
         if let Some(finished) = thread
             .goal

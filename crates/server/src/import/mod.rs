@@ -1,10 +1,15 @@
+//! Imports conversations saved by agent CLIs as Patchwork threads.
+//!
 //! Imports conversations that the agent CLIs saved on disk, so work started
 //! outside Patchwork shows up as threads. Each imported thread keeps the CLI's
 //! session id, so follow-up messages resume the original conversation.
 
+// Rust guideline compliant 2026-10-09
+
 mod ops;
 mod types;
 
+#[doc(inline)]
 pub use types::{ImportScan, ImportSource};
 
 mod antigravity;
@@ -15,17 +20,7 @@ mod t3;
 
 mod sessions;
 
-pub use sessions::*;
-
-/// `format!`s a line into the import log, `logging::IMPORT_LOG`.
-macro_rules! ilog {
-    ($($arg:tt)*) => {
-        $crate::logging::IMPORT_LOG.write(
-            $crate::settings::LogLevel::Info,
-            "",
-            &$crate::logging::Source::default(),
-            $crate::logging::Data::Text(format!($($arg)*)),
-        )
-    };
-}
-pub(crate) use ilog;
+pub(crate) use sessions::ilog;
+#[doc(inline)]
+pub use sessions::{Session, SessionMessage, is_chat_folder, sessions, to_thread, transcript};
+use sessions::push_merged;

@@ -3,6 +3,8 @@
 //! object. Stopping it sends SIGTERM to all of it, then SIGKILL to what is left after
 //! [`STOP_GRACE`]. Windows has no SIGTERM, so the job ends at once there.
 
+// Rust guideline compliant 2026-10-09
+
 use std::io;
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
@@ -26,8 +28,8 @@ pub fn spawn(cmd: Command, stdin: Stdio) -> io::Result<(Child, Range)> {
         use std::os::windows::process::CommandExt;
         const CREATE_SUSPENDED: u32 = 0x0000_0004;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        cmd.creation_flags(CREATE_NO_WINDOW | CREATE_SUSPENDED);
-    }
+        cmd.creation_flags(CREATE_NO_WINDOW | CREATE_SUSPENDED)
+    };
     let child = cmd.spawn()?;
     #[cfg(windows)]
     let job = {
@@ -78,6 +80,7 @@ impl Range {
             std::thread::spawn(move || {
                 let deadline = Instant::now() + STOP_GRACE;
                 while group_alive(pid) && Instant::now() < deadline {
+                    // How often the group is checked while it is given time to exit.
                     std::thread::sleep(Duration::from_millis(20));
                 }
                 signal_process_group(pid, SIGKILL);
@@ -133,6 +136,8 @@ mod windows {
 
     // SAFETY: a job handle may be used and closed from any thread.
     unsafe impl Send for Job {}
+    // SAFETY: the job only passes its handle to kernel calls, which may run on it from several
+    // threads at once.
     unsafe impl Sync for Job {}
 
     impl Job {
@@ -201,7 +206,7 @@ mod windows {
             }
             let mut entry: THREADENTRY32 = std::mem::zeroed();
             entry.dwSize = size_of::<THREADENTRY32>() as u32;
-            let mut more = Thread32First(snapshot, &mut entry) != 0;
+            let mut more = Thread32First(snapshot, &raw mut entry) != 0;
             while more {
                 if entry.th32OwnerProcessID == pid {
                     let thread = OpenThread(THREAD_SUSPEND_RESUME, 0, entry.th32ThreadID);
@@ -210,7 +215,7 @@ mod windows {
                         CloseHandle(thread);
                     }
                 }
-                more = Thread32Next(snapshot, &mut entry) != 0;
+                more = Thread32Next(snapshot, &raw mut entry) != 0;
             }
             CloseHandle(snapshot);
         }

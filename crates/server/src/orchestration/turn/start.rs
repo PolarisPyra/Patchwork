@@ -1,5 +1,8 @@
 //! One running turn: its shared state, and the spawn that starts it.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use crate::orchestration::turn::end::{background_id, log_cli_version, plugin_hooks};
 
 use std::collections::HashMap;
@@ -82,7 +85,7 @@ pub(in crate::orchestration) struct RunningTurn {
     pub(in crate::orchestration) agent: AgentKind,
     pub(in crate::orchestration) stdin: Stdin,
     pub(in crate::orchestration) pending: Pending,
-    pub(in crate::orchestration) native_turn: NativeTurn,
+    pub(in crate::orchestration) native: NativeTurn,
     pub(in crate::orchestration) steers: Steers,
     pub(in crate::orchestration) queue: Queue,
     pub(in crate::orchestration) tasks: Tasks,
@@ -100,6 +103,7 @@ pub(in crate::orchestration) struct RunningTurn {
 }
 
 /// What a new turn sends to the agent, and the thread it belongs to.
+#[derive(Debug)]
 pub struct TurnRequest {
     pub thread_id: String,
     pub text: String,
@@ -114,7 +118,7 @@ struct Starting<'a> {
 }
 
 impl<'a> Starting<'a> {
-    fn claim(runner: &'a Runner, thread_id: &str) -> Result<Self, String> {
+    fn claim(runner: &'a Runner, thread_id: &str) -> Result<Self, Error> {
         let mut starting = runner
             .starting
             .lock()
@@ -150,7 +154,11 @@ pub(crate) const STILL_STARTING: &str =
     "This chat is still starting its turn; send again in a moment";
 
 impl Runner {
-    pub fn start_turn(&self, server: &Arc<Server>, request: TurnRequest) -> Result<(), String> {
+    pub(crate) fn start_turn(
+        &self,
+        server: &Arc<Server>,
+        request: TurnRequest,
+    ) -> Result<(), Error> {
         let TurnRequest {
             thread_id,
             text,
@@ -184,27 +192,25 @@ impl Runner {
                 crate::import::transcript(&thread.messages[..end])
             });
             let settings = server.store.settings();
-            let root = match &thread.project_id {
-                Some(id) => {
-                    let project = settings
-                        .projects
-                        .iter()
-                        .find(|p| &p.id == id)
-                        .ok_or("Project not found")?;
-                    // Spawning in a missing folder fails with a bare "No such file or directory".
-                    if !std::path::Path::new(&project.path).is_dir() {
-                        return Err(format!(
-                            "The {} project's folder, {}, no longer exists",
-                            project.name, project.path
-                        ));
-                    }
-                    project.path.clone()
+            let root = if let Some(id) = &thread.project_id {
+                let project = settings
+                    .projects
+                    .iter()
+                    .find(|p| &p.id == id)
+                    .ok_or("Project not found")?;
+                // Spawning in a missing folder fails with a bare "No such file or directory".
+                if !std::path::Path::new(&project.path).is_dir() {
+                    return Err(format!(
+                        "The {} project's folder, {}, no longer exists",
+                        project.name, project.path
+                    )
+                    .into());
                 }
-                None => {
-                    let dir = server.chat_dir(&thread_id);
-                    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-                    dir.to_string_lossy().into_owned()
-                }
+                project.path.clone()
+            } else {
+                let dir = server.chat_dir(&thread_id);
+                std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+                dir.to_string_lossy().into_owned()
             };
             (
                 thread.agent,
@@ -394,7 +400,7 @@ impl Runner {
         }
         // Until the turn is recorded below nothing else can stop the agent, so a failure before
         // then stops it here.
-        let abandon = |child: &mut std::process::Child, error: String| -> Result<(), String> {
+        let abandon = |child: &mut std::process::Child, error: Error| -> Result<(), Error> {
             let _ = child.kill();
             let _ = child.wait();
             Err(error)
@@ -411,11 +417,11 @@ impl Runner {
             return abandon(&mut child, error);
         }
         let source = Source::agent(agent, pid, &thread_id, None);
-        let stderr_tail = std::thread::spawn(move || read_stderr_tail(stderr, source));
+        let stderr_tail = std::thread::spawn(move || read_stderr_tail(stderr, &source));
         let stdin: Stdin = Arc::new(Mutex::new(AgentStdin::take(&mut child, agent, &thread_id)));
-        input.iter().for_each(|line| {
+        for line in &input {
             write_line(&stdin, line);
-        });
+        }
 
         let message = assistant_message();
         let cancelled = Arc::new(AtomicBool::new(false));
@@ -429,23 +435,23 @@ impl Runner {
         let controls = Controls::default();
         let idle = Arc::new(AtomicBool::new(false));
         let turn = Turn {
-            server: server.clone(),
+            server: Arc::clone(server),
             thread_id: thread_id.clone(),
             message_id: message.id.clone(),
             agent,
-            cancelled: cancelled.clone(),
-            interrupts: interrupts.clone(),
-            exited: exited.clone(),
-            attribution: attribution.clone(),
+            cancelled: Arc::clone(&cancelled),
+            interrupts: Arc::clone(&interrupts),
+            exited: Arc::clone(&exited),
+            attribution: Arc::clone(&attribution),
             scope,
-            stdin: stdin.clone(),
-            pending: pending.clone(),
-            native_turn: native_turn.clone(),
-            steers: steers.clone(),
-            queue: queue.clone(),
-            tasks: tasks.clone(),
-            controls: controls.clone(),
-            idle: idle.clone(),
+            stdin: Arc::clone(&stdin),
+            pending: Arc::clone(&pending),
+            native: Arc::clone(&native_turn),
+            steers: Arc::clone(&steers),
+            queue: Arc::clone(&queue),
+            tasks: Arc::clone(&tasks),
+            controls: Arc::clone(&controls),
+            idle: Arc::clone(&idle),
             root,
             session_id,
             model,
@@ -477,7 +483,7 @@ impl Runner {
                     agent,
                     stdin,
                     pending,
-                    native_turn,
+                    native: native_turn,
                     steers,
                     queue,
                     tasks,
@@ -513,12 +519,12 @@ impl Runner {
             }
         }
         let watched = Watched {
-            server: server.clone(),
+            server: Arc::clone(server),
             thread_id: turn.thread_id.clone(),
-            exited: turn.exited.clone(),
-            idle: turn.idle.clone(),
+            exited: Arc::clone(&turn.exited),
+            idle: Arc::clone(&turn.idle),
         };
-        std::thread::spawn(move || watch(watched));
+        std::thread::spawn(move || watch(&watched));
         std::thread::spawn(move || ingest(turn, child, stdout, stderr_tail));
         Ok(())
     }
@@ -534,7 +540,7 @@ struct Watched {
 
 /// Retires the agent once it has been idle for `IDLE_LIMIT` with no shell commands of its own
 /// still running. A reply runs as long as it needs. Ends with the agent.
-fn watch(w: Watched) {
+fn watch(w: &Watched) {
     loop {
         std::thread::sleep(WATCH_EVERY);
         if w.exited.load(Ordering::SeqCst) {
@@ -573,7 +579,7 @@ pub(in crate::orchestration) struct Turn {
     pub(in crate::orchestration) scope: Option<String>,
     pub(in crate::orchestration) stdin: Stdin,
     pub(in crate::orchestration) pending: Pending,
-    pub(in crate::orchestration) native_turn: NativeTurn,
+    pub(in crate::orchestration) native: NativeTurn,
     pub(in crate::orchestration) steers: Steers,
     pub(in crate::orchestration) queue: Queue,
     pub(in crate::orchestration) tasks: Tasks,
@@ -650,7 +656,7 @@ impl Turn {
     pub(in crate::orchestration) fn next_segment(&mut self, unsaved: &mut Unsaved) {
         self.save_text(unsaved);
         let message = assistant_message();
-        self.message_id = message.id.clone();
+        self.message_id.clone_from(&message.id);
         self.publish(AgentEvent::MessageStarted { message });
     }
 

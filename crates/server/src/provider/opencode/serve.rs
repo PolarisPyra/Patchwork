@@ -1,5 +1,7 @@
 //! OpenCode 2.x: a turn runs through Patchwork's bridge to a private `opencode serve`, and its events, permissions and answers.
 
+// Rust guideline compliant 2026-10-09
+
 use std::collections::HashMap;
 use serde_json::{Value, json};
 use crate::provider::ProviderSlashCommand;
@@ -21,11 +23,13 @@ use crate::provider::tool_started;
 use super::{major_version, opencode_bin, todo_plan, tool_name};
 
 /// Whether turns run through `opencode serve`, which 2.x has; 1.x runs `opencode run`.
+#[must_use]
 pub fn uses_serve() -> bool {
     major_version() >= 2
 }
 
 /// The bridge's first stdin line: everything the turn needs.
+#[must_use]
 pub fn bridge_request(spec: &TurnSpec) -> String {
     let bin = opencode_bin()
         .map(|b| b.display().to_string())
@@ -142,6 +146,7 @@ pub(super) fn action(kind: PermissionKind) -> Option<&'static str> {
 
 /// Whether the access mode asks the user about a kind of request; OpenCode's own rules, which
 /// auto keeps, ask only about other folders.
+#[must_use]
 pub fn mode_asks(mode: AccessMode, kind: PermissionKind) -> bool {
     match mode {
         AccessMode::FullAccess => false,
@@ -154,11 +159,13 @@ pub fn mode_asks(mode: AccessMode, kind: PermissionKind) -> bool {
 }
 
 /// The bridge line that steers the running turn with another message.
+#[must_use]
 pub fn steer_line(text: &str, attachments: &[Attachment]) -> String {
     json!({"type": "steer", "text": text, "files": image_paths(attachments)}).to_string()
 }
 
 /// The bridge line that answers a permission request or a question.
+#[must_use]
 pub fn approval_reply(
     reply: &Value,
     allow: bool,
@@ -218,7 +225,7 @@ pub(super) fn parse_serve(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<P
         Some("bridge.commands") => vec![Parsed::SlashCommands(slash_commands(&v["commands"]))],
         Some("bridge.steered") => vec![Parsed::Steered],
         Some("bridge.steer_rejected") => vec![Parsed::SteerRejected(message_of(v))],
-        Some("bridge.error") => vec![Parsed::Error(message_of(v))],
+        Some("bridge.error" | "session.execution.failed") => vec![Parsed::Error(message_of(v))],
         Some("session.text.delta") => data["delta"]
             .as_str()
             .filter(|t| !t.is_empty())
@@ -408,7 +415,6 @@ pub(super) fn parse_serve(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<P
             }]
         }
         Some("session.compaction.started") => vec![Parsed::Compacting],
-        Some("session.execution.failed") => vec![Parsed::Error(message_of(v))],
         _ => Vec::new(),
     }
 }

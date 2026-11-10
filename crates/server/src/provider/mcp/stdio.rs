@@ -1,9 +1,12 @@
 //! A server run as a command, speaking JSON-RPC over its stdin and stdout.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Stdio};
-use std::sync::mpsc::{self};
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use serde_json::{Value, json};
@@ -23,7 +26,7 @@ impl StdioServer {
         args: &[String],
         env: &BTreeMap<String, String>,
         notices: Notices,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, Error> {
         let mut cmd = crate::provider::user_command(command.trim());
         cmd.args(args)
             .envs(env)
@@ -42,7 +45,7 @@ impl StdioServer {
         let waiters: Waiters = Arc::default();
         let stderr: Arc<Mutex<String>> = Arc::default();
         {
-            let stderr = stderr.clone();
+            let stderr = Arc::clone(&stderr);
             std::thread::spawn(move || {
                 for line in BufReader::new(stderr_pipe).lines().map_while(Result::ok) {
                     let mut tail = stderr.lock().unwrap_or_else(PoisonError::into_inner);
@@ -56,10 +59,10 @@ impl StdioServer {
                         tail.drain(..cut);
                     }
                 }
-            });
-        }
+            })
+        };
         {
-            let (waiters, stdin) = (waiters.clone(), stdin.clone());
+            let (waiters, stdin) = (Arc::clone(&waiters), Arc::clone(&stdin));
             std::thread::spawn(move || {
                 for line in BufReader::new(stdout).lines().map_while(Result::ok) {
                     let Ok(v) = serde_json::from_str::<Value>(&line) else {
@@ -97,8 +100,8 @@ impl StdioServer {
                     .lock()
                     .unwrap_or_else(PoisonError::into_inner)
                     .clear();
-            });
-        }
+            })
+        };
         Ok(StdioServer {
             child: Mutex::new(child),
             stdin,
@@ -117,14 +120,14 @@ impl StdioServer {
         )
     }
 
-    pub(super) fn send(&self, message: &Value) -> Result<(), String> {
+    pub(super) fn send(&self, message: &Value) -> Result<(), Error> {
         let mut stdin = self.stdin.lock().unwrap_or_else(PoisonError::into_inner);
         writeln!(stdin, "{message}")
-            .and_then(|_| stdin.flush())
-            .map_err(|e| format!("The MCP server closed: {e}"))
+            .and_then(|()| stdin.flush())
+            .map_err(|e| format!("The MCP server closed: {e}").into())
     }
 
-    pub(super) fn send_request(&self, id: u64, message: &Value) -> Result<Answer, String> {
+    pub(super) fn send_request(&self, id: u64, message: &Value) -> Result<Answer, Error> {
         let (tx, rx) = mpsc::channel();
         self.waiters
             .lock()

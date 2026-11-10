@@ -1,5 +1,8 @@
 //! Talking to the endpoint: the request body, retries, and reading the streamed reply.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::borrow::Cow;
 use std::io::{BufRead, BufReader, Read};
 use std::sync::mpsc::{self, RecvTimeoutError};
@@ -53,10 +56,10 @@ pub(super) enum Failure {
     Other(String),
 }
 
-impl From<Failure> for String {
-    fn from(failure: Failure) -> String {
+impl From<Failure> for Error {
+    fn from(failure: Failure) -> Error {
         match failure {
-            Failure::Context(m) | Failure::Images(m) | Failure::Other(m) => m,
+            Failure::Context(m) | Failure::Images(m) | Failure::Other(m) => Error::Message(m),
         }
     }
 }
@@ -269,9 +272,9 @@ fn parse_retry_after(value: &str) -> Option<u64> {
 /// to a minute, or else 2, 4, 8, 16, then 30 s. Up to a second more at random keeps tasks that
 /// failed together from retrying together.
 fn retry_delay(attempt: u32, retry_after: Option<u64>) -> Duration {
-    let base = retry_after
-        .map(|s| s.min(MAX_RETRY_AFTER))
-        .unwrap_or(2u64.pow(attempt).min(MAX_BACKOFF));
+    let base = retry_after.map_or(2u64.pow(attempt).min(MAX_BACKOFF), |s| {
+        s.min(MAX_RETRY_AFTER)
+    });
     let jitter = (uuid::Uuid::new_v4().as_u128() % 1000) as u64;
     Duration::from_millis(base * 1000 + jitter)
 }
@@ -302,6 +305,7 @@ impl Agent {
                 .http
                 .get(url)
                 .config()
+                // A model listing is small; past this, the window is left unknown rather than holding up the turn.
                 .timeout_global(Some(Duration::from_secs(5)))
                 .build();
             if let Some(key) = &self.request.api_key {
@@ -347,7 +351,7 @@ impl Agent {
         last_user: Option<usize>,
     ) -> Result<Reply, Failure> {
         let history: Cow<[Value]> = if self.request.images_ok {
-            Cow::Borrowed(&self.messages[..])
+            Cow::Borrowed(&*self.messages)
         } else {
             Cow::Owned(self.without_images())
         };
@@ -496,7 +500,7 @@ impl Agent {
         match self.read_stream(body, sent, &mut reply) {
             Ok(()) => Ok(reply),
             Err(message) => Err(StreamError {
-                message,
+                message: message.to_string(),
                 // A quiet reply, like a summary, shows nothing until it is done.
                 shown: !self.quiet && (!reply.content.is_empty() || !reply.reasoning.is_empty()),
                 stopped: reply.runaway,
@@ -512,7 +516,7 @@ impl Agent {
         calls: &[Call],
         text: &mut LoopWatch,
         reasoning: &mut LoopWatch,
-    ) -> Result<(), String> {
+    ) -> Result<(), Error> {
         if !self.request.local {
             return Ok(());
         }
@@ -533,7 +537,7 @@ impl Agent {
         reply.runaway = true;
         Err(format!(
             "{stuck}, so its reply was stopped. Send a message to continue, or choose another model."
-        ))
+        ).into())
     }
 
     /// Reads the chunks into `reply`, which keeps what arrived when it fails.
@@ -542,7 +546,7 @@ impl Agent {
         body: impl Read + Send + 'static,
         sent: Instant,
         reply: &mut Reply,
-    ) -> Result<(), String> {
+    ) -> Result<(), Error> {
         let mut calls: Vec<Call> = Vec::new();
         let mut usage = Value::Null;
         let mut first_token: Option<Instant> = None;
@@ -566,7 +570,8 @@ impl Agent {
                         "{} stopped sending its reply for {} s, so the turn was stopped",
                         self.request.provider,
                         STREAM_IDLE.as_secs()
-                    ));
+                    )
+                    .into());
                 }
             };
             let line = line
@@ -582,7 +587,7 @@ impl Agent {
                 continue;
             };
             if !chunk["error"].is_null() {
-                return Err(crate::harness::error_text(0, &chunk, data));
+                return Err(crate::harness::error_text(0, &chunk, data).into());
             }
             if chunk["usage"].is_object() {
                 usage = chunk["usage"].clone();
@@ -672,5 +677,27 @@ impl Agent {
             })
             .collect();
         Ok(())
+    }
+}
+
+/// An error a provider answered with, as one readable line.
+pub fn error_text(status: u16, body: &Value, raw: &str) -> String {
+    let error = &body["error"];
+    let message = error["message"]
+        .as_str()
+        .or_else(|| error.as_str())
+        .or_else(|| body["message"].as_str())
+        .or_else(|| body["detail"].as_str())
+        .map_or_else(|| raw.trim().chars().take(300).collect(), String::from);
+    let hint = match status {
+        401 | 403 => " Check the API key in Settings → API Providers.",
+        402 => " The account may be out of credit.",
+        404 => " Check the base URL and the model id.",
+        _ => "",
+    };
+    match status {
+        0 => message,
+        _ if message.is_empty() => format!("The provider answered {status}.{hint}"),
+        _ => format!("{message} ({status}).{hint}"),
     }
 }

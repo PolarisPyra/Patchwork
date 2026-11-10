@@ -1,5 +1,7 @@
 //! Fetching each agent's usage, and the cache that throttles it.
 
+// Rust guideline compliant 2026-10-09
+
 use std::collections::HashMap;
 use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
@@ -27,6 +29,12 @@ pub(super) struct Failure {
 impl From<&str> for Failure {
     fn from(message: &str) -> Self {
         message.to_string().into()
+    }
+}
+
+impl From<crate::Error> for Failure {
+    fn from(error: crate::Error) -> Self {
+        error.to_string().into()
     }
 }
 
@@ -67,6 +75,7 @@ fn fetch(kind: AgentKind) -> Result<ProviderUsage, Failure> {
     }
 }
 
+#[derive(Debug)]
 struct Entry {
     fetched: Instant,
     /// The numbers came from the agent itself during a turn, not from a fetch.
@@ -76,7 +85,7 @@ struct Entry {
     blocked_until: Option<Instant>,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct UsageCache {
     entries: Mutex<HashMap<AgentKind, Entry>>,
 }

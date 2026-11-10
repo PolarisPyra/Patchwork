@@ -15,6 +15,8 @@
 //! diff: a reply says whether the project's tests still pass, and says "not run" rather than
 //! nothing when they didn't run. A check that did not finish never counts as a pass.
 
+// Rust guideline compliant 2026-10-09
+
 mod detect;
 mod parse;
 mod ops;
@@ -22,18 +24,11 @@ mod run;
 #[cfg(test)]
 mod tests;
 
+#[doc(inline)]
 pub use detect::{command, Command};
+#[doc(inline)]
 pub use parse::{failures, tests_ran};
-pub use run::{Outcome, run};
-
-use std::time::Duration;
-
-/// How long the check command may run before it is stopped. Long enough for a cold build, short
-/// enough that a hung command does not hold the reply's card at "Running" forever.
-pub const LIMIT: Duration = Duration::from_secs(5 * 60);
-/// Most of the output kept with a reply. The end is what names the failures.
-const KEEP: usize = 16 << 10;
-/// Most failures listed for one run.
-const MOST: usize = 12;
-
+#[doc(inline)]
+pub use run::{LIMIT, Outcome, run};
+use run::KEEP;
 pub(crate) use ops::worth_checking;

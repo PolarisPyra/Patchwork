@@ -1,5 +1,9 @@
 //! The file tools: reading, writing and editing files, listing folders, and finding files and text.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use super::shown;
 
@@ -10,13 +14,13 @@ const MAX_LINE: usize = 2000;
 
 const MAX_MATCHES: usize = 200;
 
-pub(super) fn read_file(path: &Path, offset: usize, limit: usize) -> Result<String, String> {
+pub(super) fn read_file(path: &Path, offset: usize, limit: usize) -> Result<String, Error> {
     if path.is_dir() {
-        return Err(format!("{} is a directory; use list_dir", path.display()));
+        return Err(format!("{} is a directory; use list_dir", path.display()).into());
     }
     let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     if bytes[..bytes.len().min(8192)].contains(&0) {
-        return Err(format!("{} is a binary file", path.display()));
+        return Err(format!("{} is a binary file", path.display()).into());
     }
     let text = String::from_utf8_lossy(&bytes);
     if text.is_empty() {
@@ -37,15 +41,16 @@ pub(super) fn read_file(path: &Path, offset: usize, limit: usize) -> Result<Stri
         shown_end = i + 1;
     }
     if shown_end < total {
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             "\n({total} lines in all; read on with offset {})",
             shown_end + 1
-        ));
+        );
     }
     Ok(out)
 }
 
-pub(super) fn write_file(path: &Path, content: &str, root: &Path) -> Result<String, String> {
+pub(super) fn write_file(path: &Path, content: &str, root: &Path) -> Result<String, Error> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
@@ -65,7 +70,7 @@ pub(super) fn edit_file(
     new: &str,
     all: bool,
     root: &Path,
-) -> Result<String, String> {
+) -> Result<String, Error> {
     if old == new {
         return Err("old_string and new_string are the same".into());
     }
@@ -93,7 +98,8 @@ pub(super) fn edit_file(
             return Err(format!(
                 "old_string was not found in {}. Read the file again and match it exactly",
                 shown(path, root)
-            ));
+            )
+            .into());
         }
         1 => text.replacen(old, new, 1),
         _ if all => text.replace(old, new),
@@ -101,7 +107,7 @@ pub(super) fn edit_file(
             return Err(format!(
                 "old_string appears {n} times in {}; add surrounding lines to make it unique, or set replace_all",
                 shown(path, root)
-            ));
+            ).into());
         }
     };
     std::fs::write(path, updated).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -113,7 +119,7 @@ pub(super) fn edit_file(
     Ok(format!("Edited {}{times}", shown(path, root)))
 }
 
-pub(super) fn list_dir(path: &Path, root: &Path) -> Result<String, String> {
+pub(super) fn list_dir(path: &Path, root: &Path) -> Result<String, Error> {
     let mut entries: Vec<String> = std::fs::read_dir(path)
         .map_err(|e| format!("{}: {e}", path.display()))?
         .flatten()
@@ -131,7 +137,7 @@ pub(super) fn list_dir(path: &Path, root: &Path) -> Result<String, String> {
     entries.truncate(500);
     let mut out = format!("{}:\n{}", shown(path, root), entries.join("\n"));
     if total > entries.len() {
-        out.push_str(&format!("\n({total} entries in all)"));
+        let _ = write!(out, "\n({total} entries in all)");
     }
     Ok(out)
 }
@@ -144,10 +150,10 @@ fn walk(dir: &Path) -> impl Iterator<Item = PathBuf> {
         .build()
         .flatten()
         .filter(|e| e.file_type().is_some_and(|t| t.is_file()))
-        .map(|e| e.into_path())
+        .map(ignore::DirEntry::into_path)
 }
 
-pub(super) fn glob(pattern: &str, dir: &Path, root: &Path) -> Result<String, String> {
+pub(super) fn glob(pattern: &str, dir: &Path, root: &Path) -> Result<String, Error> {
     let matcher = globset::GlobBuilder::new(pattern)
         .literal_separator(pattern.contains('/'))
         .build()
@@ -189,7 +195,7 @@ pub(super) fn grep(
     filter: Option<&str>,
     nocase: bool,
     root: &Path,
-) -> Result<String, String> {
+) -> Result<String, Error> {
     let regex = regex::RegexBuilder::new(pattern)
         .case_insensitive(nocase)
         .build()

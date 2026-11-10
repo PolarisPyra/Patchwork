@@ -1,6 +1,9 @@
 //! Names a thread after what its first message is about, with a one-off call to a small model,
 //! which `ask` also makes for other short writing such as commit messages.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -88,11 +91,10 @@ pub(crate) struct Request<'a> {
     pub input: &'a str,
 }
 
-/// The answer to `request` as the JSON object its schema describes, or a plain string when an
-/// API model answers in plain text. Asked as a title is: the writer's model when it has one,
-/// else the provider of `agent` with `model`, or Claude, else Codex, without an agent. With
-/// `local_only`, only a local model is asked.
-/// None when none answers.
+/// The answer to `request` as the JSON object its schema describes, or a plain string when an API
+/// model answers in plain text. Asked as a title is: the writer's model when it has one, else the
+/// provider of `agent` with `model`, or Claude, else Codex, without an agent. With `local_only`,
+/// only a local model is asked. None when none answers.
 pub(crate) fn ask(
     request: &Request,
     agent: Option<AgentKind>,
@@ -158,7 +160,7 @@ fn from_api(request: &Request, model: Option<&str>) -> Option<Value> {
     let mut response = request.send(body.to_string()).ok()?;
     let text = response.body_mut().read_to_string().unwrap_or_default();
     if !response.status().is_success() {
-        log::warn!("a one-off model call failed: {}", text.trim());
+        log::warn!(error = text.trim(); "a one-off model call failed: {{error}}");
         return None;
     }
     let reply: Value = serde_json::from_str(&text).ok()?;
@@ -198,7 +200,7 @@ fn from_claude(prompt: &str, schema: &str, dir: &std::path::Path) -> Option<Valu
     ];
     let out = provider::probe_in(AgentKind::Claude, &args, dir, TIMEOUT)?;
     if !out.success {
-        log::warn!("a one-off model call failed: {}", out.stderr.trim());
+        log::warn!(error = out.stderr.trim(); "a one-off model call failed: {{error}}");
         return None;
     }
     let mut value: Value = serde_json::from_str(&out.stdout).ok()?;
@@ -234,7 +236,7 @@ fn from_codex(
     args.push(prompt);
     let out = provider::probe_in(AgentKind::Codex, &args, dir, TIMEOUT)?;
     if !out.success {
-        log::warn!("a one-off model call failed: {}", out.stderr.trim());
+        log::warn!(error = out.stderr.trim(); "a one-off model call failed: {{error}}");
         return None;
     }
     serde_json::from_str::<Value>(&std::fs::read_to_string(&answer).ok()?)
@@ -256,7 +258,7 @@ fn clean(raw: &str) -> Option<String> {
 }
 
 /// Trims a user-entered name; blank names are refused.
-pub(crate) fn clean_name(name: &str) -> Result<String, String> {
+pub(crate) fn clean_name(name: &str) -> Result<String, Error> {
     let name = name.trim();
     if name.is_empty() {
         return Err("Name can't be empty".into());
@@ -264,6 +266,8 @@ pub(crate) fn clean_name(name: &str) -> Result<String, String> {
     Ok(name.chars().take(120).collect())
 }
 
+/// `text` with its leading file and image attachment mentions removed.
+///
 /// The message without the attachments it opens with: `@name` mentions of files and images
 /// written as Markdown, which the composer puts first. `is_file` says whether a bare `@name` is
 /// a file; a word with a slash or a dot always is, as the composer writes paths. A path with
@@ -292,6 +296,8 @@ pub fn without_leading_attachments(text: &str, is_file: impl Fn(&str) -> bool) -
     }
 }
 
+/// A thread title taken from the first meaningful line of `text`.
+///
 /// A thread title from the first line of a message that is not a code fence, without a
 /// leading `/goal`. A line of only punctuation, such as the `{` pasted JSON opens with, is
 /// passed over for the first line with a letter or digit.

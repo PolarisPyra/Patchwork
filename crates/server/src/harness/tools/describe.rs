@@ -1,5 +1,7 @@
 //! What the model is told about each tool, and what the user sees of a call: its name, summary, and whether it needs approval.
 
+// Rust guideline compliant 2026-10-09
+
 use std::path::Path;
 use serde_json::{Value, json};
 use crate::system::fs::resolve;
@@ -8,6 +10,7 @@ use crate::permissions::PermissionKind;
 use crate::threads::AccessMode;
 
 /// The tools offered to the model. Plan mode offers only those that change nothing.
+#[must_use]
 pub fn definitions(plan: bool) -> Value {
     let tool = |name: &str, description: &str, parameters: Value| json!({"type": "function", "function": {"name": name, "description": description, "parameters": parameters}});
     let path = json!({"type": "string", "description": "A path relative to the project root, or absolute"});
@@ -197,6 +200,7 @@ pub fn definitions(plan: bool) -> Value {
 }
 
 /// The display name of a tool, as the chat shows tool calls.
+#[must_use]
 pub fn display_name(name: &str) -> &str {
     match name {
         "read_file" => "Read",
@@ -224,6 +228,7 @@ pub fn display_name(name: &str) -> &str {
 }
 
 /// A one-line summary of a call's arguments.
+#[must_use]
 pub fn summary(name: &str, args: &Value, root: &Path) -> String {
     let field = |key: &str| args[key].as_str().unwrap_or_default().to_string();
     let summary = match name {
@@ -267,6 +272,7 @@ pub fn summary(name: &str, args: &Value, root: &Path) -> String {
 }
 
 /// A path as the user sees it: relative to the project when inside it.
+#[must_use]
 pub fn shown(path: &Path, root: &Path) -> String {
     path.strip_prefix(root)
         .unwrap_or(path)
@@ -274,9 +280,12 @@ pub fn shown(path: &Path, root: &Path) -> String {
         .to_string()
 }
 
+/// Describes a tool call for permission rules and the access mode's approval check.
+///
 /// What a call asks to do, as its title, its detail, what it asks to do for the permission rules,
 /// and whether the access mode asks the user about it; otherwise only a rule may stop it. None
 /// when no rule can answer it, so it runs at once.
+#[must_use]
 pub fn approval(
     name: &str,
     args: &Value,
@@ -366,6 +375,7 @@ pub fn approval(
     }
 }
 
+#[must_use]
 pub fn writes(name: &str) -> bool {
     matches!(name, "write_file" | "edit_file")
 }

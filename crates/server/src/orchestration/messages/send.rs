@@ -1,5 +1,8 @@
 //! Sending messages and running turns: naming the thread, approvals, stopping.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -94,7 +97,7 @@ impl Server {
             let mut renamed = false;
             let _ = server.store.update_thread(&thread_id, |t| {
                 if t.title == placeholder {
-                    t.title = generated.clone();
+                    t.title.clone_from(&generated);
                     renamed = true;
                 }
             });
@@ -109,13 +112,19 @@ impl Server {
 
     /// Appends the user message, then starts the agent turn in the background.
     /// Returns the stored user message; assistant output arrives via the event sink.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when an attachment image cannot be read or is over 5 MB, when the chat's
+    /// turn is still starting, when a `/goal` command is not allowed for the chat's agent or the
+    /// current turn, or when the message cannot be saved or the turn cannot be started.
     pub fn send_message(
         self: &Arc<Self>,
         thread_id: String,
         text: String,
         attachments: Vec<Attachment>,
         queue: bool,
-    ) -> Result<Message, String> {
+    ) -> Result<Message, Error> {
         let images = provider::load_images(&attachments)?;
         // Refused before anything is stored: a turn still starting has no agent to write to.
         if self.runner.is_starting(&thread_id) {
@@ -159,7 +168,7 @@ impl Server {
             {
                 return Err(format!(
                     "Claude has no /goal {word}. Send a message to carry on with the goal, or /goal clear to drop it."
-                ));
+                ).into());
             }
             if matches!(
                 command,
@@ -205,7 +214,7 @@ impl Server {
                 .map(|c| c.id.clone())
                 .collect();
             t.messages.push(m);
-            session_id = t.session_id.clone();
+            session_id.clone_from(&t.session_id);
         })?;
         if let Some((placeholder, agent, model, project_id)) = first_title {
             let root = project_id.and_then(|id| {
@@ -358,7 +367,7 @@ impl Server {
                         attachments,
                         images,
                     },
-                )?
+                )?;
             }
         }
         Ok(msg)
@@ -424,11 +433,22 @@ impl Server {
         }
     }
 
-    pub fn stop_subagent(&self, thread_id: &str, tool_id: &str) -> Result<(), String> {
+    /// Stops the subagent that the call `tool_id` started.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the subagent's command already finished, when the chat has no running
+    /// turn, when the subagent cannot be stopped, or when the turn no longer accepts input.
+    pub fn stop_subagent(&self, thread_id: &str, tool_id: &str) -> Result<(), Error> {
         self.runner.stop_subagent(thread_id, tool_id)
     }
 
     /// Answers a pending approval in the thread's running turn.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no turn is waiting for the approval and the request was already
+    /// answered, or when sending the answer in a new turn fails.
     pub fn respond_approval(
         self: &Arc<Self>,
         thread_id: &str,
@@ -436,7 +456,7 @@ impl Server {
         allow: bool,
         answers: std::collections::HashMap<String, Vec<String>>,
         rule: Option<crate::permissions::RuleRef>,
-    ) -> Result<(), String> {
+    ) -> Result<(), Error> {
         self.runner.respond(
             self,
             thread_id,

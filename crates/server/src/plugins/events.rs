@@ -1,5 +1,7 @@
 //! The events a hook runs on: their names, and which of them Patchwork runs itself.
 
+// Rust guideline compliant 2026-10-09
+
 use super::HookEvent;
 
 impl HookEvent {
@@ -19,6 +21,7 @@ impl HookEvent {
     ];
 
     /// The event as Patchwork names it, and as `PATCHWORK_EVENT` gives it: `preToolUse`.
+    #[must_use]
     pub fn name(self) -> &'static str {
         match self {
             HookEvent::UserPromptSubmit => "userPromptSubmit",
@@ -37,12 +40,14 @@ impl HookEvent {
     }
 
     /// The event as the agent CLIs name it: `PreToolUse`.
+    #[must_use]
     pub fn cli_name(self) -> String {
         let name = self.name();
         name[..1].to_ascii_uppercase() + &name[1..]
     }
 
     /// The event a manifest names, whatever its case.
+    #[must_use]
     pub fn parse(name: &str) -> Option<HookEvent> {
         HookEvent::ALL
             .into_iter()
@@ -51,6 +56,7 @@ impl HookEvent {
 
     /// Whether Patchwork runs the event itself, for every agent, since only it knows how a reply
     /// ended. The rest happen inside the agent, so the agent runs them on its own hooks.
+    #[must_use]
     pub fn runs_in_patchwork(self) -> bool {
         matches!(
             self,

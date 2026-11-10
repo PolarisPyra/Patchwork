@@ -1,3 +1,5 @@
+//! MCP servers that Claude Code and Codex use, read from their config.
+//!
 //! The MCP servers Claude Code and Codex use, read from their own config, so the settings can
 //! show them beside Patchwork's. Those CLIs start their servers themselves; Patchwork only
 //! starts each one briefly to list its tools, and keeps the list per config, so a server is
@@ -6,13 +8,15 @@
 //! asks before using a server from a project's `.mcp.json`, and Codex reads a project's
 //! `.codex/config.toml` only in a project the user trusts.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock, PoisonError};
 
 use serde::Serialize;
 use serde_json::Value;
-use ts_rs::TS;
 
 use crate::provider::mcp::{self, McpServer, ToolInfo};
 use crate::projects::Project;
@@ -22,12 +26,11 @@ use crate::provider::AgentKind;
 const CACHE_FILE: &str = "mcp-cli-tools.json";
 
 /// Each server's tools by the hash of its config: None while they are being read.
-type Listings = HashMap<String, Option<Result<Vec<ToolInfo>, String>>>;
+type Listings = HashMap<String, Option<Result<Vec<ToolInfo>, Error>>>;
 static TOOLS: OnceLock<Mutex<Listings>> = OnceLock::new();
 
 /// One CLI's servers, and the file that holds its own servers.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliGroup {
     pub agent: AgentKind,
@@ -37,8 +40,7 @@ pub struct CliGroup {
 
 /// A server as the settings show it. Environment and header values stay out, since they may
 /// hold secrets; only their names are shown.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliServer {
     /// Its identity (see `mcp::identity`), which names it for a refresh, and puts it on the
@@ -76,6 +78,7 @@ struct Found {
     approved: bool,
 }
 
+#[must_use]
 pub fn list(projects: &[Project]) -> Vec<CliGroup> {
     let claude = crate::provider::claude::settings_file();
     let codex = crate::provider::codex::home()
@@ -115,7 +118,12 @@ pub fn refresh(key: &str, projects: &[Project]) {
 }
 
 /// Adds the server with this key to Patchwork's own, under its name, for API tasks.
-pub fn enable(key: &str, projects: &[Project]) -> Result<(), String> {
+///
+/// # Errors
+///
+/// Returns an error when the server is no longer in the CLI's config, the CLI has not approved it
+/// for the project, Patchwork already has a server of that name, or saving it fails.
+pub fn enable(key: &str, projects: &[Project]) -> Result<(), Error> {
     let found = all(projects)
         .into_iter()
         .find(|f| mcp::identity(&f.server) == key)
@@ -124,13 +132,10 @@ pub fn enable(key: &str, projects: &[Project]) -> Result<(), String> {
         return Err("The CLI has not approved this project's server".into());
     }
     if mcp::list().iter().any(|s| s.name == found.name) {
-        return Err(format!(
-            "Patchwork already has a server named {}",
-            found.name
-        ));
+        return Err(format!("Patchwork already has a server named {}", found.name).into());
     }
     mcp::save(
-        found.name,
+        &found.name,
         None,
         McpServer {
             disabled: false,
@@ -140,6 +145,7 @@ pub fn enable(key: &str, projects: &[Project]) -> Result<(), String> {
 }
 
 /// Whether `path` is a config file a server was read from, which the settings may open.
+#[must_use]
 pub fn is_config_file(path: &Path, projects: &[Project]) -> bool {
     (path.parent() == Some(mcp::dir().as_path()) && path.extension().is_some_and(|e| e == "json"))
         || path == crate::provider::claude::settings_file()
@@ -223,11 +229,13 @@ fn view(found: Found, shared: &[(String, McpServer)]) -> CliServer {
         Some(Some(Ok(tools))) => ("ready", tools, None),
         Some(Some(Err(e)))
             if found.server.url.is_some()
-                && (e.contains("answered 401") || e.contains("answered 403")) =>
+                && ["answered 401", "answered 403"]
+                    .iter()
+                    .any(|s| e.to_string().contains(s)) =>
         {
             ("signin", Vec::new(), None)
         }
-        Some(Some(Err(e))) => ("error", Vec::new(), Some(e)),
+        Some(Some(Err(e))) => ("error", Vec::new(), Some(e.to_string())),
     };
     let names = |map: &BTreeMap<String, String>| map.keys().cloned().collect::<Vec<_>>();
     CliServer {
@@ -268,6 +276,7 @@ fn env_var(name: &str) -> Option<String> {
 /// Claude Code's servers: its user servers, each project's local ones in `.claude.json`, and
 /// the project's shared `.mcp.json`. A project server turned off in Claude Code shows as off.
 fn claude_servers(file: &Path, projects: &[Project]) -> Vec<Found> {
+    type Check<'a> = &'a dyn Fn(&str) -> bool;
     let config: Value = std::fs::read_to_string(file)
         .ok()
         .and_then(|text| serde_json::from_str(&text).ok())
@@ -280,7 +289,6 @@ fn claude_servers(file: &Path, projects: &[Project]) -> Vec<Found> {
         .and_then(|text| serde_json::from_str(&text).ok())
         .unwrap_or(Value::Null);
     let mut out = Vec::new();
-    type Check<'a> = &'a dyn Fn(&str) -> bool;
     let mut add = |map: &Value,
                    scope,
                    project: Option<&Project>,
@@ -460,6 +468,7 @@ pub fn own_server(thread_id: &str) -> Option<(String, Vec<String>)> {
 }
 
 /// OpenCode's config for Patchwork's own server, for the agent of `thread_id`.
+#[must_use]
 pub fn opencode_config(thread_id: &str) -> Option<Value> {
     let (exe, args) = own_server(thread_id)?;
     let command: Vec<String> = std::iter::once(exe).chain(args).collect();
@@ -471,9 +480,12 @@ pub fn opencode_config(thread_id: &str) -> Option<Value> {
     }}}))
 }
 
+/// Builds the arguments that give a CLI turn Patchwork's MCP server.
+///
 /// Arguments that give a CLI's turn Patchwork's own server, and point it at Patchwork's copy of
 /// each server it shares, so the two do not each start one: `--mcp-config` replaces a Claude
 /// Code server of the same name, and `-c` a Codex one.
+#[must_use]
 pub fn overrides(agent: AgentKind, root: &str, thread_id: &str) -> Vec<String> {
     let Some((exe, own)) = own_server(thread_id) else {
         return Vec::new();

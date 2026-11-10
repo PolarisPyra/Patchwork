@@ -1,5 +1,7 @@
 //! The `settings` and `projects` tables.
 
+// Rust guideline compliant 2026-10-09
+
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
 use super::json;
@@ -36,7 +38,10 @@ pub(super) fn load_settings(conn: &Connection) -> rusqlite::Result<Settings> {
             Ok(settings) => settings,
             // Kept apart, so saving the defaults cannot lose what the settings held.
             Err(e) => {
-                log::warn!("the saved settings are not valid JSON ({e}); starting from defaults");
+                log::warn!(
+                    error:% = e;
+                    "the saved settings are not valid JSON ({{error}}); starting from defaults"
+                );
                 conn.execute(
                     "INSERT INTO app_state (key, value) VALUES ('unreadable_settings', ?1)
                      ON CONFLICT(key) DO UPDATE SET value = excluded.value",

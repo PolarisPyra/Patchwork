@@ -1,89 +1,256 @@
-//! Installing an agent CLI with its official script.
+//! Installing an agent CLI the way its makers publish it.
+//!
+//! On macOS and Linux each CLI comes from its official shell script, and on Windows from its
+//! official PowerShell script. OpenCode publishes no PowerShell script, so on Windows its release
+//! archive is downloaded and unpacked where its shell script would have put it. Each CLI lands in
+//! the folder its installer picks by default, which Patchwork already searches.
 
-use std::path::PathBuf;
+// Rust guideline compliant 2026-10-09
+
+use std::fs::File;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use crate::provider::AgentKind;
-use crate::Server;
+use crate::{Error, Server};
+
+/// How long reaching a download server may take. The download itself is not timed, because the
+/// OpenCode archive is about 80 MB.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// OpenCode's newest version, which its npm package publishes before the release archives exist.
+const OPENCODE_VERSION_URL: &str = "https://registry.npmjs.org/opencode-ai/latest";
+
+/// Where OpenCode's release archives are, by version tag.
+const OPENCODE_RELEASES_URL: &str = "https://github.com/anomalyco/opencode/releases/download";
+
+/// How a CLI is installed.
+enum Installer {
+    /// An official install script, saved under `name` and run by `shell`.
+    Script {
+        url: &'static str,
+        shell: &'static str,
+        name: &'static str,
+    },
+    /// OpenCode's release archive, for Windows, where it has no install script.
+    OpenCodeArchive,
+}
 
 impl Server {
-    /// Downloads `kind`'s official install script to a file, then runs it so it asks nothing. The
-    /// script is saved first, so the file that runs is the one that was fetched. Each CLI goes
-    /// where its installer puts it by default, which Patchwork already searches. Codex and
-    /// OpenCode are kept from editing the shell profile; Antigravity's script always adds its
-    /// folder to it, with no way to opt out. On Windows only the Antigravity CLI is set up, with
-    /// its PowerShell script.
-    pub fn install_cli(&self, kind: AgentKind) -> Result<(), String> {
-        let windows = cfg!(windows);
-        if windows && kind != AgentKind::Antigravity {
-            return Err(
-                "Setting up this CLI from Patchwork is for macOS and Linux for now.".into(),
-            );
-        }
+    /// Downloads `kind`'s CLI with its official installer and runs it without questions.
+    ///
+    /// A script is saved before it runs, so the file that runs is the one that was fetched. Codex
+    /// and OpenCode are kept from editing the shell profile; Antigravity's script always adds its
+    /// folder to it. On Windows the CLI's folder is put on the user's PATH, so a terminal opened
+    /// afterwards finds it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the agent has no CLI, the home or app data folder is unavailable, the
+    /// installer cannot be downloaded or run, or it finishes without leaving the CLI in place.
+    pub fn install_cli(&self, kind: AgentKind) -> Result<(), Error> {
         let home = crate::system::fs::home_dir().ok_or("Could not find the home folder")?;
-        let (url, shell, name, bin) = match kind {
-            AgentKind::Claude => (
-                "https://claude.ai/install.sh",
-                "bash",
-                "claude",
-                home.join(".local/bin/claude"),
-            ),
-            AgentKind::Codex => (
-                "https://chatgpt.com/codex/install.sh",
-                "sh",
+        let (installer, bin) = plan(kind, &home)?;
+        std::fs::create_dir_all(&self.installers_dir)
+            .map_err(|e| format!("Could not make {}: {e}", self.installers_dir.display()))?;
+        let http: ureq::Agent = ureq::Agent::config_builder()
+            .timeout_connect(Some(CONNECT_TIMEOUT))
+            .build()
+            .into();
+        match installer {
+            Installer::Script { url, shell, name } => {
+                run_script(&http, &self.installers_dir, kind, url, shell, name, &home)?;
+            }
+            Installer::OpenCodeArchive => {
+                install_opencode_archive(&http, &self.installers_dir, &bin)?;
+            }
+        }
+        if !bin.is_file() {
+            return Err(format!(
+                "The installer finished, but the CLI is not at {}",
+                bin.display()
+            )
+            .into());
+        }
+        #[cfg(windows)]
+        if let Some(folder) = bin.parent() {
+            add_to_user_path(folder)?;
+        }
+        log::info!(agent:? = kind, path:% = bin.display(); "installed {{agent}} at {{path}}");
+        Ok(())
+    }
+}
+
+/// Puts `folder` at the end of the user's PATH unless it is on it, and tells running programs,
+/// so a terminal opened from now on finds the CLI.
+///
+/// Claude's installer only says to add its folder by hand, and OpenCode's archive has no
+/// installer; Codex's and Antigravity's add their own, which this then finds there.
+#[cfg(windows)]
+fn add_to_user_path(folder: &Path) -> Result<(), Error> {
+    use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, KEY_SET_VALUE, RegType};
+    use winreg::types::FromRegValue;
+    use winreg::{RegKey, RegValue};
+
+    let failed = |e: std::io::Error| format!("Could not add {} to PATH: {e}", folder.display());
+    let env = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey_with_flags("Environment", KEY_READ | KEY_SET_VALUE)
+        .map_err(failed)?;
+    // The value keeps its type, so `%NAME%` entries in an expandable one go on working.
+    let (current, vtype) = match env.get_raw_value("Path") {
+        Ok(raw) => (String::from_reg_value(&raw).map_err(failed)?, raw.vtype),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            (String::new(), RegType::REG_EXPAND_SZ)
+        }
+        Err(e) => return Err(failed(e).into()),
+    };
+    let wanted = folder.to_string_lossy();
+    let same = |entry: &str| {
+        let entry = crate::system::expand_windows_vars(entry, &|name| std::env::var(name).ok());
+        entry
+            .trim_end_matches('\\')
+            .eq_ignore_ascii_case(wanted.trim_end_matches('\\'))
+    };
+    if current.split(';').any(same) {
+        return Ok(());
+    }
+    let current = current.trim_end_matches(';');
+    let updated = if current.is_empty() {
+        wanted.into_owned()
+    } else {
+        format!("{current};{wanted}")
+    };
+    let bytes: Vec<u8> = updated
+        .encode_utf16()
+        .chain([0])
+        .flat_map(u16::to_le_bytes)
+        .collect();
+    env.set_raw_value(
+        "Path",
+        &RegValue {
+            bytes: bytes.into(),
+            vtype,
+        },
+    )
+    .map_err(failed)?;
+    announce_environment();
+    Ok(())
+}
+
+/// Tells running programs that the user's environment changed, as the System Properties dialog
+/// does, so Explorer passes the new PATH to the terminals it starts.
+#[cfg(windows)]
+fn announce_environment() {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        HWND_BROADCAST, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_SETTINGCHANGE,
+    };
+    let area: Vec<u16> = "Environment".encode_utf16().chain([0]).collect();
+    let mut reply = 0;
+    // SAFETY: `area` is a NUL-terminated UTF-16 string that outlives the call, which only reads
+    // it, and `reply` is a valid place for the one value it writes.
+    unsafe {
+        SendMessageTimeoutW(
+            HWND_BROADCAST,
+            WM_SETTINGCHANGE,
+            0,
+            area.as_ptr() as isize,
+            SMTO_ABORTIFHUNG,
+            5000,
+            &raw mut reply,
+        );
+    }
+}
+
+/// How `kind` is installed on this system, and where its CLI is once it is.
+fn plan(kind: AgentKind, home: &Path) -> Result<(Installer, PathBuf), Error> {
+    let windows = cfg!(windows);
+    let local_app_data = || {
+        std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .ok_or("Could not find the local app data folder")
+    };
+    let script = |url, shell, name| Installer::Script { url, shell, name };
+    Ok(match kind {
+        AgentKind::Claude if windows => (
+            script("https://claude.ai/install.ps1", "powershell", "claude"),
+            home.join(r".local\bin\claude.exe"),
+        ),
+        AgentKind::Claude => (
+            script("https://claude.ai/install.sh", "bash", "claude"),
+            home.join(".local/bin/claude"),
+        ),
+        AgentKind::Codex if windows => (
+            script(
+                "https://chatgpt.com/codex/install.ps1",
+                "powershell",
                 "codex",
-                home.join(".local/bin/codex"),
             ),
-            AgentKind::Antigravity if windows => (
+            local_app_data()?.join(r"Programs\OpenAI\Codex\bin\codex.exe"),
+        ),
+        AgentKind::Codex => (
+            script("https://chatgpt.com/codex/install.sh", "sh", "codex"),
+            home.join(".local/bin/codex"),
+        ),
+        AgentKind::Antigravity if windows => (
+            script(
                 "https://antigravity.google/cli/install.ps1",
                 "powershell",
                 "antigravity",
-                std::env::var_os("LOCALAPPDATA")
-                    .map(PathBuf::from)
-                    .unwrap_or_default()
-                    .join(r"agy\bin\agy.exe"),
             ),
-            AgentKind::Antigravity => (
+            local_app_data()?.join(r"agy\bin\agy.exe"),
+        ),
+        AgentKind::Antigravity => (
+            script(
                 "https://antigravity.google/cli/install.sh",
                 "bash",
                 "antigravity",
-                home.join(".local/bin/agy"),
             ),
-            AgentKind::OpenCode => (
-                "https://opencode.ai/install",
-                "bash",
-                "opencode",
-                home.join(".opencode/bin/opencode"),
-            ),
-            AgentKind::Api => return Err("API providers have no CLI to install".into()),
-        };
-        std::fs::create_dir_all(&self.installers_dir).map_err(|e| e.to_string())?;
-        let ext = if windows { "ps1" } else { "sh" };
-        let script = self.installers_dir.join(format!("install-{name}.{ext}"));
-        let fetch = crate::system::host_command("curl")
-            .args(["-fsSL", url, "-o"])
-            .arg(&script)
-            .output()
-            .map_err(|e| format!("Could not run curl: {e}"))?;
-        if !fetch.status.success() {
-            return Err(format!(
-                "Download failed: {}",
-                String::from_utf8_lossy(&fetch.stderr).trim()
-            ));
-        }
-        let mut cmd = crate::system::host_command(shell);
-        if windows {
-            cmd.args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-            ]);
-        }
-        cmd.arg(&script);
-        match kind {
-            AgentKind::Codex => {
-                // The installer adds its folder to the shell profile unless it is on PATH already.
+            home.join(".local/bin/agy"),
+        ),
+        AgentKind::OpenCode if windows => (
+            Installer::OpenCodeArchive,
+            home.join(r".opencode\bin\opencode.exe"),
+        ),
+        AgentKind::OpenCode => (
+            script("https://opencode.ai/install", "bash", "opencode"),
+            home.join(".opencode/bin/opencode"),
+        ),
+        AgentKind::Api => return Err("API providers have no CLI to install".into()),
+    })
+}
+
+/// Saves the install script at `url` in `dir`, runs it with `shell`, then deletes it.
+fn run_script(
+    http: &ureq::Agent,
+    dir: &Path,
+    kind: AgentKind,
+    url: &str,
+    shell: &str,
+    name: &str,
+    home: &Path,
+) -> Result<(), Error> {
+    let windows = cfg!(windows);
+    let script = dir.join(format!(
+        "install-{name}.{}",
+        if windows { "ps1" } else { "sh" }
+    ));
+    download(http, url, &script)?;
+    let mut cmd = crate::system::host_command(shell);
+    if windows {
+        cmd.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+        ]);
+    }
+    cmd.arg(&script);
+    match kind {
+        AgentKind::Codex => {
+            // On macOS and Linux the script adds its folder to the shell profile unless it is on
+            // PATH already.
+            if !windows {
                 let mut paths = vec![home.join(".local/bin")];
                 if let Some(existing) = std::env::var_os("PATH") {
                     paths.extend(std::env::split_paths(&existing));
@@ -91,23 +258,111 @@ impl Server {
                 if let Ok(joined) = std::env::join_paths(paths) {
                     cmd.env("PATH", joined);
                 }
-                cmd.env("CODEX_NON_INTERACTIVE", "1");
             }
-            AgentKind::OpenCode => {
-                cmd.arg("--no-modify-path");
-            }
-            AgentKind::Claude | AgentKind::Antigravity | AgentKind::Api => {}
+            cmd.env("CODEX_NON_INTERACTIVE", "1");
         }
-        let run = cmd
-            .output()
-            .map_err(|e| format!("Could not run the installer: {e}"))?;
-        let _ = std::fs::remove_file(&script);
-        if !run.status.success() || !bin.is_file() {
-            return Err(format!(
-                "The install did not finish: {}",
-                String::from_utf8_lossy(&run.stderr).trim()
-            ));
+        AgentKind::OpenCode => {
+            cmd.arg("--no-modify-path");
         }
-        Ok(())
+        AgentKind::Claude | AgentKind::Antigravity | AgentKind::Api => {}
     }
+    let run = cmd.output();
+    let _ = std::fs::remove_file(&script);
+    let run = run.map_err(|e| format!("Could not run {shell}: {e}"))?;
+    if run.status.success() {
+        return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&run.stderr);
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    let said = if stderr.trim().is_empty() {
+        stdout
+    } else {
+        stderr
+    };
+    Err(format!("The installer stopped: {}", last_lines(&said, 3)).into())
+}
+
+/// Downloads OpenCode's newest Windows release and unpacks `opencode.exe` to `bin`.
+fn install_opencode_archive(http: &ureq::Agent, dir: &Path, bin: &Path) -> Result<(), Error> {
+    let latest: serde_json::Value = http
+        .get(OPENCODE_VERSION_URL)
+        .call()
+        .and_then(|mut r| r.body_mut().read_json())
+        .map_err(|e| format!("Could not look up OpenCode's newest version: {e}"))?;
+    // npm's `latest` is OpenCode 1, the line `https://opencode.ai/install` installs. OpenCode 2 has
+    // its own installer and is not on npm.
+    let version = latest["version"]
+        .as_str()
+        .filter(|v| v.starts_with("1."))
+        .ok_or("Could not look up OpenCode's newest version")?;
+    let target = if has_avx2() {
+        "windows-x64"
+    } else {
+        "windows-x64-baseline"
+    };
+    let archive = dir.join(format!("opencode-{target}.zip"));
+    let url = format!("{OPENCODE_RELEASES_URL}/v{version}/opencode-{target}.zip");
+    let unpacked =
+        download(http, &url, &archive).and_then(|()| unpack(&archive, "opencode.exe", bin));
+    let _ = std::fs::remove_file(&archive);
+    unpacked
+}
+
+/// Whether this processor runs OpenCode's main build, which needs AVX2. Other processors get its
+/// baseline build.
+fn has_avx2() -> bool {
+    #[cfg(target_arch = "x86_64")]
+    {
+        std::arch::is_x86_feature_detected!("avx2")
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        false
+    }
+}
+
+/// Writes what `url` serves to `to`.
+fn download(http: &ureq::Agent, url: &str, to: &Path) -> Result<(), Error> {
+    let response = http
+        .get(url)
+        .call()
+        .map_err(|e| format!("Could not download {url}: {e}"))?;
+    let mut file =
+        File::create(to).map_err(|e| format!("Could not write {}: {e}", to.display()))?;
+    std::io::copy(&mut response.into_body().into_reader(), &mut file)
+        .map_err(|e| format!("Could not download {url}: {e}"))?;
+    Ok(())
+}
+
+/// Unpacks the file `name` from the zip `archive` to `to`, making its folder first.
+///
+/// It is written beside `to` and renamed into place, so a stopped unpack leaves no broken CLI.
+fn unpack(archive: &Path, name: &str, to: &Path) -> Result<(), Error> {
+    let broken = |e: &dyn std::fmt::Display| format!("Could not unpack {}: {e}", archive.display());
+    let file = File::open(archive).map_err(|e| broken(&e))?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| broken(&e))?;
+    let mut entry = zip.by_name(name).map_err(|e| broken(&e))?;
+    if let Some(folder) = to.parent() {
+        std::fs::create_dir_all(folder)
+            .map_err(|e| format!("Could not make {}: {e}", folder.display()))?;
+    }
+    let part = to.with_extension("part");
+    let written = File::create(&part)
+        .and_then(|mut out| std::io::copy(&mut entry, &mut out))
+        .and_then(|_| std::fs::rename(&part, to));
+    if let Err(e) = written {
+        let _ = std::fs::remove_file(&part);
+        return Err(format!("Could not write {}: {e}", to.display()).into());
+    }
+    Ok(())
+}
+
+/// The last `count` lines of `text` that say something, joined by spaces.
+fn last_lines(text: &str, count: usize) -> String {
+    let lines: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect();
+    lines[lines.len().saturating_sub(count)..].join(" ")
 }

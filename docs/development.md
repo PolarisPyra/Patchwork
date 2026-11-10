@@ -5,41 +5,37 @@ How to build Patchwork from source, run it in development, and run the checks be
 ## Requirements
 
 - Rust
-- pnpm
-- The Tauri Linux prerequisites (webkit2gtk-4.1), or on Windows the Microsoft C++ Build Tools
-  and Node.js (the install script adds pnpm when it is missing)
+- On Linux, the libraries GPUI links against: D-Bus, fontconfig, FreeType, Wayland, xcb, and
+  xkbcommon (on Debian and Ubuntu, `libdbus-1-dev libfontconfig-dev libfreetype-dev
+  libwayland-dev libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev`)
 
 ## Run the app in development
 
-```sh
-pnpm install
-pnpm tauri dev
-```
-
-`pnpm tauri dev` runs the desktop app with the UI on Vite and the Rust backend rebuilding on save.
-
-## Build
 
 ```sh
-scripts/build.sh install    # release binary, icons, and launcher under ~/.local
+cargo run -p patchwork
 ```
 
-`scripts/build.sh install` builds the AppImage and installs it under `~/.local` with its icons and
-a launcher named **Patchwork**.
-Set `PREFIX` to install somewhere else. The launcher's id is
-`dev.patchwork.ade`, so it doesn't replace the launcher of an AppImage you already run. The
-install step refreshes the desktop, icon, and KDE caches.
 
-On Windows, from PowerShell:
+The debug build optimizes its dependencies (see the root `Cargo.toml`), so the first build takes a
+while and later ones rebuild only what changed.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1 install
+## Build the AppImage
+
+```sh
+scripts/build.sh
 ```
 
-It builds the installer and runs it silently, which installs Patchwork for your user under
-`%LOCALAPPDATA%\Patchwork` with a Start menu shortcut. Quit Patchwork first, since Windows locks the
-files of a running app. A Git for Windows install gives agents Git Bash, which they run commands in
-by default; **Settings → Environment** can switch them to PowerShell or cmd.
+It writes `target/release/Patchwork_amd64.AppImage`; see [Releasing](release.md).
+
+## Commit hook
+
+```sh
+git config core.hooksPath scripts/hooks
+```
+
+The `commit-msg` hook checks each commit's `Changelog:` paragraph; see
+[Changelog style](changelog-style.md).
 
 ## Tests
 
@@ -55,9 +51,8 @@ installed and signed in.
 
 | Check | Command |
 | --- | --- |
-| Web typecheck | `pnpm typecheck` |
-| Format TSX | `pnpm format` (check only: `pnpm format:check`) |
-| Rust lint | `cargo clippy --workspace --all-targets` |
+| Format | `cargo fmt --all` (check only: `cargo fmt --all -- --check`) |
+| Lint | `cargo clippy --workspace --all-targets -- -D warnings` |
 
 ## Where things are
 

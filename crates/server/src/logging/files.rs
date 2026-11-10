@@ -1,12 +1,14 @@
 //! The log files on disk: one folder per app session, rotated files, and reading and exporting them for Settings.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::fmt;
 use std::fs::File;
 use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use chrono::Local;
-use ts_rs::TS;
 use super::Json;
 use super::scrub::scrubbed;
 
@@ -50,7 +52,7 @@ pub fn session_dir(logs: &Path) -> PathBuf {
             let mut sessions: Vec<PathBuf> = entries
                 .iter()
                 .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()) && is_session(&e.file_name()))
-                .map(|e| e.path())
+                .map(std::fs::DirEntry::path)
                 .collect();
             sessions.sort();
             let old = sessions.len().saturating_sub(KEEP_SESSIONS);
@@ -75,7 +77,7 @@ pub(super) fn sessions(root: &Path) -> Vec<PathBuf> {
         .unwrap_or_default()
         .iter()
         .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()) && is_session(&e.file_name()))
-        .map(|e| e.path())
+        .map(std::fs::DirEntry::path)
         .collect();
     sessions.sort();
     sessions
@@ -95,7 +97,7 @@ fn files_under(dir: &Path) -> Vec<PathBuf> {
     let mut entries: Vec<_> = std::fs::read_dir(dir)
         .map(|list| list.flatten().collect())
         .unwrap_or_default();
-    entries.sort_by_key(|e| e.file_name());
+    entries.sort_by_key(std::fs::DirEntry::file_name);
     let mut files = Vec::new();
     for entry in entries {
         match entry.file_type() {
@@ -119,19 +121,20 @@ pub fn channels() -> Vec<String> {
         .map(|path| path.to_string_lossy().replace('\\', "/"))
         .filter(|name| {
             let stem = name.trim_end_matches(".log");
-            name.ends_with(".log")
+            std::path::Path::new(name)
+                .extension()
+                .is_some_and(|ext| ext == "log")
                 && !name.starts_with(CHAT_PREFIX)
-                && !stem
+                && stem
                     .rsplit('.')
                     .next()
-                    .is_some_and(|n| n.parse::<u32>().is_ok())
+                    .is_none_or(|n| n.parse::<u32>().is_err())
         })
         .collect()
 }
 
 /// What the Output panel reads of a log.
-#[derive(serde::Serialize, TS)]
-#[ts(export, export_to = "logging.ts")]
+#[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LogChunk {
     pub text: String,
@@ -143,7 +146,12 @@ pub struct LogChunk {
 
 /// The log `channel` (a path from `channels`) from `offset` on. A first read, or a read after
 /// the log started over, shows at most its last `MAX_READ_BYTES`, from a line start.
-pub fn read(channel: &str, offset: u64) -> Result<LogChunk, String> {
+///
+/// # Errors
+///
+/// Returns an error when there are no logs yet, when `channel` is an absolute path or leaves the
+/// logs folder, or when the log file cannot be opened or read.
+pub fn read(channel: &str, offset: u64) -> Result<LogChunk, Error> {
     let dir = SESSION.get().ok_or("There are no logs yet")?;
     let path = Path::new(channel);
     if path.is_absolute()
@@ -151,7 +159,7 @@ pub fn read(channel: &str, offset: u64) -> Result<LogChunk, String> {
             .components()
             .any(|c| !matches!(c, std::path::Component::Normal(_)))
     {
-        return Err(format!("Not a log: {channel}"));
+        return Err(format!("Not a log: {channel}").into());
     }
     let mut file =
         File::open(dir.join(path)).map_err(|e| format!("Could not open {channel}: {e}"))?;
@@ -189,7 +197,12 @@ pub fn read(channel: &str, offset: u64) -> Result<LogChunk, String> {
 
 /// Writes a zip at `dest` of every kept launch's log folder, plus `system.json`: what a
 /// friend sends with a bug report. Records still queued are not waited for.
-pub fn export(dest: &Path, system: &serde_json::Value) -> Result<(), String> {
+///
+/// # Errors
+///
+/// Returns an error when there are no logs yet, when the zip cannot be created at `dest`, or when
+/// `system.json` or a log file cannot be written to it.
+pub fn export(dest: &Path, system: &serde_json::Value) -> Result<(), Error> {
     let Some(root) = SESSION.get().and_then(|dir| dir.parent()) else {
         return Err("There are no logs yet".into());
     };

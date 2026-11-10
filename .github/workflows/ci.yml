@@ -1,37 +1,25 @@
 name: CI
 
-# Checks every push to main and a run started by hand with what `scripts/release.sh` checks before a
-# release: the web app's types and formatting, rustfmt, clippy, the Rust tests, and that the
-# generated wire types are committed. It runs on the Ubuntu the AppImage is built on, so a Linux
-# build problem shows here rather than at release. When a push to main passes, the Release workflow
-# starts: it updates the release pull request, or tags and publishes a release whose pull request
-# was just merged.
-#
-# Pull requests are not checked: the only ones are the release pull request's, one commit of the
-# version and notes on top of a commit these checks passed on, and GitHub holds a run for it until
-# someone approves it.
+# Checks every push to main and a run started by hand: rustfmt, clippy, and the Rust tests.
 #
 # Actions are pinned to commits; the comment after each names the version it was.
 
 on:
   push:
     branches: [main]
-    # Nothing these check, such as the links the Release workflow commits to the website after a
-    # release.
+    # Nothing these check.
     paths-ignore: ["site/**", "docs/**", "**.md"]
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# A newer push to the same branch makes an older run's result moot: on main, the newer run's release
-# pull request carries the older push's commits too.
+# A newer push to the same branch makes an older run's result moot.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  # The same compiler the Release workflow builds with.
   RUST_TOOLCHAIN: "1.99.0"
   # No debug info in the check and test builds, which nothing here debugs: it was most of the Rust
   # cache, which took longer to restore than the checks took to run.
@@ -44,11 +32,21 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: ./.github/actions/setup
+      # The runner's Azure apt mirror is sometimes throttled, so use archive.ubuntu.com directly.
+      - name: Use archive.ubuntu.com
+        run: sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+
+      # What GPUI links against on Linux: X11 and Wayland input, fonts, and D-Bus.
+      - name: Install the Linux packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y -o Acquire::Retries=3 libdbus-1-dev libfontconfig-dev \
+            libfreetype-dev libwayland-dev libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
-          rust-components: rustfmt, clippy
-          cache-packages: "true"
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: rustfmt, clippy
 
       # Saved only from main, so a run by hand on another branch starts from main's.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
@@ -56,15 +54,11 @@ jobs:
           shared-key: ci
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      # The desktop crate embeds the web app's build, so it is built first.
-      - name: Build the web app
-        run: pnpm --filter patchwork-web build
+      - name: Format
+        run: cargo fmt --all -- --check
 
-      - name: Check
-        run: pnpm check
-
-      - name: Wire types are committed
-        run: git diff --exit-code -- apps/web/src/bindings
+      - name: Lint
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Test
         run: cargo test --workspace

@@ -1,6 +1,8 @@
 //! Claude subscription limits from the claude.ai OAuth usage endpoint, using
 //! the token Claude Code stored when the user signed in.
 
+// Rust guideline compliant 2026-10-09
+
 use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -63,6 +65,7 @@ pub(super) fn usage(mut out: ProviderUsage) -> Result<ProviderUsage, Failure> {
     out.plan = oauth["subscriptionType"].as_str().map(String::from);
 
     let agent: ureq::Agent = ureq::Agent::config_builder()
+        // The usage panel can wait this long; past it, the usage is shown as unknown.
         .timeout_global(Some(Duration::from_secs(10)))
         .http_status_as_error(false)
         .build()
@@ -81,8 +84,7 @@ pub(super) fn usage(mut out: ProviderUsage) -> Result<ProviderUsage, Failure> {
                 .get("retry-after")
                 .and_then(|v| v.to_str().ok())
                 .and_then(|s| s.trim().parse().ok())
-                .map(Duration::from_secs)
-                .unwrap_or(RATE_LIMIT_BACKOFF);
+                .map_or(RATE_LIMIT_BACKOFF, Duration::from_secs);
             let minutes = retry_after.as_secs().div_ceil(60).max(1);
             return Err(Failure {
                 message: format!(
@@ -128,7 +130,7 @@ fn live_plan_for(agent: &ureq::Agent, token: &str) -> Option<String> {
     plan
 }
 
-/// e.g. "max 5x" from organization type "claude_max" and tier "default_claude_max_5x".
+/// e.g. "max 5x" from organization type "`claude_max`" and tier "`default_claude_max_5x`".
 fn live_plan(profile: &Value) -> Option<String> {
     let org = &profile["organization"];
     let plan = org["organization_type"]
@@ -153,6 +155,7 @@ pub fn stored_plan() -> Option<String> {
 
 /// The windows in a `rate_limit_event` Claude reports during a turn, which carry the
 /// same numbers as the usage endpoint (as fractions, with resets in seconds).
+#[must_use]
 pub fn windows_from_event(info: &Value) -> Vec<UsageWindow> {
     let reported = &info["unifiedWindows"];
     WINDOWS

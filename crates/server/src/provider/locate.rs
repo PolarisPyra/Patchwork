@@ -1,6 +1,9 @@
 //! Finding the agent CLIs and the commands that start them: the paths the user chose, the PATH
 //! the user's shell sets up, and the usual install folders.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -53,6 +56,10 @@ fn fallback_dirs() -> Vec<PathBuf> {
     if let Some(appdata) = std::env::var_os("APPDATA") {
         dirs.push(PathBuf::from(appdata).join("npm"));
     }
+    // Where Codex's own installer puts its CLI on Windows.
+    if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+        dirs.push(PathBuf::from(local).join(r"Programs\OpenAI\Codex\bin"));
+    }
     // The Codex desktop app on Windows keeps its CLI in a folder named by a hash that changes
     // with each update, so every one is searched, newest first.
     if let Some(entries) = std::env::var_os("LOCALAPPDATA")
@@ -90,10 +97,10 @@ pub(super) fn find_binary(name: &str) -> Option<PathBuf> {
     })
 }
 
-/// Resolves the agent CLI (searching the PATH the user's shell sets up, then common install
-/// dirs) and returns a Command for it with
-/// the binary's directory prepended to PATH (codex needs `node` beside it).
-pub fn agent_command(kind: AgentKind) -> Result<Command, String> {
+/// Resolves the agent CLI (searching the PATH the user's shell sets up, then common install dirs)
+/// and returns a Command for it with the binary's directory prepended to PATH (codex needs `node`
+/// beside it).
+pub(crate) fn agent_command(kind: AgentKind) -> Result<Command, Error> {
     let bin = match kind {
         AgentKind::Claude => {
             located_or(kind, || find_binary("claude")).ok_or("Claude Code is not installed")?
@@ -171,6 +178,7 @@ fn unwrap_cmd_shim(bin: &Path) -> Option<(PathBuf, Option<PathBuf>)> {
 
 /// A command the user configured, such as an MCP server: found and run with the PATH their
 /// shell sets up, as agents get it.
+#[must_use]
 pub fn user_command(program: &str) -> Command {
     let bin = find_binary(program).unwrap_or_else(|| PathBuf::from(program));
     let mut cmd = program_command(&bin);
@@ -182,7 +190,7 @@ pub fn user_command(program: &str) -> Command {
 
 /// The command a turn runs. An OpenCode 2.x turn runs Patchwork's own binary as the bridge to
 /// `opencode serve`; every other turn runs the agent CLI.
-pub fn turn_command(kind: AgentKind) -> Result<Command, String> {
+pub(crate) fn turn_command(kind: AgentKind) -> Result<Command, Error> {
     if kind == AgentKind::Api || (kind == AgentKind::OpenCode && opencode::uses_serve()) {
         let exe = std::env::current_exe().map_err(|e| format!("Failed to find Patchwork: {e}"))?;
         let mut cmd = Command::new(exe);
@@ -202,11 +210,13 @@ pub fn turn_command(kind: AgentKind) -> Result<Command, String> {
     agent_command(kind)
 }
 
-/// The shell `agent` runs its commands in, which the turn sets as SHELL. Each CLI picks its own:
-/// Claude Code runs only bash or zsh, so it gets bash, else zsh; Codex always runs the account's
-/// login shell. The rest run SHELL, so they get bash, which models write commands for: OpenCode
-/// refuses fish and Nushell, and Patchwork's own agent calls its tool `bash`. Windows keeps the
-/// user's shell. None when it is not known.
+/// The shell `agent` runs its commands in, which the turn sets as SHELL.
+///
+/// Each CLI picks its own: Claude Code runs only bash or zsh, so it gets bash, else zsh; Codex
+/// always runs the account's login shell. The rest run SHELL, so they get bash, which models write
+/// commands for: OpenCode refuses fish and Nushell, and Patchwork's own agent calls its tool
+/// `bash`. Windows keeps the user's shell. None when it is not known.
+#[must_use]
 pub fn agent_shell(agent: AgentKind) -> Option<String> {
     use crate::system::{command_shell, find_shell, is_posix, login_shell};
     if cfg!(windows) {

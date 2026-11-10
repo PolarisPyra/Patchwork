@@ -1,11 +1,15 @@
-//! API providers: OpenAI-compatible endpoints the user adds with their own key. The providers
-//! live in `providers.json` in the config folder, which holds no secrets. Each key goes to
-//! the system credential store (Keychain, Credential Manager, or the Secret Service), or, where
-//! none is available, to `api-keys.json` beside it, readable only by the user. A provider can
-//! instead name an environment variable that holds its key. Header values are stored the same
-//! way, since one may carry a secret (an `Authorization` or `X-Api-Key` header), and the config
-//! keeps only their names.
+//! API providers: OpenAI-compatible endpoints the user adds with their own key.
+//!
+//! The providers live in `providers.json` in the config folder, which holds no secrets. Each key
+//! goes to the system credential store (Keychain, Credential Manager, or the Secret Service), or,
+//! where none is available, to `api-keys.json` beside it, readable only by the user. A provider can
+//! instead name an environment variable that holds its key. Header values are stored the same way,
+//! since one may carry a secret (an `Authorization` or `X-Api-Key` header), and the config keeps
+//! only their names.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock, PoisonError};
@@ -13,7 +17,6 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use ts_rs::TS;
 
 use crate::system::fs::write_private;
 use crate::provider::ModelOption;
@@ -40,6 +43,7 @@ fn dir() -> PathBuf {
     DIR.get().cloned().unwrap_or_default()
 }
 
+#[must_use]
 pub fn sessions_dir() -> PathBuf {
     crate::system::dirs().data.join(SESSIONS_DIR)
 }
@@ -50,8 +54,7 @@ fn keys() -> std::sync::MutexGuard<'static, HashMap<String, String>> {
         .unwrap_or_else(PoisonError::into_inner)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiProvider {
     /// A slug, the part of a model id before its `/`.
@@ -95,8 +98,7 @@ fn yes() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiModel {
     pub id: String,
@@ -105,15 +107,13 @@ pub struct ApiModel {
     pub name: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Header {
     pub name: String,
     pub value: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum KeyStore {
     /// The system credential store.
@@ -148,9 +148,9 @@ fn read_config() -> Config {
             let url = p.get("baseUrl").and_then(Value::as_str).unwrap_or_default();
             let local = super::servers::on_this_computer(url);
             log::info!(
-                "API provider {} taken as {}",
-                p.get("id").and_then(Value::as_str).unwrap_or("?"),
-                if local { "local" } else { "cloud" }
+                provider = p.get("id").and_then(Value::as_str).unwrap_or("?"),
+                kind = if local { "local" } else { "cloud" };
+                "API provider {{provider}} taken as {{kind}}"
             );
             p.insert("local".into(), Value::Bool(local));
             filled = true;
@@ -159,7 +159,7 @@ fn read_config() -> Config {
     match serde_json::from_value::<Config>(value) {
         Ok(config) => {
             if filled && let Err(e) = write_config(&config) {
-                log::warn!("Could not save where each API provider runs: {e}");
+                log::warn!(error:% = e; "Could not save where each API provider runs: {{error}}");
             }
             config
         }
@@ -167,22 +167,23 @@ fn read_config() -> Config {
     }
 }
 
-fn write_config(config: &Config) -> Result<(), String> {
+fn write_config(config: &Config) -> Result<(), Error> {
     let text = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
     write_private(&dir().join(CONFIG_FILE), &text)
 }
 
+#[must_use]
 pub fn providers() -> Vec<ApiProvider> {
     read_config().providers
 }
 
+#[must_use]
 pub fn provider(id: &str) -> Option<ApiProvider> {
     providers().into_iter().find(|p| p.id == id)
 }
 
 /// A provider as the settings show it: without its key, but saying whether it has one.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderView {
     #[serde(flatten)]
@@ -211,7 +212,13 @@ pub enum KeyChange {
 }
 
 /// Adds or replaces a provider. A new provider gets an id from its name.
-pub fn save(mut provider: ApiProvider, key: KeyChange) -> Result<ProviderView, String> {
+///
+/// # Errors
+///
+/// Returns an error when the name is empty, when the base URL does not start with `http://` or
+/// `https://`, when the logo is not an image under 256 KB, or when the key or the config file
+/// cannot be saved.
+pub fn save(mut provider: ApiProvider, key: KeyChange) -> Result<ProviderView, Error> {
     provider.name = provider.name.trim().to_string();
     provider.base_url = provider.base_url.trim().trim_end_matches('/').to_string();
     if provider.name.is_empty() {
@@ -282,7 +289,12 @@ pub fn save(mut provider: ApiProvider, key: KeyChange) -> Result<ProviderView, S
 }
 
 /// Points a saved provider at a new base URL, keeping the rest of it.
-pub fn move_to(id: &str, base_url: &str) -> Result<(), String> {
+///
+/// # Errors
+///
+/// Returns an error when the base URL does not start with `http://` or `https://`, when the
+/// provider is no longer saved, or when the config file cannot be written.
+pub fn move_to(id: &str, base_url: &str) -> Result<(), Error> {
     let base_url = base_url.trim().trim_end_matches('/');
     check_url(base_url)?;
     let _guard = WRITE.lock().unwrap_or_else(PoisonError::into_inner);
@@ -296,7 +308,12 @@ pub fn move_to(id: &str, base_url: &str) -> Result<(), String> {
     write_config(&config)
 }
 
-pub fn remove(id: &str) -> Result<(), String> {
+/// Removes the saved API provider `id`.
+///
+/// # Errors
+///
+/// Returns an error when the config file cannot be written.
+pub fn remove(id: &str) -> Result<(), Error> {
     let _guard = WRITE.lock().unwrap_or_else(PoisonError::into_inner);
     let mut config = read_config();
     config.providers.retain(|p| p.id != id);
@@ -324,7 +341,8 @@ fn unique_id(name: &str, taken: &[ApiProvider]) -> String {
     if free(&base) {
         return base;
     }
-    (2..)
+    // One of `taken.len() + 1` numbers is always free.
+    (2..=taken.len() + 2)
         .map(|n| format!("{base}-{n}"))
         .find(|id| free(id))
         .unwrap_or(base)
@@ -341,7 +359,7 @@ fn headers_secret(id: &str) -> String {
 }
 
 /// Saves a secret in the credential store, or in the keys file when there is none.
-pub(crate) fn store_secret(name: &str, value: &str) -> Result<KeyStore, String> {
+pub(crate) fn store_secret(name: &str, value: &str) -> Result<KeyStore, Error> {
     keys().insert(name.to_string(), value.to_string());
     if entry(name).and_then(|e| e.set_password(value)).is_ok() {
         set_file_key(name, None)?;
@@ -357,7 +375,10 @@ pub(crate) fn delete_secret(name: &str) {
         let _ = entry.delete_credential();
     }
     if let Err(e) = set_file_key(name, None) {
-        log::warn!("failed to remove an API secret from {KEYS_FILE}: {e}");
+        log::warn!(
+            file = KEYS_FILE, error:% = e;
+            "failed to remove an API secret from {{file}}: {{error}}"
+        );
     }
 }
 
@@ -392,7 +413,7 @@ pub(crate) fn read_secret(name: &str) -> Option<String> {
 }
 
 /// Accepts `http://` and `https://` base URLs.
-fn check_url(url: &str) -> Result<(), String> {
+fn check_url(url: &str) -> Result<(), Error> {
     if url.starts_with("https://") || url.starts_with("http://") {
         Ok(())
     } else {
@@ -407,7 +428,7 @@ fn read_file_keys() -> HashMap<String, String> {
         .unwrap_or_default()
 }
 
-fn set_file_key(id: &str, key: Option<&str>) -> Result<(), String> {
+fn set_file_key(id: &str, key: Option<&str>) -> Result<(), Error> {
     let path = dir().join(KEYS_FILE);
     let mut file_keys = read_file_keys();
     let changed = match key {
@@ -420,7 +441,7 @@ fn set_file_key(id: &str, key: Option<&str>) -> Result<(), String> {
     if file_keys.is_empty() {
         return std::fs::remove_file(&path).or_else(|e| match e.kind() {
             std::io::ErrorKind::NotFound => Ok(()),
-            _ => Err(e.to_string()),
+            _ => Err(e.into()),
         });
     }
     let text = serde_json::to_string_pretty(&file_keys).map_err(|e| e.to_string())?;
@@ -428,6 +449,7 @@ fn set_file_key(id: &str, key: Option<&str>) -> Result<(), String> {
 }
 
 /// The provider's key: from its environment variable, else where Patchwork stored it.
+#[must_use]
 pub fn key(provider: &ApiProvider) -> Option<String> {
     if let Some(var) = &provider.key_env {
         return std::env::var(var)
@@ -448,6 +470,7 @@ pub fn key(provider: &ApiProvider) -> Option<String> {
 
 /// The key Patchwork stored for a provider, for the settings to show when asked. An environment
 /// variable's value is not returned.
+#[must_use]
 pub fn stored_key(id: &str) -> Option<String> {
     provider(id)
         .filter(|p| p.key_store.is_some())
@@ -455,6 +478,7 @@ pub fn stored_key(id: &str) -> Option<String> {
 }
 
 /// Models of every enabled provider, as `provider/model` ids.
+#[must_use]
 pub fn models() -> Vec<ModelOption> {
     providers()
         .into_iter()
@@ -473,18 +497,20 @@ pub fn models() -> Vec<ModelOption> {
 }
 
 /// The first model of the first enabled provider, which a task with no model uses.
+#[must_use]
 pub fn default_model() -> Option<String> {
     models().into_iter().next().and_then(|m| m.id)
 }
 
 /// Splits `provider/model` into the provider and the model's own id.
+#[must_use]
 pub fn resolve(model: &str) -> Option<(ApiProvider, String)> {
     let (id, model) = model.split_once('/')?;
     Some((provider(id)?, model.to_string()))
 }
 
 /// What the models request needs: either a saved provider, or the settings being edited.
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelsQuery {
     pub base_url: String,
@@ -501,7 +527,12 @@ pub struct ModelsQuery {
 }
 
 /// Asks the endpoint for its models (`GET /models`), which also checks the URL and key.
-pub fn fetch_models(query: ModelsQuery) -> Result<Vec<ApiModel>, String> {
+///
+/// # Errors
+///
+/// Returns an error when the base URL does not start with `http://` or `https://`, when the server
+/// cannot be reached, when it answers with an error status, or when its reply holds no model list.
+pub fn fetch_models(query: ModelsQuery) -> Result<Vec<ApiModel>, Error> {
     let key = query
         .key
         .filter(|k| !k.trim().is_empty())
@@ -524,6 +555,7 @@ pub fn fetch_models(query: ModelsQuery) -> Result<Vec<ApiModel>, String> {
     let base = query.base_url.trim().trim_end_matches('/');
     check_url(base)?;
     let agent: ureq::Agent = ureq::Agent::config_builder()
+        // A cloud model list can be slow to build, but the dialog is waiting on it.
         .timeout_global(Some(Duration::from_secs(20)))
         .http_status_as_error(false)
         .build()
@@ -542,7 +574,7 @@ pub fn fetch_models(query: ModelsQuery) -> Result<Vec<ApiModel>, String> {
     let text = response.body_mut().read_to_string().unwrap_or_default();
     let body: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
     if !status.is_success() {
-        return Err(crate::harness::error_text(status.as_u16(), &body, &text));
+        return Err(crate::harness::error_text(status.as_u16(), &body, &text).into());
     }
     let list = body["data"]
         .as_array()
@@ -551,7 +583,7 @@ pub fn fetch_models(query: ModelsQuery) -> Result<Vec<ApiModel>, String> {
         return Err(format!(
             "{base}/models returned no model list: {} Local servers such as LM Studio serve models under /v1; check the base URL.",
             crate::harness::error_text(0, &body, &text)
-        ));
+        ).into());
     };
     let mut models: Vec<ApiModel> = list
         .iter()
@@ -583,8 +615,7 @@ fn blank() -> ApiProvider {
 
 /// The live health of a saved provider's endpoint, probed on demand so Settings → Providers can
 /// show whether a local server is answering and which models it serves right now.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderHealth {
     /// The endpoint answered its model list.
@@ -599,10 +630,17 @@ pub struct ProviderHealth {
     pub images: HashMap<String, bool>,
 }
 
+/// Checks a saved provider's endpoint and reports its health and latency.
+///
 /// Probes a saved provider's endpoint (`GET /models`) with its stored key and headers, timing the
 /// round-trip. A failure is reported in `error`, not as an `Err`, so one unreachable server does
 /// not read as a broken request.
-pub fn probe(id: &str) -> Result<ProviderHealth, String> {
+///
+/// # Errors
+///
+/// Returns an error when the provider is no longer saved; an unreachable server is reported in the
+/// returned health instead.
+pub fn probe(id: &str) -> Result<ProviderHealth, Error> {
     let provider = provider(id).ok_or("That provider is no longer saved")?;
     let provider = with_headers(provider);
     let query = ModelsQuery {
@@ -640,15 +678,14 @@ pub fn probe(id: &str) -> Result<ProviderHealth, String> {
             reachable: false,
             latency_ms: None,
             served_models: Vec::new(),
-            error: Some(error),
+            error: Some(error.to_string()),
             images: HashMap::new(),
         }),
     }
 }
 
 /// A local model server found on this machine, offered to prefill the add-server form.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveredServer {
     /// The engine the port is known for, e.g. `Ollama`.
@@ -670,8 +707,10 @@ const DISCOVERY_CANDIDATES: &[(&str, &str)] = &[
 
 /// Looks for local model servers on well-known ports, sending no key, and returns the ones that
 /// answer their model list. Runs each time Settings → Providers opens.
+#[must_use]
 pub fn discover() -> Vec<DiscoveredServer> {
     let agent: ureq::Agent = ureq::Agent::config_builder()
+        // Only local ports are asked, which answer at once when anything is listening.
         .timeout_global(Some(Duration::from_millis(1500)))
         .http_status_as_error(false)
         .build()
@@ -717,7 +756,7 @@ pub fn discover() -> Vec<DiscoveredServer> {
 
 /// The request line the API bridge reads first: everything a turn needs, key included, so
 /// the key never appears in the bridge's arguments or environment.
-pub fn connection(model: Option<&str>) -> Result<Value, String> {
+pub(crate) fn connection(model: Option<&str>) -> Result<Value, Error> {
     let model = model
         .map(String::from)
         .or_else(default_model)
@@ -725,17 +764,14 @@ pub fn connection(model: Option<&str>) -> Result<Value, String> {
     let (provider, model_id) =
         resolve(&model).ok_or_else(|| format!("No API provider has the model {model}"))?;
     if !provider.enabled {
-        return Err(format!(
-            "{} is turned off in Settings → Providers",
-            provider.name
-        ));
+        return Err(format!("{} is turned off in Settings → Providers", provider.name).into());
     }
     check_url(&provider.base_url)?;
     let provider = with_headers(provider);
     let key = key(&provider);
     if key.is_none() && provider.key_env.is_some() {
         let var = provider.key_env.as_deref().unwrap_or_default();
-        return Err(format!("{var} is not set, so {} has no key", provider.name));
+        return Err(format!("{var} is not set, so {} has no key", provider.name).into());
     }
     let headers: serde_json::Map<String, Value> = provider
         .headers

@@ -1,15 +1,19 @@
 //! The `fetch_url` tool: a page fetched and turned into text.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::io::Read;
 use std::time::Duration;
 
 const MAX_FETCH: usize = 300_000;
 
-pub(super) fn fetch_url(url: &str) -> Result<String, String> {
+pub(super) fn fetch_url(url: &str) -> Result<String, Error> {
     if !(url.starts_with("https://") || url.starts_with("http://")) {
         return Err("Only http and https URLs can be fetched".into());
     }
     let agent: ureq::Agent = ureq::Agent::config_builder()
+        // Long enough for a slow page; the model gets an error past it instead of a stuck tool call.
         .timeout_global(Some(Duration::from_secs(30)))
         .http_status_as_error(false)
         .build()
@@ -38,7 +42,8 @@ pub(super) fn fetch_url(url: &str) -> Result<String, String> {
         return Err(format!(
             "{url} answered {status}\n\n{}",
             text.chars().take(2000).collect::<String>()
-        ));
+        )
+        .into());
     }
     Ok(text)
 }

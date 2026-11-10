@@ -1,11 +1,13 @@
-//! Timestamp helpers. Agent CLIs record times as RFC 3339 strings.
+//! Timestamps and ids for what Patchwork records. Agent CLIs record times as RFC 3339 strings.
+
+// Rust guideline compliant 2026-10-09
 
 /// The time now, in epoch milliseconds.
+#[must_use]
 pub fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
+        .map_or(0, |d| d.as_millis() as u64)
 }
 
 /// Parses an RFC 3339 timestamp such as `2026-10-20T00:49:59.687+00:00` into epoch milliseconds.
@@ -48,9 +50,9 @@ fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
 pub fn format_rfc3339_ms(ms: u64) -> String {
     let (secs, ms) = ((ms / 1000) as i64, ms % 1000);
     let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
-    let (y, m, d) = civil_from_days(days);
-    let (h, mi, s) = (rem / 3600, rem % 3600 / 60, rem % 60);
-    format!("{y:04}-{m:02}-{d:02}T{h:02}:{mi:02}:{s:02}.{ms:03}Z")
+    let (year, month, day) = civil_from_days(days);
+    let (hour, minute, second) = (rem / 3600, rem % 3600 / 60, rem % 60);
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{ms:03}Z")
 }
 
 /// The proleptic Gregorian date `days` after 1970-01-01, the inverse of `days_from_civil`.
@@ -64,6 +66,11 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
     let d = doy - (153 * mp + 2) / 5 + 1;
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     (yoe + era * 400 + i64::from(m <= 2), m, d)
+}
+/// An id for a record Patchwork creates.
+#[must_use]
+pub fn new_id() -> String {
+    uuid::Uuid::new_v4().to_string()
 }
 
 #[cfg(test)]

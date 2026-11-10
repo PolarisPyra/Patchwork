@@ -1,5 +1,7 @@
 //! Git reads and writes for a project folder. All functions are blocking.
 
+// Rust guideline compliant 2026-10-09
+
 use crate::Error;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -29,6 +31,10 @@ fn git_output(root: &str, args: &[&str]) -> std::io::Result<Output> {
         .output()
 }
 
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "an adapter for `map_err`, which passes the error by value"
+)]
 fn git_failed(e: std::io::Error) -> Error {
     Error::Git(format!("Failed to run git: {e}"))
 }
@@ -59,6 +65,7 @@ pub(super) fn has_head(root: &str) -> bool {
     git_succeeds(root, &["rev-parse", "--verify", "-q", "HEAD"])
 }
 
+#[must_use]
 pub fn git_branch(root: &str) -> Option<String> {
     git(root, &["rev-parse", "--abbrev-ref", "HEAD"])
         .ok()
@@ -121,6 +128,10 @@ fn line_count(path: &Path) -> u32 {
 fn count_lines(path: &Path) -> u32 {
     match std::fs::read(path) {
         Ok(bytes) if !bytes.contains(&0) => {
+            #[expect(
+                clippy::naive_bytecount,
+                reason = "counted once per changed file, not worth a dependency"
+            )]
             let newlines = bytes.iter().filter(|&&b| b == b'\n').count();
             let partial_last = bytes.last().is_some_and(|&b| b != b'\n');
             (newlines + usize::from(partial_last)) as u32
@@ -134,6 +145,10 @@ const MAX_LISTED_FILES: usize = 5000;
 
 /// Files git knows about: tracked files and untracked ones that are not ignored. A folder
 /// that is not a git repository has none.
+///
+/// # Errors
+///
+/// Returns an error when `git ls-files` fails.
 pub fn list_files(root: &str) -> Result<Vec<String>, Error> {
     if !git_succeeds(root, &["rev-parse", "--is-inside-work-tree"]) {
         return Ok(vec![]);
@@ -158,6 +173,11 @@ pub fn list_files(root: &str) -> Result<Vec<String>, Error> {
 
 /// The project's uncommitted changes with their line counts: `git status`, plus one
 /// `git diff HEAD` for the counts when a tracked file changed.
+///
+/// # Errors
+///
+/// Returns an error when `git` cannot be run for a reason other than being absent, or when `git
+/// status` or `git diff` fails in a repository.
 pub fn git_changes(root: &str) -> Result<Vec<FileChange>, Error> {
     let out = match git_output(
         root,
@@ -211,7 +231,7 @@ pub fn git_changes(root: &str) -> Result<Vec<FileChange>, Error> {
         if x == 'R' || x == 'C' {
             entries.next();
         }
-        let code = if x != ' ' { x } else { y };
+        let code = if x == ' ' { y } else { x };
         // Both sides changed it in a merge, rebase, or cherry-pick, and git left it to resolve.
         let unmerged = x == 'U' || y == 'U' || (x == 'A' && y == 'A') || (x == 'D' && y == 'D');
         let status = match code {
@@ -239,6 +259,11 @@ pub fn git_changes(root: &str) -> Result<Vec<FileChange>, Error> {
     Ok(changes)
 }
 
+/// The diff of `rel` against the last commit, or all of it when untracked.
+///
+/// # Errors
+///
+/// Returns an error when `git` fails to run or to diff the file.
 pub fn git_file_diff(root: &str, rel: &str) -> Result<String, Error> {
     if is_untracked(root, rel) {
         let out = git_raw(root, &["diff", "--no-index", "--", "/dev/null", rel])?;
@@ -257,10 +282,21 @@ pub fn git_file_diff(root: &str, rel: &str) -> Result<String, Error> {
     Ok(git(root, &["diff", "--cached", "--", rel])? + &git(root, &["diff", "--", rel])?)
 }
 
+/// Stages the changes to `rel`.
+///
+/// # Errors
+///
+/// Returns an error when `git add` fails for the path.
 pub fn accept_file(root: &str, rel: &str) -> Result<(), Error> {
     git(root, &["add", "--", rel]).map(|_| ())
 }
 
+/// Throws away the changes to `rel`, deleting it when git does not track it.
+///
+/// # Errors
+///
+/// Returns an error when the path is outside the project, `git` cannot restore or remove it, or the
+/// file cannot be deleted.
 pub fn revert_file(root: &str, rel: &str) -> Result<(), Error> {
     if is_untracked(root, rel) {
         return std::fs::remove_file(resolve_inside(root, rel)?).map_err(Error::from);
@@ -299,7 +335,7 @@ fn push_remote(root: &str) -> Option<String> {
         .iter()
         .find(|&&r| r == "origin")
         .or(remotes.first())
-        .map(|r| r.to_string())
+        .map(std::string::ToString::to_string)
 }
 
 /// The branch pull requests go into: the remote's HEAD, else `main` or `master`.
@@ -354,6 +390,7 @@ fn rev_count(root: &str, args: &[&str]) -> u32 {
 
 /// Where the branch stands against its remote. Asks `gh` for an open pull request only on a
 /// pushed branch other than the default one, since that call goes over the network.
+#[must_use]
 pub fn git_sync_state(root: &str) -> GitSyncState {
     let Some(branch) = git_branch(root).filter(|b| b != "HEAD") else {
         return GitSyncState::default();
@@ -483,7 +520,7 @@ fn open_pull_request(root: &str) -> Option<PullRequest> {
 
 /// Stages every change, untracked files included, for a commit of everything. Refused while a
 /// file is still in conflict, since staging it would commit its conflict markers.
-pub fn stage_all(root: &str) -> Result<(), Error> {
+pub(crate) fn stage_all(root: &str) -> Result<(), Error> {
     if !git(root, &["diff", "--name-only", "--diff-filter=U"])?
         .trim()
         .is_empty()
@@ -505,7 +542,7 @@ pub(crate) fn truncated(text: &str, max: usize) -> String {
 
 /// What a commit message is written from: the branch, the staged files and their patch, cut to
 /// fit one command line on every system.
-pub fn staged_summary(root: &str) -> Result<String, Error> {
+pub(crate) fn staged_summary(root: &str) -> Result<String, Error> {
     let files = git(root, &["diff", "--cached", "--name-status"])?;
     if files.trim().is_empty() {
         return Err(Error::Message("Nothing to commit".into()));
@@ -530,6 +567,11 @@ pub fn staged_summary(root: &str) -> Result<String, Error> {
 
 /// Commits what is staged with `message`, running the repository's hooks, and returns the new
 /// commit's hash. A hook that refuses it is quoted, from both of its outputs.
+///
+/// # Errors
+///
+/// Returns an error when nothing is staged, `git` cannot run, or `git commit` fails, for example
+/// when a hook refuses the commit.
 pub fn commit(root: &str, message: &str) -> Result<String, Error> {
     if git_succeeds(root, &["diff", "--cached", "--quiet"]) {
         return Err(Error::Message("Nothing to commit".into()));
@@ -549,6 +591,11 @@ pub fn commit(root: &str, message: &str) -> Result<String, Error> {
 
 /// Pushes the branch. Its first push sets the upstream on `origin`, or the first remote.
 /// Returns where it went, such as `origin/main`.
+///
+/// # Errors
+///
+/// Returns an error when no branch is checked out, the repository has no remote to push to, or `git
+/// push` fails.
 pub fn push(root: &str) -> Result<String, Error> {
     let branch = git_branch(root)
         .filter(|b| b != "HEAD")
@@ -567,7 +614,7 @@ pub fn push(root: &str) -> Result<String, Error> {
 
 /// What pull request text is written from: the branches, the commits since the default branch,
 /// and their diff, cut to fit one command line on every system. Also returns the base.
-pub fn branch_summary(root: &str) -> Result<(String, String), Error> {
+pub(crate) fn branch_summary(root: &str) -> Result<(String, String), Error> {
     let branch = git_branch(root).unwrap_or_default();
     let remote = push_remote(root);
     let base = default_branch(root, remote.as_deref()).ok_or_else(|| {
@@ -608,7 +655,7 @@ pub fn branch_summary(root: &str) -> Result<(String, String), Error> {
 
 /// Opens a pull request for the pushed branch into `base` with `gh`, and returns it. Without a
 /// `title`, gh fills the title and body in from the commits. An open one is returned as it is.
-pub fn create_pull_request(
+pub(crate) fn create_pull_request(
     root: &str,
     base: &str,
     text: Option<(&str, &str)>,
@@ -670,6 +717,10 @@ fn parse_refs(decoration: &str) -> Vec<GitRef> {
 
 /// Up to `limit` commits after the first `skip`, newest first in graph order: the checked-out
 /// branch and its upstream. A folder without commits has none.
+///
+/// # Errors
+///
+/// Returns an error when `git log`, `git remote`, or `git rev-list` fails.
 pub fn git_log(root: &str, skip: usize, limit: usize) -> Result<Vec<GitCommit>, Error> {
     if !has_head(root) {
         return Ok(vec![]);

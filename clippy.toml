@@ -1,0 +1,5 @@
+# Product and platform names that read as code to `doc_markdown` but are prose in the docs.
+doc-valid-idents = [
+    "AppImage", "CachyOS", "DeepSeek", "FSEvents", "GStreamer", "GrowthBook", "KWin", "OpenAI",
+    "OpenCode", "OpenRouter", "RandR", "TextMate", "..",
+]

@@ -1,5 +1,8 @@
 //! One turn: what Patchwork sends to start it, the loop that runs it, and the lines it writes.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use super::prompt::system_prompt;
 
 use std::collections::HashMap;
@@ -114,6 +117,7 @@ pub(super) struct ImageIn {
 }
 
 /// Runs the agent; the process exits with what this returns.
+#[must_use]
 pub fn run() -> i32 {
     let mut first = String::new();
     let mut stdin = BufReader::new(std::io::stdin());
@@ -171,6 +175,10 @@ pub(super) struct Agent {
     /// Replies stream to Patchwork unless set, as while summarizing on the agent's own.
     pub(super) quiet: bool,
     /// The model's context window as the endpoint reports it; None until asked, once a turn.
+    #[expect(
+        clippy::option_option,
+        reason = "None until asked, then the answer, which may be none"
+    )]
     pub(super) model_window: Option<Option<u64>>,
     pub(super) input: Receiver<Value>,
     /// Steering messages, and `/compact` requests, that came in while the agent was busy.
@@ -188,7 +196,7 @@ pub(super) struct Agent {
     /// write over a file that changed since is refused.
     pub(super) seen: HashMap<PathBuf, (SystemTime, u64)>,
     /// Results of the step's reads, run together ahead of the step's calls, by call id.
-    pub(super) prefetched: HashMap<String, Result<String, String>>,
+    pub(super) prefetched: HashMap<String, Result<String, Error>>,
     pub(super) http: ureq::Agent,
     pub(super) tools: Value,
     /// Built once per turn, so every request starts the same and the provider's prompt cache
@@ -210,6 +218,7 @@ impl Agent {
             (Vec::new(), 0)
         };
         let http = ureq::Agent::config_builder()
+            // Generous for a remote endpoint; a slower connect means it is unreachable.
             .timeout_connect(Some(Duration::from_secs(30)))
             // A reasoning model can think for minutes before its first token. The body has no
             // overall limit; `stream` stops a reply whose lines stop coming.
@@ -247,7 +256,7 @@ impl Agent {
         }
     }
 
-    fn turn(&mut self) -> Result<(), String> {
+    fn turn(&mut self) -> Result<(), Error> {
         if self.request.session_id.is_some() && !self.session_file.is_file() {
             emit(&json!({"type": "api.session_lost"}));
             return Ok(());
@@ -402,7 +411,7 @@ impl Agent {
         Path::new(&self.request.sessions_dir).join(&self.session_id)
     }
 
-    pub(super) fn save(&self) -> Result<(), String> {
+    pub(super) fn save(&self) -> Result<(), Error> {
         let text = serde_json::to_string(&json!({
             "model": self.request.model,
             "messages": self.messages,

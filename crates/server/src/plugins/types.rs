@@ -1,14 +1,14 @@
 //! Plugin bundles: their hooks and the apps they name.
 
+// Rust guideline compliant 2026-10-09
+
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use crate::provider::AgentKind;
 
 /// A plugin bundle: a folder with a `plugin.json` or only a `hooks.json`, the hooks it runs, and
 /// the apps it names.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "plugins.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Plugin {
     /// The folder name, and what `disabled_plugins` records.
@@ -23,8 +23,7 @@ pub struct Plugin {
 }
 
 /// One handler a plugin runs on an event, such as `stop` or `preToolUse`.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
-#[ts(export, export_to = "plugins.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginHook {
     pub event: HookEvent,
@@ -37,8 +36,7 @@ pub struct PluginHook {
 
 /// An event a hook runs on, in the order a turn meets them. A manifest's keys match these whatever
 /// their case, so Codex's `Stop` is `stop`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "plugins.ts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum HookEvent {
     UserPromptSubmit,
@@ -56,8 +54,7 @@ pub enum HookEvent {
 }
 
 /// What a hook does. `Command` and `Builtin` run; the rest are listed so the user sees them.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
-#[ts(export, export_to = "plugins.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
@@ -88,8 +85,7 @@ pub enum PluginHookHandler {
 }
 
 /// A connector app a plugin asks for, as Codex lists them.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
-#[ts(export, export_to = "plugins.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginApp {
     pub name: String,

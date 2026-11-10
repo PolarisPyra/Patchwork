@@ -1,6 +1,8 @@
 //! The pseudo-terminal a shell runs in: opening it at the view's size with the shell started in
 //! it, and the threads that carry the shell's output and its exit to the terminal.
 
+// Rust guideline compliant 2026-10-09
+
 use std::io::Read;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -11,7 +13,7 @@ use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system}
 
 use super::Launch;
 use super::session::Term;
-use crate::Res;
+use crate::Error;
 
 /// How long output gathers before it is sent, and the most sent at once.
 const BATCH: Duration = Duration::from_millis(8);
@@ -48,9 +50,8 @@ impl Batch {
     /// of its bytes.
     fn whole(&mut self) -> String {
         let whole = match std::str::from_utf8(&self.pending) {
-            Ok(_) => self.pending.len(),
             Err(e) if e.error_len().is_none() && !self.eof => e.valid_up_to(),
-            Err(_) => self.pending.len(),
+            _ => self.pending.len(),
         };
         let data = String::from_utf8_lossy(&self.pending[..whole]).into_owned();
         self.pending.drain(..whole);
@@ -58,12 +59,11 @@ impl Batch {
     }
 }
 
+/// The pseudo-terminal's controlling side, and the shell running in it.
+type Started = (Box<dyn MasterPty + Send>, Box<dyn Child + Send + Sync>);
+
 /// Opens a pseudo-terminal and starts the shell in it.
-pub(super) fn start(
-    launch: &Launch,
-    cols: u16,
-    rows: u16,
-) -> Res<(Box<dyn MasterPty + Send>, Box<dyn Child + Send + Sync>)> {
+pub(super) fn start(launch: &Launch, cols: u16, rows: u16) -> Result<Started, Error> {
     let pair = native_pty_system()
         .openpty(size(cols, rows))
         .map_err(|e| format!("Could not open a terminal: {e}"))?;
@@ -110,7 +110,7 @@ pub(super) fn pump(
         }
         let _ = output.send(Pump::Eof);
     });
-    let exited = term.clone();
+    let exited = Arc::clone(&term);
     std::thread::spawn(move || {
         let code = child.wait().ok().map(|status| status.exit_code());
         exited.exited.store(true, Ordering::Release);
@@ -126,7 +126,9 @@ pub(super) fn pump(
                 .map(|(_, at)| (at + EXIT_SETTLE).saturating_duration_since(Instant::now()));
             let next = match settle {
                 Some(wait) => rx.recv_timeout(wait),
-                None => rx.recv().map_err(|_| RecvTimeoutError::Disconnected),
+                None => rx
+                    .recv()
+                    .map_err(|_discarded| RecvTimeoutError::Disconnected),
             };
             match next {
                 Ok(message) => batch.take(message),

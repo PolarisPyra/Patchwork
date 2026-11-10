@@ -1,9 +1,12 @@
 //! A server at a URL, spoken to over MCP's streamable HTTP.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Read};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self};
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
@@ -26,6 +29,7 @@ pub(super) struct HttpServer {
 impl HttpServer {
     pub(super) fn new(url: &str, headers: &BTreeMap<String, String>, notices: Notices) -> Self {
         let http = ureq::Agent::config_builder()
+            // Generous for a remote server; a slower connect means it is unreachable.
             .timeout_connect(Some(Duration::from_secs(30)))
             .timeout_global(Some(CALL_TIMEOUT))
             .http_status_as_error(false)
@@ -41,7 +45,7 @@ impl HttpServer {
         }
     }
 
-    pub(super) fn post(&self, message: &Value) -> Result<ureq::http::Response<ureq::Body>, String> {
+    pub(super) fn post(&self, message: &Value) -> Result<ureq::http::Response<ureq::Body>, Error> {
         let mut request = self
             .http
             .post(&*self.url)
@@ -84,7 +88,7 @@ impl HttpServer {
     }
 
     /// Sends a request; the answer comes as JSON, or as the matching event of an SSE stream.
-    fn request(&self, id: u64, message: &Value) -> Result<Value, String> {
+    fn request(&self, id: u64, message: &Value) -> Result<Value, Error> {
         let mut response = self.post(message)?;
         let status = response.status().as_u16();
         // A server answers 404 to a session it has ended; a new one starts on the next call.
@@ -108,7 +112,8 @@ impl HttpServer {
             return Err(format!(
                 "The MCP server answered {status}: {}.{hint}",
                 text.trim().chars().take(300).collect::<String>()
-            ));
+            )
+            .into());
         }
         let sse = response
             .headers()
@@ -120,7 +125,7 @@ impl HttpServer {
             let mut text = String::new();
             body.read_to_string(&mut text).map_err(|e| e.to_string())?;
             return serde_json::from_str(&text)
-                .map_err(|e| format!("The MCP server sent bad JSON: {e}"));
+                .map_err(|e| format!("The MCP server sent bad JSON: {e}").into());
         }
         let mut data = String::new();
         for line in BufReader::new(body).lines() {

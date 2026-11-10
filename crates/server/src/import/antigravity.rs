@@ -2,6 +2,8 @@
 //! versions wrote one `.json` document). `~/.gemini/projects.json` maps each
 //! project directory to its folder name under `tmp/`.
 
+// Rust guideline compliant 2026-10-09
+
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -112,7 +114,7 @@ fn push_record(messages: &mut Vec<SessionMessage>, record: &Value, fallback_at: 
         .as_str()
         .and_then(parse_rfc3339_ms)
         .unwrap_or(fallback_at);
-    push_merged(messages, role, content_text(&record["content"]), at);
+    push_merged(messages, role, &content_text(&record["content"]), at);
 }
 
 fn session(meta: &Value, cwd: &str, messages: Vec<SessionMessage>) -> Option<Session> {

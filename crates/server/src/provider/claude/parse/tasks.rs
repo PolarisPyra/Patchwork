@@ -1,5 +1,7 @@
 //! Claude Code's background tasks and subagents: their status, and a subagent's own frames read for its thread.
 
+// Rust guideline compliant 2026-10-09
+
 use serde_json::Value;
 use crate::orchestration::AgentEvent;
 use crate::system::now_ms;

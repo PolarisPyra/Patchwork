@@ -1,6 +1,6 @@
 # Agent instructions
 
-Rules for coding agents working in the Rust code in this repo (`crates/server` and `apps/desktop/src-tauri`).
+Rules for coding agents working in the Rust code in this repo (`crates/server` and `crates/desktop`).
 
 ## Scratch files
 
@@ -43,13 +43,43 @@ Rules for coding agents working in the Rust code in this repo (`crates/server` a
 
 ## State machines
 
-This holds for the whole app, the React frontend included.
+This holds for the whole app, the UI included.
 
 - **NEVER** write an implicit state machine: state spread across booleans, optionals, refs, or maps that only make sense in some combinations, so a contradictory combination (sending and idle, stopped and running, queued and sent) can exist.
 - **MUST** name the states: one enum (a tagged union in TypeScript) whose variants carry the data each state needs, so a state that should not exist cannot be written.
-- **MUST** move between states in one step. State read and written under different locks, or in different React updates, changes together under one lock or in one update, and a check followed by an act happens in the same critical section.
+- **MUST** move between states in one step. State read and written under different locks, or in different UI updates, changes together under one lock or in one update, and a check followed by an act happens in the same critical section.
 - **MUST** derive what can be derived instead of storing a second copy that can drift, and key per-item state (per chat, per thread, per request) by its item rather than sharing one flag.
 - **MUST** give every state an exit: what a state waits on can fail, time out, or be stopped, so no state is left that nothing ends.
+
+## Modules
+
+`mod.rs` is a folder's entry point, like `index.js` in Node or `__init__.py` in Python: it registers the folder's files as submodules and chooses what the rest of the crate sees. It never holds code.
+
+```text
+src/
+├── main.rs        mod crypto;
+└── crypto/
+    ├── mod.rs     the index: docs, `mod` and `use` lines only
+    ├── encode.rs
+    └── decode.rs
+```
+
+```rust
+// src/crypto/mod.rs
+//! Encoding and decoding.
+
+mod decode;
+mod encode;
+
+pub use decode::decode;
+pub use encode::encode;
+```
+
+- **MUST** keep `mod.rs` to `//!` docs, `mod` declarations (with `#[cfg(test)]` on `mod tests;`), and `use`/`pub use` lines. **NEVER** put a function, type, const, static, macro, `impl`, or an inline `mod x { … }` block in it.
+- **MUST** put code that the whole folder shares in a named sibling file that owns its concern (`state.rs`, `types.rs`, `config.rs`), and have `mod.rs` re-export it.
+- **MUST** give a sub-folder its own `mod.rs` instead of declaring its files in the parent.
+- **MUST** keep the top of a crate's `src/` to `main.rs` or `lib.rs` and folders; shared code goes in a folder such as `ui/`.
+- **MUST** have sibling files import each other by path (`use super::state::Composer;`) rather than `use super::*`.
 
 ## Imports and dependencies
 

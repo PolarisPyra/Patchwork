@@ -1,390 +1,189 @@
 name: Release
 
-# Runs after each push to main that passes the CI workflow. While a commit since the last release
-# has a Changelog: paragraph for users, it keeps one "Release vYY.M.N" pull request up to date: the
-# next version and its notes, one commit on top of the commit the checks passed on. Merging that
-# pull request with a merge commit releases it: the merge's own push starts a run that tags it,
-# without waiting for the checks, then builds the Linux AppImage, the Windows installer (on Linux),
-# and the macOS (Apple silicon) disk image and app bundle,
-# and publishes them as the GitHub release with the tag's notes and the updater's latest.json,
-# then points the website at the new release, deploys it, and announces it on Discord. A
-# tag pushed by
-# `scripts/release.sh` is built and published the same way. scripts/release.sh does the work, and
-# docs/release.md explains it.
+# A pushed tag vX.Y.Z builds the Linux AppImage (scripts/build.sh), the Windows exe and the macOS
+# (Apple silicon) disk image, and publishes them as the GitHub release with CHANGELOG.md's section
+# for X.Y.Z as its notes, beside the latest.json the app's update check reads. docs/release.md
+# explains how to cut one.
 #
-# A push that fails the checks changes nothing; the next push that passes brings the pull request
-# up to date.
+# Run it by hand (Actions → Release → Run workflow) to build all three without publishing.
 #
-# Run it by hand (Actions → Release → Run workflow) to build every platform without publishing
-# anything, to try a change to the build before releasing.
-#
-# A run on main also saves the dependency caches, which a tag's run can restore: without them, the
-# macOS build alone takes over six minutes.
-#
-# Actions are pinned to commits, so a moved tag can't change what runs next to the secrets. The
-# comment after each names the version it was.
+# Actions are pinned to commits; the comment after each names the version it was.
 
 on:
-  # A tag, or the merge of the release pull request, which always changes the version in
-  # package.json. The merge does not wait for the checks: the commit it releases is the release
-  # pull request's, the commit the checks passed on with only the version and notes on top.
   push:
-    tags:
-      - "v*"
-    branches: [main]
-    paths: [package.json]
-  # Each run of the CI workflow on main. Only a push that passed goes on; see the plan job.
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Keyed on the event too, so the run after the checks that updates the release pull request does
-# not wait behind a release that is building.
-concurrency:
-  group: release-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: false
-
 env:
-  # Pinned: a cache is only reused by the same compiler, and the CI workflow checks with this one.
-  # Raising it rebuilds the caches on the next run by hand from main.
   RUST_TOOLCHAIN: "1.99.0"
 
 jobs:
-  # Whether a release pull request was just merged, and as which version. A CI run started by hand,
-  # or one that failed or was cancelled for a newer push, changes nothing. A push to main goes on
-  # only for the merge of the release pull request; `scripts/release.sh bump` releases by its tag.
-  plan:
-    if: >-
-      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push'
-      && github.event.workflow_run.conclusion == 'success')
-      || (github.event_name == 'push' && github.ref == 'refs/heads/main'
-      && startsWith(github.event.head_commit.message, 'Merge pull request')
-      && contains(github.event.head_commit.message, format('from {0}/release', github.repository_owner)))
+  # Fails before anything builds when the tag does not match the app's version or the changelog
+  # has no notes for it.
+  check:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    outputs:
-      version: ${{ steps.plan.outputs.version }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-          fetch-depth: 0
 
-      - name: Look for a merged release
-        id: plan
-        run: scripts/release.sh ci-plan
-
-  # Tags the merged release. A tag pushed with the workflow's token starts no second run, so this
-  # run builds it.
-  cut:
-    needs: plan
-    if: needs.plan.outputs.version != ''
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: write
-    outputs:
-      tag: ${{ steps.cut.outputs.tag }}
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-          fetch-depth: 0
-
-      - name: Tag ${{ needs.plan.outputs.version }}
-        id: cut
-        env:
-          VERSION: ${{ needs.plan.outputs.version }}
-        # An annotated tag records who made it.
+      - name: Check the version and notes
+        if: github.ref_type == 'tag'
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          scripts/release.sh ci-tag "$VERSION"
+          version="${GITHUB_REF_NAME#v}"
+          app=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          [ "$version" = "$app" ] || { echo "::error::$GITHUB_REF_NAME, but Cargo.toml says $app"; exit 1; }
+          grep -q "^## \[$version\]" CHANGELOG.md \
+            || { echo "::error::CHANGELOG.md has no section for $version"; exit 1; }
 
-  # Opens, updates, or closes the release pull request, only after the checks passed. After a merge
-  # it runs once the tag is up, so commits pushed before the merge that the release left out get a
-  # pull request of their own.
-  pr:
-    needs: [plan, cut]
-    if: >-
-      !cancelled() && github.event_name == 'workflow_run' && needs.plan.result == 'success'
-      && needs.cut.result != 'failure'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          fetch-depth: 0
-
-      - name: Update the release pull request
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          scripts/release.sh ci-pr
-
-  appimage:
-    # Built on the oldest Ubuntu runner still available, so the AppImage links against an older
-    # glibc and runs on newer distributions too.
-    needs: cut
-    # A tag, a release this run tagged, or a build by hand without publishing.
-    if: >-
-      !cancelled() && !failure() && (github.ref_type == 'tag'
-      || github.event_name == 'workflow_dispatch' || needs.cut.outputs.tag != '')
+  linux:
+    needs: check
+    # The oldest Ubuntu runner, so the AppImage links against an older glibc and runs on newer
+    # distributions too.
     runs-on: ubuntu-22.04
     timeout-minutes: 45
-    outputs:
-      assets: ${{ steps.build.outputs.assets }}
     env:
-      # linuxdeploy is itself an AppImage; this lets it run without FUSE.
+      # appimagetool is itself an AppImage; this lets it run without FUSE.
       APPIMAGE_EXTRACT_AND_RUN: 1
-      # The tag being published, or nothing for a build by hand.
-      RELEASE_TAG: ${{ needs.cut.outputs.tag || (github.ref_type == 'tag' && github.ref_name || '') }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ needs.cut.outputs.tag || github.ref }}
 
-      - uses: ./.github/actions/setup
+      - name: Install the Linux packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y -o Acquire::Retries=3 libdbus-1-dev libfontconfig-dev \
+            libfreetype-dev libwayland-dev libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          shared-key: release-linux
-          save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Build
-        id: build
-        run: scripts/release.sh ci-build linux
+      - name: Build the AppImage
+        run: scripts/build.sh
 
-      - name: Upload
-        if: env.RELEASE_TAG != ''
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-linux
-          path: release-files/
-          retention-days: 1
-          compression-level: 0
+          path: target/release/Patchwork_amd64.AppImage
           if-no-files-found: error
 
   windows:
-    # Cross-compiled on Linux with cargo-xwin, which builds it in half the time a Windows runner
-    # takes. Ubuntu 24.04 has the NSIS that Tauri's installer needs.
-    needs: cut
-    if: >-
-      !cancelled() && !failure() && (github.ref_type == 'tag'
-      || github.event_name == 'workflow_dispatch' || needs.cut.outputs.tag != '')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    outputs:
-      assets: ${{ steps.build.outputs.assets }}
-    env:
-      RELEASE_TAG: ${{ needs.cut.outputs.tag || (github.ref_type == 'tag' && github.ref_name || '') }}
-      # cargo-xwin fetches the Windows SDK and C runtime for arm64 as well unless told otherwise.
-      XWIN_ARCH: x86_64
+    needs: check
+    runs-on: windows-2022
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ needs.cut.outputs.tag || github.ref }}
 
-      - uses: ./.github/actions/setup
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
-          windows: "true"
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          shared-key: release-windows
-          save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      # The SDK and C runtime cargo-xwin unpacks. Fetching them from Microsoft took 15 minutes on a
-      # runner; it skips that while its folder is there. Saved only on main, like the Rust cache.
-      - name: Restore the Windows SDK
-        id: xwin
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/cargo-xwin
-          key: xwin-0.23.1-${{ env.XWIN_ARCH }}
+      - name: Build the exe
+        shell: bash
+        run: |
+          cargo build --release -p patchwork
+          cp target/release/patchwork.exe Patchwork_x64.exe
 
-      - name: Build
-        id: build
-        run: scripts/release.sh ci-build windows
-
-      - name: Save the Windows SDK
-        if: github.ref == 'refs/heads/main' && steps.xwin.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/cargo-xwin
-          key: ${{ steps.xwin.outputs.cache-primary-key }}
-
-      - name: Upload
-        if: env.RELEASE_TAG != ''
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-windows
-          path: release-files/
-          retention-days: 1
-          compression-level: 0
+          path: Patchwork_x64.exe
           if-no-files-found: error
 
   macos:
-    # macos-15 runs on Apple silicon, so the build is native arm64. Like the others, it builds only
-    # for a release or a run by hand, and saves its cache only on main.
-    needs: cut
-    if: >-
-      !cancelled() && !failure() && (github.ref_type == 'tag'
-      || github.event_name == 'workflow_dispatch' || needs.cut.outputs.tag != '')
+    needs: check
+    # macos-15 runs on Apple silicon, so the build is native arm64.
     runs-on: macos-15
-    timeout-minutes: 30
-    outputs:
-      assets: ${{ steps.build.outputs.assets }}
-    env:
-      RELEASE_TAG: ${{ needs.cut.outputs.tag || (github.ref_type == 'tag' && github.ref_name || '') }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ needs.cut.outputs.tag || github.ref }}
 
-      - uses: ./.github/actions/setup
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          shared-key: release-macos
-          save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Build
-        id: build
-        run: scripts/release.sh ci-build macos
+      # Patchwork.app holds the binary, its icon made from the logo, and the Info.plist naming
+      # them. It is signed ad hoc, not with a developer certificate.
+      - name: Build the disk image
+        run: |
+          cargo build --release -p patchwork
+          version=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          app=dmg/Patchwork.app
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" icon.iconset
+          cp target/release/patchwork "$app/Contents/MacOS/"
+          for size in 16 32 128 256 512; do
+            sips -z $size $size assets/logo.png --out icon.iconset/icon_${size}x${size}.png
+            [ $size = 512 ] || sips -z $((size * 2)) $((size * 2)) assets/logo.png \
+              --out icon.iconset/icon_${size}x${size}@2x.png
+          done
+          iconutil -c icns icon.iconset -o "$app/Contents/Resources/patchwork.icns"
+          cat > "$app/Contents/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key><string>Patchwork</string>
+            <key>CFBundleDisplayName</key><string>Patchwork</string>
+            <key>CFBundleIdentifier</key><string>dev.patchwork.ade</string>
+            <key>CFBundleExecutable</key><string>patchwork</string>
+            <key>CFBundleIconFile</key><string>patchwork</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleVersion</key><string>$version</string>
+            <key>CFBundleShortVersionString</key><string>$version</string>
+            <key>LSMinimumSystemVersion</key><string>11.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict>
+          </plist>
+          EOF
+          codesign --force --deep --sign - "$app"
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname Patchwork -srcfolder dmg -format UDZO Patchwork_aarch64.dmg
 
-      - name: Upload
-        if: env.RELEASE_TAG != ''
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-macos
-          path: release-files/
-          retention-days: 1
-          compression-level: 0
+          path: Patchwork_aarch64.dmg
           if-no-files-found: error
 
-  # The only job with the signing key or write access. It runs none of the project's dependencies:
-  # it takes each file from its build job's artifact, checks it, signs it with the Tauri CLI the
-  # lockfile pins, checks the signature against the key built into the app, and only then publishes
-  # the GitHub release with the files and latest.json.
-  release:
-    needs: [cut, appimage, windows, macos]
-    if: >-
-      !cancelled() && !failure() && (github.ref_type == 'tag' || needs.cut.outputs.tag != '')
+  publish:
+    needs: [linux, windows, macos]
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
-    env:
-      RELEASE_TAG: ${{ needs.cut.outputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ needs.cut.outputs.tag || github.ref }}
 
-      - name: Install minisign
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y -o Acquire::Retries=3 minisign
-
-      - name: Download the builds
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: release-*
-          path: release-check
+          path: release
           merge-multiple: true
 
-      - name: Check, sign, and publish the GitHub release
+      # The release stays a draft until every file is up, so it never becomes the latest with
+      # latest.json naming a file that is not there yet.
+      - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          LINUX: ${{ needs.appimage.outputs.assets }}
-          WINDOWS: ${{ needs.windows.outputs.assets }}
-          MACOS: ${{ needs.macos.outputs.assets }}
-        run: scripts/release.sh ci-release
-
-  # Points the website's download links at the release just published, deploys the site to
-  # Cloudflare Pages, and commits the new links to main with "Changelog: none", so the site never
-  # needs a refresh by hand. It runs once latest.json is up, which site/refresh-downloads.mjs reads.
-  # The deploy needs the CLOUDFLARE_API_TOKEN (Account → Cloudflare Pages: Edit) and
-  # CLOUDFLARE_ACCOUNT_ID secrets; without them it only commits. It holds no signing secrets.
-  site:
-    needs: [cut, release]
-    if: ${{ !cancelled() && needs.release.result == 'success' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: write
-    env:
-      RELEASE_TAG: ${{ needs.cut.outputs.tag || github.ref_name }}
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: main
-
-      - name: Point the downloads at ${{ env.RELEASE_TAG }}
-        run: node site/refresh-downloads.mjs
-
-      - name: Deploy to Cloudflare Pages
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::warning::CLOUDFLARE_API_TOKEN is not set, so the website was not deployed."
-            exit 0
-          fi
-          npx --yes wrangler@4.156.2 pages deploy site --project-name patchwork-site \
-            --branch main --commit-dirty=true
-
-      - name: Commit the new links to main
-        run: |
-          git diff --quiet -- site/index.html && exit 0
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -q -m "Point the website's downloads at $RELEASE_TAG" -m "Changelog: none" \
-            -- site/index.html
-          # main can move while the release builds; the links commit goes on top of it.
-          git pull -q --rebase origin main
-          git push origin HEAD:main
-
-  # Announces the published release in the Discord channel named by the DISCORD_RELEASE_WEBHOOK_URL
-  # secret. A trailing /github is dropped, since that suffix makes Discord expect GitHub's payload,
-  # so the release webhook's URL works too. Without the secret it only warns. It holds no signing
-  # secrets.
-  announce:
-    needs: [cut, release]
-    if: ${{ !cancelled() && needs.release.result == 'success' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    env:
-      RELEASE_TAG: ${{ needs.cut.outputs.tag || github.ref_name }}
-    steps:
-      - name: Announce ${{ env.RELEASE_TAG }} on Discord
-        env:
-          DISCORD_RELEASE_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
-        run: |
-          if [ -z "$DISCORD_RELEASE_WEBHOOK_URL" ]; then
-            echo "::warning::DISCORD_RELEASE_WEBHOOK_URL is not set, so the release was not announced."
-            exit 0
-          fi
-          url="https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG"
-          jq -n --arg text "New release: Patchwork $RELEASE_TAG is out. $url" '{content: $text}' \
-            | curl -fsS -H 'Content-Type: application/json' --data-binary @- "${DISCORD_RELEASE_WEBHOOK_URL%/github}" >/dev/null
+          version="${GITHUB_REF_NAME#v}"
+          awk -v head="## [$version]" \
+            'index($0, head) == 1 { on = 1; print; next } on && /^## \[/ { exit } on' \
+            CHANGELOG.md > notes.md
+          cd release
+          jq -n --arg tag "$GITHUB_REF_NAME" --rawfile body ../notes.md \
+            '{tag_name: $tag, body: $body, withdrawn: [], assets: [$ARGS.positional[] | {name: .}]}' \
+            --args Patchwork_amd64.AppImage Patchwork_x64.exe Patchwork_aarch64.dmg > latest.json
+          gh release create "$GITHUB_REF_NAME" --draft --title "Patchwork $GITHUB_REF_NAME" \
+            --notes-file ../notes.md \
+            Patchwork_amd64.AppImage Patchwork_x64.exe Patchwork_aarch64.dmg latest.json
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest

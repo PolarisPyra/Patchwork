@@ -1,13 +1,16 @@
 //! The shell a terminal starts, with its arguments, folder and environment.
 
+// Rust guideline compliant 2026-10-09
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use super::TerminalShell;
-use crate::Res;
+use crate::Error;
 use crate::settings::{DetectLocale, Settings};
 
 /// A shell to start.
+#[derive(Debug)]
 pub struct Launch {
     pub shell: String,
     pub args: Vec<String>,
@@ -32,14 +35,11 @@ const MINIMAL_ENV: [&str; 12] = [
     "SystemRoot",
 ];
 
-/// Variables Patchwork sets on itself, which a shell should not start with.
-const OWN_ENV: [&str; 1] = ["WEBKIT_DISABLE_DMABUF_RENDERER"];
-
 /// The shells offered after the user's own, each where the PATH finds it.
 const SHELL_CANDIDATES: [&str; 6] = ["zsh", "bash", "fish", "pwsh", "powershell", "cmd"];
 
 /// The user's shell: SHELL, else the account's login shell, else `/bin/sh`; on Windows, the
-/// ComSpec, which is cmd.
+/// `ComSpec`, which is cmd.
 fn default_shell() -> String {
     if cfg!(windows) {
         return std::env::var("ComSpec")
@@ -63,6 +63,7 @@ fn find_shell(shell: &str) -> Option<String> {
 
 /// The shells a terminal can start: the user's first, then those of [`SHELL_CANDIDATES`] that
 /// are installed, each kind once, so `/usr/bin/bash` is not listed again beside `/bin/bash`.
+#[must_use]
 pub fn shells() -> Vec<TerminalShell> {
     let mut found: Vec<TerminalShell> = Vec::new();
     let default = find_shell(&default_shell());
@@ -87,13 +88,23 @@ pub fn shells() -> Vec<TerminalShell> {
 pub(super) fn file_name(path: &str) -> String {
     Path::new(path)
         .file_name()
-        .map_or(path.to_string(), |n| n.to_string_lossy().into_owned())
+        .map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned())
 }
 
+/// Builds the shell launch for a terminal in `workspace`.
+///
 /// The shell for a terminal in `workspace`, the project folder when there is one: `shell`, else
 /// the user's, interactive, so its startup files and completion are its own. A shell that is not
 /// there is an error rather than another shell.
-pub fn launch(settings: &Settings, workspace: Option<&Path>, shell: Option<&str>) -> Res<Launch> {
+///
+/// # Errors
+///
+/// Returns an error when the chosen shell is not installed.
+pub fn launch(
+    settings: &Settings,
+    workspace: Option<&Path>,
+    shell: Option<&str>,
+) -> Result<Launch, Error> {
     let terminal = &settings.terminal;
     let wanted = shell.map_or_else(default_shell, str::to_string);
     let shell = find_shell(&wanted).ok_or_else(|| format!("{wanted} is not installed"))?;
@@ -111,7 +122,6 @@ pub fn launch(settings: &Settings, workspace: Option<&Path>, shell: Option<&str>
         .filter(|(key, _)| {
             terminal.inherit_env || cfg!(windows) || MINIMAL_ENV.contains(&key.as_str())
         })
-        .filter(|(key, _)| !OWN_ENV.contains(&key.as_str()))
         .collect();
 
     // The settings' variables, resolved against that environment; null removes one.
@@ -158,9 +168,7 @@ pub fn launch(settings: &Settings, workspace: Option<&Path>, shell: Option<&str>
     }
 
     let home = crate::system::fs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
-    let base = workspace
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| home.clone());
+    let base = workspace.map_or_else(|| home.clone(), Path::to_path_buf);
     let cwd = terminal
         .cwd
         .as_deref()

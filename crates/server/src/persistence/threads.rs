@@ -1,5 +1,7 @@
 //! The `threads`, `messages` and `folders` tables.
 
+// Rust guideline compliant 2026-10-09
+
 use std::collections::HashMap;
 
 use rusqlite::{Connection, Transaction, params};

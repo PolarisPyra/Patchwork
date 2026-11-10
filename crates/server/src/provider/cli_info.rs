@@ -1,6 +1,9 @@
 //! Read-only commands of an installed agent CLI, for the Settings panes. The panes ask each
 //! binary for its own diagnostics, so the output is what the CLI itself says rather than a copy.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::path::Path;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
@@ -25,6 +28,7 @@ pub enum InfoCommand {
 impl InfoCommand {
     /// The command a Settings pane names: `doctor`, `mcp`, `plugins`, `paths`, `agents` or
     /// `changelog`.
+    #[must_use]
     pub fn named(name: &str) -> Option<Self> {
         match name {
             "doctor" => Some(InfoCommand::Doctor),
@@ -51,11 +55,15 @@ impl InfoCommand {
 
 /// Fails unless `kind` is one of the commands the CLI `name` has. A CLI given a subcommand it
 /// lacks may take it as a prompt and start a turn, so each CLI names the ones it has.
-pub fn check(name: &str, kind: InfoCommand, offered: &[InfoCommand]) -> Result<(), String> {
+///
+/// # Errors
+///
+/// Returns an error when `offered` does not contain `kind`.
+pub fn check(name: &str, kind: InfoCommand, offered: &[InfoCommand]) -> Result<(), Error> {
     if offered.contains(&kind) {
         Ok(())
     } else {
-        Err(format!("{name} has no `{}` command", kind.args().join(" ")))
+        Err(format!("{name} has no `{}` command", kind.args().join(" ")).into())
     }
 }
 
@@ -74,7 +82,12 @@ const MAX_OUTPUT: usize = 60_000;
 /// larger than a pipe holds, and a process whose pipe fills up stops, so waiting for it to exit
 /// before reading anything would hang on exactly the commands worth reading: the model catalog is
 /// nearly 700 KB.
-pub fn run(binary: &Path, args: &[&str]) -> Result<String, String> {
+///
+/// # Errors
+///
+/// Returns an error when the program cannot be started, runs past the time limit, or exits with a
+/// failure and prints nothing.
+pub fn run(binary: &Path, args: &[&str]) -> Result<String, Error> {
     let mut child = crate::system::host_command(binary)
         .args(args)
         .stdin(Stdio::null())
@@ -91,14 +104,13 @@ pub fn run(binary: &Path, args: &[&str]) -> Result<String, String> {
             Ok(None) if started.elapsed() > TIMEOUT => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(format!(
-                    "{} {} took too long",
-                    binary.display(),
-                    args.join(" ")
-                ));
+                return Err(
+                    format!("{} {} took too long", binary.display(), args.join(" ")).into(),
+                );
             }
+            // Short, so a quick command returns at once instead of after a fixed wait.
             Ok(None) => std::thread::sleep(Duration::from_millis(20)),
-            Err(e) => return Err(format!("Could not run {}: {e}", binary.display())),
+            Err(e) => return Err(format!("Could not run {}: {e}", binary.display()).into()),
         }
     };
     // The threads end when the process closes its pipes, which it has.
@@ -114,7 +126,7 @@ pub fn run(binary: &Path, args: &[&str]) -> Result<String, String> {
         stdout
     };
     if !status.success() && text.trim().is_empty() {
-        return Err(format!("{} {} failed", binary.display(), args.join(" ")));
+        return Err(format!("{} {} failed", binary.display(), args.join(" ")).into());
     }
     Ok(text)
 }
@@ -140,7 +152,12 @@ fn drain<R: std::io::Read + Send + 'static>(mut pipe: R) -> std::thread::JoinHan
 
 /// Runs one of the read-only diagnostics commands on the CLI at `binary` and returns its output,
 /// trimmed to what a reader wants to see.
-pub fn command(binary: &Path, kind: InfoCommand) -> Result<String, String> {
+///
+/// # Errors
+///
+/// Returns an error when the command cannot be run, times out, or exits with a failure and prints
+/// nothing.
+pub fn command(binary: &Path, kind: InfoCommand) -> Result<String, Error> {
     let text = run(binary, kind.args())?;
     if text.len() <= MAX_OUTPUT {
         return Ok(text);

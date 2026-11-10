@@ -1,64 +1,64 @@
 [package]
 name = "patchwork-server"
-# The app's version is in apps/desktop/src-tauri/tauri.conf.json; releases leave this alone.
-version = "0.0.0"
-license = "MIT"
 description = "Patchwork backend: providers, persistence, usage, and thread import"
-edition = "2024"
-rust-version = "1.90"
-
-[build-dependencies]
-serde_json = "1.0"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
-base64 = "0.22"
-serde_json = "1.0"
-toml = "1.1"
-serde = { version = "1.0", features = ["derive"] }
-log = "0.4"
-uuid = { version = "1", features = ["v4"] }
-which = "7"
-libc = "0.2"
-thiserror = "2"
+base64 = { workspace = true, default-features = true }
+serde_json = { workspace = true, default-features = true }
+toml = { workspace = true, default-features = true }
+serde = { workspace = true, default-features = true, features = ["derive"] }
+log = { workspace = true, default-features = true }
+uuid = { workspace = true, default-features = true, features = ["v4"] }
+which = { workspace = true, default-features = true }
+libc = { workspace = true, default-features = true }
+thiserror = { workspace = true, default-features = true }
 # `alias` on a variant is for reading old saved names, and the bindings don't need it.
-ts-rs = { version = "12", features = ["serde-json-impl", "no-serde-warnings"] }
-rusqlite = { version = "0.37", features = ["bundled"] }
-ureq = { version = "3", features = ["json"] }
+rusqlite = { workspace = true, default-features = true, features = ["bundled"] }
+ureq = { workspace = true, default-features = true, features = ["json"] }
 # API providers: keys in the system credential store, and the agent's file search tools.
-keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
-ignore = "0.4"
+keyring = { workspace = true, default-features = true, features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+ignore = { workspace = true, default-features = true }
 # The integrated terminal's pseudo-terminals, and the screen and modes a window gets back.
-portable-pty = "0.9"
-vt100 = "0.16"
+portable-pty = { workspace = true, default-features = true }
+vt100 = { workspace = true, default-features = true }
 # Watching the open project for changes.
-notify = "8"
-globset = "0.4"
-regex = "1"
+notify = { workspace = true, default-features = true }
+globset = { workspace = true, default-features = true }
+regex = { workspace = true, default-features = true }
 # Debug log folder names and line times in local time.
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
+chrono = { workspace = true, features = ["clock"] }
 # Exporting the debug logs as one file to send with a bug report.
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { workspace = true, features = ["deflate"] }
 # Computer use: a screenshot of the primary monitor, and the pointer and keyboard under it.
-enigo = { version = "0.6" }
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+enigo = { workspace = true, default-features = true }
+image = { workspace = true, features = ["png", "jpeg", "webp"] }
 # Chat background pictures are named after a hash of their bytes, so the same one is kept once.
-sha2 = "0.10"
+sha2 = { workspace = true, default-features = true }
 
 # Screenshots. On Linux they are taken in src/screen.rs with crates the app already builds, since
 # xcap would also build PipeWire, which needs newer headers than the AppImage's build machine has.
 [target.'cfg(not(target_os = "linux"))'.dependencies]
-xcap = { version = "0.9", default-features = false }
+xcap.workspace = true
 
 # The PATH installers write to the registry, which a running app's own PATH never picks up.
 [target.'cfg(windows)'.dependencies]
-winreg = "0.56"
-# The job object a command runs in, which ends everything it started.
-windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Threading"] }
+winreg = { workspace = true, default-features = true }
+# The job object a command runs in, which ends everything it started, and telling running
+# programs that the user's PATH changed.
+windows-sys = { workspace = true, default-features = true, features = ["Win32_Foundation", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-x11rb = { version = "0.13", features = ["randr"] }
-zbus = "5"
-url = "2"
-# Activation tokens from the Wayland compositor, so the windows a program opens come forward.
-wayland-client = { version = "0.31", features = ["system"] }
-wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+x11rb = { workspace = true, default-features = true, features = ["randr"] }
+zbus = { workspace = true, default-features = true }
+url = { workspace = true, default-features = true }
+
+[lints]
+workspace = true

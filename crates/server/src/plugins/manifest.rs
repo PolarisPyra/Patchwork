@@ -1,5 +1,7 @@
 //! Reading a bundle's manifest: its name, the hooks it runs, and the apps it names, Codex's format included.
 
+// Rust guideline compliant 2026-10-09
+
 use std::path::Path;
 use serde_json::Value;
 use super::builtin::BuiltinHook;
@@ -43,10 +45,10 @@ pub(super) fn read_bundle(dir: &Path, enabled: bool) -> Option<Plugin> {
     };
     // Without a name it is called after its folder, `patchwork` reading as "Patchwork".
     let mut folder = id.chars();
-    let named_for_folder = folder
-        .next()
-        .map(|first| first.to_uppercase().chain(folder).collect())
-        .unwrap_or_else(|| "Plugin".into());
+    let named_for_folder = folder.next().map_or_else(
+        || "Plugin".into(),
+        |first| first.to_uppercase().chain(folder).collect(),
+    );
     Some(Plugin {
         name: string("name").unwrap_or(named_for_folder),
         id,

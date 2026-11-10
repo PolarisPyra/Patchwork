@@ -1,3 +1,7 @@
+//! Tests for reading plans from OpenCode's todo tool calls.
+
+// Rust guideline compliant 2026-10-09
+
 use serde_json::{Value, json};
 
 use super::run::tool;

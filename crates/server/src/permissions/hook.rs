@@ -1,9 +1,14 @@
-//! Permission hooks. Codex and Antigravity decide on their own what to ask about, and in some
-//! modes ask about nothing, so before each tool call they run Patchwork's binary as a hook
-//! (`--permission-hook <agent>`). The hook asks the app, over the relay socket the MCP relay
-//! uses, whether the permission rules refuse the call or hold it for the user, and answers the
-//! agent: a refusal with its reason, or nothing, which lets the call go on as the mode decides.
+//! Permission hooks.
+//!
+//! Codex and Antigravity decide on their own what to ask about, and in some modes ask about
+//! nothing, so before each tool call they run Patchwork's binary as a hook (`--permission-hook
+//! <agent>`). The hook asks the app, over the relay socket the MCP relay uses, whether the
+//! permission rules refuse the call or hold it for the user, and answers the agent: a refusal with
+//! its reason, or nothing, which lets the call go on as the mode decides.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
 
@@ -18,10 +23,13 @@ pub const HOOK_ARG: &str = "--permission-hook";
 /// Where the hook finds the relay and the thread it works for.
 const ENV: &str = "PATCHWORK_PERMISSION_HOOK";
 
+/// The environment that tells a permission hook which thread it serves.
+///
 /// Environment that tells the hook which thread it works for, for the agents that run one:
 /// Codex, Claude, and Antigravity. The relay's port and token are copied in: a hook that read
 /// them from the file could reach another copy of Patchwork that shares the state folder and
 /// wrote that file since.
+#[must_use]
 pub fn env(agent: AgentKind, thread_id: &str, root: &str) -> Vec<(&'static str, String)> {
     // The agents that run Patchwork's permission hook.
     if !matches!(
@@ -43,6 +51,7 @@ pub fn env(agent: AgentKind, thread_id: &str, root: &str) -> Vec<(&'static str, 
 }
 
 /// Runs the hook: reads the agent's tool call on stdin and writes its answer to stdout.
+#[must_use]
 pub fn run() -> i32 {
     let mut input = String::new();
     let agent = match std::env::args().nth(2).as_deref() {
@@ -59,19 +68,21 @@ pub fn run() -> i32 {
         _ => antigravity_call(&call),
     };
     let refusal = match request {
-        Some((title, detail, target)) => ask(&title, &detail, target).unwrap_or_else(Some),
+        Some((title, detail, target)) => {
+            ask(&title, &detail, &target).unwrap_or_else(|e| Some(e.to_string()))
+        }
         None => None,
     };
     let answer = crate::provider::hooks::answer(agent, refusal);
     let mut stdout = std::io::stdout();
     let _ = stdout
         .write_all(answer.as_bytes())
-        .and_then(|_| stdout.flush());
+        .and_then(|()| stdout.flush());
     0
 }
 
 /// Asks Patchwork about a call; the answer is why it is refused, or None to let it run.
-fn ask(title: &str, detail: &str, target: Target) -> Result<Option<String>, String> {
+fn ask(title: &str, detail: &str, target: &Target) -> Result<Option<String>, Error> {
     const UNREACHABLE: &str = "Patchwork's permission relay did not answer, so this call was not \
                                checked against its rules";
     let context: Value = match std::env::var(ENV)
@@ -92,9 +103,9 @@ fn ask(title: &str, detail: &str, target: Target) -> Result<Option<String>, Stri
             .and_then(|text| serde_json::from_str::<Value>(&text).ok())
             .ok_or(UNREACHABLE)?,
     };
-    let port =
-        u16::try_from(relay["port"].as_u64().unwrap_or_default()).map_err(|_| UNREACHABLE)?;
-    let mut stream = connect(port).map_err(|_| UNREACHABLE)?;
+    let port = u16::try_from(relay["port"].as_u64().unwrap_or_default())
+        .map_err(|_discarded| UNREACHABLE)?;
+    let mut stream = connect(port).map_err(|_discarded| UNREACHABLE)?;
     let hello = json!({"token": relay["token"], "hook": {
         "thread": context["thread"], "root": context["root"],
         "title": title, "detail": detail, "kind": target.kind, "resources": target.resources,
@@ -103,8 +114,8 @@ fn ask(title: &str, detail: &str, target: Target) -> Result<Option<String>, Stri
     let mut line = String::new();
     BufReader::new(stream)
         .read_line(&mut line)
-        .map_err(|_| UNREACHABLE)?;
-    let answer: Value = serde_json::from_str(&line).map_err(|_| UNREACHABLE)?;
+        .map_err(|_discarded| UNREACHABLE)?;
+    let answer: Value = serde_json::from_str(&line).map_err(|_discarded| UNREACHABLE)?;
     Ok(answer["deny"].as_str().map(String::from))
 }
 
@@ -116,6 +127,7 @@ fn connect(port: u16) -> std::io::Result<std::net::TcpStream> {
         match std::net::TcpStream::connect(("127.0.0.1", port)) {
             Err(e) if attempt == 0 && e.kind() == std::io::ErrorKind::ConnectionRefused => {
                 attempt += 1;
+                // The app may still be binding its port; one short wait and a retry covers that.
                 std::thread::sleep(std::time::Duration::from_millis(150));
             }
             result => return result,
@@ -256,7 +268,7 @@ fn antigravity_call(call: &Value) -> Option<(String, String, Target)> {
             let folder = if tool.contains("file") {
                 Path::new(&path)
                     .parent()
-                    .map_or(path.clone(), |p| p.to_string_lossy().into_owned())
+                    .map_or_else(|| path.clone(), |p| p.to_string_lossy().into_owned())
             } else {
                 path.clone()
             };

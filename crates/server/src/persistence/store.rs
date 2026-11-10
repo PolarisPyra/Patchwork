@@ -3,22 +3,30 @@
 //! touch its row and the messages that actually changed, since a streaming turn updates its
 //! message on every event.
 
-use std::path::PathBuf;
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
+use std::path::Path;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use rusqlite::{Connection, OptionalExtension, params};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 
-use super::{enc, err};
+use super::migrations;
+use super::legacy;
 use super::settings::{load_settings, save_settings};
 use super::threads::{load_folders, load_threads, save_message, save_thread_row, thread_state_keys};
 use crate::projects::Folder;
 use crate::settings::Settings;
 use crate::threads::{MessageStatus, Thread};
 
+#[derive(Debug)]
 pub struct Store {
     inner: Mutex<Inner>,
 }
 
+#[derive(Debug)]
 pub(super) struct Inner {
     pub(super) conn: Connection,
     settings: Settings,
@@ -27,8 +35,14 @@ pub(super) struct Inner {
 }
 
 impl Store {
-    pub fn open(dir: PathBuf) -> Result<Self, String> {
-        let mut conn = super::open(&dir)?;
+    /// Opens the database in `dir`, bringing its schema up to date and loading what it holds.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the data folder or database cannot be created, opened, or migrated,
+    /// or when stored settings, threads, or folders cannot be read or updated.
+    pub fn open(dir: &Path) -> Result<Self, Error> {
+        let mut conn = open(dir)?;
         // A turn that was streaming when the app quit can never finish.
         conn.execute(
             "UPDATE messages SET status = ?1 WHERE status = ?2",
@@ -45,7 +59,7 @@ impl Store {
         // A goal that was being pursued when the app quit is no longer pursued: its agent
         // process ended with the app. It is paused, so it can be resumed rather than shown as active.
         let tx = conn.transaction().map_err(err)?;
-        for t in threads.iter_mut() {
+        for t in &mut threads {
             if let Some(goal) = t
                 .goal
                 .as_mut()
@@ -75,7 +89,13 @@ impl Store {
         self.lock().settings.clone()
     }
 
-    pub fn update_settings<R>(&self, f: impl FnOnce(&mut Settings) -> R) -> Result<R, String> {
+    /// Changes the settings with `f` and saves them, returning what `f` returns.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the database cannot save the settings; the settings in memory stay as
+    /// they were.
+    pub fn update_settings<R>(&self, f: impl FnOnce(&mut Settings) -> R) -> Result<R, Error> {
         let mut inner = self.lock();
         let mut next = inner.settings.clone();
         let r = f(&mut next);
@@ -119,7 +139,7 @@ impl Store {
             .collect()
     }
 
-    pub fn insert_threads(&self, threads: Vec<Thread>) -> Result<(), String> {
+    pub(crate) fn insert_threads(&self, threads: Vec<Thread>) -> Result<(), Error> {
         let mut inner = self.lock();
         let tx = inner.conn.transaction().map_err(err)?;
         for t in &threads {
@@ -134,7 +154,7 @@ impl Store {
     }
 
     /// Atomically remember the goal's dismissal and clear it from storage and memory.
-    pub fn dismiss_goal(&self, id: &str, signature: &str) -> Result<(), String> {
+    pub(crate) fn dismiss_goal(&self, id: &str, signature: &str) -> Result<(), Error> {
         let mut inner = self.lock();
         let index = inner
             .threads
@@ -156,7 +176,7 @@ impl Store {
     }
 
     /// Mutate one thread (no-op if missing) and persist what changed.
-    pub fn update_thread(&self, id: &str, f: impl FnOnce(&mut Thread)) -> Result<(), String> {
+    pub(crate) fn update_thread(&self, id: &str, f: impl FnOnce(&mut Thread)) -> Result<(), Error> {
         let mut inner = self.lock();
         let Some(index) = inner.threads.iter().position(|t| t.id == id) else {
             return Ok(());
@@ -194,12 +214,12 @@ impl Store {
     /// `message_id`, if given. Unlike `update_thread` it copies nothing, so it is for
     /// changes confined to that message and the thread's own fields; removing or
     /// reordering messages goes through `update_thread`.
-    pub fn update_message(
+    pub(crate) fn update_message(
         &self,
         id: &str,
         message_id: Option<&str>,
         f: impl FnOnce(&mut Thread),
-    ) -> Result<(), String> {
+    ) -> Result<(), Error> {
         let mut guard = self.lock();
         let inner = &mut *guard;
         let Some(thread) = inner.threads.iter_mut().find(|t| t.id == id) else {
@@ -234,7 +254,12 @@ impl Store {
             .flatten()
     }
 
-    pub fn set_state(&self, key: &str, value: &str) -> Result<(), String> {
+    /// Stores `value` under `key` in the app state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the database write fails.
+    pub fn set_state(&self, key: &str, value: &str) -> Result<(), Error> {
         self.lock()
             .conn
             .execute(
@@ -247,7 +272,7 @@ impl Store {
     }
 
     /// Forgets a stored value, so `state` answers None for it again.
-    pub fn clear_state(&self, key: &str) -> Result<(), String> {
+    pub(crate) fn clear_state(&self, key: &str) -> Result<(), Error> {
         self.lock()
             .conn
             .execute("DELETE FROM app_state WHERE key = ?1", [key])
@@ -259,7 +284,12 @@ impl Store {
         self.lock().folders.clone()
     }
 
-    pub fn create_folder(&self, folder: Folder) -> Result<(), String> {
+    /// Stores a new folder.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the database cannot insert the folder.
+    pub fn create_folder(&self, folder: Folder) -> Result<(), Error> {
         let mut inner = self.lock();
         inner
             .conn
@@ -274,7 +304,12 @@ impl Store {
         Ok(())
     }
 
-    pub fn rename_folder(&self, id: &str, name: &str) -> Result<(), String> {
+    /// Renames the folder `id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the database cannot update the folder.
+    pub fn rename_folder(&self, id: &str, name: &str) -> Result<(), Error> {
         let mut inner = self.lock();
         inner
             .conn
@@ -290,7 +325,7 @@ impl Store {
     }
 
     /// Removes a folder. Its tasks move to the project's top level.
-    pub fn delete_folder(&self, id: &str) -> Result<(), String> {
+    pub(crate) fn delete_folder(&self, id: &str) -> Result<(), Error> {
         let mut inner = self.lock();
         let tx = inner.conn.transaction().map_err(err)?;
         // Back to the default order at the top level: newest first, as for a new task.
@@ -316,7 +351,11 @@ impl Store {
     /// whole destination list, so a thread that came from elsewhere joins it here.
     /// Archived, pinned and favorite threads are not in `ids`; they keep their slots in the
     /// list, so restoring, unpinning or unfavoriting one puts it back where it was.
-    pub fn reorder_threads(&self, ids: &[String], folder_id: Option<&str>) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the database cannot save the new order.
+    pub fn reorder_threads(&self, ids: &[String], folder_id: Option<&str>) -> Result<(), Error> {
         let mut inner = self.lock();
         // Listed elsewhere in the sidebar, so not among the rows that were dragged.
         let held = |t: &Thread| t.archived_at.is_some() || t.pinned || t.favorite;
@@ -369,7 +408,12 @@ impl Store {
 
     /// Deletes a thread's messages and its agent session, so its next turn starts a new
     /// conversation. The thread itself stays.
-    pub fn clear_thread(&self, id: &str) -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the database cannot delete the chat's messages or reset its session
+    /// and goal.
+    pub fn clear_thread(&self, id: &str) -> Result<(), Error> {
         let mut inner = self.lock();
         let tx = inner.conn.transaction().map_err(err)?;
         tx.execute("DELETE FROM messages WHERE thread_id = ?1", [id])
@@ -388,7 +432,12 @@ impl Store {
         Ok(())
     }
 
-    pub fn delete_thread(&self, id: &str) -> Result<(), String> {
+    /// Deletes the chat and everything stored for it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the database cannot delete the chat or its saved state.
+    pub fn delete_thread(&self, id: &str) -> Result<(), Error> {
         let mut inner = self.lock();
         inner
             .conn
@@ -405,7 +454,7 @@ impl Store {
     }
 
     /// Deletes a project's tasks and folders.
-    pub fn delete_project_threads(&self, project_id: &str) -> Result<(), String> {
+    pub(crate) fn delete_project_threads(&self, project_id: &str) -> Result<(), Error> {
         let mut inner = self.lock();
         inner
             .conn
@@ -433,4 +482,55 @@ impl Store {
         inner.folders.retain(|f| f.project_id != project_id);
         Ok(())
     }
+}
+
+const DB_FILE: &str = "patchwork.db";
+
+/// Opens the database in `dir`, creating it if need be, with the schema up to date. A new
+/// database takes in the settings and threads of the old JSON files, if they are there.
+fn open(dir: &Path) -> Result<Connection, Error> {
+    std::fs::create_dir_all(dir).map_err(err)?;
+    let mut conn = Connection::open(dir.join(DB_FILE)).map_err(err)?;
+    // With WAL, NORMAL syncs at checkpoints instead of every commit. A commit made a 4 ms fsync,
+    // under the store's lock, for each tool event of a streaming reply. The database cannot be
+    // corrupted this way; a power cut or OS crash can lose only the last commits.
+    conn.execute_batch(
+        "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;",
+    )
+    .map_err(err)?;
+    let from = migrations::run(&mut conn)?;
+    if from == 0 {
+        legacy::import_legacy_json(&mut conn, dir)?;
+    }
+    Ok(conn)
+}
+
+pub(super) fn err(e: impl std::fmt::Display) -> String {
+    format!("Database error: {e}")
+}
+
+/// Enums are stored as their serde name, e.g. `"claude"`.
+pub(super) fn enc<T: Serialize>(value: &T) -> String {
+    match serde_json::to_value(value) {
+        Ok(serde_json::Value::String(s)) => s,
+        other => other.map(|v| v.to_string()).unwrap_or_default(),
+    }
+}
+
+pub(super) fn dec<T: DeserializeOwned>(s: String) -> rusqlite::Result<T> {
+    serde_json::from_value(serde_json::Value::String(s)).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+    })
+}
+
+pub(super) fn json<T: Serialize>(value: &T) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| "[]".into())
+}
+
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "takes the column as read, so a row maps with `from_json(r.get(n)?)`"
+)]
+pub(super) fn from_json<T: DeserializeOwned + Default>(s: String) -> T {
+    serde_json::from_str(&s).unwrap_or_default()
 }

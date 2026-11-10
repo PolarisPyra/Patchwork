@@ -1,6 +1,9 @@
 //! Reading images for a model that cannot: the vision model describes them, and the model works
 //! from the description.
 
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -45,7 +48,7 @@ impl Agent {
     }
 
     /// Asks the vision model to describe `images`, with the user's message beside them.
-    fn describe(&self, vision: &Vision, text: &str, images: &[ImageIn]) -> Result<String, String> {
+    fn describe(&self, vision: &Vision, text: &str, images: &[ImageIn]) -> Result<String, Error> {
         let (base_url, api_key, headers, model, provider) = match vision {
             Vision::Cli { agent, model, path } => {
                 return describe_with_cli(*agent, model, path.as_deref(), text, images);
@@ -87,7 +90,7 @@ impl Agent {
         let raw = response.body_mut().read_to_string().unwrap_or_default();
         let parsed: Value = serde_json::from_str(&raw).unwrap_or(Value::Null);
         if !response.status().is_success() {
-            return Err(crate::harness::error_text(status, &parsed, &raw));
+            return Err(crate::harness::error_text(status, &parsed, &raw).into());
         }
         let reply = parsed["choices"][0]["message"]["content"]
             .as_str()
@@ -98,7 +101,7 @@ impl Agent {
             .map_or(reply, |(_, after)| after)
             .trim();
         if reply.is_empty() {
-            return Err(format!("{provider} sent back no description"));
+            return Err(format!("{provider} sent back no description").into());
         }
         Ok(reply.to_string())
     }
@@ -112,7 +115,7 @@ fn describe_with_cli(
     path: Option<&str>,
     text: &str,
     images: &[ImageIn],
-) -> Result<String, String> {
+) -> Result<String, Error> {
     if let Some(path) = path {
         crate::provider::set_agent_paths(&HashMap::from([(agent, path.to_string())]));
     }
@@ -125,7 +128,7 @@ fn describe_with_cli(
 }
 
 /// Writes each image to `dir` as `image-<n>.<type>`, and returns their file names.
-fn save_images(dir: &Path, images: &[ImageIn]) -> Result<Vec<String>, String> {
+fn save_images(dir: &Path, images: &[ImageIn]) -> Result<Vec<String>, Error> {
     images
         .iter()
         .enumerate()
@@ -153,7 +156,7 @@ fn run_cli(
     dir: &Path,
     text: &str,
     files: &[String],
-) -> Result<String, String> {
+) -> Result<String, Error> {
     let message = format!("The user's message:\n{text}");
     match agent {
         AgentKind::Claude => {
@@ -183,7 +186,7 @@ fn run_cli(
             let value: Value = serde_json::from_str(&out.stdout).unwrap_or(Value::Null);
             let reply = value["result"].as_str().unwrap_or_default().trim();
             if !out.success || value["is_error"] == true {
-                return Err(failure("Claude Code", reply, &out.stderr));
+                return Err(failure("Claude Code", reply, &out.stderr).into());
             }
             described(reply, "Claude Code")
         }
@@ -210,7 +213,7 @@ fn run_cli(
             let out = crate::provider::probe_in(agent, &args, dir, CLI_TIMEOUT)
                 .ok_or("Codex did not start, or took longer than 5 minutes")?;
             if !out.success {
-                return Err(failure("Codex", "", &out.stderr));
+                return Err(failure("Codex", "", &out.stderr).into());
             }
             described(
                 std::fs::read_to_string(&answer).unwrap_or_default().trim(),
@@ -221,9 +224,9 @@ fn run_cli(
     }
 }
 
-fn described(reply: &str, cli: &str) -> Result<String, String> {
+fn described(reply: &str, cli: &str) -> Result<String, Error> {
     if reply.is_empty() {
-        return Err(format!("{cli} sent back no description"));
+        return Err(format!("{cli} sent back no description").into());
     }
     Ok(reply.to_string())
 }

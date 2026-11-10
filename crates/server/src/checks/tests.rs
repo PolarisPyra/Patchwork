@@ -1,5 +1,10 @@
+//! Tests for running a project's checks after a turn and reporting what they found.
+
+// Rust guideline compliant 2026-10-09
+
 use super::ops::*;
 use super::*;
+use std::time::Duration;
 use crate::system::now_ms;
 use crate::threads::{CheckStatus, MessageStatus};
 
@@ -33,7 +38,7 @@ fn a_failing_check_names_what_failed() {
     assert_eq!(checks.failures[0].detail, "assert 1 == 2");
     assert!(checks.output.is_some(), "the output is kept for the card");
     assert_eq!(checks.at, 7);
-    std::fs::remove_dir_all(root).ok();
+    let _ = std::fs::remove_dir_all(root);
 }
 
 /// A command that passes says so, and names no failure.
@@ -51,7 +56,7 @@ fn a_passing_check_passes() {
     assert_eq!(checks.status, CheckStatus::Passed);
     assert!(checks.failures.is_empty());
     assert!(checks.output.is_some());
-    std::fs::remove_dir_all(root).ok();
+    let _ = std::fs::remove_dir_all(root);
 }
 
 /// A command past its limit is stopped, says the result is unknown, and is not a pass.
@@ -81,7 +86,7 @@ fn a_check_past_its_limit_is_not_a_pass() {
 /// A store of its own, in a folder of its own.
 fn store() -> (crate::persistence::Store, std::path::PathBuf) {
     let dir = project();
-    let store = crate::persistence::Store::open(dir.clone()).expect("a fresh database opens");
+    let store = crate::persistence::Store::open(&dir).expect("a fresh database opens");
     (store, dir)
 }
 
@@ -137,8 +142,8 @@ test("counts a discount", () => { assert.equal(total([{ price: 10 }, { price: -2
         result.failures[0].detail
     );
     assert!(result.duration_ms > 0);
-    std::fs::remove_dir_all(root).ok();
-    std::fs::remove_dir_all(data).ok();
+    let _ = std::fs::remove_dir_all(root);
+    let _ = std::fs::remove_dir_all(data);
 }
 
 /// A project whose checks are off runs nothing when a turn ends, and says nothing at all:
@@ -179,8 +184,8 @@ fn checks_that_are_off_say_nothing_and_run_when_asked() {
     let asked = asked.into_inner().unwrap();
     assert_eq!(asked[1].status, CheckStatus::Failed);
     assert!(!asked[1].enabled, "the project's own setting is still off");
-    std::fs::remove_dir_all(root).ok();
-    std::fs::remove_dir_all(data).ok();
+    let _ = std::fs::remove_dir_all(root);
+    let _ = std::fs::remove_dir_all(data);
 }
 
 /// A folder with nothing to run shows no card after a turn, and says what it looked for when
@@ -220,8 +225,8 @@ fn a_folder_with_nothing_to_run_says_why_when_asked() {
         "{:?}",
         asked[0].note
     );
-    std::fs::remove_dir_all(root).ok();
-    std::fs::remove_dir_all(data).ok();
+    let _ = std::fs::remove_dir_all(root);
+    let _ = std::fs::remove_dir_all(data);
 }
 
 /// A project follows the default until it says otherwise, and its own answer survives a reopen.
@@ -245,10 +250,10 @@ fn a_projects_checks_setting_is_its_own() {
     assert!(!enabled(&store, "p2"), "one project's answer is its own");
     drop(store);
 
-    let store = crate::persistence::Store::open(data.clone()).unwrap();
+    let store = crate::persistence::Store::open(&data).unwrap();
     assert!(enabled(&store, "p1"), "the default survived the reopen");
     assert!(!enabled(&store, "p2"), "so did the project's own answer");
-    std::fs::remove_dir_all(data).ok();
+    let _ = std::fs::remove_dir_all(data);
 }
 
 fn set_enabled_for(store: &crate::persistence::Store, project_id: &str, on: bool) {
@@ -356,7 +361,7 @@ fn only_a_finished_reply_that_changed_files_is_checked() {
         !worth_checking(&store, &thread.id, &id, MessageStatus::Complete),
         "a subagent's transcript is checked by the turn that started it"
     );
-    std::fs::remove_dir_all(data).ok();
+    let _ = std::fs::remove_dir_all(data);
 }
 
 /// A command that exits zero having run nothing: `cargo test` in a crate without tests. It is
@@ -383,7 +388,7 @@ fn a_command_that_ran_no_tests_is_not_a_pass() {
         checks.note
     );
     assert!(checks.output.is_some(), "what it printed is kept");
-    std::fs::remove_dir_all(root).ok();
+    let _ = std::fs::remove_dir_all(root);
 }
 
 /// A check that runs tests says how many.
@@ -401,7 +406,7 @@ fn a_passing_check_counts_the_tests_it_ran() {
     assert_eq!(checks.status, CheckStatus::Passed, "{checks:#?}");
     assert_eq!(checks.tests, Some(3));
     assert!(checks.note.is_none());
-    std::fs::remove_dir_all(root).ok();
+    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]

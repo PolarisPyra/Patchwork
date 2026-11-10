@@ -1,5 +1,7 @@
 //! Whether a rule's patterns cover a request: paths inside folders, hosts, and command prefixes, compared unit by unit.
 
+// Rust guideline compliant 2026-10-09
+
 use std::path::{Path, PathBuf};
 use crate::system::fs::resolve;
 use crate::system::fs::home_dir;

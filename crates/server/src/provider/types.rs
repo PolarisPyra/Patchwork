@@ -1,10 +1,10 @@
 //! Which agents there are, what each one offers, and what an installed CLI reports about itself.
 
-use serde::{Deserialize, Serialize};
-use ts_rs::TS;
+// Rust guideline compliant 2026-10-09
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AgentKind {
     Claude,
@@ -27,8 +27,7 @@ impl AgentKind {
     ];
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentStatus {
     pub kind: AgentKind,
@@ -40,8 +39,7 @@ pub struct AgentStatus {
 }
 
 /// A model the user can pick for an agent. `id: None` is the CLI's own default.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelOption {
     pub id: Option<String>,
@@ -60,8 +58,7 @@ pub struct ModelOption {
 }
 
 /// A slash command advertised by a provider CLI for this thread/workspace.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderSlashCommand {
     pub name: String,
@@ -70,8 +67,7 @@ pub struct ProviderSlashCommand {
 }
 
 /// A feature flag of the installed Codex CLI, from `codex features list`.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexFeature {
     pub name: String,
@@ -81,8 +77,7 @@ pub struct CodexFeature {
 }
 
 /// A model in the installed Codex CLI's catalog, from `codex debug models`.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexModel {
     pub slug: String,
@@ -96,8 +91,7 @@ pub struct CodexModel {
 }
 
 /// What the installed Codex CLI offers: its version, flags, and models.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexInfo {
     pub path: String,
@@ -107,8 +101,7 @@ pub struct CodexInfo {
 }
 
 /// A feature gate of the installed Claude Code, as the CLI last cached it in `.claude.json`.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaudeFeature {
     /// The gate's name, such as `tengu_bridge_poll_interval_ms`.
@@ -121,8 +114,7 @@ pub struct ClaudeFeature {
 }
 
 /// A model in the catalog Claude Code cached for the terminal.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaudeModel {
     pub id: String,
@@ -137,8 +129,7 @@ pub struct ClaudeModel {
 
 /// What the installed Claude Code offers: its path and version, the feature gates it has cached,
 /// and the models in its catalog.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaudeInfo {
     pub path: String,
@@ -148,8 +139,7 @@ pub struct ClaudeInfo {
 }
 
 /// A top-level setting from one of the config files OpenCode reads.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliSetting {
     pub name: String,
@@ -162,8 +152,7 @@ pub struct CliSetting {
 
 /// What an installed OpenCode or Antigravity CLI offers: its path and version, its models, and
 /// for OpenCode the settings its config files hold. Neither has feature flags.
-#[derive(Debug, Clone, Serialize, TS)]
-#[ts(export, export_to = "provider.ts")]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliInfo {
     pub path: String,
