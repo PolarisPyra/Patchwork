@@ -63,8 +63,6 @@ pub struct Composer {
     /// send menu. Each send, and each turn starting or ending, puts it back to the default.
     pub(super) queue_next: Option<bool>,
     pub(super) was_working: bool,
-    /// No queued message waits, so another can be queued.
-    pub(super) can_queue: bool,
     /// What the next send while a turn runs does, as last drawn: queue, or steer.
     pub(super) queues: bool,
     pub(super) health: model_notice::ModelHealth,
@@ -145,7 +143,6 @@ impl Composer {
             queue_next: None,
             was_working: false,
             health: model_notice::ModelHealth::default(),
-            can_queue: true,
             queues: false,
             sigil: sigil_menu::SigilMenu::default(),
         }

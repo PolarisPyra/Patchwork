@@ -91,7 +91,6 @@ impl Render for Composer {
             }
         }
         let editing = w.editing_queued();
-        self.can_queue = w.queued().is_empty();
         let queue_next = self.queue_next.unwrap_or_else(|| queue_by_default(w));
         let can_compact = thread.is_some_and(|t| !t.messages.is_empty()) && !working;
         let editor = self.editor.read(cx);
@@ -195,9 +194,7 @@ impl Render for Composer {
                     }
                 })
                 .child(icon(if editing { "check" } else { "arrow-up" }, 16.));
-            let blocked = folder_missing
-                || (empty && !editing)
-                || (working && queue_next && !self.can_queue && !editing);
+            let blocked = folder_missing || (empty && !editing);
             if blocked {
                 base.bg(t.bg_selected_muted)
                     .text_color(t.text_subtle)

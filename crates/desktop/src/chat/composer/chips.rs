@@ -78,10 +78,8 @@ impl Composer {
     /// Applies a menu's pick to the open chat, or to the draft of the next one.
     pub(super) fn apply(&mut self, pick: Pick, window: &mut Window, cx: &mut Context<Self>) {
         if let Pick::SendMode(queue) = pick {
-            if !queue || self.can_queue {
-                self.queue_next = Some(queue);
-                self.close_menu(window, cx);
-            }
+            self.queue_next = Some(queue);
+            self.close_menu(window, cx);
             return;
         }
         self.close_menu(window, cx);

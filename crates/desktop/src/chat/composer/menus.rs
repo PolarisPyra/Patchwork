@@ -233,7 +233,6 @@ impl Composer {
                         .items_start()
                         .gap(px(2.))
                         .min_w(px(192.))
-                        .when(queue && !self.can_queue, |d| d.opacity(0.4))
                         .child(label)
                         .child(
                             div()
@@ -255,11 +254,7 @@ impl Composer {
                     mode(
                         true,
                         "Queue for next turn",
-                        if self.can_queue {
-                            "Wait until the active turn finishes"
-                        } else {
-                            "Edit or remove the queued message first"
-                        },
+                        "Wait until the active turn finishes",
                     ),
                 ]
             }

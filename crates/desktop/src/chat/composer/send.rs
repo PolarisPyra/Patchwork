@@ -65,9 +65,6 @@ impl Composer {
         }
         let queue_next = self.queue_next.unwrap_or_else(|| queue_by_default(w));
         let queue = working && (alternate != queue_next);
-        if queue && !self.can_queue {
-            return;
-        }
         // An answer written here goes to the agent's question, not into the chat.
         if workspace.read(cx).answering_in_composer() {
             if !text.is_empty() {
