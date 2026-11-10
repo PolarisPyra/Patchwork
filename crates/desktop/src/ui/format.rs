@@ -106,3 +106,16 @@ pub fn base_name(path: &str) -> &str {
 pub fn dir_name(path: &str) -> &str {
     path.rfind('/').map_or("", |i| &path[..i])
 }
+
+/// "in 3h 12m", "in 2d 4h", "in 5m".
+pub fn resets_in(at: u64, now: u64) -> String {
+    let mins = (at.saturating_sub(now) as f64 / 60000.).round() as u64;
+    let (d, h, m) = (mins / 1440, mins % 1440 / 60, mins % 60);
+    if d > 0 {
+        format!("in {d}d {h}h")
+    } else if h > 0 {
+        format!("in {h}h {m}m")
+    } else {
+        format!("in {m}m")
+    }
+}

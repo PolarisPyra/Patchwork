@@ -96,6 +96,13 @@ pub struct UsageCache {
 }
 
 impl UsageCache {
+    /// The usage last known for `kind`, without asking the provider. None before any is known.
+    #[must_use]
+    pub fn known(&self, kind: AgentKind) -> Option<ProviderUsage> {
+        let entries = self.entries.lock().unwrap_or_else(PoisonError::into_inner);
+        entries.get(&kind).map(|e| e.usage.clone())
+    }
+
     /// Usage for `kind`. `refresh` asks for new numbers, still subject to throttling.
     pub fn get(&self, kind: AgentKind, refresh: bool) -> ProviderUsage {
         self.get_with(kind, refresh, Instant::now(), || fetch(kind))

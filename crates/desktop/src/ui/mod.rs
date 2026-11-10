@@ -24,7 +24,7 @@ pub use controls::{
     scrollbar, spinner, tooltip,
 };
 pub use format::{
-    base_name, compact_elapsed, dir_name, display_title, format_clock, format_relative,
+    base_name, compact_elapsed, dir_name, display_title, format_clock, format_relative, resets_in,
     format_tokens, full_elapsed, now_ms, slug_file_name,
 };
 pub use logos::{

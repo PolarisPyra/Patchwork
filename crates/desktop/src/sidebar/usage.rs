@@ -17,7 +17,9 @@ use patchwork_server::provider::{AgentKind, AgentStatus, detect_agent};
 use patchwork_server::usage::ProviderUsage;
 
 use crate::ui::theme::{FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
-use crate::ui::{agent_label, agent_logo, button, icon, now_ms, popup_shadow, spinner, tooltip};
+use crate::ui::{
+    agent_label, agent_logo, button, icon, now_ms, popup_shadow, resets_in, spinner, tooltip,
+};
 use crate::workspace::Workspace;
 
 /// Every agent the popover can show: the ones with plan limits (Claude, Codex, Antigravity), then
@@ -79,19 +81,6 @@ fn limited_until(entry: Option<&Entry>, now: u64) -> Option<u64> {
 fn peak(entry: Option<&Entry>) -> Option<f64> {
     let windows = &entry?.usage.as_ref()?.windows;
     windows.iter().map(|w| w.used_percent).reduce(f64::max)
-}
-
-/// "in 3h 12m", "in 2d 4h", "in 5m".
-fn resets_in(at: u64, now: u64) -> String {
-    let mins = (at.saturating_sub(now) as f64 / 60000.).round() as u64;
-    let (d, h, m) = (mins / 1440, mins % 1440 / 60, mins % 60);
-    if d > 0 {
-        format!("in {d}d {h}h")
-    } else if h > 0 {
-        format!("in {h}h {m}m")
-    } else {
-        format!("in {m}m")
-    }
 }
 
 /// "4m", "1h 5m": the wait left, rounded up so it never reads 0m.
