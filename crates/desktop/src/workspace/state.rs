@@ -164,6 +164,8 @@ pub struct Workspace {
     pub(super) settings_dialog: Option<Entity<crate::settings::SettingsDialog>>,
     /// The version whose update card the user closed.
     pub(super) update_dismissed: Option<String>,
+    /// How many replies the last session cut off wait to be resumed, with Settings set to ask.
+    pub(super) interrupted: usize,
     /// The Add a project dialog, while open.
     pub(super) add_project: Option<Entity<AddProject>>,
     pub(super) background_dialog: Option<background_dialog::BackgroundDialog>,
@@ -303,6 +305,7 @@ impl Workspace {
             palette_return: None,
             settings_dialog: None,
             update_dismissed,
+            interrupted: 0,
             add_project: None,
             background_dialog: None,
             onboarding: None,

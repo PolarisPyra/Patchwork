@@ -11,7 +11,7 @@ use gpui::{
     px,
 };
 use patchwork_server::backgrounds::{BackgroundStrength, ChatBackground};
-use patchwork_server::settings::{LogLevel, LoggingSettings, Theme as ThemeSetting};
+use patchwork_server::settings::{LogLevel, LoggingSettings, ResumeAtLaunch, Theme as ThemeSetting};
 
 use crate::ui::background_picker::{BackgroundPicker, PickerEvent};
 use crate::settings::SettingsDialog;
@@ -30,6 +30,12 @@ const STRENGTHS: [(BackgroundStrength, &str); 3] = [
     (BackgroundStrength::Subtle, "Subtle"),
     (BackgroundStrength::Medium, "Medium"),
     (BackgroundStrength::Strong, "Strong"),
+];
+
+const RESUMES: [(ResumeAtLaunch, &str); 3] = [
+    (ResumeAtLaunch::Always, "Always"),
+    (ResumeAtLaunch::Ask, "Ask"),
+    (ResumeAtLaunch::Never, "Never"),
 ];
 
 /// The log levels, from the most to the least recorded.
@@ -359,6 +365,22 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             |s, on| s.steer_while_working = on,
             cx,
         ))
+        .child(
+            token_row(
+                "Resume interrupted replies at launch",
+                Some("Replies cut off when Patchwork quit, restarted, or crashed"),
+                &t,
+            )
+            .child(segmented(
+                "resume-at-launch",
+                "Resume interrupted replies at launch",
+                s.resume_at_launch,
+                &RESUMES,
+                &t,
+                |d, resume, cx| d.update(|s| s.resume_at_launch = resume, cx),
+                cx,
+            )),
+        )
         .child(section_heading("Notifications", false, &t))
         .child(toggle_row(
             "goal-complete",

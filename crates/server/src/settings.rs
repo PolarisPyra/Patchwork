@@ -90,6 +90,8 @@ pub struct Settings {
     pub confirm_answers: bool,
     /// Enter steers a running reply instead of queueing the message for after it.
     pub steer_while_working: bool,
+    /// What a launch does with the replies the last session's closing cut off.
+    pub resume_at_launch: ResumeAtLaunch,
     /// Folder of plugin bundles. None uses `plugins` in the config folder.
     pub plugins_dir: Option<String>,
     /// Plugins switched off in Settings, by folder name.
@@ -303,6 +305,20 @@ impl Default for UpdateSettings {
             check_every_minutes: 10,
         }
     }
+}
+
+/// What a launch does with the replies the last session cut off by quitting, restarting for an
+/// update, or crashing.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ResumeAtLaunch {
+    /// Resumes them.
+    #[default]
+    Always,
+    /// Says how many there are, and resumes them when told to.
+    Ask,
+    /// Leaves each for its own Resume button.
+    Never,
 }
 
 /// Desktop notifications shown while Patchwork is not the focused window.

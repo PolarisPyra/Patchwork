@@ -7,6 +7,7 @@ mod actions;
 mod add_project;
 mod background_dialog;
 mod bars;
+mod interrupted;
 mod canvas_area;
 mod onboarding;
 mod palette;
