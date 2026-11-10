@@ -40,7 +40,17 @@ impl Render for Workspace {
             .id("workspace")
             .track_focus(&self.focus)
             .key_context("Workspace")
-            .on_action(|_: &crate::FocusNext, window, cx| window.focus_next(cx))
+            // Tab with nothing in particular focused jumps to the composer, as "Jump to the
+            // composer" says; from any control it moves on.
+            .on_action(cx.listener(|this, _: &crate::FocusNext, window, cx| {
+                let composer_shown = this.thread.as_ref().is_none_or(|t| t.parent.is_none());
+                if composer_shown && this.focus.is_focused(window) {
+                    let editor = this.composer.read(cx).editor.clone();
+                    window.focus(&gpui::Focusable::focus_handle(editor.read(cx), cx), cx);
+                } else {
+                    window.focus_next(cx);
+                }
+            }))
             .on_action(|_: &crate::FocusPrev, window, cx| window.focus_prev(cx))
             .on_action(|_: &crate::ui::selection::CopySelection, _, cx| {
                 crate::ui::selection::copy(cx);
