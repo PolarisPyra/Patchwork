@@ -344,6 +344,11 @@ impl Render for Composer {
                     cx.stop_propagation();
                 }
             }))
+            // Files, folders or pictures held over the chat box light it up as a place to drop.
+            .drag_over::<ExternalPaths>({
+                let (accent, glow) = (t.accent, t.bg_hover);
+                move |style, _, _, _| style.border_color(accent).bg(glow)
+            })
             .on_drop(cx.listener(|this, files: &ExternalPaths, window, cx| {
                 this.attach_paths(files.paths(), cx);
                 // A drop is the start of a message: the usage popover goes, as a press outside
