@@ -4359,6 +4359,7 @@ version = "26.11.30"
 dependencies = [
  "base64 0.22.1",
  "chrono",
+ "dirs",
  "futures",
  "gpui",
  "gpui_platform",

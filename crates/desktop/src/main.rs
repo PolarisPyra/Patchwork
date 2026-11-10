@@ -18,7 +18,6 @@ mod workspace;
 
 use std::fs::{File, OpenOptions};
 use std::io::Write;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -202,21 +201,15 @@ fn prewarm_fonts(cx: &App) {
     .detach();
 }
 
-fn home_dir(var: &str, fallback: &str) -> Option<PathBuf> {
-    std::env::var_os(var)
-        .map(PathBuf::from)
-        .filter(|p| p.is_absolute())
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(fallback)))
-}
-
 fn main() {
-    // The platform's folders, as the desktop app reads them, so both open the same data.
+    // The platform's folders: the XDG ones on Linux, `Library` on macOS, and `AppData` on
+    // Windows, the ones earlier versions of Patchwork used.
     let (Some(config), Some(data), Some(cache)) = (
-        home_dir("XDG_CONFIG_HOME", ".config"),
-        home_dir("XDG_DATA_HOME", ".local/share"),
-        home_dir("XDG_CACHE_HOME", ".cache"),
+        dirs::config_dir(),
+        dirs::data_local_dir(),
+        dirs::cache_dir(),
     ) else {
-        log::error!("Patchwork needs HOME to find its folders");
+        log::error!("Patchwork could not find the folders to keep its data in");
         return;
     };
     let dirs = Dirs::new(&config, &data, &cache);
