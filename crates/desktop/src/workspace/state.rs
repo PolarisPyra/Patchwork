@@ -25,7 +25,7 @@ use crate::chat::goal::GoalClear;
 use crate::chat::lineage::Lineage;
 use crate::chat::plan::ShownPlan;
 use crate::chat::prompts::Answering;
-use crate::chat::queue::QueuedEdit;
+use crate::chat::queue::{ChatDrafts, QueuedEdit};
 use crate::workspace::add_project::AddProject;
 use crate::ui::menu::Menu;
 use crate::workspace::palette::Palette;
@@ -94,6 +94,7 @@ pub struct Workspace {
     pub(super) ticking: bool,
     pub queue_open: bool,
     pub queued_edit: Option<QueuedEdit>,
+    pub chat_drafts: ChatDrafts,
     pub steer_pressed: bool,
     pub lineage: Lineage,
     pub(super) _prompt_keys: gpui::Subscription,
@@ -258,6 +259,7 @@ impl Workspace {
             ticking: false,
             queue_open: true,
             queued_edit: None,
+            chat_drafts: ChatDrafts::default(),
             steer_pressed: false,
             lineage: Lineage::default(),
             _prompt_keys: prompt_keys,

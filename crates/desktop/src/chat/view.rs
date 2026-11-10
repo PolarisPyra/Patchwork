@@ -35,6 +35,7 @@ pub fn render(
     w.sync_secret_fields(cx);
     w.load_checkpoints(cx);
     w.load_image_sizes(cx);
+    w.sync_chat_draft(cx);
     let t = *theme(cx);
     // A reply seen streaming keeps its steps open once it settles.
     if let Some(thread) = &w.thread {
