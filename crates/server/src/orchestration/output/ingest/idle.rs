@@ -61,7 +61,7 @@ pub(super) fn go_idle(
         .skip(*completed)
         .for_each(|(at, id)| {
             let (status, error) = if stopped && at == last {
-                (MessageStatus::Cancelled, None)
+                (turn.server.runner.stopped_status(), None)
             } else if at == last && error.is_some() {
                 (MessageStatus::Error, error.map(String::from))
             } else {

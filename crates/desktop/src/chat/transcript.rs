@@ -156,7 +156,12 @@ fn compaction_state(rows: &[&Message], index: usize, busy: bool) -> Compaction {
         Some(r) if r.status == MessageStatus::Streaming => Compaction::Compacting,
         None if busy => Compaction::Compacting,
         None => Compaction::Stopped,
-        Some(r) if matches!(r.status, MessageStatus::Error | MessageStatus::Cancelled) => {
+        Some(r)
+            if matches!(
+                r.status,
+                MessageStatus::Error | MessageStatus::Cancelled | MessageStatus::Interrupted
+            ) =>
+        {
             Compaction::Stopped
         }
         Some(_) => Compaction::Compacted,

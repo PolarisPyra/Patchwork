@@ -29,7 +29,11 @@ pub enum MessageStatus {
     Streaming,
     Complete,
     Error,
+    /// Stopped by the user.
     Cancelled,
+    /// Cut off because Patchwork closed, quit, or crashed while the reply ran. Unlike a stopped
+    /// reply it was not ended on purpose, so its turn can be resumed.
+    Interrupted,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

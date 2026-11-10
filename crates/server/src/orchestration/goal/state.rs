@@ -91,3 +91,35 @@ pub(crate) fn next_goal(current: Option<&Goal>, update: GoalUpdate) -> Option<Go
 pub(crate) fn agent_keeps(agent: AgentKind, status: GoalStatus) -> bool {
     status != GoalStatus::Complete && !(agent == AgentKind::Claude && status == GoalStatus::Blocked)
 }
+
+fn cut_off_key(thread_id: &str) -> String {
+    format!("cut-off-goal:{thread_id}")
+}
+
+/// Notes whether the thread's goal was being pursued when the last app session closed, which
+/// paused it. Written at each launch for a thread with a goal and no turn waiting to be resumed,
+/// so a note lasts only until its turn is resumed or the conversation moves on.
+pub(crate) fn note_cut_off(store: &Store, thread_id: &str, goal: &Goal, cut_off: bool) {
+    let note = if cut_off {
+        signature(goal)
+    } else {
+        String::new()
+    };
+    if store.state(&cut_off_key(thread_id)).unwrap_or_default() != note
+        && let Err(e) = store.set_state(&cut_off_key(thread_id), &note)
+    {
+        log::warn!(error:% = e; "failed to note a goal the app's closing cut off: {{error}}");
+    }
+}
+
+/// Whether `goal` is the one the app's closing cut off, still paused by it, and forgets that:
+/// the turn being resumed takes the goal up again, once.
+pub(crate) fn take_cut_off(store: &Store, thread_id: &str, goal: &Goal) -> bool {
+    let key = cut_off_key(thread_id);
+    let cut_off = goal.status == GoalStatus::Paused
+        && store.state(&key).as_deref() == Some(signature(goal).as_str());
+    if cut_off && let Err(e) = store.set_state(&key, "") {
+        log::warn!(error:% = e; "failed to forget a cut-off goal: {{error}}");
+    }
+    cut_off
+}

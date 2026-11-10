@@ -242,6 +242,10 @@ fn main() {
         return;
     };
     let dirs = Dirs::new(&config, &data, &cache);
+    // Opened a second time, the app shows the window it already has instead of another.
+    if patchwork_server::system::instance::raise_running(&dirs.data) {
+        return;
+    }
     start_logging(&dirs);
     let (events, mut received) = mpsc::unbounded();
     let server = match Server::open(
@@ -258,12 +262,18 @@ fn main() {
         }
     };
     start_scheduled_tasks(Arc::clone(&server));
+    // A second launch asks on the relay's thread; the window is shown on the app's.
+    let (raise, mut raised) = mpsc::unbounded::<()>();
+    patchwork_server::provider::mcp::set_raise_handler(Box::new(move || {
+        let _ = raise.unbounded_send(());
+    }));
     // A change in where updating stands is drawn by the window, like an agent's events.
     let (update_sender, mut update_events) = mpsc::unbounded();
     server.on_update_change(Box::new(move || {
         let _ = update_sender.unbounded_send(());
     }));
     server.start_update_checks();
+    server.start_limit_resumes();
 
     gpui_platform::application()
         .with_assets(assets::Assets)
@@ -316,6 +326,32 @@ fn main() {
             cx.on_window_closed(|cx, _| {
                 if cx.windows().is_empty() {
                     cx.quit();
+                }
+            })
+            .detach();
+            // Turns the last session's closing cut off carry on, now there is a window to show them.
+            // Resumed, or with Settings set to ask, counted for the card that asks.
+            let resuming = Arc::clone(&server);
+            let waiting = cx.background_spawn(async move { resuming.resume_at_launch() });
+            cx.spawn(async move |cx| {
+                let waiting = waiting.await;
+                if waiting > 0 {
+                    let _ = window.update(cx, |workspace, _, cx| {
+                        workspace.set_interrupted(waiting, cx);
+                    });
+                }
+            })
+            .detach();
+            cx.spawn(async move |cx| {
+                while raised.next().await.is_some() {
+                    log::info!("a second launch asked for this window");
+                    let shown = window.update(cx, |_, window, cx| {
+                        cx.activate(true);
+                        window.activate_window();
+                    });
+                    if shown.is_err() {
+                        break;
+                    }
                 }
             })
             .detach();

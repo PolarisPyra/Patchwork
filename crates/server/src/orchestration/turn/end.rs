@@ -200,6 +200,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
                     text,
                     attachments,
                     images,
+                    resumes: turn.resumes,
                 },
             );
             match started {
@@ -313,6 +314,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
                 text,
                 attachments,
                 images,
+                resumes: false,
             },
         ) {
             log::warn!(error:% = e; "failed to start the turn for queued messages: {{error}}");

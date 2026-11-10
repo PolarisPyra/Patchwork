@@ -271,7 +271,7 @@ fn describe(event: &AgentEvent) -> Option<(LogLevel, &'static str, Option<&str>,
         } => {
             let level = match status {
                 MessageStatus::Error => Error,
-                MessageStatus::Cancelled => Warning,
+                MessageStatus::Cancelled | MessageStatus::Interrupted => Warning,
                 _ => Info,
             };
             let mut text = format!("{status:?}");

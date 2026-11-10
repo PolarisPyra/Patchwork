@@ -91,7 +91,7 @@ fn legacy_json_moves_into_sqlite() {
     assert_eq!(s.agents, [AgentKind::Codex]);
     assert_eq!(s.projects[0].path, "/x");
     let loaded = store.thread(&t.id).unwrap();
-    assert_eq!(loaded.messages[0].status, MessageStatus::Cancelled);
+    assert_eq!(loaded.messages[0].status, MessageStatus::Interrupted);
     assert_eq!(loaded.messages[0].files, ["a.rs"]);
     assert!(dir.join("settings.json.bak").exists() && !dir.join("threads.json").exists());
     let _ = std::fs::remove_dir_all(&dir);

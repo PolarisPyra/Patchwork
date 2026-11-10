@@ -18,7 +18,7 @@ use super::timeline::{
     fold_head_of, fold_layout_of, is_goal_cleared_reply, lines_of, shown, steps_of, work_key,
 };
 use super::transcript::Piece;
-use super::{approvals, checks, files, proposed, subagents};
+use super::{approvals, checks, files, interrupted, proposed, subagents};
 
 /// `ACTION_CLASS`: a reply's small text buttons.
 fn action_button(
@@ -252,6 +252,9 @@ fn foot(
                 .child(error.clone())
                 .into_any_element(),
         );
+    }
+    if let Some(row) = interrupted::resume_row(&w.server, thread, m, t, cx) {
+        out.push(row.into_any_element());
     }
     if actions && !m.cut_off && !m.text.trim().is_empty() {
         let streaming = m.status == MessageStatus::Streaming;

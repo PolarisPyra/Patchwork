@@ -19,11 +19,18 @@ use super::settings::{load_settings, save_settings};
 use super::threads::{load_folders, load_threads, save_message, save_thread_row, thread_state_keys};
 use crate::projects::Folder;
 use crate::settings::Settings;
+use crate::system::instance;
 use crate::threads::{MessageStatus, Thread};
 
 #[derive(Debug)]
 pub struct Store {
     inner: Mutex<Inner>,
+    /// The lock on the data folder, held while this is the first Patchwork using it. A second
+    /// one running beside it holds none.
+    owner: Option<std::fs::File>,
+    /// The threads whose goal was being pursued when the last session closed, and so was paused
+    /// as this one opened.
+    goals_cut_off: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -42,23 +49,37 @@ impl Store {
     /// Returns an error when the data folder or database cannot be created, opened, or migrated,
     /// or when stored settings, threads, or folders cannot be read or updated.
     pub fn open(dir: &Path) -> Result<Self, Error> {
+        std::fs::create_dir_all(dir).map_err(err)?;
+        let owner = claim(dir);
         let mut conn = open(dir)?;
-        // A turn that was streaming when the app quit can never finish.
-        conn.execute(
-            "UPDATE messages SET status = ?1 WHERE status = ?2",
-            params![
-                enc(&MessageStatus::Cancelled),
-                enc(&MessageStatus::Streaming)
-            ],
-        )
-        .map_err(err)?;
+        // A reply still streaming in the database belongs to an app that is gone: it was cut
+        // off, and its turn can be resumed. Beside a running Patchwork the reply may be live in
+        // that one, so the database is left alone and the reply is only shown as stopped here.
+        if owner.is_some() {
+            conn.execute(
+                "UPDATE messages SET status = ?1 WHERE status = ?2",
+                params![
+                    enc(&MessageStatus::Interrupted),
+                    enc(&MessageStatus::Streaming)
+                ],
+            )
+            .map_err(err)?;
+        }
         let settings = load_settings(&conn).map_err(err)?;
         crate::provider::set_agent_paths(&settings.agent_paths);
         crate::computer::set_enabled(settings.computer_use);
         let mut threads = load_threads(&conn).map_err(err)?;
+        if owner.is_none() {
+            threads
+                .iter_mut()
+                .flat_map(|t| &mut t.messages)
+                .filter(|m| m.status == MessageStatus::Streaming)
+                .for_each(|m| m.status = MessageStatus::Cancelled);
+        }
         // A goal that was being pursued when the app quit is no longer pursued: its agent
         // process ended with the app. It is paused, so it can be resumed rather than shown as active.
         let tx = conn.transaction().map_err(err)?;
+        let mut goals_cut_off = Vec::new();
         for t in &mut threads {
             if let Some(goal) = t
                 .goal
@@ -67,6 +88,7 @@ impl Store {
             {
                 goal.status = crate::threads::GoalStatus::Paused;
                 save_thread_row(&tx, t).map_err(err)?;
+                goals_cut_off.push(t.id.clone());
             }
         }
         tx.commit().map_err(err)?;
@@ -78,7 +100,23 @@ impl Store {
                 threads,
                 folders,
             }),
+            owner,
+            goals_cut_off,
         })
+    }
+
+    /// The threads whose goal was being pursued when the last session closed. Each was paused as
+    /// this one opened, and goes on when its turn is resumed.
+    #[must_use]
+    pub fn goals_cut_off(&self) -> &[String] {
+        &self.goals_cut_off
+    }
+
+    /// Whether this is the first Patchwork using the data folder. Only that one resumes the
+    /// turns an earlier run left unfinished, so two apps never run the same turn.
+    #[must_use]
+    pub fn owns_data(&self) -> bool {
+        self.owner.is_some()
     }
 
     pub(super) fn lock(&self) -> MutexGuard<'_, Inner> {
@@ -496,6 +534,19 @@ impl Store {
 }
 
 const DB_FILE: &str = "patchwork.db";
+/// Takes the data folder's lock, which the system releases when this process ends, however it
+/// ends. None when another Patchwork holds it, or the lock file cannot be made.
+fn claim(dir: &Path) -> Option<std::fs::File> {
+    let file = std::fs::File::options()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(dir.join(instance::LOCK_FILE))
+        .ok()?;
+    file.try_lock().ok()?;
+    instance::owns(dir);
+    Some(file)
+}
 
 /// Opens the database in `dir`, creating it if need be, with the schema up to date. A new
 /// database takes in the settings and threads of the old JSON files, if they are there.

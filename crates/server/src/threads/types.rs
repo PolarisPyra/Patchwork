@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::provider::{AgentKind, ProviderSlashCommand};
 use crate::backgrounds::ChatBackground;
-use crate::threads::Message;
+use crate::threads::{Message, MessageStatus, Role};
 
 /// How much an agent may do without asking.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -133,3 +133,29 @@ pub struct Goal {
 
 /// The error for a chat or task that no longer exists. People see chat for either.
 pub(crate) const NOT_FOUND: &str = "Chat not found";
+
+impl Thread {
+    /// The reply the app's closing cut off, while it is the last thing sent in the thread: once
+    /// anything follows it the conversation has moved on, and there is nothing to resume. A
+    /// message still queued waits behind the reply, so it does not count.
+    #[must_use]
+    pub fn interrupted_reply(&self) -> Option<&Message> {
+        self.messages
+            .iter()
+            .rfind(|m| !m.queued)
+            .filter(|m| m.role == Role::Assistant && m.status == MessageStatus::Interrupted)
+    }
+
+    /// The reply whose turn can be carried on in the agent's session: the last thing sent in the
+    /// thread, when it was cut off by the app's closing or ended with an error. A subagent's
+    /// thread has none, since its turn belongs to the thread that started it.
+    #[must_use]
+    pub fn resumable_reply(&self) -> Option<&Message> {
+        self.messages
+            .iter()
+            .rfind(|m| !m.queued)
+            .filter(|_| self.parent.is_none())
+            .filter(|m| m.role == Role::Assistant)
+            .filter(|m| matches!(m.status, MessageStatus::Interrupted | MessageStatus::Error))
+    }
+}

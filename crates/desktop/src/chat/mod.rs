@@ -11,6 +11,7 @@ pub mod files;
 pub mod find;
 pub mod folder;
 pub mod goal;
+mod interrupted;
 pub mod lineage;
 pub mod plan;
 pub mod prompts;

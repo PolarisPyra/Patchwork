@@ -109,6 +109,9 @@ pub struct TurnRequest {
     pub text: String,
     pub attachments: Vec<Attachment>,
     pub images: Vec<provider::Image>,
+    /// The turn carries on one the app's closing cut off, so no message of the user's starts it:
+    /// the project was snapshotted before the turn it continues, and no prompt was submitted.
+    pub resumes: bool,
 }
 
 /// A thread's place in `Runner::starting`, held until its turn is in `turns` or has failed to start.
@@ -164,6 +167,7 @@ impl Runner {
             text,
             attachments,
             images,
+            resumes,
         } = request;
         let _starting = Starting::claim(self, &thread_id)?;
         // A turn of its own (a /goal, a compaction) replaces an idle agent process.
@@ -183,12 +187,19 @@ impl Runner {
         ) = {
             let thread = server.thread(&thread_id)?;
             // The message being sent is the newest user message; the transcript is what came before.
-            let context = thread.context_pending.then(|| {
-                let end = thread
-                    .messages
-                    .iter()
-                    .rposition(|m| m.role == Role::User)
-                    .unwrap_or(thread.messages.len());
+            // A resumed turn whose agent kept no session is told the conversation instead.
+            let fresh = thread.context_pending || (resumes && thread.session_id.is_none());
+            let context = fresh.then(|| {
+                // A resumed turn sends no new message, so everything so far came before it.
+                let end = if resumes {
+                    thread.messages.len()
+                } else {
+                    thread
+                        .messages
+                        .iter()
+                        .rposition(|m| m.role == Role::User)
+                        .unwrap_or(thread.messages.len())
+                };
                 crate::import::transcript(&thread.messages[..end])
             });
             let settings = server.store.settings();
@@ -312,16 +323,18 @@ impl Runner {
         // Agents often edit files through the shell, so changes are also found by
         // comparing git state before and after the turn.
         let attribution = Attribution::shared(workspace::git_changes(&root).unwrap_or_default());
-        plugin_hooks(
-            server,
-            HookEvent::UserPromptSubmit,
-            &thread_id,
-            &root,
-            agent,
-            None,
-        );
-        if let Some(message_id) = &checkpoint {
-            checkpoint::capture(&root, &thread_id, message_id);
+        if !resumes {
+            plugin_hooks(
+                server,
+                HookEvent::UserPromptSubmit,
+                &thread_id,
+                &root,
+                agent,
+                None,
+            );
+            if let Some(message_id) = &checkpoint {
+                checkpoint::capture(&root, &thread_id, message_id);
+            }
         }
         let mut args = provider::turn_args(agent, &spec);
         if agent == AgentKind::Claude {
@@ -460,6 +473,7 @@ impl Runner {
             model,
             vision_model,
             text,
+            resumes,
             mode,
             plan,
             effort,
@@ -497,6 +511,12 @@ impl Runner {
                     attribution,
                 },
             );
+        crate::orchestration::turn::recovery::note_agent(
+            &server.store,
+            &turn.thread_id,
+            pid,
+            turn.scope.as_deref(),
+        );
         // Stopped while it was starting, as by Stop or archiving the chat: it stops now it can.
         if self
             .stop_starting
@@ -593,6 +613,8 @@ pub(in crate::orchestration) struct Turn {
     pub(in crate::orchestration) model: Option<String>,
     pub(in crate::orchestration) vision_model: Option<crate::settings::VisionModel>,
     pub(in crate::orchestration) text: String,
+    /// See `TurnRequest::resumes`; kept for the turn that reruns this one in a new session.
+    pub(in crate::orchestration) resumes: bool,
     pub(in crate::orchestration) mode: AccessMode,
     pub(in crate::orchestration) plan: bool,
     pub(in crate::orchestration) effort: Option<String>,

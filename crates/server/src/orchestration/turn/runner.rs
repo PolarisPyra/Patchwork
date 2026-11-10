@@ -13,10 +13,12 @@ use crate::orchestration::turn::process::{
     INTERRUPT_GRACE, QUIT_GRACE, terminate, write_line, write_to,
 };
 use crate::orchestration::messages::queue::{FollowUp, FollowUpInput};
+use crate::orchestration::turn::limit::LimitWait;
 use crate::orchestration::turn::start::RunningTurn;
 use crate::permissions::Target;
 use crate::provider;
 use crate::system::scope;
+use crate::threads::MessageStatus;
 use crate::workspace;
 
 /// What became of a message sent to a thread.
@@ -50,6 +52,11 @@ pub struct Runner {
     pub(in crate::orchestration) grants: Mutex<HashMap<String, Vec<Target>>>,
     /// The commands Patchwork's own agent runs, which outlive its turns as background jobs.
     pub(in crate::orchestration) jobs: crate::orchestration::tasks::jobs::Jobs,
+    /// The turns that resume when their agent's usage limit resets, by thread.
+    pub(in crate::orchestration) limit_waits: Mutex<HashMap<String, LimitWait>>,
+    /// Set once the app is quitting. A turn stopped from then on was cut off by the quit, not
+    /// stopped by the user, so it ends interrupted and resumes at the next launch.
+    quitting: AtomicBool,
 }
 
 impl std::fmt::Debug for Runner {
@@ -362,9 +369,20 @@ impl Runner {
         });
     }
 
+    /// How a turn that was stopped ends: interrupted when the app's quit stopped it, so it can
+    /// resume at the next launch, and cancelled when the user did.
+    pub(in crate::orchestration) fn stopped_status(&self) -> MessageStatus {
+        if self.quitting.load(Ordering::SeqCst) {
+            MessageStatus::Interrupted
+        } else {
+            MessageStatus::Cancelled
+        }
+    }
+
     /// Stops every running agent, so none outlives the app when it quits. Agents that
     /// are still running after `QUIT_GRACE` are sent SIGKILL.
     pub fn stop_all(&self) {
+        self.quitting.store(true, Ordering::SeqCst);
         let running: Vec<(u32, Arc<AtomicBool>)> = self
             .turns
             .lock()

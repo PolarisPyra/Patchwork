@@ -183,6 +183,7 @@ impl Server {
                 text,
                 attachments,
                 images,
+                resumes: false,
             },
         ) {
             self.store.update_thread(thread_id, |t| {

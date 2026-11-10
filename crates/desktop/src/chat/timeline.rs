@@ -179,7 +179,10 @@ pub fn fold_layout_of(message: &Message, steps: &[Step], streaming: bool) -> Fol
     } else {
         before_text
     };
-    let cancelled = message.status == MessageStatus::Cancelled;
+    let cancelled = matches!(
+        message.status,
+        MessageStatus::Cancelled | MessageStatus::Interrupted
+    );
     let folds = !streaming
         && message.status != MessageStatus::Error
         && (hidden > 0 || cancelled || message.cut_off);
@@ -234,11 +237,13 @@ pub fn fold_head_of(message: &Message, actions: usize, open: bool) -> FoldSummar
         .map(|end| end.saturating_sub(message.created_at))
         .filter(|took| *took >= 1000)
         .map(full_elapsed);
-    let label = match (message.status == MessageStatus::Cancelled, duration) {
-        (true, Some(d)) => format!("You stopped after {d}"),
-        (true, None) => "You stopped the response".into(),
-        (false, Some(d)) => format!("Worked for {d}"),
-        (false, None) => "Worked".into(),
+    let label = match (message.status, duration) {
+        (MessageStatus::Cancelled, Some(d)) => format!("You stopped after {d}"),
+        (MessageStatus::Cancelled, None) => "You stopped the response".into(),
+        (MessageStatus::Interrupted, Some(d)) => format!("Interrupted after {d}"),
+        (MessageStatus::Interrupted, None) => "Interrupted when Patchwork closed".into(),
+        (_, Some(d)) => format!("Worked for {d}"),
+        (_, None) => "Worked".into(),
     };
     FoldSummary { label, action }
 }

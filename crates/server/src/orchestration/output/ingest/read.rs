@@ -637,10 +637,11 @@ pub(in crate::orchestration) fn ingest(
         scope::stop(unit);
     }
     turn.exited.store(true, Ordering::SeqCst);
+    crate::orchestration::turn::recovery::forget_agent(&turn.server.store, &turn.thread_id, pid);
     let tail = stderr_tail.join().unwrap_or_default();
     let cancelled = turn.cancelled.load(Ordering::SeqCst);
     let (status, error) = if cancelled {
-        (MessageStatus::Cancelled, None)
+        (turn.server.runner.stopped_status(), None)
     } else if stream_error.is_some() || !exit.is_some_and(|s| s.success()) {
         let error = stream_error
             .or_else(|| last_lines(&tail))

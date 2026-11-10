@@ -369,6 +369,7 @@ impl Server {
                         text,
                         attachments,
                         images,
+                        resumes: false,
                     },
                 )?;
             }

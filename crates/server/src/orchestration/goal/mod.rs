@@ -9,7 +9,8 @@ mod stop;
 pub(in crate::orchestration) use run::{end_input, pursued, settle};
 pub(in crate::orchestration) use stop::clear_command;
 pub(crate) use state::{
-    clear_dismissal, is_dismissed, next_goal, signature, update_is_dismissed, update_releases_held,
+    clear_dismissal, is_dismissed, next_goal, note_cut_off, signature, take_cut_off,
+    update_is_dismissed, update_releases_held,
 };
 #[doc(inline)]
 pub use stop::is_upkeep;

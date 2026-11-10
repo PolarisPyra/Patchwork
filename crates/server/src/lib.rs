@@ -108,7 +108,10 @@ impl Server {
         let store = Store::open(&dirs.data)?;
         logging::start(&logs, &store.settings().logging);
         logging::system::record(&logs);
-        orchestration::turn::recovery::recover(&store)?;
+        // Beside a running Patchwork, what looks left behind is that one's live work.
+        if store.owns_data() {
+            orchestration::turn::recovery::recover(&store)?;
+        }
         let server = Arc::new(Self {
             store,
             usage: usage::UsageCache::default(),
