@@ -417,15 +417,23 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
                         secret.status = SecretStatus::Cancelled;
                     }
                 });
-            // Nothing can still be running once the turn has ended.
+            // Nothing can still be running once the turn has ended, except a call whose
+            // background task outlives the reply, such as a subagent: it is shown finished when
+            // its task ends.
             let tool_end = if *status == MessageStatus::Complete {
                 StepStatus::Done
             } else {
                 StepStatus::Error
             };
+            let background = &msg.background;
             msg.tools
                 .iter_mut()
                 .filter(|t| t.status == StepStatus::Running)
+                .filter(|t| {
+                    !background
+                        .iter()
+                        .any(|task| task.tool_id == t.id && task.status.is_live())
+                })
                 .for_each(|tool| {
                     tool.status = tool_end;
                     tool.ended_at = Some(now_ms());
