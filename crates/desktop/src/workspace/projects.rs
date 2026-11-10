@@ -2,8 +2,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use gpui::{Window, prelude::*};
+use patchwork_server::projects::Project;
 use patchwork_server::workspace::ProjectChanged;
 use crate::workspace::add_project::{AddProject, Closed as AddProjectClosed};
 use super::state::{View, Workspace};
@@ -163,14 +165,7 @@ impl Workspace {
                     None => window.focus(&this.focus, cx),
                 }
                 if let Some(project) = &closed.0 {
-                    // A new project starts closed like the rest of the list; one already there keeps
-                    // its state.
-                    if !this.settings.projects.iter().any(|p| p.id == project.id) {
-                        this.collapsed.insert(project.id.clone());
-                        this.save_collapsed();
-                    }
-                    this.settings = this.server.store.settings();
-                    this.select_project(&project.id, cx);
+                    this.project_added(project, cx);
                 }
                 cx.notify();
             },
@@ -178,5 +173,42 @@ impl Workspace {
         .detach();
         self.add_project = Some(dialog);
         cx.notify();
+    }
+
+    /// Adds the folders dropped on the sidebar as projects, off the main thread, and opens the
+    /// last one added.
+    pub fn add_dropped_folders(&mut self, paths: &[PathBuf], cx: &mut Context<Self>) {
+        let server = Arc::clone(&self.server);
+        let paths = paths.to_vec();
+        let task = cx.background_spawn(async move {
+            paths
+                .iter()
+                .map(|path| server.add_project(&path.to_string_lossy()))
+                .collect::<Vec<_>>()
+        });
+        cx.spawn(async move |this, cx| {
+            let added = task.await;
+            this.update(cx, |this, cx| {
+                for result in added {
+                    match result {
+                        Ok(project) => this.project_added(&project, cx),
+                        Err(e) => this.error = Some(e.to_string()),
+                    }
+                }
+                cx.notify();
+            })
+        })
+        .detach();
+    }
+
+    fn project_added(&mut self, project: &Project, cx: &mut Context<Self>) {
+        // A new project starts closed like the rest of the list; one already there keeps its
+        // state.
+        if !self.settings.projects.iter().any(|p| p.id == project.id) {
+            self.collapsed.insert(project.id.clone());
+            self.save_collapsed();
+        }
+        self.settings = self.server.store.settings();
+        self.select_project(&project.id, cx);
     }
 }

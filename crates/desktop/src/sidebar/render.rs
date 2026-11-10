@@ -4,7 +4,8 @@
 
 use super::archived::archived_view;
 use gpui::{
-    AnyElement, Div, FontWeight, MouseButton, MouseDownEvent, Role, Window, div, prelude::*, px,
+    AnyElement, Div, ExternalPaths, FontWeight, MouseButton, MouseDownEvent, Role, Window, div,
+    prelude::*, px,
 };
 use crate::ui::theme::{RADIUS_SM, Theme, theme};
 use crate::ui::{button, icon};
@@ -51,6 +52,14 @@ pub fn render(
         .border_color(t.border)
         .bg(t.bg_panel)
         .text_size(px(13.))
+        // Folders held over the project list light it up; dropped, each becomes a project.
+        .when(view == View::Tasks, |s| {
+            s.drag_over::<ExternalPaths>(move |style, _, _, _| style.bg(t.bg_hover))
+                .on_drop(cx.listener(|this, files: &ExternalPaths, _, cx| {
+                    this.add_dropped_folders(files.paths(), cx);
+                    cx.stop_propagation();
+                }))
+        })
         .child(
             div()
                 .id("sidebar-resize")
