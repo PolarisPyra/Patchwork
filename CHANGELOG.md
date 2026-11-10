@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.38] - 2026-11-10
+
+### Added
+
+- Pressing Escape now leaves the chat box, a text field or a button, so nothing keeps the focus; press Tab to go back to the chat box. Escape still closes an open menu, search or dialog first, and in the terminal it still goes to the shell.
+
 ## [26.11.37] - 2026-11-10
 
 ### Added
