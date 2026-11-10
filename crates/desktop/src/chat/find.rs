@@ -9,8 +9,8 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use gpui::{
-    Div, Entity, Focusable, KeyDownEvent, ListOffset, Role, Stateful, TextLayout, Window, div,
-    point, prelude::*, px,
+    Div, Entity, FocusHandle, Focusable, KeyDownEvent, ListOffset, Role, Stateful, TextLayout,
+    Window, div, point, prelude::*, px,
 };
 use patchwork_server::threads::{Message, Role as MessageRole, Thread};
 
@@ -28,6 +28,8 @@ const TOP_ROOM: f32 = 80.;
 pub struct FindState {
     field: Option<Entity<TextArea>>,
     open: bool,
+    /// What had the keys when the field opened, which gets them back when it closes.
+    came_from: Option<FocusHandle>,
     current: usize,
     /// The current match changed and has not been scrolled to yet.
     reveal: bool,
@@ -123,6 +125,7 @@ impl Workspace {
         if !self.find.open {
             self.find.open = true;
             self.find.reveal = true;
+            self.find.came_from = window.focused(cx);
         }
         window.focus(&field.read(cx).focus_handle(cx), cx);
         field.update(cx, |f, cx| f.select_everything(window, cx));
@@ -131,8 +134,14 @@ impl Workspace {
 
     fn close_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.find.open = false;
-        let editor = self.composer.read(cx).editor.clone();
-        window.focus(&editor.read(cx).focus_handle(cx), cx);
+        // Back to where the keys were, not into the composer: closing a search is not a wish to
+        // write a message.
+        let back = self
+            .find
+            .came_from
+            .take()
+            .unwrap_or_else(|| self.focus.clone());
+        window.focus(&back, cx);
         cx.notify();
     }
 
