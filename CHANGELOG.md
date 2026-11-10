@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.42] - 2026-11-10
+
+### Fixed
+
+- Dropping a folder on the project list in the sidebar now adds it as a project and opens it. The list lights up while you hold folders over it, and you can drop several at once. Before, nothing happened.
+
 ## [26.11.41] - 2026-11-10
 
 ### Changed
