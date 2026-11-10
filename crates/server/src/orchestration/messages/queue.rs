@@ -2,7 +2,6 @@
 
 // Rust guideline compliant 2026-10-09
 
-use crate::Error;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -54,19 +53,16 @@ pub(in crate::orchestration) type Queue = Arc<Mutex<Vec<FollowUp>>>;
 impl Runner {
     /// Holds a message for the next turn of the one running in `thread_id`, even when the agent
     /// could take it now. False when no turn is running there.
-    pub(crate) fn enqueue(&self, thread_id: &str, input: FollowUpInput<'_>) -> Result<bool, Error> {
+    pub(crate) fn enqueue(&self, thread_id: &str, input: FollowUpInput<'_>) -> bool {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         // An idle agent is not replying, so there is nothing to wait for.
         let Some(turn) = turns
             .get(thread_id)
             .filter(|t| !t.idle.load(Ordering::SeqCst))
         else {
-            return Ok(false);
+            return false;
         };
         let mut queue = turn.queue.lock().unwrap_or_else(PoisonError::into_inner);
-        if !queue.is_empty() {
-            return Err("Only one message can be queued at a time. Edit or remove the queued message first.".into());
-        }
         self.handed_over
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -78,7 +74,7 @@ impl Runner {
             images: input.images.to_vec(),
             merged: input.merged.to_vec(),
         });
-        Ok(true)
+        true
     }
 
     /// Replaces the payload of a queued message in the active turn. False if it has already
@@ -128,6 +124,15 @@ impl Runner {
         }
         !self
             .handed_over
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .contains(message_id)
+    }
+
+    /// Whether a running turn was given the message and has not handed it back: it waits in the
+    /// turn's queue, or the agent has it.
+    pub fn is_handed_over(&self, message_id: &str) -> bool {
+        self.handed_over
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .contains(message_id)

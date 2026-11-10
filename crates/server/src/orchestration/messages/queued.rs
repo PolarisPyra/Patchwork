@@ -64,6 +64,8 @@ impl Server {
             .iter()
             .find(|m| m.id == message_id && m.queued)
             .ok_or("That message is no longer queued")?;
+        // A message the running turn does not hold was queued before it started: after a Stop,
+        // or before a restart. It waits in the thread alone, so the edit below is all of it.
         if self.runner.is_running(thread_id)
             && !self.runner.edit_queued(
                 thread_id,
@@ -75,8 +77,9 @@ impl Server {
                     merged: &[],
                 },
             )
+            && self.runner.is_handed_over(message_id)
         {
-            return Err("That message has already been promoted".into());
+            return Err("That message has already been sent".into());
         }
         let mut edited = original.clone();
         edited.text = text;
@@ -215,9 +218,9 @@ impl Server {
     /// queued or could not be sent to the running turn.
     pub fn steer_queued(&self, thread_id: &str, message_id: &str) -> Result<(), Error> {
         let thread = self.thread(thread_id)?;
-        if !thread.messages.iter().any(|m| m.id == message_id) {
+        let Some(message) = thread.messages.iter().find(|m| m.id == message_id) else {
             return Err("Message not found".into());
-        }
+        };
         let subagents: Vec<String> = thread
             .messages
             .iter()
@@ -227,12 +230,31 @@ impl Server {
             })
             .map(|c| c.id.clone())
             .collect();
-        if !self.runner.promote_queued(
+        let promoted = self.runner.promote_queued(
             thread_id,
             message_id,
             thread.session_id.as_deref(),
             &subagents,
-        ) {
+        );
+        // A message queued before the running turn started is not in its queue, so it goes to
+        // the agent as a new steer would.
+        let steered = promoted
+            || (message.queued && !self.runner.is_handed_over(message_id) && {
+                let images = provider::load_images(&message.attachments)?;
+                let input = FollowUpInput {
+                    message_id,
+                    text: &message.text,
+                    attachments: &message.attachments,
+                    images: &images,
+                    merged: &[],
+                };
+                matches!(
+                    self.runner
+                        .steer(thread_id, input, thread.session_id.as_deref(), &subagents),
+                    Delivery::Steered | Delivery::Resumed
+                )
+            });
+        if !steered {
             return Err("That message is no longer queued or could not be sent".into());
         }
         orchestration::publish(

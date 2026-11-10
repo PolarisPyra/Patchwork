@@ -269,8 +269,8 @@ impl Server {
         self.runner.rebase_idle(&thread_id);
         // While a turn runs, the message steers it, or waits for it to end when the
         // agent cannot take it now.
-        let delivery = if queue {
-            match self.runner.enqueue(
+        let delivery = if queue
+            && self.runner.enqueue(
                 &thread_id,
                 FollowUpInput {
                     message_id: &msg.id,
@@ -280,26 +280,7 @@ impl Server {
                     merged: &[],
                 },
             ) {
-                Ok(true) => Delivery::Queued,
-                Ok(false) => self.runner.steer(
-                    &thread_id,
-                    FollowUpInput {
-                        message_id: &msg.id,
-                        text: &steer_text(),
-                        attachments: &attachments,
-                        images: &images,
-                        merged: &[],
-                    },
-                    session_id.as_deref(),
-                    &subagents,
-                ),
-                Err(error) => {
-                    self.store.update_thread(&thread_id, |t| {
-                        t.messages.retain(|queued| queued.id != msg.id);
-                    })?;
-                    return Err(error);
-                }
-            }
+            Delivery::Queued
         } else {
             self.runner.steer(
                 &thread_id,
