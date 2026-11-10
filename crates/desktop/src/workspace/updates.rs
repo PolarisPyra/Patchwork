@@ -12,8 +12,8 @@ use crate::ui::theme::{RADIUS, RADIUS_SM, Theme};
 use crate::ui::{BtnKind, btn, button, icon, popup_shadow};
 use super::state::Workspace;
 
-/// Restarts into the installed update. Agents that are replying stop for the restart, so the user
-/// confirms that first.
+/// Restarts into the installed update. Replies that are running resume after it; when Settings
+/// says a launch never resumes them, the user confirms the restart first.
 pub(super) fn restart_to_update(server: &Arc<Server>, window: &mut Window, cx: &mut App) {
     match server.restart_to_update(false) {
         RestartResult::NothingReady => {}
@@ -27,7 +27,9 @@ pub(super) fn restart_to_update(server: &Arc<Server>, window: &mut Window, cx: &
             let answer = window.prompt(
                 PromptLevel::Warning,
                 "Restart to update",
-                Some(&format!("{tasks} still running. Restarting stops them.")),
+                Some(&format!(
+                    "{tasks} still running. Restarting interrupts them, and Settings is set not to resume them."
+                )),
                 &["Restart", "Cancel"],
                 cx,
             );

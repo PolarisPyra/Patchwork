@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use super::install;
 use super::release;
 use super::types::{RestartResult, UpdateState, UpdateStatus};
+use crate::settings::ResumeAtLaunch;
 use crate::{Error, Server};
 
 const FIRST_CHECK: Duration = Duration::from_secs(30);
@@ -232,14 +233,16 @@ impl Server {
         }
     }
 
-    /// Whether the app may restart into the installed update: not while agents are replying,
-    /// unless `force` is on.
+    /// Whether the app may restart into the installed update. Replies that are running are cut
+    /// off by the restart and resumed after it, so it only holds back, unless `force` is on, when
+    /// Settings says a launch never resumes them.
     pub fn restart_to_update(&self, force: bool) -> RestartResult {
         if !matches!(self.updates.lock().shown, UpdateState::Ready { .. }) {
             return RestartResult::NothingReady;
         }
+        let resumes = self.store.settings().resume_at_launch != ResumeAtLaunch::Never;
         match self.running_turns() {
-            running if running > 0 && !force => RestartResult::Busy { running },
+            running if running > 0 && !force && !resumes => RestartResult::Busy { running },
             _ => RestartResult::Restart,
         }
     }
