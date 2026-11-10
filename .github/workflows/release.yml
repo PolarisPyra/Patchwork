@@ -2,8 +2,8 @@ name: Release
 
 # A pushed tag vX.Y.Z builds the Linux AppImage (scripts/build.sh), the Windows exe and the macOS
 # (Apple silicon) disk image, and publishes them as the GitHub release with CHANGELOG.md's section
-# for X.Y.Z as its notes, beside the latest.json the app's update check reads. docs/release.md
-# explains how to cut one.
+# for X.Y.Z as its notes, beside the latest.json the app's update check reads, then points the
+# website at it and announces it on Discord. docs/release.md explains how to cut one.
 #
 # Run it by hand (Actions → Release → Run workflow) to build all three without publishing.
 #
@@ -187,3 +187,62 @@ jobs:
             --notes-file ../notes.md \
             Patchwork_amd64.AppImage Patchwork_x64.exe Patchwork_aarch64.dmg latest.json
           gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+
+  # Points the website's download links at the release just published, deploys the site to
+  # Cloudflare Pages, and commits the new links to main with "Changelog: none". The deploy needs
+  # the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets; without them it only commits.
+  site:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+
+      - name: Point the downloads at ${{ github.ref_name }}
+        run: node site/refresh-downloads.mjs
+
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN is not set, so the website was not deployed."
+            exit 0
+          fi
+          npx --yes wrangler@4.156.2 pages deploy site --project-name patchwork-site \
+            --branch main --commit-dirty=true
+
+      - name: Commit the new links to main
+        run: |
+          git diff --quiet -- site/index.html && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "Point the website's downloads at $GITHUB_REF_NAME" -m "Changelog: none" \
+            -- site/index.html
+          git pull -q --rebase origin main
+          git push origin HEAD:main
+
+  # Announces the release in the Discord channel named by the DISCORD_RELEASE_WEBHOOK_URL secret.
+  # A trailing /github is dropped, since that suffix makes Discord expect GitHub's payload.
+  announce:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Announce ${{ github.ref_name }} on Discord
+        env:
+          DISCORD_RELEASE_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_RELEASE_WEBHOOK_URL" ]; then
+            echo "::warning::DISCORD_RELEASE_WEBHOOK_URL is not set, so the release was not announced."
+            exit 0
+          fi
+          url="https://github.com/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME"
+          jq -n --arg text "New release: Patchwork $GITHUB_REF_NAME is out. $url" '{content: $text}' \
+            | curl -fsS -H 'Content-Type: application/json' --data-binary @- \
+              "${DISCORD_RELEASE_WEBHOOK_URL%/github}" >/dev/null

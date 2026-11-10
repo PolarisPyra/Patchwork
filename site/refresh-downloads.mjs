@@ -21,7 +21,7 @@ const checkOnly = process.argv.includes("--check");
 
 const assets = {
   linux: "Patchwork_amd64.AppImage",
-  windows: "Patchwork_x64-setup.exe",
+  windows: "Patchwork_x64.exe",
   macos: "Patchwork_aarch64.dmg",
 };
 
