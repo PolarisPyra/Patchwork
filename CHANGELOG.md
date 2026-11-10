@@ -3,6 +3,22 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.32] - 2026-11-09
+
+### Added
+
+- When Claude Code, Codex, OpenCode or Antigravity is not installed, setup's agent step and Settings → Providers now have a Download button that installs it with its maker's official installer, on Windows, macOS and Linux. A spinner shows while it installs, and if the install fails the reason appears under that agent. On Windows the agent is also added to your PATH, so typing its name in a new terminal runs it.
+
+### Changed
+
+- Patchwork now runs as a native app instead of inside a web page, so resizing the window and scrolling long chats stay smooth. Mermaid diagrams and HTML previews in replies aren't shown for now. It keeps using the settings and chats you already have.
+- Patchwork no longer installs its own updates. Settings → Updates says when a new version is out and opens its download page. On Windows, Patchwork is now one program you download and run, with nothing to install.
+- The model picker in the chat box and the command palette no longer has a Use a local model entry; local models are listed with the other models instead. Code in the side panel and in chat replies is coloured for more languages, and long files no longer pause the window while they open.
+
+### Fixed
+
+- Switching between chats no longer makes the conversation jump after it opens. It now appears at its final place right away instead of shifting as its file changes and restore buttons load.
+
 ## [26.11.31] - 2026-11-08
 
 ### Added
