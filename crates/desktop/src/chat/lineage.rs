@@ -357,6 +357,29 @@ fn subagent_row(
         .when(shown, |d| d.child(details_card(tool, tools, elapsed, t)))
 }
 
+/// The subagents the card lists as running, while it is open. The background strip leaves these
+/// to the card, so a running subagent is listed once.
+pub(super) fn running_ids(w: &Workspace) -> Vec<String> {
+    let Some(thread) = w.thread.as_ref() else {
+        return Vec::new();
+    };
+    let subagents: Vec<&ToolCall> = current_turn_tools(thread)
+        .into_iter()
+        .filter(|c| c.subagent.is_some())
+        .collect();
+    let closed = subagents
+        .last()
+        .is_none_or(|newest| w.lineage.closed_at.get(&thread.id) == Some(&newest.id));
+    if closed {
+        return Vec::new();
+    }
+    subagents
+        .into_iter()
+        .filter(|c| is_active(c))
+        .map(|c| c.id.clone())
+        .collect()
+}
+
 /// The card, while the current turn has subagents and it was not closed since the newest started.
 pub fn lineage_card(
     w: &mut Workspace,

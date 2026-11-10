@@ -51,13 +51,15 @@ pub fn background_tasks(
     t: &Theme,
     cx: &mut Context<Workspace>,
 ) -> Option<Stateful<Div>> {
+    // A running subagent is listed in the lineage card, so not here as well.
+    let in_lineage = super::lineage::running_ids(w);
     let live: Vec<BackgroundTask> = w
         .thread
         .as_ref()?
         .messages
         .iter()
         .flat_map(|m| &m.background)
-        .filter(|task| task.status.is_live())
+        .filter(|task| task.status.is_live() && !in_lineage.contains(&task.tool_id))
         .cloned()
         .collect();
     if live.is_empty() {
