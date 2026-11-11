@@ -227,6 +227,15 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
             status,
             error,
         });
+        // A reply that failed on its agent's usage limit warns of it until the agent replies in
+        // the chat again.
+        if !cancelled && status == MessageStatus::Error {
+            turn.server
+                .note_limit_failure(&turn.thread_id, last, turn.agent);
+        } else if !cancelled && status == MessageStatus::Complete {
+            turn.server
+                .clear_limit_failures(&turn.thread_id, turn.agent);
+        }
         // The project's own checks, once the reply reads as finished. Not every reply deserves
         // them: a stopped turn, or one that changed nothing, leaves the project as it was.
         if crate::checks::worth_checking(&turn.server.store, &turn.thread_id, last, status) {
@@ -254,6 +263,24 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
             }
         })
     };
+
+    // An agent that was sent the conversation and gave nothing back before it failed never took
+    // it, and has no session that holds it: the next turn sends it again.
+    if status == MessageStatus::Error && turn.sent_context {
+        let saved = turn.server.store.update_thread(&turn.thread_id, |t| {
+            let silent = t
+                .messages
+                .iter()
+                .find(|m| m.id == turn.message_id)
+                .is_none_or(|m| m.text.is_empty() && m.tools.is_empty());
+            if t.session_id.is_none() && silent {
+                t.context_pending = true;
+            }
+        });
+        if let Err(e) = saved {
+            log::warn!(error:% = e; "could not keep the conversation for the next turn: {{error}}");
+        }
+    }
 
     // A chat whose agent ran out of usage goes on in its fallback.
     if !cancelled

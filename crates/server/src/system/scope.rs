@@ -9,8 +9,8 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::sync::OnceLock;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock, PoisonError};
+use std::time::{Duration, Instant};
 
 const SLICE: &str = "app-patchwork-agents.slice";
 
@@ -98,7 +98,10 @@ fn systemd_run() -> Option<&'static SystemdRun> {
         limit_slice();
         // Kills from before this run are not this run's agents'.
         if let Some(now) = memory_kills() {
-            MEMORY_KILLS_SEEN.fetch_max(now, Ordering::Relaxed);
+            MEMORY_KILLS
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .seen = now;
         }
         Some(run)
     })
@@ -168,47 +171,94 @@ fn systemctl(args: &[&str]) -> bool {
         .is_ok_and(|s| s.success())
 }
 
-/// How many processes the kernel has killed for memory in the agents' slice since boot, as the
-/// slice's cgroup counts them, with the kills in every scope under it. None where there is no
-/// such count: without systemd, or off Linux.
+/// How many processes the kernel has killed for memory in this build's slice, as the slice's
+/// cgroup counts them, with the kills in every scope under it: this build's agents and the
+/// commands it ran for them. None where there is no such count: without systemd, off Linux, or
+/// before the slice has held anything.
 fn memory_kills() -> Option<u64> {
-    static EVENTS: OnceLock<Option<PathBuf>> = OnceLock::new();
-    let events = EVENTS
-        .get_or_init(|| {
-            let shown = crate::system::host_command("systemctl")
-                .args([
-                    "--user",
-                    "show",
-                    "--property=ControlGroup",
-                    "--value",
-                    SLICE,
-                ])
-                .stdin(Stdio::null())
-                .stderr(Stdio::null())
-                .output()
-                .ok()?;
-            let group = String::from_utf8(shown.stdout).ok()?;
-            let group = group.trim().trim_start_matches('/');
-            (!group.is_empty()).then(|| {
-                PathBuf::from("/sys/fs/cgroup")
-                    .join(group)
-                    .join("memory.events")
-            })
+    // Found once it can be: a lookup that fails is tried again the next time.
+    static EVENTS: OnceLock<PathBuf> = OnceLock::new();
+    let events = if let Some(events) = EVENTS.get() {
+        events
+    } else {
+        let shown = crate::system::host_command("systemctl")
+            .args([
+                "--user",
+                "show",
+                "--property=ControlGroup",
+                "--value",
+                build_slice(),
+            ])
+            .stdin(Stdio::null())
+            .stderr(Stdio::null())
+            .output()
+            .ok()?;
+        let group = String::from_utf8(shown.stdout).ok()?;
+        let group = group.trim().trim_start_matches('/');
+        if group.is_empty() {
+            return None;
+        }
+        EVENTS.get_or_init(|| {
+            PathBuf::from("/sys/fs/cgroup")
+                .join(group)
+                .join("memory.events")
         })
-        .as_ref()?;
+    };
     let text = std::fs::read_to_string(events).ok()?;
     let line = text.lines().find(|l| l.starts_with("oom_kill "))?;
     line.split_whitespace().nth(1)?.parse().ok()
 }
 
-/// The kernel's memory kills among the agents that have been accounted for.
-static MEMORY_KILLS_SEEN: AtomicU64 = AtomicU64::new(0);
+/// How long a memory kill that no agent's exit has answered for stays one to answer for. An
+/// agent's exit follows the kill of one of its processes within moments; a kill among the
+/// commands Patchwork runs itself is no agent's, and must not be blamed on one that is killed
+/// for another reason later.
+const KILL_STANDS_FOR: Duration = Duration::from_secs(30);
 
-/// Whether the kernel has killed a process of an agent for memory since this was last asked, or
-/// since the scopes were set up. An agent that ends on a signal ran out of memory only when this
-/// says so: other things send the same signal.
+/// The kernel's memory kills in the slice: the count last read, how many of those no agent's
+/// exit has answered for yet, and when the newest of them was seen.
+struct MemoryKills {
+    seen: u64,
+    unanswered: u64,
+    at: Option<Instant>,
+}
+
+static MEMORY_KILLS: Mutex<MemoryKills> = Mutex::new(MemoryKills {
+    seen: 0,
+    unanswered: 0,
+    at: None,
+});
+
+/// Reads the count and notes the kills since the last read. A count below the last one is a
+/// slice made anew, which counts from nothing again.
+fn note_memory_kills(kills: &mut MemoryKills) {
+    let Some(now) = memory_kills() else {
+        return;
+    };
+    let new = if now >= kills.seen {
+        now - kills.seen
+    } else {
+        now
+    };
+    kills.seen = now;
+    if new > 0 {
+        kills.unanswered += new;
+        kills.at = Some(Instant::now());
+    }
+}
+
+/// Whether the kernel has just killed a process of an agent for memory, asked as an agent ends
+/// on a signal: other things send the same signal, and it ran out of memory only when this
+/// says so. Each kill answers for one agent, so two agents killed at once are both told.
 pub fn killed_for_memory() -> bool {
-    memory_kills().is_some_and(|now| MEMORY_KILLS_SEEN.fetch_max(now, Ordering::Relaxed) < now)
+    let mut kills = MEMORY_KILLS.lock().unwrap_or_else(PoisonError::into_inner);
+    note_memory_kills(&mut kills);
+    if kills.at.is_none_or(|at| at.elapsed() > KILL_STANDS_FOR) {
+        kills.unanswered = 0;
+    }
+    let answered = kills.unanswered > 0;
+    kills.unanswered = kills.unanswered.saturating_sub(1);
+    answered
 }
 
 /// Total RAM in bytes, from /proc/meminfo.

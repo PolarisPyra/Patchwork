@@ -80,46 +80,40 @@ pub(super) fn group_button(
 }
 
 /// A group of files under its name, its actions, and a count.
-pub(super) fn group(
+pub(super) fn group_header(
     title: &'static str,
     count: usize,
     actions: Vec<AnyElement>,
-    rows: Vec<AnyElement>,
     t: &Theme,
 ) -> Div {
     let name = SharedString::from(format!("group:{title}"));
-    div()
-        .flex()
-        .flex_col()
-        .px(px(4.))
-        .child(
-            div()
-                .id(name.clone())
-                .group(name)
-                .role(Role::Group)
-                .aria_label(title)
-                .h(px(22.))
-                .flex()
-                .items_center()
-                .gap(px(4.))
-                .px(px(4.))
-                .text_size(px(FS_SM))
-                .child(div().flex_1().min_w_0().truncate().child(title))
-                .children(actions)
-                .child(
-                    div()
-                        .min_w(px(18.))
-                        .rounded_full()
-                        .bg(t.bg_selected_muted)
-                        .px(px(6.))
-                        .flex()
-                        .justify_center()
-                        .text_size(px(FS_XS))
-                        .line_height(px(18.))
-                        .child(count.to_string()),
-                ),
-        )
-        .children(rows)
+    div().flex().flex_col().px(px(4.)).child(
+        div()
+            .id(name.clone())
+            .group(name)
+            .role(Role::Group)
+            .aria_label(title)
+            .h(px(22.))
+            .flex()
+            .items_center()
+            .gap(px(4.))
+            .px(px(4.))
+            .text_size(px(FS_SM))
+            .child(div().flex_1().min_w_0().truncate().child(title))
+            .children(actions)
+            .child(
+                div()
+                    .min_w(px(18.))
+                    .rounded_full()
+                    .bg(t.bg_selected_muted)
+                    .px(px(6.))
+                    .flex()
+                    .justify_center()
+                    .text_size(px(FS_XS))
+                    .line_height(px(18.))
+                    .child(count.to_string()),
+            ),
+    )
 }
 
 impl ChangesView {

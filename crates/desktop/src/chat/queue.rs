@@ -156,10 +156,12 @@ impl Workspace {
         let Some(thread) = self.thread.as_ref().map(|t| t.id.clone()) else {
             return;
         };
-        if let Err(e) = self.server.remove_queued(&thread, id) {
-            self.error = Some(e.to_string());
-        }
-        self.reload(cx);
+        let id = id.to_string();
+        self.change(
+            "take the queued message back",
+            move |server| server.remove_queued(&thread, &id),
+            cx,
+        );
     }
 
     fn steer_queued(&mut self, id: &str, cx: &mut Context<Self>) {

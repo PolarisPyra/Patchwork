@@ -93,8 +93,16 @@ fn pinned_key(thread_id: &str) -> String {
 }
 
 /// The `app_state` keys of a thread's settings, which go when the thread does.
-pub(super) fn thread_state_keys(thread_id: &str) -> [String; 7] {
+pub(super) fn thread_state_keys(thread_id: &str) -> [String; 12] {
     [
+        // The replies of it that failed on a usage limit and still warn of it.
+        format!("limit-failed:{thread_id}"),
+        // What orchestration and git keep about its turns: a wait for a usage limit, the agent
+        // process of its turn, the goal a closing cut off, and its newest committed reply.
+        format!("resume-at:{thread_id}"),
+        format!("agent-process:{thread_id}"),
+        format!("cut-off-goal:{thread_id}"),
+        format!("thread-committed:{thread_id}"),
         // Its fallback and sub agents, which `threads/granular.rs` keeps.
         format!("granular:{thread_id}"),
         compact_window_key(thread_id),

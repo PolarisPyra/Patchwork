@@ -4,8 +4,8 @@
 
 use std::path::PathBuf;
 use gpui::{
-    AnyElement, FontWeight, ListHorizontalSizingBehavior, ObjectFit, Role, StyledText, Window, div,
-    img, prelude::*, px, relative, uniform_list,
+    AnyElement, FontWeight, ListHorizontalSizingBehavior, ObjectFit, Role, StyledText, div, img,
+    prelude::*, px, relative, uniform_list,
 };
 use patchwork_server::threads::{Message, StepStatus};
 use crate::ui::theme::{FONT_MONO, FS_MD, FS_SM, Theme, theme};
@@ -13,12 +13,7 @@ use crate::ui::{BtnKind, base_name, btn, icon, spinner, tooltip};
 use super::state::{Canvas, CanvasTab};
 
 impl Canvas {
-    pub(super) fn body(
-        &mut self,
-        message: Option<&Message>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    pub(super) fn body(&mut self, message: Option<&Message>, cx: &mut Context<Self>) -> AnyElement {
         let t = *theme(cx);
         let active = self.active_tab();
         let path = match (&self.path, active) {
@@ -97,10 +92,7 @@ impl Canvas {
                 }
                 self.code_view(&t, cx).into_any_element()
             }
-            Some(Ok(text)) => {
-                let text = text.clone();
-                self.diff_view(&text, &path, &t, window, cx)
-            }
+            Some(Ok(_)) => self.diff_view(&path, &t, cx),
         }
     }
 

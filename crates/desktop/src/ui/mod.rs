@@ -6,6 +6,7 @@
 pub mod assets;
 pub mod backdrop;
 pub mod background_picker;
+pub mod dialog;
 mod controls;
 mod format;
 pub mod highlight;

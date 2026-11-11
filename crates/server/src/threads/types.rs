@@ -135,6 +135,39 @@ pub struct Goal {
 pub(crate) const NOT_FOUND: &str = "Chat not found";
 
 impl Thread {
+    /// The thread with `messages` in place of its own, which are not copied on the way: a
+    /// thread's history can be megabytes, and the list of every thread is made on each change.
+    #[must_use]
+    pub(crate) fn with_messages(&self, messages: Vec<Message>) -> Thread {
+        Thread {
+            id: self.id.clone(),
+            project_id: self.project_id.clone(),
+            title: self.title.clone(),
+            agent: self.agent,
+            model: self.model.clone(),
+            access_mode: self.access_mode,
+            effort: self.effort.clone(),
+            compact_window: self.compact_window,
+            background: self.background.clone(),
+            session_id: self.session_id.clone(),
+            created_at: self.created_at,
+            messages,
+            goal: self.goal.clone(),
+            position: self.position,
+            folder_id: self.folder_id.clone(),
+            archived_at: self.archived_at,
+            parent: self.parent.clone(),
+            plan_mode: self.plan_mode,
+            slash_commands: self.slash_commands.clone(),
+            imported_from: self.imported_from.clone(),
+            context_pending: self.context_pending,
+            role: self.role.clone(),
+            role_pending: self.role_pending,
+            favorite: self.favorite,
+            pinned: self.pinned,
+        }
+    }
+
     /// The reply the app's closing cut off, while it is the last thing sent in the thread: once
     /// anything follows it the conversation has moved on, and there is nothing to resume. A
     /// message still queued waits behind the reply, so it does not count.

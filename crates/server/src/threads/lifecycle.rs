@@ -159,12 +159,18 @@ impl Server {
         Ok(thread)
     }
 
-    /// Permanently deletes a thread and its messages.
-    pub fn delete_thread(&self, id: &str) {
+    /// Ends what a thread that is about to be deleted has outside the database: its agent and
+    /// jobs, the snapshots its turns left in the project's repository, and its API session.
+    pub(crate) fn forget_thread(&self, id: &str) {
         self.runner.cancel(id, None);
         self.runner.forget_jobs(id);
         self.remove_checkpoints(id);
         self.remove_api_session(id);
+    }
+
+    /// Permanently deletes a thread and its messages.
+    pub fn delete_thread(&self, id: &str) {
+        self.forget_thread(id);
         if self
             .store
             .thread(id)

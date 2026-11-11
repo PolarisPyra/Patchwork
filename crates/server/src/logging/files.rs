@@ -46,6 +46,13 @@ pub fn session_dir(logs: &Path) -> PathBuf {
             let root = logs.to_path_buf();
             let dir = root.join(Local::now().format("%Y%m%dT%H%M%S").to_string());
             let _ = std::fs::create_dir_all(&dir);
+            // The logs hold what was said in chats and the commands agents ran, so the folder
+            // is the user's alone, whatever a log file in it is created as.
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700));
+            }
             let entries: Vec<_> = std::fs::read_dir(&root)
                 .map(|list| list.flatten().collect())
                 .unwrap_or_default();

@@ -106,6 +106,24 @@ impl Menu {
         })
     }
 
+    /// Opens a menu named `label` for the view that owns it, and tells that view through
+    /// `closed` when the menu closes: by a row, by Escape, or by a press outside it. The owner
+    /// then drops the menu and takes the focus back.
+    pub fn open_for<V: 'static>(
+        label: impl Into<SharedString>,
+        items: Vec<MenuItem>,
+        window: &mut Window,
+        cx: &mut gpui::Context<V>,
+        closed: impl Fn(&mut V, &mut Window, &mut gpui::Context<V>) + 'static,
+    ) -> Entity<Self> {
+        let menu = Self::open(label, items, window, cx);
+        cx.subscribe_in(&menu, window, move |owner, _, _: &Dismissed, window, cx| {
+            closed(owner, window, cx);
+        })
+        .detach();
+        menu
+    }
+
     /// The menu laid over the window at `at`, kept inside it.
     pub fn view(menu: &Entity<Self>, at: Point<Pixels>) -> AnyElement {
         deferred(

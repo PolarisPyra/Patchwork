@@ -8,7 +8,7 @@ use crate::ui::theme::{FS_SM, theme};
 use super::state::{Canvas, CanvasTab};
 
 impl Render for Canvas {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = *theme(cx);
         let message = self.live_message(cx);
         // The agent may have edited the file while it was streaming.
@@ -21,9 +21,10 @@ impl Render for Canvas {
         self.was_streaming = streaming;
         let header = self.header(&t, cx);
         let tabs = self.tabs(message.as_ref(), &t, cx);
-        let body = self.body(message.as_ref(), window, cx);
+        let body = self.body(message.as_ref(), cx);
         let footer = self.footer(&t, cx);
-        let scrolls = self.active_tab() != CanvasTab::Code;
+        // The code and the diff are lists that scroll themselves and draw only what is in view.
+        let scrolls = !matches!(self.active_tab(), CanvasTab::Code | CanvasTab::Diff);
         div()
             .id("canvas")
             .role(Role::Complementary)

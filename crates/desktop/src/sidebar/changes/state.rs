@@ -139,7 +139,15 @@ pub struct ChangesView {
     /// The commit actions menu, or a commit's undo menu with its commit, and where it opened.
     pub(super) menu: Option<(Entity<Menu>, Point<Pixels>, Option<String>)>,
     pub(super) dismissed: Option<Point<Pixels>>,
-    pub(super) scroll: ScrollHandle,
+    /// The changed files, as the list that draws the ones in view, the entries it draws, and
+    /// what their heights last depended on.
+    pub(super) list: gpui::ListState,
+    pub(super) entries: std::rc::Rc<Vec<super::list::Entry>>,
+    pub(super) list_shape: u64,
+    /// What the entries are drawn with: whether the chat may act unasked, so rows need no
+    /// buttons, and whether there is anything to commit.
+    pub(super) full_access: bool,
+    pub(super) has_changes: bool,
     pub(super) graph_scroll: ScrollHandle,
 }
 
@@ -197,7 +205,11 @@ impl ChangesView {
             missing: HashSet::new(),
             menu: None,
             dismissed: None,
-            scroll: ScrollHandle::new(),
+            list: gpui::ListState::new(0, gpui::ListAlignment::Top, gpui::px(200.)),
+            entries: std::rc::Rc::new(Vec::new()),
+            list_shape: 0,
+            full_access: false,
+            has_changes: false,
             graph_scroll: ScrollHandle::new(),
         }
     }

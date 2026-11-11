@@ -29,6 +29,14 @@ pub fn resolve(root: &Path, path: &str) -> PathBuf {
     for part in joined.components() {
         match part {
             Component::ParentDir => {
+                // The system follows a link before it steps up from it, so the step is taken
+                // from where the link leads: `link/..` is the folder above the link's target,
+                // not the folder the link is in.
+                if out.is_symlink()
+                    && let Ok(target) = std::fs::canonicalize(&out)
+                {
+                    out = target;
+                }
                 out.pop();
             }
             Component::CurDir => {}

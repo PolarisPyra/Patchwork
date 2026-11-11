@@ -291,13 +291,12 @@ fn archived_row(
             .child(icon("arrow-counter-clockwise", 16.))
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
-                if let Err(e) = this.server.set_thread_archived(&restore_id, false) {
-                    log::warn!(
-                        restore_id:%, error:% = e;
-                        "could not restore {{restore_id}}: {{error}}"
-                    );
-                }
-                this.reload(cx);
+                let id = restore_id.clone();
+                this.change(
+                    "restore the chat",
+                    move |server| server.set_thread_archived(&id, false),
+                    cx,
+                );
             })),
         )
         .child(

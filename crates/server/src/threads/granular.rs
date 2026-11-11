@@ -14,6 +14,8 @@ use crate::settings::Settings;
 use crate::threads::Thread;
 use crate::{Error, Server};
 
+use super::lifecycle::note;
+
 /// An agent with the model and effort it runs at. None leaves either to the agent's CLI.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -141,30 +143,34 @@ pub(crate) fn fall_back(store: &Store, settings: &Settings, thread: &Thread) -> 
     let fallback = fallback_of(store, settings, thread)?;
     let reserves = saved(store, &thread.id);
     let to = fallback.clone();
-    let moved = store
-        .update_thread(&thread.id, |t| {
-            t.agent = to.agent;
-            t.model = to.model;
-            t.effort = to.effort;
-            // The session belongs to the agent that ran out.
-            t.session_id = None;
-            t.context_pending = !t.messages.is_empty();
-        })
-        .and_then(|()| {
-            // A fallback is used once, and its sub agents are now the chat's.
-            let left = Reserves {
-                fallback: None,
-                sub: reserves.sub_fallback,
-                sub_fallback: None,
-            };
-            save(store, &thread.id, &left)
-        });
+    let moved = store.update_thread(&thread.id, |t| {
+        t.agent = to.agent;
+        t.model = to.model;
+        t.effort = to.effort;
+        // The session belongs to the agent that ran out.
+        t.session_id = None;
+        t.context_pending = !t.messages.is_empty();
+    });
     if let Err(e) = moved {
         log::warn!(
             thread = thread.id.as_str(), error:% = e;
             "could not move {{thread}} to its fallback: {{error}}"
         );
         return None;
+    }
+    // A fallback is used once, and its sub agents are now the chat's. The chat has moved either
+    // way: reserves left as they were name a fallback it is now on, which is no fallback, and
+    // sub agents of the agent it left, which are not used.
+    let left = Reserves {
+        fallback: None,
+        sub: reserves.sub_fallback,
+        sub_fallback: None,
+    };
+    if let Err(e) = save(store, &thread.id, &left) {
+        log::warn!(
+            thread = thread.id.as_str(), error:% = e;
+            "could not save what {{thread}} has left behind its fallback: {{error}}"
+        );
     }
     Some(fallback)
 }
@@ -195,13 +201,39 @@ impl Server {
     /// has started, or the change cannot be saved.
     pub fn set_thread_granular(&self, id: &str, mut granular: Granular) -> Result<(), Error> {
         granular.tidy();
-        self.set_thread_model(id, granular.main.agent, granular.main.model.clone())?;
-        self.set_thread_effort(id, granular.main.effort.as_deref())?;
-        if saved(&self.store, id) != granular.reserves {
-            save(&self.store, id, &granular.reserves)?;
-            // An idle agent was started with the old sub agents.
-            self.runner.retire_idle(id);
+        let thread = self.thread(id)?;
+        let Granular { main, reserves } = granular;
+        if thread.agent != main.agent && !thread.messages.is_empty() && !thread.context_pending {
+            return Err("The agent can't change after the conversation has started".into());
         }
+        let same_main = thread.agent == main.agent
+            && thread.model == main.model
+            && thread.effort == main.effort;
+        let same_reserves = saved(&self.store, id) == reserves;
+        if same_main && same_reserves {
+            return Ok(());
+        }
+        // The reserves first. Should the chat's own agent then fail to save, they stand behind
+        // the agent it kept: sub agents of another agent are not used, and it has a fallback.
+        if !same_reserves {
+            save(&self.store, id, &reserves)?;
+        }
+        if !same_main {
+            let shown = format!(
+                "agent {:?}, model {}, effort {}",
+                main.agent,
+                main.model.as_deref().unwrap_or("default"),
+                main.effort.as_deref().unwrap_or("default")
+            );
+            self.store.update_thread(id, |t| {
+                t.agent = main.agent;
+                t.model = main.model;
+                t.effort = main.effort;
+            })?;
+            note(id, shown);
+        }
+        // An idle agent was started with what the chat ran with before.
+        self.runner.retire_idle(id);
         Ok(())
     }
 
@@ -252,30 +284,47 @@ impl Server {
     ) -> Result<(), Error> {
         granular.tidy();
         self.set_project_granular_default(project_id, granular.clone())?;
-        let chats: Vec<(String, Option<AgentPick>)> = self.store.with_threads(|threads| {
+        let chats: Vec<String> = self.store.with_threads(|threads| {
             threads
                 .iter()
                 .filter(|t| t.project_id.as_deref() == Some(project_id))
                 .filter(|t| t.parent.is_none() && t.archived_at.is_none())
-                .map(|t| {
-                    let started = !t.messages.is_empty() && !t.context_pending;
-                    let own = (started && t.agent != granular.main.agent).then(|| AgentPick {
-                        agent: t.agent,
-                        model: t.model.clone(),
-                        effort: t.effort.clone(),
-                    });
-                    (t.id.clone(), own)
-                })
+                .map(|t| t.id.clone())
                 .collect()
         });
-        for (id, own) in chats {
+        // Every chat is tried, so one that fails does not leave the ones after it unchanged.
+        let mut failed = Vec::new();
+        for id in &chats {
+            // Read as each is reached: a chat may have started since the list was made.
+            let Some(thread) = self.store.thread(id) else {
+                continue;
+            };
             let mut given = granular.clone();
-            if let Some(own) = own {
-                given.main = own;
+            let started = !thread.messages.is_empty() && !thread.context_pending;
+            if started && thread.agent != given.main.agent {
+                given.main = AgentPick {
+                    agent: thread.agent,
+                    model: thread.model,
+                    effort: thread.effort,
+                };
             }
-            self.set_thread_granular(&id, given)?;
+            if let Err(e) = self.set_thread_granular(id, given) {
+                log::warn!(
+                    thread = id.as_str(), error:% = e;
+                    "could not give {{thread}} its project's granular settings: {{error}}"
+                );
+                failed.push(e);
+            }
         }
-        Ok(())
+        match failed.len() {
+            0 => Ok(()),
+            n => Err(format!(
+                "{n} of this project's {} chats could not be changed: {}",
+                chats.len(),
+                failed[0]
+            )
+            .into()),
+        }
     }
 
     /// Whether a new chat in `project_id` is asked what it runs with: granular chats are on, and

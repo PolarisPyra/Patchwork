@@ -55,8 +55,11 @@ pub struct Canvas {
     pub(super) was_streaming: bool,
     pub(super) body: ScrollHandle,
     pub(super) code_scroll: UniformListScrollHandle,
-    /// The rows of the diff that start a change, by their place among the body's children.
-    pub(super) hunk_children: Vec<usize>,
+    /// The diff read into rows once it loads, and the list that draws the ones in view.
+    pub(super) diff_rows: Option<std::rc::Rc<diff::Parsed>>,
+    pub(super) diff_list: gpui::ListState,
+    /// What the heights of the diff's lines last depended on: its notes and the open editor.
+    pub(super) diff_shape: u64,
     pub(super) draft: Option<diff::Draft>,
     pub(super) editing: Option<usize>,
     pub(super) note_input: Entity<TextArea>,
@@ -116,7 +119,9 @@ impl Canvas {
             was_streaming,
             body: ScrollHandle::new(),
             code_scroll: UniformListScrollHandle::new(),
-            hunk_children: Vec::new(),
+            diff_rows: None,
+            diff_list: gpui::ListState::new(0, gpui::ListAlignment::Top, gpui::px(400.)),
+            diff_shape: 0,
             draft: None,
             editing: None,
             note_input,
@@ -214,6 +219,12 @@ impl Canvas {
                 this.runs = runs;
                 this.widest = widest;
                 this.file = Some(file.map(SharedString::from));
+                this.diff_rows = diff
+                    .as_ref()
+                    .ok()
+                    .map(|text| std::rc::Rc::new(diff::parse(text)));
+                let items = this.diff_rows.as_ref().map_or(0, |p| p.rows.len() + 1);
+                this.diff_list.reset(items);
                 this.diff = Some(diff.map(SharedString::from));
                 this.staged = staged;
                 this.media = media;

@@ -77,7 +77,7 @@ impl Workspace {
         if !self.collapsed.remove(id) {
             self.collapsed.insert(id.to_string());
         }
-        self.save_collapsed();
+        self.save_collapsed(cx);
         cx.notify();
     }
 
@@ -85,15 +85,20 @@ impl Workspace {
         for project in &self.settings.projects {
             self.collapsed.insert(project.id.clone());
         }
-        self.save_collapsed();
+        self.save_collapsed(cx);
         cx.notify();
     }
 
-    pub fn save_collapsed(&self) {
+    /// Saves which projects and folders are folded away, off the UI thread.
+    pub fn save_collapsed(&self, cx: &gpui::App) {
         let ids: Vec<String> = self.collapsed.iter().cloned().collect();
-        if let Err(e) = self.server.set_collapsed_sections(&ids) {
-            log::warn!(error:% = e; "could not save the open sections: {{error}}");
-        }
+        let server = Arc::clone(&self.server);
+        cx.background_spawn(async move {
+            if let Err(e) = server.set_collapsed_sections(&ids) {
+                log::warn!(error:% = e; "could not save the open sections: {{error}}");
+            }
+        })
+        .detach();
     }
 }
 
@@ -141,7 +146,7 @@ impl Workspace {
                 opened |= self.collapsed.remove(&format!("folder:{folder}"));
             }
             if opened {
-                self.save_collapsed();
+                self.save_collapsed(cx);
             }
         }
         self.open_thread(id, cx);
@@ -206,7 +211,7 @@ impl Workspace {
         // state.
         if !self.settings.projects.iter().any(|p| p.id == project.id) {
             self.collapsed.insert(project.id.clone());
-            self.save_collapsed();
+            self.save_collapsed(cx);
         }
         self.settings = self.server.store.settings();
         self.select_project(&project.id, cx);

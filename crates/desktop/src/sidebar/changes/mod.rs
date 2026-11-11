@@ -7,6 +7,7 @@ mod state;
 mod actions;
 mod rows;
 mod commit;
+mod list;
 mod render;
 
 pub use state::ChangesView;

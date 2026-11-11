@@ -247,25 +247,26 @@ impl Server {
         self.register_project(project, true)
     }
 
-    /// When the project at `path` is a worktree `create_worktree` made, removes the worktree,
-    /// refused while it has changes that aren't committed. Its branch stays with its commits.
-    fn remove_worktree(&self, id: &str, path: &str) -> Result<(), Error> {
+    /// The folder of the worktree `create_worktree` made for the project at `path`, when it is
+    /// one and may be removed: refused while a task runs in it or it has changes that aren't
+    /// committed. None for any other project.
+    fn removable_worktree(&self, id: &str, path: &str) -> Result<Option<String>, Error> {
         let Ok(dir) = std::fs::canonicalize(&self.worktrees_dir) else {
-            return Ok(());
+            return Ok(None);
         };
         let Some(first) = Path::new(path)
             .strip_prefix(&dir)
             .ok()
             .and_then(|rel| rel.components().next())
         else {
-            return Ok(());
+            return Ok(None);
         };
         let root = dir.join(first);
         // Gone already: git drops its record of the worktree by itself.
         if !root.exists() {
-            return Ok(());
+            return Ok(None);
         }
-        let root = root.to_string_lossy();
+        let root = root.to_string_lossy().into_owned();
         let running = self
             .store
             .threads()
@@ -283,15 +284,18 @@ impl Server {
                     .into(),
             );
         }
+        Ok(Some(root))
+    }
+
+    /// Removes the worktree at `root`. Its branch stays with its commits.
+    fn remove_worktree(&self, root: &str) -> Result<(), Error> {
+        let dir = self.worktrees_dir.to_string_lossy();
         let common = workspace::run_git(
-            &root,
+            root,
             &["rev-parse", "--path-format=absolute", "--git-common-dir"],
         )?;
         let git_dir = format!("--git-dir={}", common.trim());
-        workspace::run_git(
-            &dir.to_string_lossy(),
-            &[&git_dir, "worktree", "remove", &root],
-        )?;
+        workspace::run_git(&dir, &[&git_dir, "worktree", "remove", root])?;
         Ok(())
     }
 
@@ -303,15 +307,32 @@ impl Server {
     /// the database cannot save the removal.
     pub fn remove_project(&self, id: &str) -> Result<(), Error> {
         let path = self.project_root(id)?;
-        self.remove_worktree(id, &path)?;
+        let worktree = self.removable_worktree(id, &path)?;
+        // Each chat goes as one deleted by itself does: its agent stopped, and what it kept
+        // outside the database removed, while the project's folder is still there to find it in.
+        let chats: Vec<String> = self.store.with_threads(|threads| {
+            threads
+                .iter()
+                .filter(|t| t.project_id.as_deref() == Some(id))
+                .map(|t| t.id.clone())
+                .collect()
+        });
+        for chat in &chats {
+            self.forget_thread(chat);
+        }
+        if let Some(root) = worktree {
+            self.remove_worktree(&root)?;
+        }
+        // The chats before the project: a failure between the two leaves an empty project, not
+        // chats that belong to none.
+        self.store.delete_project_threads(id)?;
         self.store.update_settings(|s| {
             s.projects.retain(|p| p.id != id);
             if s.active_project_id.as_deref() == Some(id) {
                 s.active_project_id = s.projects.first().map(|p| p.id.clone());
             }
         })?;
-        self.store.clear_state(&crate::threads::project_key(id))?;
-        self.store.delete_project_threads(id)
+        self.store.clear_state(&crate::threads::project_key(id))
     }
 
     /// Files of a project that a mention can refer to.

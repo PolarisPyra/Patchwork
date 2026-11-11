@@ -110,6 +110,45 @@ impl Server {
         });
     }
 
+    /// Whether the chat has no reply running and is set to resume its last one when its agent's
+    /// usage limit resets.
+    fn waits_to_resume(&self, thread_id: &str) -> bool {
+        !self.runner.is_running(thread_id)
+            && self.limit_resume_at(thread_id).is_some()
+            && self
+                .store
+                .thread(thread_id)
+                .is_some_and(|t| t.resumable_reply().is_some())
+    }
+
+    /// Stores the message as a queued one, which goes to the agent once the reply the chat is
+    /// waiting to resume has finished, or sooner when the user sends the queue.
+    fn hold_for_resume(
+        &self,
+        thread_id: &str,
+        text: &str,
+        attachments: Vec<Attachment>,
+    ) -> Result<Message, Error> {
+        let mut msg = user_message(text, attachments);
+        msg.queued = true;
+        let held = msg.clone();
+        self.store
+            .update_thread(thread_id, |t| t.messages.push(held))?;
+        let source = Source {
+            thread: Some(thread_id.to_string()),
+            message: Some(msg.id.clone()),
+            ..Source::default()
+        };
+        let note = "queued until the reply waiting on a usage limit resumes";
+        THREAD_LOG.write(
+            LogLevel::Info,
+            "message sent",
+            &source,
+            Data::Text(note.into()),
+        );
+        Ok(msg)
+    }
+
     /// Appends the user message, then starts the agent turn in the background.
     /// Returns the stored user message; assistant output arrives via the event sink.
     ///
@@ -129,6 +168,12 @@ impl Server {
         // Refused before anything is stored: a turn still starting has no agent to write to.
         if self.runner.is_starting(&thread_id) {
             return Err(crate::orchestration::turn::start::STILL_STARTING.into());
+        }
+        // A chat waiting for its usage limit to reset holds the message for after the reply it
+        // is waiting to resume. Sent now it would start a turn of its own, the chat would move
+        // past that reply, and the wait would be dropped.
+        if !provider::is_goal_command(&text) && self.waits_to_resume(&thread_id) {
+            return self.hold_for_resume(&thread_id, &text, attachments);
         }
         if let Some(command) = provider::goal_command(&text) {
             if self.runner.is_running(&thread_id) {

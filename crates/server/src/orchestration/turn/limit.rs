@@ -9,9 +9,13 @@
 use std::sync::{Arc, PoisonError};
 use std::time::Duration;
 
-use crate::orchestration::turn::start::TurnRequest;
+use crate::orchestration::turn::start::{Starting, TurnRequest};
 use crate::system::now_ms;
-use crate::threads::{MessageStatus, Thread};
+use serde::{Deserialize, Serialize};
+
+use crate::events::AgentEvent;
+use crate::provider::AgentKind;
+use crate::threads::{Message, MessageStatus, Part, Thread};
 use crate::usage::ProviderUsage;
 use crate::{Error, Server};
 
@@ -46,13 +50,81 @@ fn used_up_until(usage: &ProviderUsage) -> Option<u64> {
         .max()
 }
 
-/// One turn waiting for a limit to reset.
+/// One turn waiting for a limit to reset, or one whose wait the user cancelled.
 #[derive(Debug, Clone)]
 pub struct LimitWait {
     /// When it resumes, in Unix epoch milliseconds.
     at: u64,
     /// The reply that failed. The wait is dropped once the thread has moved past it.
     message_id: String,
+    /// Whether the turn resumes at `at`. A cancelled wait is kept until then for the time it
+    /// holds: the usage numbers that gave it may be gone, after a restart, when the user asks
+    /// for the wait again.
+    on: bool,
+}
+
+impl LimitWait {
+    /// The wait as it is saved: its time, its reply, and `off` once it is cancelled.
+    fn saved(&self) -> String {
+        let off = if self.on { "" } else { "\noff" };
+        format!("{}\n{}{off}", self.at, self.message_id)
+    }
+
+    /// A wait read back from how `saved` wrote it.
+    fn read(note: &str) -> Option<Self> {
+        let mut lines = note.lines();
+        Some(Self {
+            at: lines.next()?.parse().ok()?,
+            message_id: lines.next()?.into(),
+            on: lines.next() != Some("off"),
+        })
+    }
+}
+
+/// The replies of a thread that failed on its agent's usage limit and still warn of it, and
+/// that agent.
+#[derive(Debug, Serialize, Deserialize)]
+struct LimitFailures {
+    agent: AgentKind,
+    replies: Vec<String>,
+    /// When the limit they failed on resets, in Unix epoch milliseconds; their warnings are
+    /// stale from then. 0 once they have been taken away and only the reply to resume is left.
+    #[serde(default)]
+    reset_at: u64,
+}
+
+/// `reply` without its usage limit warning: the error, and the same words where the agent also
+/// ended its text with them. `keep_text` leaves the text, for a reply whose words are the only
+/// thing that says why it stopped.
+fn without_warning(reply: &Message, keep_text: bool) -> Message {
+    let mut reply = reply.clone();
+    let Some(warning) = reply.error.take() else {
+        return reply;
+    };
+    let warning = warning.trim();
+    if keep_text || warning.is_empty() {
+        return reply;
+    }
+    let cut = |text: &mut String| {
+        if let Some(kept) = text.trim_end().strip_suffix(warning) {
+            *text = kept.trim_end().to_string();
+        }
+    };
+    cut(&mut reply.text);
+    if let Some(Part::Text { text }) = reply
+        .parts
+        .iter_mut()
+        .rev()
+        .find(|p| matches!(p, Part::Text { .. }))
+    {
+        cut(text);
+    }
+    reply
+}
+
+/// The `app_state` key of a thread's `LimitFailures`.
+fn failed_key(thread_id: &str) -> String {
+    format!("limit-failed:{thread_id}")
 }
 
 fn key(thread_id: &str) -> String {
@@ -66,15 +138,159 @@ impl Server {
     /// while drawing.
     #[must_use]
     pub fn limit_reset(&self, thread: &Thread) -> Option<u64> {
-        thread
+        let reply = thread
             .resumable_reply()
             .filter(|m| m.status == MessageStatus::Error)?;
-        used_up_until(&self.usage.known(thread.agent)?)
+        let known = self.usage.known(thread.agent);
+        if let Some(reset) = known.as_ref().and_then(used_up_until) {
+            return Some(reset);
+        }
+        // The numbers are gone or have moved, but a wait set on this reply holds its reset.
+        let waits = self.runner.limit_waits.lock();
+        let waits = waits.unwrap_or_else(PoisonError::into_inner);
+        waits
+            .get(&thread.id)
+            .filter(|wait| wait.message_id == reply.id)
+            .map(|wait| wait.at.saturating_sub(MARGIN_MS))
+            .filter(|reset| *reset > now_ms())
+    }
+
+    /// Notes that the thread's reply `message_id`, by `agent`, failed on the agent's usage limit,
+    /// as far as the app can tell: it is the reply the thread would resume, and the agent's usage
+    /// shows a limit used up, which is when the app offers to resume once the limit resets.
+    pub(in crate::orchestration) fn note_limit_failure(
+        &self,
+        thread_id: &str,
+        message_id: &str,
+        agent: AgentKind,
+    ) {
+        let Some(thread) = self.store.thread(thread_id) else {
+            return;
+        };
+        let failed = thread.resumable_reply().is_some_and(|m| m.id == message_id);
+        let Some(reset) = self.limit_reset(&thread).filter(|_| failed) else {
+            return;
+        };
+        let noted = self
+            .store
+            .state(&failed_key(thread_id))
+            .and_then(|json| serde_json::from_str::<LimitFailures>(&json).ok())
+            .filter(|noted| noted.agent == agent);
+        let mut failures = noted.unwrap_or(LimitFailures {
+            agent,
+            replies: Vec::new(),
+            reset_at: 0,
+        });
+        failures.replies.push(message_id.to_string());
+        failures.reset_at = failures.reset_at.max(reset);
+        let saved = serde_json::to_string(&failures)
+            .map_err(|e| Error::from(e.to_string()))
+            .and_then(|json| self.store.set_state(&failed_key(thread_id), &json));
+        if let Err(e) = saved {
+            log::warn!(error:% = e; "could not note a reply that failed on a usage limit: {{error}}");
+        }
+    }
+
+    /// Takes the usage limit warnings off the thread's earlier replies, now that `agent` has
+    /// replied in it again: the limit they warned of has reset, or was never reached. A reply
+    /// that holds nothing but the warning goes; one with work in it keeps its work. Replies that
+    /// failed on another agent's limit keep their warning, which says why the chat moved off it.
+    pub(in crate::orchestration) fn clear_limit_failures(&self, thread_id: &str, agent: AgentKind) {
+        let Some(failures) = self
+            .store
+            .state(&failed_key(thread_id))
+            .and_then(|json| serde_json::from_str::<LimitFailures>(&json).ok())
+            .filter(|noted| noted.agent == agent)
+        else {
+            return;
+        };
+        self.lift_limit_failures(thread_id, &failures, false);
+    }
+
+    /// Takes the warnings off the replies whose limit has since reset, in every chat: they
+    /// said when it would, and that time has passed. The reply a chat would resume stays, as
+    /// what its Resume button carries on, without its warning, until the agent replies again.
+    fn expire_limit_failures(&self) {
+        let now = now_ms();
+        let chats: Vec<String> = self.store.with_threads(|threads| {
+            threads
+                .iter()
+                .filter(|t| t.messages.iter().any(|m| m.error.is_some()))
+                .map(|t| t.id.clone())
+                .collect()
+        });
+        for thread_id in chats {
+            let failures = self
+                .store
+                .state(&failed_key(&thread_id))
+                .and_then(|json| serde_json::from_str::<LimitFailures>(&json).ok())
+                .filter(|noted| noted.reset_at != 0 && noted.reset_at <= now);
+            if let Some(failures) = failures {
+                self.lift_limit_failures(&thread_id, &failures, true);
+            }
+        }
+    }
+
+    /// Takes the warning off each of `failures`, removing the replies that hold nothing else.
+    /// With `expiring`, the reply the chat would resume is kept, and noted again for the agent's
+    /// next reply to take away.
+    fn lift_limit_failures(&self, thread_id: &str, failures: &LimitFailures, expiring: bool) {
+        let Some(thread) = self.store.thread(thread_id) else {
+            return;
+        };
+        let resumable = thread.resumable_reply().map(|m| m.id.clone());
+        let mut kept = Vec::new();
+        for id in &failures.replies {
+            let Some(reply) = thread.messages.iter().find(|m| &m.id == id) else {
+                continue;
+            };
+            let text = reply.text.trim();
+            let only_warning = (text.is_empty()
+                || reply.error.as_deref().is_some_and(|e| text == e.trim()))
+                && reply.tools.is_empty()
+                && reply.files.is_empty()
+                && reply.approvals.is_empty();
+            let keep = expiring && resumable.as_deref() == Some(id.as_str());
+            if keep {
+                kept.push(id.clone());
+            }
+            let event = if only_warning && !keep {
+                AgentEvent::MessageRemoved {
+                    message_id: id.clone(),
+                }
+            } else if reply.error.is_some() {
+                AgentEvent::MessageEdited {
+                    message: without_warning(reply, keep),
+                }
+            } else {
+                continue;
+            };
+            crate::orchestration::publish(self, thread_id, event);
+        }
+        let left = (!kept.is_empty()).then_some(LimitFailures {
+            agent: failures.agent,
+            replies: kept,
+            reset_at: 0,
+        });
+        let saved = match left {
+            Some(left) => serde_json::to_string(&left)
+                .map_err(|e| Error::from(e.to_string()))
+                .and_then(|json| self.store.set_state(&failed_key(thread_id), &json)),
+            None => self.store.clear_state(&failed_key(thread_id)),
+        };
+        if let Err(e) = saved {
+            log::warn!(error:% = e; "could not save what is left of the usage limit warnings: {{error}}");
+        }
     }
 
     /// Carries a turn that failed while its agent was out of usage on in the chat's fallback, and
     /// returns whether it did. The fallback is given the conversation, in a session of its own.
     pub(in crate::orchestration) fn fall_back(self: &Arc<Self>, thread_id: &str) -> bool {
+        // Held from here to the fallback's turn: the check below asks the provider, and a message
+        // sent meanwhile would start a turn of its own on the agent this moves the chat off.
+        let Ok(claim) = Starting::claim(&self.runner, thread_id) else {
+            return false;
+        };
         let settings = self.store.settings();
         let Some(thread) = self.store.thread(thread_id) else {
             return false;
@@ -103,7 +319,7 @@ impl Server {
                 to.model.as_deref().unwrap_or("default")
             ),
         );
-        let started = self.runner.start_turn(
+        let started = self.runner.start_claimed(
             self,
             TurnRequest {
                 thread_id: thread_id.into(),
@@ -112,7 +328,9 @@ impl Server {
                 images: Vec::new(),
                 resumes: true,
             },
+            claim,
         );
+        // The chat stays on its fallback, which its Resume button then starts.
         if let Err(e) = &started {
             log::warn!(
                 thread = thread_id, error:% = e;
@@ -127,7 +345,10 @@ impl Server {
     pub fn limit_resume_at(&self, thread_id: &str) -> Option<u64> {
         let waits = self.runner.limit_waits.lock();
         let waits = waits.unwrap_or_else(PoisonError::into_inner);
-        waits.get(thread_id).map(|wait| wait.at)
+        waits
+            .get(thread_id)
+            .filter(|wait| wait.on)
+            .map(|wait| wait.at)
     }
 
     /// Sets the thread's failed turn to resume once its agent's usage limit has reset, and
@@ -147,26 +368,33 @@ impl Server {
             .map(|m| m.id.clone())
             .ok_or("This reply cannot be resumed")?;
         let at = reset + MARGIN_MS;
-        self.store
-            .set_state(&key(thread_id), &format!("{at}\n{message_id}"))?;
+        // Saved and noted under the one lock, so a cancel lands before both or after both.
         let mut waits = self.runner.limit_waits.lock();
         let waits = waits.as_mut().unwrap_or_else(|e| e.get_mut());
-        waits.insert(thread_id.into(), LimitWait { at, message_id });
+        let wait = LimitWait {
+            at,
+            message_id,
+            on: true,
+        };
+        self.store.set_state(&key(thread_id), &wait.saved())?;
+        waits.insert(thread_id.into(), wait);
         Ok(at)
     }
 
-    /// Stops the thread's turn from resuming when its limit resets.
+    /// Stops the thread's turn from resuming when its limit resets. The wait is kept, switched
+    /// off, so it can be asked for again.
     ///
     /// # Errors
     ///
-    /// Returns an error when the saved wait cannot be removed.
+    /// Returns an error when the change to the saved wait cannot be saved.
     pub fn cancel_limit_resume(&self, thread_id: &str) -> Result<(), Error> {
         let mut waits = self.runner.limit_waits.lock();
-        waits
-            .as_mut()
-            .unwrap_or_else(|e| e.get_mut())
-            .remove(thread_id);
-        self.store.clear_state(&key(thread_id))
+        let waits = waits.as_mut().unwrap_or_else(|e| e.get_mut());
+        let Some(wait) = waits.get_mut(thread_id) else {
+            return self.store.clear_state(&key(thread_id));
+        };
+        wait.on = false;
+        self.store.set_state(&key(thread_id), &wait.saved())
     }
 
     /// Takes up the waits an earlier session saved, and resumes each turn as its limit resets,
@@ -187,12 +415,7 @@ impl Server {
             })
             .into_iter()
             .filter_map(|id| {
-                let note = self.store.state(&key(&id))?;
-                let (at, message_id) = note.split_once('\n')?;
-                let wait = LimitWait {
-                    at: at.parse().ok()?,
-                    message_id: message_id.into(),
-                };
+                let wait = LimitWait::read(&self.store.state(&key(&id))?)?;
                 Some((id, wait))
             })
             .collect();
@@ -205,13 +428,38 @@ impl Server {
         let started = std::thread::Builder::new()
             .name("limit-resume".into())
             .spawn(move || {
+                server.learn_limits();
                 loop {
+                    server.expire_limit_failures();
                     server.resume_due();
                     std::thread::sleep(CHECK_EVERY);
                 }
             });
         if let Err(e) = started {
             log::warn!(error:% = e; "could not start waiting on usage limits: {{error}}");
+        }
+    }
+
+    /// Asks for the usage of each agent a chat's last reply failed on, once, at launch. Whether
+    /// such a reply stopped on a limit, and when the limit resets, is read from the usage
+    /// numbers, and none are known yet in an app that has just started.
+    fn learn_limits(&self) {
+        let mut agents: Vec<_> = self.store.with_threads(|threads| {
+            threads
+                .iter()
+                .filter(|t| t.archived_at.is_none())
+                .filter(|t| {
+                    t.resumable_reply()
+                        .is_some_and(|m| m.status == MessageStatus::Error)
+                })
+                .map(|t| t.agent)
+                .collect()
+        });
+        agents.dedup();
+        for agent in agents {
+            if self.usage.known(agent).is_none() {
+                self.usage.get(agent, false);
+            }
         }
     }
 
@@ -240,7 +488,8 @@ impl Server {
                 .store
                 .thread(&thread_id)
                 .is_some_and(|t| t.resumable_reply().is_some_and(|m| m.id == wait.message_id));
-            if !still_waiting {
+            // A cancelled wait was kept only for its time, which has now passed.
+            if !still_waiting || !wait.on {
                 continue;
             }
             if let Err(e) = self.resume_turn(&thread_id) {

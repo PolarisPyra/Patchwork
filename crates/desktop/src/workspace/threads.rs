@@ -10,6 +10,32 @@ use patchwork_server::threads::{Attachment, NewThread, Part};
 use super::state::{Workspace, end_thinking, message_mut};
 
 impl Workspace {
+    /// Makes a change to what is stored off the UI thread, which a write to the database would
+    /// hold up, then shows what the store holds. `what` names the change in the log if it fails.
+    pub fn change(
+        &mut self,
+        what: &'static str,
+        change: impl FnOnce(&patchwork_server::Server) -> Result<(), patchwork_server::Error>
+        + Send
+        + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        let server = Arc::clone(&self.server);
+        let task = cx.background_spawn(async move { change(&server) });
+        cx.spawn(async move |this, cx| {
+            let done = task.await;
+            this.update(cx, |this, cx| {
+                if let Err(e) = done {
+                    log::warn!(what, error:% = e; "could not {{what}}: {{error}}");
+                }
+                // A project's name is in the settings.
+                this.settings = this.server.store.settings();
+                this.reload(cx);
+            })
+        })
+        .detach();
+    }
+
     pub fn open_thread(&mut self, id: &str, cx: &mut Context<Self>) {
         match self.server.thread(id) {
             Ok(thread) => {
@@ -26,9 +52,13 @@ impl Workspace {
                 self.open_folds.clear();
                 self.open_steps.clear();
                 self.open_agents.clear();
-                if let Err(e) = self.server.set_last_thread_id(id) {
-                    log::warn!(error:% = e; "could not record the open chat: {{error}}");
-                }
+                let (server, last) = (Arc::clone(&self.server), id.to_string());
+                cx.background_spawn(async move {
+                    if let Err(e) = server.set_last_thread_id(&last) {
+                        log::warn!(error:% = e; "could not record the open chat: {{error}}");
+                    }
+                })
+                .detach();
                 self.transcript_list.set_follow_mode(FollowMode::Tail);
                 self.opened_at = std::time::Instant::now();
                 cx.spawn(async move |this, cx| {
@@ -186,13 +216,16 @@ impl Workspace {
     }
 
     pub fn archive(&mut self, id: &str, cx: &mut Context<Self>) {
-        if let Err(e) = self.server.set_thread_archived(id, true) {
-            log::warn!(id:%, error:% = e; "could not archive {{id}}: {{error}}");
-        }
         if self.thread.as_ref().is_some_and(|t| t.id == id) {
             self.thread = None;
         }
-        self.reload(cx);
+        let id = id.to_string();
+        self.change(
+            "archive the chat",
+            move |server| server.set_thread_archived(&id, true),
+            cx,
+        );
+        cx.notify();
     }
 
     /// Sends the composer's text to the open chat, or starts `new` with it, in the role of

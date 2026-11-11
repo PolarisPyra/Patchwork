@@ -4,8 +4,8 @@
 
 use gpui::{AnyElement, FontWeight, MouseButton, Role, SharedString, Window, div, prelude::*, px};
 use crate::ui::menu::Menu;
-use crate::ui::theme::{FS_LG, FS_XS, RADIUS_LG, RADIUS_SM, theme};
-use crate::ui::{icon, icon_button, mix, overflows, popup_shadow, scrollbar};
+use crate::ui::theme::{FS_LG, FS_XS, RADIUS_SM, theme};
+use crate::ui::{icon, icon_button, mix, overflows, scrollbar};
 use super::dialog::{GROUPS, SettingsDialog, SettingsEvent, sections};
 use super::controls;
 use super::extensions;
@@ -99,27 +99,14 @@ impl Render for SettingsDialog {
             .as_ref()
             .map(|(_, menu, at)| Menu::view(menu, *at));
         let viewport = window.viewport_size();
-        div()
-            .id("settings-backdrop")
-            .absolute()
-            .top_0()
-            .left_0()
-            .size_full()
-            .flex()
+        crate::ui::dialog::backdrop("settings-backdrop", true)
             .items_center()
-            .justify_center()
-            .bg(gpui::hsla(0., 0., 0., 0.4))
-            .occlude()
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|_, _, _, cx| cx.emit(SettingsEvent::Closed)),
             )
             .child(
-                div()
-                    .id("settings")
-                    .role(Role::Dialog)
-                    .aria_label("Settings")
-                    .track_focus(&self.focus)
+                crate::ui::dialog::card("settings", "Settings", &self.focus, &t)
                     .key_context("Settings")
                     .on_key_down(cx.listener(Self::on_key))
                     .on_action(cx.listener(|d, _: &crate::FocusNext, window, cx| {
@@ -128,18 +115,12 @@ impl Render for SettingsDialog {
                     .on_action(cx.listener(|d, _: &crate::FocusPrev, window, cx| {
                         d.cycle_focus(false, window, cx);
                     }))
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .flex()
                     .h(px(680.))
                     .max_h(viewport.height - px(48.))
                     .w(px(920.))
                     .max_w(viewport.width - px(48.))
                     .overflow_hidden()
-                    .rounded(px(RADIUS_LG))
-                    .border_1()
-                    .border_color(t.border_strong)
-                    .bg(t.bg_elevated)
-                    .shadow(popup_shadow(&t))
                     .child(
                         div()
                             .id("settings-sections")

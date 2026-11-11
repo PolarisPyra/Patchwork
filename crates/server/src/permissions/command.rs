@@ -49,9 +49,29 @@ const RESERVED: [&str; 12] = [
 ];
 
 /// Programs that run the command named after them, so a rule for that command covers them too.
-const WRAPPERS: [&str; 10] = [
+const WRAPPERS: [&str; 20] = [
     "env", "command", "builtin", "exec", "eval", "nohup", "nice", "xargs", "sudo", "doas",
+    "timeout", "setsid", "stdbuf", "ionice", "chrt", "taskset", "flock", "watch", "unbuffer",
+    "busybox",
 ];
+
+/// Whether a word after a wrapper is one of its own settings and not the command it runs: a
+/// flag, or a number, duration, range or mask such as `5`, `2.5s`, `0-3` and `0x3`.
+fn is_setting(word: &str) -> bool {
+    let value = word.strip_suffix(['s', 'm', 'h', 'd']).unwrap_or(word);
+    word.starts_with('-')
+        || (value.starts_with(|c: char| c.is_ascii_digit())
+            && value
+                .chars()
+                .all(|c| c.is_ascii_hexdigit() || matches!(c, '.' | ',' | '-' | ':' | 'x')))
+}
+
+/// Whether a program is written so that it could be any program: with a pattern the shell fills
+/// in, or a variable. A rule that refuses or asks covers it, as it cannot be told it is not
+/// the rule's command.
+pub(super) fn any_program(program: &str) -> bool {
+    program.contains(['*', '?', '[', '$', '`'])
+}
 
 /// A shell line as its simple commands' words, split at `&&`, `||`, `;`, `|`, `&`, new lines and
 /// the ends of a subshell or substitution, with comments, reserved words and leading `NAME=value`
@@ -238,14 +258,126 @@ fn add_command(words: &[String], out: &mut Vec<Vec<String>>) -> bool {
     }
     out.push(words.to_vec());
     if WRAPPERS.contains(&program) {
-        // Past the wrapper's own flags and their numbers: `nice -n 5 rm`.
-        let own = words[1..]
-            .iter()
-            .take_while(|w| w.starts_with('-') || w.parse::<i64>().is_ok())
-            .count();
+        // Past the wrapper's own flags and their values: `nice -n 5 rm`, `timeout 5s rm`.
+        let mut own = words[1..].iter().take_while(|w| is_setting(w)).count();
+        // `flock` names the file it locks before the command.
+        if program == "flock" && own + 1 < words.len() {
+            own += 1;
+        }
         safe &= add_command(&words[1 + own..], out);
     }
+    // `find … -exec rm {} ;` runs the command it names for each file it finds.
+    if program == "find" {
+        for (at, word) in words.iter().enumerate() {
+            if matches!(word.as_str(), "-exec" | "-execdir" | "-ok" | "-okdir") {
+                let run: Vec<String> = words[at + 1..]
+                    .iter()
+                    .take_while(|w| !matches!(w.as_str(), ";" | "+"))
+                    .cloned()
+                    .collect();
+                safe &= add_command(&run, out);
+            }
+        }
+    }
     safe
+}
+
+/// The flags that hand each interpreter its code on the command line, by the interpreter's name
+/// without a version: `python3.12 -c`, `node --eval`. The shells are here with none: `sh -c` is
+/// read as the commands it runs, and what is left is a shell fed its script on its input.
+const INTERPRETERS: [(&str, &[&str]); 17] = [
+    ("python", &["-c"]),
+    ("pypy", &["-c"]),
+    ("perl", &["-e", "-E"]),
+    ("ruby", &["-e"]),
+    ("node", &["-e", "--eval", "-p", "--print"]),
+    ("nodejs", &["-e", "--eval", "-p", "--print"]),
+    ("bun", &["-e", "--eval", "-p", "--print"]),
+    ("deno", &["eval"]),
+    ("php", &["-r"]),
+    ("lua", &["-e"]),
+    ("Rscript", &["-e"]),
+    ("osascript", &["-e"]),
+    ("pwsh", &["-c", "-Command", "-command", "-EncodedCommand"]),
+    (
+        "powershell",
+        &["-c", "-Command", "-command", "-EncodedCommand"],
+    ),
+    ("sh", &[]),
+    ("bash", &[]),
+    ("zsh", &[]),
+];
+
+/// The code a command hands an interpreter, which runs it in place of a program a rule could
+/// name: what follows `python -c` or `node -e`, or all of `line` when the code comes on the
+/// interpreter's input, from a here-document or a pipe. None for a command that is no
+/// interpreter, or that runs a script file, whose contents no rule reads either way.
+pub(super) fn handed_code(words: &[String], line: &str) -> Option<String> {
+    let program = words.first()?.rsplit('/').next().unwrap_or_default();
+    let name = program.trim_end_matches(|c: char| c.is_ascii_digit() || c == '.');
+    let (_, flags) = INTERPRETERS.iter().find(|(known, _)| *known == name)?;
+    let arguments = &words[1..];
+    for (at, word) in arguments.iter().enumerate() {
+        if flags.contains(&word.as_str()) {
+            return Some(arguments[at + 1..].join(" "));
+        }
+        if let Some((flag, code)) = word.split_once('=')
+            && flags.contains(&flag)
+        {
+            return Some(code.to_string());
+        }
+    }
+    // With no script named, or `-` for one, the code is whatever reaches the input.
+    let script = arguments
+        .iter()
+        .find(|word| !word.starts_with('-') || *word == "-");
+    script
+        .is_none_or(|word| word == "-")
+        .then(|| line.to_string())
+}
+
+/// What code names when it runs a command, in the languages of `INTERPRETERS`: Python's
+/// `os.system` and `subprocess`, Node's `child_process` and `exec`, Perl's and Ruby's `system`
+/// and backticks, a shell by its name. Code that names one can run any program.
+const RUNS_COMMANDS: [&str; 16] = [
+    "system",
+    "subprocess",
+    "popen",
+    "Popen",
+    "exec",
+    "execSync",
+    "execFile",
+    "spawn",
+    "spawnSync",
+    "child_process",
+    "Command",
+    "eval",
+    "sh",
+    "bash",
+    "zsh",
+    "shell",
+];
+
+/// Whether `text` has `word` as a whole word: `rm` in `os.system('rm -rf x')`, not in `os.remove`.
+fn mentions(text: &str, word: &str) -> bool {
+    let part_of_word = |c: char| c.is_alphanumeric() || c == '_';
+    !word.is_empty()
+        && text.match_indices(word).any(|(at, found)| {
+            !text[..at].chars().next_back().is_some_and(part_of_word)
+                && !text[at + found.len()..]
+                    .chars()
+                    .next()
+                    .is_some_and(part_of_word)
+        })
+}
+
+/// Whether code handed to an interpreter may run `program`: it names it, or it names a way of
+/// running commands, by which it could run anything. Code that builds a name piece by piece is
+/// not seen through; a rule reads what is written.
+pub(super) fn may_run(code: &str, program: &str) -> bool {
+    mentions(code, program)
+        || code.contains('`')
+        || RUNS_COMMANDS.iter().any(|way| mentions(code, way))
 }
 
 /// Whether an argument makes a command that reads by its name run a program or write a file:

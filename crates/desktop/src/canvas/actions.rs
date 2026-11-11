@@ -170,22 +170,34 @@ impl Canvas {
 
     /// Scrolls the next or previous change to the top of the view.
     pub(super) fn jump_to_change(&mut self, step: isize, cx: &mut Context<Self>) {
-        let top = self.body.bounds().top();
-        let offsets: Vec<f32> = self
-            .hunk_children
-            .iter()
-            .filter_map(|&i| self.body.bounds_for_item(i))
-            .map(|b| f32::from(b.top() - top))
-            .collect();
-        let target = if step > 0 {
-            offsets.iter().copied().find(|&o| o > 1.)
-        } else {
-            offsets.iter().rev().copied().find(|&o| o < -1.)
+        let Some(parsed) = &self.diff_rows else {
+            return;
         };
-        if let Some(by) = target {
-            let mut offset = self.body.offset();
-            offset.y -= px(by);
-            self.body.set_offset(offset);
+        // A change's header is item `row + 1` of the diff's list.
+        let changes: Vec<usize> = parsed
+            .rows
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| r.kind == super::diff::Kind::Hunk)
+            .map(|(row, _)| row + 1)
+            .collect();
+        let top = self.diff_list.logical_scroll_top();
+        let target = if step > 0 {
+            changes.iter().copied().find(|&item| item > top.item_ix)
+        } else if changes.contains(&top.item_ix) && top.offset_in_item > px(1.) {
+            Some(top.item_ix)
+        } else {
+            changes
+                .iter()
+                .rev()
+                .copied()
+                .find(|&item| item < top.item_ix)
+        };
+        if let Some(item_ix) = target {
+            self.diff_list.scroll_to(gpui::ListOffset {
+                item_ix,
+                offset_in_item: px(0.),
+            });
             cx.notify();
         }
     }

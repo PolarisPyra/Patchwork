@@ -6,7 +6,7 @@ use crate::Error;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
@@ -113,6 +113,26 @@ pub fn relay_endpoint() -> Option<Value> {
     ENDPOINT.get().cloned()
 }
 
+/// How long a new connection has to send its first line.
+const HELLO_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// The longest first line taken. A permission hook's carries the whole call it asks about, which
+/// can be a file's new contents, so this is far above any real one and only bounds memory.
+const HELLO_LIMIT: u64 = 32 * 1024 * 1024;
+
+/// The most connections served at once.
+const MAX_CLIENTS: usize = 512;
+
+/// Whether `given` is the relay's token, compared in the same time wherever they differ.
+fn same_token(given: &str, token: &str) -> bool {
+    given.len() == token.len()
+        && given
+            .bytes()
+            .zip(token.bytes())
+            .fold(0, |differing, (a, b)| differing | (a ^ b))
+            == 0
+}
+
 pub(super) fn serve_relay() -> Result<(), Error> {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
@@ -125,9 +145,19 @@ pub(super) fn serve_relay() -> Result<(), Error> {
         &endpoint.to_string(),
     )?;
     RELAY_READY.store(true, Ordering::Relaxed);
+    let open = Arc::new(AtomicUsize::new(0));
     for stream in listener.incoming().flatten() {
-        let token = token.clone();
-        std::thread::spawn(move || relay_client(stream, &token));
+        // Over the most that Patchwork's own agents, hooks and servers open at once, a
+        // connection is something else on this machine holding threads, and is dropped.
+        if open.fetch_add(1, Ordering::Relaxed) >= MAX_CLIENTS {
+            open.fetch_sub(1, Ordering::Relaxed);
+            continue;
+        }
+        let (token, open) = (token.clone(), Arc::clone(&open));
+        std::thread::spawn(move || {
+            relay_client(stream, &token);
+            open.fetch_sub(1, Ordering::Relaxed);
+        });
     }
     Ok(())
 }
@@ -138,16 +168,24 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
     let Ok(reader) = stream.try_clone() else {
         return;
     };
-    let mut lines = BufReader::new(reader).lines().map_while(Result::ok);
-    let Some(hello) = lines
-        .next()
-        .and_then(|l| serde_json::from_str::<Value>(&l).ok())
-    else {
-        return;
-    };
-    if hello["token"].as_str() != Some(token) {
+    // Until it has shown the token a connection may be anything on this machine, so its first
+    // line has a time and a size it must come within.
+    let _ = stream.set_read_timeout(Some(HELLO_WAIT));
+    let mut reader = BufReader::new(reader);
+    let mut first = String::new();
+    let read = std::io::Read::take(&mut reader, HELLO_LIMIT).read_line(&mut first);
+    if read.is_err() || !first.ends_with('\n') {
         return;
     }
+    let Ok(hello) = serde_json::from_str::<Value>(&first) else {
+        return;
+    };
+    if !same_token(hello["token"].as_str().unwrap_or_default(), token) {
+        return;
+    }
+    // A server's session then lasts as long as its agent's turn.
+    let _ = stream.set_read_timeout(None);
+    let lines = reader.lines().map_while(Result::ok);
     // A second launch of the app asks this one to come forward, and exits once it has.
     if hello["raise"] == true {
         let Some(raise) = RAISE_HANDLER.get() else {

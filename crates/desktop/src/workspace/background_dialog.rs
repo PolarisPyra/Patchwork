@@ -4,15 +4,13 @@
 // Rust guideline compliant 2026-10-09
 
 use std::sync::Arc;
-use gpui::{
-    AnyElement, Entity, FocusHandle, FontWeight, MouseButton, Role, Window, deferred, div,
-    prelude::*, px,
-};
+use gpui::{AnyElement, Entity, FocusHandle, MouseButton, Window, deferred, prelude::*, px};
 
 use super::Workspace;
 use crate::ui::background_picker::{BackgroundPicker, PickerEvent};
-use crate::ui::theme::{FS_LG, RADIUS_LG, theme};
-use crate::ui::{display_title, icon_button, popup_shadow};
+use crate::ui::dialog;
+use crate::ui::theme::theme;
+use crate::ui::{display_title, icon_button};
 
 pub struct BackgroundDialog {
     thread_id: String,
@@ -108,74 +106,40 @@ impl Workspace {
         let viewport = window.viewport_size();
         Some(
             deferred(
-                div()
-                    .id("background-dialog-backdrop")
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .size_full()
-                    .flex()
+                dialog::backdrop("background-dialog-backdrop", false)
                     .items_center()
-                    .justify_center()
-                    .occlude()
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(|this, _, window, cx| this.close_background_dialog(window, cx)),
                     )
                     .child(
-                        div()
-                            .id("background-dialog")
-                            .role(Role::Dialog)
-                            .aria_label(format!("Background of {title}"))
-                            .track_focus(&dialog.focus)
-                            .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, window, cx| {
-                                if e.keystroke.key == "escape" {
-                                    cx.stop_propagation();
+                        dialog::card(
+                            "background-dialog",
+                            format!("Background of {title}"),
+                            &dialog.focus,
+                            &t,
+                        )
+                        .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, window, cx| {
+                            if e.keystroke.key == "escape" {
+                                cx.stop_propagation();
+                                this.close_background_dialog(window, cx);
+                            }
+                        }))
+                        .flex()
+                        .flex_col()
+                        .gap(px(12.))
+                        .w(px(480.))
+                        .max_w(viewport.width - px(48.))
+                        .p(px(16.))
+                        .child(dialog::title_row(
+                            title,
+                            icon_button("background-dialog-close", "Close", "x", 16., cx).on_click(
+                                cx.listener(|this, _, window, cx| {
                                     this.close_background_dialog(window, cx);
-                                }
-                            }))
-                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                            .flex()
-                            .flex_col()
-                            .gap(px(12.))
-                            .w(px(480.))
-                            .max_w(viewport.width - px(48.))
-                            .p(px(16.))
-                            .rounded(px(RADIUS_LG))
-                            .border_1()
-                            .border_color(t.border_strong)
-                            .bg(t.bg_elevated)
-                            .shadow(popup_shadow(&t))
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap(px(8.))
-                                    .child(
-                                        div()
-                                            .min_w_0()
-                                            .truncate()
-                                            .text_size(px(FS_LG))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .child(title),
-                                    )
-                                    .child(
-                                        icon_button(
-                                            "background-dialog-close",
-                                            "Close",
-                                            "x",
-                                            16.,
-                                            cx,
-                                        )
-                                        .on_click(
-                                            cx.listener(|this, _, window, cx| {
-                                                this.close_background_dialog(window, cx);
-                                            }),
-                                        ),
-                                    ),
-                            )
-                            .child(dialog.picker.clone()),
+                                }),
+                            ),
+                        ))
+                        .child(dialog.picker.clone()),
                     ),
             )
             .with_priority(2)

@@ -32,10 +32,7 @@ fn thread_summary(thread: &Thread) -> Thread {
         })
         .map(|(_, m)| m.clone())
         .collect();
-    Thread {
-        messages,
-        ..thread.clone()
-    }
+    thread.with_messages(messages)
 }
 
 impl Server {

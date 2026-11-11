@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use crate::system::fs::{real, resolve};
 use crate::system::fs::home_dir;
 use super::{Effect, PermissionKind, PermissionRule};
-use super::command::{does_more, split_command};
+use super::command::{any_program, does_more, handed_code, may_run, split_command};
 use super::{Target, opencode_name};
 
 /// One part of a request a rule has to cover.
@@ -15,6 +15,8 @@ pub(super) enum Unit {
     Path(PathBuf),
     /// A simple command's words.
     Command(Vec<String>),
+    /// Code a command hands an interpreter to run, as `python -c` does.
+    Code(String),
     Host(String),
     /// An MCP `server/tool`.
     Tool(String),
@@ -43,7 +45,12 @@ pub(super) fn units(target: &Target, root: &Path) -> (Vec<Unit>, bool) {
             .flat_map(|line| {
                 let (segments, safe) = split_command(line);
                 allowable &= safe;
-                segments.into_iter().map(Unit::Command)
+                let code: Vec<Unit> = segments
+                    .iter()
+                    .filter_map(|words| handed_code(words, line))
+                    .map(Unit::Code)
+                    .collect();
+                segments.into_iter().map(Unit::Command).chain(code)
             })
             .collect(),
         PermissionKind::Web => target
@@ -82,6 +89,9 @@ pub(super) fn covers(rule: &PermissionRule, unit: &Unit, root: &Path) -> bool {
         },
         Unit::Command(words) => {
             let wanted: Vec<&str> = pattern.split_whitespace().collect();
+            if rule.effect != Effect::Allow && words.first().is_some_and(|w| any_program(w)) {
+                return true;
+            }
             !wanted.is_empty()
                 && words.len() >= wanted.len()
                 && wanted
@@ -101,6 +111,15 @@ pub(super) fn covers(rule: &PermissionRule, unit: &Unit, root: &Path) -> bool {
                 // Past the words the rule names, the command must still only do what it says.
                 && (rule.effect != Effect::Allow
                     || !does_more(&words[0], &words[wanted.len()..]))
+        }
+        // A rule that allows the interpreter allows what it is handed. One that refuses or asks
+        // about a command answers for code that may run that command.
+        Unit::Code(code) => {
+            rule.effect == Effect::Allow
+                || pattern
+                    .split_whitespace()
+                    .next()
+                    .is_some_and(|program| may_run(code, program))
         }
         Unit::Host(host) => {
             let pattern = pattern.trim_start_matches("*.").to_ascii_lowercase();

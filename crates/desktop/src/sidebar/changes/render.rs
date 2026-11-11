@@ -4,7 +4,7 @@
 
 use gpui::{
     AnyElement, Div, FontWeight, MouseButton, MouseDownEvent, Role, SharedString, Stateful, Window,
-    div, prelude::*, px,
+    div, list, prelude::*, px,
 };
 use patchwork_server::threads::AccessMode;
 use patchwork_server::workspace::FileChange;
@@ -12,8 +12,9 @@ use patchwork_server::workspace::FileChange;
 use crate::sidebar::graph;
 use crate::ui::menu::Menu;
 use crate::ui::theme::{RADIUS_SM, Theme, theme};
-use crate::ui::{base_name, button, icon, scrollbar, spinner, tooltip};
-use super::rows::{group, group_button, reply_files, row_action};
+use crate::ui::{button, icon, list_scrollbar, scrollbar, tooltip};
+use super::list::{Entry, Group};
+use super::rows::reply_files;
 use super::state::{ChangesView, FS_SM, FS_XS, PANE_MIN};
 
 impl ChangesView {
@@ -81,7 +82,7 @@ impl ChangesView {
 }
 
 impl Render for ChangesView {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = *theme(cx);
         let Some(workspace) = self.workspace.upgrade() else {
             return div().into_any_element();
@@ -123,162 +124,65 @@ impl Render for ChangesView {
         let staged: Vec<&FileChange> = rest.iter().copied().filter(|c| c.staged).collect();
         let unstaged: Vec<&FileChange> = rest.iter().copied().filter(|c| !c.staged).collect();
 
-        let mut body = div().flex().flex_col().pb(px(4.));
+        let mut entries = Vec::new();
         if has_project {
-            body = body.child(self.commit_box(has_changes, &t, window, cx));
-            if let Some(pr) = self.sync.as_ref().and_then(|s| s.pull_request.clone()) {
-                body = body.child(self.pull_request_bar(&pr, &t, cx));
-            }
+            entries.push(Entry::Top);
         }
         if !conflicted.is_empty() {
-            let rows = conflicted
-                .iter()
-                .map(|c| self.change_row(c, full_access, &t, cx))
-                .collect();
-            let lead = if self.resolving {
-                spinner(12., t.text_subtle).into_any_element()
-            } else {
-                icon("sparkle", 14.).into_any_element()
-            };
-            let resolve = group_button("resolve", "Resolve with agent", lead, &t)
-                .on_click(cx.listener(|this, _, _, cx| {
-                    if !this.resolving {
-                        this.resolve_with_agent(cx);
-                    }
-                }))
-                .into_any_element();
-            body = body.child(group(
-                "Merge Changes",
-                conflicted.len(),
-                vec![resolve],
-                rows,
-                &t,
-            ));
+            entries.push(Entry::Header {
+                title: "Merge Changes",
+                count: conflicted.len(),
+                group: Group::Merge,
+            });
+            entries.extend(conflicted.iter().map(|c| Entry::Change((*c).clone())));
         }
         if !replies.is_empty() {
-            let mut rows: Vec<AnyElement> = pinned
-                .iter()
-                .map(|c| self.change_row(c, full_access, &t, cx))
-                .collect();
-            let hover = t.bg_hover;
-            for path in replies
-                .iter()
-                .filter(|p| !changes.iter().any(|c| &c.path == *p))
-            {
-                let missing = self.missing.contains(path);
-                let open = path.clone();
-                let workspace = self.workspace.clone();
-                rows.push(
-                    button(
-                        SharedString::from(format!("reply-file:{path}")),
-                        path.clone(),
-                    )
-                    .h(px(22.))
-                    .gap(px(6.))
-                    .rounded(px(RADIUS_SM))
-                    .pr(px(6.))
-                    .pl(px(20.))
-                    .text_size(px(FS_SM))
-                    .text_color(t.text_muted)
-                    .hover(move |s| s.bg(hover))
-                    .tooltip(tooltip(path.clone()))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .when(missing, gpui::Styled::line_through)
-                            .child(base_name(path).to_string()),
-                    )
-                    .child(
-                        div()
-                            .flex_none()
-                            .text_size(px(FS_XS))
-                            .text_color(t.text_subtle)
-                            .child(if missing { "Deleted" } else { "No changes" }),
-                    )
-                    .on_click(move |_, window, cx| {
-                        let open = open.clone();
-                        let _ = workspace.update(cx, |w, cx| w.open_change(&open, window, cx));
-                    })
-                    .into_any_element(),
-                );
-            }
-            let back = group_button(
-                "back-to-project",
-                "Project",
-                icon("arrow-left", 14.).into_any_element(),
-                &t,
-            )
-            .on_click(cx.listener(|this, _, _, cx| {
-                if let Some(w) = this.workspace.upgrade() {
-                    w.update(cx, |w, cx| {
-                        w.change_focus = None;
-                        cx.notify();
-                    });
-                }
-                this.missing.clear();
-            }))
-            .into_any_element();
-            body = body.child(group(
-                "From this reply",
-                replies.len(),
-                vec![back],
-                rows,
-                &t,
-            ));
+            entries.push(Entry::Header {
+                title: "From this reply",
+                count: replies.len(),
+                group: Group::Reply,
+            });
+            entries.extend(pinned.iter().map(|c| Entry::Change((*c).clone())));
+            entries.extend(
+                replies
+                    .iter()
+                    .filter(|p| !changes.iter().any(|c| &c.path == *p))
+                    .map(|p| Entry::ReplyFile(p.clone())),
+            );
         }
         if !staged.is_empty() {
-            let rows = staged
-                .iter()
-                .map(|c| self.change_row(c, full_access, &t, cx))
-                .collect();
-            body = body.child(group("Staged Changes", staged.len(), Vec::new(), rows, &t));
+            entries.push(Entry::Header {
+                title: "Staged Changes",
+                count: staged.len(),
+                group: Group::Staged,
+            });
+            entries.extend(staged.iter().map(|c| Entry::Change((*c).clone())));
         }
         if !unstaged.is_empty() {
-            let rows = unstaged
-                .iter()
-                .map(|c| self.change_row(c, full_access, &t, cx))
-                .collect();
-            let paths: Vec<String> = unstaged.iter().map(|c| c.path.clone()).collect();
-            let actions = if full_access {
-                Vec::new()
-            } else {
-                let name = SharedString::from("group:Changes");
-                let (discard, stage) = (paths.clone(), paths);
-                vec![
-                    row_action(
-                        "discard-all",
-                        "Discard all changes",
-                        "arrow-counter-clockwise",
-                        name.clone(),
-                        &t,
-                    )
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.discard(discard.clone(), window, cx);
-                    }))
-                    .into_any_element(),
-                    row_action("stage-all", "Stage all changes", "plus", name, &t)
-                        .on_click(cx.listener(move |this, _, _, cx| this.stage(stage.clone(), cx)))
-                        .into_any_element(),
-                ]
-            };
-            body = body.child(group("Changes", unstaged.len(), actions, rows, &t));
+            entries.push(Entry::Header {
+                title: "Changes",
+                count: unstaged.len(),
+                group: Group::Unstaged(unstaged.iter().map(|c| c.path.clone()).collect()),
+            });
+            entries.extend(unstaged.iter().map(|c| Entry::Change((*c).clone())));
         }
+        entries.push(Entry::End);
+        self.full_access = full_access;
+        self.has_changes = has_changes;
+        self.set_entries(entries);
 
         let changes_body = div()
             .relative()
             .flex_1()
             .min_h_0()
             .child(
-                div()
-                    .id("changes-scroll")
-                    .track_scroll(&self.scroll)
-                    .overflow_y_scroll()
-                    .size_full()
-                    .child(body),
+                list(
+                    self.list.clone(),
+                    cx.processor(|this, ix: usize, window, cx| this.entry(ix, window, cx)),
+                )
+                .size_full(),
             )
-            .children(scrollbar(&self.scroll, 4., 0., t.border_strong))
+            .children(list_scrollbar(&self.list, 4., 0., t.border_strong))
             .into_any_element();
         let graph_body = div()
             .relative()
