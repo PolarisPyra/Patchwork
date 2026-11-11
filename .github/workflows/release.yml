@@ -51,6 +51,10 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      # The runner's Azure apt mirror can fail DNS resolution; use archive.ubuntu.com directly.
+      - name: Use archive.ubuntu.com
+        run: sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+
       - name: Install the Linux packages
         run: |
           sudo apt-get update
