@@ -3,6 +3,21 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.43] - 2026-11-10
+
+### Added
+
+- Text boxes now undo and redo with Ctrl+Z and Ctrl+Shift+Z (or Ctrl+Y), move and delete by word with Ctrl+Left, Ctrl+Right, Ctrl+Backspace and Ctrl+Delete, select to the line's start or end with Shift+Home and Shift+End, jump to the start or end with Ctrl+Home and Ctrl+End, and move by a box's height with Page Up and Page Down. In the chat box, Up on the first line brings back the chat's earlier messages, newest first, and Down on the last line steps back to what you were writing.
+- The chat box now styles Markdown as you type: bold, italic, code, struck-through text and headings show their look, with the marks that make them dimmed but still there.
+
+### Changed
+
+- Selecting text in a reply now highlights list bullets and numbers with their items, fills the space between selected paragraphs, and scrolls the chat when you drag past its top or bottom.
+
+### Fixed
+
+- Pressing Shift+Enter, or typing, at the bottom of a full chat box now scrolls it so the new line shows. Before, the box stayed put and the line was hidden below it.
+
 ## [26.11.42] - 2026-11-10
 
 ### Fixed
