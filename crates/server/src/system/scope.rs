@@ -10,6 +10,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 const SLICE: &str = "app-patchwork-agents.slice";
 
@@ -95,6 +96,10 @@ fn systemd_run() -> Option<&'static SystemdRun> {
             return None;
         };
         limit_slice();
+        // Kills from before this run are not this run's agents'.
+        if let Some(now) = memory_kills() {
+            MEMORY_KILLS_SEEN.fetch_max(now, Ordering::Relaxed);
+        }
         Some(run)
     })
     .as_ref()
@@ -161,6 +166,49 @@ fn systemctl(args: &[&str]) -> bool {
         .stderr(Stdio::null())
         .status()
         .is_ok_and(|s| s.success())
+}
+
+/// How many processes the kernel has killed for memory in the agents' slice since boot, as the
+/// slice's cgroup counts them, with the kills in every scope under it. None where there is no
+/// such count: without systemd, or off Linux.
+fn memory_kills() -> Option<u64> {
+    static EVENTS: OnceLock<Option<PathBuf>> = OnceLock::new();
+    let events = EVENTS
+        .get_or_init(|| {
+            let shown = crate::system::host_command("systemctl")
+                .args([
+                    "--user",
+                    "show",
+                    "--property=ControlGroup",
+                    "--value",
+                    SLICE,
+                ])
+                .stdin(Stdio::null())
+                .stderr(Stdio::null())
+                .output()
+                .ok()?;
+            let group = String::from_utf8(shown.stdout).ok()?;
+            let group = group.trim().trim_start_matches('/');
+            (!group.is_empty()).then(|| {
+                PathBuf::from("/sys/fs/cgroup")
+                    .join(group)
+                    .join("memory.events")
+            })
+        })
+        .as_ref()?;
+    let text = std::fs::read_to_string(events).ok()?;
+    let line = text.lines().find(|l| l.starts_with("oom_kill "))?;
+    line.split_whitespace().nth(1)?.parse().ok()
+}
+
+/// The kernel's memory kills among the agents that have been accounted for.
+static MEMORY_KILLS_SEEN: AtomicU64 = AtomicU64::new(0);
+
+/// Whether the kernel has killed a process of an agent for memory since this was last asked, or
+/// since the scopes were set up. An agent that ends on a signal ran out of memory only when this
+/// says so: other things send the same signal.
+pub fn killed_for_memory() -> bool {
+    memory_kills().is_some_and(|now| MEMORY_KILLS_SEEN.fetch_max(now, Ordering::Relaxed) < now)
 }
 
 /// Total RAM in bytes, from /proc/meminfo.

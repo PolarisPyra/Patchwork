@@ -155,10 +155,14 @@ pub(in crate::orchestration) fn exit_error(exit: Option<ExitStatus>) -> String {
     if let Some(code) = exit.and_then(|s| s.code()) {
         return format!("Agent exited with code {code}");
     }
-    // The kernel, or systemd-oomd under memory pressure, sends SIGKILL to the agent.
+    // Memory is named only when the kernel counted a kill for it among the agents: another
+    // program, or another Patchwork, can send the same signal.
+    if crate::system::scope::killed_for_memory() {
+        return "The agent was stopped because the system ran low on memory".into();
+    }
     #[cfg(unix)]
     if exit.and_then(|s| std::os::unix::process::ExitStatusExt::signal(&s)) == Some(libc::SIGKILL) {
-        return "The agent was stopped because the system ran low on memory".into();
+        return "The agent was killed before it finished".into();
     }
     "Agent exited unexpectedly".into()
 }
