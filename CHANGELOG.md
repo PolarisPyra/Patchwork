@@ -3,6 +3,33 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.45] - 2026-11-11
+
+### Added
+
+- A message you send while a chat waits to resume on a usage limit now waits in the chat's queue and goes once the resumed reply has finished. Before, it started a new reply and the chat stopped waiting.
+
+### Changed
+
+- Starring, pinning, renaming, archiving and moving chats in the sidebar no longer pause the window while they save, and the sidebar updates with far less work while agents are busy.
+
+### Fixed
+
+- Resizing the window is smooth again with a file's diff open beside the chat and many changed files in Source Control. Both now draw only the lines on screen, where before every line was laid out again on each frame.
+- Usage limit warnings no longer stay on a chat once the limit has reset or the agent has replied again. Retries that only repeated the warning are removed, and the reply that was cut off keeps its work without the red box.
+- After you cancel Resume when the limit resets, the button comes back so you can turn it on again, including after a restart.
+- A chat can no longer end up with two agents working at once when a message arrives while it is moving to its fallback agent or resuming.
+- Removing a project now stops the agents of its chats and clears what they left behind, as deleting a single chat does.
+- When an agent that was handed the conversation fails before it starts, the next message hands it the conversation again instead of starting from nothing.
+- Apply to all chats in a project's granular settings now changes every chat it can and says how many it could not, instead of stopping at the first.
+- The low memory message now shows for each agent the system stops at once, and no longer when a command run for an agent is the one that ran out.
+
+### Security
+
+- Ask and Deny rules in Settings → Permissions now also cover commands run through timeout, setsid, find with exec and similar wrappers, and code handed to Python, Node, Perl, Ruby and other interpreters on the command line when that code runs the command the rule names.
+- File rules in Settings → Permissions now follow a link in a path the way the system does, so a link inside a project can no longer make a file outside it look covered.
+- Patchwork's logs are now readable only by you, and its local connection for agents' tools drops connections that do not identify themselves in time.
+
 ## [26.11.44] - 2026-11-11
 
 ### Added
