@@ -7,6 +7,7 @@ mod actions;
 mod add_project;
 mod background_dialog;
 mod bars;
+mod granular_dialog;
 mod interrupted;
 mod canvas_area;
 mod onboarding;
@@ -18,4 +19,5 @@ mod state;
 mod threads;
 mod updates;
 
+pub use granular_dialog::GranularScope;
 pub use state::{SIDEBAR_MAX, SIDEBAR_MIN, SIDEBAR_WIDTH, View, Workspace, is_busy, is_working};

@@ -365,6 +365,14 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             |s, on| s.steer_while_working = on,
             cx,
         ))
+        .child(toggle_row(
+            "granular-chats",
+            "Granular chats",
+            None,
+            s.granular_chats,
+            |s, on| s.granular_chats = on,
+            cx,
+        ))
         .child(
             token_row(
                 "Resume interrupted replies at launch",

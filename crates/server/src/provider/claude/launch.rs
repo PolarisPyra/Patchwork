@@ -122,6 +122,19 @@ pub fn launch_env(compact_window: u64) -> Vec<(&'static str, String)> {
     env
 }
 
+/// Environment that sets the model and effort Claude runs its subagents at, in place of the
+/// chat's own.
+#[must_use]
+pub fn sub_agent_env(pick: &crate::threads::AgentPick) -> Vec<(&'static str, String)> {
+    [
+        ("CLAUDE_CODE_SUBAGENT_MODEL", &pick.model),
+        ("CLAUDE_CODE_SUBAGENT_EFFORT", &pick.effort),
+    ]
+    .into_iter()
+    .filter_map(|(name, value)| Some((name, value.clone()?)))
+    .collect()
+}
+
 /// Variables the shell-environment file leaves out: Patchwork passes the PATH itself, and the rest
 /// would change how bash starts or which shell Claude runs.
 const NOT_IN_ENV_FILE: [&str; 5] = ["PATH", "SHELL", "BASH_ENV", "ENV", crate::system::ENV_READ];

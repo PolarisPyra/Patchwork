@@ -90,6 +90,8 @@ pub struct Settings {
     pub confirm_answers: bool,
     /// Enter steers a running reply instead of queueing the message for after it.
     pub steer_while_working: bool,
+    /// Each chat picks the model and effort of its agent, its fallback and their sub agents.
+    pub granular_chats: bool,
     /// What a launch does with the replies the last session's closing cut off.
     pub resume_at_launch: ResumeAtLaunch,
     /// Folder of plugin bundles. None uses `plugins` in the config folder.

@@ -9,8 +9,10 @@
 use std::sync::{Arc, PoisonError};
 use std::time::Duration;
 
+use crate::orchestration::turn::start::TurnRequest;
 use crate::system::now_ms;
 use crate::threads::{MessageStatus, Thread};
+use crate::usage::ProviderUsage;
 use crate::{Error, Server};
 
 /// A window counts as used up from here. Providers report a limit that was hit as 100, and one
@@ -23,6 +25,26 @@ const MARGIN_MS: u64 = 60_000;
 
 /// How often the waits are checked. A reset is hours away, so half a minute late is unseen.
 const CHECK_EVERY: Duration = Duration::from_secs(30);
+
+/// What a fallback is told in place of a message from the user. It says what was lost, as a
+/// resumed turn's note does.
+const TAKEOVER: &str = "The agent that was working on this ran out of usage, and you are taking \
+    over from it. The conversation so far is above. Any command, subagent, or background task \
+    that was running then has stopped, and its result is lost. Check what was already done, then \
+    carry on with the task from where it left off. Do not start it over.";
+
+/// When the last of the used-up windows in `usage` resets, in Unix epoch milliseconds. None
+/// while no window is used up and still to reset.
+fn used_up_until(usage: &ProviderUsage) -> Option<u64> {
+    let now = now_ms();
+    usage
+        .windows
+        .iter()
+        .filter(|w| w.used_percent >= USED_UP)
+        .filter_map(|w| w.resets_at)
+        .filter(|at| *at > now)
+        .max()
+}
 
 /// One turn waiting for a limit to reset.
 #[derive(Debug, Clone)]
@@ -47,15 +69,57 @@ impl Server {
         thread
             .resumable_reply()
             .filter(|m| m.status == MessageStatus::Error)?;
-        let now = now_ms();
-        self.usage
-            .known(thread.agent)?
-            .windows
-            .iter()
-            .filter(|w| w.used_percent >= USED_UP)
-            .filter_map(|w| w.resets_at)
-            .filter(|at| *at > now)
-            .max()
+        used_up_until(&self.usage.known(thread.agent)?)
+    }
+
+    /// Carries a turn that failed while its agent was out of usage on in the chat's fallback, and
+    /// returns whether it did. The fallback is given the conversation, in a session of its own.
+    pub(in crate::orchestration) fn fall_back(self: &Arc<Self>, thread_id: &str) -> bool {
+        let settings = self.store.settings();
+        let Some(thread) = self.store.thread(thread_id) else {
+            return false;
+        };
+        let failed = thread
+            .resumable_reply()
+            .is_some_and(|m| m.status == MessageStatus::Error);
+        if !failed || crate::threads::fallback_of(&self.store, &settings, &thread).is_none() {
+            return false;
+        }
+        // Asked of the provider, since the turn may not have reported the limit it stopped on.
+        if used_up_until(&self.usage.get(thread.agent, true)).is_none() {
+            return false;
+        }
+        let Some(to) = crate::threads::fall_back(&self.store, &settings, &thread) else {
+            return false;
+        };
+        crate::logging::THREAD_LOG.text(
+            crate::settings::LogLevel::Info,
+            thread_id,
+            "chat",
+            format!(
+                "{:?} is out of usage: fell back to {:?}, model {}",
+                thread.agent,
+                to.agent,
+                to.model.as_deref().unwrap_or("default")
+            ),
+        );
+        let started = self.runner.start_turn(
+            self,
+            TurnRequest {
+                thread_id: thread_id.into(),
+                text: TAKEOVER.into(),
+                attachments: Vec::new(),
+                images: Vec::new(),
+                resumes: true,
+            },
+        );
+        if let Err(e) = &started {
+            log::warn!(
+                thread = thread_id, error:% = e;
+                "could not carry {{thread}} on in its fallback: {{error}}"
+            );
+        }
+        started.is_ok()
     }
 
     /// When the thread's turn is set to resume, if it is waiting for a limit to reset.

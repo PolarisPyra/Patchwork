@@ -35,6 +35,7 @@ impl Render for Workspace {
         let canvas = self.canvas_area(window, cx);
         let panel = self.panel_area(window, cx);
         let background_dialog = self.background_dialog(window, cx);
+        let granular_dialog = self.granular_dialog(window, cx);
         let error = self.error_toast(&t, cx);
         div()
             .id("workspace")
@@ -178,6 +179,7 @@ impl Render for Workspace {
                     .map(|d| deferred(d).with_priority(2)),
             )
             .children(background_dialog)
+            .children(granular_dialog)
             .children(
                 self.project_menu
                     .as_ref()

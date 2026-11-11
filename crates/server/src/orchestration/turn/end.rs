@@ -255,6 +255,16 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         })
     };
 
+    // A chat whose agent ran out of usage goes on in its fallback.
+    if !cancelled
+        && status == MessageStatus::Error
+        && unanswered.is_empty()
+        && clear_in_agent.is_none()
+        && turn.server.fall_back(&turn.thread_id)
+    {
+        return;
+    }
+
     // The agent drops the goal in a turn of its own; unanswered steers wait as queued messages,
     // as the queued ones do.
     if let Some(command) = clear_in_agent {

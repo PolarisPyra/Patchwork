@@ -59,7 +59,7 @@ impl Server {
             "New chat"
         };
         let created_at = now_ms();
-        let thread = Thread {
+        let mut thread = Thread {
             id: id.unwrap_or_else(new_id),
             project_id,
             title: title.into(),
@@ -86,6 +86,7 @@ impl Server {
             favorite: false,
             pinned: false,
         };
+        self.give_project_granular(&mut thread);
         self.store.insert_threads(vec![thread.clone()])?;
         note(
             &thread.id,

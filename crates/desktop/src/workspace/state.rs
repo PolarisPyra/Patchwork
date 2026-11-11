@@ -32,6 +32,7 @@ use crate::workspace::palette::Palette;
 use crate::sidebar::changes::ChangesView;
 use crate::sidebar::menu::{ContextMenu, Renaming, SortUndo};
 use super::background_dialog;
+use super::granular_dialog;
 use super::panel_area;
 
 /// The sidebar's views, one per activity bar icon.
@@ -170,6 +171,7 @@ pub struct Workspace {
     /// The Add a project dialog, while open.
     pub(super) add_project: Option<Entity<AddProject>>,
     pub(super) background_dialog: Option<background_dialog::BackgroundDialog>,
+    pub(super) granular_dialog: Option<granular_dialog::GranularDialog>,
     /// First-run setup, shown instead of everything else until the settings say it is done.
     pub(super) onboarding: Option<Entity<crate::onboarding::Onboarding>>,
     /// The toolbar's project menu, while open, and where the press that last closed it was.
@@ -310,6 +312,7 @@ impl Workspace {
             interrupted: 0,
             add_project: None,
             background_dialog: None,
+            granular_dialog: None,
             onboarding: None,
             title: "Patchwork".into(),
             project_menu: None,

@@ -310,6 +310,7 @@ impl Server {
                 s.active_project_id = s.projects.first().map(|p| p.id.clone());
             }
         })?;
+        self.store.clear_state(&crate::threads::project_key(id))?;
         self.store.delete_project_threads(id)
     }
 

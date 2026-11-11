@@ -94,7 +94,14 @@ impl Composer {
         };
         let attachments = std::mem::take(&mut self.attachments);
         workspace.update(cx, |w, cx| {
-            w.send_with(text, attachments, Some(new), picks.role, queue, cx);
+            // A granular chat is asked what it runs with before its first message goes, unless
+            // its project says.
+            if w.thread.is_none() && w.server.asks_granular(new.project_id.as_deref()) {
+                let first = (text, attachments, queue);
+                w.start_granular_chat(new, picks.role, first, window, cx);
+            } else {
+                w.send_with(text, attachments, Some(new), picks.role, queue, cx);
+            }
         });
         self.editor.update(cx, |e, cx| e.clear(window, cx));
         self.queue_next = None;

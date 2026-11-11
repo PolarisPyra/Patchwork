@@ -3,6 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 mod attachments;
+mod granular;
 mod messages;
 mod lifecycle;
 mod list;
@@ -17,6 +18,9 @@ pub use messages::{
     PlanStep, Question, QuestionOption, Refusal, Role, StepStatus, SubAgent, TaskStatus,
     TokenUsage, ToolCall, tool_output, TurnChecks, TurnTrees,
 };
+#[doc(inline)]
+pub use granular::{AgentPick, Granular, Reserves, runs_sub_agents_at};
+pub(crate) use granular::{fall_back, fallback_of, project_key, sub_pick};
 #[doc(inline)]
 pub use lifecycle::NewThread;
 #[doc(inline)]

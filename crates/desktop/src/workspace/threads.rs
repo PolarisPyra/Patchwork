@@ -340,6 +340,10 @@ impl Workspace {
         self.reveal_thread(&thread.id, cx);
         let editor = self.composer.read(cx).editor.clone();
         window.focus(&editor.read(cx).focus_handle(cx), cx);
+        if self.server.asks_granular(thread.project_id.as_deref()) {
+            let scope = super::GranularScope::Chat(thread.id);
+            self.open_granular_dialog(scope, None, window, cx);
+        }
     }
 
     pub fn stop(&mut self, cx: &mut Context<Self>) {

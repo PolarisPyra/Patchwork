@@ -13,7 +13,7 @@ use patchwork_server::threads::Thread;
 use crate::ui::text_area::{Changed, Submitted, TextArea};
 use crate::ui::theme::{RADIUS, RADIUS_SM, theme};
 use crate::ui::{AGENT_KINDS, agent_label, icon, popup_shadow};
-use crate::workspace::Workspace;
+use crate::workspace::{GranularScope, Workspace};
 
 /// A row the menu or the name field acts on.
 #[derive(Clone, PartialEq, Eq)]
@@ -49,6 +49,7 @@ enum Act {
     Favorite(bool),
     Pin(bool),
     Background,
+    Granular,
     Export,
     OpenLogs,
     WorktreeTask,
@@ -118,6 +119,9 @@ impl Workspace {
                     }
                 }
                 items.push(item("Background…", "image", Act::Background));
+                if self.settings.granular_chats {
+                    items.push(item("Granular settings…", "gauge", Act::Granular));
+                }
                 items.push(item("Export to…", "export", Act::Export));
                 if self.settings.logging.thread_menu {
                     items.push(item("Open logs", "file-text", Act::OpenLogs));
@@ -130,6 +134,9 @@ impl Workspace {
                     "git-branch",
                     Act::WorktreeTask,
                 ));
+                if self.settings.granular_chats {
+                    items.push(item("Granular settings…", "gauge", Act::Granular));
+                }
                 items.push(item("Change folder…", "folder", Act::ChangeFolder));
                 items.push(item("Open folder", "folder-open", Act::OpenFolder));
                 items.push(Item {
@@ -238,6 +245,14 @@ impl Workspace {
             (Target::Thread(id), Act::Remove) => return self.archive(id, cx),
             (Target::Thread(id), Act::Background) => {
                 return self.open_background_dialog(id, window, cx);
+            }
+            (Target::Thread(id), Act::Granular) => {
+                let scope = GranularScope::Chat(id.clone());
+                return self.open_granular_dialog(scope, None, window, cx);
+            }
+            (Target::Project(id), Act::Granular) => {
+                let scope = GranularScope::Project(id.clone());
+                return self.open_granular_dialog(scope, None, window, cx);
             }
             (Target::Thread(id), Act::Export) => return self.export_thread(id, cx),
             (Target::Thread(id), Act::OpenLogs) => {

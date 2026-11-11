@@ -48,6 +48,20 @@ pub fn compact_args(spec: &TurnSpec) -> Vec<String> {
     ]
 }
 
+/// `-c` overrides that set the model and effort Codex starts its subagents at, in place of the
+/// chat's own.
+#[must_use]
+pub fn sub_agent_args(pick: &crate::threads::AgentPick) -> Vec<String> {
+    [
+        ("agents.default_subagent_model", &pick.model),
+        ("agents.default_subagent_reasoning_effort", &pick.effort),
+    ]
+    .into_iter()
+    .filter_map(|(key, value)| Some(format!("{key}={}", json!(value.as_deref()?))))
+    .flat_map(|set| ["-c".to_string(), set])
+    .collect()
+}
+
 /// `-c` overrides that give Codex the custom agents as roles its `spawn_agent` starts by name.
 /// A role's instructions and model live in a file of their own, which the role points to.
 #[must_use]

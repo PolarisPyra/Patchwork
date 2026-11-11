@@ -156,7 +156,7 @@ impl Composer {
         }
     }
 
-    pub(super) fn models_of(&self, kind: AgentKind) -> Option<&[ModelOption]> {
+    pub fn models_of(&self, kind: AgentKind) -> Option<&[ModelOption]> {
         self.models.get(&kind).map(Vec::as_slice)
     }
 

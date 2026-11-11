@@ -346,6 +346,11 @@ impl Runner {
             args.extend(crate::provider::claude::launch::permission_args());
             args.extend(crate::provider::claude::launch::agents_args(&agents, &root));
         }
+        // The chat's own pick for the subagents its CLI starts, where the CLI takes one.
+        let sub = crate::threads::sub_pick(&server.store, &settings, &thread_id, agent);
+        if let (AgentKind::Codex, Some(sub)) = (agent, &sub) {
+            args.extend(crate::provider::codex::sub_agent_args(sub));
+        }
         if let Some(why) = provider::hooks::unguarded(agent, &args) {
             return Err(why.into());
         }
@@ -363,6 +368,9 @@ impl Runner {
             cmd.envs(crate::provider::claude::launch::launch_env(compact_window));
             if let Some(file) = crate::provider::claude::launch::shell_env_file() {
                 cmd.env("CLAUDE_ENV_FILE", file);
+            }
+            if let Some(sub) = &sub {
+                cmd.envs(crate::provider::claude::launch::sub_agent_env(sub));
             }
         }
         cmd.args(&args)
