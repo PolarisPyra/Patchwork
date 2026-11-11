@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
-use crate::provider;
+use crate::provider::claude::credentials;
 use crate::system::time::parse_rfc3339_ms;
 use crate::system::now_ms;
 use crate::usage::{UsageWindow, ProviderUsage};
@@ -29,26 +29,6 @@ const WINDOWS: [(&str, &str); 4] = [
     ("seven_day_opus", "Weekly · Opus"),
     ("seven_day_sonnet", "Weekly · Sonnet"),
 ];
-
-/// Claude Code's stored credentials: a file on Linux/Windows, the Keychain on macOS.
-fn credentials() -> Option<Value> {
-    let file = provider::claude::home()
-        .and_then(|h| std::fs::read_to_string(h.join(".credentials.json")).ok());
-    let raw = file.or_else(|| {
-        let out = crate::system::host_command("security")
-            .args([
-                "find-generic-password",
-                "-s",
-                "Claude Code-credentials",
-                "-w",
-            ])
-            .output()
-            .ok()
-            .filter(|o| o.status.success())?;
-        Some(String::from_utf8_lossy(&out.stdout).into_owned())
-    })?;
-    serde_json::from_str(raw.trim()).ok()
-}
 
 pub(super) fn usage(mut out: ProviderUsage) -> Result<ProviderUsage, Failure> {
     let creds = credentials().ok_or("Not signed in with a Claude subscription")?;

@@ -68,6 +68,9 @@ fn use_row(
             .when(u.cli.as_ref().is_some_and(|(_, relayed)| *relayed), |d| {
                 d.child(div().flex_none().child("· runs Patchwork's copy"))
             })
+            .when(u.signed_in, |d| {
+                d.child(div().flex_none().child(format!("· signed in to {client}")))
+            })
             .when(status == "unapproved", |d| {
                 d.child(div().flex_none().child(if u.client == Client::Codex {
                     "· project not trusted in Codex"

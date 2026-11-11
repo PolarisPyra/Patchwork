@@ -62,6 +62,8 @@ pub struct CliServer {
     pub status: &'static str,
     /// Its turns in Patchwork use Patchwork's copy of it, through the relay.
     pub relayed: bool,
+    /// The CLI holds its own sign-in to it.
+    pub signed_in: bool,
     pub tools: Vec<ToolInfo>,
     pub error: Option<String>,
 }
@@ -76,6 +78,8 @@ struct Found {
     /// The CLI would run it: always for the user's own servers, and for a project's once the
     /// CLI has approved it.
     approved: bool,
+    /// The CLI holds its own sign-in to it.
+    signed_in: bool,
 }
 
 #[must_use]
@@ -254,6 +258,7 @@ fn view(found: Found, shared: &[(String, McpServer)]) -> CliServer {
         },
         status,
         relayed,
+        signed_in: found.signed_in,
         tools,
         error,
     }
@@ -288,6 +293,13 @@ fn claude_servers(file: &Path, projects: &[Project]) -> Vec<Found> {
         .and_then(|path| std::fs::read_to_string(path).ok())
         .and_then(|text| serde_json::from_str(&text).ok())
         .unwrap_or(Value::Null);
+    // Read once, and only for a server at a URL: on macOS it asks the Keychain.
+    let credentials = std::cell::OnceCell::new();
+    let signed_in = |name: &str, url: &str| {
+        let credentials = credentials
+            .get_or_init(|| crate::provider::claude::credentials().unwrap_or(Value::Null));
+        crate::provider::claude::mcp_signed_in(credentials, name, url)
+    };
     let mut out = Vec::new();
     let mut add = |map: &Value,
                    scope,
@@ -305,6 +317,10 @@ fn claude_servers(file: &Path, projects: &[Project]) -> Vec<Found> {
                 scope,
                 project: project.map(|p| p.name.clone()),
                 file: file.to_path_buf(),
+                signed_in: server
+                    .url
+                    .as_deref()
+                    .is_some_and(|url| signed_in(name, url)),
                 server,
                 approved: approved(name),
             });
@@ -447,6 +463,7 @@ fn codex_file(
                 file: file.to_path_buf(),
                 server,
                 approved,
+                signed_in: false,
             }
         })
         .collect()

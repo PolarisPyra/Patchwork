@@ -28,6 +28,38 @@ pub fn settings_file() -> PathBuf {
     }
 }
 
+/// Claude Code's stored credentials: a file on Linux/Windows, the Keychain on macOS.
+pub(crate) fn credentials() -> Option<Value> {
+    let file = home().and_then(|h| std::fs::read_to_string(h.join(".credentials.json")).ok());
+    let raw = file.or_else(|| {
+        let out = crate::system::host_command("security")
+            .args([
+                "find-generic-password",
+                "-s",
+                "Claude Code-credentials",
+                "-w",
+            ])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())?;
+        Some(String::from_utf8_lossy(&out.stdout).into_owned())
+    })?;
+    serde_json::from_str(raw.trim()).ok()
+}
+
+/// Whether `credentials` hold Claude Code's sign-in to the MCP server `name` at `url`.
+pub(crate) fn mcp_signed_in(credentials: &Value, name: &str, url: &str) -> bool {
+    credentials["mcpOAuth"]
+        .as_object()
+        .into_iter()
+        .flat_map(|entries| entries.values())
+        .any(|e| {
+            e["serverName"] == name
+                && e["serverUrl"] == url
+                && e["accessToken"].as_str().is_some_and(|t| !t.is_empty())
+        })
+}
+
 pub fn auth(status: &mut AgentStatus) {
     let json = probe(AgentKind::Claude, &["auth", "status"])
         .and_then(|p| serde_json::from_str::<Value>(p.stdout.trim()).ok());

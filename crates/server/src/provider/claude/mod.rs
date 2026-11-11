@@ -10,6 +10,7 @@ mod parse;
 
 #[doc(inline)]
 pub use config::{home, settings_file, auth, configured_model, models};
+pub(crate) use config::{credentials, mcp_signed_in};
 #[doc(inline)]
 pub use input::{
     turn_args, user_message, steer_message, background_task, stop_task, interrupt, approval_reply,

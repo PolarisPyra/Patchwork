@@ -66,7 +66,12 @@ pub(super) fn server_row(
         "error" => div().text_color(t.danger).child("Error"),
         "starting" | "listing" => div().text_color(muted).child("…"),
         "unapproved" => div().text_color(muted).child("Not approved"),
-        "signin" if card.tools.is_empty() => div().text_color(muted).child("Signs in"),
+        "signin" if card.tools.is_empty() => {
+            let signed_in = card.uses.iter().any(|u| u.signed_in);
+            div()
+                .text_color(muted)
+                .child(if signed_in { "Signed in" } else { "Signs in" })
+        }
         _ => {
             let total = card.tools.len();
             let unit = if on < total {

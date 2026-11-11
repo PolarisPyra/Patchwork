@@ -75,6 +75,8 @@ pub(super) struct Use {
     pub(super) own: Option<Own>,
     /// A CLI's entry: its key, and whether its turns use Patchwork's copy.
     pub(super) cli: Option<(String, bool)>,
+    /// The CLI holds its own sign-in to it.
+    pub(super) signed_in: bool,
 }
 
 /// A server, once for every client that runs the same command or URL.
@@ -185,6 +187,7 @@ pub(super) fn merge(own: &[ServerView], clis: &[CliGroup]) -> Vec<Card> {
                 error: s.error.clone(),
                 own: Some(own),
                 cli: None,
+                signed_in: false,
             },
         );
     }
@@ -220,6 +223,7 @@ pub(super) fn merge(own: &[ServerView], clis: &[CliGroup]) -> Vec<Card> {
                     error: s.error.clone(),
                     own: None,
                     cli: Some((s.key.clone(), s.relayed)),
+                    signed_in: s.signed_in,
                 },
             );
         }
