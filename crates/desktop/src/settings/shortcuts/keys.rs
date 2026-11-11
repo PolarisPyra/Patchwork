@@ -375,6 +375,7 @@ fn action_for(id: &str) -> Option<Box<dyn Action>> {
         "terminal.new" => Box::new(crate::NewTerminal),
         "panel.toggle" => Box::new(crate::TogglePanel),
         "output.toggle" => Box::new(crate::ToggleOutput),
+        "workspace.deleteChat" => Box::new(crate::DeleteChat),
         _ => return None,
     })
 }

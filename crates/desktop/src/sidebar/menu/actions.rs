@@ -151,6 +151,9 @@ impl Workspace {
     ) {
         let focus = cx.focus_handle();
         window.focus(&focus, cx);
+        // The press otherwise goes on to focus the window under the row, and the menu, without
+        // the focus, hears none of its keys.
+        window.prevent_default();
         self.context_menu = Some(ContextMenu {
             at: event.position,
             target,
@@ -165,6 +168,21 @@ impl Workspace {
             window.focus(&self.focus, cx);
             cx.notify();
         }
+    }
+
+    /// Runs the Delete key: on the row whose menu is open, else the picked rows, else the open
+    /// chat. A chat or task is archived, and an archived one is deleted for good once asked.
+    pub(crate) fn delete_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let target = if let Some(menu) = &self.context_menu {
+            menu.target.clone()
+        } else if !self.picking.rows.is_empty() {
+            Target::Many(self.picking.rows.clone())
+        } else if let Some(thread) = self.thread.as_ref().filter(|t| t.parent.is_none()) {
+            Target::Thread(thread.id.clone())
+        } else {
+            return;
+        };
+        self.act(target, Act::Remove, window, cx);
     }
 
     pub(super) fn act(

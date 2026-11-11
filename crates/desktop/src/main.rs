@@ -56,7 +56,8 @@ actions!(
         ToggleTerminal,
         NewTerminal,
         TogglePanel,
-        ToggleOutput
+        ToggleOutput,
+        DeleteChat
     ]
 );
 

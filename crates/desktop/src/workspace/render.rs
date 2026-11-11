@@ -106,6 +106,16 @@ impl Render for Workspace {
             .on_action(cx.listener(|this, _: &crate::ToggleOutput, window, cx| {
                 this.toggle_output(window, cx);
             }))
+            .on_action(cx.listener(|this, _: &crate::DeleteChat, window, cx| {
+                // A dialog over the window keeps the key to itself.
+                let covered = this.palette.is_some()
+                    || this.settings_dialog.is_some()
+                    || this.background_dialog.is_some()
+                    || this.granular_dialog.is_some();
+                if !covered {
+                    this.delete_selected(window, cx);
+                }
+            }))
             .relative()
             .size_full()
             .flex()
