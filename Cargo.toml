@@ -4,7 +4,7 @@ members = ["crates/server", "crates/desktop"]
 
 # The app's version, which Settings → Updates compares with the latest release.
 [workspace.package]
-version = "26.11.45"
+version = "26.11.46"
 edition = "2024"
 rust-version = "1.90"
 license = "MIT"

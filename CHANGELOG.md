@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.46] - 2026-11-11
+
+### Added
+
+- Settings → MCP Servers now shows when Claude Code is signed in to one of its servers: the card reads "Signed in" instead of "Signs in", and the server's page says "signed in to Claude Code" beside its config file.
+
+### Fixed
+
+- Settings → MCP Servers draws the marks of Claude Code's and Codex's servers in black on their white circle, so they show up in the OLED theme, which had drawn them white on white. A server's status text, such as Not approved or Signed in, now ends where its tool count does instead of starting further left in the row.
+
 ## [26.11.45] - 2026-11-11
 
 ### Added
