@@ -29,6 +29,8 @@ pub struct Shell {
     pub name: String,
     /// Set once the shell has ended with an error, while its last output stays readable.
     pub exit_code: Option<u32>,
+    /// It runs one command rather than a shell, and has yet to say how the command ended.
+    task: bool,
     pub(super) parser: vt100::Parser,
     /// What is typed, written to the shell in order.
     pub(super) input: UnboundedSender<String>,
@@ -167,9 +169,60 @@ impl Panel {
         cx.notify();
     }
 
+    /// Runs the command `launch` starts in a terminal tab of its own, shown at once. It closes
+    /// when the command succeeds and stays when it fails, as a shell does, and
+    /// [`crate::panel::PanelEvent::RunFinished`] says how it ended.
+    pub fn run(&mut self, launch: patchwork_server::terminal::Launch, cx: &mut Context<Self>) {
+        self.tab = crate::panel::PanelTab::Terminal;
+        self.visible = true;
+        self.restore(cx);
+        let Some((cols, rows)) = self.grid else {
+            // The screen has no size yet; it starts once the panel is laid out.
+            self.pending_run = Some(launch);
+            cx.notify();
+            return;
+        };
+        self.error = None;
+        let server = Arc::clone(&self.server);
+        let (sink, rx) = frames();
+        let task =
+            cx.background_spawn(
+                async move { server.terminals.spawn(launch, cols, rows, PAGE, sink) },
+            );
+        cx.spawn(async move |this, cx| {
+            let started = task.await;
+            this.update(cx, |this, cx| {
+                match started {
+                    Ok(attached) => {
+                        let id = attached.info.id;
+                        this.add_shell(attached, rx, cx);
+                        if let Some(shell) = this.shells.iter_mut().find(|s| s.id == id) {
+                            shell.task = true;
+                        }
+                        this.active = Some(id);
+                    }
+                    Err(e) => cx.emit(crate::panel::PanelEvent::RunFinished {
+                        code: None,
+                        output: e.to_string(),
+                    }),
+                }
+                cx.notify();
+            })
+        })
+        .detach();
+        cx.notify();
+    }
+
     /// Attaches to the shells the app already has, once: a shell that ended cleanly is closed
     /// instead. Then starts one when there is none, or when one was asked for.
     pub(in crate::panel) fn restore_then_start(&mut self, asked: bool, cx: &mut Context<Self>) {
+        self.restore(cx);
+        if asked || self.shells.is_empty() {
+            self.start(asked, None, cx);
+        }
+    }
+
+    fn restore(&mut self, cx: &mut Context<Self>) {
         if !self.restored {
             self.restored = true;
             for info in self.server.terminals.list() {
@@ -183,9 +236,6 @@ impl Panel {
                 };
                 self.add_shell(attached, rx, cx);
             }
-        }
-        if asked || self.shells.is_empty() {
-            self.start(asked, None, cx);
         }
     }
 
@@ -242,6 +292,7 @@ impl Panel {
             attachment,
             name: attached.info.name,
             exit_code,
+            task: false,
             parser,
             input,
             selection: None,
@@ -256,6 +307,16 @@ impl Panel {
             return;
         };
         for frame in frames {
+            // A run says how it ended, once, then closes or stays as any shell does.
+            if let TerminalFrame::Exit { code } = &frame
+                && std::mem::take(&mut shell.task)
+            {
+                let output = last_lines(&shell.parser.screen().contents());
+                cx.emit(crate::panel::PanelEvent::RunFinished {
+                    code: *code,
+                    output,
+                });
+            }
             match frame {
                 TerminalFrame::Output { data } => shell.parser.process(data.as_bytes()),
                 // A shell that failed stays, so its last output can be read; one that ended
@@ -280,6 +341,15 @@ impl Panel {
     /// Takes the shell's tab away now, and ends its processes behind it. The last one going
     /// closes the panel.
     pub(in crate::panel) fn kill(&mut self, id: u32, cx: &mut Context<Self>) {
+        // A run whose tab is closed has ended without failing.
+        if let Some(shell) = self.shells.iter_mut().find(|s| s.id == id)
+            && std::mem::take(&mut shell.task)
+        {
+            cx.emit(crate::panel::PanelEvent::RunFinished {
+                code: Some(0),
+                output: String::new(),
+            });
+        }
         let before = self.shells.len();
         self.shells.retain(|s| s.id != id);
         if self.shells.len() == before {
@@ -350,6 +420,9 @@ impl Panel {
         if let Some((asked, chosen)) = self.pending_start.take() {
             self.start(asked, chosen, cx);
         }
+        if let Some(launch) = self.pending_run.take() {
+            self.run(launch, cx);
+        }
         cx.notify();
     }
 
@@ -360,6 +433,17 @@ impl Panel {
         })
         .detach();
     }
+}
+
+/// The end of what a screen shows, without its blank lines: where a build says what failed.
+fn last_lines(screen: &str) -> String {
+    /// Enough to hold a compiler error and the task that failed.
+    const LINES: usize = 40;
+    let lines: Vec<&str> = screen
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .collect();
+    lines[lines.len().saturating_sub(LINES)..].join("\n")
 }
 
 fn exit_text(name: &str, code: u32) -> String {

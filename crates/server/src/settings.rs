@@ -102,6 +102,8 @@ pub struct Settings {
     pub computer_use: bool,
     /// Whether a project's own check command runs after every task.
     pub checks: CheckSettings,
+    /// The Android SDK's folder, when the user set one. None finds it.
+    pub android_sdk: Option<String>,
 }
 
 /// A model that reads images: an API provider's `provider/model`, or a model of a CLI the user

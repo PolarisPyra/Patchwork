@@ -9,7 +9,7 @@ use patchwork_server::threads::{MessageStatus, Role as MessageRole};
 use super::{View, Workspace, is_busy};
 use crate::ui::menu::{Dismissed, Menu, MenuItem};
 use crate::ui::theme::{ACTIVITY_BAR_W, FS_XS, RADIUS, RADIUS_SM, STATUSBAR_H, TOOLBAR_H, Theme, theme};
-use crate::ui::{agent_label, button, display_title, icon, project_tile, spinner};
+use crate::ui::{agent_label, button, display_title, icon, icon_button, project_tile, spinner, tooltip};
 
 /// The toolbar's left padding, which lines the project tile up with the activity bar's icons.
 const TOOLBAR_PL: f32 = (ACTIVITY_BAR_W + 4. - 20.) / 2. - 6.;
@@ -120,16 +120,43 @@ impl Workspace {
                 div()
                     .ml_auto()
                     .flex_none()
-                    .rounded(px(RADIUS_SM))
-                    .border_1()
-                    .border_color(t.border)
-                    .bg(t.text_tint_6)
-                    .px(px(8.))
-                    .py(px(1.))
-                    .text_size(px(FS_XS))
-                    .line_height(px(16.))
-                    .text_color(t.text_muted)
-                    .child(patchwork_server::VERSION),
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .when(self.mobile.is_some(), |row| {
+                        let open = self.android.is_some();
+                        row.child(
+                            icon_button(
+                                "android-devices",
+                                "Android devices",
+                                "device-mobile",
+                                16.,
+                                cx,
+                            )
+                            .size(px(24.))
+                            .aria_expanded(open)
+                            .tooltip(tooltip("Android devices"))
+                            .when(open, |b| b.bg(t.bg_selected).text_color(t.text))
+                            .on_click(cx.listener(
+                                |this, _, window, cx| {
+                                    this.toggle_android(window, cx);
+                                },
+                            )),
+                        )
+                    })
+                    .child(
+                        div()
+                            .rounded(px(RADIUS_SM))
+                            .border_1()
+                            .border_color(t.border)
+                            .bg(t.text_tint_6)
+                            .px(px(8.))
+                            .py(px(1.))
+                            .text_size(px(FS_XS))
+                            .line_height(px(16.))
+                            .text_color(t.text_muted)
+                            .child(patchwork_server::VERSION),
+                    ),
             )
     }
 

@@ -27,6 +27,9 @@ pub enum PanelEvent {
     Close,
     /// A log's level changed here.
     SettingsChanged,
+    /// A command run in a terminal of its own ended: its exit code, zero too when its tab was
+    /// closed, None when it did not start or was killed, and the end of what it printed.
+    RunFinished { code: Option<u32>, output: String },
 }
 
 /// Which of the panel's menus is open.
@@ -65,6 +68,8 @@ pub struct Panel {
     pub(super) start_next: Option<Option<String>>,
     /// A shell asked for before the screen had a size.
     pub(super) pending_start: Option<(bool, Option<String>)>,
+    /// A command asked for before the screen had a size.
+    pub(super) pending_run: Option<patchwork_server::terminal::Launch>,
     pub(super) restored: bool,
     /// The screen's columns and rows, and where it sits in the window.
     pub(super) grid: Option<(u16, u16)>,
@@ -109,6 +114,7 @@ impl Panel {
             starting: false,
             start_next: None,
             pending_start: None,
+            pending_run: None,
             restored: false,
             grid: None,
             origin: Point::default(),

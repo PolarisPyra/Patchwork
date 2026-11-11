@@ -112,6 +112,11 @@ pub struct Workspace {
     pub canvas: Option<Entity<Canvas>>,
     pub(super) canvas_width: Option<f32>,
     pub(super) canvas_resizing: Option<(f32, f32)>,
+    /// The mobile app in the open project, the project it was last looked for in, and the
+    /// Android panel, which takes the file panel's place while it is open.
+    pub mobile: Option<patchwork_server::android::MobileProject>,
+    pub(super) mobile_for: Option<String>,
+    pub(super) android: Option<Entity<crate::android::AndroidPanel>>,
     /// The terminal and Output panel under the chat, whether it shows, its height, and the drag
     /// of its handle: where it started and the height then.
     pub(super) panel: Entity<crate::panel::Panel>,
@@ -273,6 +278,9 @@ impl Workspace {
             canvas: None,
             canvas_width: None,
             canvas_resizing: None,
+            mobile: None,
+            mobile_for: None,
+            android: None,
             panel,
             panel_open: false,
             panel_height,

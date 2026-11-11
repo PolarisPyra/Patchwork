@@ -7,6 +7,7 @@
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub mod agents;
+pub mod android;
 pub mod backgrounds;
 pub mod checks;
 pub mod computer;
@@ -75,6 +76,8 @@ pub struct Server {
     secrets: secrets::Waiters,
     /// Where updating the app stands.
     updates: updates::Updates,
+    /// The Android emulators Patchwork started.
+    emulators: android::Emulators,
 }
 
 impl std::fmt::Debug for Server {
@@ -128,6 +131,7 @@ impl Server {
             terminals: terminal::Terminals::default(),
             secrets: secrets::Waiters::default(),
             updates: updates::Updates::default(),
+            emulators: android::Emulators::default(),
         });
         server.purge_removed_backgrounds();
         let weak = Arc::downgrade(&server);

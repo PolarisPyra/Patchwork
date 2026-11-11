@@ -57,6 +57,13 @@ impl Workspace {
         if let Some(canvas) = &self.canvas {
             canvas.update(cx, |c, cx| c.on_paths(&changed.paths, cx));
         }
+        if changed
+            .paths
+            .iter()
+            .any(|p| patchwork_server::android::is_marker(p))
+        {
+            self.detect_mobile(cx);
+        }
         let Some(files) = changed.changes else {
             return;
         };

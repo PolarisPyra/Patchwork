@@ -22,6 +22,13 @@ pub enum Error {
     /// A file-system or process error from the standard library.
     #[error(transparent)]
     Io(Arc<std::io::Error>),
+    /// A tool that failed: what went wrong and what to do about it, and what the tool printed.
+    #[error("{message}")]
+    Tool {
+        message: String,
+        /// The tool's own output, shown when the person asks for it.
+        detail: String,
+    },
     /// Any other failure, with the message to show.
     #[error("{0}")]
     Message(String),

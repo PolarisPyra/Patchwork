@@ -40,6 +40,11 @@ pub(super) fn new_panel(
                 this.settings = this.server.store.settings();
                 cx.notify();
             }
+            PanelEvent::RunFinished { code, output } => {
+                if let Some(android) = &this.android {
+                    android.update(cx, |a, cx| a.run_finished(*code, output, cx));
+                }
+            }
         },
     )
     .detach();
@@ -58,6 +63,18 @@ impl Workspace {
         self.sync_panel(cx);
         self.panel_open = true;
         self.panel.update(cx, |p, cx| p.show(tab, cx));
+        cx.notify();
+    }
+
+    /// Shows the panel on a new terminal tab that runs the command `launch` starts.
+    pub fn run_in_terminal(
+        &mut self,
+        launch: patchwork_server::terminal::Launch,
+        cx: &mut Context<Self>,
+    ) {
+        self.sync_panel(cx);
+        self.panel_open = true;
+        self.panel.update(cx, |p, cx| p.run(launch, cx));
         cx.notify();
     }
 

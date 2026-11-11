@@ -25,6 +25,7 @@ impl Render for Workspace {
             window.set_window_title(&title);
             self.title = title;
         }
+        self.sync_mobile(cx);
         let t = *theme(cx);
         let sidebar = self.view.map(|_| {
             let width = px(self.sidebar_width);
