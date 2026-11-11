@@ -132,11 +132,15 @@ fn agent_key(thread_id: &str) -> String {
     format!("agent-process:{thread_id}")
 }
 
-/// Notes the agent process a thread's turn runs in: its pid, when it started, and its scope.
+/// Notes the agent process a thread's turn runs in: its pid, when it started, its scope, and the
+/// Patchwork that started it, by pid and start.
 ///
 /// A Patchwork that is killed cannot stop its agents, and one keeps working until its next write
 /// fails. The note lets the next launch end it first, so a resumed turn never runs beside it.
 /// Nothing is noted where the process table cannot be read, since a pid alone may be reused.
+/// The Patchwork is noted because the data can be copied, or opened by a second Patchwork, while
+/// this one runs: to that one the note reads as an agent left behind, and it is this one's live
+/// work.
 pub(in crate::orchestration) fn note_agent(
     store: &Store,
     thread_id: &str,
@@ -146,7 +150,16 @@ pub(in crate::orchestration) fn note_agent(
     let Some(process) = i32::try_from(pid).ok().and_then(processes::find) else {
         return;
     };
-    let note = format!("{pid}\n{}\n{}", process.started, scope.unwrap_or_default());
+    let owner = i32::try_from(std::process::id())
+        .ok()
+        .and_then(processes::find)
+        .map(|own| format!("{}\n{}", own.pid, own.started))
+        .unwrap_or_default();
+    let note = format!(
+        "{pid}\n{}\n{}\n{owner}",
+        process.started,
+        scope.unwrap_or_default()
+    );
     if let Err(e) = store.set_state(&agent_key(thread_id), &note) {
         log::warn!(error:% = e; "could not note a turn's agent process: {{error}}");
     }
@@ -166,7 +179,8 @@ pub(in crate::orchestration) fn forget_agent(store: &Store, thread_id: &str, pid
 
 /// Ends the agent the last session left running for the thread, if it still runs, with
 /// everything it started. Only a process that is still the one noted is ended: same pid, same
-/// start time.
+/// start time. An agent whose Patchwork still runs was not left behind, so it is left alone
+/// with its note.
 fn end_left_agent(store: &Store, thread_id: &str) {
     let key = agent_key(thread_id);
     let Some(note) = store.state(&key) else {
@@ -176,6 +190,18 @@ fn end_left_agent(store: &Store, thread_id: &str) {
     let pid = lines.next().and_then(|pid| pid.parse::<u32>().ok());
     let started = lines.next();
     let scope = lines.next().filter(|unit| !unit.is_empty());
+    let owner = lines.next().and_then(|pid| pid.parse::<i32>().ok());
+    let owner_started = lines.next();
+    if owner
+        .and_then(processes::find)
+        .is_some_and(|own| Some(own.started.as_str()) == owner_started)
+    {
+        log::info!(
+            thread = thread_id;
+            "left the agent of {{thread}} running: the Patchwork that started it still runs"
+        );
+        return;
+    }
     if let Some(pid) = pid.filter(|pid| *pid > 1 && *pid != std::process::id())
         && let Some(process) = i32::try_from(pid).ok().and_then(processes::find)
         && Some(process.started.as_str()) == started
