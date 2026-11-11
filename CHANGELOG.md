@@ -3,6 +3,17 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.49] - 2026-11-11
+
+### Added
+
+- Granular chat settings now have an Agent choice under Sub agents, so a chat can plan on one provider and hand its sub agents' work to another, for example Claude Code with sub agents on an API provider's model. Each sub agent shows as a card in the chat that opens its own transcript, and can be stopped from there. Chats on Claude Code, Codex and OpenCode can hand work over this way.
+- When the open project is a Flutter, React Native, Expo, Kotlin Multiplatform or Android app, a phone button beside the version number opens the Android devices panel beside the chat. It lists your virtual devices and connected phones, starts, stops, cold boots, wipes and deletes emulators, creates a device from a hardware profile and a system image (downloading the image first if it isn't installed), and runs the app on the device you pick in a terminal tab. It finds the Android SDK on its own, says what is missing and how to fix it, and remembers the device you picked for each project.
+
+### Fixed
+
+- The sidebar's right-click menu now takes the keyboard when it opens, so Escape closes it and the arrow keys and Enter work in it. The Delete key, listed in Settings → Shortcuts, now does what it says: it archives the chat whose menu is open, the picked chats, or the open chat, and deletes an archived chat once you confirm. It does nothing while you type in a text field or a dialog is open.
+
 ## [26.11.48] - 2026-11-11
 
 ## [26.11.47] - 2026-11-11
