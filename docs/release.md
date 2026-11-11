@@ -4,7 +4,8 @@ How a version of Patchwork is cut, built and published.
 
 ## What a release is
 
-A GitHub release tagged `vYY.M.N` (CalVer: the next N this month, or 0 in a new month) with:
+A GitHub release tagged `vYY.M.N` (CalVer: the next N this month, or 0 in a new month, counted by
+the workflow) with:
 
 | File | What it is |
 | --- | --- |
@@ -19,22 +20,23 @@ Updates.
 
 ## Cutting one
 
-1. Add the version's section to the top of `CHANGELOG.md`, `## [YY.M.N] - YYYY-MM-DD`, made from
-   the `Changelog:` paragraphs of the commits since the last tag (`git log vLAST..`), grouped by
-   Added, Changed, Fixed, Removed and Security, by the rules in
-   [Changelog style](changelog-style.md).
-2. Set `[workspace.package] version` in the root `Cargo.toml` to `YY.M.N`, and run `cargo check`
-   so `Cargo.lock` follows.
-3. Commit both and run `git pull --rebase origin main`, since the last release's workflow pushed a
-   commit of its own to `main`. Push `main`, then tag the release commit
-   `vYY.M.N` and push the tag. Tagging after the branch is up keeps a tag from landing on a
-   commit that is not on `main`.
+1. Push to `main`. The Release workflow (`.github/workflows/release.yml`) opens a pull request
+   named "Release vYY.M.N", or brings the open one up to date. It is one commit on the `release`
+   branch, on top of `main`: the next version in `Cargo.toml` and `Cargo.lock`, and the version's
+   section at the top of `CHANGELOG.md`, `## [YY.M.N] - YYYY-MM-DD`, made from the `Changelog:`
+   paragraphs of the commits since the last tag, grouped by Added, Changed, Fixed, Removed and
+   Security. Every later push makes it again, so the pull request always holds everything since
+   the last release. Pushes with nothing for users (`Changelog: none`) open none.
+2. Merge the pull request when the release should go out.
 
-The tag starts the Release workflow (`.github/workflows/release.yml`). It stops before building if
-the tag and `Cargo.toml` disagree or the changelog has no section for the version, then builds
-the three files and publishes the release.
-Once it is published, the workflow points the website's download links at it and pushes that
-change to `main` as "Point the website's downloads at vYY.M.N", so pull before the next release.
+The merge puts a version on `main` that has no tag, which is what the workflow takes as a release:
+it tags that commit `vYY.M.N`, builds the three files and publishes the release. Setting the
+version and writing the section by hand, and pushing that to `main`, releases the same way.
+The entries are the commits' own words, so they are right when the commit is written, by the rules
+in [Changelog style](changelog-style.md); to reword one, edit `CHANGELOG.md` on the `release`
+branch before merging, and merge before the next push to `main` makes the branch again.
+Once the release is published, the workflow points the website's download links at it and pushes
+that change to `main` as "Point the website's downloads at vYY.M.N", so pull before the next push.
 
 ## Signing
 

@@ -1,9 +1,13 @@
 name: Release
 
-# A pushed tag vX.Y.Z builds the Linux AppImage (scripts/build.sh), the Windows exe and the macOS
-# (Apple silicon) disk image, and publishes them as the GitHub release with CHANGELOG.md's section
-# for X.Y.Z as its notes, beside the latest.json the app's update check reads, then points the
-# website at it and announces it on Discord. docs/release.md explains how to cut one.
+# Every push to main keeps one "Release vYY.M.N" pull request up to date, from the release branch:
+# the next version in Cargo.toml and Cargo.lock, and its section of CHANGELOG.md, written from the
+# Changelog: paragraphs of the commits since the last tag. Merging that pull request is the release:
+# main then carries a version with no tag, so this run tags it, builds the Linux AppImage
+# (scripts/build.sh), the Windows exe and the macOS (Apple silicon) disk image, and publishes them
+# as the GitHub release with that section as its notes, beside the latest.json the app's update
+# check reads, then points the website at it and announces it on Discord. docs/release.md
+# explains it.
 #
 # Run it by hand (Actions → Release → Run workflow) to build all three without publishing.
 #
@@ -11,7 +15,7 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -21,26 +25,91 @@ env:
   RUST_TOOLCHAIN: "1.99.0"
 
 jobs:
-  # Fails before anything builds when the tag does not match the app's version or the changelog
-  # has no notes for it.
-  check:
+  # Tags a version main carries that has no tag yet, which the jobs below then build and publish.
+  # Otherwise brings the release pull request up to date, and nothing is built.
+  plan:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # One at a time, so two pushes close together do not write the release branch over each other.
+    concurrency: release-plan
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
 
-      - name: Check the version and notes
-        if: github.ref_type == 'tag'
+      - name: Tag the release, or update its pull request
+        id: plan
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          signer="$GITHUB_WORKSPACE/.github/signer/node_modules/.bin/tauri"
-          app=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
-          [ "$version" = "$app" ] || { echo "::error::$GITHUB_REF_NAME, but Cargo.toml says $app"; exit 1; }
-          grep -q "^## \[$version\]" CHANGELOG.md \
-            || { echo "::error::CHANGELOG.md has no section for $version"; exit 1; }
+          version=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          if ! git rev-parse -q --verify "refs/tags/v$version" > /dev/null; then
+            grep -q "^## \[$version\]" CHANGELOG.md \
+              || { echo "::error::CHANGELOG.md has no section for $version"; exit 1; }
+            git tag "v$version"
+            git push origin "v$version"
+            echo "tag=v$version" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # CalVer: the next N this month, or 0 in a new month.
+          month=$(date -u +%y.%-m)
+          next="$month.0"
+          [[ "$version" == "$month."* ]] && next="$month.$((${version##*.} + 1))"
+
+          # Each commit's Changelog: paragraph, joined into one line, under the group it names.
+          for commit in $(git rev-list --reverse "v$version..HEAD"); do
+            entry=$(git show -s --format=%B "$commit" | awk '
+              /^Changelog:/ { on = 1; sub(/^Changelog:[ \t]*/, "") }
+              on && (/^[ \t]*$/ || /^[A-Za-z-]+-[Bb]y:/) { exit }
+              on { printf "%s%s", (n++ ? " " : ""), $0 }')
+            group=Changed
+            for name in Added Changed Fixed Removed Security; do
+              [[ "$entry" == "$name: "* ]] && group=$name && entry=${entry#"$name: "}
+            done
+            [[ -z "$entry" || "${entry,,}" =~ ^none\.?$ ]] && continue
+            echo "- $entry" >> "$RUNNER_TEMP/$group"
+          done
+          {
+            echo "## [$next] - $(date -u +%F)"
+            for group in Added Changed Fixed Removed Security; do
+              [ -f "$RUNNER_TEMP/$group" ] && printf '\n### %s\n\n' "$group" && cat "$RUNNER_TEMP/$group"
+            done
+            echo
+          } > "$RUNNER_TEMP/section"
+          grep -q '^- ' "$RUNNER_TEMP/section" \
+            || { echo "Nothing for users since v$version, so there is no release to offer."; exit 0; }
+
+          awk 'FNR == NR { section = section $0 "\n"; next }
+            !done && /^## \[/ { printf "%s", section; done = 1 } { print }' \
+            "$RUNNER_TEMP/section" CHANGELOG.md > "$RUNNER_TEMP/changelog"
+          mv "$RUNNER_TEMP/changelog" CHANGELOG.md
+          sed -i "/^\[workspace.package\]/,/^\[/s/^version = \".*\"/version = \"$next\"/" Cargo.toml
+          sed -i -E "/^name = \"patchwork(-server)?\"$/{n;s/^version = \".*\"/version = \"$next\"/}" Cargo.lock
+
+          # The release branch is this job's own: main with the release's one commit on top, made
+          # again from each push, so it is written over rather than added to.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q -B release
+          git commit -q -m "Release v$next" -m "Changelog: none" -- CHANGELOG.md Cargo.toml Cargo.lock
+          git push -q --force origin release
+          if [ -n "$(gh pr list --head release --state open --json number --jq '.[].number')" ]; then
+            gh pr edit release --title "Release v$next" --body-file "$RUNNER_TEMP/section"
+          else
+            gh pr create --base main --head release --title "Release v$next" \
+              --body-file "$RUNNER_TEMP/section"
+          fi
 
   linux:
-    needs: check
+    needs: plan
+    if: needs.plan.outputs.tag != '' || github.event_name == 'workflow_dispatch'
     # The oldest Ubuntu runner, so the AppImage links against an older glibc and runs on newer
     # distributions too.
     runs-on: ubuntu-22.04
@@ -77,7 +146,8 @@ jobs:
           if-no-files-found: error
 
   windows:
-    needs: check
+    needs: plan
+    if: needs.plan.outputs.tag != '' || github.event_name == 'workflow_dispatch'
     runs-on: windows-2022
     timeout-minutes: 45
     steps:
@@ -102,7 +172,8 @@ jobs:
           if-no-files-found: error
 
   macos:
-    needs: check
+    needs: plan
+    if: needs.plan.outputs.tag != '' || github.event_name == 'workflow_dispatch'
     # macos-15 runs on Apple silicon, so the build is native arm64.
     runs-on: macos-15
     timeout-minutes: 45
@@ -159,10 +230,12 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [linux, windows, macos]
-    if: github.ref_type == 'tag'
+    needs: [plan, linux, windows, macos]
+    if: needs.plan.outputs.tag != ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      TAG: ${{ needs.plan.outputs.tag }}
     permissions:
       contents: write
     steps:
@@ -200,7 +273,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${TAG#v}"
+          signer="$GITHUB_WORKSPACE/.github/signer/node_modules/.bin/tauri"
           [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] \
             || { echo "::error::TAURI_SIGNING_PRIVATE_KEY is not set"; exit 1; }
           key=$(sed -n 's/^const SIGNING_KEY: &str = "\(.*\)";$/\1/p' \
@@ -218,13 +292,13 @@ jobs:
             minisign -Vq -P "$key" -m "$name" -x "$name.minisig" \
               || { echo "::error::The signature of $name does not check out against the app's key"; exit 1; }
             assets=$(jq -c --arg name "$name" \
-              --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/$name" \
+              --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$TAG/$name" \
               --arg digest "sha256:$(sha256sum "$name" | cut -d' ' -f1)" \
               --rawfile signature "$name.minisig" \
               '. + [{name: $name, browser_download_url: $url, digest: $digest, signature: $signature}]' \
               <<< "$assets")
           done
-          jq -n --arg tag "$GITHUB_REF_NAME" --rawfile body ../notes.md --argjson assets "$assets" \
+          jq -n --arg tag "$TAG" --rawfile body ../notes.md --argjson assets "$assets" \
             '{tag_name: $tag, body: $body, withdrawn: [], assets: $assets}' > latest.json
           # latest.json is signed too: the app reads its version and the versions it withdraws
           # from it, and takes neither from a file the release key did not sign.
@@ -232,19 +306,21 @@ jobs:
           base64 -d latest.json.sig > latest.json.minisig
           minisign -Vq -P "$key" -m latest.json -x latest.json.minisig \
             || { echo "::error::The signature of latest.json does not check out against the app's key"; exit 1; }
-          gh release create "$GITHUB_REF_NAME" --draft --title "Patchwork $GITHUB_REF_NAME" \
+          gh release create "$TAG" --draft --title "Patchwork $TAG" \
             --notes-file ../notes.md \
             Patchwork_amd64.AppImage Patchwork_x64.exe Patchwork_aarch64.dmg latest.json \
             latest.json.minisig
-          gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+          gh release edit "$TAG" --draft=false --latest
 
   # Points the website's download links at the release just published, deploys the site to
   # Cloudflare Pages, and commits the new links to main with "Changelog: none". The deploy needs
   # the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets; without them it only commits.
   site:
-    needs: publish
+    needs: [plan, publish]
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      TAG: ${{ needs.plan.outputs.tag }}
     permissions:
       contents: write
     steps:
@@ -252,7 +328,7 @@ jobs:
         with:
           ref: main
 
-      - name: Point the downloads at ${{ github.ref_name }}
+      - name: Point the downloads at ${{ needs.plan.outputs.tag }}
         run: node site/refresh-downloads.mjs
 
       # Installed before the deploy token is in any step's environment, from the lockfile in
@@ -278,7 +354,7 @@ jobs:
           git diff --quiet -- site/index.html && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -q -m "Point the website's downloads at $GITHUB_REF_NAME" -m "Changelog: none" \
+          git commit -q -m "Point the website's downloads at $TAG" -m "Changelog: none" \
             -- site/index.html
           git pull -q --rebase origin main
           git push origin HEAD:main
@@ -286,11 +362,13 @@ jobs:
   # Announces the release in the Discord channel named by the DISCORD_RELEASE_WEBHOOK_URL secret.
   # A trailing /github is dropped, since that suffix makes Discord expect GitHub's payload.
   announce:
-    needs: publish
+    needs: [plan, publish]
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      TAG: ${{ needs.plan.outputs.tag }}
     steps:
-      - name: Announce ${{ github.ref_name }} on Discord
+      - name: Announce ${{ needs.plan.outputs.tag }} on Discord
         env:
           DISCORD_RELEASE_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
         run: |
@@ -298,7 +376,7 @@ jobs:
             echo "::warning::DISCORD_RELEASE_WEBHOOK_URL is not set, so the release was not announced."
             exit 0
           fi
-          url="https://github.com/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME"
-          jq -n --arg text "New release: Patchwork $GITHUB_REF_NAME is out. $url" '{content: $text}' \
+          url="https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
+          jq -n --arg text "New release: Patchwork $TAG is out. $url" '{content: $text}' \
             | curl -fsS -H 'Content-Type: application/json' --data-binary @- \
               "${DISCORD_RELEASE_WEBHOOK_URL%/github}" >/dev/null
