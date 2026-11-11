@@ -5,11 +5,14 @@
 use std::ops::Range;
 
 use gpui::{
-    App, Bounds, CursorStyle, ElementId, ElementInputHandler, Entity, GlobalElementId, Hsla,
-    LayoutId, MouseButton, PaintQuad, Pixels, Point, Role, SharedString, Style, TextRun,
-    UnderlineStyle, Window, div, fill, point, prelude::*, px, relative, size,
+    App, Bounds, CursorStyle, FontStyle, FontWeight, StrikethroughStyle, ElementId,
+    ElementInputHandler, Entity, GlobalElementId, Hsla, LayoutId, MouseButton, PaintQuad, Pixels,
+    Point, Role, SharedString, Style, TextRun, UnderlineStyle, Window, div, fill, point,
+    prelude::*, px, relative, size,
 };
+use super::markdown;
 use super::state::{DrawnLine, TextArea};
+use crate::ui::theme::FONT_MONO;
 
 impl Render for TextArea {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -46,6 +49,24 @@ impl Render for TextArea {
             .on_action(cx.listener(Self::submit))
             .on_action(cx.listener(Self::ctrl_submit))
             .on_action(cx.listener(Self::tab))
+            .on_action(cx.listener(Self::undo))
+            .on_action(cx.listener(Self::redo))
+            .on_action(cx.listener(Self::word_left))
+            .on_action(cx.listener(Self::word_right))
+            .on_action(cx.listener(Self::select_word_left))
+            .on_action(cx.listener(Self::select_word_right))
+            .on_action(cx.listener(Self::delete_word_left))
+            .on_action(cx.listener(Self::delete_word_right))
+            .on_action(cx.listener(Self::select_home))
+            .on_action(cx.listener(Self::select_end))
+            .on_action(cx.listener(Self::top))
+            .on_action(cx.listener(Self::bottom))
+            .on_action(cx.listener(Self::select_top))
+            .on_action(cx.listener(Self::select_bottom))
+            .on_action(cx.listener(Self::page_up))
+            .on_action(cx.listener(Self::page_down))
+            .on_action(cx.listener(Self::select_page_up))
+            .on_action(cx.listener(Self::select_page_down))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
@@ -70,6 +91,7 @@ struct Prepainted {
     pub(super) lines: Vec<DrawnLine>,
     quads: Vec<PaintQuad>,
     caret: Option<PaintQuad>,
+    revealed: (usize, usize),
 }
 
 impl IntoElement for TextElement {
@@ -80,10 +102,19 @@ impl IntoElement for TextElement {
     }
 }
 
+/// How a run of text is drawn: its colours and the Markdown style of each byte, if the field
+/// styles Markdown.
+#[derive(Clone, Copy)]
+struct Look<'a> {
+    color: Hsla,
+    mark_color: Hsla,
+    styles: Option<&'a [u8]>,
+}
+
 /// Shapes `text` one `\n`-line at a time, wrapped to `width`.
 fn shape(
     text: &str,
-    color: Hsla,
+    look: Look<'_>,
     width: Pixels,
     line_height: Pixels,
     marked: Option<&Range<usize>>,
@@ -91,44 +122,58 @@ fn shape(
 ) -> Vec<DrawnLine> {
     let style = window.text_style();
     let font_size = style.font_size.to_pixels(window.rem_size());
+    let base = style.font();
+    let underline = UnderlineStyle {
+        color: Some(look.color),
+        thickness: px(1.),
+        wavy: false,
+    };
+    // The look of the byte at `i`: its Markdown style, and whether the input method marks it.
+    let key = |i: usize| {
+        let flags = look.styles.and_then(|s| s.get(i).copied()).unwrap_or(0);
+        (flags, marked.is_some_and(|m| m.contains(&i)))
+    };
+    let run = |len: usize, (flags, composing): (u8, bool)| {
+        let mut font = base.clone();
+        if flags & markdown::BOLD != 0 {
+            font.weight = FontWeight::BOLD;
+        }
+        if flags & markdown::ITALIC != 0 {
+            font.style = FontStyle::Italic;
+        }
+        if flags & markdown::CODE != 0 {
+            font.family = FONT_MONO.into();
+        }
+        TextRun {
+            len,
+            font,
+            color: if flags & markdown::MARK != 0 {
+                look.mark_color
+            } else {
+                look.color
+            },
+            background_color: None,
+            underline: composing.then_some(underline),
+            strikethrough: (flags & markdown::STRIKE != 0).then_some(StrikethroughStyle {
+                color: Some(look.color),
+                thickness: px(1.),
+            }),
+        }
+    };
     let mut lines = Vec::new();
     let mut start = 0;
     let mut top = px(0.);
     for line in text.split('\n') {
         let end = start + line.len();
-        let run = TextRun {
-            len: line.len(),
-            font: style.font(),
-            color,
-            background_color: None,
-            underline: None,
-            strikethrough: None,
-        };
-        let runs = match marked {
-            Some(m) if m.start < end && m.end > start => {
-                let (a, b) = (m.start.max(start) - start, m.end.min(end) - start);
-                vec![
-                    TextRun {
-                        len: a,
-                        ..run.clone()
-                    },
-                    TextRun {
-                        len: b - a,
-                        underline: Some(UnderlineStyle {
-                            color: Some(color),
-                            thickness: px(1.),
-                            wavy: false,
-                        }),
-                        ..run.clone()
-                    },
-                    TextRun {
-                        len: line.len() - b,
-                        ..run
-                    },
-                ]
+        let mut runs = Vec::new();
+        let mut from = start;
+        for (i, _) in line.char_indices().map(|(i, c)| (start + i, c)).skip(1) {
+            if key(i) != key(from) {
+                runs.push(run(i - from, key(from)));
+                from = i;
             }
-            _ => vec![run],
-        };
+        }
+        runs.push(run(end - from, key(from)));
         let shaped = window
             .text_system()
             .shape_text(
@@ -176,6 +221,7 @@ impl Element for TextElement {
             area.shown()
         };
         let line_height = window.line_height();
+        let styles = area.styles();
         let mut style = Style::default();
         style.size.width = relative(1.).into();
         let layout = window.request_measured_layout(style, move |known, available, window, _| {
@@ -183,7 +229,12 @@ impl Element for TextElement {
                 gpui::AvailableSpace::Definite(w) => w,
                 _ => px(10_000.),
             });
-            let lines = shape(&text, gpui::white(), width, line_height, None, window);
+            let look = Look {
+                color: gpui::white(),
+                mark_color: gpui::white(),
+                styles: styles.as_deref(),
+            };
+            let lines = shape(&text, look, width, line_height, None, window);
             let height = lines.last().map_or(line_height, |l| {
                 l.top + l.layout.size(line_height).height.max(line_height)
             });
@@ -215,7 +266,11 @@ impl Element for TextElement {
             .map(|m| area.shown_offset(m.start)..area.shown_offset(m.end));
         let lines = shape(
             &text,
-            color,
+            Look {
+                color,
+                mark_color: area.placeholder_color,
+                styles: area.styles().as_deref(),
+            },
             bounds.size.width,
             line_height,
             marked.as_ref(),
@@ -268,6 +323,26 @@ impl Element for TextElement {
                 row(px(0.), b.x, b.y);
             }
         }
+        // When the caret or the text changed, the box the field scrolls in brings the caret's line
+        // into view, as a new line from Shift+Enter at the bottom would otherwise be hidden.
+        let revealed = (area.cursor(), area.content.len());
+        let view = area.scroll.bounds();
+        if revealed != area.revealed
+            && view.size.height > px(0.)
+            && let Some(p) = at(area.shown_offset(area.cursor()))
+        {
+            let (top, bottom) = (bounds.top() + p.y, bounds.top() + p.y + line_height);
+            let mut offset = area.scroll.offset();
+            if top < view.top() {
+                offset.y += view.top() - top;
+            } else if bottom > view.bottom() {
+                offset.y -= bottom - view.bottom();
+            }
+            if offset != area.scroll.offset() {
+                area.scroll.set_offset(offset);
+                window.request_animation_frame();
+            }
+        }
         let caret = selected.is_empty().then(|| at(cursor)).flatten().map(|p| {
             fill(
                 Bounds::new(bounds.origin + p, size(px(1.), line_height)),
@@ -278,6 +353,7 @@ impl Element for TextElement {
             lines,
             quads,
             caret,
+            revealed,
         }
     }
 
@@ -319,7 +395,9 @@ impl Element for TextElement {
             window.paint_quad(caret);
         }
         let lines = std::mem::take(&mut prepaint.lines);
+        let revealed = prepaint.revealed;
         self.area.update(cx, |area, _| {
+            area.revealed = revealed;
             area.lines = lines;
             area.bounds = Some(bounds);
             area.line_height = line_height;

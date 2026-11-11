@@ -122,6 +122,7 @@ impl Composer {
     pub fn set_draft(&mut self, text: &str, attachments: Vec<Attachment>, cx: &mut Context<Self>) {
         self.editor.update(cx, |e, cx| e.set_text(text, cx));
         self.attachments = attachments;
+        self.recalled = None;
         self.draft_changed();
         cx.notify();
     }

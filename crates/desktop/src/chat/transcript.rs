@@ -254,6 +254,7 @@ pub fn transcript(
                 .flex_col()
                 .child(rows),
         )
+        .child(crate::ui::selection::overlay(w.transcript_list.clone()))
         .children(list_scrollbar(&w.transcript_list, 4., 0., t.border_strong))
         .children(rail)
 }

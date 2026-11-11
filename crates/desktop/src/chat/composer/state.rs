@@ -8,7 +8,7 @@ use gpui::{Entity, FocusHandle, Pixels, Point, WeakEntity, Window, prelude::*};
 use patchwork_server::provider::{AgentKind, ModelOption};
 use patchwork_server::settings::Settings;
 use patchwork_server::threads::{AccessMode, Attachment, NewThread};
-use crate::ui::text_area::{Arrow, Changed, Submitted, Tabbed, TextArea};
+use crate::ui::text_area::{Arrow, Changed, Edge, Submitted, Tabbed, TextArea};
 use crate::ui::theme::theme;
 use crate::workspace::Workspace;
 use super::menus::{Menu, Pick, Roles, efforts};
@@ -67,6 +67,8 @@ pub struct Composer {
     pub(super) queues: bool,
     pub(super) health: model_notice::ModelHealth,
     pub(super) sigil: sigil_menu::SigilMenu,
+    /// Where Up has stepped to among the messages sent in this chat.
+    pub(super) recalled: Option<super::recall::Recall>,
 }
 
 impl Composer {
@@ -81,6 +83,7 @@ impl Composer {
             area.text_color = t.text;
             area.placeholder_color = t.text_subtle;
             area.selection_color = t.accent.opacity(0.3);
+            area.markdown = true;
             area
         });
         cx.subscribe_in(&editor, window, |this, _, _: &Submitted, window, cx| {
@@ -99,6 +102,10 @@ impl Composer {
         .detach();
         cx.subscribe(&editor, |this, _, e: &Arrow, cx| this.sigil_arrow(e.0, cx))
             .detach();
+        cx.subscribe_in(&editor, window, |this, _, e: &Edge, window, cx| {
+            this.recall(e.0, window, cx);
+        })
+        .detach();
         cx.subscribe_in(&editor, window, |this, _, _: &Tabbed, window, cx| {
             this.sigil_tab(window, cx);
         })
@@ -145,6 +152,7 @@ impl Composer {
             health: model_notice::ModelHealth::default(),
             queues: false,
             sigil: sigil_menu::SigilMenu::default(),
+            recalled: None,
         }
     }
 

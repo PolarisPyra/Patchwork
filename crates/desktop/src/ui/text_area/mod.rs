@@ -6,8 +6,11 @@
 mod state;
 mod keys;
 mod input;
+mod history;
+mod markdown;
 mod element;
 
 pub use state::{
-    Arrow, BackspaceEmpty, Changed, Paste, Submitted, SubmittedBack, Tabbed, TextArea, bindings,
+    Arrow, BackspaceEmpty, Changed, Edge, Paste, Submitted, SubmittedBack, Tabbed, TextArea,
+    bindings,
 };

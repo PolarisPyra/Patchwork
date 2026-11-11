@@ -97,6 +97,7 @@ impl Render for Composer {
         let empty = editor.content.trim().is_empty() && self.attachments.is_empty();
         let focused = editor.focus_handle(cx).is_focused(window);
         let editor_focus = editor.focus_handle(cx);
+        let editor_scroll = editor.scroll.clone();
 
         let format_editor = self.editor.clone();
         let format = |id: &'static str,
@@ -386,6 +387,7 @@ impl Render for Composer {
                     .min_h(px(64.))
                     .max_h(px(280.))
                     .overflow_y_scroll()
+                    .track_scroll(&editor_scroll)
                     .px(px(6.))
                     .text_size(px(FS_MD))
                     .line_height(px(20.))

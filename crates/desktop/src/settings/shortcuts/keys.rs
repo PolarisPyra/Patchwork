@@ -214,6 +214,8 @@ pub(super) const FIXED_KEYS: &[(&str, &[&str], &str)] = &[
     ),
     ("Composer", &["Enter"], "Send the message"),
     ("Composer", &["Shift", "Enter"], "New line"),
+    ("Composer", &["Ctrl", "Z"], "Undo"),
+    ("Composer", &["Ctrl", "Shift", "Z"], "Redo"),
     (
         "Composer",
         &["Up", "Down"],

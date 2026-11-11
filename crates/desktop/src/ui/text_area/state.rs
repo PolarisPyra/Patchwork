@@ -5,10 +5,12 @@
 use std::ops::Range;
 
 use gpui::{
-    Bounds, Entity, EventEmitter, FocusHandle, Hsla, KeyBinding, Pixels, Point, SharedString,
-    Window, WrappedLine, actions, point, prelude::*, px,
+    Bounds, Entity, EventEmitter, FocusHandle, Hsla, KeyBinding, Pixels, Point, ScrollHandle,
+    SharedString, Window, WrappedLine, actions, point, prelude::*, px,
 };
 use unicode_segmentation::UnicodeSegmentation;
+
+use super::history::History;
 
 actions!(
     text_area,
@@ -33,6 +35,24 @@ actions!(
         Submit,
         CtrlSubmit,
         Tab,
+        Undo,
+        Redo,
+        WordLeft,
+        WordRight,
+        SelectWordLeft,
+        SelectWordRight,
+        DeleteWordLeft,
+        DeleteWordRight,
+        SelectHome,
+        SelectEnd,
+        Top,
+        Bottom,
+        SelectTop,
+        SelectBottom,
+        PageUp,
+        PageDown,
+        SelectPageUp,
+        SelectPageDown,
     ]
 );
 
@@ -60,6 +80,25 @@ pub fn bindings() -> Vec<KeyBinding> {
         KeyBinding::new("enter", Submit, context),
         KeyBinding::new("ctrl-enter", CtrlSubmit, context),
         KeyBinding::new("tab", Tab, context),
+        KeyBinding::new("ctrl-z", Undo, context),
+        KeyBinding::new("ctrl-shift-z", Redo, context),
+        KeyBinding::new("ctrl-y", Redo, context),
+        KeyBinding::new("ctrl-left", WordLeft, context),
+        KeyBinding::new("ctrl-right", WordRight, context),
+        KeyBinding::new("ctrl-shift-left", SelectWordLeft, context),
+        KeyBinding::new("ctrl-shift-right", SelectWordRight, context),
+        KeyBinding::new("ctrl-backspace", DeleteWordLeft, context),
+        KeyBinding::new("ctrl-delete", DeleteWordRight, context),
+        KeyBinding::new("shift-home", SelectHome, context),
+        KeyBinding::new("shift-end", SelectEnd, context),
+        KeyBinding::new("ctrl-home", Top, context),
+        KeyBinding::new("ctrl-end", Bottom, context),
+        KeyBinding::new("ctrl-shift-home", SelectTop, context),
+        KeyBinding::new("ctrl-shift-end", SelectBottom, context),
+        KeyBinding::new("pageup", PageUp, context),
+        KeyBinding::new("pagedown", PageDown, context),
+        KeyBinding::new("shift-pageup", SelectPageUp, context),
+        KeyBinding::new("shift-pagedown", SelectPageDown, context),
     ]
 }
 
@@ -79,6 +118,10 @@ pub struct BackspaceEmpty;
 /// Up (-1) or Down (1) in a one-line field, which has no lines to move between: its owner moves a
 /// list's highlight instead.
 pub struct Arrow(pub isize);
+
+/// Up on the first row (-1) or Down on the last (1) of a field with lines, after the caret has
+/// moved to the start or the end: its owner may bring back an earlier message.
+pub struct Edge(pub isize);
 
 /// Tab while a menu has the keys: its owner picks the highlighted entry.
 pub struct Tabbed;
@@ -116,11 +159,19 @@ pub struct TextArea {
     pub enter_newline: bool,
     /// Drawn as dots, as a secret is, rather than as what was typed.
     pub masked: bool,
+    /// Markdown is styled as it is typed, with its marks dimmed.
+    pub markdown: bool,
     /// A menu above the field has Up, Down and Tab, which go to the owner as [`Arrow`] and
     /// [`Tabbed`].
     pub menu_keys: bool,
     /// The right-click menu, while open, and where it opened.
     pub(super) menu: Option<(Entity<crate::ui::menu::Menu>, Point<Pixels>)>,
+    /// The box the field scrolls in, when its owner tracks one: it follows the caret.
+    pub scroll: ScrollHandle,
+    /// The caret and text length the box last followed, so it moves only when they change.
+    pub(super) revealed: (usize, usize),
+    /// What Undo and Redo step through.
+    pub(super) history: History,
 }
 
 /// What a masked field draws for each character.
@@ -132,6 +183,7 @@ impl EventEmitter<Changed> for TextArea {}
 impl EventEmitter<BackspaceEmpty> for TextArea {}
 impl EventEmitter<Arrow> for TextArea {}
 impl EventEmitter<Tabbed> for TextArea {}
+impl EventEmitter<Edge> for TextArea {}
 
 impl TextArea {
     pub fn new(
@@ -157,8 +209,12 @@ impl TextArea {
             single_line: false,
             enter_newline: false,
             masked: false,
+            markdown: false,
             menu_keys: false,
             menu: None,
+            scroll: ScrollHandle::new(),
+            revealed: (0, 0),
+            history: History::default(),
         }
     }
 
@@ -193,6 +249,7 @@ impl TextArea {
     }
 
     pub fn clear(&mut self, window: &Window, cx: &mut Context<Self>) {
+        self.record(&(0..self.content.len()), "");
         self.content.clear();
         cx.emit(Changed);
         self.selected = 0..0;
@@ -204,6 +261,7 @@ impl TextArea {
 
     /// Replaces the text, with the cursor at its end.
     pub fn set_text(&mut self, text: &str, cx: &mut Context<Self>) {
+        self.forget_history();
         self.content = text.to_string();
         self.selected = text.len()..text.len();
         self.reversed = false;
@@ -214,6 +272,7 @@ impl TextArea {
     /// Wraps the selection in `before` and `after`, keeping it selected, as the format bar does.
     pub fn surround(&mut self, before: &str, after: &str, window: &Window, cx: &mut Context<Self>) {
         let range = self.selected.clone();
+        self.record(&range, before);
         self.content.insert_str(range.end, after);
         self.content.insert_str(range.start, before);
         // Its range was measured before the text moved.
@@ -230,6 +289,7 @@ impl TextArea {
         let start = self.content[..self.cursor()]
             .rfind('\n')
             .map_or(0, |i| i + 1);
+        self.record(&(start..start), prefix);
         self.content.insert_str(start, prefix);
         // Its range was measured before the text moved.
         self.marked = None;
@@ -252,6 +312,7 @@ impl TextArea {
         window: &Window,
         cx: &mut Context<Self>,
     ) {
+        self.record(&range, text);
         self.content.replace_range(range.clone(), text);
         cx.emit(Changed);
         let end = range.start + text.len();
@@ -270,7 +331,8 @@ impl TextArea {
         }
     }
 
-    pub(super) fn move_to(&mut self, offset: usize, window: &Window, cx: &mut Context<Self>) {
+    pub fn move_to(&mut self, offset: usize, window: &Window, cx: &mut Context<Self>) {
+        self.history.typing_at = None;
         self.selected = offset..offset;
         self.reversed = false;
         window.notify_text_selection_changed(&self.focus);

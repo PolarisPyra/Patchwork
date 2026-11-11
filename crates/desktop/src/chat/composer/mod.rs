@@ -7,6 +7,7 @@ mod chips;
 mod menus;
 mod model_notice;
 mod model_picker;
+mod recall;
 mod render;
 mod send;
 mod sigil_menu;

@@ -11,7 +11,8 @@ use gpui::{
     AnyElement, App, Bounds, ClipboardItem, CursorStyle, DispatchPhase, Element, ElementId, Entity,
     GlobalElementId, Hitbox, HitboxBehavior, InspectorElementId, IntoElement, KeyBinding, LayoutId,
     MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString,
-    StyledText, TextLayout, Window, actions, fill, point,
+    StyledText, TextLayout, Window, actions, fill, point, ContentMask, ListState, Styled, canvas,
+    px,
 };
 
 use crate::ui::menu::{Dismissed, Menu, MenuItem};
@@ -29,6 +30,8 @@ struct Drawn {
     id: u64,
     layout: TextLayout,
     prefix: Option<SharedString>,
+    /// How far left of the text its prefix is drawn.
+    gutter: Pixels,
     after_tab: bool,
 }
 
@@ -39,6 +42,8 @@ struct Selection {
     drawn: Vec<Drawn>,
     /// The marked part of each text, by the text's id.
     marked: HashMap<u64, Range<usize>>,
+    /// The last text marked, top to bottom: the only one whose highlight stops where its mark does.
+    last: Option<u64>,
     /// The marked text, top to bottom, as Ctrl+C copies it.
     text: String,
     /// The text the drag began in, and where in it.
@@ -172,15 +177,29 @@ impl Element for Selectable {
         cx: &mut App,
     ) {
         let layout = self.text.layout().clone();
-        let marked = cx
-            .default_global::<Selection>()
-            .marked
-            .get(&self.id)
-            .cloned();
+        let selection = cx.default_global::<Selection>();
+        let marked = selection.marked.get(&self.id).cloned();
+        let continues = selection.last != Some(self.id);
         if let Some(range) = marked {
             let color = theme(cx).accent.opacity(0.3);
-            for quad in quads(&layout, &range) {
+            // Marked on to its end with more marked below, the last row runs to the edge, as
+            // the line end is marked too.
+            let to_edge = continues && range.end >= layout.len();
+            for quad in quads(&layout, &range, to_edge) {
                 window.paint_quad(fill(quad, color));
+            }
+            // Marked from its start, its bullet or number is marked with it, as it is copied.
+            if range.start == 0
+                && self.gutter > Pixels::ZERO
+                && let Some(start) = layout.position_for_index(0)
+            {
+                window.paint_quad(fill(
+                    Bounds::from_corners(
+                        point(start.x - self.gutter, start.y),
+                        point(start.x, start.y + layout.line_height()),
+                    ),
+                    color,
+                ));
             }
         }
         self.text.paint(
@@ -199,6 +218,7 @@ impl Element for Selectable {
             id: self.id,
             layout: layout.clone(),
             prefix: self.prefix.clone(),
+            gutter: self.gutter,
             after_tab: self.after_tab,
         });
 
@@ -349,7 +369,44 @@ impl Selection {
         {
             self.text = text[range.clone()].to_string();
             self.marked.insert(id, range);
+            self.last = Some(id);
         }
+    }
+
+    /// The space between two marked texts one above the other, such as the gap between
+    /// paragraphs, so a mark across them reads as one. Wider gaps, which hold something that
+    /// cannot be marked, stay clear.
+    fn gaps(&self) -> Vec<Bounds<Pixels>> {
+        let mut marked: Vec<&Drawn> = self
+            .drawn
+            .iter()
+            .filter(|d| self.marked.contains_key(&d.id))
+            .collect();
+        marked.sort_by(|a, b| {
+            let (a, b) = (a.layout.bounds(), b.layout.bounds());
+            (a.top(), a.left())
+                .partial_cmp(&(b.top(), b.left()))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        marked
+            .windows(2)
+            .filter_map(|pair| {
+                let (a, b) = (pair[0], pair[1]);
+                let (ab, bb) = (a.layout.bounds(), b.layout.bounds());
+                let through = self.marked.get(&a.id)?.end >= a.layout.len()
+                    && self.marked.get(&b.id)?.start == 0;
+                let gap = bb.top() - ab.bottom();
+                (through && gap > Pixels::ZERO && gap <= a.layout.line_height() * 2.).then(|| {
+                    Bounds::from_corners(
+                        point(
+                            (ab.left() - a.gutter).min(bb.left() - b.gutter),
+                            ab.bottom(),
+                        ),
+                        point(ab.right().max(bb.right()), bb.top()),
+                    )
+                })
+            })
+            .collect()
     }
 
     /// Marks everything from where the drag began to `position`, text by text, top to bottom.
@@ -420,6 +477,7 @@ impl Selection {
                 }
                 self.text.push_str(&text[start..end]);
                 self.marked.insert(drawn.id, start..end);
+                self.last = Some(drawn.id);
             }
         }
     }
@@ -427,14 +485,17 @@ impl Selection {
 
 /// The boxes behind `range` of a text: one for a single line, or the end of the first line, the
 /// lines between, and the start of the last.
-fn quads(layout: &TextLayout, range: &Range<usize>) -> Vec<Bounds<Pixels>> {
-    let (Some(start), Some(end)) = (
+fn quads(layout: &TextLayout, range: &Range<usize>, to_edge: bool) -> Vec<Bounds<Pixels>> {
+    let (Some(start), Some(mut end)) = (
         layout.position_for_index(range.start),
         layout.position_for_index(range.end),
     ) else {
         return Vec::new();
     };
     let (bounds, line) = (layout.bounds(), layout.line_height());
+    if to_edge {
+        end.x = bounds.right();
+    }
     if start.y == end.y {
         return vec![Bounds::from_corners(start, point(end.x, end.y + line))];
     }
@@ -449,6 +510,46 @@ fn quads(layout: &TextLayout, range: &Range<usize>) -> Vec<Bounds<Pixels>> {
         ));
     }
     quads
+}
+
+/// Drawn over a scrolling list of texts, after them: it fills the gaps between the marked ones,
+/// and while a drag holds the pointer above or below the list, it scrolls the list that way and
+/// marks on.
+pub fn overlay(list: ListState) -> impl IntoElement {
+    canvas(
+        |_, _, _| (),
+        move |bounds, (), window, cx| {
+            let color = theme(cx).accent.opacity(0.3);
+            let selection = cx.default_global::<Selection>();
+            if selection.dragging
+                && let Some(at) = selection.seen
+            {
+                let past = if at.y < bounds.top() {
+                    at.y - bounds.top()
+                } else if at.y > bounds.bottom() {
+                    at.y - bounds.bottom()
+                } else {
+                    Pixels::ZERO
+                };
+                if past != Pixels::ZERO {
+                    // The further out the pointer, the faster it goes.
+                    list.scroll_by((past / 2.).clamp(px(-40.), px(40.)));
+                    selection.drag_to(at);
+                    window.request_animation_frame();
+                }
+            }
+            let gaps = selection.gaps();
+            window.with_content_mask(Some(ContentMask { bounds }), |window| {
+                for gap in gaps {
+                    window.paint_quad(fill(gap, color));
+                }
+            });
+        },
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full()
 }
 
 /// An id for the `nth` text drawn under `key`.

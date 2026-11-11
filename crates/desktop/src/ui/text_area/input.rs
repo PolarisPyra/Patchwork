@@ -73,6 +73,7 @@ impl EntityInputHandler for TextArea {
             .map(|r| self.range_from_utf16(r))
             .or(self.marked.clone())
             .unwrap_or(self.selected.clone());
+        self.record(&range, text);
         self.content.replace_range(range.clone(), text);
         cx.emit(Changed);
         let end = range.start + text.len();
@@ -96,6 +97,7 @@ impl EntityInputHandler for TextArea {
             .map(|r| self.range_from_utf16(r))
             .or(self.marked.clone())
             .unwrap_or(self.selected.clone());
+        self.record(&range, new_text);
         self.content.replace_range(range.clone(), new_text);
         cx.emit(Changed);
         self.marked = (!new_text.is_empty()).then(|| range.start..range.start + new_text.len());
