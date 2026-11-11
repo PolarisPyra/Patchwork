@@ -31,10 +31,10 @@ pub struct AgentPick {
 pub struct Reserves {
     /// Takes the chat over when its agent's provider is out of usage.
     pub fallback: Option<AgentPick>,
-    /// What the chat's agent runs its sub agents at. A CLI only runs its own models, so this
-    /// names the chat's agent.
+    /// What the chat's agent runs its sub agents at. Naming the chat's agent sets the model and
+    /// effort of the sub agents its CLI starts; naming another has Patchwork run them there.
     pub sub: Option<AgentPick>,
-    /// What the fallback runs its sub agents at, which names the fallback's agent.
+    /// What the fallback runs its sub agents at, as `sub` is for the chat's agent.
     pub sub_fallback: Option<AgentPick>,
 }
 
@@ -47,15 +47,25 @@ pub struct Granular {
     pub reserves: Reserves,
 }
 
-/// Whether `agent`'s CLI can be told which model and effort its sub agents run at.
+/// Whether `agent`'s CLI can be told which model and effort its own sub agents run at.
 #[must_use]
 pub fn runs_sub_agents_at(agent: AgentKind) -> bool {
     matches!(agent, AgentKind::Claude | AgentKind::Codex)
 }
 
+/// Whether `agent` can hand its sub agents' work to another agent, which Patchwork runs for it:
+/// the agents whose CLI is given Patchwork's own tools.
+#[must_use]
+pub fn delegates_sub_agents(agent: AgentKind) -> bool {
+    matches!(
+        agent,
+        AgentKind::Claude | AgentKind::Codex | AgentKind::OpenCode
+    )
+}
+
 impl Granular {
     /// Drops the picks that could never act: a fallback that is the chat's own agent and model,
-    /// and sub agents on another agent than the one that would start them.
+    /// and sub agents the agent that would start them can neither run nor hand over.
     fn tidy(&mut self) {
         let Reserves {
             fallback,
@@ -69,8 +79,13 @@ impl Granular {
         {
             *fallback = None;
         }
-        let fits =
-            |pick: &AgentPick, agent: AgentKind| pick.agent == agent && runs_sub_agents_at(agent);
+        let fits = |pick: &AgentPick, agent: AgentKind| {
+            if pick.agent == agent {
+                runs_sub_agents_at(agent)
+            } else {
+                delegates_sub_agents(agent)
+            }
+        };
         if sub.as_ref().is_some_and(|s| !fits(s, main.agent)) {
             *sub = None;
         }
@@ -121,6 +136,20 @@ pub(crate) fn sub_pick(
         return None;
     }
     saved(store, thread_id).sub.filter(|s| s.agent == agent)
+}
+
+/// The other agent the thread's sub agents run on, when its own can hand work to one.
+pub(crate) fn delegate_of(
+    store: &Store,
+    settings: &Settings,
+    thread: &Thread,
+) -> Option<AgentPick> {
+    if !settings.granular_chats || thread.parent.is_some() || !delegates_sub_agents(thread.agent) {
+        return None;
+    }
+    saved(store, &thread.id)
+        .sub
+        .filter(|s| s.agent != thread.agent)
 }
 
 /// The agent that takes the thread over when its own is out of usage, if it has one.

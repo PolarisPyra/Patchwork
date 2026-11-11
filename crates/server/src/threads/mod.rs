@@ -3,6 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 mod attachments;
+pub mod delegate;
 mod granular;
 mod messages;
 mod lifecycle;
@@ -19,8 +20,8 @@ pub use messages::{
     TokenUsage, ToolCall, tool_output, TurnChecks, TurnTrees,
 };
 #[doc(inline)]
-pub use granular::{AgentPick, Granular, Reserves, runs_sub_agents_at};
-pub(crate) use granular::{fall_back, fallback_of, project_key, sub_pick};
+pub use granular::{AgentPick, Granular, Reserves, delegates_sub_agents, runs_sub_agents_at};
+pub(crate) use granular::{delegate_of, fall_back, fallback_of, project_key, sub_pick};
 #[doc(inline)]
 pub use lifecycle::NewThread;
 #[doc(inline)]

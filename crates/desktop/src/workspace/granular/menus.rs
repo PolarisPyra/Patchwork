@@ -6,7 +6,7 @@ use gpui::{Entity, SharedString, WeakEntity, Window, anchored, deferred, div, po
 use patchwork_server::provider::ModelOption;
 use patchwork_server::threads::Granular;
 
-use super::state::{Part, Slot, agent_of, edit, pick_of, set_agent};
+use super::state::{Part, Slot, agent_of, edit, pick_of, set_agent, starter_of};
 use crate::chat::composer::{effort_label, efforts};
 use crate::ui::menu::{Menu, MenuItem};
 use crate::ui::{AGENT_KINDS, agent_label};
@@ -61,7 +61,8 @@ impl Workspace {
         let this = cx.entity().downgrade();
         let pick = pick_of(value, slot);
         if part == Part::Agent {
-            let current = pick.map(|p| p.agent);
+            // Sub agents not put on another agent run on the one that starts them.
+            let current = pick.map(|p| p.agent).or(starter_of(value, slot));
             let none = (slot == Slot::Fallback).then(|| {
                 choice(&this, "None", current.is_none(), move |v| {
                     set_agent(v, slot, None);
@@ -139,6 +140,9 @@ impl Workspace {
         }
         let items = self.granular_items(slot, part, cx);
         let label = match part {
+            Part::Agent if matches!(slot, Slot::Sub | Slot::SubFallback) => {
+                format!("{} agent", slot.name())
+            }
             Part::Agent => slot.name().to_string(),
             Part::Model => format!("{} model", slot.name()),
             Part::Effort => format!("{} effort", slot.name()),

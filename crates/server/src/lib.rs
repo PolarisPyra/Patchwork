@@ -142,8 +142,18 @@ impl Server {
             Some(server) if tool == secrets::TOOL => server
                 .runner
                 .request_secret(&server, thread_id, args, stopped),
+            Some(server) if tool == threads::delegate::TOOL => server
+                .runner
+                .run_sub_agent(&server, thread_id, args, stopped),
             Some(_) => Err(format!("Patchwork has no tool {tool}").into()),
             None => Err("Patchwork is closing".into()),
+        }));
+        let weak = Arc::downgrade(&server);
+        provider::mcp::set_tool_lister(Box::new(move |thread_id| {
+            weak.upgrade()
+                .and_then(|server| server.delegate_tool(thread_id))
+                .into_iter()
+                .collect()
         }));
         Ok(server)
     }

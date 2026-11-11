@@ -66,6 +66,7 @@ use crate::orchestration::turn::stuck::{LOOP_LIMIT, Repeats};
 use crate::orchestration::turn::process::write_line;
 use crate::orchestration::output::stream::publish;
 use crate::orchestration::output::stream::Unsaved;
+use crate::orchestration::tasks::delegate::mark_call;
 use crate::orchestration::tasks::subagents::finish_child;
 use crate::orchestration::tasks::subagents::open_child;
 use crate::orchestration::tasks::subagents::SubagentThread;
@@ -560,6 +561,7 @@ pub(in crate::orchestration) fn ingest(
                                 tool.child_thread_id = Some(child.thread_id.clone());
                                 children.insert(tool.id.clone(), child);
                             }
+                            mark_call(&turn, tool);
                         }
                         AgentEvent::ToolFinished {
                             tool_id,

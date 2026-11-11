@@ -54,6 +54,16 @@ pub fn set_tool_handler(handler: ToolHandler) {
     let _ = TOOL_HANDLER.set(handler);
 }
 
+/// The tools of Patchwork's own that a thread's agent has beside the one every agent has, as
+/// `tools/list` entries.
+type ToolLister = Box<dyn Fn(&str) -> Vec<Value> + Send + Sync>;
+static TOOL_LISTER: OnceLock<ToolLister> = OnceLock::new();
+
+/// Sets what lists a thread's further tools; called once when the server opens.
+pub fn set_tool_lister(lister: ToolLister) {
+    let _ = TOOL_LISTER.set(lister);
+}
+
 /// Runs Patchwork's own tool `tool` for the agent of `thread_id`, until `stopped`.
 pub(crate) fn call_own(
     thread_id: &str,
@@ -81,11 +91,17 @@ fn own_request(
             "serverInfo": {"name": OWN_SERVER, "version": crate::VERSION},
         })),
         "ping" => Ok(json!({})),
-        "tools/list" => Ok(json!({"tools": [{
-            "name": crate::secrets::TOOL,
-            "description": crate::secrets::DESCRIPTION,
-            "inputSchema": crate::secrets::input_schema(),
-        }]})),
+        "tools/list" => {
+            let mut tools = vec![json!({
+                "name": crate::secrets::TOOL,
+                "description": crate::secrets::DESCRIPTION,
+                "inputSchema": crate::secrets::input_schema(),
+            })];
+            if let Some(list) = TOOL_LISTER.get() {
+                tools.extend(list(thread_id));
+            }
+            Ok(json!({"tools": tools}))
+        }
         "tools/call" => {
             let tool = params["name"].as_str().unwrap_or_default();
             let (text, error) = match call_own(thread_id, tool, &params["arguments"], stopped) {

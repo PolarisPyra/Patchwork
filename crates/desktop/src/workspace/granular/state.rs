@@ -8,7 +8,7 @@ use std::sync::Arc;
 use gpui::{Entity, FocusHandle, Focusable, SharedString, Window, prelude::*};
 use patchwork_server::provider::AgentKind;
 use patchwork_server::threads::{
-    AgentPick, Attachment, Granular, NewThread, Reserves, runs_sub_agents_at,
+    AgentPick, Attachment, Granular, NewThread, Reserves, delegates_sub_agents, runs_sub_agents_at,
 };
 
 use crate::ui::menu::Menu;
@@ -71,15 +71,33 @@ pub struct GranularDialog {
     pub(super) error: Option<SharedString>,
 }
 
-/// The agent the slot's pick runs on. None for a fallback not picked, and for the sub agents of
-/// an agent whose CLI cannot be told what to run them at.
+/// The agent that starts a sub agent slot's sub agents: the chat's, or its fallback. None for the
+/// other slots, and for the sub agents of a fallback not picked.
+pub(super) fn starter_of(value: &Granular, slot: Slot) -> Option<AgentKind> {
+    match slot {
+        Slot::Main | Slot::Fallback => None,
+        Slot::Sub => Some(value.main.agent),
+        Slot::SubFallback => value.reserves.fallback.as_ref().map(|f| f.agent),
+    }
+}
+
+/// The agent the slot's pick runs on. None for a fallback not picked, and for sub agents whose
+/// model and effort cannot be set: those of an agent whose CLI cannot be told what to run its
+/// own at.
 pub(super) fn agent_of(value: &Granular, slot: Slot) -> Option<AgentKind> {
-    let fallback = value.reserves.fallback.as_ref().map(|f| f.agent);
     match slot {
         Slot::Main => Some(value.main.agent),
-        Slot::Fallback => fallback,
-        Slot::Sub => Some(value.main.agent).filter(|a| runs_sub_agents_at(*a)),
-        Slot::SubFallback => fallback.filter(|a| runs_sub_agents_at(*a)),
+        Slot::Fallback => value.reserves.fallback.as_ref().map(|f| f.agent),
+        Slot::Sub | Slot::SubFallback => {
+            let starter = starter_of(value, slot)?;
+            let picked = pick_of(value, slot).map_or(starter, |p| p.agent);
+            let set = if picked == starter {
+                runs_sub_agents_at(starter)
+            } else {
+                delegates_sub_agents(starter)
+            };
+            set.then_some(picked)
+        }
     }
 }
 
@@ -92,11 +110,13 @@ pub(super) fn pick_of(value: &Granular, slot: Slot) -> Option<&AgentPick> {
     }
 }
 
-/// Changes the slot's model or effort. Sub agents left at the default for both are not kept.
+/// Changes the slot's model or effort. Sub agents on the agent that starts them, left at the
+/// default for both, are not kept.
 pub(super) fn edit(value: &mut Granular, slot: Slot, change: impl FnOnce(&mut AgentPick)) {
     let Some(agent) = agent_of(value, slot) else {
         return;
     };
+    let own = starter_of(value, slot) == Some(agent);
     let held = match slot {
         Slot::Main => return change(&mut value.main),
         Slot::Fallback => {
@@ -118,10 +138,11 @@ pub(super) fn edit(value: &mut Granular, slot: Slot, change: impl FnOnce(&mut Ag
         .filter(|p| p.agent == agent)
         .unwrap_or_else(|| unset.clone());
     change(&mut pick);
-    *held = (pick != unset).then_some(pick);
+    *held = (!own || pick != unset).then_some(pick);
 }
 
 /// Puts `pick` in a slot that names an agent, and drops the sub agents of the agent it replaces.
+/// Sub agents put on the agent that starts them are that agent's own again.
 pub(super) fn set_agent(value: &mut Granular, slot: Slot, pick: Option<AgentPick>) {
     match (slot, pick) {
         (Slot::Main, Some(pick)) if pick.agent != value.main.agent => {
@@ -134,6 +155,19 @@ pub(super) fn set_agent(value: &mut Granular, slot: Slot, pick: Option<AgentPick
         {
             value.reserves.fallback = pick;
             value.reserves.sub_fallback = None;
+        }
+        (Slot::Sub | Slot::SubFallback, Some(pick)) => {
+            let Some(starter) = starter_of(value, slot) else {
+                return;
+            };
+            let held = if slot == Slot::Sub {
+                &mut value.reserves.sub
+            } else {
+                &mut value.reserves.sub_fallback
+            };
+            if pick.agent != held.as_ref().map_or(starter, |p| p.agent) {
+                *held = (pick.agent != starter).then_some(pick);
+            }
         }
         _ => {}
     }

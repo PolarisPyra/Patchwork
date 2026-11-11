@@ -240,7 +240,8 @@ impl Server {
         let mut subagents = Vec::new();
         let mut first_title = None;
         self.store.update_thread(&thread_id, |t| {
-            if t.messages.is_empty() {
+            // A sub agent's chat is named after what it was asked to do when it is made.
+            if t.messages.is_empty() && t.parent.is_none() {
                 first_title = Some((
                     t.title.clone(),
                     t.agent,
@@ -470,6 +471,19 @@ impl Server {
     /// Returns an error when the subagent's command already finished, when the chat has no running
     /// turn, when the subagent cannot be stopped, or when the turn no longer accepts input.
     pub fn stop_subagent(&self, thread_id: &str, tool_id: &str) -> Result<(), Error> {
+        // A sub agent on another agent is a turn of its own, in its own thread.
+        let own_turn = self.store.thread(thread_id).and_then(|t| {
+            t.messages
+                .iter()
+                .flat_map(|m| &m.tools)
+                .find(|c| c.id == tool_id)
+                .and_then(|c| c.child_thread_id.clone())
+                .filter(|child| self.runner.is_starting(child) || self.runner.is_running(child))
+        });
+        if let Some(child) = own_turn {
+            self.stop_turn(&child, false);
+            return Ok(());
+        }
         self.runner.stop_subagent(thread_id, tool_id)
     }
 

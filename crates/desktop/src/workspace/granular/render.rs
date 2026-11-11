@@ -9,12 +9,13 @@ use gpui::{
 };
 
 use super::menus::below;
-use super::state::{GranularDialog, GranularScope, Part, Slot, agent_of, pick_of};
+use super::state::{GranularDialog, GranularScope, Part, Slot, agent_of, pick_of, starter_of};
 use crate::chat::composer::effort_label;
 use crate::ui::dialog;
 use crate::ui::theme::{FS_MD, FS_SM, RADIUS, Theme, theme};
 use crate::ui::{BtnKind, agent_label, agent_logo, btn, button, icon, icon_button};
 use crate::workspace::Workspace;
+use patchwork_server::threads::delegates_sub_agents;
 
 /// The height of every select on the card.
 const SELECT_HEIGHT: f32 = 32.;
@@ -92,6 +93,23 @@ impl Workspace {
                 .child(field)
                 .children(menu.map(|(_, menu)| below(menu.clone())))
         };
+        // A select of the sub agents under its title.
+        let row = |title: &'static str, field: gpui::Div| {
+            div()
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .child(
+                    div()
+                        .w(px(52.))
+                        .flex_none()
+                        .text_size(px(FS_MD))
+                        .text_color(t.text_muted)
+                        .child(title),
+                )
+                .child(field.flex_1())
+                .into_any_element()
+        };
         // A slot's model and effort, each a named row. Nothing for a slot that cannot be set.
         let rows = |slot: Slot| -> Vec<AnyElement> {
             let Some(agent) = agent_of(value, slot) else {
@@ -112,20 +130,7 @@ impl Workspace {
             .into_iter()
             .map(|(part, title, shown)| {
                 let label = format!("{} {}", slot.name(), title.to_lowercase());
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .child(
-                        div()
-                            .w(px(52.))
-                            .flex_none()
-                            .text_size(px(FS_MD))
-                            .text_color(t.text_muted)
-                            .child(title),
-                    )
-                    .child(dropdown(slot, part, label, Field::value(shown)).flex_1())
-                    .into_any_element()
+                row(title, dropdown(slot, part, label, Field::value(shown)))
             })
             .collect()
         };
@@ -170,7 +175,22 @@ impl Workspace {
             cx,
         )
         .on_click(cx.listener(move |this, _, _, cx| this.reset_granular(main, cx)));
-        let sub_rows = rows(sub);
+        // The agent the sub agents run on, where the one that starts them can hand work to another.
+        let sub_agent = starter_of(value, sub)
+            .filter(|starter| delegates_sub_agents(*starter))
+            .map(|starter| {
+                let pick = pick_of(value, sub);
+                let on = pick.map_or(starter, |p| p.agent);
+                let model = pick.and_then(|p| p.model.as_deref());
+                let field = Field {
+                    shown: agent_label(on).into(),
+                    unset: on == starter,
+                    mark: Some(agent_logo(on, model, 16.)),
+                };
+                let label = format!("{} agent", sub.name());
+                row("Agent", dropdown(sub, Part::Agent, label, field))
+            });
+        let sub_rows: Vec<AnyElement> = sub_agent.into_iter().chain(rows(sub)).collect();
         let sub_agents = (!sub_rows.is_empty()).then(|| {
             div()
                 .id(SharedString::from(format!("granular-{}", sub.name())))

@@ -54,6 +54,10 @@ pub struct Runner {
     pub(in crate::orchestration) jobs: crate::orchestration::tasks::jobs::Jobs,
     /// The turns that resume when their agent's usage limit resets, by thread.
     pub(in crate::orchestration) limit_waits: Mutex<HashMap<String, LimitWait>>,
+    /// Calls that start a sub agent on another agent, by the thread that made them, from when
+    /// its reply shows one until the sub agent it starts takes it up.
+    pub(in crate::orchestration) delegated:
+        Mutex<HashMap<String, Vec<crate::orchestration::tasks::delegate::Called>>>,
     /// Set once the app is quitting. A turn stopped from then on was cut off by the quit, not
     /// stopped by the user, so it ends interrupted and resumes at the next launch.
     quitting: AtomicBool,
