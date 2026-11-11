@@ -5,7 +5,7 @@ them changes how a turn is run.
 
 ## Scheduled tasks
 
-`crates/server/src/scheduled.rs` works out the next run from the shape of a schedule and the local
+`crates/server/src/scheduled/` works out the next run from the shape of a schedule and the local
 clock; there is no cron parser. The shapes are Codex's own: every few hours, every day, weekdays,
 or named days.
 
@@ -85,11 +85,11 @@ skip it, such as OpenCode for a tool hook.
 
 ## Computer use
 
-`crates/server/src/computer.rs` gives Patchwork's own agent a screenshot and the pointer and keyboard
+`crates/server/src/computer/` gives Patchwork's own agent a screenshot and the pointer and keyboard
 under it. It is off until Settings → Permissions turns it on; `set_enabled` mirrors the setting so
 the tool list and the approval rules can ask without a database read.
 
-- `crates/server/src/computer.rs` captures the primary monitor. On Windows and macOS that is `xcap`.
+- `crates/server/src/computer/` captures the primary monitor. On Windows and macOS that is `xcap`.
   On Linux it is the desktop portal under Wayland, cut to the primary monitor that XWayland
   reports, and the root window under X11. It uses `zbus` and `x11rb`, which the app already builds
   for notifications and the clipboard. `xcap` is not used on Linux, since it would also build

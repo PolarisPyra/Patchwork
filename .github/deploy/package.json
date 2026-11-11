@@ -1,0 +1,8 @@
+{
+  "name": "patchwork-site-deploy",
+  "private": true,
+  "description": "The tool the Release workflow deploys the website with. Its lockfile records the hash of every package, which npm ci checks. To change the version: edit it here, then run npm install --package-lock-only --ignore-scripts in this folder.",
+  "dependencies": {
+    "wrangler": "4.156.2"
+  }
+}

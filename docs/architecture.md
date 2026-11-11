@@ -14,8 +14,8 @@ The repo is split into `crates/server` and `crates/desktop`:
   - `src/persistence/` — SQLite store and schema migrations
   - `src/import/` — reads each CLI's saved sessions for importing
   - `src/usage/` — subscription usage limits per provider
-  - `src/scheduled.rs` — scheduled tasks and the next run of each, from its shape and the local clock
-  - `src/computer.rs` — a screenshot, and the pointer and keyboard under it
+  - `src/scheduled/` — scheduled tasks and the next run of each, from its shape and the local clock
+  - `src/computer/` — a screenshot, and the pointer and keyboard under it
   - `src/workspace/` — git and file access; `src/watch.rs` — watches the open project for file changes (see [File changes](#file-changes))
   - `src/system/` — the user's machine: the programs Patchwork starts and their environment, login shells, paths, opening files on the desktop
   - `src/logging/` — the debug logs

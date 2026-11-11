@@ -33,6 +33,7 @@ jobs:
         if: github.ref_type == 'tag'
         run: |
           version="${GITHUB_REF_NAME#v}"
+          signer="$GITHUB_WORKSPACE/.github/signer/node_modules/.bin/tauri"
           app=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
           [ "$version" = "$app" ] || { echo "::error::$GITHUB_REF_NAME, but Cargo.toml says $app"; exit 1; }
           grep -q "^## \[$version\]" CHANGELOG.md \
@@ -174,6 +175,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y -o Acquire::Retries=3 minisign
 
+      # The signer is installed here, before the release key is in any step's environment, from
+      # the lockfile in .github/signer: npm ci takes only the packages it records, each checked
+      # against the hash recorded for it, and runs none of their install scripts.
+      - name: Install the signer
+        working-directory: .github/signer
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
       # Each file is signed with the release key (the TAURI_SIGNING_PRIVATE_KEY secret and its
       # password), and its signature is checked against the key built into the app, as the app's
       # updater will check it, before anything is published. latest.json then names each file's
@@ -201,7 +209,7 @@ jobs:
           cd release
           assets='[]'
           for name in Patchwork_amd64.AppImage Patchwork_x64.exe Patchwork_aarch64.dmg; do
-            npx --yes @tauri-apps/cli@2.12.3 signer sign --app-version "$version" "$name" > /dev/null
+            "$signer" signer sign --app-version "$version" "$name" > /dev/null
             base64 -d "$name.sig" > "$name.minisig"
             minisign -Vq -P "$key" -m "$name" -x "$name.minisig" \
               || { echo "::error::The signature of $name does not check out against the app's key"; exit 1; }
@@ -216,7 +224,7 @@ jobs:
             '{tag_name: $tag, body: $body, withdrawn: [], assets: $assets}' > latest.json
           # latest.json is signed too: the app reads its version and the versions it withdraws
           # from it, and takes neither from a file the release key did not sign.
-          npx --yes @tauri-apps/cli@2.12.3 signer sign --app-version "$version" latest.json > /dev/null
+          "$signer" signer sign --app-version "$version" latest.json > /dev/null
           base64 -d latest.json.sig > latest.json.minisig
           minisign -Vq -P "$key" -m latest.json -x latest.json.minisig \
             || { echo "::error::The signature of latest.json does not check out against the app's key"; exit 1; }
@@ -243,6 +251,12 @@ jobs:
       - name: Point the downloads at ${{ github.ref_name }}
         run: node site/refresh-downloads.mjs
 
+      # Installed before the deploy token is in any step's environment, from the lockfile in
+      # .github/deploy, as the signer is.
+      - name: Install the deploy tool
+        working-directory: .github/deploy
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
       - name: Deploy to Cloudflare Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -252,7 +266,7 @@ jobs:
             echo "::warning::CLOUDFLARE_API_TOKEN is not set, so the website was not deployed."
             exit 0
           fi
-          npx --yes wrangler@4.156.2 pages deploy site --project-name patchwork-site \
+          .github/deploy/node_modules/.bin/wrangler pages deploy site --project-name patchwork-site \
             --branch main --commit-dirty=true
 
       - name: Commit the new links to main

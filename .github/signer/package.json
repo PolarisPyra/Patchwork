@@ -1,0 +1,8 @@
+{
+  "name": "patchwork-release-signer",
+  "private": true,
+  "description": "The tool the Release workflow signs each file with. Its lockfile records the hash of every package, which npm ci checks. To change the version: edit it here, then run npm install --package-lock-only --ignore-scripts in this folder.",
+  "dependencies": {
+    "@tauri-apps/cli": "2.12.3"
+  }
+}

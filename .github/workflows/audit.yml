@@ -1,0 +1,31 @@
+name: Audit
+
+# Checks the crates in Cargo.lock against the RustSec advisory database: each Monday, when the
+# lockfile changes on main, and when started by hand. It fails on a known vulnerability, so an
+# advisory on something the app ships is seen without anyone having to look.
+#
+# Actions are pinned to commits; the comment after each names the version it was.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  push:
+    branches: [main]
+    paths: ["Cargo.lock"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked --version 0.23.0
+
+      - name: Check Cargo.lock for advisories
+        run: cargo audit
