@@ -3,6 +3,19 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.44] - 2026-11-11
+
+### Added
+
+- Settings → General has a new Granular chats switch. With it on, a new chat asks which agent, model and effort it runs with, which agent takes over when the first runs out of usage, and what each of them runs its sub agents on. A chat's right-click menu has Granular settings to change them later.
+- With granular chats on, a project's right-click menu has Granular settings too. Make default there gives the picks to the project's new chats, which then start without asking, and Apply to all chats gives them to every chat already in it as well.
+- When a granular chat's agent runs out of usage in the middle of a reply, the chat moves to its fallback, which is given the conversation and carries on. Sub agent picks are offered for Claude Code and Codex, the two that can be told what to run theirs on.
+
+### Fixed
+
+- Starting a second Patchwork on a copy of the first one's data no longer stops the chats the first is working on. Before, it took their agents for ones left behind by a crash and ended them mid-reply.
+- A reply whose agent is killed now says the system ran low on memory only when the system reports that it was. Before, it said so whenever an agent was killed, whatever killed it.
+
 ## [26.11.43] - 2026-11-10
 
 ### Added
