@@ -51,14 +51,14 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      # The runner's Azure apt mirror can fail DNS resolution; use archive.ubuntu.com directly.
-      - name: Use archive.ubuntu.com
-        run: sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
-
       - name: Install the Linux packages
+        timeout-minutes: 10
         run: |
-          sudo apt-get update
-          sudo apt-get install -y -o Acquire::Retries=3 libdbus-1-dev libfontconfig-dev \
+          apt_options=(-o Acquire::Retries=1 -o Acquire::ForceIPv4=true \
+            -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15)
+          sudo apt-get "${apt_options[@]}" update
+          sudo apt-get "${apt_options[@]}" install -y --no-install-recommends \
+            libdbus-1-dev libfontconfig-dev \
             libfreetype-dev libwayland-dev libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev
 
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
