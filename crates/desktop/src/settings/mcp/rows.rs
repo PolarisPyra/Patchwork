@@ -24,6 +24,8 @@ pub(super) fn logo(client: Client, size: f32, app_icon: &SharedString) -> AnyEle
 }
 
 /// A logo on a white disc, as the rows and the detail show who runs a server.
+/// A one-colour logo is drawn black there: the disc stays white in OLED mode, so
+/// the theme's text colour would paint it white on white.
 pub(super) fn logo_disc(
     client: Client,
     size: f32,
@@ -41,7 +43,11 @@ pub(super) fn logo_disc(
         .border_1()
         .border_color(t.border)
         .bg(gpui::white())
-        .child(logo(client, logo_size, app_icon))
+        .child(
+            div()
+                .text_color(gpui::black())
+                .child(logo(client, logo_size, app_icon)),
+        )
 }
 
 /// One server in the list: its name, status, command or matching tools, clients and tool count.
@@ -193,6 +199,9 @@ pub(super) fn server_row(
         div()
             .w(px(112.))
             .flex_none()
+            .flex()
+            .items_center()
+            .justify_end()
             .text_size(px(FS_SM))
             .font_weight(FontWeight::SEMIBOLD)
             .child(tally),
