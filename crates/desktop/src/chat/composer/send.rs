@@ -175,8 +175,8 @@ impl Composer {
         .detach();
     }
 
-    /// Attaches the files and folders at `paths`: picked, dropped on the composer, or pasted.
-    pub(super) fn attach_paths(&mut self, paths: &[PathBuf], cx: &mut Context<Self>) {
+    /// Attaches the files and folders at `paths`: picked, dropped on the chat, or pasted.
+    pub(crate) fn attach_paths(&mut self, paths: &[PathBuf], cx: &mut Context<Self>) {
         let paths: Vec<String> = paths
             .iter()
             .map(|path| path.to_string_lossy().into_owned())

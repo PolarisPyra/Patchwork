@@ -345,20 +345,12 @@ impl Render for Composer {
                     cx.stop_propagation();
                 }
             }))
-            // Files, folders or pictures held over the chat box light it up as a place to drop.
-            .drag_over::<ExternalPaths>({
+            // Files, folders or pictures held anywhere over the chat light the chat box up: a
+            // drop there lands in it (see `chat::view`).
+            .group_drag_over::<ExternalPaths>("chat", {
                 let (accent, glow) = (t.accent, t.bg_hover);
-                move |style, _, _, _| style.border_color(accent).bg(glow)
+                move |style| style.border_color(accent).bg(glow)
             })
-            .on_drop(cx.listener(|this, files: &ExternalPaths, window, cx| {
-                this.attach_paths(files.paths(), cx);
-                // A drop is the start of a message: the usage popover goes, as a press outside
-                // it would close it, and the keys come here.
-                if let Some(workspace) = this.workspace.upgrade() {
-                    workspace.update(cx, crate::workspace::Workspace::dismiss_usage);
-                }
-                this.focus(window, cx);
-            }))
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                 // A chip, or the editor itself, has already answered the press.
                 if window.default_prevented() {

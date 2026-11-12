@@ -16,6 +16,8 @@ pub struct Picking {
     cursor: Option<Target>,
     /// The tree's rows as last drawn, top to bottom, for a Shift range to run along.
     pub tree: Vec<Target>,
+    /// The row last plainly clicked, which the Delete key acts on. Any other press lets it go.
+    pub clicked: Option<Target>,
 }
 
 impl Workspace {
@@ -43,6 +45,7 @@ impl Workspace {
             return true;
         }
         if !(m.control || m.platform) {
+            picking.clicked = Some(target.clone());
             if !picking.rows.is_empty() {
                 picking.rows.clear();
                 cx.notify();

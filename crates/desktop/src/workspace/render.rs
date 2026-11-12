@@ -3,8 +3,8 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{
-    MouseButton, MouseMoveEvent, MouseUpEvent, Role, StyleRefinement, Window, deferred, div,
-    prelude::*, px, relative,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Role, StyleRefinement, Window,
+    deferred, div, prelude::*, px, relative,
 };
 use crate::ui::menu::Menu;
 use crate::ui::theme::{FONT_UI, FS_MD, RADIUS, RADIUS_SM, STATUSBAR_H, Theme, theme};
@@ -42,6 +42,11 @@ impl Render for Workspace {
             .id("workspace")
             .track_focus(&self.focus)
             .key_context("Workspace")
+            // Any press lets go of the row the Delete key would act on; a click on a row picks it
+            // again once the press is over.
+            .capture_any_mouse_down(cx.listener(|this, _: &MouseDownEvent, _, _| {
+                this.picking.clicked = None;
+            }))
             // Tab with nothing in particular focused jumps to the composer, as "Jump to the
             // composer" says; from any control it moves on.
             .on_action(cx.listener(|this, _: &crate::FocusNext, window, cx| {
