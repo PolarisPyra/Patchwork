@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.55] - 2026-11-12
+
+### Fixed
+
+- Scrolling down in a file's change preview now moves straight down. Before, the mouse wheel also pushed the lines sideways, so the view drifted diagonally.
+
 ## [26.11.54] - 2026-11-12
 
 ### Fixed
