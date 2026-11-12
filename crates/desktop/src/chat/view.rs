@@ -2,7 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{Div, ExternalPaths, FontWeight, Role, SharedString, Window, div, prelude::*, px};
+use gpui::{Div, FontWeight, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_server::threads::{MessageStatus, Thread};
 use crate::ui::theme::{FS_SM, FS_XL, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
 use crate::ui::{agent_logo, button, display_title, format_tokens, icon, tooltip};
@@ -98,35 +98,23 @@ pub fn render(
         .child(body)
         .when_some(parent, gpui::ParentElement::child)
         .when(w.thread.as_ref().is_none_or(|t| t.parent.is_none()), |c| {
-            // Files, folders or pictures dropped anywhere on the chat, not only on the chat box,
-            // are attached to the message: a drop just off the box was lost before.
-            c.group("chat")
-                .on_drop(cx.listener(|w, files: &ExternalPaths, window, cx| {
-                    // A drop is the start of a message: the usage popover goes, as a press
-                    // outside it would close it, and the keys go to the chat box.
-                    w.dismiss_usage(cx);
-                    w.composer.update(cx, |composer, cx| {
-                        composer.attach_paths(files.paths(), cx);
-                        composer.focus(window, cx);
-                    });
-                }))
-                .child(
-                    div()
-                        .w_full()
-                        .flex_none()
-                        .px(px(24.))
-                        .pb(px(16.))
-                        .children(background)
-                        .children(plan)
-                        .children(ready)
-                        .children(banner)
-                        .children(missing)
-                        .children(resume)
-                        .children(prompt)
-                        .children(queued)
-                        .children(goal)
-                        .child(w.composer.clone()),
-                )
+            c.child(
+                div()
+                    .w_full()
+                    .flex_none()
+                    .px(px(24.))
+                    .pb(px(16.))
+                    .children(background)
+                    .children(plan)
+                    .children(ready)
+                    .children(banner)
+                    .children(missing)
+                    .children(resume)
+                    .children(prompt)
+                    .children(queued)
+                    .children(goal)
+                    .child(w.composer.clone()),
+            )
         })
         .when(!is_new, |c| c.child(floating(w, &t, window, cx)))
 }

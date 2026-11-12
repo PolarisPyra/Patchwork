@@ -10,7 +10,7 @@ use crate::ui::text_area::Paste;
 use crate::chat::user::attachment_chip;
 use crate::ui::theme::{FS_MD, RADIUS, RADIUS_LG, theme};
 use crate::ui::{agent_logo, button, icon, tooltip};
-use crate::workspace::{is_busy, is_working};
+use crate::workspace::{Workspace, is_busy, is_working};
 use super::menus::{Menu, access_of, compact_label, effort_label, efforts};
 use super::chips::{chip, context_of, fill_ring, tool_button};
 use super::send::queue_by_default;
@@ -355,12 +355,22 @@ impl Render for Composer {
                     cx.stop_propagation();
                 }
             }))
-            // Files, folders or pictures held anywhere over the chat light the chat box up: a
-            // drop there lands in it (see `chat::view`).
-            .group_drag_over::<ExternalPaths>("chat", {
+            // Files, folders or pictures held over the chat box light it up; dropped, they are
+            // attached to the message.
+            .drag_over::<ExternalPaths>({
                 let (accent, glow) = (t.accent, t.bg_hover);
-                move |style| style.border_color(accent).bg(glow)
+                move |style, _, _, _| style.border_color(accent).bg(glow)
             })
+            .on_drop(cx.listener(|this, files: &ExternalPaths, window, cx| {
+                // A drop is the start of a message: the usage popover goes, as a press outside
+                // it would close it, and the keys go to the chat box.
+                if let Some(workspace) = this.workspace.upgrade() {
+                    workspace.update(cx, Workspace::dismiss_usage);
+                }
+                this.attach_paths(files.paths(), cx);
+                this.focus(window, cx);
+                cx.stop_propagation();
+            }))
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                 // A chip, or the editor itself, has already answered the press.
                 if window.default_prevented() {
