@@ -3,6 +3,21 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.56] - 2026-11-12
+
+### Changed
+
+- The "Always allow" choice on a command approval now works for commands that run a for or if loop, set a logging or colour setting first, or save their output to a file. Saving to a file follows your edit rules for that file, so an allowed command still asks before it writes somewhere you haven't allowed edits.
+
+### Fixed
+
+- An MCP server that failed to start, for example because its first download was slow, is tried again after a short wait. Before, it stayed broken until you changed its settings.
+- A running reply now says when the agent is retrying a request or has printed nothing for a few minutes, so a stuck command no longer looks like a frozen app, and a turn whose agent has quit ends with its error instead of staying on Working. The compacting indicator stops once compaction finishes, and Codex errors about signing in, usage limits or a full conversation say what to do. The output token count in a chat's usage line now shows Claude's real total.
+
+### Removed
+
+- Patchwork no longer has its own check that refused shell commands waiting with no time limit. Settings → Hooks now shows an example plugin to copy if you want a check like it, and a plugin that still names the old check is listed there but does nothing.
+
 ## [26.11.55] - 2026-11-12
 
 ### Fixed
