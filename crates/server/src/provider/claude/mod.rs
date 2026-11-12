@@ -9,7 +9,7 @@ pub mod launch;
 mod parse;
 
 #[doc(inline)]
-pub use config::{home, settings_file, auth, configured_model, models};
+pub use config::{home, settings_file, auth, configured_model, entrypoint, models};
 pub(crate) use config::{credentials, mcp_signed_in};
 #[doc(inline)]
 pub use input::{

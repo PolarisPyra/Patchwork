@@ -117,6 +117,10 @@ pub(crate) fn agent_command(kind: AgentKind) -> Result<Command, Error> {
         }
     };
     let mut cmd = program_command(&bin);
+    // Turns, probes and one-off calls all start here; the in-app terminal does not.
+    if kind == AgentKind::Claude {
+        cmd.env("CLAUDE_CODE_ENTRYPOINT", super::claude::entrypoint());
+    }
     if let Some(dir) = bin.parent() {
         let mut paths = vec![dir.to_path_buf()];
         paths.extend(

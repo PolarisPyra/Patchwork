@@ -92,6 +92,28 @@ pub fn configured_model() -> Option<String> {
     Some(settings.get("model")?.as_str()?.to_owned())
 }
 
+/// The `CLAUDE_CODE_ENTRYPOINT` for the Claude processes Patchwork runs.
+///
+/// `patchwork`, unless Claude's `settings.json` `env` sets one. Claude Code reads the entrypoint
+/// only from its process environment, so Patchwork applies the settings value itself, and a value
+/// Patchwork inherited (such as `claude-desktop` when it was started from a Claude session) is
+/// replaced.
+#[must_use]
+pub fn entrypoint() -> String {
+    home()
+        .and_then(|home| std::fs::read_to_string(home.join("settings.json")).ok())
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .and_then(|settings| {
+            Some(
+                settings["env"]["CLAUDE_CODE_ENTRYPOINT"]
+                    .as_str()?
+                    .to_owned(),
+            )
+        })
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "patchwork".to_owned())
+}
+
 /// Current Claude models, from the catalog the CLI caches, each with the thinking levels and
 /// context window it gives them, so a model that cannot think gets no level.
 #[must_use]
