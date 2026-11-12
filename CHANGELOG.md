@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.53] - 2026-11-12
+
+### Changed
+
+- Files, folders and pictures are attached only when dropped on the chat box. Dragging them over the rest of the chat no longer lights the box up or attaches them.
+
 ## [26.11.52] - 2026-11-12
 
 ### Fixed
