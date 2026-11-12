@@ -270,10 +270,11 @@ impl Workspace {
         } else {
             "Save"
         };
-        // A project's settings can be kept for its new chats alone.
+        // A project's settings, or a new chat's in a project with none, can be kept for the
+        // project's new chats alone.
         // Lit while the card shows what the project's new chats start with.
         let is_default = dialog.default.as_ref() == Some(&dialog.value);
-        let make_default = project.then(|| {
+        let make_default = dialog.default_for.is_some().then(|| {
             let shown = if is_default {
                 "Default"
             } else {

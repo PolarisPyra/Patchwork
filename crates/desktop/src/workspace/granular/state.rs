@@ -64,8 +64,10 @@ pub struct GranularDialog {
     /// The open dropdown: its chip's id, the menu, and where it was opened.
     pub(super) menu: Option<(SharedString, Entity<Menu>)>,
     pub(super) first: Option<First>,
-    /// What a project's new chats start with, as last saved. None for a chat, and for a
-    /// project with none.
+    /// The project whose new chats the card can set what they start with: the card's own, or
+    /// the project of a new chat when that project has nothing set yet.
+    pub(super) default_for: Option<String>,
+    /// What that project's new chats start with, as last saved. None when it has none.
     pub(super) default: Option<Granular>,
     pub(super) saving: bool,
     pub(super) error: Option<SharedString>,
@@ -194,11 +196,7 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let default = match &scope {
-            GranularScope::Chat(_) => None,
-            GranularScope::Project(id) => self.server.project_granular(id),
-        };
-        let (title, value, agent_fixed) = match &scope {
+        let (title, value, agent_fixed, default_for) = match &scope {
             GranularScope::Chat(id) => {
                 let (Ok(thread), Ok(value)) =
                     (self.server.thread(id), self.server.thread_granular(id))
@@ -210,7 +208,16 @@ impl Workspace {
                     return;
                 }
                 let started = !thread.messages.is_empty() && !thread.context_pending;
-                ("Granular chat settings".to_string(), value, started)
+                // A new chat in a project with nothing set can set it.
+                let default_for = thread
+                    .project_id
+                    .filter(|id| !started && self.server.project_granular(id).is_none());
+                (
+                    "Granular chat settings".to_string(),
+                    value,
+                    started,
+                    default_for,
+                )
             }
             GranularScope::Project(id) => {
                 let Some(project) = self.settings.projects.iter().find(|p| &p.id == id) else {
@@ -223,7 +230,12 @@ impl Workspace {
                         main: self.default_pick(None),
                         reserves: Reserves::default(),
                     });
-                (format!("Default {} settings", project.name), value, false)
+                (
+                    format!("Default {} settings", project.name),
+                    value,
+                    false,
+                    Some(id.clone()),
+                )
             }
         };
         let focus = cx.focus_handle();
@@ -236,7 +248,10 @@ impl Workspace {
             focus,
             menu: None,
             first,
-            default,
+            default: default_for
+                .as_deref()
+                .and_then(|id| self.server.project_granular(id)),
+            default_for,
             saving: false,
             error: None,
         });
@@ -316,7 +331,7 @@ impl Workspace {
         let Some(dialog) = &mut self.granular_dialog else {
             return;
         };
-        let GranularScope::Project(id) = &dialog.scope else {
+        let Some(id) = &dialog.default_for else {
             return;
         };
         let changed = if dialog.default.as_ref() == Some(&dialog.value) {
