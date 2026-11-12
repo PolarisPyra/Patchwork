@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.59] - 2026-11-12
+
+### Changed
+
+- Very long chats are much faster. Opening a chat with tens of thousands of items, scrolling it, sending a message and receiving a reply used to slow down as the chat grew, and now take about the same time at any length. The sidebar's list of chats also refreshes faster.
+
 ## [26.11.58] - 2026-11-12
 
 ### Fixed
