@@ -210,7 +210,7 @@ pub(super) fn floating(
             }))
     });
     let android = w.mobile.is_some().then(|| {
-        let shown = w.android.is_some();
+        let shown = w.android_open(cx);
         let fg = t.text;
         button("android-devices", "Android devices")
             .aria_expanded(shown)

@@ -34,20 +34,22 @@ impl Workspace {
         let (id, root) = (project.id.clone(), project.path.clone());
         let workspace = cx.entity().downgrade();
         let path = Some(path.to_string());
-        self.android = None;
+        if self.android_open(cx) {
+            self.android = None;
+        }
         self.canvas =
             Some(cx.new(|cx| Canvas::new(workspace, id, root, path, message, tab, window, cx)));
         cx.notify();
     }
 
     /// Looks for a mobile app when the open project is another than the one last looked in. The
-    /// Android panel belongs to the project it opened for, so it closes with it.
+    /// Android panel belongs to the project it opened for: it hides while another is open and
+    /// shows again on the way back.
     pub(super) fn sync_mobile(&mut self, cx: &mut Context<Self>) {
         let id = self.project().map(|p| p.id.clone());
         if id != self.mobile_for {
             self.mobile_for = id;
             self.mobile = None;
-            self.android = None;
             self.detect_mobile(cx);
         }
     }
@@ -66,9 +68,14 @@ impl Workspace {
                 if this.mobile_for.as_ref() != Some(&id) {
                     return;
                 }
-                if found.is_none() {
+                let ours = this
+                    .android
+                    .as_ref()
+                    .filter(|a| a.read(cx).project_id == id)
+                    .cloned();
+                if found.is_none() && ours.is_some() {
                     this.android = None;
-                } else if let (Some(android), Some(found)) = (&this.android, &found) {
+                } else if let (Some(android), Some(found)) = (ours, &found) {
                     android.update(cx, |a, cx| a.set_project(found.clone(), cx));
                 }
                 this.mobile = found;
@@ -80,7 +87,8 @@ impl Workspace {
 
     /// Opens the Android panel beside the chat, or closes it.
     pub(crate) fn toggle_android(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.android.take().is_some() {
+        if self.android_open(cx) {
+            self.android = None;
             window.focus(&self.focus, cx);
             return cx.notify();
         }
@@ -93,6 +101,14 @@ impl Workspace {
             crate::android::AndroidPanel::new(workspace, server, id, mobile, window, cx)
         }));
         cx.notify();
+    }
+
+    /// Whether the Android panel is open for the open project.
+    pub(crate) fn android_open(&self, cx: &gpui::App) -> bool {
+        let project = self.project().map(|p| &p.id);
+        self.android
+            .as_ref()
+            .is_some_and(|a| Some(&a.read(cx).project_id) == project)
     }
 
     pub fn close_android(&mut self, cx: &mut Context<Self>) {
