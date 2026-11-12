@@ -74,9 +74,10 @@ pub fn steps_of(message: &Message) -> Vec<Step<'_>> {
                 steps.push(Step::Plan(text));
                 continue;
             }
-            Part::Compaction { .. } => {
-                let running =
-                    index + 1 == message.parts.len() && message.status == MessageStatus::Streaming;
+            Part::Compaction { done, .. } => {
+                let running = !done
+                    && index + 1 == message.parts.len()
+                    && message.status == MessageStatus::Streaming;
                 steps.push(Step::Compaction(running));
                 continue;
             }

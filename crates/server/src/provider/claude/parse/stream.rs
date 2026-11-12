@@ -118,6 +118,9 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
         {
             out.push(Parsed::Compacting);
         }
+        Some("system") if v["subtype"] == "compact_boundary" && parent.is_none() => {
+            out.push(Parsed::Compacted(None));
+        }
         Some("system") if v["subtype"] == "task_started" => {
             if let (Some(tool_id), Some(task_id)) =
                 (v["tool_use_id"].as_str(), v["task_id"].as_str())
@@ -364,6 +367,11 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
                     .or(reason_error)
                     .unwrap_or(subtype);
                 out.push(Parsed::Error(text.into()));
+            }
+            // Each assistant message carries its request's output as first estimated; the
+            // result has the real count.
+            if let Some(output) = v["usage"]["output_tokens"].as_u64() {
+                out.push(Parsed::TurnOutput(output));
             }
             out.push(Parsed::Finished);
         }

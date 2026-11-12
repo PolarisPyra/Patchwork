@@ -50,6 +50,15 @@ pub const SIDEBAR_MIN: f32 = 200.;
 
 pub const SIDEBAR_MAX: f32 = 480.;
 
+/// What a running reply's head line adds about it until the reply's next output.
+pub enum ReplyNotice {
+    /// The agent is retrying a model request: why, the attempt, and how many it makes (0 when
+    /// unknown).
+    Retrying(String, u32, u32),
+    /// The agent has said nothing since this time (ms since epoch).
+    Quiet(u64),
+}
+
 #[expect(
     clippy::struct_excessive_bools,
     reason = "each flag is a separate piece of view state"
@@ -138,6 +147,8 @@ pub struct Workspace {
     /// Rows of the task tree picked together with Ctrl or Shift.
     pub picking: crate::sidebar::pick::Picking,
     pub open_folds: HashSet<String>,
+    /// Notices on running replies, by message id, with the thread each is in.
+    pub notices: HashMap<String, (String, ReplyNotice)>,
     pub open_steps: HashSet<String>,
     /// Runs of subagents listed open, by their first call.
     pub open_agents: HashSet<String>,
@@ -294,6 +305,7 @@ impl Workspace {
             hovered_row: None,
             picking: crate::sidebar::pick::Picking::default(),
             open_folds: HashSet::new(),
+            notices: HashMap::new(),
             open_steps: HashSet::new(),
             open_agents: HashSet::new(),
             resume_ask: None,

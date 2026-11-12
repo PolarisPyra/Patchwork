@@ -471,6 +471,9 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
         (None, Some("item/started")) if params["item"]["type"] == "contextCompaction" => {
             out.push(Parsed::Compacting);
         }
+        (None, Some("item/completed")) if params["item"]["type"] == "contextCompaction" => {
+            out.push(Parsed::Compacted(None));
+        }
         (None, Some(kind @ ("item/started" | "item/completed"))) => {
             codex_item(
                 kind == "item/completed",
@@ -510,14 +513,19 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                 steps,
             }));
         }
-        (None, Some("error")) if params["willRetry"] != true => {
+        (None, Some("error")) if params["willRetry"] == true => out.push(Parsed::Retrying {
+            reason: retry_reason(&params["error"]),
+            attempt: 0,
+            max_attempts: 0,
+        }),
+        (None, Some("error")) => {
             if let Some(refusal) = policy_refusal(&params["error"]) {
                 out.push(refused(message_id, refusal));
             } else {
-                let message = params["error"]["message"]
-                    .as_str()
-                    .unwrap_or("Codex reported an error");
-                out.push(Parsed::Error(message.into()));
+                out.push(Parsed::Error(error_text(
+                    &params["error"],
+                    "Codex reported an error",
+                )));
             }
         }
         (None, Some("turn/completed")) => {
@@ -526,8 +534,7 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                 if let Some(refusal) = policy_refusal(&turn["error"]) {
                     out.push(refused(message_id, refusal));
                 } else {
-                    let message = turn["error"]["message"].as_str().unwrap_or("Turn failed");
-                    out.push(Parsed::Error(message.into()));
+                    out.push(Parsed::Error(error_text(&turn["error"], "Turn failed")));
                 }
             }
             out.push(Parsed::Finished);
@@ -561,6 +568,46 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
 }
 
 /// A Codex error that means a safety check blocked the request, not that the turn broke.
+/// The code Codex files an error under: a name such as `unauthorized`, or the key of an object
+/// such as `{"httpConnectionFailed": {…}}`.
+fn error_code(error: &Value) -> Option<&str> {
+    let info = &error["codexErrorInfo"];
+    info.as_str()
+        .or_else(|| info.as_object()?.keys().next().map(String::as_str))
+}
+
+/// Why Codex is retrying a request, as a few words.
+fn retry_reason(error: &Value) -> String {
+    match error_code(error) {
+        Some("serverOverloaded") => "server overloaded".into(),
+        Some("rateLimitExceeded") => "rate limited".into(),
+        Some("internalServerError") => "server error".into(),
+        Some("httpConnectionFailed" | "responseStreamConnectionFailed") => {
+            "connection failed".into()
+        }
+        Some("responseStreamDisconnected") => "connection dropped".into(),
+        _ => crate::provider::one_line(error["message"].as_str().unwrap_or("request failed")),
+    }
+}
+
+/// The message of a Codex error, with what to do about it when its code says.
+fn error_text(error: &Value, fallback: &str) -> String {
+    let message = error["message"].as_str().unwrap_or(fallback);
+    let remedy = match error_code(error) {
+        Some("unauthorized") => {
+            "Sign in to Codex: run `codex login` in a terminal, then try again."
+        }
+        Some("usageLimitExceeded") => {
+            "Codex's usage limit is reached. Wait for it to reset, or pick another model."
+        }
+        Some("contextWindowExceeded") => {
+            "The conversation no longer fits the model's context. Run /compact or start a new task."
+        }
+        _ => return message.into(),
+    };
+    format!("{message}\n\n{remedy}")
+}
+
 fn policy_refusal(error: &Value) -> Option<Refusal> {
     let category = match error["codexErrorInfo"].as_str()? {
         "cyberPolicy" => "cyber",

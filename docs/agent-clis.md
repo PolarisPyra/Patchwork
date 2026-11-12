@@ -158,9 +158,9 @@ call. *Unconfirmed* means the docs did not say either way.
 
 Not as documented:
 
-- **Output tokens.** They are read from each `assistant` message's `usage`, where `output_tokens`
-  is only the placeholder from `message_start`. The real totals are in the `result` message
-  (`usage`, `modelUsage`, which also counts subagents and compaction).
+- **Output tokens.** Each `assistant` message's `usage` carries only the placeholder
+  `output_tokens` from `message_start`; the `result` message's `usage.output_tokens` then corrects
+  the turn's total. `modelUsage`, which also counts subagents and compaction, is not read.
 - **Steering.** It sends `priority: "now"` with no `origin`, which the SDK documents as an
   interrupt. `origin: {kind: "human"}` reads the message in the same turn, and `next` waits for
   the next tool boundary, as this page says steering does.
@@ -173,8 +173,9 @@ Not as documented:
 
 Not used yet:
 
-- `compact_boundary` (manual or auto, tokens before) and the `get_context_usage` control request,
-  which reports the context percentage and the auto-compact threshold.
+- The token count before compaction on `compact_boundary`, which is read only as the end of a
+  compaction, and the `get_context_usage` control request, which reports the context percentage
+  and the auto-compact threshold.
 - `set_permission_mode` and `set_model`, which change mode and model without a respawn; the `plan`
   and `dontAsk` modes.
 - `updatedPermissions` from a request's `suggestions`, the documented "always allow".
@@ -206,8 +207,6 @@ Not used yet:
   and `mcpServer/elicitation/request` are refused.
 - `thread/fork`, `thread/revert`, and `review/start`.
 - `thread/backgroundTerminals/list` and `terminate`, which would let background tasks be stopped.
-- `codexErrorInfo` codes (`ContextWindowExceeded`, `UsageLimitExceeded`, `Unauthorized`), so every
-  error shows its raw message.
 - Reasoning section breaks (`summaryPartAdded`), raw reasoning (`textDelta`), and `tokenBudget` on
   `thread/goal/set`.
 
@@ -229,7 +228,7 @@ Not used yet:
 - Child sessions (`parentID`), so subagents are not shown.
 - `fork`, `revert`, `diff`, and the steering inbox (cancel or re-queue, `delivery: "queue"`).
 - `always` and a message on permission replies, and saved permissions.
-- `session.usage.updated` and `cost`, `retry.scheduled`, and `step.failed`, so retries do not show.
+- `session.usage.updated` and `cost`, and `step.failed`.
 - `GET /api/agent`, `/api/model` and `/api/provider`.
 
 Unconfirmed: the event field names Patchwork reads (`tokens`, `delta`, the tool events), and

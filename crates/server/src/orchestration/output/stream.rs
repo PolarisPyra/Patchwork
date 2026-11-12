@@ -185,6 +185,7 @@ pub(in crate::orchestration) fn event_message(event: &AgentEvent) -> Option<&str
         | AgentEvent::Compacting { message_id }
         | AgentEvent::Compacted { message_id, .. }
         | AgentEvent::Retrying { message_id, .. }
+        | AgentEvent::Quiet { message_id, .. }
         | AgentEvent::Refused { message_id, .. }
         | AgentEvent::Cursor { message_id, .. }
         | AgentEvent::PlanProposed { message_id, .. }
@@ -328,17 +329,26 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
         AgentEvent::Compacting { .. } => {
             end_thinking(msg);
             if !matches!(msg.parts.last(), Some(Part::Compaction { .. })) {
-                msg.parts.push(Part::Compaction { summary: None });
+                msg.parts.push(Part::Compaction {
+                    summary: None,
+                    done: false,
+                });
             }
         }
         AgentEvent::Compacted { summary, .. } => {
-            if let Some(Part::Compaction { summary: last }) = msg
+            if let Some(Part::Compaction {
+                summary: last,
+                done,
+            }) = msg
                 .parts
                 .iter_mut()
                 .rev()
                 .find(|p| matches!(p, Part::Compaction { .. }))
             {
-                last.clone_from(summary);
+                if summary.is_some() {
+                    last.clone_from(summary);
+                }
+                *done = true;
             }
         }
         // A task stays on its message once it ends, with its final status; the strip shows only
@@ -449,6 +459,7 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
         | AgentEvent::GoalUpdated { .. }
         | AgentEvent::GoalChecking { .. }
         | AgentEvent::Retrying { .. }
+        | AgentEvent::Quiet { .. }
         | AgentEvent::SlashCommandsUpdated { .. }
         | AgentEvent::RoleChanged { .. }
         | AgentEvent::ModelChanged { .. }

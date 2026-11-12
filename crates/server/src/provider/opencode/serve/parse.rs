@@ -227,6 +227,17 @@ pub(in crate::provider::opencode) fn parse_serve(
             }]
         }
         Some("session.compaction.started") => vec![Parsed::Compacting],
+        Some("session.compaction.ended") => vec![Parsed::Compacted(
+            data["text"]
+                .as_str()
+                .filter(|t| !t.is_empty())
+                .map(String::from),
+        )],
+        Some("session.retry.scheduled") => vec![Parsed::Retrying {
+            reason: crate::provider::one_line(&message_of(v)),
+            attempt: u32::try_from(data["attempt"].as_u64().unwrap_or(0)).unwrap_or(u32::MAX),
+            max_attempts: 0,
+        }],
         _ => Vec::new(),
     }
 }

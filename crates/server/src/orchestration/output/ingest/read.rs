@@ -49,9 +49,11 @@ fn publish_child(turn: &Turn, child: &mut SubagentThread, events: Vec<AgentEvent
 
 use crate::threads::GoalStatus;
 use crate::threads::MessageStatus;
+use crate::threads::TokenUsage;
 use crate::logging::{AGENT_LOG, Data, Source};
 use crate::settings::LogLevel;
 use crate::workspace;
+use crate::system::now_ms;
 
 use crate::orchestration::changes::attribution;
 use crate::orchestration::tasks::background::Background;
@@ -138,6 +140,8 @@ pub(in crate::orchestration) fn ingest(
     let mut unsaved = Unsaved::default();
     // Every model request the turn has made; each reply's usage is summed from these.
     let mut requests: Vec<Request> = Vec::new();
+    // Where this turn's requests start in `requests`; the agent may answer several turns.
+    let mut turn_requests = 0;
     // Claude's task list, shown as the plan of whichever reply changes it.
     let mut claude_tasks = provider::claude::TaskList::default();
 
@@ -166,6 +170,10 @@ pub(in crate::orchestration) fn ingest(
         // A message Claude took after it had already ended its reply (while a background
         // subagent kept it running) is answered from here on, below that message. So is
         // a reply an idle Claude starts on its own, such as once a background command ends.
+        // Claude's `tool_progress` only says a call is still running, which a stuck one is too.
+        if value["type"] != "tool_progress" {
+            turn.last_output.store(now_ms(), Ordering::Relaxed);
+        }
         let starts_reply = value["type"] == "system" && value["subtype"] == "init";
         if ended
             && turn.agent == AgentKind::Claude
@@ -489,6 +497,27 @@ pub(in crate::orchestration) fn ingest(
                         usage: message_usage(&requests, &message_id),
                         message_id,
                     });
+                }
+                Parsed::TurnOutput(total) => {
+                    let counted: u64 = requests[turn_requests..]
+                        .iter()
+                        .filter(|r| r.top_level)
+                        .map(|r| r.usage.output)
+                        .sum();
+                    if total > counted {
+                        let usage = TokenUsage {
+                            output: total - counted,
+                            ..TokenUsage::default()
+                        };
+                        let id = format!("turn-output-{}", requests.len());
+                        let message_id =
+                            record_request(&mut requests, id, usage, false, &turn.message_id);
+                        turn.publish(AgentEvent::Usage {
+                            usage: message_usage(&requests, &message_id),
+                            message_id,
+                        });
+                    }
+                    turn_requests = requests.len();
                 }
                 Parsed::TurnStarted(id) => {
                     ended = false;

@@ -120,6 +120,12 @@ pub enum AgentEvent {
         attempt: u32,
         max_attempts: u32,
     },
+    /// The agent has said nothing since `since` (ms since epoch), as a command that never ends
+    /// leaves it. Streamed, not saved; the message's next output ends it.
+    Quiet {
+        message_id: String,
+        since: u64,
+    },
     /// Provider-native slash command names advertised by the active CLI session.
     SlashCommandsUpdated {
         commands: Vec<ProviderSlashCommand>,

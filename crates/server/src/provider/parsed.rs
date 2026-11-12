@@ -69,6 +69,9 @@ pub enum Parsed {
         usage: TokenUsage,
         top_level: bool,
     },
+    /// The output tokens the agent's whole turn made, for an agent whose per-request counts are
+    /// only estimates until it ends.
+    TurnOutput(u64),
     /// The agent's id for the turn now running, which a steering message must name.
     TurnStarted(String),
     /// The agent is summarizing the conversation to free up context.

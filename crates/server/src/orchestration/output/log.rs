@@ -177,6 +177,12 @@ fn describe(event: &AgentEvent) -> Option<(LogLevel, &'static str, Option<&str>,
             let text = format!("attempt {attempt} of {max_attempts}: {reason}");
             (Warning, "retrying", Some(message_id), text)
         }
+        AgentEvent::Quiet { message_id, since } => (
+            Debug,
+            "quiet",
+            Some(message_id),
+            format!("no output since {since}"),
+        ),
         AgentEvent::SlashCommandsUpdated { commands } => (
             Debug,
             "slash commands",

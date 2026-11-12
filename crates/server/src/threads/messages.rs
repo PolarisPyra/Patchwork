@@ -135,6 +135,9 @@ pub enum Part {
     Compaction {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         summary: Option<String>,
+        /// The agent reported the compaction finished.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        done: bool,
     },
 }
 

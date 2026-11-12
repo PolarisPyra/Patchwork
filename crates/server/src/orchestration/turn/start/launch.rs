@@ -13,7 +13,7 @@ use crate::orchestration::turn::end::{log_cli_version, plugin_hooks};
 use std::os::unix::process::CommandExt;
 use std::process::Stdio;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 use std::sync::PoisonError;
@@ -24,10 +24,11 @@ use crate::provider::TurnSpec;
 use crate::provider;
 use crate::system::scope;
 use crate::Server;
-use crate::events::AgentEvent;
+use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::provider::AgentKind;
 use crate::threads::Goal;
 use crate::threads::GoalStatus;
+use crate::threads::MessageStatus;
 use crate::system::now_ms;
 use crate::threads::Role;
 use crate::logging::{AGENT_LOG, Data, Source};
@@ -41,6 +42,7 @@ use crate::orchestration::turn::process::read_stderr_tail;
 use crate::orchestration::turn::process::Stdin;
 use crate::orchestration::turn::process::IDLE_LIMIT;
 use crate::orchestration::turn::process::WATCH_EVERY;
+use crate::orchestration::turn::process::QUIET_AFTER;
 use crate::orchestration::turn::process::write_line;
 use crate::orchestration::messages::queue::Queue;
 use crate::orchestration::messages::queue::Steers;
@@ -402,6 +404,7 @@ impl Runner {
             tasks: Arc::clone(&tasks),
             controls: Arc::clone(&controls),
             idle: Arc::clone(&idle),
+            last_output: Arc::new(AtomicU64::new(now_ms())),
             root,
             session_id,
             model,
@@ -479,8 +482,12 @@ impl Runner {
         let watched = Watched {
             server: Arc::clone(server),
             thread_id: turn.thread_id.clone(),
+            pid,
+            scope: turn.scope.clone(),
             exited: Arc::clone(&turn.exited),
             idle: Arc::clone(&turn.idle),
+            pending: Arc::clone(&turn.pending),
+            last_output: Arc::clone(&turn.last_output),
         };
         std::thread::spawn(move || watch(&watched));
         std::thread::spawn(move || ingest(turn, child, stdout, stderr_tail));
@@ -492,32 +499,105 @@ impl Runner {
 struct Watched {
     server: Arc<Server>,
     thread_id: String,
+    pid: u32,
+    scope: Option<String>,
     exited: Arc<AtomicBool>,
     idle: Arc<AtomicBool>,
+    pending: Pending,
+    last_output: Arc<AtomicU64>,
 }
 
-/// Retires the agent once it has been idle for `IDLE_LIMIT` with no shell commands of its own
-/// still running. A reply runs as long as it needs. Ends with the agent.
+/// Watches one agent process until it ends. It retires the agent once it has been idle for
+/// `IDLE_LIMIT` with no shell commands of its own still running; tells the user when a reply has
+/// said nothing for `QUIET_AFTER`; and ends the turn of an agent that exited while something it
+/// started still holds its output open. A reply runs as long as it needs.
 fn watch(w: &Watched) {
     loop {
         std::thread::sleep(WATCH_EVERY);
         if w.exited.load(Ordering::SeqCst) {
             return;
         }
-        let idle = w.idle.load(Ordering::SeqCst);
+        if agent_exited(w.pid) {
+            // The reader waits for the output to close, which a process the agent left behind
+            // can hold open; stopping what is left closes it, and the turn ends with the exit.
+            log::warn!(pid = w.pid; "agent exited with its output still open; stopping what it left");
+            workspace::signal_process_group(w.pid, workspace::SIGKILL);
+            if let Some(unit) = &w.scope {
+                scope::stop(unit);
+            }
+            return;
+        }
+        if !w.idle.load(Ordering::SeqCst) {
+            tell_quiet(w);
+            continue;
+        }
         // Idle time counts from the last reply, as idle compaction counts it.
-        let retire = idle
-            && w.server.store.thread(&w.thread_id).is_some_and(|t| {
-                let finished = t.messages.last().and_then(|m| m.finished_at).unwrap_or(0);
-                let idle_ms = u64::try_from(IDLE_LIMIT.as_millis()).unwrap_or(u64::MAX);
-                now_ms().saturating_sub(finished) >= idle_ms
-                    && t.messages
-                        .iter()
-                        .all(|m| m.background.iter().all(|task| !task.status.is_live()))
-            });
+        let retire = w.server.store.thread(&w.thread_id).is_some_and(|t| {
+            let finished = t.messages.last().and_then(|m| m.finished_at).unwrap_or(0);
+            let idle_ms = u64::try_from(IDLE_LIMIT.as_millis()).unwrap_or(u64::MAX);
+            now_ms().saturating_sub(finished) >= idle_ms
+                && t.messages
+                    .iter()
+                    .all(|m| m.background.iter().all(|task| !task.status.is_live()))
+        });
         if retire {
             w.server.runner.retire_idle(&w.thread_id);
             return;
         }
     }
+}
+
+/// Tells the user the reply under way has said nothing for `QUIET_AFTER`, unless it waits on
+/// them to answer an approval.
+fn tell_quiet(w: &Watched) {
+    let since = w.last_output.load(Ordering::Relaxed);
+    let quiet_ms = u64::try_from(QUIET_AFTER.as_millis()).unwrap_or(u64::MAX);
+    if now_ms().saturating_sub(since) < quiet_ms
+        || !w
+            .pending
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .is_empty()
+    {
+        return;
+    }
+    let Some(thread) = w.server.store.thread(&w.thread_id) else {
+        return;
+    };
+    let Some(reply) = thread
+        .messages
+        .iter()
+        .rev()
+        .find(|m| m.role == Role::Assistant && m.status == MessageStatus::Streaming)
+    else {
+        return;
+    };
+    // A reply that started after the last output has been quiet only since it started.
+    let since = since.max(reply.created_at);
+    if now_ms().saturating_sub(since) < quiet_ms {
+        return;
+    }
+    w.server.emit(AgentEventEnvelope {
+        thread_id: w.thread_id.clone(),
+        event: AgentEvent::Quiet {
+            message_id: reply.id.clone(),
+            since,
+        },
+    });
+}
+
+/// Whether the agent `pid` has exited and waits to be reaped.
+#[cfg(target_os = "linux")]
+fn agent_exited(pid: u32) -> bool {
+    // The state follows the command name in parentheses, which may itself hold any character.
+    std::fs::read_to_string(format!("/proc/{pid}/stat")).is_ok_and(|stat| {
+        stat.rsplit_once(')')
+            .is_some_and(|(_, rest)| rest.trim_start().starts_with('Z'))
+    })
+}
+
+/// Whether the agent `pid` has exited and waits to be reaped; only Linux is checked.
+#[cfg(not(target_os = "linux"))]
+fn agent_exited(_pid: u32) -> bool {
+    false
 }

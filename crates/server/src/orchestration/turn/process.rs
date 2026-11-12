@@ -44,8 +44,13 @@ pub(in crate::orchestration) const MAX_LINE_BYTES: usize = 8 << 20;
 /// commands it left running keep it up longer.
 pub(in crate::orchestration) const IDLE_LIMIT: Duration = Duration::from_secs(30 * 60);
 
-/// How often a running agent is checked against `IDLE_LIMIT`.
-pub(in crate::orchestration) const WATCH_EVERY: Duration = Duration::from_secs(60);
+/// How often a running agent is checked: against `IDLE_LIMIT`, for a reply gone quiet, and for
+/// having exited.
+pub(in crate::orchestration) const WATCH_EVERY: Duration = Duration::from_secs(15);
+
+/// How long a reply goes without output before the user is told: longer than a model takes to
+/// answer, shorter than a stuck command leaves them waiting before they look.
+pub(in crate::orchestration) const QUIET_AFTER: Duration = Duration::from_secs(3 * 60);
 
 /// The agent's stdin; None once the turn has finished.
 pub(in crate::orchestration) type Stdin = Arc<Mutex<Option<AgentStdin>>>;

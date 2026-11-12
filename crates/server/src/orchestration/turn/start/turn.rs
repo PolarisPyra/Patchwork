@@ -7,7 +7,7 @@ use super::running::{NativeTurn, Pending};
 use crate::orchestration::turn::end::background_id;
 
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 
 use crate::orchestration::changes::attribution::{self, Reach, SharedAttribution};
 use crate::provider::TurnSpec;
@@ -53,6 +53,9 @@ pub(in crate::orchestration) struct Turn {
     pub(in crate::orchestration) tasks: Tasks,
     pub(in crate::orchestration) controls: Controls,
     pub(in crate::orchestration) idle: Arc<AtomicBool>,
+    /// When the agent last said anything (ms since epoch), which `watch` reads to tell the user
+    /// a reply has gone quiet.
+    pub(in crate::orchestration) last_output: Arc<AtomicU64>,
     pub(in crate::orchestration) root: String,
     pub(in crate::orchestration) session_id: Option<String>,
     pub(in crate::orchestration) model: Option<String>,

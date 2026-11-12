@@ -8,7 +8,7 @@ use gpui::{AnyElement, ClipboardItem, Div, FontWeight, Role, SharedString, div, 
 use patchwork_server::threads::{Message, MessageStatus, Part, Role as MessageRole, Thread};
 use crate::ui::theme::{FS_MD, FS_SM, FS_XS, RADIUS, Theme};
 use crate::ui::{button, format_clock, full_elapsed, icon, now_ms};
-use crate::workspace::Workspace;
+use crate::workspace::{ReplyNotice, Workspace};
 use crate::chat::timeline::{fold_head_of, fold_layout_of, steps_of};
 use crate::chat::{approvals, checks, files, interrupted};
 
@@ -144,6 +144,20 @@ pub(super) fn foot(
     out
 }
 
+/// What a running reply's head line says after "Working for 12s".
+fn notice_text(notice: &ReplyNotice) -> String {
+    match notice {
+        ReplyNotice::Retrying(reason, attempt, max) if *max > 0 => {
+            format!("· Retrying, {reason} ({attempt}/{max})")
+        }
+        ReplyNotice::Retrying(reason, _, _) => format!("· Retrying, {reason}"),
+        ReplyNotice::Quiet(since) => format!(
+            "· No output for {}",
+            full_elapsed(now_ms().saturating_sub(*since))
+        ),
+    }
+}
+
 /// The reply's head line: "Working for 12s" while it streams, else its fold.
 pub(super) fn head(w: &Workspace, m: &Message, t: &Theme, cx: &mut Context<Workspace>) -> Div {
     let streaming = m.status == MessageStatus::Streaming;
@@ -174,6 +188,11 @@ pub(super) fn head(w: &Workspace, m: &Message, t: &Theme, cx: &mut Context<Works
                     "Working for {}",
                     full_elapsed(now_ms().saturating_sub(m.created_at))
                 ))
+                .children(
+                    w.notices.get(&m.id).map(|(_, notice)| {
+                        div().text_color(t.text_subtle).child(notice_text(notice))
+                    }),
+                )
                 .into_any_element(),
         )
     } else {

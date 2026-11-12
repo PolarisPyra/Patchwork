@@ -7,7 +7,7 @@ use std::time::Duration;
 use gpui::{Focusable, FollowMode, Window, prelude::*};
 use patchwork_server::events::{AgentEvent, AgentEventEnvelope};
 use patchwork_server::threads::{Attachment, NewThread, Part};
-use super::state::{Workspace, end_thinking, message_mut};
+use super::state::{ReplyNotice, Workspace, end_thinking, message_mut};
 
 impl Workspace {
     /// Makes a change to what is stored off the UI thread, which a write to the database would
@@ -145,6 +145,32 @@ impl Workspace {
     /// Applies one event from an agent. Text streams in place; anything else reloads what the
     /// window shows from the store, which saved it before sending it.
     pub fn on_event(&mut self, envelope: AgentEventEnvelope, cx: &mut Context<Self>) {
+        // A notice lasts until the agent's next output in that thread.
+        let notice = match &envelope.event {
+            AgentEvent::Retrying {
+                message_id,
+                reason,
+                attempt,
+                max_attempts,
+            } => Some((
+                message_id,
+                ReplyNotice::Retrying(reason.clone(), *attempt, *max_attempts),
+            )),
+            AgentEvent::Quiet { message_id, since } => {
+                Some((message_id, ReplyNotice::Quiet(*since)))
+            }
+            _ => None,
+        };
+        if let Some((message_id, notice)) = notice {
+            self.notices
+                .insert(message_id.clone(), (envelope.thread_id.clone(), notice));
+            cx.notify();
+            return;
+        }
+        if !self.notices.is_empty() {
+            self.notices
+                .retain(|_, (thread_id, _)| *thread_id != envelope.thread_id);
+        }
         let open = self.thread.as_mut().filter(|t| t.id == envelope.thread_id);
         match envelope.event {
             AgentEvent::TextDelta { message_id, text } => {

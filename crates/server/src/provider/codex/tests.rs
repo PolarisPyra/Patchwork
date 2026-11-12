@@ -245,7 +245,10 @@ fn codex_turn_end_and_errors() {
     let spec = spec(None, AccessMode::FullAccess);
     let retrying =
         json!({"method": "error", "params": {"error": {"message": "x"}, "willRetry": true}});
-    assert!(parse(&retrying, &spec, "m1").is_empty());
+    assert!(matches!(
+        parse(&retrying, &spec, "m1").as_slice(),
+        [Parsed::Retrying { reason, .. }] if reason == "x"
+    ));
 
     let failed = json!({"method": "turn/completed", "params": {"turn": {
         "status": "failed", "error": {"message": "usage limit"}}}});

@@ -20,4 +20,6 @@ mod threads;
 mod updates;
 
 pub use granular::GranularScope;
-pub use state::{SIDEBAR_MAX, SIDEBAR_MIN, SIDEBAR_WIDTH, View, Workspace, is_busy, is_working};
+pub use state::{
+    ReplyNotice, SIDEBAR_MAX, SIDEBAR_MIN, SIDEBAR_WIDTH, View, Workspace, is_busy, is_working,
+};
