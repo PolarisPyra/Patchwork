@@ -381,26 +381,6 @@ code {
   text-wrap: balance;
 }
 
-/* A highlighter swipe in the logo's colours under one word. */
-.mark {
-  position: relative;
-  white-space: nowrap;
-}
-
-.mark::after {
-  content: "";
-  position: absolute;
-  left: -4px;
-  right: -4px;
-  bottom: 0.06em;
-  height: 0.3em;
-  z-index: -1;
-  border-radius: 999px;
-  background: var(--candy);
-  opacity: 0.75;
-  transform-origin: left;
-}
-
 .sparkle-a {
   top: -14px;
   right: -22px;
@@ -564,7 +544,6 @@ code {
   color: #1a1323;
   font-size: 14px;
   font-weight: 700;
-  transform: rotate(-3deg);
 }
 
 .tag-mint {
@@ -577,6 +556,14 @@ code {
 
 .tag-pink {
   background: var(--pink);
+}
+
+.tag-sun {
+  background: var(--sun);
+}
+
+.tag-violet {
+  background: #c4a1f2;
 }
 
 /* Setup steps, drawn like the app's stepper: numbered dots on a line in the logo's colours. */
@@ -918,15 +905,6 @@ code {
     animation: pop-in 560ms var(--pop) 160ms backwards;
   }
 
-  /* The highlighter swipes across once the headline is in. */
-  .js .hero-copy .mark::after {
-    transform: scaleX(0);
-  }
-
-  .js .hero-copy.is-seen .mark::after {
-    animation: swipe 520ms var(--settle) 560ms both;
-  }
-
   /* Words slide in from the side away from their picture, and the tag is stamped on after.
      --from is the side they start on, swapped when a row is flipped. */
   .slide-in {
@@ -1068,11 +1046,11 @@ code {
   @keyframes stamp {
     0% {
       opacity: 0;
-      transform: scale(2.4) rotate(-20deg);
+      transform: scale(2.4);
     }
     60% {
       opacity: 1;
-      transform: scale(0.9) rotate(0deg);
+      transform: scale(0.9);
     }
   }
 
@@ -1133,15 +1111,6 @@ code {
     from {
       opacity: 0;
       transform: translateY(96px) rotate(var(--tilt)) scale(0.92);
-    }
-  }
-
-  @keyframes swipe {
-    from {
-      transform: scaleX(0);
-    }
-    to {
-      transform: scaleX(1);
     }
   }
 

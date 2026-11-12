@@ -14,7 +14,7 @@
     <meta property="og:title" content="Patchwork — a desktop workspace for coding agents" />
     <meta
       property="og:description"
-      content="Claude Code, Codex, Antigravity, OpenCode and your own API keys in one cozy window."
+      content="Claude Code, Codex, Antigravity, OpenCode and your own API keys in one window."
     />
     <meta property="og:url" content="https://patchworkeditor.com/" />
     <meta property="og:image" content="https://patchworkeditor.com/img/og.png" />
@@ -26,7 +26,7 @@
     <link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <!-- Browsers may keep these two for 4 hours (Cloudflare's browser cache), so bump ?v= whenever
          either changes, or a visitor gets the new page with the old styles. -->
-    <link rel="stylesheet" href="styles.css?v=2" />
+    <link rel="stylesheet" href="styles.css?v=3" />
     <script src="site.js?v=2"></script>
   </head>
   <body>
@@ -77,12 +77,12 @@
           <div class="wrap wrap-wide">
             <div class="hero-copy reveal">
               <h1>
-                All your coding agents, in one <span class="mark">cozy</span> window
+                All your coding agents, in one window
                 <svg class="sparkle sparkle-a" aria-hidden="true"><use href="#sparkle" /></svg>
                 <svg class="sparkle sparkle-b" aria-hidden="true"><use href="#sparkle" /></svg>
               </h1>
               <p class="lede">
-                Claude Code, Codex, Antigravity, OpenCode, or your own API key. Hand one a task,
+                Claude Code, Codex, Antigravity, OpenCode, or your own API key. Give an agent a task,
                 watch it work, and keep only the changes you like.
               </p>
               <div class="hero-actions">
@@ -106,10 +106,10 @@
               <div class="window">
                 <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
                 <img
-                  src="img/app-task.webp"
+                  src="img/shot-hero.webp"
                   width="2400"
                   height="1440"
-                  alt="Patchwork with a task running in the router-firmware project: the agent has read the header code, searched for crc, changed it, and is running cargo test while it explains the checksum it found"
+                  alt="Patchwork with a finished task in the router-firmware project: projects and tasks in the sidebar, the agent's steps, its explanation of the checksum it found, and the three files it changed"
                 />
               </div>
             </figure>
@@ -120,7 +120,7 @@
         <section class="section" id="setup">
           <div class="wrap wrap-wide split">
             <div class="split-copy reveal slide-in">
-              <h2>Ready in about a minute</h2>
+              <h2>Set up in about a minute</h2>
               <ol class="steps" aria-label="Setup steps">
                 <li>
                   <span class="step-dot" aria-hidden="true">1</span>
@@ -150,11 +150,11 @@
               <div class="window">
                 <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
                 <img
-                  src="img/app-setup.webp"
-                  width="2400"
-                  height="1440"
+                  src="img/shot-setup.webp"
+                  width="1371"
+                  height="823"
                   loading="lazy"
-                  alt="The first setup step, Connect your coding agents, listing Claude Code, Codex, Antigravity and OpenCode as signed in, with Claude Code picked as the default agent"
+                  alt="The first setup step, Connect your coding agents, listing Claude Code, Codex, Antigravity CLI and OpenCode CLI as ready, with Claude Code picked as the default agent"
                 />
               </div>
             </figure>
@@ -166,22 +166,109 @@
           <div class="wrap wrap-wide">
             <div class="split">
               <div class="split-copy reveal slide-in">
-                <span class="tag tag-mint" aria-hidden="true">Review</span>
-                <h2>Keep what you like</h2>
+                <span class="tag tag-violet" aria-hidden="true">Tasks</span>
+                <h2>Give an agent a task and watch it work</h2>
                 <p>
-                  Every task ends with a list of what changed. Open the diff, stage the files you
-                  want, and reject the rest to put them back.
+                  The chat lists each file it reads, each edit it makes and each command it runs.
                 </p>
               </div>
               <figure class="shot">
                 <div class="window">
                   <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
                   <img
-                    src="img/app-review.webp"
-                    width="2400"
-                    height="1440"
+                    src="img/shot-tasks.webp"
+                    width="1263"
+                    height="758"
                     loading="lazy"
-                    alt="A finished task in the light theme on a lavender chat background: the agent explains a save-format change, and a card lists the three files it changed with their added and removed lines"
+                    alt="A finished task in the chat: the steps list shows the agent read src/header.rs, searched for crc, changed three files and ran cargo test, above its explanation and a table of checksums"
+                  />
+                </div>
+              </figure>
+            </div>
+
+            <div class="split split-flip">
+              <div class="split-copy reveal slide-in">
+                <span class="tag tag-mint" aria-hidden="true">Review</span>
+                <h2>Review every change before you keep it</h2>
+                <p>
+                  Open the diff, stage the files you want and reject the rest.
+                </p>
+              </div>
+              <figure class="shot">
+                <div class="window">
+                  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+                  <img
+                    src="img/shot-review.webp"
+                    width="1371"
+                    height="823"
+                    loading="lazy"
+                    alt="The diff of header.rs beside the chat, with removed lines in red, added lines in green, and Note, Discard and Stage buttons on each block"
+                  />
+                </div>
+              </figure>
+            </div>
+
+            <div class="split">
+              <div class="split-copy reveal slide-in">
+                <span class="tag tag-sky" aria-hidden="true">Search</span>
+                <h2>Search inside a chat</h2>
+                <p>
+                  Type a word and step through every place it appears.
+                </p>
+              </div>
+              <figure class="shot">
+                <div class="window">
+                  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+                  <img
+                    src="img/shot-search.webp"
+                    width="1600"
+                    height="960"
+                    loading="lazy"
+                    alt="The search field over a chat with the word checksum typed in, and every match in the conversation highlighted"
+                  />
+                </div>
+              </figure>
+            </div>
+
+            <div class="split split-flip">
+              <div class="split-copy reveal slide-in">
+                <span class="tag tag-pink" aria-hidden="true">Models</span>
+                <h2>Pick a model for each task</h2>
+                <p>
+                  The model list is in the message box, with a shortcut for each one.
+                </p>
+              </div>
+              <figure class="shot">
+                <div class="window">
+                  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+                  <img
+                    src="img/shot-models.webp"
+                    width="1143"
+                    height="686"
+                    loading="lazy"
+                    alt="The model list open over the message box, showing Default, Opus 5.5, Fable 5.2, Sonnet 5.5 and Haiku 5.5 with shortcuts Ctrl+1 to Ctrl+5"
+                  />
+                </div>
+              </figure>
+            </div>
+
+            <div class="split">
+              <div class="split-copy reveal slide-in">
+                <span class="tag tag-violet" aria-hidden="true">Access</span>
+                <h2>Decide how much an agent can do alone</h2>
+                <p>
+                  Each task has its own setting, from asking before every command to full access.
+                </p>
+              </div>
+              <figure class="shot">
+                <div class="window">
+                  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+                  <img
+                    src="img/shot-access.webp"
+                    width="1143"
+                    height="686"
+                    loading="lazy"
+                    alt="The access menu open over the message box, with Supervised, Auto-accept edits, Auto and Full access and a line describing each"
                   />
                 </div>
               </figure>
@@ -190,21 +277,20 @@
             <div class="split split-flip">
               <div class="split-copy reveal slide-in">
                 <span class="tag tag-sky" aria-hidden="true">Usage</span>
-                <h2>See how much you have left</h2>
+                <h2>See how much of your plan is left</h2>
                 <p>
-                  Your plan's session and weekly limits sit in the sidebar, with when each one
-                  resets, so you know before you start something big.
+                  The sidebar shows your session and weekly limits and when each one resets.
                 </p>
               </div>
               <figure class="shot">
                 <div class="window">
                   <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
                   <img
-                    src="img/app-usage.webp"
-                    width="2400"
-                    height="1440"
+                    src="img/shot-usage.webp"
+                    width="1091"
+                    height="655"
                     loading="lazy"
-                    alt="The Usage panel open in the sidebar, showing Claude Code's 5-hour session at 32 percent and the weekly limit at 14 percent, with when each resets"
+                    alt="The Usage panel in the sidebar, showing a Claude Code 5-hour session at 35 percent and two weekly limits, with when each resets"
                   />
                 </div>
               </figure>
@@ -212,22 +298,87 @@
 
             <div class="split">
               <div class="split-copy reveal slide-in">
-                <span class="tag tag-pink" aria-hidden="true">Yours</span>
-                <h2>Make it yours</h2>
+                <span class="tag tag-sun" aria-hidden="true">Providers</span>
+                <h2>Use your own API key</h2>
                 <p>
-                  Light or dark, two dozen app icons, and a background for every chat. Or drop in a
-                  picture of your own.
+                  Add DeepSeek, OpenRouter or any OpenAI-compatible endpoint in Settings.
                 </p>
               </div>
               <figure class="shot">
                 <div class="window">
                   <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
                   <img
-                    src="img/app-general.webp"
-                    width="2400"
-                    height="1440"
+                    src="img/shot-providers.webp"
+                    width="1067"
+                    height="640"
                     loading="lazy"
-                    alt="Settings on General, with the Light, Dark and System theme switch, a grid of colourful cube app icons, and a row of chat backgrounds"
+                    alt="Settings on Providers: the four agent CLIs marked installed, and a grid of API providers to add, from DeepSeek and OpenAI to OpenRouter and your own server"
+                  />
+                </div>
+              </figure>
+            </div>
+
+            <div class="split split-flip">
+              <div class="split-copy reveal slide-in">
+                <span class="tag tag-mint" aria-hidden="true">Permissions</span>
+                <h2>Set rules for commands</h2>
+                <p>
+                  Each command can be allowed, denied or set to ask first.
+                </p>
+              </div>
+              <figure class="shot">
+                <div class="window">
+                  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+                  <img
+                    src="img/shot-permissions.webp"
+                    width="1067"
+                    height="640"
+                    loading="lazy"
+                    alt="Settings on Permissions: a list of commands such as cd, ls and grep, each with Allow, Ask and Deny buttons"
+                  />
+                </div>
+              </figure>
+            </div>
+
+            <div class="split">
+              <div class="split-copy reveal slide-in">
+                <span class="tag tag-pink" aria-hidden="true">Android</span>
+                <h2>Run your Android app beside the chat</h2>
+                <p>
+                  Start an emulator from the panel and see its screen there.
+                </p>
+              </div>
+              <figure class="shot">
+                <div class="window">
+                  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+                  <img
+                    src="img/shot-android.webp"
+                    width="2182"
+                    height="1309"
+                    loading="lazy"
+                    alt="The Android devices panel beside a chat, listing a running virtual device and showing its screen"
+                  />
+                </div>
+              </figure>
+            </div>
+
+            <div class="split split-flip">
+              <div class="split-copy reveal slide-in">
+                <span class="tag tag-violet" aria-hidden="true">Appearance</span>
+                <h2>Change how it looks</h2>
+                <p>
+                  Choose a light or dark theme, an app icon and a background for your chats.
+                </p>
+              </div>
+              <figure class="shot">
+                <div class="window">
+                  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+                  <img
+                    src="img/shot-appearance.webp"
+                    width="1091"
+                    height="655"
+                    loading="lazy"
+                    alt="Settings on General, with the Light, Dark, OLED and System theme switch, a grid of colourful cube app icons, and a row of chat backgrounds"
                   />
                 </div>
               </figure>
@@ -235,49 +386,49 @@
           </div>
 
           <div class="wrap">
-            <h2 class="more-head reveal drop-in">And the little things</h2>
+            <h2 class="more-head reveal drop-in">There is more</h2>
             <ul class="cards">
               <li class="card reveal flip-in">
                 <span class="card-icon icon-sun" aria-hidden="true">
                   <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3.5" /></svg>
                 </span>
-                <h3>Set a goal</h3>
-                <p>Give it a <code>/goal</code> and walk away, or send a message mid-turn to change course.</p>
-              </li>
-              <li class="card reveal flip-in">
-                <span class="card-icon icon-violet" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2.5" /><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5" /></svg>
-                </span>
-                <h3>You hold the leash</h3>
-                <p>Supervised, auto-accept edits, auto, or full access, set per task. It asks in the chat.</p>
+                <h3>Goals</h3>
+                <p>Set a goal with <code>/goal</code> and the agent works until it is met.</p>
               </li>
               <li class="card reveal flip-in">
                 <span class="card-icon icon-pink" aria-hidden="true">
                   <svg viewBox="0 0 10 10" class="fill"><use href="#sparkle" /></svg>
                 </span>
-                <h3>Skills for every agent</h3>
-                <p>Write an agent or a skill once and every CLI can use it. Call one with <code>&amp;name</code>.</p>
-              </li>
-              <li class="card reveal flip-in">
-                <span class="card-icon icon-sky" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><circle cx="8" cy="12" r="4" /><path d="M12 12h8M17 12v3M20 12v2" /></svg>
-                </span>
-                <h3>Bring your own key</h3>
-                <p>DeepSeek or any OpenAI-compatible endpoint. Keys stay in your system keychain.</p>
+                <h3>Skills</h3>
+                <p>Write a skill once and every agent can use it.</p>
               </li>
               <li class="card reveal flip-in">
                 <span class="card-icon icon-mint" aria-hidden="true">
                   <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 103-6.2" /><path d="M4 4v4h4" /><path d="M12 8v4l3 2" /></svg>
                 </span>
-                <h3>Pick up old sessions</h3>
-                <p>Import chats from Claude Code, Codex, the Gemini CLI or OpenCode, and keep going.</p>
+                <h3>Imports</h3>
+                <p>Import your chats from Claude Code, Codex, the Gemini CLI or OpenCode.</p>
+              </li>
+              <li class="card reveal flip-in">
+                <span class="card-icon icon-sky" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /><path d="M12 7.5V12l3 2" /></svg>
+                </span>
+                <h3>Scheduled tasks</h3>
+                <p>Start a task on a schedule in any project.</p>
+              </li>
+              <li class="card reveal flip-in">
+                <span class="card-icon icon-violet" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M9 3v5M15 3v5" /><path d="M6.5 8h11v3a5.5 5.5 0 01-11 0z" /><path d="M12 16.5V21" /></svg>
+                </span>
+                <h3>MCP servers and hooks</h3>
+                <p>Plugins add tools and checks to every agent.</p>
               </li>
               <li class="card reveal flip-in">
                 <span class="card-icon icon-sun" aria-hidden="true">
                   <svg viewBox="0 0 24 24"><path d="M4 11l8-6.5 8 6.5" /><path d="M6.5 9.5V19h11V9.5" /></svg>
                 </span>
-                <h3>Stays on your machine</h3>
-                <p>No account, no proxy, no telemetry. Requests go straight to your provider.</p>
+                <h3>Private</h3>
+                <p>There is no account, no proxy and no telemetry.</p>
               </li>
             </ul>
           </div>
