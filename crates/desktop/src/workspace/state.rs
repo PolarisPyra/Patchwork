@@ -116,7 +116,7 @@ pub struct Workspace {
     /// Android panel, which takes the file panel's place while it is open.
     pub mobile: Option<patchwork_server::android::MobileProject>,
     pub(super) mobile_for: Option<String>,
-    pub(super) android: Option<Entity<crate::android::AndroidPanel>>,
+    pub(crate) android: Option<Entity<crate::android::AndroidPanel>>,
     /// The terminal and Output panel under the chat, whether it shows, its height, and the drag
     /// of its handle: where it started and the height then.
     pub(super) panel: Entity<crate::panel::Panel>,

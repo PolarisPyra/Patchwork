@@ -5,7 +5,7 @@
 use gpui::{Div, FontWeight, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_server::threads::{MessageStatus, Thread};
 use crate::ui::theme::{FS_SM, FS_XL, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
-use crate::ui::{agent_logo, button, display_title, format_tokens, icon};
+use crate::ui::{agent_logo, button, display_title, format_tokens, icon, tooltip};
 use crate::workspace::Workspace;
 use super::transcript::{sync_transcript, transcript};
 use crate::ui::backdrop;
@@ -170,7 +170,7 @@ pub(super) fn subagent_footer(
     )
 }
 
-/// Search and "Open in editor", over the transcript's top right.
+/// Search, Android devices and "Open in editor", over the transcript's top right.
 pub(super) fn floating(
     w: &mut Workspace,
     t: &Theme,
@@ -209,11 +209,37 @@ pub(super) fn floating(
                 .detach();
             }))
     });
+    let android = w.mobile.is_some().then(|| {
+        let shown = w.android.is_some();
+        let fg = t.text;
+        button("android-devices", "Android devices")
+            .aria_expanded(shown)
+            .flex_none()
+            .size(px(28.))
+            .justify_center()
+            .rounded(px(RADIUS))
+            .border_1()
+            .border_color(t.border)
+            .bg(t.bg_panel)
+            .text_color(t.text_muted)
+            .shadow(vec![gpui::BoxShadow {
+                color: gpui::hsla(0., 0., 0., 0.12),
+                offset: gpui::point(px(0.), px(1.)),
+                blur_radius: px(3.),
+                spread_radius: px(0.),
+                inset: false,
+            }])
+            .hover(move |s| s.bg(hover).text_color(fg))
+            .tooltip(tooltip("Android devices"))
+            .child(icon("device-mobile", 14.))
+            .on_click(cx.listener(|w, _, window, cx| w.toggle_android(window, cx)))
+    });
     let bar = div()
         .flex()
         .items_center()
         .gap(px(8.))
         .child(find::find_field(w, t, cx))
+        .children(android)
         .children(open);
     div()
         .absolute()

@@ -79,7 +79,7 @@ impl Workspace {
     }
 
     /// Opens the Android panel beside the chat, or closes it.
-    pub(super) fn toggle_android(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn toggle_android(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.android.take().is_some() {
             window.focus(&self.focus, cx);
             return cx.notify();
