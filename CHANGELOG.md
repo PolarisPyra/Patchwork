@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.58] - 2026-11-12
+
+### Fixed
+
+- While a reply was being written, its text could lose its first letter, or a paragraph could clear and carry on without its opening words, most often while another chat was busy. The reply now stays whole as it streams.
+
 ## [26.11.57] - 2026-11-12
 
 ### Fixed
