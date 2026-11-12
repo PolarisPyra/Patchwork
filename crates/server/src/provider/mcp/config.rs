@@ -19,7 +19,12 @@ const CONFIG_DIR: &str = "mcp";
 pub(super) const PROTOCOL: &str = "2025-06-18";
 /// Starting a server and listing its tools; `npx` may download the server first.
 pub(super) const START_TIMEOUT: Duration = Duration::from_secs(90);
+/// A tool call, which may run a long job.
 pub(super) const CALL_TIMEOUT: Duration = Duration::from_secs(600);
+/// Any other request a CLI sends through the relay, such as listing tools or resources.
+pub(super) const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+/// How long a server that failed to start is left before the next start is tried.
+pub(super) const RETRY_AFTER: Duration = Duration::from_secs(30);
 /// Stderr kept to explain a server that failed to start.
 pub(super) const STDERR_TAIL: usize = 2000;
 /// The longest tool name endpoints accept.

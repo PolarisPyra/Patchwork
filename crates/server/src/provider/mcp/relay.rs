@@ -6,18 +6,20 @@ use crate::Error;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 use serde_json::{Value, json};
 
-use super::{CALL_TIMEOUT, pool};
+use super::{CALL_TIMEOUT, REQUEST_TIMEOUT, pool};
 
 /// The argument that starts Patchwork's binary as a relay to one of Patchwork's servers.
 pub const PROXY_ARG: &str = "--mcp-proxy";
 const RELAY_FILE: &str = "mcp-relay.json";
 static RELAY_READY: AtomicBool = AtomicBool::new(false);
+/// The id the next CLI's notification listener is kept by.
+static LISTENERS: AtomicU64 = AtomicU64::new(0);
 /// This copy's own relay, as it bound it. Kept in memory rather than read back from `RELAY_FILE`,
 /// which every copy of the app on the machine writes to the same state folder.
 static ENDPOINT: OnceLock<Value> = OnceLock::new();
@@ -239,13 +241,15 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
     let tokens: Arc<Mutex<HashMap<String, Value>>> = Arc::default();
     // The server's notifications: progress goes to the CLI whose request it is about, and the
     // rest, such as a changed tool list, to every CLI sharing the server.
-    if let Some(entry) = pool().get(&server).cloned().filter(|_| thread.is_none()) {
+    let listening = pool().get(&server).cloned().filter(|_| thread.is_none());
+    let listener = LISTENERS.fetch_add(1, Ordering::Relaxed);
+    if let Some(entry) = &listening {
         let (tx, rx) = mpsc::channel::<Value>();
         entry
             .notices
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .push(tx);
+            .push((listener, tx));
         let (out, tokens) = (Arc::clone(&out), Arc::clone(&tokens));
         std::thread::spawn(move || {
             for mut notice in rx {
@@ -326,7 +330,8 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
                     .and_then(|conn| match method.as_str() {
                         "initialize" => Ok(conn.info.clone()),
                         "ping" => Ok(json!({})),
-                        _ => conn.request(&method, params, CALL_TIMEOUT, &stopped),
+                        "tools/call" => conn.request(&method, params, CALL_TIMEOUT, &stopped),
+                        _ => conn.request(&method, params, REQUEST_TIMEOUT, &stopped),
                     }),
             };
             running
@@ -348,7 +353,15 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
             reply(&out, answer);
         });
     }
-    // The CLI has gone, so nothing reads the answers to what it still had running.
+    // The CLI has gone: its listener stops with its channel, and nothing reads the answers to
+    // what it still had running.
+    if let Some(entry) = listening {
+        entry
+            .notices
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .retain(|(id, _)| *id != listener);
+    }
     running
         .lock()
         .unwrap_or_else(PoisonError::into_inner)

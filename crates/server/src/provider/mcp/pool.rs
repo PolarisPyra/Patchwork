@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 
 use super::{
     CALL_TIMEOUT, HttpServer, MAX_NAME, MAX_TOOLS, McpServer, POLL, PROTOCOL, read_config,
-    resolved, restart_changed, START_TIMEOUT, StdioServer, ToolInfo, TurnTool,
+    resolved, restart_changed, RETRY_AFTER, START_TIMEOUT, StdioServer, ToolInfo, TurnTool,
 };
 
 static POOL: OnceLock<Mutex<HashMap<String, Arc<Entry>>>> = OnceLock::new();
@@ -46,6 +46,7 @@ pub(super) fn live_servers() -> Vec<(String, Arc<Conn>)> {
                     Arc::new(Entry {
                         config,
                         conn: Mutex::new(None),
+                        failed_at: Mutex::new(None),
                         notices: Arc::default(),
                     })
                 }));
@@ -230,19 +231,21 @@ pub(super) struct Entry {
     pub(super) config: McpServer,
     /// None until started; held while starting, so callers wait for one start.
     pub(super) conn: Mutex<Option<Result<Arc<Conn>, Error>>>,
+    /// When the last start failed; the failure stands until `RETRY_AFTER` has passed.
+    pub(super) failed_at: Mutex<Option<Instant>>,
     /// Where the server's notifications go: the CLIs sharing it. Kept across restarts.
     pub(super) notices: Notices,
 }
 
-/// Listeners for a server's notifications.
-pub(super) type Notices = Arc<Mutex<Vec<Sender<Value>>>>;
+/// Listeners for a server's notifications, each by an id its CLI's relay removes it by.
+pub(super) type Notices = Arc<Mutex<Vec<(u64, Sender<Value>)>>>;
 
 /// Passes a notification to every listener, forgetting those that have gone.
 pub(super) fn announce(notices: &Notices, notice: &Value) {
     notices
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
-        .retain(|l| l.send(notice.clone()).is_ok());
+        .retain(|(_, l)| l.send(notice.clone()).is_ok());
 }
 
 impl Entry {
@@ -253,10 +256,25 @@ impl Entry {
         {
             *conn = None;
         }
-        conn.get_or_insert_with(|| {
-            Conn::start(&self.config, Arc::clone(&self.notices)).map(Arc::new)
-        })
-        .clone()
+        // A start that failed for a passing reason, such as a slow download, is tried again.
+        let mut failed_at = self
+            .failed_at
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if matches!(conn.as_ref(), Some(Err(_)))
+            && failed_at.is_none_or(|at| at.elapsed() >= RETRY_AFTER)
+        {
+            *conn = None;
+        }
+        let started = conn
+            .get_or_insert_with(|| {
+                Conn::start(&self.config, Arc::clone(&self.notices)).map(Arc::new)
+            })
+            .clone();
+        if started.is_err() && failed_at.is_none_or(|at| at.elapsed() >= RETRY_AFTER) {
+            *failed_at = Some(Instant::now());
+        }
+        started
     }
 
     fn drop_conn(&self) {

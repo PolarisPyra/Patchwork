@@ -23,8 +23,8 @@ pub use config::{
     shared_servers, identity, same_server,
 };
 use config::{
-    CALL_TIMEOUT, MAX_NAME, MAX_TOOLS, POLL, PROTOCOL, START_TIMEOUT, STDERR_TAIL, read_config,
-    resolved, restart_changed,
+    CALL_TIMEOUT, MAX_NAME, MAX_TOOLS, POLL, PROTOCOL, REQUEST_TIMEOUT, RETRY_AFTER, START_TIMEOUT,
+    STDERR_TAIL, read_config, resolved, restart_changed,
 };
 #[doc(inline)]
 pub use pool::{tool_budget, turn_tools, probe, call};
