@@ -2,9 +2,8 @@
 
 // Rust guideline compliant 2026-10-09
 
-use super::commands::local_command;
-use super::commands::Runs;
-use super::commands::SLASH_COMMANDS;
+use super::commands::{Runs, runs_of};
+use std::ops::Range;
 use std::sync::Arc;
 use gpui::{PromptLevel, Window, prelude::*};
 use patchwork_server::provider::AgentKind;
@@ -61,10 +60,16 @@ impl Composer {
         let Some(item) = items.get(self.sigil.highlight) else {
             return false;
         };
-        if tk.kind != SigilKind::Files && tk.text.to_lowercase() == item.name {
+        if tk.kind != SigilKind::Files && tk.text.eq_ignore_ascii_case(&item.name) {
             return false;
         }
         let name = item.name.clone();
+        // Later in a draft, a command that runs on pick runs, as a click does, and keeps the rest.
+        if tk.kind == SigilKind::Commands && !tk.whole && runs_of(&name) == Some(Runs::Pick) {
+            let token = tk.range.clone();
+            self.run_local(&name, Some(token), window, cx);
+            return true;
+        }
         self.complete(&name, window, cx);
         true
     }
@@ -88,25 +93,22 @@ impl Composer {
             return;
         };
         let name = item.name.clone();
-        let picked = SLASH_COMMANDS
-            .iter()
-            .any(|&(n, _, runs)| n == name && runs == Runs::Pick);
-        let local = local_command(&name).is_some();
-        if tk.kind == SigilKind::Commands && (tk.whole || local) && picked {
-            self.run_local(&name, window, cx);
+        if tk.kind == SigilKind::Commands && runs_of(&name) == Some(Runs::Pick) {
+            // Only the word typed goes; whatever else is written stays.
+            let token = (!tk.whole).then(|| tk.range.clone());
+            self.run_local(&name, token, window, cx);
             return;
         }
         self.complete(&name, window, cx);
     }
 
     /// Puts the pick in the draft. Later in the draft it replaces just the word typed; a pick
-    /// for a draft that is only that word, or a local command, which only runs as the whole
-    /// message, replaces the draft.
+    /// for a draft that is only that word replaces the draft.
     fn complete(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
         let Some((tk, _)) = &self.sigil.open else {
             return;
         };
-        let range = if tk.kind == SigilKind::Files || (!tk.whole && local_command(name).is_none()) {
+        let range = if tk.kind == SigilKind::Files || !tk.whole {
             tk.range.clone()
         } else {
             0..self.editor.read(cx).content.len()
@@ -117,10 +119,12 @@ impl Composer {
         self.focus(window, cx);
     }
 
-    /// Runs a command Patchwork handles itself (`runLocalCommand`), clearing the draft.
+    /// Runs a command Patchwork handles itself (`runLocalCommand`). With `token`, the command was
+    /// picked later in a draft and only that word is taken out; without, the draft is cleared.
     pub(in crate::chat::composer) fn run_local(
         &mut self,
         name: &str,
+        token: Option<Range<usize>>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -130,7 +134,22 @@ impl Composer {
         if name == "/clear" {
             return self.clear_chat(window, cx);
         }
-        self.editor.update(cx, |e, cx| e.clear(window, cx));
+        match token {
+            Some(token) => {
+                // The word goes with one space beside it, so no double space is left.
+                let content = &self.editor.read(cx).content;
+                let token = if content[token.end..].starts_with(' ') {
+                    token.start..token.end + 1
+                } else if content[..token.start].ends_with(' ') {
+                    token.start - 1..token.end
+                } else {
+                    token
+                };
+                self.editor
+                    .update(cx, |e, cx| e.replace(token, "", window, cx));
+            }
+            None => self.editor.update(cx, |e, cx| e.clear(window, cx)),
+        }
         match name {
             "/compact" => workspace.update(cx, |w, cx| w.send_command("/compact", cx)),
             "/model" => self.open_menu(Menu::Model, window, cx),

@@ -2,7 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{Entity, prelude::*};
+use gpui::{Entity, FocusHandle, prelude::*};
 use patchwork_server::Server;
 use patchwork_server::provider::{AgentKind, ModelOption};
 use crate::chat::composer::Composer;
@@ -25,6 +25,8 @@ pub struct ModelPicker {
     /// The provider whose Legacy models panel is open.
     pub legacy_open: Option<AgentKind>,
     pub favorites: Vec<String>,
+    /// The dialog, which Tab and Shift+Tab go round inside rather than leave.
+    pub dialog: FocusHandle,
 }
 
 /// A model in the list: its agent, the option, and its `agent:model` key.
@@ -166,8 +168,12 @@ impl Composer {
         } else {
             picker.favorites.push(key.to_string());
         }
+        self.favorites = picker.favorites.clone();
         if let Some(workspace) = self.workspace.upgrade() {
-            save_favorites(&workspace.read(cx).server, &picker.favorites);
+            let server = std::sync::Arc::clone(&workspace.read(cx).server);
+            let favorites = self.favorites.clone();
+            cx.background_spawn(async move { save_favorites(&server, &favorites) })
+                .detach();
         }
         cx.notify();
     }

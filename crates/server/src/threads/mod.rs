@@ -15,9 +15,9 @@ mod types;
 #[doc(inline)]
 pub use messages::{
     Approval, ApprovalStatus, Attachment, AttachmentKind, BackgroundTask, CheckFailure,
-    CheckStatus, EditLines, image_media_type, MAX_TOOL_OUTPUT, Message, MessageStatus, Part,
-    PlanStep, Question, QuestionOption, Refusal, Role, StepStatus, SubAgent, TaskStatus,
-    TokenUsage, ToolCall, tool_output, TurnChecks, TurnTrees,
+    CheckStatus, EditLines, answer_with_attachments, image_media_type, MAX_TOOL_OUTPUT, Message,
+    MessageStatus, Part, PlanStep, Question, QuestionOption, Refusal, Role, StepStatus, SubAgent,
+    TaskStatus, TokenUsage, ToolCall, tool_output, TurnChecks, TurnTrees,
 };
 #[doc(inline)]
 pub use granular::{AgentPick, Granular, Reserves, delegates_sub_agents, runs_sub_agents_at};

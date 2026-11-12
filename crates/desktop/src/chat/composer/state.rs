@@ -58,6 +58,8 @@ pub struct Composer {
     /// What each row of the open menu picks, in order, for the keyboard.
     pub(super) menu_picks: Vec<Pick>,
     pub(super) roles: Roles,
+    /// The project `roles` were listed for, so a refresh for the same one keeps showing them.
+    pub(super) roles_project: Option<String>,
     pub(super) picker: Option<ModelPicker>,
     /// Whether the next send while a turn runs queues rather than steers, when picked from the
     /// send menu. Each send, and each turn starting or ending, puts it back to the default.
@@ -67,6 +69,8 @@ pub struct Composer {
     pub(super) queues: bool,
     pub(super) health: model_notice::ModelHealth,
     pub(super) sigil: sigil_menu::SigilMenu,
+    /// The favourite models, as `agent:model` keys, read once in the background and saved there.
+    pub(super) favorites: Vec<String>,
     /// Where Up has stepped to among the messages sent in this chat.
     pub(super) recalled: Option<super::recall::Recall>,
 }
@@ -87,11 +91,12 @@ impl Composer {
             area
         });
         cx.subscribe_in(&editor, window, |this, _, _: &Submitted, window, cx| {
-            if this.sigil_enter(window, cx) {
-                return;
-            }
             let m = window.modifiers();
             let alternate = m.control || m.platform;
+            // Ctrl+Enter always sends; plain Enter picks from an open sigil menu first.
+            if !alternate && this.sigil_enter(window, cx) {
+                return;
+            }
             this.send(alternate, true, window, cx);
         })
         .detach();
@@ -108,6 +113,25 @@ impl Composer {
         .detach();
         cx.subscribe_in(&editor, window, |this, _, _: &Tabbed, window, cx| {
             this.sigil_tab(window, cx);
+        })
+        .detach();
+        // The saved favourites, read off the UI thread once the workspace this belongs to is made.
+        cx.spawn(async move |this, cx| {
+            let server = this.update(cx, |this, cx| {
+                this.workspace
+                    .upgrade()
+                    .map(|w| std::sync::Arc::clone(&w.read(cx).server))
+            });
+            let Ok(Some(server)) = server else {
+                return;
+            };
+            let favorites = cx
+                .background_spawn(async move { super::model_picker::read_favorites(&server) })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                this.favorites = favorites;
+                cx.notify();
+            });
         })
         .detach();
         // The caret moving changes the word a menu is for.
@@ -146,6 +170,7 @@ impl Composer {
             highlight: usize::MAX,
             menu_picks: Vec::new(),
             roles: Roles::Loading,
+            roles_project: None,
             picker: None,
             queue_next: None,
             was_working: false,
@@ -153,6 +178,7 @@ impl Composer {
             queues: false,
             sigil: sigil_menu::SigilMenu::default(),
             recalled: None,
+            favorites: Vec::new(),
         }
     }
 
@@ -229,7 +255,12 @@ impl Composer {
         let w = workspace.read(cx);
         let server = Arc::clone(&w.server);
         let project = w.project().map(|p| p.id.clone());
-        self.roles = Roles::Loading;
+        // The same project's agents stay listed while they refresh, rather than flashing a
+        // loading line each time a menu opens.
+        if self.roles_project != project {
+            self.roles = Roles::Loading;
+            self.roles_project.clone_from(&project);
+        }
         let task = cx.background_spawn(async move { server.project_agents(project.as_deref()) });
         cx.spawn(async move |this, cx| {
             let agents = task.await;

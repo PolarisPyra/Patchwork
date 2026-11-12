@@ -383,8 +383,16 @@ impl Composer {
             .occlude()
             .when(menu == Menu::Agent, |p| p.w(px(300.)))
             .on_key_down(cx.listener(Self::menu_key))
-            .on_mouse_down_out(cx.listener(|this, e: &MouseDownEvent, _, cx| {
+            // Tab leaves a menu the way Escape does, rather than moving on with it still open.
+            .on_action(cx.listener(|this, _: &crate::FocusNext, window, cx| {
+                this.close_menu(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &crate::FocusPrev, window, cx| {
+                this.close_menu(window, cx);
+            }))
+            .on_mouse_down_out(cx.listener(|this, e: &MouseDownEvent, window, cx| {
                 this.dismissed = this.menu.take().map(|m| (m, e.position));
+                this.restore_focus(window, cx);
                 cx.notify();
             }))
             .child(

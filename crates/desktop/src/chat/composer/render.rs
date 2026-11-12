@@ -92,6 +92,9 @@ impl Render for Composer {
         }
         let editing = w.editing_queued();
         let queue_next = self.queue_next.unwrap_or_else(|| queue_by_default(w));
+        // The send menu checks what the button does.
+        self.queues = queue_next;
+        let plan_ready = w.ready_plan().is_some();
         let can_compact = thread.is_some_and(|t| !t.messages.is_empty()) && !working;
         let editor = self.editor.read(cx);
         let empty = editor.content.trim().is_empty() && self.attachments.is_empty();
@@ -133,8 +136,10 @@ impl Render for Composer {
                     .text_color(t.text_muted)
                     .hover(move |s| s.bg(hover).text_color(fg))
                     .child(icon("x", 10.))
-                    .on_click(cx.listener(move |this, _, _, cx| {
+                    .on_click(cx.listener(move |this, _, window, cx| {
                         this.attachments.remove(i);
+                        // The button pressed is gone; the keyboard carries on in the editor.
+                        window.focus(&this.editor.focus_handle(cx), cx);
                         cx.notify();
                     })),
                 )
@@ -164,6 +169,8 @@ impl Render for Composer {
         });
         let send_label = if editing {
             "Update queued message"
+        } else if !working && empty && plan_ready {
+            "Implement plan"
         } else if !working {
             "Send"
         } else if queue_next {
@@ -173,6 +180,8 @@ impl Render for Composer {
         };
         let send_tip = if editing {
             "Update queued message"
+        } else if !working && empty && plan_ready {
+            "Implement plan"
         } else if !working {
             "Send"
         } else if queue_next {
@@ -195,7 +204,8 @@ impl Render for Composer {
                     }
                 })
                 .child(icon(if editing { "check" } else { "arrow-up" }, 16.));
-            let blocked = folder_missing || (empty && !editing);
+            // With a plan ready, an empty send implements it, as Enter does.
+            let blocked = folder_missing || (empty && !editing && !plan_ready);
             if blocked {
                 base.bg(t.bg_selected_muted)
                     .text_color(t.text_subtle)
@@ -383,6 +393,12 @@ impl Render for Composer {
                     .px(px(6.))
                     .text_size(px(FS_MD))
                     .line_height(px(20.))
+                    // The field is only as tall as its text; a right-click on the box below it
+                    // opens the field's Edit menu too.
+                    .on_mouse_down(MouseButton::Right, {
+                        let editor = self.editor.clone();
+                        move |e, window, cx| editor.update(cx, |ed, cx| ed.open_menu(e, window, cx))
+                    })
                     .child(self.editor.clone()),
             )
             .child(

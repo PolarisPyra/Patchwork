@@ -64,6 +64,13 @@ impl Composer {
     pub(super) fn close_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
         self.picker = None;
+        self.restore_focus(window, cx);
+        cx.notify();
+    }
+
+    /// Gives the keys back to where they were before a menu opened, so a menu closed by a press
+    /// outside it does not leave them on a menu that is gone.
+    pub(super) fn restore_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Back to where the keys were: picking a model is not a wish to write a message.
         let back = self.menu_came_from.take().or_else(|| {
             let workspace = self.workspace.upgrade()?;
@@ -72,7 +79,6 @@ impl Composer {
         if let Some(back) = back {
             window.focus(&back, cx);
         }
-        cx.notify();
     }
 
     /// Applies a menu's pick to the open chat, or to the draft of the next one.

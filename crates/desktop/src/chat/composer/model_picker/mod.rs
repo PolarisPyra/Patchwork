@@ -8,4 +8,4 @@ mod rows;
 mod view;
 mod open;
 
-pub use rows::{ModelPicker, ordered};
+pub use rows::{ModelPicker, ordered, read_favorites};

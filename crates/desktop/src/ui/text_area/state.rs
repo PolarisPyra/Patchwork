@@ -284,17 +284,51 @@ impl TextArea {
         cx.notify();
     }
 
-    /// Starts the cursor's line with `prefix`, as the list buttons do.
+    /// Starts each line the selection touches, or the cursor's line, with `prefix`, as the list
+    /// buttons do; when they all start with it already, it comes off them instead. One undo step.
     pub fn prefix_line(&mut self, prefix: &str, window: &Window, cx: &mut Context<Self>) {
-        let start = self.content[..self.cursor()]
-            .rfind('\n')
-            .map_or(0, |i| i + 1);
-        self.record(&(start..start), prefix);
-        self.content.insert_str(start, prefix);
+        let (from, to) = (self.selected.start, self.selected.end);
+        let start = self.content[..from].rfind('\n').map_or(0, |i| i + 1);
+        // A selection that ends at the start of a line leaves that line out.
+        let last = if to > from && self.content[..to].ends_with('\n') {
+            to - 1
+        } else {
+            to
+        };
+        let end = self.content[last..]
+            .find('\n')
+            .map_or(self.content.len(), |i| last + i);
+        let block = &self.content[start..end];
+        let old_len = block.len();
+        let remove = block.split('\n').all(|line| line.starts_with(prefix));
+        let lines: Vec<String> = block
+            .split('\n')
+            .map(|line| match line.strip_prefix(prefix) {
+                Some(rest) if remove => rest.to_string(),
+                _ if remove => line.to_string(),
+                Some(_) => line.to_string(),
+                None => format!("{prefix}{line}"),
+            })
+            .collect();
+        let text = lines.join("\n");
+        let range = start..end;
+        self.record(&range, &text);
+        self.content.replace_range(range, &text);
         // Its range was measured before the text moved.
         self.marked = None;
         cx.emit(Changed);
-        self.selected = self.selected.start + prefix.len()..self.selected.end + prefix.len();
+        self.selected = if from == to {
+            // One line: the caret keeps its place in the line's text.
+            let at = if remove {
+                from.saturating_sub(prefix.len()).max(start)
+            } else {
+                from + text.len() - old_len
+            };
+            at..at
+        } else {
+            start..start + text.len()
+        };
+        self.reversed = false;
         window.notify_text_input_changed(&self.focus);
         cx.notify();
     }

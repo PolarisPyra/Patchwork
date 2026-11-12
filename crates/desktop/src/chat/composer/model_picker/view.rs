@@ -32,6 +32,10 @@ impl Composer {
             .iter()
             .map(|r| Pick::Model(r.kind, r.item.id.clone()))
             .collect();
+        // Unstarring the last favourite shortens the list under the highlight.
+        if self.picker.is_some() {
+            self.highlight = self.highlight.min(self.menu_picks.len().saturating_sub(1));
+        }
         let Some(picker) = &self.picker else {
             return div().into_any_element();
         };
@@ -76,7 +80,7 @@ impl Composer {
                 .role(Role::ListBoxOption)
                 .aria_label(label.clone())
                 .aria_selected(selected)
-                .when(index.is_none(), |r| r.tab_index(0))
+                .tab_index(0)
                 .mb(px(2.))
                 .min_h(px(44.))
                 .min_w_0()
@@ -325,11 +329,22 @@ impl Composer {
         div()
             .id("model-picker")
             .occlude()
+            .when_some(
+                self.picker.as_ref().map(|p| p.dialog.clone()),
+                |d, dialog| d.track_focus(&dialog),
+            )
+            .on_action(cx.listener(|this, _: &crate::FocusNext, window, cx| {
+                this.picker_tab(true, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &crate::FocusPrev, window, cx| {
+                this.picker_tab(false, window, cx);
+            }))
             .flex()
             .gap(px(6.))
             .h(px(HEIGHT))
-            .on_mouse_down_out(cx.listener(|this, e: &MouseDownEvent, _, cx| {
+            .on_mouse_down_out(cx.listener(|this, e: &MouseDownEvent, window, cx| {
                 this.dismissed = this.menu.take().map(|m| (m, e.position));
+                this.restore_focus(window, cx);
                 this.picker = None;
                 cx.notify();
             }))

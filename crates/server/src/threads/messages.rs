@@ -300,6 +300,21 @@ pub fn image_media_type(path: &str) -> Option<&'static str> {
     }
 }
 
+/// An answer to an agent's question with files attached: an answer is only text, so each file goes
+/// in by its path, which the agent can open.
+#[must_use]
+pub fn answer_with_attachments(answer: &str, attachments: &[Attachment]) -> String {
+    let mut text = answer.trim().to_string();
+    for a in attachments {
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text.push_str("Attached: ");
+        text.push_str(&a.path);
+    }
+    text
+}
+
 impl Attachment {
     /// Classifies a path that exists on disk.
     pub(crate) fn from_path(path: &str) -> Result<Self, Error> {

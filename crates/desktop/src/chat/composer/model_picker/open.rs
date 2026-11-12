@@ -4,7 +4,6 @@
 
 use super::rows::ModelPicker;
 use super::rows::row_key;
-use super::rows::read_favorites;
 use gpui::{Focusable, KeyDownEvent, Window, prelude::*};
 use patchwork_server::provider::AgentKind;
 use crate::chat::composer::Composer;
@@ -38,6 +37,31 @@ impl Composer {
         cx.stop_propagation();
     }
 
+    /// Tab (`forward`) or Shift+Tab moves through the picker; past its last or first control it
+    /// comes back to the search field rather than leaving the dialog open behind it.
+    pub(super) fn picker_tab(
+        &mut self,
+        forward: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(picker) = &self.picker else {
+            return;
+        };
+        let (dialog, search) = (
+            picker.dialog.clone(),
+            picker.search.read(cx).focus_handle(cx),
+        );
+        if forward {
+            window.focus_next(cx);
+        } else {
+            window.focus_prev(cx);
+        }
+        if !dialog.contains_focused(window, cx) {
+            window.focus(&search, cx);
+        }
+    }
+
     /// Opens the picker on the favorites if one is still listed, else on the chat's agent; and on
     /// its Legacy models panel when the chat's model is a legacy one.
     pub(in crate::chat::composer) fn open_model_picker(
@@ -47,10 +71,7 @@ impl Composer {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(workspace) = self.workspace.upgrade() else {
-            return;
-        };
-        let favorites = read_favorites(&workspace.read(cx).server);
+        let favorites = self.favorites.clone();
         let has_favorite = agents.iter().any(|&kind| {
             self.models_of(kind)
                 .unwrap_or_default()
@@ -115,6 +136,7 @@ impl Composer {
             },
             legacy_open: active_legacy.then_some(agent),
             favorites,
+            dialog: cx.focus_handle(),
         });
         // The chat's model starts highlighted.
         let rows = self.model_rows(agents, cx);

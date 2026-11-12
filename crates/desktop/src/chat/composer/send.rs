@@ -51,7 +51,7 @@ impl Composer {
         if self.attachments.is_empty()
             && let Some(command) = sigil_menu::local_command(&text)
         {
-            return self.run_local(command, window, cx);
+            return self.run_local(command, None, window, cx);
         }
         // Mid-turn, /goal clear is the Stop button: the agent's session drops the goal once it
         // exits.
@@ -67,10 +67,15 @@ impl Composer {
         let queue_next = self.queue_next.unwrap_or_else(|| queue_by_default(w));
         let queue = working && (alternate != queue_next);
         // An answer written here goes to the agent's question, not into the chat.
+        // An answer is only text, so attached files go in by their paths rather than staying behind.
         if workspace.read(cx).answering_in_composer() {
-            if !text.is_empty() {
-                workspace.update(cx, |w, cx| w.answer_question(text, cx));
+            if !text.is_empty() || !self.attachments.is_empty() {
+                let attachments = std::mem::take(&mut self.attachments);
+                let answer =
+                    patchwork_server::threads::answer_with_attachments(&text, &attachments);
+                workspace.update(cx, |w, cx| w.answer_question(answer, cx));
                 self.editor.update(cx, |e, cx| e.clear(window, cx));
+                cx.notify();
             }
             return;
         }
@@ -155,7 +160,12 @@ impl Composer {
             text = format!("{text}\n\n{written}");
         }
         self.editor.update(cx, |e, cx| e.set_text(&text, cx));
+        // A file attached again since is kept once.
+        self.attachments
+            .retain(|a| !attachments.iter().any(|b| b.path == a.path));
         self.attachments.splice(0..0, attachments);
+        self.recalled = None;
+        self.draft_changed();
         cx.notify();
     }
 

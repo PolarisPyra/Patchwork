@@ -49,6 +49,14 @@ pub(super) const SLASH_COMMANDS: [(&str, &str, Runs); 7] = [
     ),
 ];
 
+/// When one of Patchwork's own commands runs, or `None` for any other name.
+pub(super) fn runs_of(name: &str) -> Option<Runs> {
+    SLASH_COMMANDS
+        .iter()
+        .find(|&&(n, _, _)| n == name)
+        .map(|&(_, _, runs)| runs)
+}
+
 /// The command Patchwork runs itself when `text` is the whole message, if it is one.
 pub fn local_command(text: &str) -> Option<&'static str> {
     SLASH_COMMANDS

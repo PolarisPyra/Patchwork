@@ -4,7 +4,7 @@
 // Rust guideline compliant 2026-11-10
 
 use gpui::{Window, prelude::*};
-use patchwork_server::threads::Role;
+use patchwork_server::threads::{Attachment, Role};
 
 use super::state::Composer;
 
@@ -12,19 +12,19 @@ use super::state::Composer;
 pub(super) struct Recall {
     /// How far back, from 0 for the newest.
     index: usize,
-    /// What was written before the first Up, which Down past the newest brings back.
-    draft: String,
+    /// What was written and attached before the first Up, which Down past the newest brings back.
+    draft: (String, Vec<Attachment>),
     /// The message shown, so an edit to it ends the stepping.
     shown: String,
 }
 
 impl Composer {
-    /// The messages written in this chat, newest first, each once in a row.
-    fn sent(&self, cx: &Context<Self>) -> Vec<String> {
+    /// The messages written in this chat with what they carried, newest first, each once in a row.
+    fn sent(&self, cx: &Context<Self>) -> Vec<(String, Vec<Attachment>)> {
         let Some(workspace) = self.workspace.upgrade() else {
             return Vec::new();
         };
-        let mut sent: Vec<String> = Vec::new();
+        let mut sent: Vec<(String, Vec<Attachment>)> = Vec::new();
         let messages = workspace.read(cx).thread.as_ref().map(|t| &t.messages);
         for m in messages.into_iter().flatten().rev() {
             if m.role != Role::User {
@@ -33,8 +33,10 @@ impl Composer {
             let text = crate::chat::user::without_image_markdown(&m.text)
                 .trim()
                 .to_string();
-            if !text.is_empty() && sent.last() != Some(&text) {
-                sent.push(text);
+            let message = (text, m.attachments.clone());
+            let empty = message.0.is_empty() && message.1.is_empty();
+            if !empty && sent.last() != Some(&message) {
+                sent.push(message);
             }
         }
         sent
@@ -49,17 +51,19 @@ impl Composer {
             (Some(r), false) => (r.index.checked_sub(1), r.draft.clone()),
             // Down with nothing brought back stays where it is.
             (None, false) => return,
-            (None, true) => (Some(0), content.clone()),
+            (None, true) => (Some(0), (content.clone(), self.attachments.clone())),
         };
         let sent = self.sent(cx);
-        let text = match index {
+        let (text, attachments) = match index {
             Some(i) => match sent.get(i) {
-                Some(text) => text.clone(),
+                Some(message) => message.clone(),
                 // Past the oldest, the oldest stays.
                 None => return,
             },
             None => draft.clone(),
         };
+        // Pictures and files come back with the message, as they went with it.
+        self.attachments = attachments;
         let len = content.len();
         self.editor.update(cx, |e, cx| {
             e.replace(0..len, &text, window, cx);

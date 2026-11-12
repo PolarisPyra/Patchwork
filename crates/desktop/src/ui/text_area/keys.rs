@@ -440,7 +440,7 @@ impl TextArea {
     /// A right click: the caret moves there unless it is on the selection, and a menu opens to
     /// cut, copy, paste or select all. Each runs as its key would, so the owner's own handling,
     /// such as the composer attaching a pasted picture, still applies.
-    pub(super) fn open_menu(
+    pub(crate) fn open_menu(
         &mut self,
         event: &MouseDownEvent,
         window: &mut Window,

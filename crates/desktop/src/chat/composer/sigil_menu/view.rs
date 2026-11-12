@@ -7,6 +7,7 @@ use super::commands::Item;
 use super::commands::commands;
 use super::commands::file_items;
 use super::commands::token;
+use super::commands::{Runs, runs_of};
 use gpui::{AnyElement, FontWeight, Role, SharedString, deferred, div, prelude::*, px, relative};
 use patchwork_server::provider::{AgentKind, ProviderSlashCommand};
 use crate::chat::composer::Composer;
@@ -55,7 +56,12 @@ impl Composer {
             let query = tk.query();
             let items = match tk.kind {
                 SigilKind::Files => return Some((file_items(&self.sigil.files, &query), tk)),
-                SigilKind::Commands => commands(agent, provider),
+                // A command that runs on send only runs as the whole message, so later in a draft
+                // it is not offered: picking it would have to replace what is written.
+                SigilKind::Commands => commands(agent, provider)
+                    .into_iter()
+                    .filter(|item| tk.whole || runs_of(&item.name) != Some(Runs::Send))
+                    .collect(),
                 SigilKind::Skills => self
                     .sigil
                     .skills
