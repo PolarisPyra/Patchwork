@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::system::fs::real;
-use super::command::{command_prefix, split_command};
+use super::command::{command_prefix, split_writes};
 use super::matching::{Unit, covers, folder_of, host, shown, units};
 use super::{
     Effect, PermissionKind, PermissionRule, PermissionScope, PermissionSettings, RuleRef,
@@ -213,7 +213,7 @@ fn answer(
     {
         return Answer::Open;
     }
-    let (units, allowable) = units(target, root);
+    let (units, mut allowable, writes) = units(target, root);
     let found = |scope: &PermissionScope, rule: &PermissionRule| RuleRef {
         scope: scope.clone(),
         rule_id: Some(rule.id.clone()),
@@ -235,6 +235,19 @@ fn answer(
                     rule: found(scope, rule),
                 });
             }
+        }
+    }
+
+    // A file a command writes by redirection is an edit: a rule that refuses the edit refuses the
+    // command, and allow rules answer for the command only where the edit is allowed.
+    if allowable && !writes.is_empty() {
+        let edit = Target::new(PermissionKind::Edit, writes);
+        match answer(settings, project, root, &edit, skills) {
+            Answer::Given(decision) if decision.allow => {}
+            Answer::Given(decision) if decision.rule.rule_id.is_some() => {
+                return Answer::Given(decision);
+            }
+            Answer::Given(_) | Answer::AskRule | Answer::Open => allowable = false,
         }
     }
 
@@ -324,7 +337,8 @@ pub fn suggest(target: &Target, root: &Path) -> Vec<String> {
         }
         PermissionKind::Command => {
             for line in &target.resources {
-                let (segments, safe) = split_command(line);
+                // A rule for the command answers for it; the files it writes are asked about as edits.
+                let (segments, safe, _) = split_writes(line);
                 if !safe {
                     return Vec::new();
                 }
@@ -346,7 +360,11 @@ pub fn suggest(target: &Target, root: &Path) -> Vec<String> {
 /// A request that names nothing, as Codex's file changes do, matches any of its kind.
 #[must_use]
 pub fn same_request(a: &Target, b: &Target, root: &Path) -> bool {
-    a.kind == b.kind && (b.resources.is_empty() || units(a, root).0 == units(b, root).0)
+    a.kind == b.kind
+        && (b.resources.is_empty() || {
+            let (a, b) = (units(a, root), units(b, root));
+            a.0 == b.0 && a.2 == b.2
+        })
 }
 
 /// A server or tool name as OpenCode puts it in a tool's id: anything but letters, digits, `_`,

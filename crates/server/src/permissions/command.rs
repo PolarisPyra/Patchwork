@@ -43,9 +43,35 @@ pub(super) fn command_prefix(words: &[String]) -> String {
     }
 }
 
-/// Words the shell reads before a command without their being one: `{ rm x; }`, `then rm x`.
-const RESERVED: [&str; 12] = [
-    "{", "}", "!", "if", "then", "elif", "else", "while", "until", "do", "time", "function",
+/// Words the shell reads before a command without their being one: `{ rm x; }`, `then rm x`,
+/// `done`.
+const RESERVED: [&str; 18] = [
+    "{", "}", "!", "if", "then", "elif", "else", "fi", "while", "until", "for", "select", "do",
+    "done", "case", "esac", "time", "function",
+];
+
+/// Whether the shell reads `word` before a command without its being one.
+fn is_reserved(word: &str) -> bool {
+    RESERVED.contains(&word)
+}
+
+/// Variables that change only how a program reports, never what it runs, so setting one before a
+/// command leaves a rule for the command answering for it.
+const HARMLESS_VARIABLES: [&str; 14] = [
+    "RUST_LOG",
+    "RUST_BACKTRACE",
+    "CARGO_TERM_COLOR",
+    "NO_COLOR",
+    "FORCE_COLOR",
+    "CLICOLOR",
+    "TERM",
+    "COLUMNS",
+    "LANG",
+    "LC_ALL",
+    "TZ",
+    "CI",
+    "NODE_ENV",
+    "DEBUG",
 ];
 
 /// Programs that run the command named after them, so a rule for that command covers them too.
@@ -77,9 +103,17 @@ pub(super) fn any_program(program: &str) -> bool {
 /// the ends of a subshell or substitution, with comments, reserved words and leading `NAME=value`
 /// assignments dropped, `sh -c '…'` unwrapped, and the command a wrapper such as `env` or `xargs`
 /// runs added as one of its own. The flag is false when the line does more than its commands
-/// show: a substitution, a subshell, an assignment, a quote that never closes, or a redirect other
-/// than to /dev/null or another descriptor.
+/// show: a substitution, a subshell, an assignment that may change what runs, a quote that never
+/// closes, or a redirect other than to /dev/null or another descriptor.
 pub(super) fn split_command(line: &str) -> (Vec<Vec<String>>, bool) {
+    let (segments, safe, writes) = split_writes(line);
+    (segments, safe && writes.is_empty())
+}
+
+/// `split_command`, with the files the line writes by `>` and `>>` apart, rather than counting
+/// against it: an Edit rule, not a command rule, answers for them.
+pub(super) fn split_writes(line: &str) -> (Vec<Vec<String>>, bool, Vec<String>) {
+    let mut writes: Vec<String> = Vec::new();
     let mut segments: Vec<Vec<String>> = Vec::new();
     let mut words: Vec<String> = Vec::new();
     let mut word = String::new();
@@ -195,8 +229,13 @@ pub(super) fn split_command(line: &str) -> (Vec<Vec<String>>, bool) {
                     file.push(c);
                     chars.next();
                 }
-                if file != "/dev/null" {
+                // A name the shell would expand or quote is not the file it names.
+                if file.is_empty()
+                    || file.contains(['\'', '"', '$', '`', '~', '*', '?', '[', '{', '(', '\\'])
+                {
                     safe = false;
+                } else if file != "/dev/null" {
+                    writes.push(file);
                 }
             }
             ';' | '&' | '|' | '\n' => {
@@ -220,21 +259,30 @@ pub(super) fn split_command(line: &str) -> (Vec<Vec<String>>, bool) {
     for words in &segments {
         safe &= add_command(words, &mut out);
     }
-    (out, safe)
+    (out, safe, writes)
 }
 
 /// Adds the command `words` spell to `out`, and the commands it runs in turn. False when it does
 /// more than they show.
 fn add_command(words: &[String], out: &mut Vec<Vec<String>>) -> bool {
-    let reserved = words
-        .iter()
-        .take_while(|w| RESERVED.contains(&w.as_str()))
-        .count();
+    let reserved = words.iter().take_while(|w| is_reserved(w)).count();
+    // `for f in a b`, `select f in a b` and `case x in` name a variable and list words; none of
+    // them is a program.
+    if words[..reserved]
+        .last()
+        .is_some_and(|w| matches!(w.as_str(), "for" | "select" | "case"))
+    {
+        return true;
+    }
     let words = &words[reserved..];
-    // An assignment can change which program a name runs (`PATH`, `LD_PRELOAD`), so a rule for
-    // the command does not answer for it.
+    // An assignment can change which program a name runs (`PATH`, `LD_PRELOAD`), or have it run
+    // other code (`GIT_SSH_COMMAND`, `NODE_OPTIONS`), so a rule for the command answers only for
+    // the ones that only change its output.
     let assignments = words.iter().take_while(|w| is_assignment(w)).count();
-    let mut safe = assignments == 0;
+    let mut safe = words[..assignments].iter().all(|w| {
+        w.split_once('=')
+            .is_some_and(|(name, _)| HARMLESS_VARIABLES.contains(&name))
+    });
     let words = &words[assignments..];
     let Some(program) = words.first() else {
         return safe;

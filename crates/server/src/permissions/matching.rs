@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use crate::system::fs::{real, resolve};
 use crate::system::fs::home_dir;
 use super::{Effect, PermissionKind, PermissionRule};
-use super::command::{any_program, does_more, handed_code, may_run, split_command};
+use super::command::{any_program, does_more, handed_code, may_run, split_writes};
 use super::{Target, opencode_name};
 
 /// One part of a request a rule has to cover.
@@ -24,9 +24,11 @@ pub(super) enum Unit {
     Unknown,
 }
 
-/// The parts of `target`, and whether allow rules may answer it at all.
-pub(super) fn units(target: &Target, root: &Path) -> (Vec<Unit>, bool) {
+/// The parts of `target`, whether allow rules may answer it at all, and the files its commands
+/// write by redirection, which Edit rules answer for.
+pub(super) fn units(target: &Target, root: &Path) -> (Vec<Unit>, bool, Vec<String>) {
     let mut allowable = true;
+    let mut writes = Vec::new();
     let mut units: Vec<Unit> = match target.kind {
         PermissionKind::Edit => target
             .resources
@@ -43,8 +45,9 @@ pub(super) fn units(target: &Target, root: &Path) -> (Vec<Unit>, bool) {
             .resources
             .iter()
             .flat_map(|line| {
-                let (segments, safe) = split_command(line);
+                let (segments, safe, written) = split_writes(line);
                 allowable &= safe;
+                writes.extend(written);
                 let code: Vec<Unit> = segments
                     .iter()
                     .filter_map(|words| handed_code(words, line))
@@ -73,7 +76,7 @@ pub(super) fn units(target: &Target, root: &Path) -> (Vec<Unit>, bool) {
     if units.is_empty() {
         units.push(Unit::Unknown);
     }
-    (units, allowable)
+    (units, allowable, writes)
 }
 
 pub(super) fn covers(rule: &PermissionRule, unit: &Unit, root: &Path) -> bool {
