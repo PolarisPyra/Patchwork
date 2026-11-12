@@ -9,14 +9,19 @@ use std::ops::Range;
 
 use gpui::{
     AnyElement, App, Bounds, ClipboardItem, CursorStyle, DispatchPhase, Element, ElementId, Entity,
-    GlobalElementId, Hitbox, HitboxBehavior, InspectorElementId, IntoElement, KeyBinding, LayoutId,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString,
-    StyledText, TextLayout, Window, actions, fill, point, ContentMask, ListState, Styled, canvas,
-    px,
+    GlobalElementId, Hitbox, HitboxBehavior, Hsla, InspectorElementId, IntoElement, KeyBinding,
+    LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point,
+    SharedString, StyledText, TextLayout, Window, actions, fill, point, ContentMask, ListState,
+    Styled, canvas, px,
 };
 
 use crate::ui::menu::{Dismissed, Menu, MenuItem};
-use crate::ui::theme::theme;
+use crate::ui::theme::{RADIUS_SM, theme};
+
+/// How far a chip reaches past its first and last letter, and how far in from its line's top and
+/// bottom it stops, so chips on lines above each other keep apart.
+const CHIP_PAD_X: f32 = 3.;
+const CHIP_INSET_Y: f32 = 1.;
 
 actions!(selection, [CopySelection]);
 
@@ -88,6 +93,8 @@ pub struct Selectable {
     /// How far left of the text its prefix is drawn: a press there starts a drag too.
     gutter: Pixels,
     after_tab: bool,
+    /// Ranges drawn as rounded chips behind the text, each with its colour.
+    chips: Vec<(Range<usize>, Hsla)>,
 }
 
 /// Wraps `text` so a drag can mark it.
@@ -98,6 +105,7 @@ pub fn selectable(id: u64, text: StyledText) -> Selectable {
         prefix: None,
         gutter: Pixels::ZERO,
         after_tab: false,
+        chips: Vec::new(),
     }
 }
 
@@ -115,6 +123,12 @@ impl Selectable {
     /// table's cells after the first in their row.
     pub fn after_tab(mut self) -> Self {
         self.after_tab = true;
+        self
+    }
+
+    /// Draws each range as a rounded chip in its colour, padded a little past its letters.
+    pub fn chips(mut self, chips: Vec<(Range<usize>, Hsla)>) -> Self {
+        self.chips = chips;
         self
     }
 }
@@ -177,6 +191,19 @@ impl Element for Selectable {
         cx: &mut App,
     ) {
         let layout = self.text.layout().clone();
+        for (range, color) in &self.chips {
+            let range = range.start.min(layout.len())..range.end.min(layout.len());
+            for quad in quads(&layout, &range, false) {
+                let quad = Bounds::from_corners(
+                    point(quad.left() - px(CHIP_PAD_X), quad.top() + px(CHIP_INSET_Y)),
+                    point(
+                        quad.right() + px(CHIP_PAD_X),
+                        quad.bottom() - px(CHIP_INSET_Y),
+                    ),
+                );
+                window.paint_quad(fill(quad, *color).corner_radii(px(RADIUS_SM)));
+            }
+        }
         let selection = cx.default_global::<Selection>();
         let marked = selection.marked.get(&self.id).cloned();
         let continues = selection.last != Some(self.id);

@@ -33,9 +33,10 @@ impl Markdown<'_> {
     }
 
     fn take_inline(&mut self) -> Selectable {
+        let chips = std::mem::take(&mut self.inline.chips);
         let Some(find) = self.find else {
             let text = self.inline.take();
-            return self.selectable(text);
+            return self.selectable(text).chips(chips);
         };
         let t = self.t;
         let len = self.inline.text.trim_end().len();
@@ -66,7 +67,7 @@ impl Markdown<'_> {
         if let Some(start) = current {
             *find.target.borrow_mut() = Some((text.layout().clone(), start));
         }
-        self.selectable(text)
+        self.selectable(text).chips(chips)
     }
 
     /// Adds text to the open run, marking its chips when this message draws them.
@@ -88,10 +89,27 @@ impl Markdown<'_> {
             if kind != '@' {
                 self.inline.mono.push(range.clone());
             }
+            // The spaces either side are drawn in the monospace font, about twice as wide, so the
+            // chip's padding keeps clear of the words beside it. The text itself is unchanged.
+            let full = self.inline.text.as_bytes();
+            let mut spaces = Vec::new();
+            if range.start > 0 && full[range.start - 1] == b' ' {
+                spaces.push(range.start - 1..range.start);
+            }
+            if full.get(range.end) == Some(&b' ') {
+                spaces.push(range.end..range.end + 1);
+            }
+            for space in spaces {
+                // A run of its own: a font is only changed for whole runs.
+                self.inline
+                    .highlights
+                    .push((space.clone(), HighlightStyle::default()));
+                self.inline.mono.push(space);
+            }
+            self.inline.chips.push((range.clone(), background));
             self.inline.highlights.push((
                 range,
                 HighlightStyle {
-                    background_color: Some(background),
                     color: Some(if kind == '@' { t.accent_text } else { t.text }),
                     ..Default::default()
                 },

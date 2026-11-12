@@ -5,7 +5,7 @@
 use std::cell::{Cell, RefCell};
 use std::ops::Range;
 use std::rc::Rc;
-use gpui::{AnyElement, Div, HighlightStyle, SharedString, StyledText, TextLayout};
+use gpui::{AnyElement, Div, HighlightStyle, Hsla, SharedString, StyledText, TextLayout};
 use crate::ui::theme::FONT_MONO;
 
 /// One block with the margins CSS gives it; adjacent margins collapse into the larger one.
@@ -21,6 +21,8 @@ pub(super) struct Inline {
     pub(super) text: String,
     pub(super) highlights: Vec<(Range<usize>, HighlightStyle)>,
     pub(super) mono: Vec<Range<usize>>,
+    /// Sigil chips, drawn as rounded shapes behind the text rather than as a run background.
+    pub(super) chips: Vec<(Range<usize>, Hsla)>,
     /// Open spans: where each started and how it looks.
     open: Vec<(usize, HighlightStyle)>,
 }
@@ -68,8 +70,12 @@ impl Inline {
                 highlights.push((piece, style));
             }
         }
-        let mono: Vec<_> = inline
-            .mono
+        // Sorted and apart, as the font overrides must be: a chip and the space beside it are
+        // pushed out of order, and two chips can share one space.
+        let mut mono = inline.mono;
+        mono.sort_by_key(|r| (r.start, r.end));
+        mono.dedup();
+        let mono: Vec<_> = mono
             .into_iter()
             .filter(|r| r.end <= len)
             .map(|r| (r, SharedString::from(FONT_MONO)))
