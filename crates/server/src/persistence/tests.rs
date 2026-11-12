@@ -52,7 +52,7 @@ fn thread(messages: Vec<Message>) -> Thread {
         session_id: Some("s".into()),
         access_mode: crate::threads::AccessMode::Supervised,
         created_at: 2,
-        messages,
+        messages: messages.into_iter().map(std::sync::Arc::new).collect(),
         goal: None,
         position: 0,
         folder_id: None,
@@ -111,8 +111,9 @@ fn thread_changes_survive_reopen_and_delete_cascades() {
                 name: "review".into(),
                 description: Some("Review the current changes".into()),
             }];
-            t.messages[0].text.push('b');
-            t.messages.push(message("c", MessageStatus::Complete));
+            std::sync::Arc::make_mut(&mut t.messages[0]).text.push('b');
+            t.messages
+                .push(std::sync::Arc::new(message("c", MessageStatus::Complete)));
         })
         .unwrap();
     drop(store);
@@ -269,7 +270,7 @@ fn a_replys_checks_survive_reopen() {
     let dir = temp_dir();
     let store = Store::open(&dir).unwrap();
     let mut t = thread(vec![message("done", MessageStatus::Complete)]);
-    t.messages[0].checks = Some(crate::threads::TurnChecks {
+    std::sync::Arc::make_mut(&mut t.messages[0]).checks = Some(crate::threads::TurnChecks {
         status: crate::threads::CheckStatus::Failed,
         command: Some("cargo test".into()),
         duration_ms: 1234,

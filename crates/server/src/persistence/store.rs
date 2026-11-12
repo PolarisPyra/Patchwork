@@ -6,8 +6,11 @@
 // Rust guideline compliant 2026-10-09
 
 use crate::Error;
+use std::cell::OnceCell;
+use std::collections::HashSet;
+use std::ops::{Deref, DerefMut};
 use std::path::Path;
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
@@ -37,8 +40,40 @@ pub struct Store {
 pub(super) struct Inner {
     pub(super) conn: Connection,
     settings: Settings,
-    threads: Vec<Thread>,
+    threads: Vec<Held>,
     folders: Vec<Folder>,
+}
+
+/// A thread in memory beside its entry in the thread list, which is made once and dropped
+/// whenever the thread is borrowed to be changed.
+#[derive(Debug)]
+pub struct Held {
+    thread: Thread,
+    summary: OnceCell<Arc<Thread>>,
+}
+
+impl Held {
+    fn new(thread: Thread) -> Self {
+        Self {
+            thread,
+            summary: OnceCell::new(),
+        }
+    }
+}
+
+impl Deref for Held {
+    type Target = Thread;
+
+    fn deref(&self) -> &Thread {
+        &self.thread
+    }
+}
+
+impl DerefMut for Held {
+    fn deref_mut(&mut self) -> &mut Thread {
+        self.summary.take();
+        &mut self.thread
+    }
 }
 
 impl Store {
@@ -74,7 +109,7 @@ impl Store {
                 .iter_mut()
                 .flat_map(|t| &mut t.messages)
                 .filter(|m| m.status == MessageStatus::Streaming)
-                .for_each(|m| m.status = MessageStatus::Cancelled);
+                .for_each(|m| Arc::make_mut(m).status = MessageStatus::Cancelled);
         }
         // A goal that was being pursued when the app quit is no longer pursued: its agent
         // process ended with the app. It is paused, so it can be resumed rather than shown as active.
@@ -97,7 +132,7 @@ impl Store {
             inner: Mutex::new(Inner {
                 conn,
                 settings,
-                threads,
+                threads: threads.into_iter().map(Held::new).collect(),
                 folders,
             }),
             owner,
@@ -147,16 +182,34 @@ impl Store {
     }
 
     pub fn threads(&self) -> Vec<Thread> {
-        self.lock().threads.clone()
+        self.lock()
+            .threads
+            .iter()
+            .map(|t| t.thread.clone())
+            .collect()
+    }
+
+    /// Every thread's entry in the thread list. `make` builds one the first time it is asked
+    /// for, and it is kept until its thread changes.
+    pub(crate) fn summaries(&self, make: impl Fn(&Thread) -> Thread) -> Vec<Arc<Thread>> {
+        self.lock()
+            .threads
+            .iter()
+            .map(|t| Arc::clone(t.summary.get_or_init(|| Arc::new(make(&t.thread)))))
+            .collect()
     }
 
     /// Runs `f` over the threads without copying them.
-    pub fn with_threads<R>(&self, f: impl FnOnce(&[Thread]) -> R) -> R {
+    pub fn with_threads<R>(&self, f: impl FnOnce(&[Held]) -> R) -> R {
         f(&self.lock().threads)
     }
 
     pub fn thread(&self, id: &str) -> Option<Thread> {
-        self.lock().threads.iter().find(|t| t.id == id).cloned()
+        self.lock()
+            .threads
+            .iter()
+            .find(|t| t.id == id)
+            .map(|t| t.thread.clone())
     }
 
     /// `(agent, session_id)` of every thread that has a session, for de-duplicating imports.
@@ -187,7 +240,7 @@ impl Store {
             }
         }
         tx.commit().map_err(err)?;
-        inner.threads.extend(threads);
+        inner.threads.extend(threads.into_iter().map(Held::new));
         Ok(())
     }
 
@@ -219,16 +272,24 @@ impl Store {
         let Some(index) = inner.threads.iter().position(|t| t.id == id) else {
             return Ok(());
         };
-        let mut next = inner.threads[index].clone();
+        let mut next = inner.threads[index].thread.clone();
         f(&mut next);
         let before = &inner.threads[index];
+        // A message `f` left alone is still the one allocation, which is told without reading it.
         let changed: Vec<usize> = (0..next.messages.len())
-            .filter(|&i| before.messages.get(i) != Some(&next.messages[i]))
+            .filter(|&i| {
+                let now = &next.messages[i];
+                before
+                    .messages
+                    .get(i)
+                    .is_none_or(|was| !Arc::ptr_eq(was, now) && was != now)
+            })
             .collect();
+        let kept: HashSet<&str> = next.messages.iter().map(|m| m.id.as_str()).collect();
         let removed: Vec<String> = before
             .messages
             .iter()
-            .filter(|old| !next.messages.iter().any(|message| message.id == old.id))
+            .filter(|old| !kept.contains(old.id.as_str()))
             .map(|message| message.id.clone())
             .collect();
         let tx = inner.conn.transaction().map_err(err)?;
@@ -244,7 +305,7 @@ impl Store {
             save_message(&tx, &next.id, i, &next.messages[i]).map_err(err)?;
         }
         tx.commit().map_err(err)?;
-        inner.threads[index] = next;
+        inner.threads[index] = Held::new(next);
         Ok(())
     }
 
@@ -294,7 +355,7 @@ impl Store {
                 .ok()
                 .and_then(|threads| threads.into_iter().find(|t| t.id == id));
             if let Some(stored) = stored {
-                *thread = stored;
+                *thread = Held::new(stored);
             }
             return Err(err(e).into());
         }
@@ -431,6 +492,7 @@ impl Store {
                         && t.folder_id.as_deref() == folder_id
                         && (held(t) || ids.contains(&t.id))
                 })
+                .map(|t| &t.thread)
                 .collect();
             list.sort_by_key(|t| t.position);
             let mut moved = ids.iter();

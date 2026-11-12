@@ -2,6 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::sync::Arc;
 use crate::Error;
 use crate::system::now_ms;
 use crate::threads::{MessageStatus, ApprovalStatus, Thread};
@@ -30,7 +31,7 @@ fn thread_summary(thread: &Thread) -> Thread {
                     .iter()
                     .any(|a| a.status == ApprovalStatus::Pending)
         })
-        .map(|(_, m)| m.clone())
+        .map(|(_, m)| Arc::clone(m))
         .collect();
     thread.with_messages(messages)
 }
@@ -38,10 +39,8 @@ fn thread_summary(thread: &Thread) -> Thread {
 impl Server {
     /// Every thread, each with only the messages the task list reads: the last one, and any
     /// still streaming, running background tasks, queued, or waiting on an approval. `thread` returns one in full.
-    pub fn list_threads(&self) -> Vec<Thread> {
-        let mut ts: Vec<Thread> = self
-            .store
-            .with_threads(|threads| threads.iter().map(thread_summary).collect());
+    pub fn list_threads(&self) -> Vec<Arc<Thread>> {
+        let mut ts = self.store.summaries(thread_summary);
         ts.sort_by_key(|t| t.position);
         ts
     }

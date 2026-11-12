@@ -3,6 +3,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::sync::Arc;
 use std::collections::HashMap;
 
 use gpui::{
@@ -327,8 +328,8 @@ fn undo_items(view: &Context<ChangesView>, commit: &GitCommit, thread: &str) -> 
 
 pub fn section(
     view: &ChangesView,
-    live: &[Thread],
-    archived: &[Thread],
+    live: &[Arc<Thread>],
+    archived: &[Arc<Thread>],
     t: &Theme,
     cx: &mut Context<ChangesView>,
 ) -> AnyElement {
@@ -351,9 +352,14 @@ pub fn section(
             .child("No commits")
             .into_any_element();
     }
-    let live_by_id: HashMap<&str, &Thread> = live.iter().map(|th| (th.id.as_str(), th)).collect();
-    let archived_by_id: HashMap<&str, &Thread> =
-        archived.iter().map(|th| (th.id.as_str(), th)).collect();
+    let live_by_id: HashMap<&str, &Thread> = live
+        .iter()
+        .map(|th| (th.id.as_str(), th.as_ref()))
+        .collect();
+    let archived_by_id: HashMap<&str, &Thread> = archived
+        .iter()
+        .map(|th| (th.id.as_str(), th.as_ref()))
+        .collect();
     let hover = t.bg_hover;
     let mut list = div()
         .id("commit-history")

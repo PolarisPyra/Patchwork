@@ -14,7 +14,7 @@ categories.workspace = true
 base64 = { workspace = true, default-features = true }
 serde_json = { workspace = true, default-features = true }
 toml = { workspace = true, default-features = true }
-serde = { workspace = true, default-features = true, features = ["derive"] }
+serde = { workspace = true, default-features = true, features = ["derive", "rc"] }
 log = { workspace = true, default-features = true }
 uuid = { workspace = true, default-features = true, features = ["v4"] }
 which = { workspace = true, default-features = true }

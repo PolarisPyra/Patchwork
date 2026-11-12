@@ -2,6 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::sync::Arc;
 use crate::Error;
 use crate::provider::AgentKind;
 use crate::system::{now_ms, new_id};
@@ -142,15 +143,17 @@ impl Server {
         // Message ids are unique across threads, so the copies get new ones.
         let messages = source.messages[..=end]
             .iter()
-            .map(|m| Message {
-                id: new_id(),
-                queued: false,
-                background: Vec::new(),
-                // The original thread's checkpoints stay with it, and its cursors name messages
-                // of its own session.
-                turn: None,
-                cursor: None,
-                ..m.clone()
+            .map(|m| {
+                Arc::new(Message {
+                    id: new_id(),
+                    queued: false,
+                    background: Vec::new(),
+                    // The original thread's checkpoints stay with it, and its cursors name messages
+                    // of its own session.
+                    turn: None,
+                    cursor: None,
+                    ..Message::clone(m)
+                })
             })
             .collect();
         let thread = Thread {

@@ -37,7 +37,7 @@ impl Workspace {
     /// Moves the project's tasks into a folder per provider, made as needed, and remembers where
     /// they were so it can be undone.
     pub fn sort_by_agent(&mut self, project_id: &str, cx: &mut Context<Self>) {
-        let tasks: Vec<Thread> = self
+        let tasks: Vec<Arc<Thread>> = self
             .threads
             .iter()
             .filter(|t| {

@@ -7,4 +7,4 @@ mod pieces;
 mod frame;
 mod steps;
 
-pub use pieces::{pieces_of, reply_piece};
+pub use pieces::{is_open, pieces_of, reply_piece};

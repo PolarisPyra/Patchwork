@@ -2,6 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::sync::Arc;
 use crate::Error;
 use crate::Server;
 use crate::events::AgentEvent;
@@ -211,7 +212,7 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
     match event {
         AgentEvent::MessageStarted { message } => {
             if !thread.messages.iter().any(|m| m.id == message.id) {
-                thread.messages.push(message.clone());
+                thread.messages.push(Arc::new(message.clone()));
             }
             return;
         }
@@ -241,7 +242,7 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
         }
         AgentEvent::MessageEdited { message } => {
             if let Some(stored) = thread.messages.iter_mut().find(|m| m.id == message.id) {
-                *stored = message.clone();
+                *stored = Arc::new(message.clone());
             }
             return;
         }
@@ -250,7 +251,12 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
     let Some(message_id) = event_message(event) else {
         return;
     };
-    let Some(msg) = thread.messages.iter_mut().find(|m| m.id == *message_id) else {
+    let Some(msg) = thread
+        .messages
+        .iter_mut()
+        .find(|m| m.id == *message_id)
+        .map(Arc::make_mut)
+    else {
         return;
     };
     match event {

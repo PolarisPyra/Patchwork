@@ -13,7 +13,7 @@ use crate::workspace::{GranularScope, Workspace};
 
 impl Workspace {
     pub(in crate::sidebar) fn thread_by_id(&self, id: &str) -> Option<&Thread> {
-        self.threads.iter().find(|t| t.id == id)
+        self.threads.iter().find(|t| t.id == id).map(Arc::as_ref)
     }
 
     pub(super) fn items(&self, target: &Target) -> Vec<Item> {

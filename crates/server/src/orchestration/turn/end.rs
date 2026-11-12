@@ -74,6 +74,7 @@ pub(in crate::orchestration) fn hold_unanswered(turn: &Turn, ids: &[String]) {
             .iter_mut()
             .filter(|m| ids.contains(&m.id))
             .for_each(|m| {
+                let m = Arc::make_mut(m);
                 m.steer = false;
                 m.queued = true;
             });

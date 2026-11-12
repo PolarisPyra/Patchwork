@@ -2,6 +2,8 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::sync::Arc;
+
 use gpui::{AnyElement, Div, FollowMode, Role, SharedString, Window, div, list, prelude::*, px};
 use patchwork_server::threads::{Message, MessageStatus, Part, Role as MessageRole, Thread};
 
@@ -10,7 +12,7 @@ use crate::ui::{format_tokens, list_scrollbar, spinner};
 use crate::workspace::{Workspace, is_busy};
 
 use crate::ui::markdown::find_in;
-use super::reply::{pieces_of, reply_piece};
+use super::reply::{is_open, pieces_of, reply_piece};
 use super::timeline::{Step, steps_of};
 use super::{rail, user};
 
@@ -37,6 +39,17 @@ pub struct Row {
     pub piece: Piece,
 }
 
+/// The pieces a shown message was last cut into, and what they were cut from.
+pub struct Pieces {
+    id: String,
+    /// The message they were cut from, kept so that one changed since is a different allocation.
+    /// A reply still streaming keeps none: it changes in place, and is cut again every frame.
+    of: Option<Arc<Message>>,
+    /// Whether the reply's steps were open.
+    open: bool,
+    cut: Vec<Piece>,
+}
+
 /// Keeps the transcript's list in step with the open chat: another chat starts over at its end,
 /// items that arrive or go are spliced in, and the last item and the last piece of any reply still
 /// streaming are measured again, since they can grow out of sight.
@@ -44,40 +57,74 @@ pub fn sync_transcript(w: &mut Workspace) {
     let Some(thread) = &w.thread else {
         return;
     };
-    let mut rows = Vec::new();
+    let same_chat = w.transcript_rows.0.as_deref() == Some(thread.id.as_str());
+    let mut cut = std::mem::take(&mut w.transcript_pieces);
+    if !same_chat {
+        cut.clear();
+    }
+    let mut changed = false;
+    let mut streaming = Vec::new();
+    let mut shown = 0;
     for (i, m) in thread.messages.iter().filter(|m| !m.queued).enumerate() {
+        shown = i + 1;
+        let live = m.status == MessageStatus::Streaming;
+        if live {
+            streaming.push(i);
+        }
+        let open = m.role != MessageRole::User && is_open(w, m);
+        let kept = cut
+            .get(i)
+            .is_some_and(|c| c.open == open && c.of.as_ref().is_some_and(|of| Arc::ptr_eq(of, m)));
+        if kept {
+            continue;
+        }
         let pieces = if m.role == MessageRole::User {
             vec![Piece::Whole]
         } else {
             pieces_of(w, m)
         };
-        rows.extend(pieces.into_iter().map(|piece| Row {
+        changed |= cut.get(i).is_none_or(|c| c.id != m.id || c.cut != pieces);
+        let next = Pieces {
             id: m.id.clone(),
-            message: i,
-            piece,
-        }));
-    }
-    let list = &w.transcript_list;
-    let (shown_in, old) = &w.transcript_rows;
-    if shown_in.as_deref() != Some(thread.id.as_str()) {
-        list.reset(rows.len());
-        list.set_follow_mode(FollowMode::Tail);
-    } else if *old == rows {
-        let streaming = |i: usize| {
-            thread
-                .messages
-                .iter()
-                .find(|m| m.id == rows[i].id)
-                .is_some_and(|m| m.status == MessageStatus::Streaming)
+            of: (!live).then(|| Arc::clone(m)),
+            open,
+            cut: pieces,
         };
-        for i in 0..rows.len() {
-            let last_piece = rows.get(i + 1).is_none_or(|next| next.id != rows[i].id);
-            if last_piece && (i + 1 == rows.len() || streaming(i)) {
-                list.remeasure_items(i..i + 1);
-            }
+        match cut.get_mut(i) {
+            Some(c) => *c = next,
+            None => cut.push(next),
         }
+    }
+    changed |= cut.len() != shown;
+    cut.truncate(shown);
+    let list = &w.transcript_list;
+    if same_chat && !changed {
+        let old = &w.transcript_rows.1;
+        // Rows are in message order, so a message's last piece is found without a walk.
+        let last_of = |message: usize| old.partition_point(|r| r.message <= message).checked_sub(1);
+        for i in streaming
+            .into_iter()
+            .filter_map(last_of)
+            .chain(old.len().checked_sub(1))
+        {
+            list.remeasure_items(i..i + 1);
+        }
+        w.transcript_pieces = cut;
         return;
-    } else {
+    }
+    let rows: Vec<Row> = cut
+        .iter()
+        .enumerate()
+        .flat_map(|(message, c)| {
+            c.cut.iter().map(move |&piece| Row {
+                id: c.id.clone(),
+                message,
+                piece,
+            })
+        })
+        .collect();
+    if same_chat {
+        let old = &w.transcript_rows.1;
         let same = old.iter().zip(&rows).take_while(|(a, b)| a == b).count();
         let tail = old[same..]
             .iter()
@@ -86,8 +133,12 @@ pub fn sync_transcript(w: &mut Workspace) {
             .take_while(|(a, b)| a == b)
             .count();
         list.splice(same..old.len() - tail, rows.len() - same - tail);
+    } else {
+        list.reset(rows.len());
+        list.set_follow_mode(FollowMode::Tail);
     }
     w.transcript_rows = (Some(thread.id.clone()), rows);
+    w.transcript_pieces = cut;
 }
 
 impl Workspace {
@@ -219,7 +270,12 @@ pub fn transcript(
     cx: &mut Context<Workspace>,
 ) -> Div {
     // One still queued is waiting above the composer, not a row here.
-    let shown: Vec<&Message> = thread.messages.iter().filter(|m| !m.queued).collect();
+    let shown: Vec<&Message> = thread
+        .messages
+        .iter()
+        .map(Arc::as_ref)
+        .filter(|m| !m.queued)
+        .collect();
     let rail = rail::turn_rail(w, &shown, t, window, cx);
     let marks = w.find_marks(cx);
     let busy = is_busy(thread);
@@ -283,7 +339,12 @@ fn transcript_row(
     let Some(&Row { message, piece, .. }) = rows.get(i) else {
         return gpui::Empty.into_any_element();
     };
-    let shown: Vec<&Message> = thread.messages.iter().filter(|m| !m.queued).collect();
+    let shown: Vec<&Message> = thread
+        .messages
+        .iter()
+        .map(Arc::as_ref)
+        .filter(|m| !m.queued)
+        .collect();
     let Some(&m) = shown.get(message) else {
         return gpui::Empty.into_any_element();
     };

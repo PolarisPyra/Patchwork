@@ -2,6 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::sync::Arc;
 use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
 use patchwork_server::workspace::FileChange;
 
@@ -17,6 +18,7 @@ pub(super) fn reply_files(w: &Workspace) -> Vec<String> {
     };
     w.threads
         .iter()
+        .map(Arc::as_ref)
         .chain(w.thread.iter())
         .find(|t| &t.id == thread)
         .and_then(|t| t.messages.iter().find(|m| &m.id == message))

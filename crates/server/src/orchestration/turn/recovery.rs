@@ -4,6 +4,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::sync::Arc;
 use crate::Error;
 use crate::persistence::Store;
 use crate::threads::CheckStatus;
@@ -94,6 +95,22 @@ pub(crate) fn recover(store: &Store) -> Result<(), Error> {
                     goal.status = GoalStatus::Paused;
                 }
                 for message in &mut t.messages {
+                    // Only a message with something to change is copied.
+                    let stale = (child_cut_off && message.status == MessageStatus::Interrupted)
+                        || waiting.as_ref() == Some(&message.id)
+                        || message.background.iter().any(|task| task.status.is_live())
+                        || message
+                            .tools
+                            .iter()
+                            .any(|t| t.status == StepStatus::Running)
+                        || message
+                            .checks
+                            .as_ref()
+                            .is_some_and(|c| c.status == CheckStatus::Running);
+                    if !stale {
+                        continue;
+                    }
+                    let message = Arc::make_mut(message);
                     if child_cut_off && message.status == MessageStatus::Interrupted {
                         message.status = MessageStatus::Cancelled;
                     }

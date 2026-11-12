@@ -67,7 +67,7 @@ pub struct Workspace {
     pub server: Arc<Server>,
     pub settings: Settings,
     /// Every thread, each with only the messages the task list reads.
-    pub threads: Vec<Thread>,
+    pub threads: Vec<Arc<Thread>>,
     pub folders: Vec<Folder>,
     /// Projects and folders (`folder:<id>`) whose rows are closed.
     pub collapsed: HashSet<String>,
@@ -168,6 +168,8 @@ pub struct Workspace {
     /// The transcript, drawn a screenful at a time, and the chat and items it last held.
     pub transcript_list: ListState,
     pub transcript_rows: (Option<String>, Vec<crate::chat::Row>),
+    /// The pieces each shown message was last cut into, so a frame cuts only what changed.
+    pub transcript_pieces: Vec<crate::chat::Pieces>,
     /// When the open chat was chosen, which its transcript waits on for at most `OPEN_HOLD`.
     pub opened_at: std::time::Instant,
     pub tree_scroll: ScrollHandle,
@@ -320,6 +322,7 @@ impl Workspace {
             streamed: HashSet::new(),
             transcript_list: ListState::new(0, ListAlignment::Top, gpui::px(800.)),
             transcript_rows: (None, Vec::new()),
+            transcript_pieces: Vec::new(),
             opened_at: std::time::Instant::now(),
             tree_scroll: ScrollHandle::new(),
             focus: cx.focus_handle(),
@@ -376,7 +379,12 @@ impl Workspace {
 
     /// The open chat's message with this id.
     pub fn message(&self, id: &str) -> Option<&Message> {
-        self.thread.as_ref()?.messages.iter().find(|m| m.id == id)
+        self.thread
+            .as_ref()?
+            .messages
+            .iter()
+            .find(|m| m.id == id)
+            .map(Arc::as_ref)
     }
 
     /// Draws the window again in a second, for the elapsed times it shows.
@@ -398,7 +406,11 @@ impl Workspace {
 }
 
 pub(super) fn message_mut<'a>(thread: &'a mut Thread, id: &str) -> Option<&'a mut Message> {
-    thread.messages.iter_mut().find(|m| m.id == id)
+    thread
+        .messages
+        .iter_mut()
+        .find(|m| m.id == id)
+        .map(Arc::make_mut)
 }
 
 /// Ends the reasoning block still streaming, if any, as the next step starts.

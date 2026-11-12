@@ -81,7 +81,7 @@ impl Server {
         {
             return Err("That message has already been sent".into());
         }
-        let mut edited = original.clone();
+        let mut edited = original.as_ref().clone();
         edited.text = text;
         edited.attachments = attachments;
         self.store.update_thread(thread_id, |t| {
@@ -89,6 +89,7 @@ impl Server {
                 .messages
                 .iter_mut()
                 .find(|m| m.id == message_id && m.queued)
+                .map(Arc::make_mut)
             {
                 m.text.clone_from(&edited.text);
                 m.attachments.clone_from(&edited.attachments);
@@ -145,7 +146,7 @@ impl Server {
             t.messages
                 .iter_mut()
                 .filter(|m| queued.iter().any(|q| q.id == m.id))
-                .for_each(|m| m.queued = false);
+                .for_each(|m| Arc::make_mut(m).queued = false);
         })?;
         for m in &queued {
             orchestration::publish(
@@ -193,7 +194,7 @@ impl Server {
                 t.messages
                     .iter_mut()
                     .filter(|m| queued.iter().any(|q| q.id == m.id))
-                    .for_each(|m| m.queued = true);
+                    .for_each(|m| Arc::make_mut(m).queued = true);
             })?;
             for m in &queued {
                 orchestration::publish(

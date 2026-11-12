@@ -2,6 +2,8 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 
 use crate::provider::{AgentKind, ProviderSlashCommand};
@@ -51,7 +53,8 @@ pub struct Thread {
     /// Claude `session_id` / Codex `thread_id` used to resume the conversation.
     pub session_id: Option<String>,
     pub created_at: u64,
-    pub messages: Vec<Message>,
+    /// Shared, so copying a thread copies no message: a history can be megabytes.
+    pub messages: Vec<Arc<Message>>,
     /// The `/goal` the agent is working toward, as the agent last reported it.
     #[serde(default)]
     pub goal: Option<Goal>,
@@ -149,7 +152,7 @@ impl Thread {
     /// The thread with `messages` in place of its own, which are not copied on the way: a
     /// thread's history can be megabytes, and the list of every thread is made on each change.
     #[must_use]
-    pub(crate) fn with_messages(&self, messages: Vec<Message>) -> Thread {
+    pub(crate) fn with_messages(&self, messages: Vec<Arc<Message>>) -> Thread {
         Thread {
             id: self.id.clone(),
             project_id: self.project_id.clone(),
@@ -186,6 +189,7 @@ impl Thread {
     pub fn interrupted_reply(&self) -> Option<&Message> {
         self.messages
             .iter()
+            .map(Arc::as_ref)
             .rfind(|m| !m.queued)
             .filter(|m| m.role == Role::Assistant && m.status == MessageStatus::Interrupted)
     }
@@ -197,6 +201,7 @@ impl Thread {
     pub fn resumable_reply(&self) -> Option<&Message> {
         self.messages
             .iter()
+            .map(Arc::as_ref)
             .rfind(|m| !m.queued)
             .filter(|_| self.parent.is_none())
             .filter(|m| m.role == Role::Assistant)

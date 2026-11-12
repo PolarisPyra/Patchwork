@@ -282,7 +282,7 @@ fn only_a_finished_reply_that_changed_files_is_checked() {
         background: None,
         session_id: None,
         created_at: 1,
-        messages: vec![crate::threads::Message {
+        messages: vec![std::sync::Arc::new(crate::threads::Message {
             id: "m1".into(),
             role: crate::threads::Role::Assistant,
             text: "done".into(),
@@ -305,7 +305,7 @@ fn only_a_finished_reply_that_changed_files_is_checked() {
             turn: None,
             checks: None,
             cursor: None,
-        }],
+        })],
         goal: None,
         position: 0,
         folder_id: None,
@@ -340,7 +340,7 @@ fn only_a_finished_reply_that_changed_files_is_checked() {
     store
         .update_thread(&thread.id, |t| {
             t.project_id = None;
-            t.messages[0].files.clear();
+            std::sync::Arc::make_mut(&mut t.messages[0]).files.clear();
         })
         .unwrap();
     assert!(
@@ -351,7 +351,7 @@ fn only_a_finished_reply_that_changed_files_is_checked() {
     store
         .update_thread(&thread.id, |t| {
             t.project_id = Some("p1".into());
-            t.messages[0].files = vec!["src/a.ts".into()];
+            std::sync::Arc::make_mut(&mut t.messages[0]).files = vec!["src/a.ts".into()];
             t.parent = Some(crate::threads::ThreadParent {
                 thread_id: "parent".into(),
                 tool_id: "tool".into(),

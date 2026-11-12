@@ -3,6 +3,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::sync::Arc;
 use gpui::{
     AnyElement, Div, FontWeight, MouseButton, MouseDownEvent, Role, SharedString, div, prelude::*,
     px,
@@ -18,7 +19,7 @@ use crate::workspace::Workspace;
 
 pub fn archived_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl IntoElement {
     let t = *theme(cx);
-    let archived: Vec<Thread> = w
+    let archived: Vec<Arc<Thread>> = w
         .threads
         .iter()
         .filter(|th| th.archived_at.is_some() && th.parent.is_none())
@@ -28,6 +29,7 @@ pub fn archived_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl Int
     let selected = selected.as_deref();
     let chats: Vec<&Thread> = archived
         .iter()
+        .map(Arc::as_ref)
         .filter(|th| th.project_id.is_none())
         .collect();
 
@@ -82,6 +84,7 @@ pub fn archived_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl Int
     for p in &w.settings.projects {
         let tasks: Vec<&Thread> = archived
             .iter()
+            .map(Arc::as_ref)
             .filter(|th| th.project_id.as_ref() == Some(&p.id))
             .collect();
         if tasks.is_empty() {

@@ -39,7 +39,13 @@ impl Workspace {
     pub fn queued(&self) -> Vec<&Message> {
         self.thread
             .as_ref()
-            .map(|t| t.messages.iter().filter(|m| m.queued).collect())
+            .map(|t| {
+                t.messages
+                    .iter()
+                    .filter(|m| m.queued)
+                    .map(Arc::as_ref)
+                    .collect()
+            })
             .unwrap_or_default()
     }
 

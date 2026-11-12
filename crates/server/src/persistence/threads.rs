@@ -2,6 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::sync::Arc;
 use std::collections::HashMap;
 
 use rusqlite::{Connection, Transaction, params};
@@ -284,6 +285,7 @@ pub(super) fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
                     cursor: r.get(20)?,
                 })
             })?
+            .map(|m| m.map(Arc::new))
             .collect::<rusqlite::Result<_>>()?;
     }
     Ok(threads)

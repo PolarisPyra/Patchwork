@@ -6,6 +6,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::sync::Arc;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -131,7 +132,7 @@ fn chat(thread: &Thread, project: Option<Result<String, Error>>) -> String {
 }
 
 /// One line per message, with the failed tools and the errors under it. No one's words are in it.
-fn replies(messages: &[Message]) -> String {
+fn replies(messages: &[Arc<Message>]) -> String {
     let mut text = String::new();
     for message in messages {
         let short: String = message.id.chars().take(8).collect();

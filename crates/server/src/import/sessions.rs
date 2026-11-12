@@ -14,6 +14,7 @@ macro_rules! ilog {
     };
 }
 pub(crate) use ilog;
+use std::sync::Arc;
 use std::path::Path;
 
 use super::{ImportSource, antigravity, claude, codex, opencode, t3};
@@ -198,6 +199,7 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
                 checks: None,
                 cursor: None,
             })
+            .map(Arc::new)
             .collect(),
         goal: None,
     }
@@ -206,7 +208,7 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
 /// The imported conversation as text for the agent's first turn: the newest messages that fit
 /// in `MAX_CONTEXT_BYTES`, each labelled with who wrote it.
 #[must_use]
-pub fn transcript(messages: &[Message]) -> String {
+pub fn transcript(messages: &[Arc<Message>]) -> String {
     let mut turns = Vec::new();
     let mut size = 0;
     for message in messages.iter().rev() {

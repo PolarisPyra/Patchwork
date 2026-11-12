@@ -97,7 +97,7 @@ pub(super) fn clears_goal(steps: &[Step]) -> bool {
 }
 
 /// Whether the reply's steps are open: opened by hand, or seen streaming and not closed since.
-pub(super) fn is_open(w: &Workspace, m: &Message) -> bool {
+pub fn is_open(w: &Workspace, m: &Message) -> bool {
     w.open_folds.contains(&m.id) != w.streamed.contains(&m.id)
 }
 

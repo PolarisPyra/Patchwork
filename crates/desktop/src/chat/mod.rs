@@ -27,6 +27,6 @@ mod transcript;
 pub mod user;
 mod view;
 
-pub use transcript::Row;
+pub use transcript::{Pieces, Row};
 pub use view::{OPEN_HOLD, render};
 pub(crate) use view::usage_line;

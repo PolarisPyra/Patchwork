@@ -158,7 +158,7 @@ pub(in crate::orchestration) fn open_child(turn: &Turn, tool: &ToolCall) -> Opti
         background: parent.background,
         session_id: None,
         created_at,
-        messages: vec![asked, reply],
+        messages: vec![Arc::new(asked), Arc::new(reply)],
         goal: None,
         position: 0,
         folder_id: None,

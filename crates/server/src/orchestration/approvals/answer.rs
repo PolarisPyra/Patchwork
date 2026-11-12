@@ -193,12 +193,12 @@ fn answer_in_new_turn(
         .store
         .thread(thread_id)
         .and_then(|thread| {
-            thread.messages.into_iter().find_map(|message| {
+            thread.messages.iter().find_map(|message| {
                 let approval = message
                     .approvals
-                    .into_iter()
+                    .iter()
                     .find(|a| a.id == approval_id && a.status == ApprovalStatus::Pending)?;
-                Some((message.id, approval.questions))
+                Some((message.id.clone(), approval.questions.clone()))
             })
         })
         .ok_or("This request was already answered")?;
@@ -215,9 +215,10 @@ fn answer_in_new_turn(
     let recorded = answers.clone();
     server.store.update_thread(thread_id, |thread| {
         for message in &mut thread.messages {
-            let Some(approval) = message.approvals.iter_mut().find(|a| a.id == approval_id) else {
+            let Some(at) = message.approvals.iter().position(|a| a.id == approval_id) else {
                 continue;
             };
+            let approval = &mut Arc::make_mut(message).approvals[at];
             approval.status = status;
             approval.answers.clone_from(&recorded);
             approval.rule.clone_from(&rule);

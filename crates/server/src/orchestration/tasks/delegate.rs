@@ -256,6 +256,6 @@ impl Runner {
         };
         // Its work is done, so the agent is not kept up for a message that will not come.
         self.retire_idle(&child_id);
-        reply.and_then(result)
+        reply.and_then(|reply| result(Arc::unwrap_or_clone(reply)))
     }
 }

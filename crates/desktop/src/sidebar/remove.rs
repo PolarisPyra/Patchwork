@@ -160,6 +160,7 @@ impl Workspace {
                     .threads
                     .iter()
                     .filter(|t| ids.contains(&t.id))
+                    .map(Arc::as_ref)
                     .collect();
                 let chats = picked.iter().filter(|t| t.project_id.is_none()).count();
                 let tasks = picked.len() - chats;

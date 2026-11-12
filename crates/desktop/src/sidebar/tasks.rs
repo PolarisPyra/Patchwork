@@ -2,6 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::sync::Arc;
 use super::menu::{self, Target};
 use gpui::{
     ClickEvent, FontWeight, MouseButton, MouseDownEvent, Role, SharedString, div, prelude::*, px,
@@ -15,7 +16,7 @@ use super::tree::{TREE_GUTTER, indent_guide, reveal_button, thread_row, tree_row
 
 pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl IntoElement {
     let t = *theme(cx);
-    let live: Vec<Thread> = w
+    let live: Vec<Arc<Thread>> = w
         .threads
         .iter()
         .filter(|th| th.archived_at.is_none() && th.parent.is_none())
@@ -24,9 +25,14 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
     let selected = w.thread.as_ref().map(|th| th.id.clone());
     // The rows in the order they are drawn, for Shift+click to pick a run of them.
     let mut rows: Vec<Target> = Vec::new();
-    let favorites: Vec<&Thread> = live.iter().filter(|th| th.favorite).collect();
+    let favorites: Vec<&Thread> = live
+        .iter()
+        .map(Arc::as_ref)
+        .filter(|th| th.favorite)
+        .collect();
     let chats: Vec<&Thread> = live
         .iter()
+        .map(Arc::as_ref)
         .filter(|th| th.project_id.is_none() && !th.favorite)
         .collect();
 
@@ -98,6 +104,7 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
         let open = !w.collapsed.contains(&p.id);
         let tasks: Vec<&Thread> = live
             .iter()
+            .map(Arc::as_ref)
             .filter(|th| th.project_id.as_ref() == Some(&p.id) && !th.favorite)
             .collect();
         let pinned: Vec<&&Thread> = tasks.iter().filter(|th| th.pinned).collect();

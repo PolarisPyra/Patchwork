@@ -134,7 +134,7 @@ impl Server {
         msg.queued = true;
         let held = msg.clone();
         self.store
-            .update_thread(thread_id, |t| t.messages.push(held))?;
+            .update_thread(thread_id, |t| t.messages.push(Arc::new(held)))?;
         let source = Source {
             thread: Some(thread_id.to_string()),
             message: Some(msg.id.clone()),
@@ -260,7 +260,7 @@ impl Server {
                 })
                 .map(|c| c.id.clone())
                 .collect();
-            t.messages.push(m);
+            t.messages.push(Arc::new(m));
             session_id.clone_from(&t.session_id);
         })?;
         if let Some((placeholder, agent, model, project_id)) = first_title {
@@ -365,7 +365,12 @@ impl Server {
             Delivery::Steered => {
                 msg.steer = true;
                 self.store.update_thread(&thread_id, |t| {
-                    if let Some(m) = t.messages.iter_mut().find(|m| m.id == msg.id) {
+                    if let Some(m) = t
+                        .messages
+                        .iter_mut()
+                        .find(|m| m.id == msg.id)
+                        .map(Arc::make_mut)
+                    {
                         m.steer = true;
                     }
                 })?;
@@ -374,7 +379,12 @@ impl Server {
                 // Only ever raised here: a turn that took the message from its queue meanwhile
                 // has flagged it itself, and whoever sends it lowers the flag.
                 self.store.update_thread(&thread_id, |t| {
-                    if let Some(m) = t.messages.iter_mut().find(|m| m.id == msg.id) {
+                    if let Some(m) = t
+                        .messages
+                        .iter_mut()
+                        .find(|m| m.id == msg.id)
+                        .map(Arc::make_mut)
+                    {
                         m.queued |= self.runner.is_queued(&thread_id, &m.id);
                         msg.queued = m.queued;
                     }

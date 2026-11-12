@@ -140,7 +140,8 @@ impl Canvas {
                 .as_ref()
                 .and_then(|t| t.messages.iter().find(|m| &m.id == id).cloned())
         });
-        live.or_else(|| self.message.clone())
+        live.map(|m| m.as_ref().clone())
+            .or_else(|| self.message.clone())
     }
 
     /// A file the reply changed shows what its turn did, which stays after a commit.
