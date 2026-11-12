@@ -171,14 +171,18 @@ impl Workspace {
     }
 
     /// Runs the Delete key: on the row whose menu is open, else the picked rows, else the chat row
-    /// just clicked. A chat or task is archived, and an archived one is deleted for good once asked.
+    /// just clicked while it is still the open one. A chat or task is archived, and an archived one
+    /// is deleted for good once asked.
     pub(crate) fn delete_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let target = if let Some(menu) = &self.context_menu {
             menu.target.clone()
         } else if !self.picking.rows.is_empty() {
             Target::Many(self.picking.rows.clone())
         } else if let Some(Target::Thread(id)) = &self.picking.clicked
-            && self.thread_by_id(id).is_some_and(|t| t.parent.is_none())
+            && self
+                .thread
+                .as_ref()
+                .is_some_and(|t| &t.id == id && t.parent.is_none())
         {
             Target::Thread(id.clone())
         } else {
