@@ -243,7 +243,7 @@ fn small_button(
     let (fg, hover) = (t.text, t.bg_hover);
     let b = button(id, label)
         .flex_none()
-        .size(px(24.))
+        .size(px(20.))
         .justify_center()
         .rounded(px(RADIUS_SM))
         .text_color(t.text_muted)
@@ -326,7 +326,7 @@ pub fn find_field(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>) -> 
                 .min_w_0()
                 .items_center()
                 .gap(px(2.))
-                .pr(px(4.))
+                .pr(px(3.))
                 .child(div().flex_1().min_w_0().text_size(px(FS_SM)).child(field))
                 .child(
                     div()
