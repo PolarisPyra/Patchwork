@@ -315,13 +315,8 @@ impl Markdown<'_> {
                 self.inline.text.push_str(&code);
                 let range = start..self.inline.text.len();
                 self.inline.mono.push(range.clone());
-                self.inline.highlights.push((
-                    range,
-                    HighlightStyle {
-                        background_color: Some(t.bg_selected_muted),
-                        ..Default::default()
-                    },
-                ));
+                // Drawn behind the text like a chip, so a selection over it still shows.
+                self.inline.chips.push((range, t.bg_selected_muted));
             }
             Event::SoftBreak => self.inline.text.push(' '),
             Event::HardBreak => self.inline.text.push('\n'),
