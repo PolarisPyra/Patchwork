@@ -1,44 +1,57 @@
 # Comparison charts
 
-How to make a before-and-after chart for posting, such as the speed-up card for huge chats. The
+How to make a before-and-after chart for posting, such as the speed-up chart for huge chats. The
 chart is a hand-written SVG rendered to a PNG. Nothing is kept in the repo: the SVG and the PNG
 go where the person asked for them, usually the Desktop.
 
-## Contents of the card
+## Contents of the chart
 
-- One headline number, and it is the largest thing on the card. Below it, one line that finishes
-  the sentence: "faster in huge chats".
-- Two or three supporting figures in a row underneath: the largest ratios for steps a user does
-  and would feel, such as opening a chat. Leave out the rest, even when they were measured.
-- "Patchwork" in the top left. When the headline is the best of several results, "up to" goes on
-  the line directly under "Patchwork", with clear space between it and the number.
-- No title, subtitle, legend, axis, gridline, data bar or footnote. If the card needs one of these to
-  be understood, change the wording.
+- A title that states the result as a sentence: "Patchwork got a speed boost".
+- Up to six rows, one per measured step, ordered from the longest time before to the shortest.
+- Each row has a label saying what the user was doing, with the size of the chat under it, and
+  two horizontal bars: the time before, and under it the time now. Each bar has its time written
+  at its end.
+- One time axis under the rows. It starts at zero and has a faint line up from each label. A
+  legend on the title's line at the right names the two bar colours: "before" and "now".
+- No "times faster" figure. The two times and the two bars already say it.
+- No subtitle or footnote. If the chart needs one to be understood, change the wording.
 
 ## Numbers
 
-- Every figure comes from a measurement made in this repo, before and after the change the card
-  is about (see "Performance checks" in the root `CLAUDE.md`). Divide the time before by the time
-  now and round down to two significant figures:
-  24 ms and 0.01 ms is 2,400×.
-- Write a ratio as a number and "×", with a comma in the thousands: `2,400×`, `180×`.
-- Say how it was measured when handing the card over, not on the card. A debug build is slower
+- Every figure comes from a measurement made in this repo, before and after the change the chart
+  is about (see "Performance checks" in the root `CLAUDE.md`).
+- Write each time in ms with two significant figures at most, both in the same unit: "24 ms",
+  "0.34 ms". Round the way the measurement supports, never to flatter it.
+- Say how it was measured when handing the chart over, not on the chart. A debug build is slower
   than a release, so name the build.
-- When the biggest ratio is for a step people never see, tell the person, and offer the largest
-  one they would feel as the headline.
+- When the biggest speed-up is for a step people never see, tell the person.
 
 ## Wording
 
-- Each supporting figure gets one lower-case line that says what the user was doing: "opening a
-  41,000-item chat", "sending a message in a 75,000-item chat". Start with the "-ing" form of the
-  verb.
+- Each row's label is two lines. The first says what the user was doing, the way they would say
+  it, starting with the "-ing" form of the verb: "Sending a message", "Opening a chat". The second
+  is smaller and grey and gives the size the measurement was made at: "in a chat with 75,000
+  items", "with 109 chats".
+- Read the labels aloud. If one sounds like a log line ("Refresh the list of 109 chats"), say it
+  the way you would to someone using the app ("Updating the chat list").
 - Use the words the app uses: "chat", not "thread". No names of functions, types or files.
-- Give the size the measurement was made at, in the line itself: how many items, how many chats.
-- Every ratio shows the times it came from, written "was 24 ms, now 0.01 ms". A ratio alone tells
-  the reader nothing about whether the step was slow.
-- The headline's times go on a grey line under "faster in huge chats", after what was measured:
-  "fetching a 75,000-item chat: was 24 ms, now 0.01 ms". Each supporting figure's times go under
-  its label, in the figure colour at weight 600.
+- Both lines have to end before the bars start, 480 across the 1600-wide canvas. That is about
+  28 characters for the first line.
+
+## Bars
+
+- Every bar starts at zero and is drawn to scale, on one linear axis shared by all rows. A bar's
+  width is its time multiplied by the axis's pixels per ms. The file below uses 20 per ms, so
+  48 ms is 960 wide.
+- Pick the axis so the longest bar fills most of it and the labels are round numbers: 0 to 50 ms
+  in steps of 10 puts a label every 200, from 480 to 1480.
+- Give the bars as much of the width as the labels leave, so short bars are as long as the scale
+  allows.
+- A bar that would be under 4 wide is drawn 4 wide, the least that reads as a bar, with its time
+  beside it. Do not lengthen it further, draw every row's bar the same length, or switch to a
+  logarithmic axis to make it visible. A "now" bar that has almost vanished is what the chart is
+  there to show.
+- The axis is never cut or started above zero, and no bar is drawn against a scale of its own.
 
 ## Look
 
@@ -47,66 +60,69 @@ go where the person asked for them, usually the Desktop.
 | Canvas | 1600 × 900, rendered at 2× to 3200 × 1800 |
 | Background | `#0b0b0c` |
 | Font | Inter, from `crates/desktop/assets/fonts` |
-| Text | `#f4f4f5` for figures and the headline line, `#b4b4bc` for labels |
-| Colours | blue `#4682fa`, pink `#f25fa0`, amber `#f5a524`, green `#3ecf8e` |
-| Margins | text starts at 72 and ends by 1528; the headline number sits at 62 so its first digit lines up by eye |
-| Columns | supporting figures start at 72, 560 and 1048 |
+| Text | `#f4f4f5` for the title, labels and the time now; `#b4b4bc` for the time before and the legend; `#8b8b94` for the axis labels and each label's second line |
+| Bars | grey `#5c5c66` for before, blue `#4682fa` for now; 20 tall, the before bar's right end rounded by 4 |
+| Axis | the zero line is `#3a3a42` and the others `#1f1f23`, 1.5 thick; labels are 20 px and the last one carries the unit |
+| Margins | everything sits between 56 and 1544 across |
+| Rows | 104 apart; the first row's label has its 27 px line at 221 down and its 20 px line at 249 |
 
-- The headline number is 240 px, weight 700, filled with a gradient from blue through pink to
-  amber. It is the only coloured text.
-- Behind it sit three blurred circles in the same three colours, at a third of full strength, so
-  the number glows without a visible shape.
-- Each supporting figure is 64 px in the figure colour, with a short coloured bar above it (56 × 8,
-  rounded) as decoration. The bars are pink, amber and green, left to right.
-- Keep text clear of the headline's comma, which hangs about 50 px below the line the digits
-  stand on.
+- Grey and blue are the only colours, and no row gets a colour of its own.
+- Times are 22 px and start 12 after the end of their bar. The time now is white at weight 600
+  and the time before is grey at regular weight, so the eye lands on the new number.
 
 ## The file
 
-Change the text and the numbers, and keep the positions.
+Every position is in canvas units, `x` across and `y` down. Change the text and the times, and
+keep the positions, apart from the two that follow from a time:
+
+- The before bar is a `path`, so only its right end is rounded. Its `h` values are the bar's
+  width minus 4: 48 ms is 960 wide, so `h956` and `h-956`.
+- Each time's `x` is 480 plus its bar's width plus 12.
+
+The file has two rows. For each further row, copy a row and add 104 to every `y` in it (in the
+`path`, the number after `M480`). The axis lines run from 170 down to 25 below the last row's
+second label line, and the axis labels sit 30 below that. With six rows the lines end at 794 and
+the labels are at 824.
 
 ```svg
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" font-family="Inter">
-  <defs>
-    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="0.35">
-      <stop offset="0" stop-color="#4682fa"/>
-      <stop offset="0.5" stop-color="#f25fa0"/>
-      <stop offset="1" stop-color="#f5a524"/>
-    </linearGradient>
-    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="110"/></filter>
-  </defs>
   <rect width="1600" height="900" fill="#0b0b0c"/>
-  <g filter="url(#blur)" opacity="0.33">
-    <circle cx="260" cy="290" r="190" fill="#4682fa"/>
-    <circle cx="600" cy="250" r="180" fill="#f25fa0"/>
-    <circle cx="940" cy="320" r="170" fill="#f5a524"/>
+  <text x="56" y="112" font-size="54" font-weight="600" fill="#f4f4f5" letter-spacing="-1.2">Patchwork got a speed boost</text>
+  <g font-size="22" fill="#b4b4bc">
+    <rect x="1306" y="88" width="28" height="16" rx="3" fill="#5c5c66"/>
+    <text x="1344" y="104">before</text>
+    <rect x="1446" y="88" width="28" height="16" rx="3" fill="#4682fa"/>
+    <text x="1484" y="104">now</text>
   </g>
-  <text x="72" y="104" font-size="30" font-weight="600" fill="#f4f4f5" letter-spacing="-0.4">Patchwork</text>
-  <text x="72" y="156" font-size="40" fill="#b4b4bc">up to</text>
-  <text x="62" y="384" font-size="240" font-weight="700" fill="url(#hero)" letter-spacing="-8">2,400×</text>
-  <text x="72" y="498" font-size="66" font-weight="600" fill="#f4f4f5" letter-spacing="-1.6">faster in huge chats</text>
-  <text x="72" y="546" font-size="24" fill="#b4b4bc">fetching a 75,000-item chat: was 24 ms, now 0.01 ms</text>
 
-  <rect x="72" y="644" width="56" height="8" rx="4" fill="#f25fa0"/>
-  <text x="72" y="724" font-size="64" font-weight="600" fill="#f4f4f5" letter-spacing="-1.4">1,000×</text>
-  <text x="72" y="766" font-size="22" fill="#b4b4bc">drawing a frame of a 41,000-item chat</text>
-  <text x="72" y="800" font-size="22" font-weight="600" fill="#f4f4f5">was 31 ms, now 0.03 ms</text>
+  <line x1="480" y1="170" x2="480" y2="378" stroke="#3a3a42" stroke-width="1.5"/>
+  <text x="480" y="408" font-size="20" fill="#8b8b94" text-anchor="middle">0</text>
+  <line x1="680" y1="170" x2="680" y2="378" stroke="#1f1f23" stroke-width="1.5"/>
+  <text x="680" y="408" font-size="20" fill="#8b8b94" text-anchor="middle">10</text>
+  <line x1="880" y1="170" x2="880" y2="378" stroke="#1f1f23" stroke-width="1.5"/>
+  <text x="880" y="408" font-size="20" fill="#8b8b94" text-anchor="middle">20</text>
+  <line x1="1080" y1="170" x2="1080" y2="378" stroke="#1f1f23" stroke-width="1.5"/>
+  <text x="1080" y="408" font-size="20" fill="#8b8b94" text-anchor="middle">30</text>
+  <line x1="1280" y1="170" x2="1280" y2="378" stroke="#1f1f23" stroke-width="1.5"/>
+  <text x="1280" y="408" font-size="20" fill="#8b8b94" text-anchor="middle">40</text>
+  <line x1="1480" y1="170" x2="1480" y2="378" stroke="#1f1f23" stroke-width="1.5"/>
+  <text x="1480" y="408" font-size="20" fill="#8b8b94" text-anchor="middle">50 ms</text>
 
-  <rect x="560" y="644" width="56" height="8" rx="4" fill="#f5a524"/>
-  <text x="560" y="724" font-size="64" font-weight="600" fill="#f4f4f5" letter-spacing="-1.4">180×</text>
-  <text x="560" y="766" font-size="22" fill="#b4b4bc">opening a 41,000-item chat</text>
-  <text x="560" y="800" font-size="22" font-weight="600" fill="#f4f4f5">was 18 ms, now 0.1 ms</text>
+  <text x="56" y="221" font-size="27" fill="#f4f4f5">Sending a message</text>
+  <text x="56" y="249" font-size="20" fill="#8b8b94">in a chat with 75,000 items</text>
+  <path d="M480 198h956a4 4 0 0 1 4 4v12a4 4 0 0 1 -4 4h-956z" fill="#5c5c66"/>
+  <text x="1452" y="216" font-size="22" fill="#b4b4bc">48 ms</text>
+  <rect x="480" y="226" width="9.6" height="20" fill="#4682fa"/>
+  <text x="501.6" y="244" font-size="22" font-weight="600" fill="#f4f4f5">0.48 ms</text>
 
-  <rect x="1048" y="644" width="56" height="8" rx="4" fill="#3ecf8e"/>
-  <text x="1048" y="724" font-size="64" font-weight="600" fill="#f4f4f5" letter-spacing="-1.4">100×</text>
-  <text x="1048" y="766" font-size="22" fill="#b4b4bc">sending a message in a 75,000-item chat</text>
-  <text x="1048" y="800" font-size="22" font-weight="600" fill="#f4f4f5">was 48 ms, now 0.48 ms</text>
-
+  <text x="56" y="325" font-size="27" fill="#f4f4f5">Redrawing the screen</text>
+  <text x="56" y="353" font-size="20" fill="#8b8b94">in a chat with 41,000 items</text>
+  <path d="M480 302h616a4 4 0 0 1 4 4v12a4 4 0 0 1 -4 4h-616z" fill="#5c5c66"/>
+  <text x="1112" y="320" font-size="22" fill="#b4b4bc">31 ms</text>
+  <rect x="480" y="330" width="4" height="20" fill="#4682fa"/>
+  <text x="496" y="348" font-size="22" font-weight="600" fill="#f4f4f5">0.03 ms</text>
 </svg>
 ```
-
-With two supporting figures, put them at 72 and 560. A label has to end before the next column
-starts, which is about 40 characters.
 
 ## Rendering
 
@@ -123,4 +139,5 @@ rm -r target/chart-scratch
 ```
 
 Then open the PNG and look at it before handing it over. Check that no text touches other text,
-that every label ends before the next column, and that nothing runs past the right margin at 1528.
+that every label ends before the axis at 480, that each bar ends where its time says against the
+axis labels, and that nothing runs past the right margin at 1544.
