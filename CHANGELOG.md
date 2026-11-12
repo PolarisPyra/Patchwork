@@ -3,6 +3,13 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.57] - 2026-11-12
+
+### Fixed
+
+- Claude chats compact at 200k tokens again. In Settings → AI Tokenomics, the choice labelled Default let a chat grow until the model's context was nearly full before compacting, which used up the usage limit much faster. That choice is now called When full, 200k is on the list there and in the chat's Compact at menu, and a Claude setting left on the old Default moves to 200k.
+- Selecting text in chat now highlights inline code too. The grey background of code spans used to cover the selection, so it looked like they could not be selected or copied. Inline code now sits in a rounded grey box drawn behind the selection.
+
 ## [26.11.56] - 2026-11-12
 
 ### Changed
