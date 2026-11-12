@@ -95,13 +95,19 @@ impl Runner {
             compact_window,
             plan,
             context,
+            point,
             project_id,
             checkpoint,
         ) = {
             let thread = server.thread(&thread_id)?;
             // The message being sent is the newest user message; the transcript is what came before.
             // A resumed turn whose agent kept no session is told the conversation instead.
-            let fresh = thread.context_pending || (resumes && thread.session_id.is_none());
+            // Claude picks its own session up from where an undo or a fork left it instead.
+            let point = (thread.agent == AgentKind::Claude && thread.session_id.is_some())
+                .then(|| server.resume_point(&thread_id))
+                .flatten();
+            let fresh = point.is_none()
+                && (thread.context_pending || (resumes && thread.session_id.is_none()));
             let context = fresh.then(|| {
                 // A resumed turn sends no new message, so everything so far came before it.
                 let end = if resumes {
@@ -148,6 +154,7 @@ impl Runner {
                     .unwrap_or_else(|| settings.tokens.compact_window(thread.agent)),
                 thread.plan_mode,
                 context,
+                point,
                 thread.project_id.clone(),
                 // Project files are snapshotted before the newest user message's turn changes them.
                 thread.project_id.and(
@@ -258,6 +265,11 @@ impl Runner {
             ));
             args.extend(crate::provider::claude::launch::permission_args());
             args.extend(crate::provider::claude::launch::agents_args(&agents, &root));
+            // After an undo or a fork the session goes on from the reply they left last. The
+            // point is forgotten once the session reports in, as it then goes on from there.
+            if let Some(point) = &point {
+                args.extend(crate::provider::claude::launch::resume_point_args(point));
+            }
         }
         // The chat's own pick for the subagents its CLI starts, where the CLI takes one.
         let sub = crate::threads::sub_pick(&server.store, &settings, &thread_id, agent);
@@ -345,8 +357,9 @@ impl Runner {
         let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
             return abandon(&mut child, "Agent output is unavailable".into());
         };
-        // The agent has the transcript now, so later turns resume its session instead.
-        if sends_context
+        // The agent has the transcript, or its session from the point, so later turns resume its
+        // session instead.
+        if (sends_context || point.is_some())
             && let Err(error) = server
                 .store
                 .update_thread(&thread_id, |t| t.context_pending = false)

@@ -43,6 +43,7 @@ fn user_message(text: &str, attachments: Vec<Attachment>) -> Message {
         usage: None,
         turn: None,
         checks: None,
+        cursor: None,
     }
 }
 

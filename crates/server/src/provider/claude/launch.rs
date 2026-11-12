@@ -9,6 +9,7 @@ use crate::agents::{self, Agent};
 use crate::plugins::AgentHook;
 use crate::provider::AgentKind;
 use crate::settings::Settings;
+use crate::threads::ResumePoint;
 
 /// Builds the arguments that configure Claude's system prompt, skills, and hooks.
 ///
@@ -32,6 +33,17 @@ pub fn launch_args(settings: &Settings, hooks: &[AgentHook], instructions: Strin
             "--plugin-dir".to_string(),
             plugin.to_string_lossy().into_owned(),
         ]);
+    }
+    args
+}
+
+/// Arguments that pick a resumed session up from `point` rather than from its newest message,
+/// branching it into a new session for a fork.
+#[must_use]
+pub fn resume_point_args(point: &ResumePoint) -> Vec<String> {
+    let mut args = vec!["--resume-session-at".to_string(), point.at.clone()];
+    if point.fork {
+        args.push("--fork-session".to_string());
     }
     args
 }

@@ -254,10 +254,19 @@ impl Server {
                 main.model.as_deref().unwrap_or("default"),
                 main.effort.as_deref().unwrap_or("default")
             );
+            // An undone or forked Claude chat kept its Claude session to resume; another agent is
+            // given the conversation as a transcript instead.
+            let switched = thread.agent != main.agent;
+            if switched {
+                self.set_resume_point(id, None)?;
+            }
             self.store.update_thread(id, |t| {
                 t.agent = main.agent;
                 t.model = main.model;
                 t.effort = main.effort;
+                if switched {
+                    t.session_id = None;
+                }
             })?;
             note(id, shown);
         }

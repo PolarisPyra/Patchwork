@@ -33,9 +33,18 @@ impl Server {
             "agent {agent:?}, model {}",
             model.as_deref().unwrap_or("default")
         );
+        // An undone or forked Claude chat kept its Claude session to resume; another agent is
+        // given the conversation as a transcript instead.
+        let switched = thread.agent != agent;
+        if switched {
+            self.set_resume_point(id, None)?;
+        }
         self.store.update_thread(id, |t| {
             t.agent = agent;
             t.model = model;
+            if switched {
+                t.session_id = None;
+            }
         })?;
         // An idle agent was started with the old model.
         if changed {

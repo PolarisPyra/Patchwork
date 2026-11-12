@@ -127,6 +127,11 @@ const MIGRATIONS: &[Migration] = &[
         name: "message_checks",
         sql: include_str!("0023_message_checks.sql"),
     },
+    Migration {
+        id: 24,
+        name: "message_cursor",
+        sql: include_str!("0024_message_cursor.sql"),
+    },
 ];
 
 fn fail(m: &Migration, e: impl std::fmt::Display) -> Error {

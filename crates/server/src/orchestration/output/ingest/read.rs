@@ -440,6 +440,13 @@ pub(in crate::orchestration) fn ingest(
                     {
                         log::warn!(error:% = e; "failed to save session id: {{error}}");
                     }
+                    // The session has gone on from an undo's or a fork's point, and a later
+                    // turn resumes where it is now.
+                    if turn.agent == AgentKind::Claude
+                        && let Err(e) = turn.server.set_resume_point(&turn.thread_id, None)
+                    {
+                        log::warn!(error:% = e; "failed to forget a resume point: {{error}}");
+                    }
                     turn.session_id = Some(id);
                 }
                 Parsed::SlashCommands(commands) => {

@@ -211,6 +211,9 @@ fn describe(event: &AgentEvent) -> Option<(LogLevel, &'static str, Option<&str>,
             Some(message_id),
             String::new(),
         ),
+        AgentEvent::Cursor { message_id, cursor } => {
+            (Debug, "cursor", Some(message_id), cursor.clone())
+        }
         AgentEvent::Refused {
             message_id,
             refusal,

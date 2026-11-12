@@ -5,7 +5,7 @@
 use crate::Error;
 use crate::provider::AgentKind;
 use crate::system::{now_ms, new_id};
-use crate::threads::{AccessMode, Message, Thread};
+use crate::threads::{AccessMode, Message, ResumePoint, Thread};
 use crate::logging::THREAD_LOG;
 use crate::settings::LogLevel;
 use crate::Server;
@@ -31,6 +31,11 @@ pub struct NewThread {
 /// Notes a change to the chat `id` in its log.
 pub(super) fn note(id: &str, text: String) {
     THREAD_LOG.text(LogLevel::Info, id, "chat", text);
+}
+
+/// The `app_state` key of where a thread's next Claude turn picks its session up.
+fn resume_point_key(thread_id: &str) -> String {
+    format!("claude-resume-point:{thread_id}")
 }
 
 impl Server {
@@ -108,8 +113,10 @@ impl Server {
     }
 
     /// Starts a new thread with the conversation of `thread_id` up to and including `message_id`,
-    /// and the same agent and settings. Its first turn gives the agent that conversation as a
-    /// transcript, in a session of its own, so the original thread goes on unchanged.
+    /// and the same agent and settings, in a session of its own so the original thread goes on
+    /// unchanged. Claude branches its session at that reply, so the fork keeps every call and
+    /// result and reads them from the cache; other agents, and replies without a cursor, are
+    /// given the conversation as a transcript on the fork's first turn.
     ///
     /// # Errors
     ///
@@ -122,6 +129,16 @@ impl Server {
             .position(|m| m.id == message_id)
             .ok_or("Message not found")?;
         let created_at = now_ms();
+        let branch = match (&source.session_id, &source.messages[end].cursor) {
+            (Some(session), Some(at)) if source.agent == AgentKind::Claude => Some((
+                session.clone(),
+                ResumePoint {
+                    at: at.clone(),
+                    fork: true,
+                },
+            )),
+            _ => None,
+        };
         // Message ids are unique across threads, so the copies get new ones.
         let messages = source.messages[..=end]
             .iter()
@@ -129,15 +146,18 @@ impl Server {
                 id: new_id(),
                 queued: false,
                 background: Vec::new(),
-                // The original thread's checkpoints stay with it.
+                // The original thread's checkpoints stay with it, and its cursors name messages
+                // of its own session.
                 turn: None,
+                cursor: None,
                 ..m.clone()
             })
             .collect();
         let thread = Thread {
             id: new_id(),
             title: format!("{} (fork)", source.title),
-            session_id: None,
+            // The first turn branches the original's session, and takes the new one it gets.
+            session_id: branch.as_ref().map(|(session, _)| session.clone()),
             created_at,
             messages,
             goal: None,
@@ -152,11 +172,40 @@ impl Server {
             ..source
         };
         self.store.insert_threads(vec![thread.clone()])?;
+        if let Some((_, point)) = &branch {
+            self.set_resume_point(&thread.id, Some(point))?;
+        }
         note(
             &thread.id,
             format!("forked from {thread_id} at message {message_id}"),
         );
         Ok(thread)
+    }
+
+    /// Where the thread's next Claude turn picks its session up, when an undo or a fork set it.
+    pub(crate) fn resume_point(&self, thread_id: &str) -> Option<ResumePoint> {
+        let json = self.store.state(&resume_point_key(thread_id))?;
+        serde_json::from_str(&json).ok()
+    }
+
+    /// Sets where the thread's next Claude turn picks its session up, or forgets it for None.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the database write fails.
+    pub(crate) fn set_resume_point(
+        &self,
+        thread_id: &str,
+        point: Option<&ResumePoint>,
+    ) -> Result<(), Error> {
+        let key = resume_point_key(thread_id);
+        match point {
+            Some(point) => {
+                let json = serde_json::to_string(point).map_err(|e| e.to_string())?;
+                self.store.set_state(&key, &json)
+            }
+            None => self.store.clear_state(&key),
+        }
     }
 
     /// Ends what a thread that is about to be deleted has outside the database: its agent and

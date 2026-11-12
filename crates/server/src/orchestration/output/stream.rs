@@ -186,6 +186,7 @@ pub(in crate::orchestration) fn event_message(event: &AgentEvent) -> Option<&str
         | AgentEvent::Compacted { message_id, .. }
         | AgentEvent::Retrying { message_id, .. }
         | AgentEvent::Refused { message_id, .. }
+        | AgentEvent::Cursor { message_id, .. }
         | AgentEvent::PlanProposed { message_id, .. }
         | AgentEvent::BackgroundTaskStarted { message_id, .. }
         | AgentEvent::BackgroundTaskUpdated { message_id, .. }
@@ -318,6 +319,7 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
         }
         AgentEvent::MessageCutOff { .. } => msg.cut_off = true,
         AgentEvent::Refused { refusal, .. } => msg.refusal = Some(refusal.clone()),
+        AgentEvent::Cursor { cursor, .. } => msg.cursor = Some(cursor.clone()),
         AgentEvent::PlanProposed { text, .. } => {
             end_thinking(msg);
             msg.parts.push(Part::Plan { text: text.clone() });

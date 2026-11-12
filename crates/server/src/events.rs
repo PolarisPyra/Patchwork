@@ -151,6 +151,11 @@ pub enum AgentEvent {
         message_id: String,
         refusal: Refusal,
     },
+    /// Claude wrote another message of the reply to its session: the reply's cursor moves to it.
+    Cursor {
+        message_id: String,
+        cursor: String,
+    },
     /// A message sent mid-turn is now waiting for the turn to end (`queued`), or no longer is.
     MessageQueued {
         message_id: String,

@@ -27,5 +27,5 @@ pub use lifecycle::NewThread;
 #[doc(inline)]
 pub use title::{title_from, without_leading_attachments};
 #[doc(inline)]
-pub use types::{AccessMode, Goal, GoalStatus, Thread, ThreadParent};
+pub use types::{AccessMode, Goal, GoalStatus, ResumePoint, Thread, ThreadParent};
 pub(crate) use types::NOT_FOUND;

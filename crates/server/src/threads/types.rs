@@ -104,6 +104,17 @@ pub struct ThreadParent {
     pub tool_id: String,
 }
 
+/// Where a Claude chat's next turn picks its session up, in place of the session's newest
+/// message: a reply kept by an undo, or the reply a fork branches from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResumePoint {
+    /// The cursor of the reply the session goes on from.
+    pub at: String,
+    /// Branches the session into a new one and leaves the original as it is, as a fork does.
+    pub fork: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum GoalStatus {

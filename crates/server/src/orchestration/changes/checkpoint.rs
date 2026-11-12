@@ -17,7 +17,8 @@ use serde::Serialize;
 
 use crate::Server;
 use crate::system::new_id;
-use crate::threads::{Thread, TurnTrees};
+use crate::provider::AgentKind;
+use crate::threads::{ResumePoint, Thread, TurnTrees};
 
 const REFS: &str = "refs/patchwork/checkpoints";
 /// Snapshots from the end of a turn, one ref per reply the turn wrote.
@@ -486,8 +487,10 @@ impl Server {
 
     /// Undoes the turn of the user message `message_id` and everything after it: the project's
     /// files go back to how they were before that turn, and the message and the ones after it
-    /// leave the thread. The agent starts a new session next turn, given the remaining messages
-    /// as a transcript, since its own session still holds the undone turns.
+    /// leave the thread. Claude picks its session up next turn from the reply now last, which
+    /// drops the undone turns and keeps the rest cached. Other agents, and Claude when that reply
+    /// has no cursor, start a new session given the remaining messages as a transcript, since
+    /// their own session still holds the undone turns.
     ///
     /// # Errors
     ///
@@ -514,9 +517,18 @@ impl Server {
             .map(|m| m.id.clone())
             .collect();
         remove(&root, thread_id, Some(&undone));
+        let kept = start
+            .checked_sub(1)
+            .and_then(|last| thread.messages[last].cursor.clone())
+            .filter(|_| thread.agent == AgentKind::Claude && thread.session_id.is_some());
+        let point = kept.map(|at| ResumePoint { at, fork: false });
+        let resumes = point.is_some();
+        self.set_resume_point(thread_id, point.as_ref())?;
         self.store.update_thread(thread_id, |t| {
             t.messages.truncate(start);
-            t.session_id = None;
+            if !resumes {
+                t.session_id = None;
+            }
             t.goal = None;
             t.context_pending = !t.messages.is_empty();
         })?;

@@ -93,7 +93,7 @@ fn pinned_key(thread_id: &str) -> String {
 }
 
 /// The `app_state` keys of a thread's settings, which go when the thread does.
-pub(super) fn thread_state_keys(thread_id: &str) -> [String; 12] {
+pub(super) fn thread_state_keys(thread_id: &str) -> [String; 13] {
     [
         // The replies of it that failed on a usage limit and still warn of it.
         format!("limit-failed:{thread_id}"),
@@ -103,6 +103,9 @@ pub(super) fn thread_state_keys(thread_id: &str) -> [String; 12] {
         format!("agent-process:{thread_id}"),
         format!("cut-off-goal:{thread_id}"),
         format!("thread-committed:{thread_id}"),
+        // Where its next Claude turn picks its session up after an undo or a fork, which
+        // `threads/lifecycle.rs` keeps.
+        format!("claude-resume-point:{thread_id}"),
         // Its fallback and sub agents, which `threads/granular.rs` keeps.
         format!("granular:{thread_id}"),
         compact_window_key(thread_id),
@@ -125,16 +128,16 @@ pub(super) fn save_message(
         "INSERT INTO messages
              (id, thread_id, position, role, text, created_at, status, tools, plan, files, error,
               approvals, attachments, steer, finished_at, usage, queued, parts, cut_off, refusal,
-              turn, checks)
+              turn, checks, cursor)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                 ?19, ?20, ?21, ?22)
+                 ?19, ?20, ?21, ?22, ?23)
          ON CONFLICT (id) DO UPDATE SET position = excluded.position, text = excluded.text,
              status = excluded.status, tools = excluded.tools, plan = excluded.plan,
              files = excluded.files, error = excluded.error, approvals = excluded.approvals,
              attachments = excluded.attachments, finished_at = excluded.finished_at,
              usage = excluded.usage, steer = excluded.steer, queued = excluded.queued,
              parts = excluded.parts, cut_off = excluded.cut_off, refusal = excluded.refusal,
-             turn = excluded.turn, checks = excluded.checks",
+             turn = excluded.turn, checks = excluded.checks, cursor = excluded.cursor",
         params![
             m.id,
             thread_id,
@@ -157,7 +160,8 @@ pub(super) fn save_message(
             m.cut_off,
             m.refusal.as_ref().map(json),
             m.turn.as_ref().map(json),
-            m.checks.as_ref().map(json)
+            m.checks.as_ref().map(json),
+            m.cursor
         ],
     )?;
     Ok(())
@@ -240,7 +244,7 @@ pub(super) fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
     let mut stmt = conn.prepare(
         "SELECT id, role, text, created_at, status, tools, plan, files, error, approvals,
                 attachments, steer, finished_at, usage, queued, parts, cut_off, refusal, turn,
-                checks
+                checks, cursor
          FROM messages WHERE thread_id = ?1 ORDER BY position",
     )?;
     for t in &mut threads {
@@ -277,6 +281,7 @@ pub(super) fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
                     checks: r
                         .get::<_, Option<String>>(19)?
                         .and_then(|j| serde_json::from_str(&j).ok()),
+                    cursor: r.get(20)?,
                 })
             })?
             .collect::<rusqlite::Result<_>>()?;

@@ -304,6 +304,15 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
                 }
             }
             out.extend(request_usage(&v["message"], parent.is_none()));
+            // Where the session can resume from to drop what came after this reply.
+            if parent.is_none()
+                && let Some(uuid) = v["uuid"].as_str()
+            {
+                out.push(Parsed::Event(AgentEvent::Cursor {
+                    message_id: message_id.into(),
+                    cursor: uuid.into(),
+                }));
+            }
         }
         Some("user") => {
             out.extend(

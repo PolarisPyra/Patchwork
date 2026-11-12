@@ -185,5 +185,6 @@ pub(in crate::orchestration) fn assistant_message() -> Message {
         usage: None,
         turn: None,
         checks: None,
+        cursor: None,
     }
 }

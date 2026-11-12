@@ -408,6 +408,10 @@ pub struct Message {
     /// files. None for older replies, and for projects with nothing to run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checks: Option<TurnChecks>,
+    /// Claude's id for the reply's last message, where its session can resume once the replies
+    /// after it are undone, or a fork can branch it. None for other agents and older replies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
 }
 
 /// Snapshots of a project's files as git tree ids, kept alive by refs under `refs/patchwork`.
