@@ -24,7 +24,9 @@ pub enum Step<'a> {
     Agents(Vec<&'a ToolCall>),
     Plan(&'a str),
     Approvals(Vec<&'a str>),
-    Compaction,
+    /// A compaction, and whether the agent is still at it: the reply streams with nothing after
+    /// it yet.
+    Compaction(bool),
 }
 
 /// Calls that keep a plan the composer already shows, so the turn does not repeat it.
@@ -73,7 +75,9 @@ pub fn steps_of(message: &Message) -> Vec<Step<'_>> {
                 continue;
             }
             Part::Compaction { .. } => {
-                steps.push(Step::Compaction);
+                let running =
+                    index + 1 == message.parts.len() && message.status == MessageStatus::Streaming;
+                steps.push(Step::Compaction(running));
                 continue;
             }
             Part::Approval { id } => {
@@ -156,7 +160,7 @@ fn size_of(step: &Step) -> usize {
         Step::Agents(tools) => tools.len(),
         Step::Approvals(ids) => ids.len(),
         Step::Text(_) | Step::Plan(_) => 1,
-        Step::Compaction => 0,
+        Step::Compaction(_) => 0,
     }
 }
 
@@ -252,7 +256,7 @@ pub fn fold_head_of(message: &Message, actions: usize, open: bool) -> FoldSummar
 /// questions the agent asked, and compactions.
 pub fn shown(message: &Message, step: &Step, i: usize, hidden: usize) -> bool {
     i >= hidden
-        || matches!(step, Step::Compaction)
+        || matches!(step, Step::Compaction(_))
         || matches!(step, Step::Agents(tools) if tools.iter().any(|t| is_running(t)))
         || matches!(step, Step::Approvals(ids) if ids.iter().any(|id| message
             .approvals

@@ -148,8 +148,15 @@ enum Compaction {
 /// The state of the `/compact` at `index`, read from the reply after it.
 fn compaction_state(rows: &[&Message], index: usize, busy: bool) -> Compaction {
     let reply = rows.get(index + 1);
-    // A /compact sent during a turn compacts where the turn is, and the turn's reply streams on.
-    if reply.is_some_and(|r| r.parts.iter().any(|p| matches!(p, Part::Compaction { .. }))) {
+    // A /compact sent during a turn compacts where the turn is, and the turn's reply streams on
+    // once it is done.
+    let went_on = |r: &&Message| {
+        r.parts
+            .iter()
+            .position(|p| matches!(p, Part::Compaction { .. }))
+            .is_some_and(|at| at + 1 < r.parts.len())
+    };
+    if reply.is_some_and(went_on) {
         return Compaction::Compacted;
     }
     match reply {
@@ -302,6 +309,17 @@ fn transcript_row(
             .into_any_element();
     }
     let previous = message.checked_sub(1).and_then(|p| shown.get(p).copied());
+    // The divider above a /compact already says how it went, so its reply shows nothing more
+    // unless it said or did something besides compacting.
+    let only_compacts = m.text.trim().is_empty()
+        && m.parts.iter().all(|p| matches!(p, Part::Compaction { .. }))
+        && matches!(m.status, MessageStatus::Streaming | MessageStatus::Complete);
+    if m.role == MessageRole::Assistant
+        && only_compacts
+        && previous.is_some_and(|p| p.role == MessageRole::User && p.text.trim() == "/compact")
+    {
+        return div().id(row).into_any_element();
+    }
     let find = w.find_in_row(marks, &m.id);
     let body = if m.role == MessageRole::User {
         user::user_message(w, m, find.as_ref(), t, cx).into_any_element()

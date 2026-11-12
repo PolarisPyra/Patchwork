@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use std::ops::Range;
-use gpui::{Div, SharedString, div, prelude::*, px};
+use gpui::{Div, Role, SharedString, div, prelude::*, px};
 use patchwork_server::threads::{Message, MessageStatus, StepStatus};
 use crate::ui::theme::{FONT_MONO, FS_MD, FS_SM, FS_XS, RADIUS_SM, Theme};
 use crate::ui::{button, icon, spinner};
@@ -81,7 +81,7 @@ pub(super) fn reply_step(
             ),
         Step::Agents(tools) => subagents::subagents(w, m, tools, t, cx),
         Step::Approvals(ids) => approvals::approvals(w, m, ids, t, cx),
-        Step::Compaction => div().pb(px(20.)).child(
+        Step::Compaction(running) => div().pb(px(20.)).child(
             div()
                 .flex()
                 .items_center()
@@ -89,7 +89,19 @@ pub(super) fn reply_step(
                 .text_size(px(FS_XS))
                 .text_color(t.text_subtle)
                 .child(div().h(px(1.)).flex_1().bg(t.border))
-                .child("Context compacted")
+                .child(if *running {
+                    div()
+                        .id("compacting")
+                        .role(Role::Status)
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .child(spinner(11., t.text_subtle))
+                        .child("Compacting context")
+                        .into_any_element()
+                } else {
+                    div().child("Context compacted").into_any_element()
+                })
                 .child(div().h(px(1.)).flex_1().bg(t.border)),
         ),
     }
