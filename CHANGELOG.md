@@ -3,6 +3,20 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.51] - 2026-11-12
+
+### Changed
+
+- In Android projects, the Android devices button now floats beside the search button over the chat instead of sitting next to the version number in the header.
+- The Android devices panel no longer closes when you switch to a chat in another project. It hides there and is back as you left it when you return to the Android project.
+- In sent messages, commands, skills, agents and file mentions now show as rounded chips with room inside them and a clear gap from the words beside them. Before, their colour ran tight to the letters and touched the next word.
+
+### Fixed
+
+- The previous, next and close buttons in Find in chat no longer touch the top and bottom of the field when highlighted.
+- The Delete key no longer archives the open chat when nothing is selected; it now acts only on a chat row you have just clicked, picked with Ctrl or Shift, or opened the menu of. Files, folders and pictures dropped anywhere on the chat now attach to the message, and the chat box lights up as soon as you drag over the chat. Before, only a drop right on the chat box counted, and one just off it was lost.
+- In the chat box, right-clicking anywhere in the text area opens Paste, picking a command partway through a message no longer erases what you wrote, and pressing Up brings back a sent message's pictures and files along with its text. Files attached while answering an agent's question now go with the answer, the bullet button takes the bullet off when pressed again, and the model, effort and access menus close on Tab and no longer leave the keyboard stuck after a click outside them. Every model in the model list can be reached with Tab, the queue or steer menu checks the option the Send button will use, and with a plan ready the Send button implements it just as Enter does.
+
 ## [26.11.50] - 2026-11-12
 
 ### Added
