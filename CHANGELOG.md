@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.54] - 2026-11-12
+
+### Fixed
+
+- Claude chats in Patchwork now use up your Claude plan's 5-hour limit at the same rate as Claude Code in the terminal. Before, Claude marked every Patchwork session as an SDK app, and Anthropic counts SDK usage against the 5-hour limit about twice as fast for the same work, so you could hit the limit far sooner than in the terminal. Chat titles and image descriptions that Patchwork asks Claude for are counted the same way now too.
+
 ## [26.11.53] - 2026-11-12
 
 ### Changed
