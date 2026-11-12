@@ -6,12 +6,12 @@ go where the person asked for them, usually the Desktop.
 
 ## Contents of the card
 
-- One headline number, and it is the largest thing on the card. Above it, "up to" when it is the
-  best of several results. Below it, one line that finishes the sentence: "faster in huge chats".
+- One headline number, and it is the largest thing on the card. Below it, one line that finishes
+  the sentence: "faster in huge chats".
 - Two or three supporting figures in a row underneath: the largest ratios for steps a user does
   and would feel, such as opening a chat. Leave out the rest, even when they were measured.
-- "Patchwork" in the top left, and how the numbers were measured in the top right ("Measured in a
-  debug build").
+- "Patchwork" in the top left. When the headline is the best of several results, "up to" goes on
+  the line directly under "Patchwork", with clear space between it and the number.
 - No title, subtitle, legend, axis, gridline, data bar or footnote. If the card needs one of these to
   be understood, change the wording.
 
@@ -22,7 +22,8 @@ go where the person asked for them, usually the Desktop.
   now and round down to two significant figures:
   24 ms and 0.01 ms is 2,400×.
 - Write a ratio as a number and "×", with a comma in the thousands: `2,400×`, `180×`.
-- Say how it was measured. A debug build is slower than a release, so the card says "debug build".
+- Say how it was measured when handing the card over, not on the card. A debug build is slower
+  than a release, so name the build.
 - When the biggest ratio is for a step people never see, tell the person, and offer the largest
   one they would feel as the headline.
 
@@ -46,7 +47,7 @@ go where the person asked for them, usually the Desktop.
 | Canvas | 1600 × 900, rendered at 2× to 3200 × 1800 |
 | Background | `#0b0b0c` |
 | Font | Inter, from `crates/desktop/assets/fonts` |
-| Text | `#f4f4f5` for figures and the headline line, `#b4b4bc` for labels, `#8b8b94` for the measurement note |
+| Text | `#f4f4f5` for figures and the headline line, `#b4b4bc` for labels |
 | Colours | blue `#4682fa`, pink `#f25fa0`, amber `#f5a524`, green `#3ecf8e` |
 | Margins | text starts at 72 and ends by 1528; the headline number sits at 62 so its first digit lines up by eye |
 | Columns | supporting figures start at 72, 560 and 1048 |
@@ -76,32 +77,31 @@ Change the text and the numbers, and keep the positions.
   </defs>
   <rect width="1600" height="900" fill="#0b0b0c"/>
   <g filter="url(#blur)" opacity="0.33">
-    <circle cx="260" cy="340" r="190" fill="#4682fa"/>
-    <circle cx="600" cy="300" r="180" fill="#f25fa0"/>
-    <circle cx="940" cy="370" r="170" fill="#f5a524"/>
+    <circle cx="260" cy="290" r="190" fill="#4682fa"/>
+    <circle cx="600" cy="250" r="180" fill="#f25fa0"/>
+    <circle cx="940" cy="320" r="170" fill="#f5a524"/>
   </g>
   <text x="72" y="104" font-size="30" font-weight="600" fill="#f4f4f5" letter-spacing="-0.4">Patchwork</text>
-  <text x="72" y="208" font-size="40" fill="#b4b4bc">up to</text>
-  <text x="62" y="424" font-size="240" font-weight="700" fill="url(#hero)" letter-spacing="-8">2,400×</text>
-  <text x="72" y="540" font-size="66" font-weight="600" fill="#f4f4f5" letter-spacing="-1.6">faster in huge chats</text>
-  <text x="72" y="588" font-size="24" fill="#b4b4bc">fetching a 75,000-item chat: was 24 ms, now 0.01 ms</text>
+  <text x="72" y="156" font-size="40" fill="#b4b4bc">up to</text>
+  <text x="62" y="384" font-size="240" font-weight="700" fill="url(#hero)" letter-spacing="-8">2,400×</text>
+  <text x="72" y="498" font-size="66" font-weight="600" fill="#f4f4f5" letter-spacing="-1.6">faster in huge chats</text>
+  <text x="72" y="546" font-size="24" fill="#b4b4bc">fetching a 75,000-item chat: was 24 ms, now 0.01 ms</text>
 
-  <rect x="72" y="664" width="56" height="8" rx="4" fill="#f25fa0"/>
-  <text x="72" y="744" font-size="64" font-weight="600" fill="#f4f4f5" letter-spacing="-1.4">1,000×</text>
-  <text x="72" y="786" font-size="22" fill="#b4b4bc">drawing a frame of a 41,000-item chat</text>
-  <text x="72" y="820" font-size="22" font-weight="600" fill="#f4f4f5">was 31 ms, now 0.03 ms</text>
+  <rect x="72" y="644" width="56" height="8" rx="4" fill="#f25fa0"/>
+  <text x="72" y="724" font-size="64" font-weight="600" fill="#f4f4f5" letter-spacing="-1.4">1,000×</text>
+  <text x="72" y="766" font-size="22" fill="#b4b4bc">drawing a frame of a 41,000-item chat</text>
+  <text x="72" y="800" font-size="22" font-weight="600" fill="#f4f4f5">was 31 ms, now 0.03 ms</text>
 
-  <rect x="560" y="664" width="56" height="8" rx="4" fill="#f5a524"/>
-  <text x="560" y="744" font-size="64" font-weight="600" fill="#f4f4f5" letter-spacing="-1.4">180×</text>
-  <text x="560" y="786" font-size="22" fill="#b4b4bc">opening a 41,000-item chat</text>
-  <text x="560" y="820" font-size="22" font-weight="600" fill="#f4f4f5">was 18 ms, now 0.1 ms</text>
+  <rect x="560" y="644" width="56" height="8" rx="4" fill="#f5a524"/>
+  <text x="560" y="724" font-size="64" font-weight="600" fill="#f4f4f5" letter-spacing="-1.4">180×</text>
+  <text x="560" y="766" font-size="22" fill="#b4b4bc">opening a 41,000-item chat</text>
+  <text x="560" y="800" font-size="22" font-weight="600" fill="#f4f4f5">was 18 ms, now 0.1 ms</text>
 
-  <rect x="1048" y="664" width="56" height="8" rx="4" fill="#3ecf8e"/>
-  <text x="1048" y="744" font-size="64" font-weight="600" fill="#f4f4f5" letter-spacing="-1.4">100×</text>
-  <text x="1048" y="786" font-size="22" fill="#b4b4bc">sending a message in a 75,000-item chat</text>
-  <text x="1048" y="820" font-size="22" font-weight="600" fill="#f4f4f5">was 48 ms, now 0.48 ms</text>
+  <rect x="1048" y="644" width="56" height="8" rx="4" fill="#3ecf8e"/>
+  <text x="1048" y="724" font-size="64" font-weight="600" fill="#f4f4f5" letter-spacing="-1.4">100×</text>
+  <text x="1048" y="766" font-size="22" fill="#b4b4bc">sending a message in a 75,000-item chat</text>
+  <text x="1048" y="800" font-size="22" font-weight="600" fill="#f4f4f5">was 48 ms, now 0.48 ms</text>
 
-  <text x="1528" y="104" font-size="20" fill="#8b8b94" text-anchor="end">Measured in a debug build</text>
 </svg>
 ```
 
