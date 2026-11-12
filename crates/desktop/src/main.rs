@@ -139,7 +139,7 @@ impl<'kvs> log::kv::VisitSource<'kvs> for Properties {
 /// Runs the helper the first argument names and returns its exit code, or None to open the app.
 /// Without this, every hook or relay an agent starts would open another Patchwork window.
 fn run_helper() -> Option<i32> {
-    use patchwork_server::{harness, permissions, plugins, provider};
+    use patchwork_server::{harness, permissions, provider};
     let arg = std::env::args().nth(1)?;
     let run: fn() -> i32 = match arg.as_str() {
         // An OpenCode turn's bridge to `opencode serve`.
@@ -150,8 +150,6 @@ fn run_helper() -> Option<i32> {
         permissions::hook::HOOK_ARG => permissions::hook::run,
         // Antigravity's session start, for the system prompt from Settings.
         provider::hooks::PROMPT_ARG => provider::hooks::run_prompt_hook,
-        // A plugin's built-in hook, such as `boundedWaits`.
-        plugins::builtin::HOOK_ARG => plugins::builtin::run,
         // Claude Code's and Codex's relay to an MCP server Patchwork runs.
         provider::mcp::PROXY_ARG => provider::mcp::run_proxy,
         _ => return None,

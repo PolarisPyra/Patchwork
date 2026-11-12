@@ -42,8 +42,7 @@ pub fn run_hooks(settings: &Settings, context: &HookContext<'_>) -> Vec<String> 
                         command,
                         timeout_secs,
                     } => Some((name.clone(), command, timeout_secs)),
-                    PluginHookHandler::Builtin { .. }
-                    | PluginHookHandler::McpTool { .. }
+                    PluginHookHandler::McpTool { .. }
                     | PluginHookHandler::Prompt
                     | PluginHookHandler::Agent
                     | PluginHookHandler::Unsupported { .. } => None,

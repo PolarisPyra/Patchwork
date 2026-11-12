@@ -10,7 +10,7 @@ The repo is split into `crates/server` and `crates/desktop`:
   - `src/provider/` — one module per agent CLI (`claude/`, `codex/`, `antigravity.rs`, `opencode/`, `api/`), finding and probing them (`locate.rs`, `probe.rs`), what a turn sends them (`turn.rs`) and reads back (`parsed.rs`), and handing each one its hooks (`hooks.rs`)
   - `src/orchestration/` — runs turns, grouped by feature, one folder each, with `orchestration/mod.rs` as the index: `turn/` (the `Runner`, starting and ending a turn, its process, turns cut off by a restart), `messages/` (sending, steering and queueing), `output/` (reading agent output into agent events and streaming them), `approvals/`, `changes/` (which files each reply changed, and per-turn checkpoints), `tasks/` (background tasks and subagents), and `goal/`
   - `src/permissions/` — the rules Patchwork answers approvals by, and the permission hook Codex and Antigravity run
-  - `src/plugins/` — plugin bundles and their hooks, with the built-in hooks Patchwork carries (`builtin/`)
+  - `src/plugins/` — plugin bundles and their hooks
   - `src/persistence/` — SQLite store and schema migrations
   - `src/import/` — reads each CLI's saved sessions for importing
   - `src/usage/` — subscription usage limits per provider

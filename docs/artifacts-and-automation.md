@@ -23,12 +23,11 @@ or named days.
 
 A bundle is a folder in the plugins folder (`<config>/plugins` unless Settings chooses another).
 A plugin carries hooks and apps; skills belong in the skills folder and MCP servers in Settings →
-MCP Servers. The app ships no plugins. Patchwork's own hooks live in a `patchwork` bundle there,
-switched on and off like any other, and are one file:
+MCP Servers. The app ships no plugins; Settings → Hooks shows an example bundle, one file:
 
 ```
-plugins/patchwork/
-└── hooks.json   { "name": "Patchwork", "hooks": { "preToolUse": [ … ] } }
+plugins/guard/
+└── hooks.json   { "hooks": { "preToolUse": [ … ], "stop": [ … ] } }
 ```
 
 A plugin that runs hooks alone is that one file. A bundle that also carries apps has a
@@ -44,7 +43,7 @@ read is left empty, and the rest of the bundle still loads.
 
 Hook events match whatever their case: `userPromptSubmit`, `sessionStart`, `preToolUse`,
 `permissionRequest`, `postToolUse`, `preCompact`, `postCompact`, `subagentStart`,
-`subagentStop`, `stop`, `interrupt`, `sessionEnd`. `command` and `builtin` handlers run. A group's
+`subagentStop`, `stop`, `interrupt`, `sessionEnd`. Only `command` handlers run. A group's
 `matcher` limits a tool event to the tools whose whole name it matches as a regular expression
 (`Bash`, `Edit|Write`); none, or `*`, is every tool.
 
@@ -67,21 +66,8 @@ Each agent gets the payload and tool names it uses itself:
 | API providers | `preToolUse`, `postToolUse` | Patchwork's own agent runs them around each call, with Claude Code's payload |
 | OpenCode | none | it has no hooks of this kind |
 
-A `builtin` handler, `{ "type": "builtin", "name": "boundedWaits" }`, is a check Patchwork carries
-itself (`crates/server/src/plugins/builtin/`). An agent CLI runs it as `patchwork --hook <name>
-<agent>`, which reads the call in that agent's format and answers in it; Patchwork's own agent runs it
-in-process. A name this version does not carry is logged and skipped. A built-in in a group with no
-`matcher` gets the tools it is for, so `boundedWaits` needs none: it covers each agent's shell tool.
-
 Settings → Hooks lists each hook by when it runs and what it does, and names the agents whose turns
 skip it, such as OpenCode for a tool hook.
-
-- `boundedWaits` refuses a shell command that polls in a loop (`until` or `while` with a `sleep` in
-  it) with no `timeout`, and one that polls for a word cargo prints in colour (`Running`,
-  `Compiling`, `Finished`, `Building`). It reads the command as the shell does, so only what runs
-  counts: a loop quoted as data, in `printf`, `echo`, `jq`, `grep`, a commit message, or a heredoc
-  written to a file, is not a loop. The scripts `sh -c` and its kin, `eval`, `$(…)`, and a shell's
-  heredoc run are read too, and one that `timeout` runs has its limit.
 
 ## Computer use
 

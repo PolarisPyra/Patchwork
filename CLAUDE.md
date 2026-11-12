@@ -22,7 +22,6 @@ Native desktop app in Rust: the UI is drawn with GPUI, over the backend in `crat
 - Machine-level helpers that no domain owns live in `system/`: the command and environment programs run with, login shells, the home folder and path resolution, opening files on the desktop.
 - A domain's files may reach down to `system/`, `logging/` and other domains' types, never up into `orchestration/` or a `Server` operation; `persistence/` stores what it is given and decides nothing.
 - An area that exists on both sides keeps the same name on each: `crates/server/src/threads/`, `crates/desktop/src/sidebar/` reads `crate::threads`.
-- A hook check Patchwork carries itself is a `BuiltinHook` in `plugins/builtin/`, which a plugin names as `{ "type": "builtin", "name": … }`; it never matches on a command's raw text, it reads it with `plugins/builtin/shell.rs`.
 
 ### Both crates
 

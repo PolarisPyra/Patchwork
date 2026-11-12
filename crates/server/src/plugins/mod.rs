@@ -15,7 +15,6 @@
 // Rust guideline compliant 2026-10-09
 
 mod agent_hooks;
-pub mod builtin;
 mod events;
 mod manifest;
 mod turn_hooks;

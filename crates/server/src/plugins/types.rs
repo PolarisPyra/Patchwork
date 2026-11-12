@@ -53,7 +53,7 @@ pub enum HookEvent {
     SessionEnd,
 }
 
-/// What a hook does. `Command` and `Builtin` run; the rest are listed so the user sees them.
+/// What a hook does. `Command` runs; the rest are listed so the user sees them.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(
     tag = "type",
@@ -63,13 +63,6 @@ pub enum HookEvent {
 pub enum PluginHookHandler {
     Command {
         command: String,
-        timeout_secs: u64,
-    },
-    /// A check Patchwork carries itself, by name, such as `boundedWaits`.
-    Builtin {
-        name: String,
-        /// What it does, or None for a name this version does not carry.
-        description: Option<String>,
         timeout_secs: u64,
     },
     McpTool {

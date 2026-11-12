@@ -14,7 +14,6 @@ use std::time::Duration;
 use serde_json::{Value, json};
 
 use crate::permissions::hook::HOOK_ARG;
-use crate::plugins::builtin;
 use crate::plugins::{AgentHook, HookAction, HookEvent};
 use crate::provider::{AgentKind, TurnSpec};
 
@@ -62,16 +61,10 @@ pub fn patchwork_command(agent: AgentKind, args: &[&str]) -> Option<String> {
     })
 }
 
-/// The command `agent` runs for `hook`: the plugin's own, or Patchwork's binary for a built-in.
-#[must_use]
-pub fn command_line(hook: &AgentHook, agent: AgentKind) -> Option<String> {
-    match &hook.action {
-        HookAction::Command { command } => Some(command.clone()),
-        HookAction::Builtin { hook: builtin } => {
-            let name = serde_json::to_value(agent).ok()?;
-            patchwork_command(agent, &[builtin::HOOK_ARG, builtin.name(), name.as_str()?])
-        }
-    }
+/// The command an agent runs for `hook`.
+fn command_line(hook: &AgentHook) -> &str {
+    let HookAction::Command { command } = &hook.action;
+    command
 }
 
 /// The hooks `agent` runs, in the `hooks.json` shape Claude Code and Antigravity read:
@@ -80,9 +73,7 @@ pub fn command_line(hook: &AgentHook, agent: AgentKind) -> Option<String> {
 pub fn hooks_json(hooks: &[AgentHook], agent: AgentKind) -> Value {
     let mut by_event = serde_json::Map::new();
     for hook in hooks.iter().filter(|hook| runs(agent, hook.event)) {
-        let Some(command) = command_line(hook, agent) else {
-            continue;
-        };
+        let command = command_line(hook);
         let mut group = json!({ "hooks": [{
             "type": "command",
             "command": command,
@@ -100,10 +91,6 @@ pub fn hooks_json(hooks: &[AgentHook], agent: AgentKind) -> Value {
     }
     json!({ "hooks": by_event })
 }
-
-/// The shell tool as each agent names it, as a matcher: Claude Code and Codex `Bash`, Patchwork's
-/// own agent `bash`, and Antigravity the rest.
-pub const SHELL_TOOLS: &str = "Bash|bash|run_command|execute_command|shell";
 
 /// Extracts the shell command from an agent's tool-call payload.
 ///
@@ -202,9 +189,7 @@ pub fn codex_args(spec: &TurnSpec) -> Vec<String> {
         .iter()
         .filter(|hook| runs(AgentKind::Codex, hook.event))
     {
-        let Some(command) = command_line(hook, AgentKind::Codex) else {
-            continue;
-        };
+        let command = command_line(hook);
         let matcher = hook
             .matcher
             .as_ref()

@@ -12,9 +12,32 @@ use crate::settings::controls::{switch, token_row};
 use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
 use crate::ui::{AGENT_KINDS, BtnKind, agent_label, btn, icon};
 
-use super::{empty, list_box};
+use super::{empty, example, list_box};
 
-/// The shell tool's name in each agent, as `provider::hooks::SHELL_TOOLS` lists them.
+/// How a plugin is laid out: a folder with a `hooks.json`, whose commands get the event as JSON on
+/// stdin. A tool hook refuses the call with exit code 2 and its reason on stderr.
+const HOOKS_EXAMPLE: &str = "plugins/
+└── guard/
+    └── hooks.json
+
+guard/hooks.json
+{
+  \"hooks\": {
+    \"preToolUse\": [{
+      \"matcher\": \"Bash\",
+      \"hooks\": [{
+        \"type\": \"command\",
+        \"command\": \"grep -qv 'tail -f' || { echo 'tail -f never ends' >&2; exit 2; }\"
+      }]
+    }],
+    \"stop\": [{
+      \"hooks\": [{ \"type\": \"command\", \"command\": \"notify-send \\\"Turn $PATCHWORK_STATUS\\\"\" }]
+    }]
+  }
+}";
+
+/// The shell tool as each agent names it: Claude Code and Codex `Bash`, Patchwork's own agent
+/// `bash`, and Antigravity the rest.
 const SHELL_TOOLS: [&str; 5] = ["Bash", "bash", "run_command", "execute_command", "shell"];
 
 /// Whether a matcher names only shell tools.
@@ -58,11 +81,6 @@ fn event_name(event: HookEvent) -> String {
 fn handler_text(handler: &PluginHookHandler) -> String {
     match handler {
         PluginHookHandler::Command { command, .. } => command.clone(),
-        PluginHookHandler::Builtin {
-            name, description, ..
-        } => description
-            .clone()
-            .unwrap_or_else(|| format!("Unknown built-in: {name}")),
         PluginHookHandler::McpTool { server, tool } => format!("{server} → {tool}"),
         PluginHookHandler::Prompt => "A prompt hook".into(),
         PluginHookHandler::Agent => "A agent hook".into(),
@@ -233,11 +251,6 @@ fn hook_row(
                             .child(command.clone()),
                         t,
                     ))
-                    .child(detail("Timeout", format!("{timeout_secs}s"), t)),
-                PluginHookHandler::Builtin {
-                    name, timeout_secs, ..
-                } => d
-                    .child(detail("Built-in", mono(name.clone()), t))
                     .child(detail("Timeout", format!("{timeout_secs}s"), t)),
                 _ => d,
             })
@@ -426,5 +439,6 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 ),
             ),
         )
+        .child(example(HOOKS_EXAMPLE, &t))
         .into_any_element()
 }

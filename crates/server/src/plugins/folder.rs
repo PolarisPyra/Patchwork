@@ -275,7 +275,7 @@ mod tests {
         write(
             &root.join("patchwork/hooks.json"),
             r#"{"name":"Patchwork","description":"Patchwork's own hooks.","hooks":{
-                "preToolUse":[{"hooks":[{"type":"builtin","name":"boundedWaits","timeoutSec":10}]}]
+                "preToolUse":[{"hooks":[{"type":"command","command":"exit 0","timeoutSec":10}]}]
             }}"#,
         );
         let plugins = list(&settings_with(&root, &[]));
@@ -290,16 +290,10 @@ mod tests {
         assert_eq!(plugin.hooks.len(), 1);
         let hook = &plugin.hooks[0];
         assert_eq!(hook.event, HookEvent::PreToolUse);
-        // A built-in this version carries gets the tools it is for.
-        assert_eq!(
-            hook.matcher.as_deref(),
-            Some(crate::provider::hooks::SHELL_TOOLS)
-        );
         assert_eq!(
             hook.handler,
-            PluginHookHandler::Builtin {
-                name: "boundedWaits".into(),
-                description: Some("Refuses waits with no time limit".into()),
+            PluginHookHandler::Command {
+                command: "exit 0".into(),
                 timeout_secs: 10,
             }
         );

@@ -11,7 +11,6 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::builtin::BuiltinHook;
 use super::{HookEvent, PluginHookHandler, list};
 use crate::settings::Settings;
 
@@ -26,7 +25,7 @@ pub struct AgentHook {
     pub timeout_secs: u64,
 }
 
-/// What a hook runs: a shell command, or a check Patchwork carries itself.
+/// What a hook runs: a shell command.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "type",
@@ -35,7 +34,6 @@ pub struct AgentHook {
 )]
 pub enum HookAction {
     Command { command: String },
-    Builtin { hook: BuiltinHook },
 }
 
 impl AgentHook {
@@ -49,8 +47,7 @@ impl AgentHook {
     }
 }
 
-/// The hooks of the enabled plugins that the agent runs, rather than Patchwork. A built-in hook
-/// this version does not carry is left out.
+/// The hooks of the enabled plugins that the agent runs, rather than Patchwork.
 #[must_use]
 pub fn agent_hooks(settings: &Settings) -> Vec<AgentHook> {
     list(settings)
@@ -64,18 +61,6 @@ pub fn agent_hooks(settings: &Settings) -> Vec<AgentHook> {
                     command,
                     timeout_secs,
                 } => (HookAction::Command { command }, timeout_secs),
-                PluginHookHandler::Builtin {
-                    name, timeout_secs, ..
-                } => {
-                    let Some(builtin) = BuiltinHook::from_name(&name) else {
-                        log::warn!(
-                            event = hook.event.name(), name:%;
-                            "plugin hook {{event}}: no built-in hook {{name}}"
-                        );
-                        return None;
-                    };
-                    (HookAction::Builtin { hook: builtin }, timeout_secs)
-                }
                 PluginHookHandler::McpTool { .. }
                 | PluginHookHandler::Prompt
                 | PluginHookHandler::Agent
@@ -94,16 +79,14 @@ pub fn agent_hooks(settings: &Settings) -> Vec<AgentHook> {
 /// Runs a tool hook for Patchwork's own agent, returning the refusal reason if any.
 ///
 /// Runs a tool hook for Patchwork's own agent the way Claude Code runs one, and returns the reason
-/// the call is refused, or None to let it run. A built-in hook runs in-process. A command gets
+/// the call is refused, or None to let it run. A command gets
 /// `input` as JSON on stdin, and exit code 2 with a reason on stderr, or a `deny` decision on
 /// stdout, refuses the call; one that fails or runs past its timeout lets the call run, as in the
 /// CLIs.
 #[must_use]
 pub fn run_tool_hook(hook: &AgentHook, input: &Value, root: &str) -> Option<String> {
-    match &hook.action {
-        HookAction::Builtin { hook: builtin } => builtin.check(input),
-        HookAction::Command { command } => run_command(hook, command, input, root),
-    }
+    let HookAction::Command { command } = &hook.action;
+    run_command(hook, command, input, root)
 }
 
 fn run_command(hook: &AgentHook, command: &str, input: &Value, root: &str) -> Option<String> {

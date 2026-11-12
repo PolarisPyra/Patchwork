@@ -311,21 +311,6 @@ mod tests {
         assert_eq!(title, "Run command");
         assert_eq!(detail, "'printf' '%s\\n' 'while true; do sleep 1; done'");
         assert_eq!(target.resources, [detail]);
-        assert_eq!(
-            crate::plugins::builtin::BuiltinHook::BoundedWaits.check(&call),
-            None
-        );
-
-        let executed = json!({
-            "tool_input": {
-                "command": ["sh", "-c", "while true; do sleep 1; done"]
-            }
-        });
-        assert!(
-            crate::plugins::builtin::BuiltinHook::BoundedWaits
-                .check(&executed)
-                .is_some()
-        );
     }
 }
 
