@@ -18,6 +18,24 @@ written for users when the commit is.
   rotated and looked like it shook."
 - An exception gets its own bullet in the same plain words.
 - One to three sentences. No line breaks inside an entry.
+- Keep the tone plain and professional, like release notes from a company you trust: no jokes,
+  exclamation marks or drama.
+
+## Fixed entries
+
+- Start with what went wrong for the user, in the past tense, then say what happens now. Write
+  "Claude chats waited until the model's context was nearly full before compacting, which used up
+  the usage limit much faster. They now compact at 200k tokens", not "Claude chats compact at 200k
+  tokens again."
+- Don't describe a fix as a return, with words like "again", "back", "restored" or "once more".
+  A user who never saw it work reads that as a feature someone removed on purpose and then put back.
+- Give the cause only when the user can act on it, such as a setting worth checking.
+
+## Before committing
+
+Run the draft entry through the declauding skill, use its rewrite, and then check the result
+against the rules here. The skill takes out phrasing that reads as machine-written; these rules
+cover what a Patchwork entry has to say.
 
 ## Never
 
