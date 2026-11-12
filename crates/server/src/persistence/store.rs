@@ -248,6 +248,13 @@ impl Store {
         Ok(())
     }
 
+    /// Mutates one thread in memory only (no-op if missing); the next save of it writes the change.
+    pub(crate) fn update_unsaved(&self, id: &str, f: impl FnOnce(&mut Thread)) {
+        if let Some(thread) = self.lock().threads.iter_mut().find(|t| t.id == id) {
+            f(thread);
+        }
+    }
+
     /// Mutates one thread in place (no-op if missing) and saves its row and the message
     /// `message_id`, if given. Unlike `update_thread` it copies nothing, so it is for
     /// changes confined to that message and the thread's own fields; removing or

@@ -17,12 +17,15 @@ use crate::threads::Thread;
 use crate::orchestration::turn::start::Turn;
 
 impl Turn {
-    /// Streams a text delta to the frontend without saving it; the reader
-    /// collects it in `unsaved` so it is stored in one write later.
+    /// Streams a text delta to the frontend and adds it to the thread in memory, so a reload
+    /// mid-reply shows all of it; `unsaved` marks it for one disk write later.
     pub(in crate::orchestration) fn stream_text(&self, event: AgentEvent, unsaved: &mut Unsaved) {
         self.save_thinking(unsaved);
-        if let AgentEvent::TextDelta { text, .. } = &event {
-            unsaved.text.push_str(text);
+        if let AgentEvent::TextDelta { .. } = &event {
+            self.server
+                .store
+                .update_unsaved(&self.thread_id, |t| apply(t, &event));
+            unsaved.text = true;
         }
         self.emit(event);
     }
@@ -57,14 +60,14 @@ impl Turn {
     }
 
     pub(in crate::orchestration) fn save_only_text(&self, unsaved: &mut Unsaved) {
-        if unsaved.text.is_empty() {
+        if !std::mem::take(&mut unsaved.text) {
             return;
         }
-        let event = AgentEvent::TextDelta {
-            message_id: self.message_id.clone(),
-            text: std::mem::take(&mut unsaved.text),
-        };
-        if let Err(e) = save_event(&self.server, &self.thread_id, &event) {
+        let saved =
+            self.server
+                .store
+                .update_message(&self.thread_id, Some(&self.message_id), |_| {});
+        if let Err(e) = saved {
             log::warn!(error:% = e; "failed to save agent text: {{error}}");
         }
     }
@@ -124,10 +127,11 @@ fn settle_late(server: &Server, thread_id: &str, mut event: AgentEvent) -> Agent
     event
 }
 
-/// Streamed output not yet stored: text, or a block of reasoning and when it started.
+/// Streamed output not yet stored: whether text is in memory only, or a block of reasoning and
+/// when it started.
 #[derive(Default)]
 pub(in crate::orchestration) struct Unsaved {
-    pub(in crate::orchestration) text: String,
+    pub(in crate::orchestration) text: bool,
     pub(in crate::orchestration) thinking: String,
     pub(in crate::orchestration) thinking_since: u64,
 }
