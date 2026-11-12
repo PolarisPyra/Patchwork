@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.52] - 2026-11-12
+
+### Fixed
+
+- Dragging a picture or file onto a chat no longer closes Patchwork. The file is attached to the chat box, as it already was when pasted.
+
 ## [26.11.51] - 2026-11-12
 
 ### Changed
