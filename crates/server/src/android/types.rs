@@ -205,3 +205,29 @@ pub struct RunCommand {
     pub line: String,
     pub cwd: PathBuf,
 }
+
+/// One picture of an emulator's screen, scaled to the size asked for, in the BGRA order the app
+/// draws.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScreenFrame {
+    pub width: u32,
+    pub height: u32,
+    pub bgra: Vec<u8>,
+}
+
+/// What the screen view sends the emulator. Points are fractions of the picture shown, 0 at its
+/// left or top and 1 at its right or bottom.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ScreenInput {
+    /// The pointer pressed, moved while pressed, or released.
+    Touch { x: f32, y: f32, down: bool },
+    /// The wheel turned by `dy` lines over the point `x`, `y`, positive towards the top of the
+    /// page.
+    Wheel { x: f32, y: f32, dy: f32 },
+    /// A key by its web name, such as `"GoBack"`, `"Enter"` or `"Power"`, pressed and released.
+    Key(String),
+    /// Text typed.
+    Text(String),
+    /// The room the picture is drawn in, in pixels, which frames are scaled to fit.
+    Fit { width: u32, height: u32 },
+}

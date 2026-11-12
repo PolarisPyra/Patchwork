@@ -71,7 +71,7 @@ pub(super) fn phone_tag(tag: &str) -> bool {
 }
 
 /// The `key=value` lines of an `.ini` file.
-fn ini(text: &str) -> HashMap<String, String> {
+pub(super) fn ini(text: &str) -> HashMap<String, String> {
     text.lines()
         .filter_map(|line| line.split_once('='))
         .map(|(key, value)| (key.trim().to_string(), value.trim().to_string()))
@@ -273,6 +273,17 @@ pub fn create(sdk: &Sdk, name: &str, image: &SystemImage, profile: &str) -> Resu
         .args(["--device", profile]);
     let out = tool::output(cmd, AVDMANAGER_LIMIT)?;
     if out.ok {
+        // avdmanager leaves the keyboard off, which makes the emulator drop the keys the panel
+        // sends; Android Studio turns it on for every device it makes.
+        let config = sdk.avd_home.join(format!("{name}.avd")).join("config.ini");
+        if let Ok(text) = std::fs::read_to_string(&config) {
+            let mut lines: Vec<&str> = text
+                .lines()
+                .filter(|line| !line.starts_with("hw.keyboard="))
+                .collect();
+            lines.push("hw.keyboard=yes");
+            std::fs::write(&config, lines.join("\n") + "\n")?;
+        }
         return Ok(());
     }
     Err(Error::Tool {

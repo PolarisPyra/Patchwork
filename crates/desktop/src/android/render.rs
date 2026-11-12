@@ -1,13 +1,15 @@
-//! The Android panel drawn: its header with the run button, what is wrong, the devices, and the
+//! The Android panel drawn: its header, what is wrong, the devices, and the
 //! SDK it found.
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{AnyElement, FontWeight, KeyDownEvent, Role, SharedString, Window, div, prelude::*, px};
+use gpui::{
+    AnyElement, FontWeight, KeyDownEvent, Role, SharedString, Window, div, prelude::*, px, relative,
+};
 use patchwork_server::Error;
 use patchwork_server::android::{self, Sdk};
 
-use super::state::{AndroidPanel, Run};
+use super::state::AndroidPanel;
 use crate::ui::menu::Menu;
 use crate::ui::theme::{FONT_MONO, FS_LG, FS_SM, FS_XS, RADIUS, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, icon_button, input_box, scrollbar, spinner, tooltip};
@@ -21,6 +23,7 @@ impl Render for AndroidPanel {
         let header = self.header(&t, cx);
         let body = self.body(&t, window, cx);
         let footer = self.footer(&t, window, cx);
+        let screen = self.screen.clone().filter(|_| self.create.is_none());
         div()
             .id("android-panel")
             .role(Role::Complementary)
@@ -53,8 +56,18 @@ impl Render for AndroidPanel {
             .child(
                 div()
                     .relative()
-                    .flex_1()
                     .min_h_0()
+                    // While a screen shows under them, the devices take the room they need, up to half
+                    // the panel, and scroll past that.
+                    .map(|list| {
+                        if screen.is_some() {
+                            list.max_h(relative(0.5))
+                                .border_b_1()
+                                .border_color(t.border)
+                        } else {
+                            list.flex_1()
+                        }
+                    })
                     .child(
                         div()
                             .id("android-body")
@@ -70,6 +83,7 @@ impl Render for AndroidPanel {
                     )
                     .children(scrollbar(&self.scroll, 10., 2., t.border_strong)),
             )
+            .children(screen)
             .children(footer)
             .children(
                 self.menu
@@ -81,12 +95,6 @@ impl Render for AndroidPanel {
 
 impl AndroidPanel {
     fn header(&self, t: &Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let can_run = self.run == Run::Idle && self.selected.is_some() && self.create.is_none();
-        let run_label = match self.run {
-            Run::Idle => "Run",
-            Run::Preparing => "Starting",
-            Run::Running => "Running",
-        };
         div()
             .flex()
             .items_center()
@@ -132,23 +140,6 @@ impl AndroidPanel {
                                 self.folder()
                             )),
                     ),
-            )
-            .child(
-                btn(
-                    "android-run",
-                    format!("{run_label} the app"),
-                    BtnKind::Primary,
-                    !can_run,
-                    t,
-                )
-                .map(|b| match self.run {
-                    Run::Idle => b.child(icon("play-fill", 12.)),
-                    _ => b.child(spinner(12., t.text_on_accent)),
-                })
-                .child(run_label)
-                .when(can_run, |b| {
-                    b.on_click(cx.listener(|this, _, _, cx| this.run(cx)))
-                }),
             )
             .child(
                 icon_button("close-android", "Close Android devices", "x", 16., cx)

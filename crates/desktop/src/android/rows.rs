@@ -8,9 +8,9 @@ use gpui::{
 };
 use patchwork_server::android::{self, Avd, Boot, Device, DeviceState};
 
-use super::state::{AndroidPanel, Busy, Confirm, device_key};
+use super::state::{AndroidPanel, Busy, Confirm, Run, device_key};
 use crate::ui::menu::{Menu, MenuItem};
-use crate::ui::theme::{FS_SM, RADIUS, Theme};
+use crate::ui::theme::{FS_SM, RADIUS, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, icon_button, spinner, tooltip};
 
 /// A row that is one of several choices: a dot, filled when it is the one picked, then what its
@@ -75,7 +75,42 @@ fn status(
 }
 
 impl AndroidPanel {
-    /// Opens the menu of a stopped virtual device: the ways to start it other than the usual one.
+    /// The button that builds the app and runs it on the device `key`, starting the device first
+    /// when it is stopped; a spinner on the device it is being run on.
+    fn run_button(
+        &self,
+        id: (&'static str, usize),
+        key: &str,
+        name: &str,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let t = theme(cx);
+        if self.run != Run::Idle && self.selected.as_deref() == Some(key) {
+            return div()
+                .id(id)
+                .role(Role::Status)
+                .aria_label(format!("Running the app on {name}"))
+                .size(px(28.))
+                .flex()
+                .flex_none()
+                .items_center()
+                .justify_center()
+                .child(spinner(14., t.text_muted))
+                .into_any_element();
+        }
+        let key = key.to_string();
+        icon_button(id, format!("Run the app on {name}"), "play", 14., cx)
+            .tooltip(tooltip("Run the app"))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                cx.stop_propagation();
+                this.select(key.clone(), cx);
+                this.run(cx);
+            }))
+            .into_any_element()
+    }
+
+    /// Opens the menu of a stopped virtual device: starting it without running the app, and the
+    /// other ways to start it.
     fn open_avd_menu(
         &mut self,
         avd: &str,
@@ -92,6 +127,10 @@ impl AndroidPanel {
                 })
             };
         let items = vec![
+            item("Start", avd.to_string(), |this, name, cx| {
+                this.start(name, Boot::Quick, false, cx);
+            })
+            .icon("play"),
             item("Cold boot", avd.to_string(), |this, name, cx| {
                 this.start(name, Boot::Cold, false, cx);
             })
@@ -156,6 +195,9 @@ impl AndroidPanel {
         match (busy, device) {
             (None, Some(d)) => {
                 let (name, serial) = (name.clone(), d.serial.clone());
+                if d.state == DeviceState::Online {
+                    controls.push(self.run_button(("avd-run", i), &name, &avd.display_name, cx));
+                }
                 controls.push(
                     icon_button(
                         ("avd-stop", i),
@@ -173,23 +215,9 @@ impl AndroidPanel {
                 );
             }
             (None, None) => {
-                let (start, more) = (name.clone(), name.clone());
+                let more = name.clone();
                 let open = self.menu.as_ref().is_some_and(|(of, _, _)| of == &avd.name);
-                controls.push(
-                    icon_button(
-                        ("avd-start", i),
-                        format!("Start {}", avd.display_name),
-                        "play",
-                        14.,
-                        cx,
-                    )
-                    .tooltip(tooltip("Start"))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.start(&start, Boot::Quick, false, cx);
-                    }))
-                    .into_any_element(),
-                );
+                controls.push(self.run_button(("avd-run", i), &name, &avd.display_name, cx));
                 controls.push(
                     icon_button(
                         ("avd-more", i),
@@ -315,6 +343,8 @@ impl AndroidPanel {
         let problem = android::problem(device)
             .filter(|_| !stopping)
             .map(|e| e.to_string());
+        let run = (device.state == DeviceState::Online && problem.is_none() && !stopping)
+            .then(|| self.run_button(("device-run", i), &key, &name, cx));
         // An emulator can be asked to close; a phone is unplugged.
         let stop = (device.emulator && !stopping).then(|| {
             let (key, serial) = (key.clone(), device.serial.clone());
@@ -350,6 +380,7 @@ impl AndroidPanel {
                 status(("device-status", i).into(), state, stopping, t)
                     .when(problem.is_some(), |s| s.text_color(t.warning)),
             )
+            .children(run)
             .children(stop)
             .on_click(cx.listener(move |this, _, _, cx| this.select(key.clone(), cx)));
         match problem {

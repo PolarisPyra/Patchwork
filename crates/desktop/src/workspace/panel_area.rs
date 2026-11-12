@@ -66,14 +66,13 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Shows the panel on a new terminal tab that runs the command `launch` starts.
+    /// Runs the command `launch` starts in a new terminal tab, without opening the panel.
     pub fn run_in_terminal(
         &mut self,
         launch: patchwork_server::terminal::Launch,
         cx: &mut Context<Self>,
     ) {
         self.sync_panel(cx);
-        self.panel_open = true;
         self.panel.update(cx, |p, cx| p.run(launch, cx));
         cx.notify();
     }

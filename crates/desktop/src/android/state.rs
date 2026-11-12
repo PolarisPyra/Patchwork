@@ -13,6 +13,7 @@ use patchwork_server::android::{self, Avd, Boot, Device, MobileProject, Sdk, Sna
 use patchwork_server::{Error, Server};
 
 use super::create::Create;
+use super::screen::DeviceScreen;
 use crate::ui::menu::Menu;
 use crate::ui::text_area::{Submitted, TextArea};
 use crate::ui::theme::theme;
@@ -62,6 +63,9 @@ pub struct AndroidPanel {
     /// The device the app runs on: a virtual device's name, or a connected device's serial.
     pub(super) selected: Option<String>,
     pub(super) busy: HashMap<String, Busy>,
+    /// The emulators asked to close, by serial. adb lists one as offline, without the name of its
+    /// virtual device, while it shuts down, so it is left out until adb lets it go.
+    stopping: HashSet<String>,
     /// The virtual device the panel asks about, and what it asks.
     pub(super) confirm: Option<(String, Confirm)>,
     /// The last failure of an action, until dismissed.
@@ -72,6 +76,8 @@ pub struct AndroidPanel {
     pub(super) sdk_editing: bool,
     pub(super) run: Run,
     pub(super) create: Option<Create>,
+    /// The screen of the device picked, while it is a running emulator.
+    pub(super) screen: Option<Entity<DeviceScreen>>,
     /// A virtual device's menu, while open, and where it opened.
     pub(super) menu: Option<(String, Entity<Menu>, Point<Pixels>)>,
     pub(super) scroll: ScrollHandle,
@@ -130,6 +136,7 @@ impl AndroidPanel {
             acceleration: None,
             acceleration_checked: false,
             busy: HashMap::new(),
+            stopping: HashSet::new(),
             confirm: None,
             failure: None,
             open_details: HashSet::new(),
@@ -137,6 +144,7 @@ impl AndroidPanel {
             sdk_editing: false,
             run: Run::Idle,
             create: None,
+            screen: None,
             menu: None,
             scroll: ScrollHandle::new(),
             focus,
@@ -176,7 +184,14 @@ impl AndroidPanel {
 
     /// Takes a fresh read of the SDK and devices. The device picked stays while it still exists;
     /// else one that is running is picked, else the first virtual device, else none.
-    fn apply(&mut self, snapshot: Snapshot, cx: &mut Context<Self>) {
+    fn apply(&mut self, mut snapshot: Snapshot, cx: &mut Context<Self>) {
+        if let Ok(devices) = &mut snapshot.devices {
+            self.stopping
+                .retain(|serial| devices.iter().any(|d| &d.serial == serial));
+            devices.retain(|d| {
+                d.state == android::DeviceState::Online || !self.stopping.contains(&d.serial)
+            });
+        }
         self.snapshot = Some(snapshot);
         let exists = |key: &String| {
             self.avds().iter().any(|avd| &avd.name == key)
@@ -187,6 +202,7 @@ impl AndroidPanel {
             let first = self.avds().first().map(|avd| avd.name.clone());
             self.selected = running.or(first);
         }
+        self.sync_screen(cx);
         if !self.acceleration_checked
             && let Some(sdk) = self.sdk().cloned()
         {
@@ -202,6 +218,28 @@ impl AndroidPanel {
             .detach();
         }
         cx.notify();
+    }
+
+    /// Shows the screen of the device picked when it is a running emulator, and no screen
+    /// otherwise.
+    fn sync_screen(&mut self, cx: &mut Context<Self>) {
+        let key = self.selected.as_deref();
+        let shown = self.devices().iter().find(|d| {
+            d.emulator
+                && d.state == android::DeviceState::Online
+                && (Some(d.serial.as_str()) == key || d.avd.as_deref() == key)
+        });
+        let current = self.screen.as_ref().map(|s| s.read(cx).serial.clone());
+        match shown {
+            Some(device) if current.as_ref() != Some(&device.serial) => {
+                let (server, serial) = (Arc::clone(&self.server), device.serial.clone());
+                let root = self.project.root.clone();
+                let name = device_key(device);
+                self.screen = Some(cx.new(|cx| DeviceScreen::new(server, root, serial, name, cx)));
+            }
+            Some(_) => {}
+            None => self.screen = None,
+        }
     }
 
     /// Reads the SDK and devices now, rather than at the next poll, after something changed them.
@@ -221,6 +259,7 @@ impl AndroidPanel {
             return;
         }
         self.selected = Some(key.clone());
+        self.sync_screen(cx);
         let (server, project) = (Arc::clone(&self.server), self.project_id.clone());
         cx.background_spawn(async move {
             if let Err(e) = server.set_android_device(&project, &key) {
@@ -276,13 +315,20 @@ impl AndroidPanel {
         let avd = key;
         self.busy.insert(avd.to_string(), Busy::Stopping);
         self.failure = None;
+        self.stopping.insert(serial.clone());
         let (server, root) = (Arc::clone(&self.server), self.project.root.clone());
         let name = avd.to_string();
-        let task = cx.background_spawn(async move { server.stop_emulator(&root, &serial) });
+        let task = cx.background_spawn({
+            let serial = serial.clone();
+            async move { server.stop_emulator(&root, &serial) }
+        });
         cx.spawn(async move |this, cx| {
             let stopped = task.await;
             this.update(cx, |this, cx| {
                 this.busy.remove(&name);
+                if stopped.is_err() {
+                    this.stopping.remove(&serial);
+                }
                 this.failure = stopped.err();
                 this.refresh(cx);
                 cx.notify();
@@ -384,8 +430,8 @@ impl AndroidPanel {
             Some(code) => {
                 self.failure = Some(Error::Tool {
                     message: format!(
-                        "The build or the run failed (exit code {code}). The terminal has its \
-                         whole output: fix the first error it names, then run again."
+                        "The build or the run failed (exit code {code}). Fix the first error its output \
+                         names, then run again. The whole output is in its terminal tab."
                     ),
                     detail: output.to_string(),
                 });

@@ -68,8 +68,6 @@ pub struct Panel {
     pub(super) start_next: Option<Option<String>>,
     /// A shell asked for before the screen had a size.
     pub(super) pending_start: Option<(bool, Option<String>)>,
-    /// A command asked for before the screen had a size.
-    pub(super) pending_run: Option<patchwork_server::terminal::Launch>,
     pub(super) restored: bool,
     /// The screen's columns and rows, and where it sits in the window.
     pub(super) grid: Option<(u16, u16)>,
@@ -114,7 +112,6 @@ impl Panel {
             starting: false,
             start_next: None,
             pending_start: None,
-            pending_run: None,
             restored: false,
             grid: None,
             origin: Point::default(),

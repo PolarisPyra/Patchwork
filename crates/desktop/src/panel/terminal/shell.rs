@@ -21,6 +21,9 @@ const PAGE: &str = "native";
 /// prompt, so a drag would leave a trail of stale prompts behind.
 const RESIZE_SETTLE: Duration = Duration::from_millis(100);
 
+/// The columns and rows a command run before the terminal was ever shown starts with.
+const HIDDEN_GRID: (u16, u16) = (120, 40);
+
 /// A shell this window shows.
 pub struct Shell {
     pub id: u32,
@@ -169,19 +172,14 @@ impl Panel {
         cx.notify();
     }
 
-    /// Runs the command `launch` starts in a terminal tab of its own, shown at once. It closes
-    /// when the command succeeds and stays when it fails, as a shell does, and
-    /// [`crate::panel::PanelEvent::RunFinished`] says how it ended.
+    /// Runs the command `launch` starts in a terminal tab of its own, without showing the
+    /// terminal: the tab is there when the user opens it. It closes when the command succeeds and
+    /// stays when it fails, as a shell does, and [`crate::panel::PanelEvent::RunFinished`] says
+    /// how it ended.
     pub fn run(&mut self, launch: patchwork_server::terminal::Launch, cx: &mut Context<Self>) {
-        self.tab = crate::panel::PanelTab::Terminal;
-        self.visible = true;
         self.restore(cx);
-        let Some((cols, rows)) = self.grid else {
-            // The screen has no size yet; it starts once the panel is laid out.
-            self.pending_run = Some(launch);
-            cx.notify();
-            return;
-        };
+        // Before the terminal has been shown it has no size; it takes its own once it is.
+        let (cols, rows) = self.grid.unwrap_or(HIDDEN_GRID);
         self.error = None;
         let server = Arc::clone(&self.server);
         let (sink, rx) = frames();
@@ -419,9 +417,6 @@ impl Panel {
         }));
         if let Some((asked, chosen)) = self.pending_start.take() {
             self.start(asked, chosen, cx);
-        }
-        if let Some(launch) = self.pending_run.take() {
-            self.run(launch, cx);
         }
         cx.notify();
     }

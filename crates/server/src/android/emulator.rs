@@ -2,9 +2,9 @@
 //! one, and whether this machine can run one at speed.
 //!
 //! An emulator is started in a session of its own with its output in a log file, so closing the
-//! panel, or Patchwork, leaves it running. Each one started is recorded in the app's state with
-//! its console port and process, which is how a later look, or a later launch, knows it as
-//! Patchwork's own. Nothing here stops an emulator on its own account. When the user stops one, it
+//! panel, or Patchwork, leaves it running. Its window is hidden: its screen shows in the panel.
+//! Each one started is recorded in the app's state with its console port and process, which is
+//! how a later look, or a later launch, knows it as Patchwork's own. Nothing here stops an emulator on its own account. When the user stops one, it
 //! is asked to close; only the process of one Patchwork started is ever ended.
 
 // Rust guideline compliant 2026-10-09
@@ -250,12 +250,18 @@ fn kvm(device: &Path) -> Result<(), Error> {
     })
 }
 
+/// The gRPC port of the emulator whose console is on `console`: 8554 for 5554, as Android Studio
+/// numbers them.
+fn grpc_port(console: u16) -> u16 {
+    console + 3000
+}
+
 /// A console port no emulator in `taken` uses and nothing else listens on, with the adb port
-/// after it.
+/// after it and the gRPC port it goes with.
 fn free_port(taken: &[u16]) -> Option<u16> {
     PORTS.step_by(2).find(|port| {
         !taken.contains(port)
-            && [*port, port + 1]
+            && [*port, port + 1, grpc_port(*port)]
                 .iter()
                 .all(|port| std::net::TcpListener::bind(("127.0.0.1", *port)).is_ok())
     })
@@ -287,8 +293,9 @@ impl Server {
         sdk::locate(self.store.settings().android_sdk.as_deref(), Some(project))
     }
 
-    /// Starts the virtual device `avd` in a window of its own and returns once it is running,
-    /// before Android has started in it; [`Self::await_boot`] waits for that.
+    /// Starts the virtual device `avd`, its screen shown in the panel rather than a window, and
+    /// returns once it is running, before Android has started in it; [`Self::await_boot`] waits
+    /// for that.
     ///
     /// # Errors
     ///
@@ -326,9 +333,19 @@ impl Server {
         }
         let output = std::fs::File::create(&log)?;
         let mut cmd = tool_command(&sdk, emulator);
-        cmd.args(["-avd", avd, "-port", &port.to_string()])
-            .stdout(output.try_clone()?)
-            .stderr(output);
+        // Its screen shows in the panel, streamed over gRPC, rather than in a window of its own.
+        cmd.args([
+            "-avd",
+            avd,
+            "-port",
+            &port.to_string(),
+            "-grpc",
+            &grpc_port(port).to_string(),
+            "-grpc-use-token",
+            "-qt-hide-window",
+        ])
+        .stdout(output.try_clone()?)
+        .stderr(output);
         match boot {
             Boot::Quick => {}
             Boot::Cold => {

@@ -46,6 +46,12 @@ image = { workspace = true, features = ["png", "jpeg", "webp"] }
 sha2 = { workspace = true, default-features = true }
 # Updates: a release's download is checked against the release key's signature.
 minisign-verify = { workspace = true, default-features = true }
+futures = { workspace = true, default-features = true }
+http = { workspace = true, default-features = true }
+prost = { workspace = true, features = ["derive", "std"] }
+tokio = { workspace = true, features = ["macros", "net", "rt", "sync", "time"] }
+tonic = { workspace = true, features = ["channel"] }
+tonic-prost.workspace = true
 
 # Screenshots. On Linux they are taken in src/screen.rs with crates the app already builds, since
 # xcap would also build PipeWire, which needs newer headers than the AppImage's build machine has.

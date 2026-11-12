@@ -31,7 +31,8 @@ pub fn run_command(
     shell: &str,
 ) -> RunCommand {
     let line = match project.framework {
-        Framework::Flutter => format!("flutter run -d {serial}"),
+        // Not left attached for hot reload: nobody sees the terminal it runs in.
+        Framework::Flutter => format!("flutter run -d {serial} --no-resident"),
         Framework::ReactNative => "npx react-native run-android".to_string(),
         Framework::Expo => {
             let device = avd.unwrap_or(serial);
