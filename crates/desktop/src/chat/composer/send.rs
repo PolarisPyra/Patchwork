@@ -200,13 +200,14 @@ impl Composer {
         load: impl FnOnce(&Server) -> Result<Vec<Attachment>, patchwork_server::Error> + Send + 'static,
         cx: &mut Context<Self>,
     ) {
-        let Some(workspace) = self.workspace.upgrade() else {
-            return;
-        };
-        let server = Arc::clone(&workspace.read(cx).server);
-        let task = cx.background_spawn(async move { load(&server) });
+        // The server is read once this update is over: a drop on the chat attaches from inside
+        // the workspace's own update, where reading the workspace panics.
+        let workspace = self.workspace.clone();
         cx.spawn(async move |this, cx| {
-            let loaded = task.await;
+            let Ok(server) = workspace.read_with(cx, |w, _| Arc::clone(&w.server)) else {
+                return;
+            };
+            let loaded = cx.background_spawn(async move { load(&server) }).await;
             let _ = this.update(cx, |this, cx| {
                 match loaded {
                     Ok(attachments) => {
