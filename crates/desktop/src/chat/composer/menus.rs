@@ -41,7 +41,7 @@ pub enum Pick {
 }
 
 /// Context sizes to compact at, each twice the one before; 0 leaves it to the agent.
-const WINDOWS: [u64; 4] = [128_000, 256_000, 512_000, 0];
+const WINDOWS: [u64; 5] = [128_000, 200_000, 256_000, 512_000, 0];
 
 const ACCESS_MODES: [(AccessMode, &str, &str, &str); 4] = [
     (

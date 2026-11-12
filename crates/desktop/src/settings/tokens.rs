@@ -17,8 +17,8 @@ use crate::ui::{AGENT_KINDS, agent_label, format_tokens, icon};
 /// Context sizes offered by the token settings.
 const TOKEN_LEVELS: [u64; 4] = [100_000, 150_000, 200_000, 300_000];
 
-/// Context sizes to compact at; 0 is Default.
-const COMPACT_WINDOWS: [u64; 4] = [0, 128_000, 256_000, 512_000];
+/// Context sizes to compact at; 0 is When full, the agent's own, near the model's full window.
+const COMPACT_WINDOWS: [u64; 5] = [128_000, 200_000, 256_000, 512_000, 0];
 
 /// The models each agent offers, loaded once per opening of the pane.
 #[derive(Default)]
@@ -38,10 +38,10 @@ fn compact_window_mut(t: &mut TokenSettings, kind: AgentKind) -> &mut u64 {
     }
 }
 
-/// A level's label, with 0 read as "Default".
+/// A level's label, with 0 read as "When full".
 fn level_label(level: u64) -> SharedString {
     if level == 0 {
-        "Default".into()
+        "When full".into()
     } else {
         format_tokens(level).into()
     }
@@ -273,12 +273,13 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         let mut levels = COMPACT_WINDOWS.to_vec();
         if !levels.contains(&value) {
             levels.push(value);
-            levels.sort_unstable();
+            // When full (0) stays last, as the largest.
+            levels.sort_unstable_by_key(|&l| if l == 0 { u64::MAX } else { l });
         }
         rows.push(
             token_row(
                 title.clone(),
-                Some("Compacts a task once its context reaches this. Default leaves it to the agent, near the model's full window"),
+                Some("Compacts a task once its context reaches this. When full leaves it to the agent, near the model's full window"),
                 &t,
             )
             .child(context_levels(

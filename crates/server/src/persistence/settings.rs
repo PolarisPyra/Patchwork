@@ -61,10 +61,11 @@ pub(super) fn load_settings(conn: &Connection) -> rusqlite::Result<Settings> {
         });
     }
     crate::permissions::seed(&mut settings.permissions);
-    // Claude compacted only near the model's full window by default, far past where it gets costly.
+    // 0 leaves Claude to compact near the model's full window, far past where it gets costly. It
+    // was the old default, then a choice labelled "Default", so it is reset once to 200k.
     let tokens = &mut settings.tokens;
-    if !tokens.compact_window_defaulted {
-        tokens.compact_window_defaulted = true;
+    if !tokens.compact_window_reset {
+        tokens.compact_window_reset = true;
         if tokens.claude_compact_window == 0 {
             tokens.claude_compact_window = 200_000;
         }

@@ -361,11 +361,11 @@ pub struct TokenSettings {
     /// The context size at which Claude compacts mid-task. 0 leaves Claude's own, near the
     /// model's full window.
     pub claude_compact_window: u64,
-    /// Set once the 200k default for `claude_compact_window` replaced the old default, 0, so
-    /// choosing 0 again sticks.
+    /// Set once a `claude_compact_window` of 0 was reset to 200k. Settings labelled 0 "Default",
+    /// so it was picked as the safe choice; once reset, choosing When full (0) again sticks.
     // Missing in settings saved before it, unlike the struct's default.
     #[serde(default)]
-    pub compact_window_defaulted: bool,
+    pub compact_window_reset: bool,
     /// The context size at which Patchwork's own agent compacts an API task before its next
     /// request. 0 leaves it until the provider refuses the conversation as too long.
     pub api_compact_window: u64,
@@ -397,7 +397,7 @@ impl Default for TokenSettings {
             warn_above: 150_000,
             ask_before_resume: true,
             claude_compact_window: 200_000,
-            compact_window_defaulted: true,
+            compact_window_reset: true,
             api_compact_window: 128_000,
             codex_compact_window: 0,
             opencode_compact_window: 0,
