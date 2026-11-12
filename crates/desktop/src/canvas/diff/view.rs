@@ -74,6 +74,8 @@ impl Canvas {
             .id("diff")
             .size_full()
             .overflow_x_scroll()
+            // The list scrolls down on its own; without this the wheel also scrolls this sideways.
+            .restrict_scroll_to_axis()
             .font_family(FONT_MONO)
             .text_size(px(crate::ui::theme::FS_MD))
             .line_height(relative(1.65))
