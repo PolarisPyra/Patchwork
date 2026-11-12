@@ -3,6 +3,21 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.50] - 2026-11-12
+
+### Added
+
+- When you start a new chat in a project that has no default chat settings yet, the Granular chat settings card now has a Make default button. It saves the card's settings as what the project's new chats start with, so later chats there skip the card.
+
+### Changed
+
+- The Android devices panel now shows a running emulator's screen inside Patchwork, in a phone's frame, instead of in a window of its own. You can tap, swipe, scroll and type on it, press its power and volume keys on the frame's side, and use Back, Home and Overview under it. Each device in the list now has its own play button, which starts the device if needed and runs the app on it, so the panel's Run button is gone. Running the app no longer opens the terminal: the build runs in a terminal tab you can open yourself, and if it fails, the panel shows the error. An emulator you stop no longer shows up as an offline connected device while it shuts down.
+- Undoing to an earlier message, or forking from a reply, in a Claude chat now continues Claude's own conversation from that reply instead of starting over from a plain-text copy of the chat. Claude keeps everything it read and ran up to that point, and the next message reuses the cached context, so it uses far fewer tokens and doesn't read the same files again. Replies from before this update, and other agents, still get the copy.
+
+### Fixed
+
+- While Claude compacts a chat's context, the chat now shows a spinner with Compacting context until it is done. Before, it said Context compacted twice while compaction was still running, under a Working timer. The reply under a /compact no longer repeats the divider.
+
 ## [26.11.49] - 2026-11-11
 
 ### Added
