@@ -4,8 +4,8 @@
 
 use super::archived::archived_view;
 use gpui::{
-    AnyElement, Div, ExternalPaths, FontWeight, MouseButton, MouseDownEvent, Role, Window, div,
-    prelude::*, px,
+    AnyElement, Div, ExternalPaths, FontWeight, MouseButton, MouseDownEvent, Role, div, prelude::*,
+    px,
 };
 use crate::ui::theme::{FS_MD, FS_SM, RADIUS_SM, Theme, theme};
 use crate::ui::{button, icon};
@@ -16,7 +16,6 @@ use super::usage;
 pub fn render(
     w: &mut Workspace,
     view: View,
-    window: &mut Window,
     cx: &mut Context<Workspace>,
 ) -> impl IntoElement + use<> {
     let t = *theme(cx);
@@ -25,13 +24,6 @@ pub fn render(
     let body = match view {
         View::Tasks => tasks_view(w, cx).into_any_element(),
         View::Archived => archived_view(w, cx).into_any_element(),
-        View::Devices => div()
-            .flex_1()
-            .min_h_0()
-            .flex()
-            .flex_col()
-            .child(w.devices_view(window, cx))
-            .into_any_element(),
         View::Changes => div()
             .flex_1()
             .min_h_0()

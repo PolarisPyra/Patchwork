@@ -1,19 +1,21 @@
-//! Settings → SSH: the hosts in `~/.ssh/config`, which the Add Project
+//! Settings → Devices: the hosts in `~/.ssh/config`, which the Add Project
 //! dialog offers as machines. Test logs in with keys only, so it shows whether Patchwork could
-//! reach a host unattended. The config is the user's own: it is opened in their editor, and
-//! Patchwork never writes it.
+//! reach a host unattended. Add Device appends a host to the config, which ssh then reads.
 
 // Rust guideline compliant 2026-10-09
 
 use std::collections::{HashMap, HashSet};
 
-use gpui::{AnyElement, FontWeight, SharedString, div, prelude::*, px};
+use gpui::{AnyElement, Focusable, FontWeight, SharedString, Window, div, prelude::*, px};
 use patchwork_server::system::ssh::{self, Host, Test};
 
 use crate::settings::SettingsDialog;
-use crate::settings::controls::alert;
+use crate::settings::controls::{FieldKind, alert};
 use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS_SM, theme};
 use crate::ui::{BtnKind, btn, icon, spinner};
+
+/// The add form's fields share this prefix, so closing it forgets them.
+const PREFIX: &str = "ssh-form-";
 
 #[derive(Default)]
 pub struct SshState {
@@ -22,6 +24,18 @@ pub struct SshState {
     /// The last result of each host's test, by name.
     tests: HashMap<String, Test>,
     testing: HashSet<String>,
+    error: Option<String>,
+    /// The device being added, while its form is open.
+    adding: Option<NewDevice>,
+}
+
+/// What the add form holds.
+#[derive(Default)]
+struct NewDevice {
+    name: String,
+    host: String,
+    user: String,
+    busy: bool,
     error: Option<String>,
 }
 
@@ -52,28 +66,197 @@ impl SettingsDialog {
         );
     }
 
-    fn open_ssh_config(&mut self, cx: &mut Context<Self>) {
-        self.ssh.error = None;
+    fn open_add_device(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.drop_fields(PREFIX);
+        self.ssh.adding = Some(NewDevice::default());
+        let _ = render(self, window, cx);
+        if let Some(area) = self.field_area(&format!("{PREFIX}name")) {
+            window.focus(&area.read(cx).focus_handle(cx), cx);
+        }
+        cx.notify();
+    }
+
+    fn close_add_device(&mut self, cx: &mut Context<Self>) {
+        self.ssh.adding = None;
+        self.drop_fields(PREFIX);
+        cx.notify();
+    }
+
+    /// Escape closes the add form, unless it is saving. False when it is not open.
+    pub(in crate::settings) fn cancel_add_device(&mut self, cx: &mut Context<Self>) -> bool {
+        match &self.ssh.adding {
+            None => return false,
+            Some(draft) if draft.busy => {}
+            Some(_) => self.close_add_device(cx),
+        }
+        true
+    }
+
+    fn save_device(&mut self, cx: &mut Context<Self>) {
+        let Some(draft) = self.ssh.adding.as_mut() else {
+            return;
+        };
+        if draft.busy || draft.host.trim().is_empty() {
+            return;
+        }
+        let (name, host, user) = (draft.name.clone(), draft.host.clone(), draft.user.clone());
+        draft.busy = true;
+        draft.error = None;
         self.run(
-            || {
-                let path = ssh::config_path().ok_or("No home folder")?;
-                if !path.is_file() {
-                    return Err(format!("{} does not exist", path.display()));
+            move || ssh::add_host(&name, &host, &user).map(|()| ssh::hosts()),
+            |d, out, cx| match out {
+                Ok(hosts) => {
+                    d.ssh.hosts = Some(hosts);
+                    d.close_add_device(cx);
                 }
-                let dir = path
-                    .parent()
-                    .map(|d| d.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                patchwork_server::workspace::open_in_editor(&dir, "config", None)
-                    .map_err(|e| e.to_string())
+                Err(e) => {
+                    if let Some(draft) = &mut d.ssh.adding {
+                        draft.busy = false;
+                        draft.error = Some(e.to_string());
+                    }
+                }
             },
-            |d, out, _| d.ssh.error = out.err(),
             cx,
         );
     }
 }
 
-pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
+/// A field with its label above it.
+fn labeled(label: &'static str, field: gpui::Div, muted: gpui::Hsla) -> gpui::Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(4.))
+        .child(
+            div()
+                .text_size(px(FS_SM))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(muted)
+                .child(label),
+        )
+        .child(field)
+}
+
+/// The add form, or the button that opens it.
+fn add_device(
+    d: &mut SettingsDialog,
+    window: &mut Window,
+    cx: &mut Context<SettingsDialog>,
+) -> AnyElement {
+    let t = *theme(cx);
+    let Some(draft) = d.ssh.adding.as_ref() else {
+        return div()
+            .py(px(10.))
+            .flex()
+            .child(
+                btn("ssh-add-device", "Add device", BtnKind::Plain, false, &t)
+                    .gap(px(6.))
+                    .child(icon("plus", 14.))
+                    .child("Add device")
+                    .on_click(cx.listener(|d, _, window, cx| d.open_add_device(window, cx))),
+            )
+            .into_any_element();
+    };
+    let (name, host, user, busy, error) = (
+        draft.name.clone(),
+        draft.host.clone(),
+        draft.user.clone(),
+        draft.busy,
+        draft.error.clone(),
+    );
+    let kind = FieldKind {
+        live: true,
+        mono: true,
+        ..Default::default()
+    };
+    let set = |f: fn(&mut NewDevice, String)| {
+        move |d: &mut SettingsDialog, text: String, cx: &mut Context<SettingsDialog>| {
+            if let Some(draft) = &mut d.ssh.adding {
+                f(draft, text);
+            }
+            cx.notify();
+        }
+    };
+    let name_key = format!("{PREFIX}name");
+    let host_key = format!("{PREFIX}host");
+    let user_key = format!("{PREFIX}user");
+    let name_field = d.field(
+        name_key.clone(),
+        "Name",
+        &name,
+        "nas",
+        kind,
+        set(|draft, text| draft.name = text),
+        window,
+        cx,
+    );
+    let host_field = d.field(
+        host_key.clone(),
+        "Address",
+        &host,
+        "192.168.1.20",
+        kind,
+        set(|draft, text| draft.host = text),
+        window,
+        cx,
+    );
+    let user_field = d.field(
+        user_key.clone(),
+        "User",
+        &user,
+        "",
+        kind,
+        set(|draft, text| draft.user = text),
+        window,
+        cx,
+    );
+    for key in [&name_key, &host_key, &user_key] {
+        d.on_submit(key, |d, _, cx| d.save_device(cx));
+    }
+    let can_save = !busy && !host.trim().is_empty();
+    div()
+        .id("ssh-add-form")
+        .role(gpui::Role::Group)
+        .aria_label("Add device")
+        .flex()
+        .flex_col()
+        .gap(px(12.))
+        .py(px(10.))
+        .child(labeled("Name", name_field, t.text_muted))
+        .child(labeled("Address", host_field, t.text_muted))
+        .child(labeled("User", user_field, t.text_muted))
+        .children(error.map(|e| alert("ssh-form-error", e, t.danger).pt_0()))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .border_t_1()
+                .border_color(t.border)
+                .pt(px(12.))
+                .child(
+                    btn("ssh-form-save", "Save", BtnKind::Primary, !can_save, &t)
+                        .child(if busy { "Saving…" } else { "Save" })
+                        .when(can_save, |b| {
+                            b.on_click(cx.listener(|d, _, _, cx| d.save_device(cx)))
+                        }),
+                )
+                .child(
+                    btn("ssh-form-cancel", "Cancel", BtnKind::Plain, busy, &t)
+                        .child("Cancel")
+                        .when(!busy, |b| {
+                            b.on_click(cx.listener(|d, _, _, cx| d.close_add_device(cx)))
+                        }),
+                ),
+        )
+        .into_any_element()
+}
+
+pub fn render(
+    d: &mut SettingsDialog,
+    window: &mut Window,
+    cx: &mut Context<SettingsDialog>,
+) -> AnyElement {
     let t = *theme(cx);
     if !std::mem::replace(&mut d.ssh.asked, true) {
         d.run(ssh::hosts, |d, hosts, _| d.ssh.hosts = Some(hosts), cx);
@@ -161,6 +344,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
     let loading = state.hosts.is_none() && state.error.is_none();
     let none = state.hosts.as_ref().is_some_and(std::vec::Vec::is_empty);
     let error = state.error.clone();
+    let add = add_device(d, window, cx);
 
     div()
         .flex()
@@ -188,19 +372,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             )
         })
         .children(rows)
-        .child(
-            div().py(px(10.)).flex().child(
-                btn(
-                    "ssh-open-config",
-                    "Open ~/.ssh/config",
-                    BtnKind::Plain,
-                    false,
-                    &t,
-                )
-                .child("Open ~/.ssh/config")
-                .on_click(cx.listener(|d, _, _, cx| d.open_ssh_config(cx))),
-            ),
-        )
+        .child(add)
         .children(error.map(|e| alert("ssh-error", e, t.danger)))
         .into_any_element()
 }
