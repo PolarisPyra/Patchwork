@@ -16,7 +16,8 @@ use crate::settings::controls::{letter_badge, switch, token_row};
 use crate::ui::theme::{FS_SM, theme};
 use crate::ui::{BtnKind, btn, icon};
 
-use super::{SKILL_SIGIL, empty, example, filter_chip, list_box};
+use crate::ui::sigils::{SigilKind, default_sigil};
+use super::{empty, example, filter_chip, list_box};
 
 /// How a skills folder is laid out: one folder per skill, named like the skill, with its SKILL.md
 /// and anything the skill refers to.
@@ -216,7 +217,7 @@ pub fn render(
         .iter()
         .map(|skill| {
             let (path, name, enabled) = (skill.path.clone(), skill.name.clone(), skill.enabled);
-            let label = format!("{SKILL_SIGIL}{}", skill.name);
+            let label = format!("{}{}", default_sigil(SigilKind::Skills), skill.name);
             div()
                 .flex()
                 .min_w_0()

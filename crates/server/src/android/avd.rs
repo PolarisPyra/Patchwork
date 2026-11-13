@@ -190,7 +190,7 @@ pub(super) fn parse_profiles(listing: &str) -> Vec<HardwareProfile> {
 ///
 /// Returns an error when the SDK has no `avdmanager`, or it fails.
 pub fn profiles(sdk: &Sdk) -> Result<Vec<HardwareProfile>, Error> {
-    let avdmanager = avdmanager(sdk)?;
+    let avdmanager = sdk.avdmanager()?;
     let out = tool::output(
         {
             let mut cmd = tool_command(sdk, avdmanager);
@@ -209,12 +209,6 @@ pub fn profiles(sdk: &Sdk) -> Result<Vec<HardwareProfile>, Error> {
         });
     }
     Ok(found)
-}
-
-fn avdmanager(sdk: &Sdk) -> Result<&Path, Error> {
-    sdk.avdmanager
-        .as_deref()
-        .ok_or_else(|| tool::missing("avdmanager", "Android SDK Command-line Tools (latest)", sdk))
 }
 
 /// A name for a new device with this profile and API level that no device in `existing` has:
@@ -267,7 +261,7 @@ pub fn create(sdk: &Sdk, name: &str, image: &SystemImage, profile: &str) -> Resu
     {
         return Err(format!("A device named {name} already exists. Pick another name.").into());
     }
-    let mut cmd = tool_command(sdk, avdmanager(sdk)?);
+    let mut cmd = tool_command(sdk, sdk.avdmanager()?);
     cmd.args(["create", "avd", "--name", name, "--package"])
         .arg(image.avd_package())
         .args(["--device", profile]);
@@ -301,7 +295,7 @@ pub fn create(sdk: &Sdk, name: &str, image: &SystemImage, profile: &str) -> Resu
 ///
 /// Returns an error when the SDK has no `avdmanager`, or it fails, with what it printed.
 pub(super) fn delete(sdk: &Sdk, name: &str) -> Result<(), Error> {
-    let mut cmd = tool_command(sdk, avdmanager(sdk)?);
+    let mut cmd = tool_command(sdk, sdk.avdmanager()?);
     cmd.args(["delete", "avd", "--name", name]);
     let out = tool::output(cmd, AVDMANAGER_LIMIT)?;
     if out.ok {

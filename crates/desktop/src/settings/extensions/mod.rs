@@ -9,5 +9,5 @@ mod skills;
 mod view;
 
 pub(super) use crate::settings::controls::list_box;
-use view::{AGENT_SIGIL, SKILL_SIGIL, empty, example, filter_chip};
+use view::{empty, example, filter_chip};
 pub use view::{ExtensionsState, render};

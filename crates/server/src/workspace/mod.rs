@@ -33,7 +33,7 @@ pub use git::{
 };
 pub(crate) use git::{
     CheckState, base_ref, branch_summary, check_state, create_pull_request, gh, git as run_git,
-    stage_all, staged_summary, truncated,
+    pull_request_checks, pull_request_view, stage_all, staged_summary, truncated,
 };
 #[doc(inline)]
 pub use media::{FileMedia, PreviewKind, file_media};

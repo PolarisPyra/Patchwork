@@ -14,7 +14,9 @@ use patchwork_server::provider::AgentKind;
 use patchwork_server::threads::{Role as MessageRole, StepStatus, Thread, ToolCall};
 
 use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_LG, Theme};
-use crate::ui::{agent_logo, button, full_elapsed, icon, now_ms, popup, popup_shadow, spinner};
+use crate::ui::{
+    agent_logo, button, compact_elapsed, full_elapsed, icon, now_ms, popup, popup_shadow, spinner,
+};
 use crate::workspace::{Workspace, is_working};
 
 /// How long a row is hovered before its details card opens.
@@ -69,22 +71,6 @@ pub(super) fn title_of(tool: &ToolCall) -> String {
 fn elapsed_ms(tool: &ToolCall, now: u64) -> Option<u64> {
     let started = tool.started_at?;
     Some(tool.ended_at.unwrap_or(now).saturating_sub(started))
-}
-
-/// "42s", "3m", "1.5h", "12h".
-fn compact_elapsed(ms: u64) -> String {
-    let s = ms / 1000;
-    if s < 60 {
-        format!("{s}s")
-    } else if s < 3600 {
-        format!("{}m", s / 60)
-    } else if s < 36_000 {
-        let h = (s as f64 / 360.).round() / 10.;
-        let text = format!("{h:.1}");
-        format!("{}h", text.strip_suffix(".0").unwrap_or(&text))
-    } else {
-        format!("{}h", s / 3600)
-    }
 }
 
 pub(super) fn status_label(status: StepStatus) -> &'static str {

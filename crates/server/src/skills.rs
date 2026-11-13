@@ -22,9 +22,16 @@ static CONFIG_DIR: OnceLock<PathBuf> = OnceLock::new();
 /// an older version built for the CLIs.
 pub fn init(config_dir: &Path) {
     let _ = CONFIG_DIR.set(config_dir.to_path_buf());
-    let _ = std::fs::create_dir_all(default_dir());
+    if let Err(e) = std::fs::create_dir_all(default_dir()) {
+        log::warn!(error:% = e; "could not create the skills folder: {{error}}");
+    }
     for old in ["skills-enabled", "agents-for-claude", "agents-for-codex"] {
-        let _ = std::fs::remove_dir_all(config_dir.join(old));
+        match std::fs::remove_dir_all(config_dir.join(old)) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                log::warn!(error:% = e; "could not remove an old folder: {{error}}");
+            }
+            _ => {}
+        }
     }
 }
 

@@ -1,14 +1,10 @@
 //! Custom agents: role files a chat can summon with `&name`.
 //!
-//! Custom agents: Markdown files in `agents` in the config folder, or in a project's
+//! Markdown files in `agents` in the config folder, or in a project's
 //! `.patchwork/agents`, each a role an agent takes on when a message summons it as `&name`. The
 //! name is the file's name without `.md`; the frontmatter gives a title (`name`), a description,
 //! a model and a mode, and the text below it is the role's instructions. A `primary` agent stays
 //! the chat's agent once summoned; any other is summoned for one message.
-//!
-//! The custom agents a chat can summon, and the role it takes on.
-//!
-//! The agents folder, the agents in it, and summoning one into a turn.
 
 // Rust guideline compliant 2026-10-09
 
@@ -207,7 +203,9 @@ impl Library {
     /// library lives. A folder that can't be watched is still read once.
     pub fn open(config_dir: &Path) -> Arc<Self> {
         let dir = config_dir.join("agents");
-        let _ = std::fs::create_dir_all(&dir);
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            log::warn!(error:% = e; "could not create the agents folder: {{error}}");
+        }
         let library = Arc::new(Self {
             agents: RwLock::new(load(&dir).into()),
             dir,

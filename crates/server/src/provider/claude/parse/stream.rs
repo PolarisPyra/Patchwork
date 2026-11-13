@@ -209,7 +209,7 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
                     },
                 }
             };
-            let count = |key: &str| v[key].as_u64().unwrap_or(0) as u32;
+            let count = |key: &str| v[key].as_u64().and_then(|n| u32::try_from(n).ok());
             out.push(Parsed::Retrying {
                 reason,
                 attempt: count("attempt"),

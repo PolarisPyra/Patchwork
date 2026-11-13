@@ -11,24 +11,27 @@ use crate::provider::AgentKind;
 use crate::{import, workspace};
 use crate::Server;
 
+/// What a scan of one source found.
+struct Scan {
+    /// Sessions that are the user's own, imported or not.
+    found: u32,
+    /// Sub-agent runs, which are never imported.
+    subagents: u32,
+    /// Sessions not yet in Patchwork.
+    new: Vec<import::Session>,
+}
+
 impl Server {
     /// Sessions `source` saved on disk that can be imported: ones whose folder
     /// still exists, that Patchwork did not run as a chat, and that are not already
     /// threads: an agent session in `known`, or an imported transcript in `imported`.
-    /// Returns (found, importable).
     fn importable(
         &self,
         source: ImportSource,
         known: &[(AgentKind, String)],
         imported: &[String],
-    ) -> (u32, u32, Vec<import::Session>) {
-        let default_agent = self
-            .store
-            .settings()
-            .agents
-            .first()
-            .copied()
-            .unwrap_or(AgentKind::Claude);
+    ) -> Scan {
+        let default_agent = self.store.settings().default_agent();
         let all = import::sessions(source, default_agent);
         let subagents = all.iter().filter(|s| s.subagent).count() as u32;
         // Patchwork's own chats are not the user's imports, so they are not counted.
@@ -67,12 +70,20 @@ impl Server {
             "{source:?}: {found} found, {} new, {subagents} sub-agent runs",
             new.len()
         );
-        (found, subagents, new)
+        Scan {
+            found,
+            subagents,
+            new,
+        }
     }
 
     pub fn scan_imports(&self, source: ImportSource) -> ImportScan {
         ilog!("{source:?}: scan started");
-        let (found, subagents, new) = self.importable(
+        let Scan {
+            found,
+            subagents,
+            new,
+        } = self.importable(
             source,
             &self.store.session_keys(),
             &self.store.imported_sources(),
@@ -100,7 +111,7 @@ impl Server {
         let mut imported = self.store.imported_sources();
         let mut threads = Vec::new();
         for &source in sources {
-            for session in self.importable(source, &known, &imported).2 {
+            for session in self.importable(source, &known, &imported).new {
                 if session.imported {
                     if imported.contains(&session.session_id) {
                         ilog!(

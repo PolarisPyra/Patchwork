@@ -515,8 +515,8 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
         }
         (None, Some("error")) if params["willRetry"] == true => out.push(Parsed::Retrying {
             reason: retry_reason(&params["error"]),
-            attempt: 0,
-            max_attempts: 0,
+            attempt: None,
+            max_attempts: None,
         }),
         (None, Some("error")) => {
             if let Some(refusal) = policy_refusal(&params["error"]) {
@@ -567,7 +567,6 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
     out
 }
 
-/// A Codex error that means a safety check blocked the request, not that the turn broke.
 /// The code Codex files an error under: a name such as `unauthorized`, or the key of an object
 /// such as `{"httpConnectionFailed": {…}}`.
 fn error_code(error: &Value) -> Option<&str> {
@@ -608,6 +607,7 @@ fn error_text(error: &Value, fallback: &str) -> String {
     format!("{message}\n\n{remedy}")
 }
 
+/// A Codex error that means a safety check blocked the request, not that the turn broke.
 fn policy_refusal(error: &Value) -> Option<Refusal> {
     let category = match error["codexErrorInfo"].as_str()? {
         "cyberPolicy" => "cyber",

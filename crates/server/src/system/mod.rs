@@ -1,10 +1,9 @@
-//! The user's machine: programs, environment, shells, desktop opening, processes, folders, and
-//! time.
+//! The user's machine, which no domain owns.
 //!
-//! The user's machine: the programs Patchwork starts and the environment they run with, the
+//! The programs Patchwork starts and the environment they run with, the
 //! environment the user's shell sets up, the shells commands and the terminal run in, opening
-//! files and links on the desktop, the systemd scope agents run in, the range a command runs in, the process table,
-//! Patchwork's own folders, and time.
+//! files and links on the desktop, the systemd scope agents run in, the range a command runs in,
+//! the process table, Patchwork's own folders, and time.
 
 // Rust guideline compliant 2026-10-09
 

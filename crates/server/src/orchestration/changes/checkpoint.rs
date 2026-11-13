@@ -161,7 +161,9 @@ pub(in crate::orchestration) fn record_end(
         .map_err(|e| log::warn!(error:% = e; "failed to snapshot a turn's end: {{error}}"))
         .ok()?;
     for id in replies {
-        let _ = git(root, &["update-ref", &end_ref(thread_id, id), &after]);
+        if let Err(e) = git(root, &["update-ref", &end_ref(thread_id, id), &after]) {
+            log::warn!(error:% = e; "failed to record a turn's end: {{error}}");
+        }
     }
     Some(TurnTrees { before, after })
 }
@@ -482,8 +484,8 @@ pub fn remove(root: &str, thread_id: &str, message_ids: Option<&[String]>) {
         None => list(root, thread_id),
     };
     for id in ids {
-        let _ = git(root, &["update-ref", "-d", &ref_name(thread_id, &id)]);
-        let _ = git(root, &["update-ref", "-d", &end_ref(thread_id, &id)]);
+        delete_ref(root, &ref_name(thread_id, &id));
+        delete_ref(root, &end_ref(thread_id, &id));
     }
     // Replies have end snapshots but no snapshot of their own, so they are not in `list`.
     if message_ids.is_none() {
@@ -496,8 +498,15 @@ pub fn remove(root: &str, thread_id: &str, message_ids: Option<&[String]>) {
             ],
         );
         for name in ends.unwrap_or_default().lines() {
-            let _ = git(root, &["update-ref", "-d", name]);
+            delete_ref(root, name);
         }
+    }
+}
+
+/// Deletes the ref `name`, logging a failure.
+fn delete_ref(root: &str, name: &str) {
+    if let Err(e) = git(root, &["update-ref", "-d", name]) {
+        log::warn!(error:% = e; "failed to drop a snapshot: {{error}}");
     }
 }
 

@@ -178,8 +178,7 @@ pub(super) fn set_agent(value: &mut Granular, slot: Slot, pick: Option<AgentPick
 impl Workspace {
     /// The agent new chats start on, with its model from Settings.
     pub(super) fn default_pick(&self, agent: Option<AgentKind>) -> AgentPick {
-        let first = self.settings.agents.first().copied();
-        let agent = agent.or(first).unwrap_or(AgentKind::Claude);
+        let agent = agent.unwrap_or_else(|| self.settings.default_agent());
         AgentPick {
             agent,
             model: self.settings.tokens.default_models.get(&agent).cloned(),

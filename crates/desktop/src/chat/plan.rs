@@ -139,10 +139,6 @@ impl Workspace {
             compact_window: thread.compact_window,
             plan_mode: false,
         });
-        // A second click does not send it again.
-        if !self.implementing.insert(id.clone()) {
-            return;
-        }
         let text = format!("{IMPLEMENT}{}", plan.trim());
         self.error = None;
         if let Some(new) = new {
@@ -157,7 +153,6 @@ impl Workspace {
             }
             self.send(text, Vec::new(), None, None, cx);
         }
-        self.implementing.remove(&id);
         cx.notify();
     }
 }

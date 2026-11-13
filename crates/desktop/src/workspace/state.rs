@@ -55,7 +55,7 @@ pub const SIDEBAR_MAX: f32 = 480.;
 pub enum ReplyNotice {
     /// The agent is retrying a model request: why, the attempt, and how many it makes (0 when
     /// unknown).
-    Retrying(String, u32, u32),
+    Retrying(String, Option<u32>, Option<u32>),
     /// The agent has said nothing since this time (ms since epoch).
     Quiet(u64),
 }
@@ -98,7 +98,6 @@ pub struct Workspace {
     pub plan_last_running: Option<String>,
     pub shown_plan: Option<ShownPlan>,
     pub plan_fold_queued: Option<String>,
-    pub implementing: HashSet<String>,
     pub goal_clear: Option<GoalClear>,
     pub goal_closed: Option<u64>,
     /// A redraw is due in a second, for the elapsed times on screen.
@@ -276,7 +275,6 @@ impl Workspace {
             plan_last_running: None,
             shown_plan: None,
             plan_fold_queued: None,
-            implementing: HashSet::new(),
             goal_clear: None,
             goal_closed: None,
             ticking: false,

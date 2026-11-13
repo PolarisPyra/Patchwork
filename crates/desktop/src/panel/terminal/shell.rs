@@ -418,7 +418,9 @@ impl Panel {
             cx.background_executor().timer(RESIZE_SETTLE).await;
             cx.background_spawn(async move {
                 for (id, attachment) in shells {
-                    let _ = server.terminals.resize(id, attachment, cols, rows);
+                    if let Err(e) = server.terminals.resize(id, attachment, cols, rows) {
+                        log::warn!(error:% = e; "could not resize a terminal: {{error}}");
+                    }
                 }
             })
             .await;
@@ -432,7 +434,9 @@ impl Panel {
     fn tell_size(&self, id: u32, attachment: u32, cols: u16, rows: u16, cx: &mut Context<Self>) {
         let server = Arc::clone(&self.server);
         cx.background_spawn(async move {
-            let _ = server.terminals.resize(id, attachment, cols, rows);
+            if let Err(e) = server.terminals.resize(id, attachment, cols, rows) {
+                log::warn!(error:% = e; "could not resize a terminal: {{error}}");
+            }
         })
         .detach();
     }

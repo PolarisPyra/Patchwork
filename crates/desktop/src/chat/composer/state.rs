@@ -187,12 +187,7 @@ impl Composer {
     }
 
     pub(super) fn picks(&self, w: &Workspace) -> Picks {
-        let default_agent = w
-            .settings
-            .agents
-            .first()
-            .copied()
-            .unwrap_or(AgentKind::Claude);
+        let default_agent = w.settings.default_agent();
         let (agent, model, effort, access, compact, role) = match &w.thread {
             Some(t) => (
                 t.agent,
@@ -225,11 +220,7 @@ impl Composer {
     /// A new thread in `project` with the default agent and its default model, and the access,
     /// effort and compact window last picked.
     pub fn new_thread(&self, project_id: Option<String>, settings: &Settings) -> NewThread {
-        let agent = settings
-            .agents
-            .first()
-            .copied()
-            .unwrap_or(AgentKind::Claude);
+        let agent = settings.default_agent();
         let effort = self
             .draft
             .effort

@@ -14,7 +14,7 @@ use crate::settings::Settings;
 use crate::threads::Thread;
 use crate::{Error, Server};
 
-use super::lifecycle::note;
+use super::options::can_switch;
 
 /// An agent with the model and effort it runs at. None leaves either to the agent's CLI.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -251,9 +251,7 @@ impl Server {
         granular.tidy();
         let thread = self.thread(id)?;
         let Granular { main, reserves } = granular;
-        if thread.agent != main.agent && !thread.messages.is_empty() && !thread.context_pending {
-            return Err("The agent can't change after the conversation has started".into());
-        }
+        can_switch(&thread, main.agent)?;
         let same_main = thread.agent == main.agent
             && thread.model == main.model
             && thread.effort == main.effort;
@@ -267,27 +265,7 @@ impl Server {
             save(&self.store, id, &reserves)?;
         }
         if !same_main {
-            let shown = format!(
-                "agent {:?}, model {}, effort {}",
-                main.agent,
-                main.model.as_deref().unwrap_or("default"),
-                main.effort.as_deref().unwrap_or("default")
-            );
-            // An undone or forked Claude chat kept its Claude session to resume; another agent is
-            // given the conversation as a transcript instead.
-            let switched = thread.agent != main.agent;
-            if switched {
-                self.set_resume_point(id, None)?;
-            }
-            self.store.update_thread(id, |t| {
-                t.agent = main.agent;
-                t.model = main.model;
-                t.effort = main.effort;
-                if switched {
-                    t.session_id = None;
-                }
-            })?;
-            note(id, shown);
+            self.switch_agent(&thread, main.agent, main.model, main.effort)?;
         }
         // An idle agent was started with what the chat ran with before.
         self.runner.retire_idle(id);

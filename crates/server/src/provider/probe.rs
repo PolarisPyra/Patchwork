@@ -94,7 +94,6 @@ fn run_probe(
     })
 }
 
-/// Kills the CLI and anything it started in its process group.
 /// Waits for a pipe's reader to reach the end, but only briefly: a process the CLI left behind
 /// outside its group can hold the pipe open long after the CLI has gone.
 fn settle(reader: &JoinHandle<()>) {
@@ -104,6 +103,7 @@ fn settle(reader: &JoinHandle<()>) {
     }
 }
 
+/// Kills the CLI and anything it started in its process group.
 pub(super) fn stop(child: &mut Child) {
     signal_process_group(child.id(), SIGKILL);
     let _ = child.kill();

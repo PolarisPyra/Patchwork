@@ -15,11 +15,6 @@ use super::agents;
 use super::skills;
 use super::hooks;
 
-/// What `&name` summons an agent with, and `$name` a skill (`DEFAULT_SIGILS`).
-pub(super) const AGENT_SIGIL: &str = "&";
-
-pub(super) const SKILL_SIGIL: &str = "$";
-
 #[derive(Clone, Copy, PartialEq, Default)]
 pub(super) enum Tab {
     #[default]

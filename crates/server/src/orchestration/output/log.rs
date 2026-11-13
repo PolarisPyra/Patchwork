@@ -174,7 +174,11 @@ fn describe(event: &AgentEvent) -> Option<(LogLevel, &'static str, Option<&str>,
             attempt,
             max_attempts,
         } => {
-            let text = format!("attempt {attempt} of {max_attempts}: {reason}");
+            let text = match (attempt, max_attempts) {
+                (Some(attempt), Some(max)) => format!("attempt {attempt} of {max}: {reason}"),
+                (Some(attempt), None) => format!("attempt {attempt}: {reason}"),
+                _ => reason.clone(),
+            };
             (Warning, "retrying", Some(message_id), text)
         }
         AgentEvent::Quiet { message_id, since } => (

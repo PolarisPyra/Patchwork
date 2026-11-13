@@ -5,7 +5,6 @@
 use std::sync::Arc;
 
 use gpui::{AnyElement, FontWeight, SharedString, Window, div, prelude::*, px};
-use patchwork_server::provider::AgentKind;
 use patchwork_server::scheduled::Task;
 
 use crate::settings::controls::{alert, switch};
@@ -229,12 +228,7 @@ pub fn render(
     if !std::mem::replace(&mut d.scheduled.asked, true) {
         d.list_scheduled(cx);
     }
-    let default_agent = d
-        .settings
-        .agents
-        .first()
-        .copied()
-        .unwrap_or(AgentKind::Claude);
+    let default_agent = d.settings.default_agent();
     let tasks = d.scheduled.tasks.clone();
     let cards: Vec<_> = tasks
         .iter()

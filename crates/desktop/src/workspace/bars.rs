@@ -241,7 +241,7 @@ impl Workspace {
                 } else {
                     label.to_string()
                 };
-                activity_button(SharedId(label), aria, &t, active)
+                activity_button(label, aria, &t, active)
                     .aria_toggled(if active {
                         gpui::Toggled::True
                     } else {
@@ -277,7 +277,7 @@ impl Workspace {
             .child(entry(View::Archived, "Archived", "archive", cx))
             .child(entry(View::Devices, "Devices", "devices", cx).mt_auto())
             .child(
-                activity_button(SharedId("Settings"), "Settings".into(), &t, false)
+                activity_button("Settings", "Settings".into(), &t, false)
                     .child(icon("gear-six", 20.))
                     .on_click(
                         cx.listener(|this, _, window, cx| this.open_settings(None, window, cx)),
@@ -296,10 +296,7 @@ impl Workspace {
         let done = last.is_some_and(|m| {
             m.status == MessageStatus::Complete && m.role == MessageRole::Assistant
         });
-        let agent = thread
-            .map(|t| t.agent)
-            .or(self.settings.agents.first().copied())
-            .unwrap_or(patchwork_server::provider::AgentKind::Claude);
+        let agent = thread.map_or_else(|| self.settings.default_agent(), |t| t.agent);
         let plan_mode = thread.is_some_and(|t| t.plan_mode);
         let (hover, fg) = (t.bg_hover, t.text);
         let state = if working {
@@ -404,17 +401,8 @@ impl Workspace {
     }
 }
 
-/// An id for a static label.
-struct SharedId(&'static str);
-
-impl From<SharedId> for gpui::ElementId {
-    fn from(id: SharedId) -> Self {
-        gpui::ElementId::Name(id.0.into())
-    }
-}
-
 fn activity_button(
-    id: SharedId,
+    id: &'static str,
     label: String,
     t: &Theme,
     active: bool,

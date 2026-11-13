@@ -170,19 +170,11 @@ impl Server {
         project_id: &str,
     ) -> Result<(Option<String>, String), Error> {
         let root = self.project_root(project_id)?;
-        let fields = "number,url,state,statusCheckRollup,comments,reviews";
-        let pr = workspace::gh(&root, &["pr", "view", "--json", fields])?;
-        let pr: Value = serde_json::from_str(&pr).map_err(|e| e.to_string())?;
-        if pr["state"] != "OPEN" {
-            return Err("The branch has no open pull request".into());
-        }
+        let pr = workspace::pull_request_view(&root)?;
         let number = pr["number"].as_u64().unwrap_or_default();
         let mut sections = Vec::new();
 
-        let failed: Vec<&Value> = pr["statusCheckRollup"]
-            .as_array()
-            .into_iter()
-            .flatten()
+        let failed: Vec<&Value> = workspace::pull_request_checks(&pr)
             .filter(|c| workspace::check_state(c) == CheckState::Failed)
             .collect();
         if !failed.is_empty() {
@@ -323,7 +315,10 @@ impl Server {
                     .map(|b| String::from_utf8_lossy(&b).into_owned()),
                 None => std::fs::read_to_string(Path::new(&root).join(file)).map_err(Error::from),
             }
-            .unwrap_or_default();
+            .unwrap_or_else(|e| {
+                log::warn!(error:% = e; "could not read a conflicted file: {{error}}");
+                String::new()
+            });
             let hunks = conflict_hunks(&text);
             let body = if hunks.is_empty() {
                 "No conflict markers: one side deleted or renamed it.".to_string()
