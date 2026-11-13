@@ -1,0 +1,101 @@
+name: Issue Labels
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/ISSUE_TEMPLATE/**
+      - .github/workflows/issue-labels.yml
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  sync:
+    name: Sync issue labels
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Ensure managed issue labels exist
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const managedLabels = [
+              {
+                name: "bug",
+                color: "d73a4a",
+                description: "Something is broken or behaving incorrectly.",
+              },
+              {
+                name: "enhancement",
+                color: "a2eeef",
+                description: "Requested improvement or new capability.",
+              },
+              {
+                name: "needs-triage",
+                color: "fbca04",
+                description: "Issue needs maintainer review and initial categorization.",
+              },
+              {
+                name: "needs more info",
+                color: "d876e3",
+                description: "Waiting on the reporter. Closes 7 days after it is added.",
+              },
+              {
+                name: "needs-rebase",
+                color: "e99695",
+                description: "PR conflicts with its base. Closes after 7 idle days.",
+              },
+              {
+                name: "triage:closing",
+                color: "b60205",
+                description: "PR breaks a contribution rule. Closes 72 hours after the notice.",
+              },
+              {
+                name: "triage:keep-open",
+                color: "0e8a16",
+                description: "Maintainer exemption from the automatic PR limits.",
+              },
+              { name: "size:XS", color: "0e8a16", description: "0-9 changed lines, tests excluded." },
+              { name: "size:S", color: "5ebd3e", description: "10-29 changed lines, tests excluded." },
+              { name: "size:M", color: "fbca04", description: "30-99 changed lines, tests excluded." },
+              { name: "size:L", color: "fe7d37", description: "100-499 changed lines, tests excluded." },
+              { name: "size:XL", color: "d93f0b", description: "500-999 changed lines, tests excluded." },
+              { name: "size:XXL", color: "b60205", description: "1,000+ changed lines, tests excluded." },
+            ];
+
+            for (const label of managedLabels) {
+              try {
+                const { data: existing } = await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                });
+
+                if (
+                  existing.color !== label.color ||
+                  (existing.description ?? "") !== label.description
+                ) {
+                  await github.rest.issues.updateLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: label.name,
+                    color: label.color,
+                    description: label.description,
+                  });
+                }
+              } catch (error) {
+                if (error.status !== 404) {
+                  throw error;
+                }
+
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                  color: label.color,
+                  description: label.description,
+                });
+              }
+            }

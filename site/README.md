@@ -39,7 +39,7 @@ not touch the releases, which live on GitHub.
 
 ## After a release
 
-The page links into one GitHub release (`/releases/download/v26.11.0/Patchwork_amd64.AppImage`,
+The page links into one GitHub release (`/releases/download/26.11.0/Patchwork_amd64.AppImage`,
 and so on), whose files never change once published. The Release workflow's `site` job points the page
 at the new tag, deploys it to the `patchwork-site` Pages project, and commits the new links to main,
 so nothing is done by hand. It needs two repository secrets, set once:

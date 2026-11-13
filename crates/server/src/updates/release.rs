@@ -273,7 +273,7 @@ const MAX_HELPER: u64 = 64 << 20;
 /// signature does not match.
 pub(crate) fn helper(name: &str) -> Result<Vec<u8>, Error> {
     let url = format!(
-        "https://github.com/PolarisPyra/Patchwork/releases/download/v{}/{name}",
+        "https://github.com/PolarisPyra/Patchwork/releases/download/{}/{name}",
         crate::VERSION
     );
     let agent = agent(DOWNLOAD_TIMEOUT);

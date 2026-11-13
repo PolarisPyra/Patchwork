@@ -2,7 +2,7 @@
 // Points the page at the newest GitHub release.
 //
 // Each release carries `latest.json` for the updater and its installers
-// (`/releases/download/v26.11.0/Patchwork_amd64.AppImage`, ...), which never change once published.
+// (`/releases/download/26.11.0/Patchwork_amd64.AppImage`, ...), which never change once published.
 // The page links into a release, so it has to be told which tag is current: run this after a
 // release.
 //
@@ -33,7 +33,7 @@ if (!response.ok) {
 
 const release = await response.json();
 const tag = release.tag_name;
-if (typeof tag !== "string" || !/^v\d+\.\d+\.\d+$/.test(tag)) {
+if (typeof tag !== "string" || !/^v?\d+\.\d+\.\d+$/.test(tag)) {
   console.error(`latest.json has an unexpected tag_name: ${JSON.stringify(tag)}`);
   process.exit(1);
 }
@@ -47,7 +47,7 @@ if (missing.length > 0) {
 
 const before = await readFile(page, "utf8");
 const after = before.replace(
-  /github\.com\/PolarisPyra\/Patchwork\/releases\/download\/v\d+\.\d+\.\d+\//g,
+  /github\.com\/PolarisPyra\/Patchwork\/releases\/download\/v?\d+\.\d+\.\d+\//g,
   `github.com/PolarisPyra/Patchwork/releases/download/${tag}/`,
 );
 

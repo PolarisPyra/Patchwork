@@ -69,13 +69,14 @@ commit_msg_hook() {
   local file="$1" msg subject text found group
   msg=$(tr -d '\r' < "$file" | grep -v '^#' || true)
   subject=$(head -n 1 <<< "$msg")
-  [[ "$subject" =~ ^(Release\ v|Merge\ |fixup!\ |squash!\ |amend!\ ) ]] && return 0
+  [[ "$subject" =~ ^(Release\ v?[0-9]|Merge\ |fixup!\ |squash!\ |amend!\ ) ]] && return 0
   # An amend's commit also holds what the commit it replaces changed.
   local base=() path app=()
   [[ "${GIT_REFLOG_ACTION:-}" == *amend* ]] && git rev-parse --quiet --verify HEAD^ > /dev/null && base=(HEAD^)
+  # The PR check passes the PR's files in CHANGED_FILES, one per line, in place of the staged ones.
   while IFS= read -r path; do
     [[ -n "$path" ]] && is_app_path "$path" && app+=("$path")
-  done < <(git diff --cached --name-only ${base[@]+"${base[@]}"})
+  done < <(if [[ -v CHANGED_FILES ]]; then echo "$CHANGED_FILES"; else git diff --cached --name-only ${base[@]+"${base[@]}"}; fi)
   [[ ${#app[@]} -eq 0 ]] && return 0
   found=$(grep -c '^Changelog:' <<< "$msg" || true)
   if [[ "$found" -eq 0 ]]; then

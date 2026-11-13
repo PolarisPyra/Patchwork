@@ -1,0 +1,40 @@
+name: PR Changelog
+
+# Squash merging turns the PR title into the commit subject and the release notes read the
+# Changelog: line from the PR body, so this runs the commit-msg hook on the title and body.
+# The hook comes from the base branch, so a PR cannot change the rules it is checked by.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-changelog-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  changelog:
+    name: Changelog
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout the hook from the base branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          sparse-checkout: scripts/hooks
+
+      - name: Check the title and the Changelog line
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          CHANGED_FILES=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename')
+          export CHANGED_FILES
+          printf '%s\n\n%s\n' "$PR_TITLE" "$PR_BODY" > "$RUNNER_TEMP/message"
+          scripts/hooks/commit-msg "$RUNNER_TEMP/message"

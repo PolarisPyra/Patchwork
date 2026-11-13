@@ -1,9 +1,9 @@
 name: Release
 
-# Pushing a tag vYY.M.N releases the commit it points at. The notes job writes the release notes
-# from the Changelog: paragraphs of the commits since the previous tag: a line counting the
+# Pushing a tag YY.M.N releases the commit it points at. The notes job writes the release notes
+# from the Changelog: lines of the PRs and commits since the previous tag: a line counting the
 # changes, up to seven highlights DeepSeek picks from them, a count of the fixes left out, and every
-# entry folded under "Full changelog". The build jobs build the Linux AppImage (scripts/build.sh),
+# entry, credited to its author and PR, folded under "Full changelog". The build jobs build the Linux AppImage (scripts/build.sh),
 # the Windows exe and the macOS (Apple silicon) disk image at the tag's version, and the publish
 # job signs them and publishes the GitHub release beside the latest.json the app's update check
 # reads. The finalize job then commits the version and the notes to main and points the website
@@ -15,7 +15,7 @@ name: Release
 
 on:
   push:
-    tags: ["v*.*.*"]
+    tags: ["[0-9]*.[0-9]*.[0-9]*"]
   workflow_dispatch:
 
 permissions:
@@ -30,6 +30,9 @@ jobs:
   notes:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     timeout-minutes: 10
     outputs:
       version: ${{ steps.changes.outputs.version }}
@@ -38,32 +41,48 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Each commit's Changelog: paragraph since the previous tag, joined into one line, with the
-      # group it names and its author. Commits with Changelog: none are left out.
+      # Each change since the previous tag, with the group it names, its author's login and its PR.
+      # A squash-merged PR's commit ends its subject in "(#N)", and its Changelog: line comes from
+      # the PR body, falling back to the commit message; a commit pushed straight to main uses its
+      # message. Changes with Changelog: none are left out.
       - name: Collect the changes
         id: changes
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          version=${GITHUB_REF_NAME#v}
+          version=$GITHUB_REF_NAME
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
-            || { echo "::error::$GITHUB_REF_NAME is not a version tag (vYY.M.N)"; exit 1; }
+            || { echo "::error::$GITHUB_REF_NAME is not a version tag (YY.M.N)"; exit 1; }
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          previous=$(git describe --tags --abbrev=0 --match 'v*.*.*' "$GITHUB_REF_NAME^" 2> /dev/null || true)
+          previous=$(git describe --tags --abbrev=0 --match '[0-9]*.*.*' --match 'v*.*.*' "$GITHUB_REF_NAME^" 2> /dev/null || true)
+          paragraph() {
+            awk '/^Changelog:/ { on = 1; sub(/^Changelog:[ \t]*/, "") }
+              on && (/^[ \t]*$/ || /^[A-Za-z-]+-[Bb]y:/) { exit }
+              on { printf "%s%s", (n++ ? " " : ""), $0 }' | sed 's/[[:space:]]*$//'
+          }
           : > "$RUNNER_TEMP/entries"
           for commit in $(git rev-list --reverse "${previous:+$previous..}$GITHUB_REF_NAME"); do
-            entry=$(git show -s --format=%B "$commit" | awk '
-              /^Changelog:/ { on = 1; sub(/^Changelog:[ \t]*/, "") }
-              on && (/^[ \t]*$/ || /^[A-Za-z-]+-[Bb]y:/) { exit }
-              on { printf "%s%s", (n++ ? " " : ""), $0 }')
+            message=$(git show -s --format=%B "$commit")
+            entry="" pr="" login=""
+            if [[ "$(head -n 1 <<< "$message")" =~ \(#([0-9]+)\)$ ]]; then
+              pr=${BASH_REMATCH[1]}
+              view=$(gh pr view "$pr" --json body,author) || view={} || view={}
+              login=$(jq -r '.author.login // empty' <<< "$view")
+              entry=$(jq -r '.body // ""' <<< "$view" | tr -d '\r' | paragraph)
+            fi
+            [[ -n "$entry" ]] || entry=$(paragraph <<< "$message")
+            [[ -n "$login" ]] \
+              || login=$(gh api "repos/$GITHUB_REPOSITORY/commits/$commit" --jq '.author.login // empty')
             group=Changed
             for name in Added Changed Fixed Removed Security; do
               [[ "$entry" == "$name: "* ]] && group=$name && entry=${entry#"$name: "}
             done
             [[ -z "$entry" || "${entry,,}" =~ ^none\.?$ ]] && continue
-            printf '%s\t%s\t%s\n' "$group" "$entry" "$(git show -s --format=%an "$commit")" \
+            printf '%s\t%s\t%s\t%s\n' "$group" "$entry" "${login:-$(git show -s --format=%an "$commit")}" "$pr" \
               >> "$RUNNER_TEMP/entries"
           done
           jq -R -s 'split("\n") | map(select(. != "") | split("\t")
-            | {group: .[0], entry: .[1], author: .[2]})' \
+            | {group: .[0], entry: .[1], author: .[2], pr: .[3]})' \
             "$RUNNER_TEMP/entries" > "$RUNNER_TEMP/entries.json"
 
       # DeepSeek picks up to seven entries worth leading with and writes each as a short name and
@@ -120,7 +139,8 @@ jobs:
           entries=$RUNNER_TEMP/entries.json
           full=$(jq -r '. as $all | ["Added", "Changed", "Fixed", "Removed", "Security"]
             | map(. as $group | $all | map(select(.group == $group)) | select(length > 0)
-              | "### \($group)\n\n" + (map("- \(.entry)") | join("\n")))
+              | "### \($group)\n\n" + (map("- \(.entry) by @\(.author)"
+                  + (if .pr != "" then " in #\(.pr)" else "" end)) | join("\n")))
             | join("\n\n")' "$entries")
           if [ -s "$RUNNER_TEMP/highlights.json" ] \
             && summary=$(jq -r --slurpfile entries "$entries" '
@@ -376,7 +396,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          version="${TAG#v}"
+          version=$TAG
           signer="$GITHUB_WORKSPACE/.github/signer/node_modules/.bin/tauri"
           [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] \
             || { echo "::error::TAURI_SIGNING_PRIVATE_KEY is not set"; exit 1; }
@@ -425,7 +445,7 @@ jobs:
             $(for name in $helpers; do echo "$name" "$name.minisig"; done)
           gh release edit "$TAG" --draft=false --latest
 
-  # Commits the release's version and notes to main, as "Release vYY.M.N" with "Changelog: none",
+  # Commits the release's version and notes to main, as "Release YY.M.N" with "Changelog: none",
   # points the website's download links at it and deploys the site to Cloudflare Pages. The deploy
   # needs the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets; without them it only commits.
   finalize:

@@ -1,6 +1,7 @@
 name: CI
 
-# Checks every push to main and a run started by hand: rustfmt, clippy, and the Rust tests.
+# Checks every PR, every push to main, and a run started by hand: rustfmt, clippy, and the Rust
+# tests. A PR runs it whatever it changes, since the ruleset on main requires this check.
 #
 # Actions are pinned to commits; the comment after each names the version it was.
 
@@ -9,6 +10,7 @@ on:
     branches: [main]
     # Nothing these check.
     paths-ignore: ["site/**", "docs/**", "**.md"]
+  pull_request:
   workflow_dispatch:
 
 permissions:
