@@ -124,8 +124,8 @@ pub(super) const GROUPS: &[(&str, &[Section])] = &[
             },
             Section {
                 id: "ssh",
-                label: "SSH",
-                icon: "hard-drives",
+                label: "Devices",
+                icon: "devices",
             },
         ],
     ),

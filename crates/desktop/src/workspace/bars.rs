@@ -275,9 +275,9 @@ impl Workspace {
             .child(entry(View::Tasks, "Tasks", "chats", cx))
             .child(entry(View::Changes, "Source Control", "git-diff", cx))
             .child(entry(View::Archived, "Archived", "archive", cx))
-            .child(entry(View::Devices, "Devices", "devices", cx).mt_auto())
             .child(
                 activity_button("Settings", "Settings".into(), &t, false)
+                    .mt_auto()
                     .child(icon("gear-six", 20.))
                     .on_click(
                         cx.listener(|this, _, window, cx| this.open_settings(None, window, cx)),

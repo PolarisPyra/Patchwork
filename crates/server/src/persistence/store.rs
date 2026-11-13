@@ -12,7 +12,7 @@ use std::ops::{Deref, DerefMut};
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
@@ -609,6 +609,32 @@ impl Store {
 }
 
 const DB_FILE: &str = "patchwork.db";
+
+impl Store {
+    /// Copies the database in the folder `from` to the folder `to`, as one snapshot even while
+    /// another Patchwork has it open. The copy's scheduled tasks are turned off, so they do not
+    /// also run from it. Does nothing when `to` has a database or `from` has none; true when it
+    /// copied.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the database cannot be read or the copy written.
+    pub fn copy(from: &Path, to: &Path) -> Result<bool, Error> {
+        let (source, target) = (from.join(DB_FILE), to.join(DB_FILE));
+        if target.exists() || !source.is_file() {
+            return Ok(false);
+        }
+        std::fs::create_dir_all(to).map_err(err)?;
+        Connection::open_with_flags(&source, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .and_then(|conn| conn.execute("VACUUM INTO ?1", [target.to_string_lossy()]))
+            .map_err(err)?;
+        Connection::open(&target)
+            .and_then(|conn| conn.execute("UPDATE scheduled_tasks SET enabled = 0", []))
+            .map_err(err)?;
+        Ok(true)
+    }
+}
+
 /// Takes the data folder's lock, which the system releases when this process ends, however it
 /// ends. None when another Patchwork holds it, or the lock file cannot be made.
 fn claim(dir: &Path) -> Option<std::fs::File> {

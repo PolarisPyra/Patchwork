@@ -39,7 +39,6 @@ use super::panel_area;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum View {
     Tasks,
-    Devices,
     Changes,
     Archived,
 }
@@ -201,7 +200,7 @@ pub struct Workspace {
     pub context_menu: Option<ContextMenu>,
     pub renaming: Option<Renaming>,
     pub sort_undo: HashMap<String, SortUndo>,
-    /// The window's title as last set: "Patchwork", then the open chat's title after a dash.
+    /// The window's title as last set: the app's name, then the open chat's title after a dash.
     pub(super) title: String,
 }
 
@@ -234,8 +233,8 @@ impl Workspace {
         let sidebar_region = cx.new(|cx| {
             Region::new(
                 &entity,
-                |w, window, cx| match w.view {
-                    Some(view) => crate::sidebar::render(w, view, window, cx).into_any_element(),
+                |w, _, cx| match w.view {
+                    Some(view) => crate::sidebar::render(w, view, cx).into_any_element(),
                     None => gpui::Empty.into_any_element(),
                 },
                 cx,
@@ -339,7 +338,7 @@ impl Workspace {
             background_dialog: None,
             granular_dialog: None,
             onboarding: None,
-            title: "Patchwork".into(),
+            title: crate::APP_TITLE.into(),
             machine_menu: None,
             machine_menu_dismissed: None,
             context_menu: None,
