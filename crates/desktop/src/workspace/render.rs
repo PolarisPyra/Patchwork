@@ -144,7 +144,7 @@ impl Render for Workspace {
                     }
                 }),
             )
-            .child(self.toolbar(cx))
+            .child(self.toolbar(window, cx))
             .child(
                 div()
                     .flex()
@@ -197,9 +197,9 @@ impl Render for Workspace {
             .children(background_dialog)
             .children(granular_dialog)
             .children(
-                self.project_menu
+                self.machine_menu
                     .as_ref()
-                    .map(|m| Menu::view(m, bars::project_menu_at())),
+                    .map(|m| Menu::view(m, bars::machine_menu_at())),
             )
             .children(crate::ui::selection::menu(cx))
             .into_any_element()

@@ -21,7 +21,7 @@ pub mod theme;
 
 pub use controls::{
     BtnKind, above, badge, btn, button, checkbox, dropdown_chip, focus_ring, icon, icon_button,
-    input_box, list_scrollbar, menu_item, mix, overflows, popup, popup_shadow, project_tile,
+    kind_icon, input_box, list_scrollbar, menu_item, mix, overflows, popup, popup_shadow,
     scrollbar, spinner, tooltip,
 };
 pub use format::{

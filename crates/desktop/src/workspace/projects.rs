@@ -198,6 +198,8 @@ impl Workspace {
             return view.clone();
         }
         let view = cx.new(DevicesView::new);
+        // The toolbar's machine button shows what the view learns about each machine.
+        cx.observe(&view, |_, _, cx| cx.notify()).detach();
         cx.subscribe_in(&view, window, |this, _, open: &OpenDevice, window, cx| {
             this.open_folder(window, cx);
             if let Some(dialog) = &this.add_project {

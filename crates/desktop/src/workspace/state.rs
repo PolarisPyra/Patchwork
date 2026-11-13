@@ -195,9 +195,9 @@ pub struct Workspace {
     pub(super) granular_dialog: Option<granular::GranularDialog>,
     /// First-run setup, shown instead of everything else until the settings say it is done.
     pub(super) onboarding: Option<Entity<crate::onboarding::Onboarding>>,
-    /// The toolbar's project menu, while open, and where the press that last closed it was.
-    pub(super) project_menu: Option<Entity<Menu>>,
-    pub(super) project_menu_dismissed: Option<gpui::Point<gpui::Pixels>>,
+    /// The toolbar's machine menu, while open, and where the press that last closed it was.
+    pub(super) machine_menu: Option<Entity<Menu>>,
+    pub(super) machine_menu_dismissed: Option<gpui::Point<gpui::Pixels>>,
     /// The task tree's open menu, the row being renamed, and where sorted tasks were.
     pub context_menu: Option<ContextMenu>,
     pub renaming: Option<Renaming>,
@@ -342,8 +342,8 @@ impl Workspace {
             granular_dialog: None,
             onboarding: None,
             title: "Patchwork".into(),
-            project_menu: None,
-            project_menu_dismissed: None,
+            machine_menu: None,
+            machine_menu_dismissed: None,
             context_menu: None,
             renaming: None,
             sort_undo: HashMap::new(),

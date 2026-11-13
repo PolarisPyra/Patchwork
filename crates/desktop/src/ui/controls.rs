@@ -17,6 +17,16 @@ pub fn icon(name: &str, size: f32) -> Icon {
     mono_svg(SharedString::from(format!("icons/{name}.svg")), size)
 }
 
+/// The icon for a kind of machine: a desktop, a laptop, or a drive for anything else.
+pub fn kind_icon(kind: patchwork_server::system::device::Kind) -> &'static str {
+    use patchwork_server::system::device::Kind;
+    match kind {
+        Kind::Desktop => "desktop",
+        Kind::Laptop => "laptop",
+        Kind::Other => "hard-drives",
+    }
+}
+
 /// A one-colour SVG asset, `size` square.
 pub(super) fn mono_svg(path: SharedString, size: f32) -> Icon {
     Icon {
@@ -168,40 +178,6 @@ pub fn spinner(size: f32, color: Hsla) -> impl IntoElement {
         .aria_label("Loading")
         .flex_none()
         .child(ring)
-}
-
-/// The tile a project is drawn with (`ProjectTile`): its first two letters on a colour picked from
-/// its name, so each project keeps its colour.
-pub fn project_tile(name: &str, size: f32, cx: &App) -> Div {
-    let t = theme(cx);
-    let palette = [
-        t.accent,
-        t.syn_string,
-        t.syn_property,
-        t.syn_keyword,
-        t.syn_type,
-    ];
-    let hash = name
-        .chars()
-        .fold(0u32, |h, c| h.wrapping_mul(31).wrapping_add(c as u32));
-    let initials = name
-        .trim()
-        .chars()
-        .take(2)
-        .collect::<String>()
-        .to_uppercase();
-    div()
-        .size(px(size))
-        .flex_none()
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded(px(RADIUS_SM))
-        .bg(palette[hash as usize % palette.len()])
-        .text_color(t.text_on_accent)
-        .text_size(px(10.))
-        .font_weight(gpui::FontWeight::BOLD)
-        .child(initials)
 }
 
 /// Whether the element `handle` tracks scrolls, as last laid out. When layout changes that, the

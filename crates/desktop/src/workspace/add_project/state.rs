@@ -119,13 +119,14 @@ impl AddProject {
         let focus = cx.focus_handle();
         window.focus(&focus, cx);
 
-        // The home folder loads alongside the machine list, so this computer opens at once either
-        // way.
+        // The machine picked in the toolbar opens at once, alongside the machine list; this
+        // computer when none is picked.
+        let host = server.store.settings().default_machine;
         let mut dialog = Self {
             server,
             machines: None,
-            browsing: false,
-            host: None,
+            browsing: true,
+            host,
             listing: None,
             field,
             last: String::new(),
@@ -135,7 +136,7 @@ impl AddProject {
             adding: false,
             error: None,
             focus,
-            refocus: false,
+            refocus: true,
             list_scroll: ScrollHandle::new(),
             follow: false,
         };
@@ -144,22 +145,14 @@ impl AddProject {
         cx.spawn(async move |this, cx| {
             let machines = task.await;
             this.update(cx, |this, cx| {
-                // A machine opened before the list came, as from the Devices view, stays open.
-                let opened = this.browsing;
-                if !machines.iter().any(|m| !m.local) {
-                    this.browsing = true;
-                    this.refocus = true;
-                }
-                // The host picked in setup opens first, while the SSH config still lists it.
-                let default = this
-                    .server
-                    .store
-                    .settings()
-                    .default_machine
-                    .filter(|d| machines.iter().any(|m| !m.local && m.name == *d));
+                // A picked host the SSH config no longer lists gives way to this computer.
+                let listed = this
+                    .host
+                    .as_ref()
+                    .is_none_or(|h| machines.iter().any(|m| !m.local && m.name == *h));
                 this.machines = Some(machines);
-                if default.is_some() && !opened {
-                    this.open_machine(default, cx);
+                if !listed {
+                    this.open_machine(None, cx);
                 }
                 cx.notify();
             })

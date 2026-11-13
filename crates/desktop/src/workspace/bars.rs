@@ -1,88 +1,151 @@
-//! The bars around the window's content: the toolbar with the project dropdown, the activity bar
+//! The bars around the window's content: the toolbar with the machine dropdown, the activity bar
 //! that picks the sidebar's view, and the status bar.
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{ClickEvent, FontWeight, Pixels, Point, Role, Window, div, point, prelude::*, px, relative};
+use gpui::{
+    App, ClickEvent, FontWeight, Pixels, Point, Role, Window, div, point, prelude::*, px, relative,
+};
+use patchwork_server::system::device::Kind;
 use patchwork_server::threads::{MessageStatus, Role as MessageRole};
 
 use super::{View, Workspace, is_busy};
 use crate::ui::menu::{Dismissed, Menu, MenuItem};
 use crate::ui::theme::{ACTIVITY_BAR_W, FS_XS, RADIUS, RADIUS_SM, STATUSBAR_H, TOOLBAR_H, Theme, theme};
-use crate::ui::{agent_label, button, display_title, icon, project_tile, spinner};
+use crate::ui::{agent_label, button, display_title, icon, kind_icon, spinner};
 
-/// The toolbar's left padding, which lines the project tile up with the activity bar's icons.
-const TOOLBAR_PL: f32 = (ACTIVITY_BAR_W + 4. - 20.) / 2. - 6.;
+/// The machine button's size, the same as the activity bar's buttons.
+const MACHINE_BUTTON: f32 = 28.;
 
-/// Where the project menu opens: 4px under the project button.
-pub(super) fn project_menu_at() -> Point<Pixels> {
-    point(px(TOOLBAR_PL), px(f32::midpoint(TOOLBAR_H, 26.) + 4.))
+/// The toolbar's left padding, which puts the machine button's icon in the column of the activity
+/// bar's icons: that bar's content, inside its 1px right border, centers 28px buttons.
+const TOOLBAR_PL: f32 = (ACTIVITY_BAR_W - 1. - MACHINE_BUTTON) / 2.;
+
+/// Where the machine menu opens: 4px under the machine button.
+pub(super) fn machine_menu_at() -> Point<Pixels> {
+    point(
+        px(TOOLBAR_PL),
+        px(f32::midpoint(TOOLBAR_H, MACHINE_BUTTON) + 4.),
+    )
 }
 
 impl Workspace {
-    /// Opens the project menu: every project, the current one marked, then "Open folder…". A
-    /// press on the button while it is open closes it.
-    fn toggle_project_menu(&mut self, e: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+    /// The machine new projects open on: the SSH host picked, while the SSH config still lists
+    /// it, or this computer.
+    fn picked_machine(&self, cx: &App) -> Option<(String, Option<Kind>)> {
+        let machines = self.devices_view.as_ref()?.read(cx).machines()?;
+        let picked = self.settings.default_machine.as_deref();
+        machines
+            .iter()
+            .find(|(m, _)| !m.local && Some(m.name.as_str()) == picked)
+            .or_else(|| machines.iter().find(|(m, _)| m.local))
+            .map(|(m, kind)| (m.name.clone(), *kind))
+    }
+
+    /// The SSH host picked in the toolbar, by its alias; none is this computer. Until the machines
+    /// are read, the host saved last.
+    pub(crate) fn machine_host(&self, cx: &App) -> Option<String> {
+        let listed = self
+            .devices_view
+            .as_ref()
+            .and_then(|v| v.read(cx).machines().map(<[_]>::to_vec));
+        let picked = self.settings.default_machine.clone();
+        match listed {
+            Some(machines) => {
+                picked.filter(|h| machines.iter().any(|(m, _)| !m.local && m.name == *h))
+            }
+            None => picked,
+        }
+    }
+
+    /// Makes `host` the machine new projects open on and the sidebar lists; none is this
+    /// computer. When the open chat is on another machine, the first project on this one opens.
+    fn pick_machine(&mut self, host: Option<String>, cx: &mut Context<Self>) {
+        self.settings.default_machine.clone_from(&host);
+        let elsewhere = self
+            .project()
+            .map_or(host.is_some(), |p| p.host() != host.as_deref());
+        let first = self
+            .settings
+            .projects
+            .iter()
+            .find(|p| p.host() == host.as_deref())
+            .map(|p| p.id.clone());
+        if let Err(e) = self
+            .server
+            .store
+            .update_settings(|s| s.default_machine = host)
+        {
+            log::warn!(error:% = e; "could not record the machine: {{error}}");
+        }
+        if elsewhere && let Some(id) = first {
+            self.select_project(&id, cx);
+        }
+        cx.notify();
+    }
+
+    /// Opens the machine menu: this computer and every SSH host, the picked one marked. A press
+    /// on the button while it is open closes it.
+    fn toggle_machine_menu(&mut self, e: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
         let closing_press = matches!(e, ClickEvent::Mouse(click)
-            if self.project_menu_dismissed.take() == Some(click.down.position));
-        if closing_press || self.project_menu.take().is_some() {
+            if self.machine_menu_dismissed.take() == Some(click.down.position));
+        if closing_press || self.machine_menu.take().is_some() {
             cx.notify();
             return;
         }
         let this = cx.entity().downgrade();
-        let current = self.project().map(|p| p.id.clone());
-        let mut items: Vec<MenuItem> = self
-            .settings
-            .projects
-            .iter()
-            .map(|p| {
-                let (id, this) = (p.id.clone(), this.clone());
-                MenuItem::new(p.name.clone(), move |_, cx| {
-                    let _ = this.update(cx, |w, cx| w.select_project(&id, cx));
+        let picked = self.picked_machine(cx).map(|(name, _)| name);
+        let machines = self
+            .devices_view
+            .as_ref()
+            .and_then(|v| v.read(cx).machines().map(<[_]>::to_vec))
+            .unwrap_or_default();
+        let items: Vec<MenuItem> = machines
+            .into_iter()
+            .map(|(m, kind)| {
+                let host = (!m.local).then(|| m.name.clone());
+                let this = this.clone();
+                let label = if m.local {
+                    format!("{} (this computer)", m.name)
+                } else {
+                    m.name.clone()
+                };
+                MenuItem::new(label, move |_, cx| {
+                    let _ = this.update(cx, |w, cx| w.pick_machine(host.clone(), cx));
                 })
-                .radio(current.as_ref() == Some(&p.id))
+                .icon(kind.map_or("hard-drives", kind_icon))
+                .radio(picked.as_ref() == Some(&m.name))
             })
             .collect();
-        let open = MenuItem::new("Open folder…", move |window, cx| {
-            let _ = this.update(cx, |w, cx| w.open_folder(window, cx));
-        })
-        .icon("folder-plus");
-        items.push(if items.is_empty() {
-            open
-        } else {
-            open.separated()
-        });
-        let menu = Menu::open("Projects", items, window, cx);
+        let menu = Menu::open("Machines", items, window, cx);
         cx.subscribe_in(&menu, window, |this, _, e: &Dismissed, window, cx| {
-            this.project_menu_dismissed = e.0;
-            this.project_menu = None;
+            this.machine_menu_dismissed = e.0;
+            this.machine_menu = None;
             window.focus(&this.focus, cx);
             cx.notify();
         })
         .detach();
-        self.project_menu = Some(menu);
+        self.machine_menu = Some(menu);
         cx.notify();
     }
 
-    pub(super) fn toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = theme(cx);
-        let name = self
-            .project()
-            .map_or_else(|| "No project".into(), |p| p.name.clone());
-        let tile = match self.project() {
-            Some(project) => project_tile(&project.name, 20., cx).into_any_element(),
-            None => div()
-                .size(px(20.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded(px(RADIUS_SM))
-                .bg(t.bg_accent_soft)
-                .text_color(t.accent_text)
-                .child(icon("chats", 12.))
-                .into_any_element(),
+    pub(super) fn toolbar(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        // The Devices view reads the machines and what each is; the toolbar shows the same list.
+        self.devices_view(window, cx);
+        let t = *theme(cx);
+        let picked = self.picked_machine(cx);
+        let name = picked
+            .as_ref()
+            .map_or_else(|| "This computer".to_string(), |(name, _)| name.clone());
+        let mark = match picked.as_ref().map(|(_, kind)| *kind) {
+            Some(Some(kind)) => icon(kind_icon(kind), 20.).into_any_element(),
+            _ => spinner(16., t.text_muted).into_any_element(),
         };
-        let hover = t.bg_hover;
+        let (hover, fg) = (t.bg_hover, t.text);
         div()
             .id("toolbar")
             .role(Role::Banner)
@@ -97,20 +160,31 @@ impl Workspace {
             .pr(px(8.))
             .pl(px(TOOLBAR_PL))
             .child(
-                button("project", format!("Project: {name}"))
-                    .h(px(26.))
+                button("machine", format!("Machine: {name}"))
+                    .h(px(MACHINE_BUTTON))
+                    .min_w(px(MACHINE_BUTTON))
                     .gap(px(6.))
-                    .rounded(px(RADIUS_SM))
-                    .pl(px(4.))
+                    .rounded(px(RADIUS))
+                    .pl(px((MACHINE_BUTTON - 20.) / 2.))
                     .pr(px(6.))
-                    .hover(move |s| s.bg(hover))
-                    .aria_expanded(self.project_menu.is_some())
-                    .on_click(cx.listener(super::state::Workspace::toggle_project_menu))
-                    .child(tile)
+                    .text_color(t.text_muted)
+                    .hover(move |s| s.bg(hover).text_color(fg))
+                    .aria_expanded(self.machine_menu.is_some())
+                    .on_click(cx.listener(super::state::Workspace::toggle_machine_menu))
+                    .child(
+                        div()
+                            .size(px(20.))
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(mark),
+                    )
                     .child(
                         div()
                             .max_w(px(180.))
                             .truncate()
+                            .text_color(fg)
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(name),
                     )

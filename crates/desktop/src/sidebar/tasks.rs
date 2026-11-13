@@ -7,12 +7,12 @@ use super::menu::{self, Target};
 use gpui::{
     ClickEvent, FontWeight, MouseButton, MouseDownEvent, Role, SharedString, div, prelude::*, px,
 };
-use patchwork_server::system::remote;
+use patchwork_server::projects::Project;
 use patchwork_server::threads::Thread;
 use crate::ui::theme::theme;
 use crate::ui::{button, icon, icon_button, scrollbar};
 use crate::workspace::Workspace;
-use super::render::{FS_SM, FS_XS, empty_row, section_label, twistie};
+use super::render::{FS_SM, empty_row, section_label, twistie};
 use super::tree::{TREE_GUTTER, indent_guide, reveal_button, thread_row, tree_row};
 
 pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl IntoElement {
@@ -24,12 +24,26 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
         .cloned()
         .collect();
     let selected = w.thread.as_ref().map(|th| th.id.clone());
+    // The list shows only what is on the machine picked in the toolbar.
+    let host = w.machine_host(cx);
+    let here: Vec<Project> = w
+        .settings
+        .projects
+        .iter()
+        .filter(|p| p.host() == host.as_deref())
+        .cloned()
+        .collect();
+    // A chat outside any project runs on this computer.
+    let on_machine = |th: &Thread| match &th.project_id {
+        Some(id) => here.iter().any(|p| &p.id == id),
+        None => host.is_none(),
+    };
     // The rows in the order they are drawn, for Shift+click to pick a run of them.
     let mut rows: Vec<Target> = Vec::new();
     let favorites: Vec<&Thread> = live
         .iter()
         .map(Arc::as_ref)
-        .filter(|th| th.favorite)
+        .filter(|th| th.favorite && on_machine(th))
         .collect();
     let chats: Vec<&Thread> = live
         .iter()
@@ -59,21 +73,23 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
             tree = tree.child(thread_row(w, th, 0, selected.as_deref(), cx));
         }
     }
-    let new_chat = icon_button("new-chat", "New chat", "plus", 18., cx)
-        .on_click(cx.listener(|this, _, window, cx| this.new_thread_in(None, None, window, cx)))
-        .into_any_element();
-    tree = tree.child(section_label(
-        "Chats",
-        favorites.is_empty(),
-        Some(new_chat),
-        &t,
-    ));
-    if chats.is_empty() {
-        tree = tree.child(empty_row("No chats yet", &t));
-    }
-    for th in &chats {
-        rows.push(Target::Thread(th.id.clone()));
-        tree = tree.child(thread_row(w, th, 0, selected.as_deref(), cx));
+    if host.is_none() {
+        let new_chat = icon_button("new-chat", "New chat", "plus", 18., cx)
+            .on_click(cx.listener(|this, _, window, cx| this.new_thread_in(None, None, window, cx)))
+            .into_any_element();
+        tree = tree.child(section_label(
+            "Chats",
+            favorites.is_empty(),
+            Some(new_chat),
+            &t,
+        ));
+        if chats.is_empty() {
+            tree = tree.child(empty_row("No chats yet", &t));
+        }
+        for th in &chats {
+            rows.push(Target::Thread(th.id.clone()));
+            tree = tree.child(thread_row(w, th, 0, selected.as_deref(), cx));
+        }
     }
 
     let (muted, fg) = (t.text_muted, t.text);
@@ -95,13 +111,18 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
                 .on_click(cx.listener(|this, _, window, cx| this.open_folder(window, cx))),
         )
         .into_any_element();
-    tree = tree.child(section_label("Projects", false, Some(projects_action), &t));
-    if w.settings.projects.is_empty() {
+    tree = tree.child(section_label(
+        "Projects",
+        host.is_some() && favorites.is_empty(),
+        Some(projects_action),
+        &t,
+    ));
+    if here.is_empty() {
         tree = tree.child(empty_row("No projects yet", &t));
     }
 
     let mut projects = div().mx(px(-8.)).flex_none();
-    for p in &w.settings.projects {
+    for p in &here {
         let open = !w.collapsed.contains(&p.id);
         let tasks: Vec<&Thread> = live
             .iter()
@@ -134,29 +155,10 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
         let (sort_id, folder_id, task_id) = (p.id.clone(), p.id.clone(), p.id.clone());
         let key = SharedString::from(format!("project:{}", p.id));
         let shown = w.hovered_row.as_ref() == Some(&key);
-        // A project on an SSH host names the host after its own name.
-        let host = remote::split(&p.path).map(|l| l.host.to_string());
-        let label = match &host {
-            Some(host) => format!("{} on {host}", p.name),
-            None => p.name.clone(),
-        };
-        let row = tree_row(key, label, 1, open, picked, &t, cx)
+        let row = tree_row(key, p.name.clone(), 1, open, picked, &t, cx)
             .pl(px(4.))
             .child(twistie(open))
             .child(name)
-            .when_some(host.filter(|_| !shown), |row, host| {
-                row.child(
-                    div()
-                        .flex_none()
-                        .flex()
-                        .items_center()
-                        .gap(px(4.))
-                        .text_size(px(FS_XS))
-                        .text_color(t.text_subtle)
-                        .child(icon("hard-drives", 12.))
-                        .child(host),
-                )
-            })
             .when(shown && sorted, |row| {
                 let undo_id = p.id.clone();
                 row.child(

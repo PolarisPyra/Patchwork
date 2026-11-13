@@ -9,7 +9,7 @@ use patchwork_server::system::device::{self, Kind};
 
 use super::{FS_SM, FS_XS};
 use crate::ui::theme::{RADIUS_SM, theme};
-use crate::ui::{button, icon, icon_button, spinner};
+use crate::ui::{button, icon, icon_button, kind_icon, spinner};
 
 /// A device was picked: the SSH host's alias, or none for this computer.
 pub struct OpenDevice(pub Option<String>);
@@ -72,14 +72,10 @@ impl DevicesView {
         .detach();
         cx.notify();
     }
-}
 
-/// The icon for a kind of machine.
-fn kind_icon(kind: Kind) -> &'static str {
-    match kind {
-        Kind::Desktop => "desktop",
-        Kind::Laptop => "laptop",
-        Kind::Other => "hard-drives",
+    /// The machines, once read, each with its kind once it answered.
+    pub(crate) fn machines(&self) -> Option<&[(Machine, Option<Kind>)]> {
+        self.devices.as_deref()
     }
 }
 
