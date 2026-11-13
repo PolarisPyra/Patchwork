@@ -8,7 +8,7 @@ use gpui::{AnyElement, Div, FontWeight, SharedString, div, prelude::*, px};
 use patchwork_server::hooks::{self, HookEvent, Bundle, Hook, HookHandler};
 
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{switch, token_row};
+use crate::settings::controls::{switch, tildify, token_row};
 use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
 use crate::ui::{AGENT_KINDS, BtnKind, agent_label, btn, icon};
 
@@ -384,6 +384,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         ),
     };
     let dir = hooks::dir(&d.settings);
+    let folder = tildify(&dir.to_string_lossy());
     let (open_top, open_row) = (dir.clone(), dir.clone());
     let tools = div()
         .flex()
@@ -430,7 +431,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .child(body)
         .child(
             div().mt(px(12.)).child(
-                token_row("Folder", d.settings.hooks_dir.as_deref().or(Some("")), &t).child(
+                token_row("Folder", Some(&folder), &t).child(
                     btn("hooks-open-row", "Open", BtnKind::Plain, false, &t)
                         .child("Open")
                         .on_click(

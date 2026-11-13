@@ -254,19 +254,3 @@ pub(super) fn quote(word: &str) -> String {
         format!("\"{}\"", word.replace('\\', "\\\\").replace('"', "\\\""))
     }
 }
-
-/// `~/…` for a path under the home folder.
-pub(super) fn tildify(path: &str) -> String {
-    match std::env::var("HOME") {
-        // Only at a folder's edge: `/home/ann` is not the start of `/home/anna`.
-        Ok(home)
-            if !home.is_empty()
-                && path
-                    .strip_prefix(&home)
-                    .is_some_and(|rest| rest.is_empty() || rest.starts_with('/')) =>
-        {
-            format!("~{}", &path[home.len()..])
-        }
-        _ => path.to_string(),
-    }
-}
