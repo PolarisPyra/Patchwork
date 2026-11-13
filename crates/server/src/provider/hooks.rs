@@ -211,7 +211,7 @@ pub fn codex_args(spec: &TurnSpec) -> Vec<String> {
         .iter()
         .map(|(event, groups)| format!("hooks.{event}=[{}]", groups.join(",")))
         .collect();
-    if let Some(trust) = codex_trust(&overrides, spec.root) {
+    if let Some(trust) = codex_trust(&overrides, spec.root, spec.host) {
         overrides
             .into_iter()
             .chain(std::iter::once(trust))
@@ -247,17 +247,21 @@ fn permission_group() -> Option<String> {
 }
 
 /// The `-c` override that trusts every hook `overrides` add, as Codex lists them, by config.
-fn codex_trust(overrides: &[String], root: &str) -> Option<String> {
-    static TRUSTED: OnceLock<Mutex<HashMap<Vec<String>, String>>> = OnceLock::new();
+/// For a project on `host`, Codex there lists them, with the paths the hooks have there.
+fn codex_trust(overrides: &[String], root: &str, host: Option<&str>) -> Option<String> {
+    /// The override for each host (none for this machine) and list of hooks.
+    type Trusted = HashMap<(Option<String>, Vec<String>), String>;
+    static TRUSTED: OnceLock<Mutex<Trusted>> = OnceLock::new();
+    let key = (host.map(str::to_string), overrides.to_vec());
     let cache = TRUSTED.get_or_init(Mutex::default);
     if let Some(trust) = cache
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
-        .get(overrides)
+        .get(&key)
     {
         return Some(trust.clone());
     }
-    let listed = list_codex_hooks(overrides, root)?;
+    let listed = list_codex_hooks(overrides, root, host)?;
     if listed.is_empty() {
         return None;
     }
@@ -269,16 +273,32 @@ fn codex_trust(overrides: &[String], root: &str) -> Option<String> {
     cache
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
-        .insert(overrides.to_vec(), trust.clone());
+        .insert(key, trust.clone());
     Some(trust)
 }
 
 /// The key and hash Codex gives each hook `overrides` add, read from `hooks/list`.
-fn list_codex_hooks(overrides: &[String], root: &str) -> Option<Vec<(String, String)>> {
-    let mut cmd = crate::provider::turn_command(AgentKind::Codex).ok()?;
+fn list_codex_hooks(
+    overrides: &[String],
+    root: &str,
+    host: Option<&str>,
+) -> Option<Vec<(String, String)>> {
+    let mut cmd = match host {
+        Some(_) => crate::provider::remote_turn_command(AgentKind::Codex),
+        None => crate::provider::turn_command(AgentKind::Codex),
+    }
+    .ok()?;
     cmd.arg("app-server");
     for config in overrides {
         cmd.args(["-c", config]);
+    }
+    if let Some(host) = host {
+        cmd.current_dir(crate::system::remote::root(host, root));
+        cmd = crate::system::remote::supervised(cmd)
+            .map_err(
+                |e| log::warn!(error:% = e; "Codex on the host could not list hooks: {{error}}"),
+            )
+            .ok()?;
     }
     let mut child = cmd
         .stdin(std::process::Stdio::piped())

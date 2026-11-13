@@ -7,6 +7,7 @@ use gpui::{Entity, EventEmitter, FocusHandle, KeyDownEvent, ScrollHandle, Window
 use patchwork_server::Server;
 use patchwork_server::projects::Project;
 use patchwork_server::system::browse::{self, DirEntry, DirListing, Machine};
+use patchwork_server::system::remote;
 use crate::ui::text_area::{Arrow, Changed, Submitted, TextArea};
 use crate::ui::theme::theme;
 
@@ -21,6 +22,8 @@ pub struct AddProject {
     pub(super) server: Arc<Server>,
     pub(super) machines: Option<Vec<Machine>>,
     pub(super) browsing: bool,
+    /// The SSH host whose folders are shown, or none for this computer's.
+    pub(super) host: Option<String>,
     pub(super) listing: Option<DirListing>,
     pub(super) field: Entity<TextArea>,
     /// The field's text before its last change: deleting the separator after the folder shown
@@ -122,6 +125,7 @@ impl AddProject {
             server,
             machines: None,
             browsing: false,
+            host: None,
             listing: None,
             field,
             last: String::new(),
@@ -157,7 +161,13 @@ impl AddProject {
         self.error = None;
         self.browse_seq += 1;
         let seq = self.browse_seq;
-        let task = cx.background_spawn(async move { browse::browse(path.as_deref()) });
+        let host = self.host.clone();
+        let task = cx.background_spawn(async move {
+            match host {
+                Some(host) => browse::browse_host(&host, path.as_deref()),
+                None => browse::browse(path.as_deref()),
+            }
+        });
         cx.spawn(async move |this, cx| {
             let listing = task.await;
             this.update(cx, |this, cx| {
@@ -184,7 +194,10 @@ impl AddProject {
     }
 
     pub(super) fn add(&mut self, cx: &mut Context<Self>) {
-        let Some(path) = self.listing.as_ref().map(|l| l.path.clone()) else {
+        let Some(path) = self.listing.as_ref().map(|l| match &self.host {
+            Some(host) => remote::root(host, &l.path),
+            None => l.path.clone(),
+        }) else {
             return;
         };
         if self.loading || self.adding {
@@ -236,6 +249,18 @@ impl AddProject {
         self.browsing = browsing;
         self.refocus = true;
         cx.notify();
+    }
+
+    /// Shows the folders of `host`, or of this computer when it is none, from its home folder.
+    pub(super) fn open_machine(&mut self, host: Option<String>, cx: &mut Context<Self>) {
+        if self.host != host {
+            self.host = host;
+            self.listing = None;
+            self.last.clear();
+            self.field.update(cx, |f, cx| f.set_text("", cx));
+            self.browse(None, cx);
+        }
+        self.show_machines(true, cx);
     }
 
     pub(super) fn on_key(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {

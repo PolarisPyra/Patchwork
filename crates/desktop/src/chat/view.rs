@@ -179,36 +179,42 @@ pub(super) fn floating(
 ) -> Div {
     let lineage = lineage::lineage_card(w, t, window, cx);
     let hover = t.bg_hover;
-    let open = w.project().map(|p| p.path.clone()).map(|root| {
-        button("open-in-editor", "Open in editor")
-            .h(px(28.))
-            .gap(px(6.))
-            .px(px(12.))
-            .rounded(px(RADIUS))
-            .border_1()
-            .border_color(t.border)
-            .bg(t.bg_panel)
-            .text_size(px(FS_SM))
-            .shadow(vec![gpui::BoxShadow {
-                color: gpui::hsla(0., 0., 0., 0.12),
-                offset: gpui::point(px(0.), px(1.)),
-                blur_radius: px(3.),
-                spread_radius: px(0.),
-                inset: false,
-            }])
-            .hover(move |s| s.bg(hover))
-            .child(icon("code", 14.))
-            .child("Open in editor")
-            .on_click(cx.listener(move |_, _, _, cx| {
-                let root = root.clone();
-                cx.background_spawn(async move {
-                    if let Err(e) = patchwork_server::workspace::open_in_editor(&root, "", None) {
-                        log::warn!(error:% = e; "could not open the editor: {{error}}");
-                    }
-                })
-                .detach();
-            }))
-    });
+    // A project on an SSH host has no folder here for an editor to open.
+    let open = w
+        .project()
+        .map(|p| p.path.clone())
+        .filter(|root| !patchwork_server::system::remote::is_remote(root))
+        .map(|root| {
+            button("open-in-editor", "Open in editor")
+                .h(px(28.))
+                .gap(px(6.))
+                .px(px(12.))
+                .rounded(px(RADIUS))
+                .border_1()
+                .border_color(t.border)
+                .bg(t.bg_panel)
+                .text_size(px(FS_SM))
+                .shadow(vec![gpui::BoxShadow {
+                    color: gpui::hsla(0., 0., 0., 0.12),
+                    offset: gpui::point(px(0.), px(1.)),
+                    blur_radius: px(3.),
+                    spread_radius: px(0.),
+                    inset: false,
+                }])
+                .hover(move |s| s.bg(hover))
+                .child(icon("code", 14.))
+                .child("Open in editor")
+                .on_click(cx.listener(move |_, _, _, cx| {
+                    let root = root.clone();
+                    cx.background_spawn(async move {
+                        if let Err(e) = patchwork_server::workspace::open_in_editor(&root, "", None)
+                        {
+                            log::warn!(error:% = e; "could not open the editor: {{error}}");
+                        }
+                    })
+                    .detach();
+                }))
+        });
     let android = w.mobile.is_some().then(|| {
         let shown = w.android_open(cx);
         let fg = t.text;

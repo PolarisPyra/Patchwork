@@ -65,13 +65,14 @@ pub fn run_hooks(settings: &Settings, context: &HookContext<'_>) -> Vec<String> 
 /// Runs one hook command in a range of its own, stopping it and all it started at its timeout,
 /// and what it left running once it exits. Its output goes to the log.
 fn run_command(command: &str, timeout_secs: u64, context: &HookContext<'_>) -> Result<(), Error> {
-    let mut cmd = crate::system::shell_command(command).ok_or("there is no shell to run it in")?;
-    cmd.current_dir(context.root)
-        .env("PATCHWORK_EVENT", context.event.name())
+    let mut cmd = crate::system::remote::shell_in(context.root, command)
+        .ok_or("there is no shell to run it in")?;
+    cmd.env("PATCHWORK_EVENT", context.event.name())
         .env("PATCHWORK_THREAD", context.thread_id)
-        .env("PATCHWORK_CWD", context.root)
+        .env("PATCHWORK_CWD", crate::system::remote::here(context.root))
         .env("PATCHWORK_AGENT", context.agent)
         .env("PATCHWORK_STATUS", context.status.unwrap_or_default());
+    let cmd = crate::system::remote::supervised(cmd)?;
     let (mut child, range) = crate::system::contained::spawn(cmd, Stdio::null())
         .map_err(|e| format!("did not start: {e}"))?;
     let read = |pipe: Option<Box<dyn Read + Send>>| {

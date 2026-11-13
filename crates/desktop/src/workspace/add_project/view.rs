@@ -175,6 +175,17 @@ impl Render for AddProject {
                                     None => b.opacity(0.4).cursor_default(),
                                 }),
                         )
+                        .children(self.host.clone().map(|host| {
+                            div()
+                                .ml(px(4.))
+                                .flex_none()
+                                .max_w(px(160.))
+                                .truncate()
+                                .font_family(FONT_MONO)
+                                .text_size(px(FS_MD))
+                                .text_color(t.text_muted)
+                                .child(format!("{host}:"))
+                        }))
                         .child(
                             div()
                                 .ml(px(4.))
@@ -287,7 +298,7 @@ impl Render for AddProject {
                                         .child(icon("caret-right", 12.)),
                                 )
                                 .on_click(
-                                    cx.listener(|this, _, _, cx| this.show_machines(true, cx)),
+                                    cx.listener(|this, _, _, cx| this.open_machine(None, cx)),
                                 ),
                         )
                         .child(
@@ -301,14 +312,17 @@ impl Render for AddProject {
                                 .child("SSH HOSTS"),
                         )
                         .children(hosts.iter().map(|(name, hostname)| {
+                            let host = name.clone();
                             row()
                                 .id(SharedString::from(format!("machine-{name}")))
                                 .role(Role::Button)
                                 .aria_label(SharedString::from(name.clone()))
-                                .aria_description("Connecting to SSH hosts is not supported yet")
                                 .tab_index(0)
-                                .opacity(0.5)
-                                .tooltip(tooltip("Connecting to SSH hosts is not supported yet"))
+                                .cursor_pointer()
+                                .hover(move |s| s.bg(hover))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.open_machine(Some(host.clone()), cx);
+                                }))
                                 .child(
                                     div()
                                         .flex_none()

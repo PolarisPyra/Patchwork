@@ -121,10 +121,45 @@ fn media_of(root: &Path, base: &Path, rel: &str) -> FileMedia {
 ///
 /// Returns an error when the project root cannot be resolved.
 pub fn file_media(root: &str, rels: &[String]) -> Result<Vec<FileMedia>, Error> {
+    if let Some(at) = crate::system::remote::split(root) {
+        return remote_media(root, at, rels);
+    }
     let canonical = std::fs::canonicalize(root).map_err(|e| e.to_string())?;
     Ok(rels
         .iter()
         .take(MAX_MEDIA_PATHS)
         .map(|rel| media_of(&canonical, Path::new(root), rel))
+        .collect())
+}
+
+/// [`file_media`] for a project on an SSH host. Its pictures and videos are not on this machine
+/// to show, so they list as other files; text still opens in the diff list.
+fn remote_media(
+    root: &str,
+    at: crate::system::remote::Location<'_>,
+    rels: &[String],
+) -> Result<Vec<FileMedia>, Error> {
+    let rels: Vec<String> = rels.iter().take(MAX_MEDIA_PATHS).cloned().collect();
+    let sizes = crate::system::remote::fs::sizes(at.host, at.path, &rels)?;
+    Ok(rels
+        .into_iter()
+        .zip(sizes)
+        .map(|(rel, size)| {
+            let rel_path = Path::new(&rel);
+            let plain = rel_path
+                .components()
+                .all(|c| matches!(c, Component::Normal(_)));
+            let in_git = rel_path.components().any(|c| c.as_os_str() == ".git");
+            let kind = match preview_kind(&rel, size.unwrap_or(0)) {
+                PreviewKind::Text if plain && !in_git => PreviewKind::Text,
+                _ => PreviewKind::Other,
+            };
+            FileMedia {
+                absolute: crate::system::remote::join(root, &rel),
+                path: rel,
+                size: size.unwrap_or(0),
+                kind,
+            }
+        })
         .collect())
 }

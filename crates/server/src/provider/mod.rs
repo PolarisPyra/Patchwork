@@ -10,7 +10,7 @@ mod turn;
 
 #[doc(inline)]
 pub use locate::{agent_shell, set_agent_paths, user_command};
-pub(crate) use locate::{agent_command, turn_command};
+pub(crate) use locate::{agent_command, remote_turn_command, turn_command};
 use locate::{located, located_or, find_binary};
 #[doc(inline)]
 pub use parsed::{TaskEvent, Parsed, GoalUpdate};

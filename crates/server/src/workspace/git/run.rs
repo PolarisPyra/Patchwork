@@ -12,14 +12,16 @@ pub(in crate::workspace) fn git_raw(root: &str, args: &[&str]) -> Result<Output,
 
 /// `git_raw` with the error from starting git as it came, so a caller can tell git is missing.
 pub(in crate::workspace) fn git_output(root: &str, args: &[&str]) -> std::io::Result<Output> {
-    crate::system::host_command("git")
-        .args(args)
+    let mut cmd = crate::system::host_command("git");
+    cmd.args(args)
         .current_dir(root)
         // Reads such as `git status` would otherwise rewrite the index, which the project
         // watcher would report as a change.
         .env("GIT_OPTIONAL_LOCKS", "0")
         // There is no terminal to type a password in, so a push fails instead of waiting.
-        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_TERMINAL_PROMPT", "0");
+    crate::system::remote::prepare(cmd)
+        .map_err(std::io::Error::other)?
         .stdin(Stdio::null())
         .output()
 }

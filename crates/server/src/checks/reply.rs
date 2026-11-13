@@ -4,7 +4,6 @@
 // Rust guideline compliant 2026-10-09
 
 use crate::Error;
-use std::path::Path;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
@@ -16,7 +15,7 @@ use crate::system::now_ms;
 use crate::threads::{CheckStatus, MessageStatus, TurnChecks};
 use crate::Server;
 
-use super::{KEEP, LIMIT, command, failures, run, tests_ran, Command};
+use super::{KEEP, LIMIT, failures, run, tests_ran, Command};
 
 /// Most failures listed for one run.
 const MOST: usize = 12;
@@ -136,7 +135,7 @@ pub(super) fn check_project(
         return;
     }
     // Asked for, a project answers even when it has nothing to run, saying what it looked for.
-    let Some(found) = command(Path::new(root)) else {
+    let Some(found) = super::detect::command_at(root) else {
         if asked {
             emit(TurnChecks {
                 status: CheckStatus::NotRun,

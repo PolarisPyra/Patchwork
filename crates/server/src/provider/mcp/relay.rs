@@ -157,6 +157,7 @@ pub(super) fn serve_relay() -> Result<(), Error> {
     let token = uuid::Uuid::new_v4().simple().to_string();
     let endpoint = json!({"port": port, "token": token});
     let _ = ENDPOINT.set(endpoint.clone());
+    crate::system::remote::set_relay_port(port);
     crate::system::instance::listens(&endpoint);
     crate::system::fs::write_private(
         &crate::system::dirs().state.join(RELAY_FILE),

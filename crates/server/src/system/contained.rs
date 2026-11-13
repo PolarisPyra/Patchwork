@@ -114,7 +114,7 @@ fn group_alive(pid: u32) -> bool {
 }
 
 #[cfg(windows)]
-mod windows {
+pub(crate) mod windows {
     use std::os::windows::io::AsRawHandle;
     use std::process::Child;
 
@@ -128,11 +128,13 @@ mod windows {
         JobObjectBasicAccountingInformation, JobObjectExtendedLimitInformation,
         QueryInformationJobObject, SetInformationJobObject, TerminateJobObject,
     };
-    use windows_sys::Win32::System::Threading::{OpenThread, ResumeThread, THREAD_SUSPEND_RESUME};
+    use windows_sys::Win32::System::Threading::{
+        GetCurrentProcess, OpenThread, ResumeThread, THREAD_SUSPEND_RESUME,
+    };
 
     /// A job object that ends what is in it when Patchwork closes it or exits.
     #[derive(Debug)]
-    pub(super) struct Job(HANDLE);
+    pub(crate) struct Job(HANDLE);
 
     // SAFETY: a job handle may be used and closed from any thread.
     unsafe impl Send for Job {}
@@ -141,7 +143,7 @@ mod windows {
     unsafe impl Sync for Job {}
 
     impl Job {
-        pub(super) fn new() -> Option<Job> {
+        pub(crate) fn new() -> Option<Job> {
             // SAFETY: plain Win32 calls on a handle this owns; the limits struct is zeroed
             // before its one flag is set.
             unsafe {
@@ -165,6 +167,14 @@ mod windows {
         pub(super) fn assign(&self, child: &Child) {
             // SAFETY: both handles are open for the call.
             unsafe { AssignProcessToJobObject(self.0, child.as_raw_handle() as HANDLE) };
+        }
+
+        /// Puts this process in the job, so everything it starts after is in the job too, and
+        /// ends with it once the job's last handle, this process's own, closes.
+        pub(crate) fn assign_self(&self) -> bool {
+            // SAFETY: the job handle is open, and the current process's pseudo handle is always
+            // valid.
+            unsafe { AssignProcessToJobObject(self.0, GetCurrentProcess()) != 0 }
         }
 
         pub(super) fn terminate(&self) {

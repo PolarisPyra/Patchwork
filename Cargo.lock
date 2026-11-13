@@ -4455,6 +4455,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "patchwork-remote"
+version = "26.11.59"
+dependencies = [
+ "patchwork-server",
+]
+
+[[package]]
 name = "patchwork-server"
 version = "26.11.59"
 dependencies = [

@@ -5,7 +5,6 @@
 
 use crate::Error;
 use std::io::Read;
-use std::path::Path;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
@@ -35,15 +34,15 @@ pub struct Outcome {
 ///
 /// Returns an error when no shell is found, the command does not start, or waiting for it fails.
 pub fn run(root: &str, command: &str, limit: Duration) -> Result<Outcome, Error> {
-    let mut cmd = crate::system::shell_command(command)
+    let mut cmd = crate::system::remote::shell_in(root, command)
         .ok_or_else(|| "No shell was found to run the check in.".to_string())?;
-    cmd.current_dir(Path::new(root))
-        .env("CI", "1")
+    cmd.env("CI", "1")
         // Colour codes make the output unreadable in the card, and hide what the parsers look
         // for; every runner on this list respects one of these.
         .env("NO_COLOR", "1")
         .env("FORCE_COLOR", "0")
         .env("CLICOLOR", "0");
+    let cmd = crate::system::remote::supervised(cmd)?;
     let started = Instant::now();
     let (mut child, range) = crate::system::contained::spawn(cmd, Stdio::null())
         .map_err(|e| format!("The check command didn't start: {e}"))?;

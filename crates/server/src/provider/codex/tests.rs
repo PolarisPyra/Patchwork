@@ -22,6 +22,7 @@ use crate::provider::TurnSpec;
 fn spec(session_id: Option<&'static str>, mode: AccessMode) -> TurnSpec<'static> {
     TurnSpec {
         root: "/abs",
+        host: None,
         thread_id: "thread",
         session_id,
         model: Some("gpt"),

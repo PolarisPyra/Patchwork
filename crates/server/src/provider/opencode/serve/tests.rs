@@ -10,6 +10,7 @@ use super::request::serve_permissions;
 fn spec(mode: AccessMode, plan: bool) -> TurnSpec<'static> {
     TurnSpec {
         root: "/w",
+        host: None,
         thread_id: "thread",
         session_id: None,
         model: None,
@@ -101,6 +102,7 @@ mod dump_rules {
         ] {
             let spec = crate::provider::TurnSpec {
                 root: "/w",
+                host: None,
                 thread_id: "thread",
                 session_id: None,
                 model: None,

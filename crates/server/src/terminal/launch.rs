@@ -168,6 +168,19 @@ pub fn launch(
     }
 
     let home = crate::system::fs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+    // A project on an SSH host gets the user's login shell there, over the shared connection.
+    if let Some(at) = crate::system::remote::split(&folder) {
+        let ssh = crate::system::remote::interactive(at.host, at.path)?;
+        return Ok(Launch {
+            shell: ssh.get_program().to_string_lossy().into_owned(),
+            args: ssh
+                .get_args()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect(),
+            cwd: home,
+            env,
+        });
+    }
     let base = workspace.map_or_else(|| home.clone(), Path::to_path_buf);
     let cwd = terminal
         .cwd

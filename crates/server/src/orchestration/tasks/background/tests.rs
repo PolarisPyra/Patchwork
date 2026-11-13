@@ -232,6 +232,7 @@ fn a_process_that_ends_stops_its_open_tasks_and_their_calls() {
 fn a_codex_command_open_at_turn_end_is_listed_and_holds_no_stdin() {
     let spec = TurnSpec {
         root: "/abs/work",
+        host: None,
         thread_id: "thread",
         session_id: None,
         model: None,

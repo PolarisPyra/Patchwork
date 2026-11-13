@@ -74,10 +74,9 @@ fn file_diff(root: &str, rel: &str, turn: Option<&TurnTrees>) -> Result<String, 
 
 /// Runs `git apply <args>` on `patch` in `top`, the repository's top folder.
 fn apply(top: &str, args: &[&str], patch: &str) -> Result<(), Error> {
-    let mut child = crate::system::host_command("git")
-        .arg("apply")
-        .args(args)
-        .current_dir(top)
+    let mut cmd = crate::system::host_command("git");
+    cmd.arg("apply").args(args).current_dir(top);
+    let mut child = crate::system::remote::prepare(cmd)?
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -97,9 +96,8 @@ fn apply(top: &str, args: &[&str], patch: &str) -> Result<(), Error> {
 }
 
 fn toplevel(root: &str) -> Result<String, Error> {
-    Ok(git(root, &["rev-parse", "--show-toplevel"])?
-        .trim()
-        .to_string())
+    let top = git(root, &["rev-parse", "--show-toplevel"])?;
+    Ok(crate::system::remote::same_host(root, top.trim()))
 }
 
 /// Stages, unstages, or discards the change of the file's diff whose text, from its `@@` line

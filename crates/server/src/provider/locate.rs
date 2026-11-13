@@ -214,6 +214,28 @@ pub(crate) fn turn_command(kind: AgentKind) -> Result<Command, Error> {
     agent_command(kind)
 }
 
+/// The command that runs a turn of `kind` in a project on an SSH host, before
+/// [`crate::system::remote::supervised`] moves it there. The agent CLIs are found on the host by
+/// name; Patchwork's own agent and the OpenCode bridge run as Patchwork's helper there.
+///
+/// # Errors
+///
+/// Returns an error when Patchwork's own path cannot be found.
+pub(crate) fn remote_turn_command(kind: AgentKind) -> Result<Command, Error> {
+    let name = match kind {
+        AgentKind::Claude => "claude",
+        AgentKind::Codex => "codex",
+        AgentKind::Antigravity => "agy",
+        AgentKind::OpenCode if !opencode::uses_serve() => "opencode",
+        AgentKind::OpenCode | AgentKind::Api => return turn_command(kind),
+    };
+    let mut cmd = Command::new(name);
+    if kind == AgentKind::Claude {
+        cmd.env("CLAUDE_CODE_ENTRYPOINT", super::claude::entrypoint());
+    }
+    Ok(cmd)
+}
+
 /// The shell `agent` runs its commands in, which the turn sets as SHELL.
 ///
 /// Each CLI picks its own: Claude Code runs only bash or zsh, so it gets bash, else zsh; Codex

@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::system::new_id;
+use crate::system::{new_id, remote};
 use crate::threads::title::clean_name;
 use crate::Server;
 use crate::{watch, workspace};
@@ -54,11 +54,11 @@ impl Server {
             return Ok(());
         }
         let root = self.project_root(project_id)?;
-        let folder = PathBuf::from(&root);
+        let folder = root.clone();
         // The watcher lives in the server, so it holds the server weakly.
         let server = Arc::downgrade(self);
         let id = project_id.to_string();
-        let watcher = watch::ProjectWatcher::start(&folder, move |burst| {
+        let on_burst = move |burst: Vec<watch::Change>| {
             let Some(server) = server.upgrade() else {
                 return;
             };
@@ -72,7 +72,12 @@ impl Server {
                 branch: workspace::git_branch(&root),
                 changes,
             });
-        })?;
+        };
+        let watcher = if remote::is_remote(&folder) {
+            watch::ProjectWatcher::poll(&folder, on_burst)?
+        } else {
+            watch::ProjectWatcher::start(&PathBuf::from(&folder), on_burst)?
+        };
         *current = Some((project_id.to_string(), watcher));
         Ok(())
     }
@@ -217,32 +222,31 @@ impl Server {
             .ok_or_else(|| format!("unknown project {project_id}"))?;
         let top = workspace::run_git(&source.path, &["rev-parse", "--show-toplevel"])
             .map_err(|_discarded| format!("{} isn't a git repository", source.name))?;
-        let top = top.trim();
-        if workspace::run_git(top, &["rev-parse", "--verify", "-q", "HEAD"]).is_err() {
+        let top = remote::same_host(&source.path, top.trim());
+        if workspace::run_git(&top, &["rev-parse", "--verify", "-q", "HEAD"]).is_err() {
             return Err("Make a first commit before starting a task in a worktree".into());
         }
         // A project in a folder of its repository opens the same folder of the worktree.
         let prefix = workspace::run_git(&source.path, &["rev-parse", "--show-prefix"])?;
         let short = &new_id()[..8];
-        let folder = Path::new(top)
+        let folder = Path::new(remote::here(&top))
             .file_name()
             .map_or_else(|| "worktree".into(), |n| n.to_string_lossy().into_owned());
-        std::fs::create_dir_all(&self.worktrees_dir)
-            .map_err(|e| format!("Cannot create {}: {e}", self.worktrees_dir.display()))?;
-        let root = self.worktrees_dir.join(format!("{folder}-{short}"));
+        let dir = self.worktrees_for(&top)?;
+        let root = remote::join(&dir, &format!("{folder}-{short}"));
         let branch = format!("patchwork/{short}");
         workspace::run_git(
-            top,
+            &top,
             &[
                 "worktree",
                 "add",
                 "-b",
                 &branch,
-                &root.to_string_lossy(),
+                remote::here(&root),
                 "HEAD",
             ],
         )?;
-        let mut project = workspace::make_project(&root.join(prefix.trim()).to_string_lossy())?;
+        let mut project = workspace::make_project(&remote::join(&root, prefix.trim()))?;
         project.name = format!("{} · {short}", source.name);
         self.register_project(project, true)
     }
@@ -251,22 +255,45 @@ impl Server {
     /// one and may be removed: refused while a task runs in it or it has changes that aren't
     /// committed. None for any other project.
     fn removable_worktree(&self, id: &str, path: &str) -> Result<Option<String>, Error> {
-        let Ok(dir) = std::fs::canonicalize(&self.worktrees_dir) else {
-            return Ok(None);
+        let root = if let Some(at) = remote::split(path) {
+            // Only asked of the host when the path could be one of its worktrees, so removing a
+            // project on a host that is down still works.
+            if !at.path.contains("/patchwork/worktrees/") {
+                return Ok(None);
+            }
+            let Ok(dir) = self.worktrees_for(path) else {
+                return Ok(None);
+            };
+            let Some(first) = path
+                .strip_prefix(&format!("{dir}/"))
+                .and_then(|rel| rel.split('/').next())
+            else {
+                return Ok(None);
+            };
+            let root = remote::join(&dir, first);
+            // Gone already: git drops its record of the worktree by itself.
+            if remote::fs::canonical_dir(at.host, remote::here(&root)).is_err() {
+                return Ok(None);
+            }
+            root
+        } else {
+            let Ok(dir) = std::fs::canonicalize(&self.worktrees_dir) else {
+                return Ok(None);
+            };
+            let Some(first) = Path::new(path)
+                .strip_prefix(&dir)
+                .ok()
+                .and_then(|rel| rel.components().next())
+            else {
+                return Ok(None);
+            };
+            let root = dir.join(first);
+            // Gone already: git drops its record of the worktree by itself.
+            if !root.exists() {
+                return Ok(None);
+            }
+            root.to_string_lossy().into_owned()
         };
-        let Some(first) = Path::new(path)
-            .strip_prefix(&dir)
-            .ok()
-            .and_then(|rel| rel.components().next())
-        else {
-            return Ok(None);
-        };
-        let root = dir.join(first);
-        // Gone already: git drops its record of the worktree by itself.
-        if !root.exists() {
-            return Ok(None);
-        }
-        let root = root.to_string_lossy().into_owned();
         let running = self
             .store
             .threads()
@@ -289,14 +316,26 @@ impl Server {
 
     /// Removes the worktree at `root`. Its branch stays with its commits.
     fn remove_worktree(&self, root: &str) -> Result<(), Error> {
-        let dir = self.worktrees_dir.to_string_lossy();
+        let dir = self.worktrees_for(root)?;
         let common = workspace::run_git(
             root,
             &["rev-parse", "--path-format=absolute", "--git-common-dir"],
         )?;
         let git_dir = format!("--git-dir={}", common.trim());
-        workspace::run_git(&dir, &[&git_dir, "worktree", "remove", root])?;
+        workspace::run_git(&dir, &[&git_dir, "worktree", "remove", remote::here(root)])?;
         Ok(())
+    }
+
+    /// The folder `create_worktree` puts worktrees in, on the machine `root` is on, made if it
+    /// isn't there: Patchwork's own here, and the same place under the home folder of an SSH host.
+    fn worktrees_for(&self, root: &str) -> Result<String, Error> {
+        let Some(at) = remote::split(root) else {
+            std::fs::create_dir_all(&self.worktrees_dir)
+                .map_err(|e| format!("Cannot create {}: {e}", self.worktrees_dir.display()))?;
+            return Ok(self.worktrees_dir.to_string_lossy().into_owned());
+        };
+        let dir = remote::op::make_dirs(at.host, ".local/share/patchwork/worktrees")?;
+        Ok(remote::root(at.host, &dir))
     }
 
     /// Removes the project, with its worktree if Patchwork made one.

@@ -13,7 +13,10 @@ use super::Parsed;
 /// What one turn runs with.
 #[derive(Debug)]
 pub struct TurnSpec<'a> {
+    /// The project's folder, on the SSH host when [`Self::host`] is set.
     pub root: &'a str,
+    /// The SSH host the project is on, for a remote project.
+    pub host: Option<&'a str>,
     /// The thread the turn runs in, which Patchwork's own tools act for.
     pub thread_id: &'a str,
     pub session_id: Option<&'a str>,

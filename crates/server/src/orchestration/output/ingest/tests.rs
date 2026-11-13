@@ -58,6 +58,7 @@ pub(in crate::orchestration) fn live_turn(agent: AgentKind, mode: AccessMode) {
 
     let spec = TurnSpec {
         root: root_str,
+        host: None,
         thread_id: "thread",
         session_id: None,
         model: (agent == AgentKind::Claude).then_some("haiku"),

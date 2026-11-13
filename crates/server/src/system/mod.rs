@@ -16,6 +16,7 @@ pub mod instance;
 pub mod fs;
 pub(crate) mod contained;
 pub(crate) mod processes;
+pub mod remote;
 pub(crate) mod scope;
 mod shells;
 pub mod ssh;

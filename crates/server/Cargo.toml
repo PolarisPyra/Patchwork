@@ -25,7 +25,7 @@ thiserror = { workspace = true, default-features = true }
 rusqlite = { workspace = true, features = ["bundled", "fallible_uint"] }
 ureq = { workspace = true, default-features = true, features = ["json"] }
 # API providers: keys in the system credential store, and the agent's file search tools.
-keyring = { workspace = true, default-features = true, features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+keyring = { workspace = true, default-features = true }
 ignore = { workspace = true, default-features = true }
 # The integrated terminal's pseudo-terminals, and the screen and modes a window gets back.
 portable-pty = { workspace = true, default-features = true }
@@ -63,12 +63,24 @@ xcap.workspace = true
 winreg = { workspace = true, default-features = true }
 # The job object a command runs in, which ends everything it started, and telling running
 # programs that the user's PATH changed.
-windows-sys = { workspace = true, default-features = true, features = ["Win32_Foundation", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { workspace = true, default-features = true, features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 x11rb = { workspace = true, default-features = true, features = ["randr"] }
 zbus = { workspace = true, default-features = true }
 url = { workspace = true, default-features = true }
+
+[features]
+default = ["keychain"]
+# The system credential store: the Secret Service on Linux, which links libdbus, the Keychain and the
+# Credential Manager. The helper Patchwork copies to SSH hosts is built without it: it never keeps
+# a key, and a static build has no libdbus to link.
+keychain = [
+  "keyring/sync-secret-service",
+  "keyring/crypto-rust",
+  "keyring/apple-native",
+  "keyring/windows-native",
+]
 
 [lints]
 workspace = true

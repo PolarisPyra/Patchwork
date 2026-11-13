@@ -95,23 +95,29 @@ impl Canvas {
                             .on_click(cx.listener(|this, _, _, cx| this.send_review(cx))),
                         )
                     })
-                    .when(self.path.is_some(), |d| {
-                        d.child(
-                            btn("open-in-editor", "Open in editor", BtnKind::Plain, false, t)
-                                .child(icon("arrow-square-out", 14.))
-                                .child("Open in editor")
-                                .on_click(cx.listener(|this, _, _, cx| this.open_in_editor(cx))),
-                        )
-                        .child({
-                            let label = if self.copied { "Copied" } else { "Copy" };
-                            btn("copy-file", label, BtnKind::Plain, !has_content, t)
-                                .child(icon(if self.copied { "check" } else { "copy" }, 14.))
-                                .child(label)
-                                .when(has_content, |b| {
-                                    b.on_click(cx.listener(|this, _, _, cx| this.copy(cx)))
-                                })
-                        })
-                    })
+                    .when(
+                        self.path.is_some()
+                            && !patchwork_server::system::remote::is_remote(&self.root),
+                        |d| {
+                            d.child(
+                                btn("open-in-editor", "Open in editor", BtnKind::Plain, false, t)
+                                    .child(icon("arrow-square-out", 14.))
+                                    .child("Open in editor")
+                                    .on_click(
+                                        cx.listener(|this, _, _, cx| this.open_in_editor(cx)),
+                                    ),
+                            )
+                            .child({
+                                let label = if self.copied { "Copied" } else { "Copy" };
+                                btn("copy-file", label, BtnKind::Plain, !has_content, t)
+                                    .child(icon(if self.copied { "check" } else { "copy" }, 14.))
+                                    .child(label)
+                                    .when(has_content, |b| {
+                                        b.on_click(cx.listener(|this, _, _, cx| this.copy(cx)))
+                                    })
+                            })
+                        },
+                    )
                     .child(
                         icon_button("close-canvas", "Close canvas", "x", 16., cx)
                             .tooltip(tooltip("Close"))

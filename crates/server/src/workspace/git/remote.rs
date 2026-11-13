@@ -116,10 +116,11 @@ pub fn git_sync_state(root: &str) -> GitSyncState {
 
 /// Runs `gh <args>` in `root`, without prompts. A missing `gh` is said plainly.
 pub(crate) fn gh(root: &str, args: &[&str]) -> Result<String, Error> {
-    let out = crate::system::host_command("gh")
-        .args(args)
+    let mut cmd = crate::system::host_command("gh");
+    cmd.args(args)
         .current_dir(root)
-        .env("GH_PROMPT_DISABLED", "1")
+        .env("GH_PROMPT_DISABLED", "1");
+    let out = crate::system::remote::prepare(cmd)?
         .stdin(Stdio::null())
         .output()
         .map_err(|e| match e.kind() {

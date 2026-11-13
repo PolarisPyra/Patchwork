@@ -159,6 +159,20 @@ pub fn git_changes(root: &str) -> Result<Vec<FileChange>, Error> {
         }
     }
 
+    // On an SSH host the untracked files are counted in one command rather than read here.
+    let remote_counts = match crate::system::remote::split(root) {
+        Some(at) => {
+            let untracked: Vec<String> = status
+                .split('\0')
+                .filter_map(|e| e.strip_prefix("?? "))
+                .map(str::to_string)
+                .collect();
+            Some(crate::system::remote::fs::line_counts(
+                at.host, at.path, &untracked,
+            )?)
+        }
+        None => None,
+    };
     let mut changes = Vec::new();
     let mut entries = status.split('\0');
     while let Some(entry) = entries.next() {
@@ -183,7 +197,11 @@ pub fn git_changes(root: &str) -> Result<Vec<FileChange>, Error> {
             _ => "modified",
         };
         let (additions, deletions) = if x == '?' {
-            (line_count(&Path::new(root).join(&path)), 0)
+            let count = match &remote_counts {
+                Some(counts) => counts.get(&path).copied().unwrap_or(0),
+                None => line_count(&Path::new(root).join(&path)),
+            };
+            (count, 0)
         } else {
             counts.get(&path).copied().unwrap_or((0, 0))
         };
@@ -239,7 +257,7 @@ pub fn accept_file(root: &str, rel: &str) -> Result<(), Error> {
 /// file cannot be deleted.
 pub fn revert_file(root: &str, rel: &str) -> Result<(), Error> {
     if is_untracked(root, rel) {
-        return std::fs::remove_file(resolve_inside(root, rel)?).map_err(Error::from);
+        return remove(root, rel);
     }
     if git_succeeds(root, &["cat-file", "-e", &format!("HEAD:{rel}")]) {
         git(
@@ -256,9 +274,17 @@ pub fn revert_file(root: &str, rel: &str) -> Result<(), Error> {
     } else {
         // Newly added file: drop it from the index and delete it from disk.
         git(root, &["rm", "--cached", "-f", "-q", "--", rel])?;
-        if let Ok(path) = resolve_inside(root, rel) {
-            std::fs::remove_file(path).map_err(|e| e.to_string())?;
+        if resolve_inside(root, rel).is_ok() {
+            remove(root, rel)?;
         }
     }
     Ok(())
+}
+
+/// Deletes the project file `rel`, refused outside the project.
+fn remove(root: &str, rel: &str) -> Result<(), Error> {
+    match crate::system::remote::split(root) {
+        Some(at) => crate::system::remote::fs::remove_inside(at.host, at.path, rel),
+        None => std::fs::remove_file(resolve_inside(root, rel)?).map_err(Error::from),
+    }
 }

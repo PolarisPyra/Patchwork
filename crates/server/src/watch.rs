@@ -44,7 +44,9 @@ pub struct Change {
 /// Watches until dropped.
 #[derive(Debug)]
 pub struct ProjectWatcher {
-    _watcher: Arc<Mutex<RecommendedWatcher>>,
+    _watcher: Option<Arc<Mutex<RecommendedWatcher>>>,
+    /// Held while a remote project is polled; the polling thread ends once it is dropped.
+    _polling: Option<Arc<()>>,
 }
 
 impl ProjectWatcher {
@@ -73,7 +75,57 @@ impl ProjectWatcher {
             .name("project-watch".into())
             .spawn(move || run(&root, &weak, &rx, on_change))
             .map_err(|e| e.to_string())?;
-        Ok(Self { _watcher: watcher })
+        Ok(Self {
+            _watcher: Some(watcher),
+            _polling: None,
+        })
+    }
+
+    /// Watches the project at `root` on an SSH host, which has no file events to send here, by
+    /// asking it every few seconds which files git sees changed and when each was written.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `root` is not remote or the polling thread cannot be created.
+    pub fn poll(
+        root: &str,
+        mut on_change: impl FnMut(Vec<Change>) + Send + 'static,
+    ) -> Result<Self, Error> {
+        let at = crate::system::remote::split(root).ok_or("Not a remote project")?;
+        let (host, dir) = (at.host.to_string(), at.path.to_string());
+        let alive = Arc::new(());
+        let weak = Arc::downgrade(&alive);
+        std::thread::Builder::new()
+            .name("project-poll".into())
+            .spawn(move || {
+                let mut last: Option<BTreeMap<String, String>> = None;
+                while weak.strong_count() > 0 {
+                    if let Some(now) = remote_state(&host, &dir) {
+                        if let Some(before) = &last {
+                            let at = Instant::now();
+                            let changed: Vec<Change> = before
+                                .iter()
+                                .filter(|(p, s)| now.get(*p) != Some(*s))
+                                .chain(now.iter().filter(|(p, _)| !before.contains_key(*p)))
+                                .map(|(path, _)| Change {
+                                    path: path.clone(),
+                                    at,
+                                })
+                                .collect();
+                            if !changed.is_empty() && weak.strong_count() > 0 {
+                                on_change(changed);
+                            }
+                        }
+                        last = Some(now);
+                    }
+                    std::thread::sleep(POLL);
+                }
+            })
+            .map_err(|e| e.to_string())?;
+        Ok(Self {
+            _watcher: None,
+            _polling: Some(alive),
+        })
     }
 }
 
@@ -315,4 +367,14 @@ mod tree {
     pub(super) fn dir_created(_watcher: &mut RecommendedWatcher, _dir: &Path) -> Vec<PathBuf> {
         Vec::new()
     }
+}
+
+/// How often a project on an SSH host is asked what changed.
+const POLL: Duration = Duration::from_secs(3);
+
+/// What git sees in the folder `dir` on `host`: each changed or new file with its time and size,
+/// and `.git/HEAD` and `.git/index` with theirs, so commits, staging and checkouts show too.
+/// None when the host cannot be reached.
+fn remote_state(host: &str, dir: &str) -> Option<BTreeMap<String, String>> {
+    crate::system::remote::op::poll(host, dir).ok()
 }

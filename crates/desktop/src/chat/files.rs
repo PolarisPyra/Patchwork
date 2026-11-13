@@ -325,8 +325,11 @@ fn produced_file(
             div()
                 .flex_none()
                 .size(px(24.))
-                .children(root.filter(|_| !deleted).map(|root| {
-                    button(
+                // A file of a project on an SSH host has no copy here for an app to open.
+                .children(
+                    root.filter(|r| !deleted && !patchwork_server::system::remote::is_remote(r))
+                        .map(|root| {
+                            button(
                         SharedString::from(format!("card-app-{}-{}", m.id, file.path)),
                         format!("Open {name} in its app"),
                     )
@@ -345,7 +348,8 @@ fn produced_file(
                             }
                         }
                     })
-                })),
+                        }),
+                ),
         )
 }
 

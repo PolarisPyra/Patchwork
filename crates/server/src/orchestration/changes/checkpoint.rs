@@ -46,18 +46,20 @@ fn run(
     let mut cmd = crate::system::host_command("git");
     cmd.args(args)
         .current_dir(root)
-        .env("GIT_LITERAL_PATHSPECS", "1")
+        .env("GIT_LITERAL_PATHSPECS", "1");
+    if let Some(index) = index {
+        cmd.env("GIT_INDEX_FILE", index);
+    }
+    let mut child = crate::system::remote::prepare(cmd)?
         .stdin(if input.is_some() {
             Stdio::piped()
         } else {
             Stdio::null()
         })
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    if let Some(index) = index {
-        cmd.env("GIT_INDEX_FILE", index);
-    }
-    let mut child = cmd.spawn().map_err(|e| format!("Failed to run git: {e}"))?;
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to run git: {e}"))?;
     // Written while the output is read: git answers a long input as it reads it, and with both
     // pipes full each side would wait on the other.
     let out = std::thread::scope(|scope| {
@@ -90,6 +92,9 @@ fn git(root: &str, args: &[&str]) -> Result<String, Error> {
 /// A tree of the project's files as they are now. The user's index is copied first, so git only
 /// re-reads the files that changed since it was last refreshed.
 fn snapshot(root: &str) -> Result<String, Error> {
+    if crate::system::remote::is_remote(root) {
+        return remote_snapshot(root);
+    }
     let index = PathBuf::from(root).join(git(root, &["rev-parse", "--git-path", "index"])?);
     let temp = PathBuf::from(root).join(git(
         root,
@@ -106,6 +111,14 @@ fn snapshot(root: &str) -> Result<String, Error> {
         .and_then(|_| run(root, Some(&temp), &["write-tree"], None));
     let _ = std::fs::remove_file(&temp);
     Ok(String::from_utf8_lossy(&tree?.stdout).trim().to_string())
+}
+
+/// [`snapshot`] for a project on an SSH host, where the temporary index is a file on the host.
+fn remote_snapshot(root: &str) -> Result<String, Error> {
+    let Some(at) = crate::system::remote::split(root) else {
+        return Err("Not a remote project".into());
+    };
+    crate::system::remote::op::snapshot(at.host, at.path)
 }
 
 /// Snapshots the project before the turn for `message_id` changes it. Nothing is taken outside
@@ -230,11 +243,12 @@ pub fn turn_files(root: &str, turn: &TurnTrees, paths: &[String]) -> Result<Vec<
         );
     }
     // The blobs to compare: before the turn, at the last commit, and on disk now.
+    let on_disk = files_on_disk(root, paths);
     let present: Vec<&String> = paths
         .iter()
-        .filter(|p| {
-            status.get(p.as_str()).is_some_and(|s| *s != "D") && Path::new(root).join(p).is_file()
-        })
+        .zip(&on_disk)
+        .filter(|(p, there)| **there && status.get(p.as_str()).is_some_and(|s| *s != "D"))
+        .map(|(p, _)| p)
         .collect();
     // Both read paths from the repository's top, which the project may sit below.
     let prefix = git(root, &["rev-parse", "--show-prefix"])?;
@@ -256,7 +270,8 @@ pub fn turn_files(root: &str, turn: &TurnTrees, paths: &[String]) -> Result<Vec<
     let known = String::from_utf8_lossy(&known.stdout).into_owned();
     let mut known = known.lines();
     let names: String = present.iter().fold(String::new(), |mut names, p| {
-        let _ = writeln!(names, "{}", Path::new(root).join(p).display());
+        // Relative to the project, where git runs, so the same names work on an SSH host.
+        let _ = writeln!(names, "{p}");
         names
     });
     let now = run(
@@ -329,6 +344,29 @@ pub fn list(root: &str, thread_id: &str) -> Vec<String> {
         .collect()
 }
 
+/// Whether each of `paths` (project-relative) is a file on disk now.
+fn files_on_disk(root: &str, paths: &[String]) -> Vec<bool> {
+    match crate::system::remote::split(root) {
+        Some(at) => crate::system::remote::fs::sizes(at.host, at.path, paths).map_or_else(
+            |_| vec![false; paths.len()],
+            |sizes| sizes.iter().map(Option::is_some).collect(),
+        ),
+        None => paths
+            .iter()
+            .map(|p| Path::new(root).join(p).is_file())
+            .collect(),
+    }
+}
+
+/// Deletes the file `rel` of the project at `root`, which a turn created.
+fn remove_added(root: &str, rel: &str) -> Result<(), Error> {
+    if let Some(at) = crate::system::remote::split(root) {
+        return crate::system::remote::fs::remove_inside(at.host, at.path, rel);
+    }
+    let path = Path::new(root).join(rel);
+    std::fs::remove_file(&path).map_err(|e| format!("{}: {e}", path.display()).into())
+}
+
 /// Puts the project's files back as they were before the turn for `message_id`: files changed or
 /// deleted since are rewritten, and files created since are deleted. Ignored files are left alone.
 ///
@@ -368,8 +406,7 @@ pub fn restore(root: &str, thread_id: &str, message_id: &str) -> Result<(), Erro
     for pair in fields.chunks(2) {
         let [status, path] = pair else { continue };
         if status == b"A" {
-            let path = Path::new(root).join(String::from_utf8_lossy(path).as_ref());
-            std::fs::remove_file(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            remove_added(root, &String::from_utf8_lossy(path))?;
         } else {
             rewrite.extend_from_slice(path);
             rewrite.push(0);
@@ -420,6 +457,7 @@ pub fn undo(root: &str, turn: &TurnTrees, files: &[String]) -> Result<(), Error>
     }
     // The patch names files from the repository's top, which the project may sit below.
     let top = git(root, &["rev-parse", "--show-toplevel"])?;
+    let top = crate::system::remote::same_host(root, top.trim());
     run(
         &top,
         None,

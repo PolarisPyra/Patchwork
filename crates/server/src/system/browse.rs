@@ -1,18 +1,17 @@
-//! Folder picking: the machines to choose from and local folder browsing.
+//! Folder picking: the machines to choose from and browsing their folders.
 //!
 //! Picking a project folder from inside the app: the machines to pick from (this computer, plus the
-//! SSH hosts in `~/.ssh/config`) and walking this computer's folders a level at a time. Remote hosts
-//! are listed so they can be chosen later; nothing here reaches across SSH yet.
+//! SSH hosts in `~/.ssh/config`) and walking a machine's folders a level at a time.
 
 // Rust guideline compliant 2026-10-09
 
 use crate::Error;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::fs::{home_dir, resolve};
 
-/// A machine the Add Project dialog can open a folder on. `local` is this computer, the only one
-/// that can be browsed today; the rest come from `~/.ssh/config` and are shown but not connectable.
+/// A machine the Add Project dialog can open a folder on: this computer, or a host from
+/// `~/.ssh/config`.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Machine {
@@ -24,14 +23,14 @@ pub struct Machine {
 }
 
 /// One sub-folder in a browsed directory.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DirEntry {
     pub name: String,
     pub path: String,
 }
 
 /// A directory's folders, for the in-app folder browser.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DirListing {
     /// The directory being shown, resolved to an absolute path.
@@ -106,4 +105,18 @@ pub fn browse(path: Option<&str>) -> Result<DirListing, Error> {
         parent: dir.parent().map(|p| p.to_string_lossy().into_owned()),
         entries,
     })
+}
+
+/// The sub-folders of `path` on the SSH host `host` (its home folder when none is given), sorted
+/// by name. Paths are the host's own, as [`browse`] gives this computer's.
+///
+/// A path may start with `~`, and a relative one is taken from the home folder there. Links to
+/// folders are listed, as on this computer. Patchwork's helper there lists them, so the paths
+/// use forward slashes on every host.
+///
+/// # Errors
+///
+/// Returns an error when the host cannot be reached, or the path there cannot be opened.
+pub fn browse_host(host: &str, path: Option<&str>) -> Result<DirListing, Error> {
+    crate::system::remote::op::browse(host, path)
 }

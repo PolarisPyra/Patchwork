@@ -143,7 +143,8 @@ impl Turn {
 
     pub(in crate::orchestration) fn spec(&self) -> TurnSpec<'_> {
         TurnSpec {
-            root: &self.root,
+            root: crate::system::remote::here(&self.root),
+            host: crate::system::remote::split(&self.root).map(|at| at.host),
             thread_id: &self.thread_id,
             session_id: self.session_id.as_deref(),
             model: self.model.as_deref(),

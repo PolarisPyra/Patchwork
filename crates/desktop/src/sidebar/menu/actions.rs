@@ -70,7 +70,12 @@ impl Workspace {
                 }
                 items.push(item("Archive", "archive", Act::Remove));
             }
-            Target::Project(_) => {
+            Target::Project(id) => {
+                // A project on an SSH host has no folder here to show.
+                let remote =
+                    self.settings.projects.iter().any(|p| {
+                        &p.id == id && patchwork_server::system::remote::is_remote(&p.path)
+                    });
                 items.push(item(
                     "New task in a worktree",
                     "git-branch",
@@ -80,7 +85,9 @@ impl Workspace {
                     items.push(item("Granular settings…", "gauge", Act::Granular));
                 }
                 items.push(item("Change folder…", "folder", Act::ChangeFolder));
-                items.push(item("Open folder", "folder-open", Act::OpenFolder));
+                if !remote {
+                    items.push(item("Open folder", "folder-open", Act::OpenFolder));
+                }
                 items.push(Item {
                     danger: true,
                     ..item("Remove", "trash", Act::Remove)

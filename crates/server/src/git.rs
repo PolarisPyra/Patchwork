@@ -318,7 +318,12 @@ impl Server {
 
         let mut conflicts = String::new();
         for file in &files {
-            let text = std::fs::read_to_string(Path::new(&root).join(file)).unwrap_or_default();
+            let text = match crate::system::remote::split(&root) {
+                Some(at) => crate::system::remote::fs::read_inside(at.host, at.path, file, 1 << 20)
+                    .map(|b| String::from_utf8_lossy(&b).into_owned()),
+                None => std::fs::read_to_string(Path::new(&root).join(file)).map_err(Error::from),
+            }
+            .unwrap_or_default();
             let hunks = conflict_hunks(&text);
             let body = if hunks.is_empty() {
                 "No conflict markers: one side deleted or renamed it.".to_string()

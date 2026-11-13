@@ -25,7 +25,7 @@ mod run;
 mod tests;
 
 #[doc(inline)]
-pub use detect::{command, Command};
+pub use detect::{command, command_at, Command};
 #[doc(inline)]
 pub use parse::{failures, tests_ran};
 #[doc(inline)]

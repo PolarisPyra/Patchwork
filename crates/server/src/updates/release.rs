@@ -257,3 +257,43 @@ impl Download<'_> {
             .map_err(|_mismatch| "The download is not signed with Patchwork's release key.".into())
     }
 }
+
+/// The most bytes a helper download may have.
+const MAX_HELPER: u64 = 64 << 20;
+
+/// The helper `name` from this version's release, checked against the release key's signature
+/// beside it. Blocks.
+///
+/// A copy of Patchwork ships only the helpers for the systems it builds on; the others, such as
+/// the macOS ones on Linux, come from the release the first time a host needs one.
+///
+/// # Errors
+///
+/// Returns an error when the release has no such file, it cannot be downloaded, or its
+/// signature does not match.
+pub(crate) fn helper(name: &str) -> Result<Vec<u8>, Error> {
+    let url = format!(
+        "https://github.com/PolarisPyra/Patchwork/releases/download/v{}/{name}",
+        crate::VERSION
+    );
+    let agent = agent(DOWNLOAD_TIMEOUT);
+    let fetch = |url: &str, limit: u64| {
+        agent
+            .get(url)
+            .call()
+            .map_err(|e| format!("Could not download {name}: {e}"))?
+            .body_mut()
+            .with_config()
+            .limit(limit)
+            .read_to_vec()
+            .map_err(|e| format!("Could not download {name}: {e}"))
+    };
+    let bytes = fetch(&url, MAX_HELPER)?;
+    let signature = fetch(&format!("{url}.minisig"), MAX_MANIFEST)?;
+    let key = PublicKey::from_base64(SIGNING_KEY).map_err(|e| e.to_string())?;
+    let signature = Signature::decode(&String::from_utf8_lossy(&signature))
+        .map_err(|e| format!("{name} has an unreadable signature: {e}"))?;
+    key.verify(&bytes, &signature, false)
+        .map_err(|_mismatch| format!("{name} is not signed with Patchwork's release key"))?;
+    Ok(bytes)
+}

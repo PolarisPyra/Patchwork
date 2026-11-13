@@ -130,8 +130,11 @@ impl Runner {
                     .iter()
                     .find(|p| &p.id == id)
                     .ok_or("Project not found")?;
-                // Spawning in a missing folder fails with a bare "No such file or directory".
-                if !std::path::Path::new(&project.path).is_dir() {
+                // Spawning in a missing folder fails with a bare "No such file or directory". A
+                // folder on an SSH host is found missing there, when the helper changes into it.
+                if !crate::system::remote::is_remote(&project.path)
+                    && !std::path::Path::new(&project.path).is_dir()
+                {
                     return Err(format!(
                         "The {} project's folder, {}, no longer exists",
                         project.name, project.path
@@ -223,7 +226,8 @@ impl Runner {
         };
         let vision_model = settings.vision.clone();
         let spec = TurnSpec {
-            root: &root,
+            root: crate::system::remote::here(&root),
+            host: crate::system::remote::split(&root).map(|at| at.host),
             thread_id: &thread_id,
             session_id: session_id.as_deref(),
             model: model.as_deref(),
@@ -281,8 +285,23 @@ impl Runner {
         if let Some(why) = provider::hooks::unguarded(agent, &args) {
             return Err(why.into());
         }
-        let input = provider::turn_input(agent, &spec);
-        let (mut cmd, scope) = scope::scoped(provider::turn_command(agent)?);
+        let mut input = provider::turn_input(agent, &spec);
+        if let Some(host) = spec.host {
+            // The files the input names, such as attachments and where sessions are kept, as the
+            // agent on the host finds them.
+            input = input
+                .iter()
+                .map(|line| crate::system::remote::mirrored(host, line))
+                .collect::<Result<_, _>>()?;
+        }
+        // A project on an SSH host runs its agent there, under Patchwork's helper, which stops it
+        // when the connection ends, so no scope is made for it here.
+        let remote = crate::system::remote::is_remote(&root);
+        let (mut cmd, scope) = if remote {
+            (provider::remote_turn_command(agent)?, None)
+        } else {
+            scope::scoped(provider::turn_command(agent)?)
+        };
         if let Some(shell) = provider::agent_shell(agent) {
             // Claude Code on Windows runs its commands in Git Bash, and refuses to start when it
             // cannot find it on PATH.
@@ -302,15 +321,20 @@ impl Runner {
         }
         cmd.args(&args)
             .envs(provider::turn_env(agent, &spec))
-            .envs(crate::permissions::hook::env(agent, &thread_id, &root))
-            .current_dir(&root)
-            .stdin(if input.is_empty() {
-                Stdio::null()
-            } else {
-                Stdio::piped()
-            })
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            .envs(crate::permissions::hook::env(
+                agent,
+                &thread_id,
+                crate::system::remote::here(&root),
+            ))
+            .current_dir(&root);
+        let mut cmd = crate::system::remote::supervised(cmd)?;
+        cmd.stdin(if input.is_empty() {
+            Stdio::null()
+        } else {
+            Stdio::piped()
+        })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
         #[cfg(unix)]
         cmd.process_group(0);
         let mut child = cmd

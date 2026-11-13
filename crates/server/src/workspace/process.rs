@@ -49,6 +49,9 @@ pub const SIGTERM: i32 = 15;
 ///
 /// Returns an error when none of the known editors or the system opener can be started.
 pub fn open_in_editor(root: &str, rel: &str, token: Option<&str>) -> Result<(), Error> {
+    if crate::system::remote::is_remote(root) {
+        return Err("Files of a project on an SSH host open in Patchwork only".into());
+    }
     let path = Path::new(root).join(rel);
     let fallback = if cfg!(target_os = "macos") {
         "open"

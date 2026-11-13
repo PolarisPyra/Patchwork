@@ -294,6 +294,7 @@ fn main() {
             cx.on_app_quit(move |_| {
                 quitting.stop_agents();
                 quitting.terminals.kill_all();
+                patchwork_server::system::remote::close_all();
                 async {}
             })
             .detach();
