@@ -109,8 +109,15 @@ impl Onboarding {
         );
     }
 
+    /// Checks the project `id`, or clears the check when it is the one already checked.
     pub(super) fn set_active(&mut self, id: String, cx: &mut Context<Self>) {
-        self.save(|s| s.active_project_id = Some(id), cx);
+        self.save(
+            |s| {
+                s.active_project_id =
+                    (s.active_project_id.as_deref() != Some(id.as_str())).then_some(id);
+            },
+            cx,
+        );
     }
 }
 
