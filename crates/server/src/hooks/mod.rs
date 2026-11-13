@@ -19,6 +19,7 @@
 mod agent_hooks;
 mod events;
 mod manifest;
+mod process;
 mod turn_hooks;
 
 #[doc(inline)]

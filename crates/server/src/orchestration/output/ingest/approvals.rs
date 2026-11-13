@@ -109,7 +109,7 @@ fn refused_by_hook(turn: &Turn, target: &permissions::Target) -> Option<String> 
         hooks
             .iter()
             .filter(|hook| hook.event == event && hook.matches(&tool))
-            .find_map(|hook| crate::hooks::run_tool_hook(hook, &call, root))
+            .find_map(|hook| crate::hooks::run_tool_hook(hook, &call, &turn.root))
     })
 }
 
