@@ -176,7 +176,14 @@ impl Updates {
             });
         }
         let version = release.version().to_string();
-        self.lock().notes = release.body.clone().filter(|body| !body.trim().is_empty());
+        // The update notes end where the release's folded full changelog starts.
+        self.lock().notes = release
+            .body
+            .as_deref()
+            .and_then(|body| body.split("<details>").next())
+            .map(str::trim)
+            .filter(|notes| !notes.is_empty())
+            .map(str::to_string);
         if !install::can_install() {
             return self.finish(|_, _| Some(UpdateState::Available { version }));
         }

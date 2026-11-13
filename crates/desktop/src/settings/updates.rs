@@ -83,7 +83,13 @@ fn releases() -> &'static [Release] {
                 Release {
                     version: version.to_string(),
                     date: rest.trim_start_matches(" - ").trim().to_string(),
-                    notes: notes.trim().to_string(),
+                    // The folded full changelog is for the release page.
+                    notes: notes
+                        .split("<details>")
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .to_string(),
                 }
             })
             .collect()
