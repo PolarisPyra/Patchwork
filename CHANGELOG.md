@@ -3,6 +3,24 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.64] - 2026-11-13
+
+### Changed
+
+- Settings → Hooks now uses the word hooks throughout, and the folder that holds them is named hooks instead of plugins. An existing plugins folder is renamed the first time this version starts. Hooks that run before a tool call now also apply to OpenCode chats.
+- Buttons that only appeared on hover, such as archive in the sidebar and the actions on a Changes row, now also appear when reached with the Tab key. Escape in a Settings form closes only that form, and error messages in Settings are announced by screen readers.
+
+### Fixed
+
+- For a project in a subfolder of its repository, Changes listed the whole repository's files with wrong names and line counts, and reverting a file failed. Changes now lists only the project's files, and reverting works.
+- With two copies of Patchwork open, one copy could receive the other's tool calls and approval requests, and starting the second paused the first one's running goals. Each copy now handles its own chats.
+- When a reply had to restart and the restart failed, the reply disappeared, and a goal was dropped when its turn could not start. The reply now stays with its error, and the goal waits to be resumed.
+- While a question from the agent was showing, typing a digit or pressing Enter in a message already begun answered the question instead of going to the message, and the suggestions in an empty chat did nothing when clicked. Those keys now go to the message, and clicking a suggestion fills the chat box.
+
+### Security
+
+- Permission rules now read the command inside sudo, env, timeout and xargs, and a rule for git push also covers git run from another folder. A deny or ask rule for a file also applies when a command writes to that file with a redirect.
+
 ## [26.11.63] - 2026-11-13
 
 ### Fixed
