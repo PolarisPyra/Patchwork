@@ -123,7 +123,7 @@ pub struct ClaudeModel {
     pub efforts: Vec<String>,
     /// Whether the model offers fast mode.
     pub fast_mode: bool,
-    /// Whether the catalog lists it among the older models rather than the main ones.
+    /// Whether a newer model of the same line, such as a later Opus, replaces it.
     pub legacy: bool,
 }
 
