@@ -101,8 +101,12 @@ fn check_turn(server: &Arc<Server>, thread_id: &str, message_id: &str, asked: bo
     let Some(project_id) = project_of(server, thread_id) else {
         return;
     };
-    let Some(root) = server.project_root(&project_id).ok() else {
-        return;
+    let root = match server.project_root(&project_id) {
+        Ok(root) => root,
+        Err(e) => {
+            log::warn!(error:% = e; "could not find the project to check: {{error}}");
+            return;
+        }
     };
     let emit = |checks: TurnChecks| {
         publish(
@@ -145,7 +149,8 @@ pub(super) fn check_project(
                 failures: Vec::new(),
                 output: None,
                 note: Some(format!(
-                    "No check command in this project. Looked for {WHAT}"
+                    "No check command in this project. Looked for {}",
+                    super::detect::looked_for()
                 )),
                 enabled,
                 at,
@@ -300,10 +305,6 @@ pub(super) fn tail(text: &str) -> Option<String> {
         &text[start..]
     ))
 }
-
-/// What a project's check command is looked for, in the words a person reads when there is none.
-const WHAT: &str = "package.json scripts (check, then test), Cargo.toml, pyproject.toml, go.mod, \
-                    a Makefile's check or test target, and mix.exs.";
 
 /// Whether the project runs its checks after every task, from Settings. Off unless it was turned
 /// on, so a project's test suite is not run behind the person's back, on every task, the first

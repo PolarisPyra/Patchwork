@@ -40,11 +40,41 @@ pub fn command_at(root: &str) -> Option<Command> {
 
 fn detect(root: &dyn Probe) -> Option<Command> {
     node_scripts(root)
-        .or_else(|| file(root, "Cargo.toml").then(|| Command::new("cargo test")))
-        .or_else(|| python(root))
-        .or_else(|| file(root, "go.mod").then(|| Command::new("go test ./...")))
+        .or_else(|| {
+            root.is_file("Cargo.toml")
+                .then(|| Command::new("cargo test"))
+        })
+        .or_else(|| python(root, PYTHON_MANIFESTS.iter().any(|name| root.is_file(name))))
+        .or_else(|| {
+            root.is_file("go.mod")
+                .then(|| Command::new("go test ./..."))
+        })
         .or_else(|| make(root))
-        .or_else(|| file(root, "mix.exs").then(|| Command::new("mix test")))
+        .or_else(|| root.is_file("mix.exs").then(|| Command::new("mix test")))
+        // A folder of tests is a Python project's signal only when nothing else matched: Go, C
+        // and Elixir projects have one too.
+        .or_else(|| python(root, root.is_dir("tests")))
+}
+
+/// The files that make a folder a Python project.
+const PYTHON_MANIFESTS: [&str; 5] = [
+    "pyproject.toml",
+    "setup.cfg",
+    "pytest.ini",
+    "tox.ini",
+    "setup.py",
+];
+
+/// What [`detect`] looks for, in its order, for a person to read.
+pub(super) fn looked_for() -> String {
+    let (last, rest) = PYTHON_MANIFESTS
+        .split_last()
+        .map_or(("", &[][..]), |(l, r)| (*l, r));
+    format!(
+        "package.json scripts (check, then test), Cargo.toml, a Python manifest ({} or {last}), \
+         go.mod, a Makefile's check or test target, mix.exs, and a tests folder.",
+        rest.join(", ")
+    )
 }
 
 /// A `check` script in `package.json`, else a `test` script, with the package manager the project
@@ -80,26 +110,16 @@ fn node_runner(root: &dyn Probe) -> &'static str {
     ];
     RUNNERS
         .iter()
-        .find(|(lockfile, runner)| file(root, lockfile) && root.installed(runner))
+        .find(|(lockfile, runner)| root.is_file(lockfile) && root.installed(runner))
         .map(|(_, runner)| *runner)
-        .or_else(|| (file(root, "bun.lock") && root.installed("bun")).then_some("bun"))
+        .or_else(|| (root.is_file("bun.lock") && root.installed("bun")).then_some("bun"))
         .unwrap_or("npm")
 }
 
-/// A Python project's tests, run through the interpreter the project is set up for.
-fn python(root: &dyn Probe) -> Option<Command> {
-    let configured = [
-        "pyproject.toml",
-        "setup.cfg",
-        "pytest.ini",
-        "tox.ini",
-        "setup.py",
-    ]
-    .into_iter()
-    .any(|name| file(root, name));
-    // A folder of tests is a Python project's own signal, for the ones with no manifest.
-    let folder = root.is_dir("tests");
-    if !configured && !folder {
+/// A Python project's tests, run through the interpreter the project is set up for, when `found`
+/// says the folder is one.
+fn python(root: &dyn Probe, found: bool) -> Option<Command> {
+    if !found {
         return None;
     }
     // macOS and some Linux installs have only `python3`.
@@ -127,10 +147,6 @@ fn make(root: &dyn Probe) -> Option<Command> {
         .into_iter()
         .find(|target| has(target))
         .map(|target| Command::new(format!("make {target}")))
-}
-
-fn file(root: &dyn Probe, name: &str) -> bool {
-    root.is_file(name)
 }
 
 /// Whether `program` is on the PATH, so a lockfile naming a package manager that is not installed
@@ -170,15 +186,10 @@ impl Probe for Local<'_> {
     }
 }
 
-/// The files detection looks for.
-const LOOKED_FOR: [&str; 14] = [
+/// The files detection looks for, besides [`PYTHON_MANIFESTS`].
+const LOOKED_FOR: [&str; 9] = [
     "package.json",
     "Cargo.toml",
-    "pyproject.toml",
-    "setup.cfg",
-    "pytest.ini",
-    "tox.ini",
-    "setup.py",
     "go.mod",
     "Makefile",
     "mix.exs",
@@ -191,7 +202,8 @@ const LOOKED_FOR: [&str; 14] = [
 /// The programs detection asks about.
 const PROGRAMS: [&str; 4] = ["pnpm", "yarn", "bun", "python"];
 
-/// A folder on an SSH host, read in one command: which of [`LOOKED_FOR`] it has, whether it has
+/// A folder on an SSH host, read in one command: which of [`LOOKED_FOR`] and
+/// [`PYTHON_MANIFESTS`] it has, whether it has
 /// a `tests` folder, which of [`PROGRAMS`] the user's login shell finds, and the two files
 /// detection reads.
 struct Remote {
@@ -205,6 +217,7 @@ struct Remote {
 impl Remote {
     fn read(host: &str, dir: &str) -> Option<Self> {
         let mut names = LOOKED_FOR.to_vec();
+        names.extend(PYTHON_MANIFESTS);
         names.push("tests");
         let found = crate::system::remote::op::survey(
             host,
