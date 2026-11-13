@@ -5,6 +5,7 @@
 
 mod archived;
 pub mod changes;
+pub mod devices;
 mod export;
 mod graph;
 pub mod menu;

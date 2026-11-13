@@ -198,6 +198,7 @@ impl Workspace {
             .bg(t.bg_app)
             .py(px(6.))
             .child(entry(View::Tasks, "Tasks", "chats", cx))
+            .child(entry(View::Devices, "Devices", "devices", cx))
             .child(entry(View::Changes, "Source Control", "git-diff", cx))
             .child(entry(View::Archived, "Archived", "archive", cx))
             .child(

@@ -12,6 +12,7 @@ use std::process::Stdio;
 use std::sync::{Mutex, PoisonError};
 
 use super::connection::ssh;
+use crate::system::device::Kind;
 
 /// A host's operating system, as far as Patchwork's helper cares.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,6 +64,33 @@ pub fn probe(host: &str) -> Result<Host, Error> {
 /// Returns an error when the host cannot be reached.
 pub fn home(host: &str) -> Result<String, Error> {
     probe(host).map(|h| h.home)
+}
+
+/// Whether `host` is a desktop or a laptop, read from what its system reports about its case and
+/// battery.
+///
+/// # Errors
+///
+/// Returns an error when the host cannot be reached.
+pub fn kind(host: &str) -> Result<Kind, Error> {
+    use crate::system::device;
+    Ok(match probe(host)?.os {
+        Os::Linux => device::from_linux(&say(
+            host,
+            &super::command::posix(
+                "cat /sys/class/dmi/id/chassis_type 2>/dev/null || echo; ls /sys/class/power_supply 2>/dev/null",
+            ),
+        )?),
+        Os::Mac => device::from_pmset(&say(host, "pmset -g batt")?),
+        // Read the same from PowerShell or cmd, whichever the OpenSSH server starts.
+        Os::Windows => device::from_chassis(&say(
+            host,
+            &format!(
+                "powershell -NoProfile -NonInteractive -Command \"{}\"",
+                device::WINDOWS_QUERY
+            ),
+        )?),
+    })
 }
 
 fn ask(host: &str) -> Result<Host, Error> {

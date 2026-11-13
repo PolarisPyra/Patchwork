@@ -39,6 +39,7 @@ use super::panel_area;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum View {
     Tasks,
+    Devices,
     Changes,
     Archived,
 }
@@ -109,6 +110,8 @@ pub struct Workspace {
     pub lineage: Lineage,
     pub(super) _prompt_keys: gpui::Subscription,
     pub changes_view: Entity<ChangesView>,
+    /// The Devices view, made the first time it is shown.
+    pub devices_view: Option<Entity<crate::sidebar::devices::DevicesView>>,
     /// Each reply's files as they stand now, by message id, and a count of the git updates that
     /// makes them load again.
     pub reply_files: HashMap<String, ReplyFiles>,
@@ -284,6 +287,7 @@ impl Workspace {
             lineage: Lineage::default(),
             _prompt_keys: prompt_keys,
             changes_view,
+            devices_view: None,
             reply_files: HashMap::new(),
             changes_generation: 0,
             project_events,

@@ -15,6 +15,7 @@ mod host;
 pub mod instance;
 pub mod fs;
 pub(crate) mod contained;
+pub mod device;
 pub(crate) mod processes;
 pub mod remote;
 pub(crate) mod scope;

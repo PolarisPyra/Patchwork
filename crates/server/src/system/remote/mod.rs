@@ -24,7 +24,7 @@ pub use command::{interactive, prepare, shell_in, supervised};
 #[doc(inline)]
 pub use connection::{close_all, set_relay_port, ssh};
 #[doc(inline)]
-pub use host::{Host, Os, home, probe};
+pub use host::{Host, Os, home, kind, probe};
 #[doc(inline)]
 pub use location::{Location, display, has_drive, here, is_remote, join, quote, root, same_host, split};
 #[doc(inline)]

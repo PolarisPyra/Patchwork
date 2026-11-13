@@ -144,6 +144,8 @@ impl AddProject {
         cx.spawn(async move |this, cx| {
             let machines = task.await;
             this.update(cx, |this, cx| {
+                // A machine opened before the list came, as from the Devices view, stays open.
+                let opened = this.browsing;
                 if !machines.iter().any(|m| !m.local) {
                     this.browsing = true;
                     this.refocus = true;
@@ -156,7 +158,7 @@ impl AddProject {
                     .default_machine
                     .filter(|d| machines.iter().any(|m| !m.local && m.name == *d));
                 this.machines = Some(machines);
-                if default.is_some() {
+                if default.is_some() && !opened {
                     this.open_machine(default, cx);
                 }
                 cx.notify();
@@ -262,7 +264,7 @@ impl AddProject {
     }
 
     /// Shows the folders of `host`, or of this computer when it is none, from its home folder.
-    pub(super) fn open_machine(&mut self, host: Option<String>, cx: &mut Context<Self>) {
+    pub(crate) fn open_machine(&mut self, host: Option<String>, cx: &mut Context<Self>) {
         if self.host != host {
             self.host = host;
             self.listing = None;

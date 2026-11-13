@@ -12,7 +12,7 @@ use super::fs::{home_dir, resolve};
 
 /// A machine the Add Project dialog can open a folder on: this computer, or a host from
 /// `~/.ssh/config`.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Machine {
     /// This computer's hostname, or the `Host` alias from the SSH config.

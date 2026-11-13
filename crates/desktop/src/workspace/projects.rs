@@ -4,11 +4,12 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use gpui::{Window, prelude::*};
+use gpui::{Entity, Window, prelude::*};
 use patchwork_server::projects::Project;
 use patchwork_server::workspace::ProjectChanged;
 use crate::workspace::add_project::{AddProject, Closed as AddProjectClosed};
 use super::state::{View, Workspace};
+use crate::sidebar::devices::{DevicesView, OpenDevice};
 
 impl Workspace {
     /// Reads the project's branch and changed files off the main thread, and watches the project
@@ -185,6 +186,28 @@ impl Workspace {
         .detach();
         self.add_project = Some(dialog);
         cx.notify();
+    }
+
+    /// The Devices view, made and hooked up the first time it is shown.
+    pub fn devices_view(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<DevicesView> {
+        if let Some(view) = &self.devices_view {
+            return view.clone();
+        }
+        let view = cx.new(DevicesView::new);
+        cx.subscribe_in(&view, window, |this, _, open: &OpenDevice, window, cx| {
+            this.open_folder(window, cx);
+            if let Some(dialog) = &this.add_project {
+                let host = open.0.clone();
+                dialog.update(cx, |d, cx| d.open_machine(host, cx));
+            }
+        })
+        .detach();
+        self.devices_view = Some(view.clone());
+        view
     }
 
     /// Adds the folders dropped on the sidebar as projects, off the main thread, and opens the
