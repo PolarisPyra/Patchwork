@@ -76,9 +76,20 @@ fn handle(request: Request) -> Result<serde_json::Value, Error> {
         Request::Resolve { dir, rel } => json(portable(&inside(&dir, &rel)?)),
         Request::Read { dir, rel, max } => json(read(&dir, &rel, max)?),
         Request::Remove { dir, rel } => {
+            // Gone already counts as done: a request whose reply was lost is sent again.
+            let joined = Path::new(&dir).join(rel.trim_start_matches('/'));
+            if std::fs::symlink_metadata(&joined)
+                .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+            {
+                return json(());
+            }
             let path = inside(&dir, &rel)?;
-            std::fs::remove_file(&path).map_err(|e| format!("Cannot delete {rel}: {e}"))?;
-            json(())
+            match std::fs::remove_file(&path) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                    Err(format!("Cannot delete {rel}: {e}").into())
+                }
+                _ => json(()),
+            }
         }
         Request::Sizes { dir, rels } => json(sizes(&dir, &rels)),
         Request::LineCounts { dir, rels } => json(line_counts(&dir, &rels)),
@@ -156,6 +167,9 @@ fn inside(dir: &str, rel: &str) -> Result<PathBuf, Error> {
 }
 
 fn create_dir(parent: &str, name: &str) -> Result<String, Error> {
+    if name.is_empty() || name == "." || name == ".." || name.contains(['/', '\\']) {
+        return Err(format!("{name} is not a folder name").into());
+    }
     let parent = Path::new(parent)
         .canonicalize()
         .map_err(|e| format!("{parent} is not a folder: {e}"))?;
@@ -201,7 +215,7 @@ fn sizes(dir: &str, rels: &[String]) -> Vec<Option<u64>> {
 fn line_counts(dir: &str, rels: &[String]) -> Vec<u32> {
     rels.iter()
         .map(|rel| {
-            let Ok(bytes) = std::fs::read(Path::new(dir).join(rel)) else {
+            let Ok(bytes) = inside(dir, rel).and_then(|p| Ok(std::fs::read(p)?)) else {
                 return 0;
             };
             if bytes.contains(&0) {
@@ -351,6 +365,11 @@ fn snapshot(dir: &str) -> Result<String, Error> {
 /// How long a helper copy no Patchwork has started stays before [`prune`] deletes it.
 const UNUSED: std::time::Duration = std::time::Duration::from_secs(30 * 24 * 60 * 60);
 
+/// How long a staged run spec stays before [`prune`] deletes it. `--remote-exec` reads and
+/// removes one at once, so an older one is from a start that never happened, and may hold
+/// forwarded credentials.
+const STAGED: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
 /// Marks this helper as in use, then deletes the other helper copies beside it that no Patchwork
 /// has started for [`UNUSED`], with their marks.
 ///
@@ -387,6 +406,20 @@ fn prune() -> Result<(), Error> {
             .is_some_and(|age| age > UNUSED);
         if stale && std::fs::remove_file(&path).is_ok() {
             let _ = std::fs::remove_file(mark(&path));
+        }
+    }
+    let staged = base()
+        .map(|b| b.join("run"))
+        .and_then(|d| std::fs::read_dir(d).ok());
+    for entry in staged.into_iter().flatten().flatten() {
+        let old = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age > STAGED);
+        if old && entry.path().extension().is_some_and(|x| x == "json") {
+            let _ = std::fs::remove_file(entry.path());
         }
     }
     Ok(())
