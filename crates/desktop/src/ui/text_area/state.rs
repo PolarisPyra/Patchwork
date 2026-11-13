@@ -170,6 +170,8 @@ pub struct TextArea {
     pub scroll: ScrollHandle,
     /// The caret and text length the box last followed, so it moves only when they change.
     pub(super) revealed: (usize, usize),
+    /// How far a single-line field's text is scrolled left, so the caret stays in view.
+    pub(super) scroll_x: Pixels,
     /// What Undo and Redo step through.
     pub(super) history: History,
 }
@@ -214,6 +216,7 @@ impl TextArea {
             menu: None,
             scroll: ScrollHandle::new(),
             revealed: (0, 0),
+            scroll_x: px(0.),
             history: History::default(),
         }
     }
