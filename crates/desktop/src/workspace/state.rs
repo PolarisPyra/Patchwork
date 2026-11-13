@@ -39,7 +39,6 @@ use super::panel_area;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum View {
     Tasks,
-    Devices,
     Changes,
     Archived,
 }
@@ -234,8 +233,8 @@ impl Workspace {
         let sidebar_region = cx.new(|cx| {
             Region::new(
                 &entity,
-                |w, window, cx| match w.view {
-                    Some(view) => crate::sidebar::render(w, view, window, cx).into_any_element(),
+                |w, _, cx| match w.view {
+                    Some(view) => crate::sidebar::render(w, view, cx).into_any_element(),
                     None => gpui::Empty.into_any_element(),
                 },
                 cx,

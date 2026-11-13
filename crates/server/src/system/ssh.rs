@@ -1,5 +1,5 @@
-//! The SSH hosts in the user's `~/.ssh/config`, read only: Patchwork lists them and checks that one
-//! answers, and never writes the config itself.
+//! The SSH hosts in the user's `~/.ssh/config`: Patchwork lists them, checks that one answers, and
+//! adds a host to the end of the file. It never changes what is already there.
 
 // Rust guideline compliant 2026-10-09
 
@@ -104,6 +104,67 @@ pub fn hosts() -> Vec<Host> {
         }
     }
     hosts
+}
+
+/// Adds a host named `name` at `hostname` to the end of `~/.ssh/config`, logging in as `user` when
+/// it is given.
+///
+/// An empty `name` names the host by its address. The `.ssh` folder and the config are
+/// made when they are missing, readable only by the user on macOS and Linux, as ssh requires.
+///
+/// # Errors
+///
+/// Returns an error when `hostname` is empty, a value holds a space or a character the config
+/// reads as syntax, the name is already a host in the config, or the config cannot be written.
+pub fn add_host(name: &str, hostname: &str, user: &str) -> Result<(), Error> {
+    let (hostname, user) = (hostname.trim(), user.trim());
+    let name = match name.trim() {
+        "" => hostname,
+        name => name,
+    };
+    if hostname.is_empty() {
+        return Err("Give the host's address".into());
+    }
+    let bad = |s: &str| {
+        s.chars()
+            .any(|c| c.is_whitespace() || c.is_control() || "*?!#=\"".contains(c))
+    };
+    if bad(name) || bad(hostname) || bad(user) {
+        return Err("The name, address and user cannot hold spaces or * ? ! # = \"".into());
+    }
+    if hosts().iter().any(|h| h.name == name) {
+        return Err(format!("{name} is already in ~/.ssh/config").into());
+    }
+    let path = config_path().ok_or("No home folder")?;
+    if let Some(dir) = path.parent() {
+        let mut builder = std::fs::DirBuilder::new();
+        builder.recursive(true);
+        #[cfg(unix)]
+        std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+        builder
+            .create(dir)
+            .map_err(|e| format!("Could not make {}: {e}", dir.display()))?;
+    }
+    let before = std::fs::read_to_string(&path).unwrap_or_default();
+    let gap = match before.chars().last() {
+        None => "",
+        Some('\n') => "\n",
+        Some(_) => "\n\n",
+    };
+    let user = if user.is_empty() {
+        String::new()
+    } else {
+        format!("    User {user}\n")
+    };
+    let block = format!("{gap}Host {name}\n    HostName {hostname}\n{user}");
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true).append(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    options
+        .open(&path)
+        .and_then(|mut file| std::io::Write::write_all(&mut file, block.as_bytes()))
+        .map_err(|e| format!("Could not write {}: {e}", path.display()).into())
 }
 
 /// Checks that key-only SSH login works for a config alias `name`.

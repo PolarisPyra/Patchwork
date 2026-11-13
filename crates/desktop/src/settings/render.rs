@@ -34,7 +34,7 @@ impl SettingsDialog {
             "mcp" => mcp::render(self, window, cx),
             "permissions" => permissions::render(self, window, cx),
             "projects" => projects::render(self, cx),
-            "ssh" => ssh::render(self, cx),
+            "ssh" => ssh::render(self, window, cx),
             "scheduled" => scheduled::render(self, window, cx),
             "terminal" => terminal::render(self, window, cx),
             "updates" => updates::render(self, cx),
