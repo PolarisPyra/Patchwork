@@ -23,6 +23,7 @@ patchwork-server = { path = "crates/server" }
 base64 = { version = "0.22", default-features = false }
 chrono = { version = "0.4", default-features = false }
 dirs = { version = "6", default-features = false }
+embed-resource = { version = "3", default-features = false }
 enigo = { version = "0.6", default-features = false }
 futures = { version = "0.3", default-features = false }
 globset = { version = "0.4", default-features = false }

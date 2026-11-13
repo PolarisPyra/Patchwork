@@ -4438,6 +4438,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "dirs",
+ "embed-resource",
  "futures",
  "gpui",
  "gpui_platform",
@@ -4456,7 +4457,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-remote"
-version = "26.11.60"
+version = "26.11.61"
 dependencies = [
  "patchwork-server",
 ]
