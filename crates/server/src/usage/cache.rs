@@ -2,7 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -93,6 +93,9 @@ struct Entry {
 #[derive(Debug, Default)]
 pub struct UsageCache {
     entries: Mutex<HashMap<AgentKind, Entry>>,
+    /// The agents being fetched now. A second caller meanwhile gets the cached numbers, so a
+    /// rate-limited endpoint is never asked twice at once. Locked inside `entries`.
+    in_flight: Mutex<HashSet<AgentKind>>,
 }
 
 impl UsageCache {
@@ -116,7 +119,13 @@ impl UsageCache {
         fetch: impl FnOnce() -> Result<ProviderUsage, Failure>,
     ) -> ProviderUsage {
         let lock = || self.entries.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(e) = lock().get(&kind) {
+        let flying = || {
+            self.in_flight
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+        };
+        let entries = lock();
+        if let Some(e) = entries.get(&kind) {
             let age = now.saturating_duration_since(e.fetched);
             let blocked = e.blocked_until.is_some_and(|until| now < until);
             // Only an explicit refresh fetches; opening the popup shows the last numbers.
@@ -138,8 +147,15 @@ impl UsageCache {
                 return e.usage.clone();
             }
         }
+        if !flying().insert(kind) {
+            return entries
+                .get(&kind)
+                .map_or_else(|| empty(kind), |e| e.usage.clone());
+        }
+        drop(entries);
         let result = fetch();
         let mut entries = lock();
+        flying().remove(&kind);
         // Numbers the agent reported while this fetched are newer than what it brought back,
         // but the fetch has the limits a report leaves out.
         if let Some(e) = entries
