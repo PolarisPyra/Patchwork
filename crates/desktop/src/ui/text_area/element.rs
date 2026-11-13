@@ -1,4 +1,5 @@
-//! The text field drawn: its lines shaped and wrapped, the selection and the caret.
+//! The text field drawn: its lines shaped and wrapped, the selection and the caret. A single-line
+//! field never wraps; it scrolls sideways to keep the caret in view.
 
 // Rust guideline compliant 2026-10-09
 
@@ -92,6 +93,7 @@ struct Prepainted {
     quads: Vec<PaintQuad>,
     caret: Option<PaintQuad>,
     revealed: (usize, usize),
+    scroll_x: Pixels,
 }
 
 impl IntoElement for TextElement {
@@ -111,11 +113,11 @@ struct Look<'a> {
     styles: Option<&'a [u8]>,
 }
 
-/// Shapes `text` one `\n`-line at a time, wrapped to `width`.
+/// Shapes `text` one `\n`-line at a time, wrapped to `width` when there is one.
 fn shape(
     text: &str,
     look: Look<'_>,
-    width: Pixels,
+    width: Option<Pixels>,
     line_height: Pixels,
     marked: Option<&Range<usize>>,
     window: &mut Window,
@@ -180,7 +182,7 @@ fn shape(
                 SharedString::from(line.to_string()),
                 font_size,
                 &runs,
-                Some(width),
+                width,
                 None,
             )
             .ok()
@@ -222,6 +224,7 @@ impl Element for TextElement {
         };
         let line_height = window.line_height();
         let styles = area.styles();
+        let wraps = !area.single_line;
         let mut style = Style::default();
         style.size.width = relative(1.).into();
         let layout = window.request_measured_layout(style, move |known, available, window, _| {
@@ -234,7 +237,14 @@ impl Element for TextElement {
                 mark_color: gpui::white(),
                 styles: styles.as_deref(),
             };
-            let lines = shape(&text, look, width, line_height, None, window);
+            let lines = shape(
+                &text,
+                look,
+                wraps.then_some(width),
+                line_height,
+                None,
+                window,
+            );
             let height = lines.last().map_or(line_height, |l| {
                 l.top + l.layout.size(line_height).height.max(line_height)
             });
@@ -271,7 +281,7 @@ impl Element for TextElement {
                 mark_color: area.placeholder_color,
                 styles: area.styles().as_deref(),
             },
-            bounds.size.width,
+            (!area.single_line).then_some(bounds.size.width),
             line_height,
             marked.as_ref(),
             window,
@@ -296,11 +306,30 @@ impl Element for TextElement {
                 .position_for_index(offset - line.start, line_height)?;
             Some(point(p.x, p.y + line.top))
         };
+        // A single line wider than the field scrolls just far enough to show the caret.
+        let scroll_x = if area.single_line {
+            let end = lines
+                .first()
+                .and_then(|l| l.layout.position_for_index(text.len(), line_height))
+                .map_or(px(0.), |p| p.x);
+            let room = (bounds.size.width - px(2.)).max(px(0.));
+            let caret = at(cursor).map_or(px(0.), |p| p.x);
+            let mut x = area.scroll_x;
+            if caret - x > room {
+                x = caret - room;
+            }
+            if caret < x {
+                x = caret;
+            }
+            x.min((end - room).max(px(0.))).max(px(0.))
+        } else {
+            px(0.)
+        };
+        let origin = bounds.origin - point(scroll_x, px(0.));
         let mut quads = Vec::new();
         if !selected.is_empty()
             && let (Some(a), Some(b)) = (at(selected.start), at(selected.end))
         {
-            let origin = bounds.origin;
             let right = bounds.size.width;
             let mut row = |x0: Pixels, x1: Pixels, y: Pixels| {
                 quads.push(fill(
@@ -345,7 +374,7 @@ impl Element for TextElement {
         }
         let caret = selected.is_empty().then(|| at(cursor)).flatten().map(|p| {
             fill(
-                Bounds::new(bounds.origin + p, size(px(1.), line_height)),
+                Bounds::new(origin + p, size(px(1.), line_height)),
                 caret_color,
             )
         });
@@ -354,6 +383,7 @@ impl Element for TextElement {
             quads,
             caret,
             revealed,
+            scroll_x,
         }
     }
 
@@ -368,38 +398,46 @@ impl Element for TextElement {
         cx: &mut App,
     ) {
         let focus = self.area.read(cx).focus.clone();
+        // Where the text starts, left of the field by however far it is scrolled. Positions from
+        // the mouse and the input method are measured from here.
+        let scroll_x = prepaint.scroll_x;
+        let text_bounds = Bounds::new(bounds.origin - point(scroll_x, px(0.)), bounds.size);
         window.handle_input(
             &focus,
-            ElementInputHandler::new(bounds, self.area.clone()),
+            ElementInputHandler::new(text_bounds, self.area.clone()),
             cx,
         );
-        for quad in prepaint.quads.drain(..) {
-            window.paint_quad(quad);
-        }
         let line_height = window.line_height();
-        for line in &prepaint.lines {
-            if let Err(e) = line.layout.paint(
-                bounds.origin + point(px(0.), line.top),
-                line_height,
-                gpui::TextAlign::Left,
-                None,
-                window,
-                cx,
-            ) {
-                log::warn!(error:% = e; "could not draw the composer's text: {{error}}");
+        let mask = gpui::ContentMask { bounds };
+        window.with_content_mask(Some(mask), |window| {
+            for quad in prepaint.quads.drain(..) {
+                window.paint_quad(quad);
             }
-        }
-        if focus.is_focused(window)
-            && let Some(caret) = prepaint.caret.take()
-        {
-            window.paint_quad(caret);
-        }
+            for line in &prepaint.lines {
+                if let Err(e) = line.layout.paint(
+                    text_bounds.origin + point(px(0.), line.top),
+                    line_height,
+                    gpui::TextAlign::Left,
+                    None,
+                    window,
+                    cx,
+                ) {
+                    log::warn!(error:% = e; "could not draw the composer's text: {{error}}");
+                }
+            }
+            if focus.is_focused(window)
+                && let Some(caret) = prepaint.caret.take()
+            {
+                window.paint_quad(caret);
+            }
+        });
         let lines = std::mem::take(&mut prepaint.lines);
         let revealed = prepaint.revealed;
         self.area.update(cx, |area, _| {
             area.revealed = revealed;
             area.lines = lines;
-            area.bounds = Some(bounds);
+            area.bounds = Some(text_bounds);
+            area.scroll_x = scroll_x;
             area.line_height = line_height;
         });
     }
