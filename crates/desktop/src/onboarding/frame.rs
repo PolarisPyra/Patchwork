@@ -273,14 +273,8 @@ impl Render for Onboarding {
                     .h_full()
                     .flex()
                     .items_center()
-                    .justify_between()
+                    .justify_end()
                     .gap(px(16.))
-                    .child(
-                        div()
-                            .text_size(px(FS_SM))
-                            .text_color(t.text_muted)
-                            .child(current.helper),
-                    )
                     .child(
                         div()
                             .flex()
