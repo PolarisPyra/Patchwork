@@ -5,6 +5,7 @@
 // Rust guideline compliant 2026-10-09
 
 pub(in crate::orchestration) mod background;
+pub(in crate::orchestration) mod chats;
 pub(in crate::orchestration) mod delegate;
 pub(in crate::orchestration) mod jobs;
 pub(in crate::orchestration) mod review;

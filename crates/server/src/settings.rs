@@ -97,6 +97,8 @@ pub struct Settings {
     pub granular_chats: bool,
     /// No reply is reviewed by the agent a granular chat picks as its reviewer.
     pub review_off: bool,
+    /// Agents are not given Patchwork's tools to start, message and wait on other chats.
+    pub chat_tools_off: bool,
     /// Patchwork's own agent carries on calling tools for as long as it takes, instead of stopping
     /// after a set number of steps for the user to carry it on.
     pub unlimited_steps: bool,
