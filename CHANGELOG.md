@@ -3,6 +3,27 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.65] - 2026-11-13
+
+**v26.11.65** · 3 changes from 1 contributor
+
+- **Remote terminals from machine menu.** Pick an SSH host to see and open terminals on that host in its home folder.
+- **Agent run controls.** Set step and token limits, continue after stops, stop immediately keeping partial work, and delegate to a subagent.
+
+<details>
+<summary>Full changelog</summary>
+
+### Added
+
+- Settings → Chat holds the chat options that were under General, and two new ones for Patchwork's own agent: it stops after 200 steps of tool calls unless you turn that off, and you can cap the tokens one turn may use at 1, 5, 20 or 50 million. Send a message to carry on after either stop. The agent can also hand work to a sub agent, which runs on itself or on the agent the chat's sub agents are set to, and the stop button ends its reply at once, keeping what it had written and what its tool calls did.
+
+### Changed
+
+- The terminal now follows the machine picked in the header's machine menu. Picking an SSH host shows the terminals on that host, and opens one in its home folder when it has none; picking this computer brings its own terminals back. Terminal tabs on a host are named after it, and the "New terminal in a shell" menu is hidden there, since a host always starts your login shell.
+- The update notes and Settings → Updates show a release's highlights. The full list of changes is on the release page.
+
+</details>
+
 ## [26.11.64] - 2026-11-13
 
 ### Changed
