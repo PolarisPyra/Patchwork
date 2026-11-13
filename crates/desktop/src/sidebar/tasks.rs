@@ -7,11 +7,12 @@ use super::menu::{self, Target};
 use gpui::{
     ClickEvent, FontWeight, MouseButton, MouseDownEvent, Role, SharedString, div, prelude::*, px,
 };
+use patchwork_server::system::remote;
 use patchwork_server::threads::Thread;
 use crate::ui::theme::theme;
 use crate::ui::{button, icon, icon_button, scrollbar};
 use crate::workspace::Workspace;
-use super::render::{FS_SM, empty_row, section_label, twistie};
+use super::render::{FS_SM, FS_XS, empty_row, section_label, twistie};
 use super::tree::{TREE_GUTTER, indent_guide, reveal_button, thread_row, tree_row};
 
 pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl IntoElement {
@@ -133,10 +134,29 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
         let (sort_id, folder_id, task_id) = (p.id.clone(), p.id.clone(), p.id.clone());
         let key = SharedString::from(format!("project:{}", p.id));
         let shown = w.hovered_row.as_ref() == Some(&key);
-        let row = tree_row(key, p.name.clone(), 1, open, picked, &t, cx)
+        // A project on an SSH host names the host after its own name.
+        let host = remote::split(&p.path).map(|l| l.host.to_string());
+        let label = match &host {
+            Some(host) => format!("{} on {host}", p.name),
+            None => p.name.clone(),
+        };
+        let row = tree_row(key, label, 1, open, picked, &t, cx)
             .pl(px(4.))
             .child(twistie(open))
             .child(name)
+            .when_some(host.filter(|_| !shown), |row, host| {
+                row.child(
+                    div()
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .gap(px(4.))
+                        .text_size(px(FS_XS))
+                        .text_color(t.text_subtle)
+                        .child(icon("hard-drives", 12.))
+                        .child(host),
+                )
+            })
             .when(shown && sorted, |row| {
                 let undo_id = p.id.clone();
                 row.child(
