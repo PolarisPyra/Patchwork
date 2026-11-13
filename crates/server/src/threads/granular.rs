@@ -1,5 +1,6 @@
 //! Granular chats: the model and effort of a chat's own agent, of the fallback that takes over
-//! when that agent's provider is out of usage, and of the sub agents each of them starts.
+//! when that agent's provider is out of usage, of the sub agents each of them starts, and of the
+//! agent that reviews what a reply changed.
 //!
 //! A chat's picks are its own; a project's are given to every chat in it, and to each new one.
 //! They only act while granular chats are on in Settings.
@@ -36,6 +37,8 @@ pub struct Reserves {
     pub sub: Option<AgentPick>,
     /// What the fallback runs its sub agents at, as `sub` is for the chat's agent.
     pub sub_fallback: Option<AgentPick>,
+    /// Reviews the files each reply changed, as a second opinion from another model.
+    pub review: Option<AgentPick>,
 }
 
 /// Everything a granular chat runs with.
@@ -72,13 +75,16 @@ impl Granular {
             fallback,
             sub,
             sub_fallback,
+            review,
         } = &mut self.reserves;
         let main = &self.main;
-        if fallback
-            .as_ref()
-            .is_some_and(|f| f.agent == main.agent && f.model == main.model)
-        {
+        let same = |pick: &AgentPick| pick.agent == main.agent && pick.model == main.model;
+        if fallback.as_ref().is_some_and(same) {
             *fallback = None;
+        }
+        // A review by the model that wrote the changes is no second opinion.
+        if review.as_ref().is_some_and(same) {
+            *review = None;
         }
         let fits = |pick: &AgentPick, agent: AgentKind| {
             if pick.agent == agent {
@@ -171,6 +177,21 @@ fn delegate_of(store: &Store, settings: &Settings, thread: &Thread) -> Option<Ag
         .filter(|s| s.agent != thread.agent)
 }
 
+/// The agent that reviews the files the thread's replies change, if it has one other than the
+/// model that changed them and review is on.
+pub(crate) fn reviewer_of(
+    store: &Store,
+    settings: &Settings,
+    thread: &Thread,
+) -> Option<AgentPick> {
+    if !settings.granular_chats || settings.review_off || thread.parent.is_some() {
+        return None;
+    }
+    saved(store, &thread.id)
+        .review
+        .filter(|r| r.agent != thread.agent || r.model != thread.model)
+}
+
 /// The agent that takes the thread over when its own is out of usage, if it has one.
 pub(crate) fn fallback_of(
     store: &Store,
@@ -213,6 +234,7 @@ pub(crate) fn fall_back(store: &Store, settings: &Settings, thread: &Thread) -> 
         fallback: None,
         sub: reserves.sub_fallback,
         sub_fallback: None,
+        review: reserves.review,
     };
     if let Err(e) = save(store, &thread.id, &left) {
         log::warn!(

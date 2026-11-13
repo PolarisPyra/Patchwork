@@ -20,6 +20,7 @@ pub mod queue;
 pub mod rail;
 mod reply;
 pub mod resume;
+pub mod review;
 pub mod secret;
 pub mod subagents;
 pub mod timeline;

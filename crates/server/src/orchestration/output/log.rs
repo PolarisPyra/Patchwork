@@ -277,6 +277,10 @@ fn describe(event: &AgentEvent) -> Option<(LogLevel, &'static str, Option<&str>,
             );
             (Info, "checks", Some(message_id), text)
         }
+        AgentEvent::ReviewRecorded { message_id, review } => {
+            let text = format!("{:?} by {:?}", review.status, review.agent);
+            (Info, "review", Some(message_id), text)
+        }
         AgentEvent::TurnCompleted {
             message_id,
             status,

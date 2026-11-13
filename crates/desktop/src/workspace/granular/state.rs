@@ -1,4 +1,4 @@
-//! What the card holds and what its buttons do: whose settings they are, the four agents it
+//! What the card holds and what its buttons do: whose settings they are, the five agents it
 //! sets, and opening, saving, resetting and closing it.
 
 // Rust guideline compliant 2026-10-09
@@ -21,23 +21,25 @@ pub enum GranularScope {
     Project(String),
 }
 
-/// One of the four agents the card sets.
+/// One of the five agents the card sets.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Slot {
     Main,
     Fallback,
     Sub,
     SubFallback,
+    Review,
 }
 
 impl Slot {
-    /// The slot's name, which is unique among the four for a screen reader.
+    /// The slot's name, which is unique among the five for a screen reader.
     pub(super) fn name(self) -> &'static str {
         match self {
             Slot::Main => "Agent",
             Slot::Fallback => "Fallback",
             Slot::Sub => "Sub agents",
             Slot::SubFallback => "Fallback sub agents",
+            Slot::Review => "Reviewer",
         }
     }
 }
@@ -77,7 +79,7 @@ pub struct GranularDialog {
 /// other slots, and for the sub agents of a fallback not picked.
 pub(super) fn starter_of(value: &Granular, slot: Slot) -> Option<AgentKind> {
     match slot {
-        Slot::Main | Slot::Fallback => None,
+        Slot::Main | Slot::Fallback | Slot::Review => None,
         Slot::Sub => Some(value.main.agent),
         Slot::SubFallback => value.reserves.fallback.as_ref().map(|f| f.agent),
     }
@@ -90,6 +92,7 @@ pub(super) fn agent_of(value: &Granular, slot: Slot) -> Option<AgentKind> {
     match slot {
         Slot::Main => Some(value.main.agent),
         Slot::Fallback => value.reserves.fallback.as_ref().map(|f| f.agent),
+        Slot::Review => value.reserves.review.as_ref().map(|r| r.agent),
         Slot::Sub | Slot::SubFallback => {
             let starter = starter_of(value, slot)?;
             let picked = pick_of(value, slot).map_or(starter, |p| p.agent);
@@ -109,6 +112,7 @@ pub(super) fn pick_of(value: &Granular, slot: Slot) -> Option<&AgentPick> {
         Slot::Fallback => value.reserves.fallback.as_ref(),
         Slot::Sub => value.reserves.sub.as_ref(),
         Slot::SubFallback => value.reserves.sub_fallback.as_ref(),
+        Slot::Review => value.reserves.review.as_ref(),
     }
 }
 
@@ -121,9 +125,14 @@ pub(super) fn edit(value: &mut Granular, slot: Slot, change: impl FnOnce(&mut Ag
     let own = starter_of(value, slot) == Some(agent);
     let held = match slot {
         Slot::Main => return change(&mut value.main),
-        Slot::Fallback => {
-            if let Some(fallback) = &mut value.reserves.fallback {
-                change(fallback);
+        Slot::Fallback | Slot::Review => {
+            let held = if slot == Slot::Fallback {
+                &mut value.reserves.fallback
+            } else {
+                &mut value.reserves.review
+            };
+            if let Some(pick) = held {
+                change(pick);
             }
             return;
         }
@@ -157,6 +166,12 @@ pub(super) fn set_agent(value: &mut Granular, slot: Slot, pick: Option<AgentPick
         {
             value.reserves.fallback = pick;
             value.reserves.sub_fallback = None;
+        }
+        (Slot::Review, pick)
+            if pick.as_ref().map(|p| p.agent)
+                != value.reserves.review.as_ref().map(|r| r.agent) =>
+        {
+            value.reserves.review = pick;
         }
         (Slot::Sub | Slot::SubFallback, Some(pick)) => {
             let Some(starter) = starter_of(value, slot) else {
@@ -400,6 +415,7 @@ impl Workspace {
             Slot::Fallback => set_agent(value, slot, None),
             Slot::Sub => value.reserves.sub = None,
             Slot::SubFallback => value.reserves.sub_fallback = None,
+            Slot::Review => value.reserves.review = None,
         }
         dialog.error = None;
         cx.notify();

@@ -63,7 +63,7 @@ impl Workspace {
         if part == Part::Agent {
             // Sub agents not put on another agent run on the one that starts them.
             let current = pick.map(|p| p.agent).or(starter_of(value, slot));
-            let none = (slot == Slot::Fallback).then(|| {
+            let none = matches!(slot, Slot::Fallback | Slot::Review).then(|| {
                 choice(&this, "None", current.is_none(), move |v| {
                     set_agent(v, slot, None);
                 })

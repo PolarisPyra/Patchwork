@@ -12,16 +12,14 @@ use serde_json::Value;
 
 use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::orchestration::Runner;
+use super::wait::Unanswered;
 use crate::orchestration::turn::start::Turn;
 use crate::system::{new_id, now_ms};
 use crate::threads::delegate::{self, Ask};
 use crate::threads::{
-    AgentPick, Message, MessageStatus, Role, SubAgent, Thread, ThreadParent, ToolCall, sub_agent_of,
+    AgentPick, Message, MessageStatus, SubAgent, Thread, ThreadParent, ToolCall, sub_agent_of,
 };
 use crate::{Error, Server};
-
-/// How often the wait looks at the sub agent's turn, and at whether its caller still waits.
-const POLL: Duration = Duration::from_millis(500);
 
 /// How often a call that has just arrived looks for its card in the caller's reply.
 const LINK_POLL: Duration = Duration::from_millis(50);
@@ -29,9 +27,6 @@ const LINK_POLL: Duration = Duration::from_millis(50);
 /// How long a call waits for its card to show in the caller's reply. The CLI reports the call as
 /// it makes it, so the two arrive together; past this the sub agent runs without a card.
 const LINK_WAIT: Duration = Duration::from_secs(3);
-
-/// How long a sub agent's turn may take to show a reply before it counts as not started.
-const START_WAIT: Duration = Duration::from_secs(60);
 
 /// The longest a sub agent runs. Under the 65 minutes a CLI waits on one of Patchwork's own
 /// tools (`OWN_TIMEOUT_SECS`), so the caller hears that it ran out rather than a dropped call.
@@ -218,44 +213,25 @@ impl Runner {
             thread_id: child_id.clone(),
             event: AgentEvent::ThreadCreated { thread },
         });
-        server.send_message(child_id.clone(), ask.prompt, Vec::new(), false)?;
-        let started = Instant::now();
-        // A turn that is rerun, as in a new session, is for a moment neither running nor
-        // starting, so its end is only taken once it is seen twice.
-        let mut ended = false;
-        let reply = loop {
-            std::thread::sleep(POLL);
-            if gone() {
-                server.stop_turn(&child_id, false);
-                break Err("The sub agent was stopped with the turn that started it".into());
-            }
-            if started.elapsed() >= MAX_RUN {
-                server.stop_turn(&child_id, false);
-                break Err(
-                    "The sub agent ran for an hour without finishing, and was stopped".into(),
-                );
-            }
-            if self.is_starting(&child_id) || self.is_running(&child_id) {
-                ended = false;
-                continue;
-            }
-            let reply = server.store.thread(&child_id).and_then(|t| {
-                t.messages
-                    .into_iter()
-                    .rfind(|m| !m.queued)
-                    .filter(|m| m.role == Role::Assistant && m.status != MessageStatus::Streaming)
-            });
-            match reply {
-                Some(reply) if ended => break Ok(reply),
-                Some(_) => ended = true,
-                None if started.elapsed() >= START_WAIT => {
-                    break Err("The sub agent did not start".into());
+        let sent = server.send_message(child_id.clone(), ask.prompt, Vec::new(), false)?;
+        let reply = self
+            .wait_for_reply(server, &child_id, Some(&sent.id), &gone, MAX_RUN)
+            .map_err(|why| {
+                if why != Unanswered::NotStarted {
+                    server.stop_turn(&child_id, false);
                 }
-                None => {}
-            }
-        };
+                Error::from(match why {
+                    Unanswered::Stopped => {
+                        "The sub agent was stopped with the turn that started it"
+                    }
+                    Unanswered::TimedOut => {
+                        "The sub agent ran for an hour without finishing, and was stopped"
+                    }
+                    Unanswered::NotStarted => "The sub agent did not start",
+                })
+            });
         // Its work is done, so the agent is not kept up for a message that will not come.
         self.retire_idle(&child_id);
-        reply.and_then(|reply| result(Arc::unwrap_or_clone(reply)))
+        reply.and_then(result)
     }
 }

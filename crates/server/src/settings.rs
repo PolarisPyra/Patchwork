@@ -95,6 +95,8 @@ pub struct Settings {
     pub steer_while_working: bool,
     /// Each chat picks the model and effort of its agent, its fallback and their sub agents.
     pub granular_chats: bool,
+    /// No reply is reviewed by the agent a granular chat picks as its reviewer.
+    pub review_off: bool,
     /// Patchwork's own agent carries on calling tools for as long as it takes, instead of stopping
     /// after a set number of steps for the user to carry it on.
     pub unlimited_steps: bool,
