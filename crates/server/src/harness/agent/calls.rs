@@ -42,6 +42,13 @@ impl Agent {
         };
         let summary = crate::harness::tools::summary(&call.name, &args, &self.root);
         emit(&json!({"type": "api.tool", "id": call.id, "name": call.name, "summary": summary}));
+        // A call to a tool this turn does not offer, such as an edit copied from earlier history
+        // into a plan turn, is refused before it can run.
+        if !self.offers(&call.name) {
+            let reason = format!("{} is not available in this turn", call.name);
+            emit(&json!({"type": "api.tool_done", "id": call.id, "error": true, "output": reason}));
+            return (reason, false);
+        }
         if let Some(reason) = self.run_hooks(HookEvent::PreToolUse, &call.name, &args, None) {
             emit(&json!({"type": "api.tool_done", "id": call.id, "error": true, "output": reason}));
             return (reason, false);
@@ -333,6 +340,13 @@ impl Agent {
             });
             format!("{path} is an image; it follows the tool results.")
         }))
+    }
+
+    /// Whether `name` is one of the tools this turn was given.
+    fn offers(&self, name: &str) -> bool {
+        self.tools
+            .as_array()
+            .is_some_and(|tools| tools.iter().any(|t| t["function"]["name"] == name))
     }
 
     /// Has Patchwork call an MCP tool, once the user approves where the access mode asks and the
