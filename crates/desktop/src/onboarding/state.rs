@@ -25,7 +25,6 @@ pub(super) struct Step {
     pub(super) label: &'static str,
     pub(super) title: &'static str,
     pub(super) subtitle: &'static str,
-    pub(super) helper: &'static str,
 }
 
 pub(super) const STEPS: [Step; 4] = [
@@ -33,25 +32,21 @@ pub(super) const STEPS: [Step; 4] = [
         label: "Agent",
         title: "Connect your coding agents",
         subtitle: "Connect the agents on this computer, or download the ones you want. You can pick which one runs each task.",
-        helper: "Connect at least one agent to start your first task.",
     },
     Step {
         label: "Imports",
         title: "Import your conversations",
         subtitle: "Bring in conversations you've had with these agents outside Patchwork. Follow-ups continue the same session.",
-        helper: "Importing is optional. You can import later from Settings.",
     },
     Step {
         label: "Projects",
         title: "Set up your projects",
         subtitle: "Choose where Patchwork should work. You can add and manage projects later.",
-        helper: "Projects are optional. You can add more later.",
     },
     Step {
         label: "Ready",
         title: "You're all set",
         subtitle: "Check your choices, then start your first task.",
-        helper: "You can change any of this later in Settings.",
     },
 ];
 
