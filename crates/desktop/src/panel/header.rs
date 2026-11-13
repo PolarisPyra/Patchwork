@@ -164,7 +164,9 @@ impl Panel {
             .size(px(18.))
             .tooltip(tooltip("Kill terminal"))
             .when(!on, |b| {
-                b.opacity(0.).group_hover(group.clone(), |s| s.opacity(1.))
+                b.opacity(0.)
+                    .group_hover(group.clone(), |s| s.opacity(1.))
+                    .focus(|s| s.opacity(1.))
             })
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();

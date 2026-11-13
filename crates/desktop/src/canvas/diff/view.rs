@@ -433,8 +433,9 @@ impl Canvas {
                 .rounded(px(RADIUS_SM))
                 .text_color(t.text_muted)
                 .hover(move |s| s.bg(hover).text_color(fg))
-                .invisible()
-                .group_hover(group.clone(), gpui::Styled::visible)
+                .opacity(0.)
+                .group_hover(group.clone(), |s| s.opacity(1.))
+                .focus(|s| s.opacity(1.))
                 .child(crate::ui::icon(name, 13.))
         };
         let (id, text) = (note.id, note.text.clone());

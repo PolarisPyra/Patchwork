@@ -305,6 +305,8 @@ pub fn render(
                         .when(recording, |r| {
                             r.children(d.shortcuts.refused.clone().map(|e| {
                                 div()
+                                    .id("shortcut-refused")
+                                    .role(Role::Alert)
                                     .mt(px(2.))
                                     .text_right()
                                     .text_size(px(FS_SM))

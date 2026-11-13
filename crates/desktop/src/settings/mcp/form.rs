@@ -182,6 +182,16 @@ impl SettingsDialog {
         cx.notify();
     }
 
+    /// Escape closes the open form, unless it is saving. False when no form is open.
+    pub(in crate::settings) fn cancel_mcp_form(&mut self, cx: &mut Context<Self>) -> bool {
+        match &self.mcp.editing {
+            None => return false,
+            Some(draft) if draft.busy => {}
+            Some(_) => self.close_mcp_form(cx),
+        }
+        true
+    }
+
     fn close_mcp_form(&mut self, cx: &mut Context<Self>) {
         self.mcp.editing = None;
         self.drop_fields(PREFIX);

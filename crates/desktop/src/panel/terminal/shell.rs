@@ -244,7 +244,7 @@ impl Panel {
         cx: &mut Context<Self>,
     ) {
         let id = attached.info.id;
-        let (cols, rows) = self.grid.unwrap_or((80, 24));
+        let (cols, rows) = self.grid.unwrap_or(HIDDEN_GRID);
         let mut parser = vt100::Parser::new(rows, cols, self.settings.scrollback as usize);
         parser.process(attached.screen.as_bytes());
         let mut exit_code = None;

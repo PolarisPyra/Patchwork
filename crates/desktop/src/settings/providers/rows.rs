@@ -42,7 +42,13 @@ pub(super) fn describe_agent(status: Option<&Option<AgentStatus>>) -> String {
 /// `~/…` for a path under the home folder (`tildify`).
 pub(super) fn tildify(path: &str) -> String {
     match std::env::var("HOME") {
-        Ok(home) if !home.is_empty() && path.starts_with(&home) => {
+        // Only at a folder's edge: `/home/ann` is not the start of `/home/anna`.
+        Ok(home)
+            if !home.is_empty()
+                && path
+                    .strip_prefix(&home)
+                    .is_some_and(|rest| rest.is_empty() || rest.starts_with('/')) =>
+        {
             format!("~{}", &path[home.len()..])
         }
         _ => path.to_string(),

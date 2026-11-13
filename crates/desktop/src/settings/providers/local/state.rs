@@ -155,6 +155,16 @@ impl SettingsDialog {
         );
     }
 
+    /// Escape closes the address being edited. False when none is.
+    pub(in crate::settings) fn cancel_address(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.providers.local.address.is_none() {
+            return false;
+        }
+        self.close_address();
+        cx.notify();
+        true
+    }
+
     pub(super) fn close_address(&mut self) {
         self.providers.local.address = None;
         self.drop_fields(ADDRESS_FIELD);

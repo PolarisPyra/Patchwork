@@ -13,7 +13,19 @@ impl SettingsDialog {
         let step = match e.keystroke.key.as_str() {
             "escape" => {
                 cx.stop_propagation();
-                if self.cancel_draft(cx) {
+                // A form open in the section closes first, and the dialog on the next press.
+                let closed = self.cancel_draft(cx)
+                    || match self.section {
+                        "mcp" => self.cancel_mcp_form(cx),
+                        "scheduled" => self.cancel_task(cx),
+                        "providers" => {
+                            self.cancel_prompt(cx)
+                                || self.cancel_address(cx)
+                                || self.cancel_form(cx)
+                        }
+                        _ => false,
+                    };
+                if closed {
                     return;
                 }
                 return cx.emit(SettingsEvent::Closed);

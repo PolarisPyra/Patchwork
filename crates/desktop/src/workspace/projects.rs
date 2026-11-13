@@ -136,9 +136,12 @@ impl Workspace {
                 t.project_id.as_deref() == Some(id) && t.archived_at.is_none() && t.parent.is_none()
             })
             .map(|t| t.id.clone());
-        match first {
-            Some(thread) => self.open_thread(&thread, cx),
-            None => self.new_chat(cx),
+        if let Some(thread) = first {
+            self.open_thread(&thread, cx);
+        } else {
+            // No thread opens to read the project's branch and changes, so they are read here.
+            self.new_chat(cx);
+            self.load_git(cx);
         }
     }
 

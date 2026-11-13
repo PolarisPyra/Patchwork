@@ -40,6 +40,20 @@ impl SettingsDialog {
         cx.notify();
     }
 
+    /// Escape closes the open system prompt, unless it is saving. False when none is open.
+    pub(in crate::settings) fn cancel_prompt(&mut self, cx: &mut Context<Self>) -> bool {
+        match &self.providers.prompt {
+            None => return false,
+            Some(p) if p.busy => {}
+            Some(_) => {
+                self.providers.prompt = None;
+                self.drop_fields(PROMPT_FIELD);
+                cx.notify();
+            }
+        }
+        true
+    }
+
     pub(super) fn prompt_field(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
         let (label, draft) = match &self.providers.prompt {
             Some(p) => (

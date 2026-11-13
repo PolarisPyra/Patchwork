@@ -63,6 +63,8 @@ pub struct ScheduledState {
     pub(super) editing: Option<Task>,
     pub(super) query: String,
     pub(super) error: Option<String>,
+    /// A save is on its way, so a second press of Save does not make the task twice.
+    pub(super) saving: bool,
 }
 
 pub(super) fn repeats(schedule: &Schedule) -> Repeats {
@@ -254,6 +256,17 @@ impl SettingsDialog {
         cx.notify();
     }
 
+    /// Escape closes the open task, unless it is saving. False when no task is open.
+    pub(in crate::settings) fn cancel_task(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.scheduled.editing.is_none() {
+            return false;
+        }
+        if !self.scheduled.saving {
+            self.close_task(cx);
+        }
+        true
+    }
+
     pub(super) fn close_task(&mut self, cx: &mut Context<Self>) {
         self.drop_fields(PREFIX);
         self.scheduled.editing = None;
@@ -264,16 +277,22 @@ impl SettingsDialog {
         let Some(task) = self.scheduled.editing.clone() else {
             return;
         };
+        if std::mem::replace(&mut self.scheduled.saving, true) {
+            return;
+        }
         let server = Arc::clone(&self.server);
         self.scheduled.error = None;
         self.run(
             move || server.save_scheduled_task(task),
-            |d, out, cx| match out {
-                Ok(_) => {
-                    d.close_task(cx);
-                    d.list_scheduled(cx);
+            |d, out, cx| {
+                d.scheduled.saving = false;
+                match out {
+                    Ok(_) => {
+                        d.close_task(cx);
+                        d.list_scheduled(cx);
+                    }
+                    Err(e) => d.scheduled.error = Some(e.to_string()),
                 }
-                Err(e) => d.scheduled.error = Some(e.to_string()),
             },
             cx,
         );

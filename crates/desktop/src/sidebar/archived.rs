@@ -289,8 +289,9 @@ fn archived_row(
             .rounded(px(RADIUS_SM))
             .text_color(t.text_muted)
             .hover(move |s| s.bg(btn_hover).text_color(fg))
-            .invisible()
-            .group_hover(group, gpui::Styled::visible)
+            .opacity(0.)
+            .group_hover(group, |s| s.opacity(1.))
+            .focus(|s| s.opacity(1.))
             .child(icon("arrow-counter-clockwise", 16.))
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();

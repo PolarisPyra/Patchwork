@@ -251,6 +251,16 @@ impl SettingsDialog {
         cx.notify();
     }
 
+    /// Escape closes the open form, unless it is saving. False when no form is open.
+    pub(in crate::settings) fn cancel_form(&mut self, cx: &mut Context<Self>) -> bool {
+        match &self.providers.form {
+            None => return false,
+            Some(form) if form.busy => {}
+            Some(_) => self.close_form(false, cx),
+        }
+        true
+    }
+
     pub(super) fn close_form(&mut self, reload: bool, cx: &mut Context<Self>) {
         if let Some(form) = self.providers.form.take() {
             self.drop_fields(&form.prefix);

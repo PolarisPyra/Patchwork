@@ -156,6 +156,8 @@ pub fn rows(
                 .when(recording, |r| {
                     r.children(d.shortcuts.refused.clone().map(|e| {
                         div()
+                            .id("sigil-refused")
+                            .role(gpui::Role::Alert)
                             .mt(px(2.))
                             .text_right()
                             .text_size(px(FS_SM))

@@ -14,6 +14,8 @@ use std::fs;
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    // Without one of these, cargo runs this again whenever any file of the crate changes.
+    println!("cargo:rerun-if-changed=build.rs");
     if env::var("CARGO_CFG_TARGET_OS")? != "windows" {
         return Ok(());
     }

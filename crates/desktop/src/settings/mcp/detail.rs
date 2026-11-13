@@ -43,7 +43,13 @@ fn use_row(
             .truncate()
             .text_size(px(FS_SM))
             .text_color(t.danger)
-            .child(e.clone()),
+            .child(
+                div()
+                    .id("mcp-error")
+                    .role(gpui::Role::Alert)
+                    .truncate()
+                    .child(e.clone()),
+            ),
         None => div()
             .flex()
             .min_w_0()

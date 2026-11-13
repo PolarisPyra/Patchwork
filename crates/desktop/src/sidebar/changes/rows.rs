@@ -55,8 +55,9 @@ pub(super) fn row_action(
         .text_color(t.text_muted)
         .hover(move |s| s.bg(hover).text_color(fg))
         .tooltip(tooltip(label.to_string()))
-        .invisible()
-        .group_hover(group, gpui::Styled::visible)
+        .opacity(0.)
+        .group_hover(group, |s| s.opacity(1.))
+        .focus(|s| s.opacity(1.))
         .child(icon(name, 14.))
 }
 

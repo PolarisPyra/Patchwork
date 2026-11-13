@@ -450,8 +450,9 @@ pub fn section(
                 .tooltip(tooltip("Undo a reply"))
                 .aria_expanded(menu_open)
                 .when(!menu_open, |b| {
-                    b.invisible()
-                        .group_hover(group.clone(), gpui::Styled::visible)
+                    b.opacity(0.)
+                        .group_hover(group.clone(), |s| s.opacity(1.))
+                        .focus(|s| s.opacity(1.))
                 })
                 .child(crate::ui::icon("arrow-u-up-left", 12.))
                 .on_click(cx.listener(move |v, e: &gpui::ClickEvent, window, cx| {
