@@ -8,6 +8,7 @@
 // Rust guideline compliant 2026-10-09
 
 use crate::Error;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
@@ -125,11 +126,27 @@ pub fn models() -> Vec<ClaudeModel> {
 }
 
 /// Parses a cached catalog: `{ "catalog": { "config": { "models": [ … ] } } }`.
+///
+/// The catalog lists the newest model of each line first. A model outside the main section is
+/// legacy only when one listed before it has the same short name, such as an older Opus: a line
+/// the main section leaves out, such as an early-access model, stays with the current ones.
 pub fn parse_models(catalog: &Value) -> Vec<ClaudeModel> {
+    let mut lines = HashSet::new();
     catalog
         .pointer("/catalog/config/models")
         .and_then(Value::as_array)
-        .map(|models| models.iter().filter_map(parse_model).collect())
+        .map(|models| {
+            models
+                .iter()
+                .filter_map(|model| {
+                    let mut parsed = parse_model(model)?;
+                    let line = model.get("short_name").and_then(Value::as_str);
+                    let superseded = line.is_none_or(|line| !lines.insert(line));
+                    parsed.legacy &= superseded;
+                    Some(parsed)
+                })
+                .collect()
+        })
         .unwrap_or_default()
 }
 
