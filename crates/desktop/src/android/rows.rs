@@ -9,6 +9,7 @@ use gpui::{
 use patchwork_server::android::{self, Avd, Boot, Device, DeviceState};
 
 use super::state::{AndroidPanel, Busy, Confirm, Run, device_key};
+use super::tools::device_menu;
 use crate::ui::menu::{Menu, MenuItem};
 use crate::ui::theme::{FS_SM, RADIUS, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, icon_button, spinner, tooltip};
@@ -164,6 +165,26 @@ impl AndroidPanel {
         cx.notify();
     }
 
+    /// The button that opens the menu of what the running `device` can be asked.
+    fn more_button(
+        &self,
+        id: (&'static str, usize),
+        device: &Device,
+        name: &str,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let open = self.menu_open(&device_menu(&device.serial));
+        let device = device.clone();
+        icon_button(id, format!("More for {name}"), "dots-three", 16., cx)
+            .aria_expanded(open)
+            .tooltip(tooltip("More"))
+            .on_click(cx.listener(move |this, e, window, cx| {
+                cx.stop_propagation();
+                this.open_device_menu(&device, e, window, cx);
+            }))
+            .into_any_element()
+    }
+
     pub(super) fn avd_row(
         &self,
         i: usize,
@@ -197,6 +218,9 @@ impl AndroidPanel {
                 let (name, serial) = (name.clone(), d.serial.clone());
                 if d.state == DeviceState::Online {
                     controls.push(self.run_button(("avd-run", i), &name, &avd.display_name, cx));
+                }
+                if d.state == DeviceState::Online {
+                    controls.push(self.more_button(("avd-tools", i), d, &avd.display_name, cx));
                 }
                 controls.push(
                     icon_button(
@@ -345,6 +369,8 @@ impl AndroidPanel {
             .map(|e| e.to_string());
         let run = (device.state == DeviceState::Online && problem.is_none() && !stopping)
             .then(|| self.run_button(("device-run", i), &key, &name, cx));
+        let more = (device.state == DeviceState::Online && !stopping)
+            .then(|| self.more_button(("device-tools", i), device, &name, cx));
         // An emulator can be asked to close; a phone is unplugged.
         let stop = (device.emulator && !stopping).then(|| {
             let (key, serial) = (key.clone(), device.serial.clone());
@@ -381,6 +407,7 @@ impl AndroidPanel {
                     .when(problem.is_some(), |s| s.text_color(t.warning)),
             )
             .children(run)
+            .children(more)
             .children(stop)
             .on_click(cx.listener(move |this, _, _, cx| this.select(key.clone(), cx)));
         match problem {

@@ -154,7 +154,35 @@ const DRAIN: Duration = Duration::from_millis(300);
 /// # Errors
 ///
 /// Returns an error when the program does not start, or is still running at the limit.
-pub(super) fn output(mut cmd: Command, limit: Duration) -> Result<Output, Error> {
+pub(super) fn output(cmd: Command, limit: Duration) -> Result<Output, Error> {
+    let raw = output_bytes(cmd, limit, &|| false)?;
+    Ok(Output {
+        ok: raw.ok,
+        stdout: String::from_utf8_lossy(&raw.stdout).into_owned(),
+        stderr: raw.stderr,
+    })
+}
+
+/// What a tool printed as the bytes it wrote, for a picture or an archive.
+#[derive(Debug)]
+pub(super) struct Bytes {
+    pub(super) ok: bool,
+    pub(super) stdout: Vec<u8>,
+    pub(super) stderr: String,
+}
+
+/// Runs `cmd` to its end as [`output`] does, and also stops it once `stopped` says the person
+/// who asked for it gave up.
+///
+/// # Errors
+///
+/// Returns an error when the program does not start, is still running at the limit, or was
+/// stopped.
+pub(super) fn output_bytes(
+    mut cmd: Command,
+    limit: Duration,
+    stopped: &dyn Fn() -> bool,
+) -> Result<Bytes, Error> {
     let name = cmd.get_program().to_string_lossy().into_owned();
     let mut child = cmd
         .stdout(Stdio::piped())
@@ -167,6 +195,11 @@ pub(super) fn output(mut cmd: Command, limit: Duration) -> Result<Output, Error>
     let status = loop {
         match child.try_wait()? {
             Some(status) => break status,
+            None if stopped() => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("{name} was stopped before it finished.").into());
+            }
             // Short, so a quick tool returns at once.
             None if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(15)),
             None => {
@@ -177,7 +210,7 @@ pub(super) fn output(mut cmd: Command, limit: Duration) -> Result<Output, Error>
                         "{name} did not finish within {} seconds, so it was stopped. Try again.",
                         limit.as_secs()
                     ),
-                    detail: text(&stderr),
+                    detail: tail(&format!("{}\n{}", text(&stdout), text(&stderr))),
                 });
             }
         }
@@ -187,9 +220,10 @@ pub(super) fn output(mut cmd: Command, limit: Duration) -> Result<Output, Error>
         // Short, so output already read is returned at once.
         std::thread::sleep(Duration::from_millis(5));
     }
-    Ok(Output {
+    let stdout = std::mem::take(&mut *stdout.lock().unwrap_or_else(PoisonError::into_inner));
+    Ok(Bytes {
         ok: status.success(),
-        stdout: text(&stdout),
+        stdout,
         stderr: text(&stderr),
     })
 }

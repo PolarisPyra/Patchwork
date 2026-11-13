@@ -4,7 +4,8 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{
-    AnyElement, FontWeight, KeyDownEvent, Role, SharedString, Window, div, prelude::*, px, relative,
+    AnyElement, ExternalPaths, FontWeight, KeyDownEvent, Role, SharedString, Window, div,
+    prelude::*, px, relative,
 };
 use patchwork_server::Error;
 use patchwork_server::android::{self, Sdk};
@@ -23,19 +24,27 @@ impl Render for AndroidPanel {
         let header = self.header(&t, cx);
         let body = self.body(&t, window, cx);
         let footer = self.footer(&t, window, cx);
-        let screen = self.screen.clone().filter(|_| self.create.is_none());
+        let run_bar = self.run_bar(&t, cx);
+        let log = self.log_view(&t, cx);
+        let screen = self
+            .screen
+            .clone()
+            .filter(|_| self.create.is_none() && self.sheet.is_none());
+        let drop_bg = t.bg_hover;
         div()
             .id("android-panel")
             .role(Role::Complementary)
             .aria_label("Android devices")
             .track_focus(&self.focus)
-            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
                 if e.keystroke.key != "escape" {
                     return;
                 }
                 // Escape backs out of what is open, innermost first.
                 if this.confirm.take().is_some() {
                     cx.notify();
+                } else if this.sheet.is_some() {
+                    this.close_sheet(window, cx);
                 } else if this.sdk_editing {
                     this.sdk_editing = false;
                     cx.notify();
@@ -44,6 +53,9 @@ impl Render for AndroidPanel {
                 }
                 cx.stop_propagation();
             }))
+            // An APK dropped anywhere on the panel is installed on the device picked.
+            .drag_over::<ExternalPaths>(move |style, _, _, _| style.bg(drop_bg))
+            .on_drop(cx.listener(|this, files: &ExternalPaths, _, cx| this.dropped(files, cx)))
             .relative()
             .flex()
             .flex_col()
@@ -53,6 +65,7 @@ impl Render for AndroidPanel {
             .border_l_1()
             .border_color(t.border)
             .child(header)
+            .children(run_bar)
             .child(
                 div()
                     .relative()
@@ -84,6 +97,7 @@ impl Render for AndroidPanel {
                     .children(scrollbar(&self.scroll, 10., 2., t.border_strong)),
             )
             .children(screen)
+            .children(log)
             .children(footer)
             .children(
                 self.menu
@@ -155,6 +169,7 @@ impl AndroidPanel {
             let dismiss: Dismiss = |this| this.failure = None;
             parts.push(self.alert("failure", failure, Some(dismiss), t, cx));
         }
+        parts.extend(self.progress(t, cx));
         let Some(snapshot) = &self.snapshot else {
             parts.push(
                 div()
@@ -190,6 +205,10 @@ impl AndroidPanel {
         }
         if let Some(create) = self.create_view(t, window, cx) {
             parts.push(create);
+            return parts;
+        }
+        if let Some(sheet) = self.sheet_view(t, window, cx) {
+            parts.push(sheet);
             return parts;
         }
         let can_create = sdk.avdmanager.is_some();
@@ -242,8 +261,23 @@ impl AndroidPanel {
                     .is_some_and(|avd| snapshot.avds.iter().any(|known| &known.name == avd))
             })
             .collect();
+        parts.push(
+            section("Connected devices", t)
+                .child(
+                    btn(
+                        "android-pair",
+                        "Pair a phone over Wi-Fi",
+                        BtnKind::Plain,
+                        false,
+                        t,
+                    )
+                    .child(icon("plugs-connected", 14.))
+                    .child("Pair over Wi-Fi")
+                    .on_click(cx.listener(|this, _, window, cx| this.open_pair(window, cx))),
+                )
+                .into_any_element(),
+        );
         if !connected.is_empty() {
-            parts.push(section("Connected devices", t).into_any_element());
             parts.push(
                 list("android-connected", "Connected devices")
                     .children(

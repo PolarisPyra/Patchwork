@@ -68,6 +68,14 @@ impl Workspace {
         {
             self.detect_mobile(cx);
         }
+        // A run that stays attached takes saved code without a rebuild.
+        let reload = self
+            .android
+            .as_ref()
+            .and_then(|android| android.read(cx).reload_on_save(&changed.paths));
+        if let Some(keys) = reload {
+            self.type_in_run(keys, cx);
+        }
         let Some(files) = changed.changes else {
             return;
         };

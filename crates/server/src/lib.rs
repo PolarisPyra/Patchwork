@@ -165,6 +165,9 @@ impl Server {
             Some(server) if threads::chat_tools::is_tool(tool) => server
                 .runner
                 .run_chat_tool(&server, thread_id, tool, args, stopped),
+            Some(server) if tool.starts_with(android::TOOL_PREFIX) => {
+                server.android_tool(thread_id, tool, args, stopped)
+            }
             Some(_) => Err(format!("Patchwork has no tool {tool}").into()),
             None => Err("Patchwork is closing".into()),
         }));
@@ -174,6 +177,7 @@ impl Server {
                 .map(|server| {
                     let mut tools = server.chat_tools(thread_id);
                     tools.extend(server.delegate_tool(thread_id));
+                    tools.extend(server.android_tools(thread_id));
                     tools
                 })
                 .unwrap_or_default()

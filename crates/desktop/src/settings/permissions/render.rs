@@ -220,6 +220,18 @@ pub fn render(
         )),
     );
 
+    let android_on = d.settings.android_use;
+    let android_use = token_row(
+        "Let agents use Android devices",
+        Some("Adds tools to run the app, take screenshots, tap, type and read the log, in mobile projects."),
+        &t,
+    )
+    .child(
+        switch("perm-android-use", "Android devices", android_on, &t).on_click(cx.listener(
+            move |d, _, _, cx| d.update(|s| s.android_use = !android_on, cx),
+        )),
+    );
+
     div()
         .flex()
         .flex_col()
@@ -231,5 +243,7 @@ pub fn render(
         .child(add)
         .child(heading("Computer use", &t))
         .child(computer_use)
+        .child(heading("Android", &t))
+        .child(android_use)
         .into_any_element()
 }
