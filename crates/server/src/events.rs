@@ -10,7 +10,7 @@ use crate::permissions::RuleRef;
 use crate::provider::ProviderSlashCommand;
 use crate::threads::{
     Approval, BackgroundTask, Goal, Message, MessageStatus, PlanStep, Refusal, Thread, TokenUsage,
-    ToolCall, TurnChecks, TurnTrees,
+    ToolCall, TurnChecks, TurnReview, TurnTrees,
 };
 
 /// An agent event, which the app applies on its UI thread.
@@ -205,6 +205,11 @@ pub enum AgentEvent {
     ChecksRecorded {
         message_id: String,
         checks: TurnChecks,
+    },
+    /// The chat's reviewer started, or came to something, for the reply whose turn it reviews.
+    ReviewRecorded {
+        message_id: String,
+        review: TurnReview,
     },
     /// Terminal event for a turn. `status` is complete | error | cancelled.
     TurnCompleted {

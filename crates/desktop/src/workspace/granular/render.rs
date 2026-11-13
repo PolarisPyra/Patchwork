@@ -1,5 +1,5 @@
-//! Drawing the card: a panel for the chat's agent and one for its fallback, each over the sub
-//! agents it starts, and the buttons under them.
+//! Drawing the card: rows for the chat's agent, the agent that reviews its replies, and its
+//! fallback, each agent's over the sub agents it starts, and the buttons under them.
 
 // Rust guideline compliant 2026-10-09
 
@@ -67,12 +67,13 @@ fn select(
 }
 
 impl Workspace {
-    /// One side of the card: an agent with its model and effort, over those of the sub agents
-    /// it starts. `main` is the slot of the agent and `sub` the slot of its sub agents.
+    /// One panel of the card: an agent with its model and effort, over those of the sub agents
+    /// it starts. `main` is the slot of the agent and `sub` the slot of its sub agents, if it
+    /// starts any.
     fn granular_panel(
         &self,
         dialog: &GranularDialog,
-        (main, sub): (Slot, Slot),
+        (main, sub): (Slot, Option<Slot>),
         t: &Theme,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -176,9 +177,10 @@ impl Workspace {
         )
         .on_click(cx.listener(move |this, _, _, cx| this.reset_granular(main, cx)));
         // The agent the sub agents run on, where the one that starts them can hand work to another.
-        let sub_agent = starter_of(value, sub)
-            .filter(|starter| delegates_sub_agents(*starter))
-            .map(|starter| {
+        let sub_agent = sub
+            .and_then(|sub| starter_of(value, sub).map(|starter| (sub, starter)))
+            .filter(|(_, starter)| delegates_sub_agents(*starter))
+            .map(|(sub, starter)| {
                 let pick = pick_of(value, sub);
                 let on = pick.map_or(starter, |p| p.agent);
                 let model = pick.and_then(|p| p.model.as_deref());
@@ -190,8 +192,11 @@ impl Workspace {
                 let label = format!("{} agent", sub.name());
                 row("Agent", dropdown(sub, Part::Agent, label, field))
             });
-        let sub_rows: Vec<AnyElement> = sub_agent.into_iter().chain(rows(sub)).collect();
-        let sub_agents = (!sub_rows.is_empty()).then(|| {
+        let sub_rows: Vec<AnyElement> = sub_agent
+            .into_iter()
+            .chain(sub.map(rows).unwrap_or_default())
+            .collect();
+        let sub_agents = sub.filter(|_| !sub_rows.is_empty()).map(|sub| {
             div()
                 .id(SharedString::from(format!("granular-{}", sub.name())))
                 .role(Role::Group)
@@ -256,12 +261,20 @@ impl Workspace {
         let dialog = self.granular_dialog.as_ref()?;
         let t = *theme(cx);
         let viewport = window.viewport_size();
+        // Settings → Chat can turn review off for every chat, and then there is nothing to pick.
+        let reviewer = (!self.settings.review_off)
+            .then(|| self.granular_panel(dialog, (Slot::Review, None), &t, cx));
+        // Stacked, the card can outgrow the window, so its panels scroll under the title.
         let panels = div()
+            .id("granular-panels")
             .flex()
-            .items_start()
+            .flex_col()
             .gap(px(12.))
-            .child(self.granular_panel(dialog, (Slot::Main, Slot::Sub), &t, cx))
-            .child(self.granular_panel(dialog, (Slot::Fallback, Slot::SubFallback), &t, cx));
+            .max_h(viewport.height - px(180.))
+            .overflow_y_scroll()
+            .child(self.granular_panel(dialog, (Slot::Main, Some(Slot::Sub)), &t, cx))
+            .children(reviewer)
+            .child(self.granular_panel(dialog, (Slot::Fallback, Some(Slot::SubFallback)), &t, cx));
         let project = matches!(dialog.scope, GranularScope::Project(_));
         let save = if dialog.first.is_some() {
             "Send"

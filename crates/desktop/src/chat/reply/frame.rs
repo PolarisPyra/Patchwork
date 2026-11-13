@@ -10,10 +10,10 @@ use crate::ui::theme::{FS_MD, FS_SM, FS_XS, RADIUS, Theme};
 use crate::ui::{button, format_clock, full_elapsed, icon, now_ms};
 use crate::workspace::{ReplyNotice, Workspace};
 use crate::chat::timeline::{fold_head_of, fold_layout_of, steps_of};
-use crate::chat::{approvals, checks, files, interrupted};
+use crate::chat::{approvals, checks, files, interrupted, review};
 
 /// What sits under a reply's steps: approvals from before they had a place in the timeline, its
-/// files and checks, a refusal or error, and its actions.
+/// files, checks and review, a refusal or error, and its actions.
 pub(super) fn foot(
     w: &Workspace,
     thread: &Thread,
@@ -40,6 +40,7 @@ pub(super) fn foot(
     }
     out.extend(files::reply_files(w, m, t, cx).map(IntoElement::into_any_element));
     out.extend(checks::checks_card(w, m, t, cx).map(IntoElement::into_any_element));
+    out.extend(review::review_card(w, m, t, cx).map(IntoElement::into_any_element));
     if let Some(refusal) = &m.refusal {
         out.push(
             div()

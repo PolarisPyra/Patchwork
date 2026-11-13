@@ -17,11 +17,11 @@ pub use messages::{
     Approval, ApprovalStatus, Attachment, AttachmentKind, BackgroundTask, CheckFailure,
     CheckStatus, EditLines, answer_with_attachments, image_media_type, MAX_TOOL_OUTPUT, Message,
     MessageStatus, Part, PlanStep, Question, QuestionOption, Refusal, Role, StepStatus, SubAgent,
-    TaskStatus, TokenUsage, ToolCall, tool_output, TurnChecks, TurnTrees,
+    ReviewStatus, TaskStatus, TokenUsage, ToolCall, tool_output, TurnChecks, TurnReview, TurnTrees,
 };
 #[doc(inline)]
 pub use granular::{AgentPick, Granular, Reserves, delegates_sub_agents, runs_sub_agents_at};
-pub(crate) use granular::{fall_back, fallback_of, project_key, sub_agent_of, sub_pick};
+pub(crate) use granular::{fall_back, fallback_of, project_key, reviewer_of, sub_agent_of, sub_pick};
 #[doc(inline)]
 pub use lifecycle::NewThread;
 #[doc(inline)]

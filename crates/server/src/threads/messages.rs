@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::permissions::{PermissionKind, RuleRef};
+use crate::provider::AgentKind;
 
 /// Which side of a chat a message came from.
 ///
@@ -426,6 +427,10 @@ pub struct Message {
     /// files. None for older replies, and for projects with nothing to run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checks: Option<TurnChecks>,
+    /// What the chat's reviewer, another agent or model, made of the files the turn changed.
+    /// None when the chat has no reviewer, and for replies that changed nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review: Option<TurnReview>,
     /// Claude's id for the reply's last message, where its session can resume once the replies
     /// after it are undone, or a fork can branch it. None for other agents and older replies.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -483,6 +488,37 @@ pub struct TurnChecks {
     /// run was asked for, and the card offers to turn them on.
     #[serde(default)]
     pub enabled: bool,
+    /// When it started, in Unix epoch milliseconds.
+    pub at: u64,
+}
+
+/// How a reviewer's look at a turn stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ReviewStatus {
+    Running,
+    /// The reviewer found nothing that needs changing.
+    Approved,
+    /// The reviewer found something the person should look at.
+    Concerns,
+    /// The review did not finish; `TurnReview::text` says why.
+    Failed,
+}
+
+/// What the chat's reviewer made of the files a turn changed.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnReview {
+    pub status: ReviewStatus,
+    /// The agent and model that reviewed.
+    pub agent: AgentKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// The reviewer's own chat, which holds its whole look at the changes.
+    pub thread_id: String,
+    /// The reviewer's reply, or why it has none. Empty while it runs.
+    #[serde(default)]
+    pub text: String,
     /// When it started, in Unix epoch milliseconds.
     pub at: u64,
 }

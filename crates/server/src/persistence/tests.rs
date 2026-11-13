@@ -38,6 +38,7 @@ fn message(text: &str, status: MessageStatus) -> Message {
         usage: None,
         turn: None,
         checks: None,
+        review: None,
         cursor: None,
     }
 }

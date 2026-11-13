@@ -178,6 +178,7 @@ pub(in crate::orchestration) fn event_message(event: &AgentEvent) -> Option<&str
         | AgentEvent::FileTouched { message_id, .. }
         | AgentEvent::TurnRecorded { message_id, .. }
         | AgentEvent::ChecksRecorded { message_id, .. }
+        | AgentEvent::ReviewRecorded { message_id, .. }
         | AgentEvent::ApprovalRequested { message_id, .. }
         | AgentEvent::ApprovalResolved { message_id, .. }
         | AgentEvent::SecretResolved { message_id, .. }
@@ -381,6 +382,7 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
         }
         AgentEvent::TurnRecorded { turn, .. } => msg.turn = Some(turn.clone()),
         AgentEvent::ChecksRecorded { checks, .. } => msg.checks = Some(checks.clone()),
+        AgentEvent::ReviewRecorded { review, .. } => msg.review = Some(review.clone()),
         AgentEvent::ApprovalRequested { approval, .. } => {
             end_thinking(msg);
             msg.parts.push(Part::Approval {

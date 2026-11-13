@@ -152,6 +152,8 @@ pub struct Workspace {
     pub open_steps: HashSet<String>,
     /// Runs of subagents listed open, by their first call.
     pub open_agents: HashSet<String>,
+    /// Review cards turned from how they first show, by reply.
+    pub open_reviews: HashSet<String>,
     pub find: crate::chat::find::FindState,
     pub rail: crate::chat::rail::RailState,
     pub proposed: crate::chat::proposed::ProposedPlans,
@@ -309,6 +311,7 @@ impl Workspace {
             notices: HashMap::new(),
             open_steps: HashSet::new(),
             open_agents: HashSet::new(),
+            open_reviews: HashSet::new(),
             resume_ask: None,
             checks: crate::chat::checks::ChecksState::default(),
             secrets: crate::chat::secret::SecretState::default(),
