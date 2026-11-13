@@ -16,10 +16,11 @@ on:
 permissions:
   contents: read
 
-# A newer push to the same branch makes an older run's result moot.
+# A newer push to a PR makes its older run's result moot. Each push to main runs to the end, so
+# merges in a row do not cancel each other's checks.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   RUST_TOOLCHAIN: "1.99.0"
