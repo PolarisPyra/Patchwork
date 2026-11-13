@@ -121,7 +121,14 @@ pub fn list_files(root: &str) -> Result<Vec<String>, Error> {
 pub fn git_changes(root: &str) -> Result<Vec<FileChange>, Error> {
     let out = match git_output(
         root,
-        &["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+        &[
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            "--",
+            ".",
+        ],
     ) {
         Ok(out) => out,
         // Without git installed, a folder has no changes, as one that is not a repository.
@@ -137,6 +144,14 @@ pub fn git_changes(root: &str) -> Result<Vec<FileChange>, Error> {
         return Err(Error::Git(format!("git status: {}", err.trim())));
     }
     let status = String::from_utf8_lossy(&out.stdout).into_owned();
+    // Git names each file from the repository's top, which the project may sit below; the rest of
+    // Patchwork names it from the project.
+    let prefix = if status.is_empty() {
+        String::new()
+    } else {
+        let out = git(root, &["rev-parse", "--show-prefix"])?;
+        out.trim_end_matches(['\r', '\n']).to_string()
+    };
 
     let mut counts: HashMap<String, (u32, u32)> = HashMap::new();
     let tracked_changed = status
@@ -145,11 +160,11 @@ pub fn git_changes(root: &str) -> Result<Vec<FileChange>, Error> {
     if tracked_changed {
         // Staged and unstaged changes in one diff against the last commit, as the diff view shows
         // them. A repository with no commits yet has no HEAD, so its two parts are added up.
-        let numstats = match git(root, &["diff", "HEAD", "--numstat", "-z"]) {
+        let numstats = match git(root, &["diff", "HEAD", "--numstat", "-z", "--relative"]) {
             Ok(out) => vec![out],
             Err(_) => vec![
-                git(root, &["diff", "--numstat", "-z"])?,
-                git(root, &["diff", "--cached", "--numstat", "-z"])?,
+                git(root, &["diff", "--numstat", "-z", "--relative"])?,
+                git(root, &["diff", "--cached", "--numstat", "-z", "--relative"])?,
             ],
         };
         for (path, added, deleted) in numstats.iter().flat_map(|out| parse_numstat(out)) {
@@ -165,7 +180,7 @@ pub fn git_changes(root: &str) -> Result<Vec<FileChange>, Error> {
             let untracked: Vec<String> = status
                 .split('\0')
                 .filter_map(|e| e.strip_prefix("?? "))
-                .map(str::to_string)
+                .map(|p| p.strip_prefix(prefix.as_str()).unwrap_or(p).to_string())
                 .collect();
             Some(crate::system::remote::fs::line_counts(
                 at.host, at.path, &untracked,
@@ -181,7 +196,11 @@ pub fn git_changes(root: &str) -> Result<Vec<FileChange>, Error> {
             continue;
         }
         let (x, y) = (entry.as_bytes()[0] as char, entry.as_bytes()[1] as char);
-        let path = entry[3..].to_string();
+        let path = &entry[3..];
+        let path = path
+            .strip_prefix(prefix.as_str())
+            .unwrap_or(path)
+            .to_string();
         if x == 'R' || x == 'C' {
             entries.next();
         }
@@ -259,7 +278,7 @@ pub fn revert_file(root: &str, rel: &str) -> Result<(), Error> {
     if is_untracked(root, rel) {
         return remove(root, rel);
     }
-    if git_succeeds(root, &["cat-file", "-e", &format!("HEAD:{rel}")]) {
+    if git_succeeds(root, &["cat-file", "-e", &format!("HEAD:./{rel}")]) {
         git(
             root,
             &[
