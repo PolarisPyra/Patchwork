@@ -5,8 +5,10 @@
 use super::card::AllowChoice;
 use super::card::suggested_rules;
 use std::collections::HashMap;
+use std::sync::Arc;
 use gpui::prelude::*;
-use patchwork_server::permissions::{PermissionKind, PermissionRule, PermissionScope, RuleRef};
+use patchwork_server::permissions::{PermissionKind, PermissionScope, RuleRef};
+use patchwork_server::Server;
 use patchwork_server::threads::{Approval, ApprovalStatus};
 use crate::workspace::Workspace;
 
@@ -80,39 +82,18 @@ impl Workspace {
             return;
         }
         if let Some(scope) = always.filter(|_| !rules.is_empty()) {
-            // A rule with the same pattern is replaced, so saving one twice keeps one.
-            self.save_rules(
-                &scope,
-                |to| {
-                    to.retain(|r| {
-                        !rules
-                            .iter()
-                            .any(|n| n.kind == r.kind && n.pattern == r.pattern)
-                    });
-                    to.extend(rules);
-                },
-                cx,
-            );
+            self.save_rules(|server| server.save_permission_rules(&scope, rules), cx);
         }
         cx.notify();
     }
 
-    /// Changes the rules of `scope` with `change` and saves them.
+    /// Saves a change to the permission rules, and shows the rules as saved.
     pub(super) fn save_rules(
         &mut self,
-        scope: &PermissionScope,
-        change: impl FnOnce(&mut Vec<PermissionRule>),
+        change: impl FnOnce(&Arc<Server>) -> Result<(), patchwork_server::Error>,
         cx: &mut Context<Self>,
     ) {
-        let mut settings = self.server.store.settings();
-        let p = &mut settings.permissions;
-        let to = match scope {
-            PermissionScope::Everywhere => &mut p.everywhere,
-            PermissionScope::Chats => &mut p.chats,
-            PermissionScope::Project(id) => p.projects.entry(id.clone()).or_default(),
-        };
-        change(&mut to.rules);
-        if let Err(e) = self.server.save_settings(settings) {
+        if let Err(e) = change(&self.server) {
             log::warn!(error:% = e; "could not save the rule: {{error}}");
         }
         self.settings = self.server.store.settings();

@@ -8,6 +8,7 @@ mod command;
 mod tests;
 mod defaults;
 mod matching;
+mod rules;
 
 #[doc(inline)]
 pub use defaults::{seed, default_rules};
