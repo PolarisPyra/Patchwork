@@ -4,13 +4,10 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::io::{Read, Write};
-use std::process::Stdio;
-use std::time::{Duration, Instant};
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::process::run_hook_process;
 use super::{HookEvent, HookHandler, list};
 use crate::settings::Settings;
 
@@ -66,6 +63,14 @@ pub fn agent_hooks(settings: &Settings) -> Vec<AgentHook> {
                 | HookHandler::Agent
                 | HookHandler::Unsupported { .. } => return None,
             };
+            if let Some(matcher) = &hook.matcher
+                && let Err(e) = regex::Regex::new(&format!("^(?:{matcher})$"))
+            {
+                log::warn!(
+                    matcher:% = matcher, error:% = e;
+                    "hook matcher {{matcher}} is not a valid pattern and matches no tool: {{error}}"
+                );
+            }
             Some(AgentHook {
                 event: hook.event,
                 matcher: hook.matcher,
@@ -82,7 +87,8 @@ pub fn agent_hooks(settings: &Settings) -> Vec<AgentHook> {
 /// the call is refused, or None to let it run. A command gets
 /// `input` as JSON on stdin, and exit code 2 with a reason on stderr, or a `deny` decision on
 /// stdout, refuses the call; one that fails or runs past its timeout lets the call run, as in the
-/// CLIs.
+/// CLIs. `root` is the project folder as Patchwork keeps it, so a hook of a project on another
+/// machine runs there.
 #[must_use]
 pub fn run_tool_hook(hook: &AgentHook, input: &Value, root: &str) -> Option<String> {
     let HookAction::Command { command } = &hook.action;
@@ -91,65 +97,17 @@ pub fn run_tool_hook(hook: &AgentHook, input: &Value, root: &str) -> Option<Stri
 
 fn run_command(hook: &AgentHook, command: &str, input: &Value, root: &str) -> Option<String> {
     let event = hook.event.name();
-    let mut cmd = crate::system::shell_command(command)?;
-    cmd.current_dir(root);
-    let (mut child, range) = crate::system::contained::spawn(cmd, Stdio::piped())
-        .inspect_err(
-            |e| log::warn!(event:%, error:% = e; "hook {{event}} did not start: {{error}}"),
-        )
-        .ok()?;
-    let read = |pipe: Option<Box<dyn Read + Send>>| {
-        std::thread::spawn(move || {
-            let mut text = String::new();
-            if let Some(mut pipe) = pipe {
-                let _ = pipe.read_to_string(&mut text);
-            }
-            text
-        })
-    };
-    let stdout = read(
-        child
-            .stdout
-            .take()
-            .map(|p| Box::new(p) as Box<dyn Read + Send>),
-    );
-    let stderr = read(
-        child
-            .stderr
-            .take()
-            .map(|p| Box::new(p) as Box<dyn Read + Send>),
-    );
-    if let Some(mut stdin) = child.stdin.take() {
-        // On its own thread, so a hook that does not read its input cannot hold off the timeout.
-        let input = input.to_string();
-        std::thread::spawn(move || {
-            let _ = stdin.write_all(input.as_bytes());
-        });
-    }
-    let deadline = Instant::now() + Duration::from_secs(hook.timeout_secs);
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                // What it left running holds the output pipes open, and would outlive the call.
-                range.stop();
-                break status;
-            }
-            // Short, so a quick hook returns at once instead of after a fixed wait.
-            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
-            _ => {
-                range.stop();
-                let _ = child.wait();
-                log::warn!(
-                    event:%, timeout = hook.timeout_secs;
-                    "hook {{event}} ran past {{timeout}}s and was stopped"
-                );
-                return None;
-            }
-        }
-    };
-    let stdout = stdout.join().unwrap_or_default();
-    let stderr = stderr.join().unwrap_or_default();
-    match status.code() {
+    let done = run_hook_process(
+        root,
+        command,
+        &[],
+        Some(input.to_string()),
+        hook.timeout_secs,
+    )
+    .inspect_err(|e| log::warn!(event:%, error:% = e; "hook {{event}}: {{error}}"))
+    .ok()?;
+    let (stdout, stderr) = (done.stdout, done.stderr);
+    match done.status.code() {
         Some(2) => Some(
             Some(stderr.trim())
                 .filter(|reason| !reason.is_empty())
