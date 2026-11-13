@@ -1,13 +1,13 @@
 name: Release
 
-# Every push to main keeps one "Release vYY.M.N" pull request up to date, from the release branch:
-# the next version in Cargo.toml and Cargo.lock, and its section of CHANGELOG.md, written from the
-# Changelog: paragraphs of the commits since the last tag. Merging that pull request is the release:
-# main then carries a version with no tag, so this run tags it, builds the Linux AppImage
-# (scripts/build.sh), the Windows exe and the macOS (Apple silicon) disk image, and publishes them
-# as the GitHub release with that section as its notes, beside the latest.json the app's update
-# check reads, then points the website at it and announces it on Discord. docs/release.md
-# explains it.
+# Pushing a tag vYY.M.N releases the commit it points at. The notes job writes the release notes
+# from the Changelog: paragraphs of the commits since the previous tag: a line counting the
+# changes, up to seven highlights DeepSeek picks from them, a count of the fixes left out, and every
+# entry folded under "Full changelog". The build jobs build the Linux AppImage (scripts/build.sh),
+# the Windows exe and the macOS (Apple silicon) disk image at the tag's version, and the publish
+# job signs them and publishes the GitHub release beside the latest.json the app's update check
+# reads. The finalize job then commits the version and the notes to main and points the website
+# at the release, and the announce job posts it on Discord. docs/release.md explains it.
 #
 # Run it by hand (Actions → Release → Run workflow) to build all three without publishing.
 #
@@ -15,7 +15,7 @@ name: Release
 
 on:
   push:
-    branches: [main]
+    tags: ["v*.*.*"]
   workflow_dispatch:
 
 permissions:
@@ -25,46 +25,31 @@ env:
   RUST_TOOLCHAIN: "1.99.0"
 
 jobs:
-  # Tags a version main carries that has no tag yet, which the jobs below then build and publish.
-  # Otherwise brings the release pull request up to date, and nothing is built.
-  plan:
+  # The release notes, and the Cargo.toml, Cargo.lock and CHANGELOG.md the builds use: the tag's
+  # version, and its notes at the top of CHANGELOG.md, which the app shows in Settings → Updates.
+  notes:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    # One at a time, so two pushes close together do not write the release branch over each other.
-    concurrency: release-plan
-    permissions:
-      contents: write
-      pull-requests: write
+    timeout-minutes: 10
     outputs:
-      tag: ${{ steps.plan.outputs.tag }}
+      version: ${{ steps.changes.outputs.version }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
-      - name: Tag the release, or update its pull request
-        id: plan
-        if: github.event_name == 'push'
-        env:
-          GH_TOKEN: ${{ github.token }}
+      # Each commit's Changelog: paragraph since the previous tag, joined into one line, with the
+      # group it names and its author. Commits with Changelog: none are left out.
+      - name: Collect the changes
+        id: changes
         run: |
-          version=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
-          if ! git rev-parse -q --verify "refs/tags/v$version" > /dev/null; then
-            grep -q "^## \[$version\]" CHANGELOG.md \
-              || { echo "::error::CHANGELOG.md has no section for $version"; exit 1; }
-            git tag "v$version"
-            git push origin "v$version"
-            echo "tag=v$version" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # CalVer: the next N this month, or 0 in a new month.
-          month=$(date -u +%y.%-m)
-          next="$month.0"
-          [[ "$version" == "$month."* ]] && next="$month.$((${version##*.} + 1))"
-
-          # Each commit's Changelog: paragraph, joined into one line, under the group it names.
-          for commit in $(git rev-list --reverse "v$version..HEAD"); do
+          version=${GITHUB_REF_NAME#v}
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+            || { echo "::error::$GITHUB_REF_NAME is not a version tag (vYY.M.N)"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          previous=$(git describe --tags --abbrev=0 --match 'v*.*.*' "$GITHUB_REF_NAME^" 2> /dev/null || true)
+          : > "$RUNNER_TEMP/entries"
+          for commit in $(git rev-list --reverse "${previous:+$previous..}$GITHUB_REF_NAME"); do
             entry=$(git show -s --format=%B "$commit" | awk '
               /^Changelog:/ { on = 1; sub(/^Changelog:[ \t]*/, "") }
               on && (/^[ \t]*$/ || /^[A-Za-z-]+-[Bb]y:/) { exit }
@@ -74,42 +59,120 @@ jobs:
               [[ "$entry" == "$name: "* ]] && group=$name && entry=${entry#"$name: "}
             done
             [[ -z "$entry" || "${entry,,}" =~ ^none\.?$ ]] && continue
-            echo "- $entry" >> "$RUNNER_TEMP/$group"
+            printf '%s\t%s\t%s\n' "$group" "$entry" "$(git show -s --format=%an "$commit")" \
+              >> "$RUNNER_TEMP/entries"
           done
-          {
-            echo "## [$next] - $(date -u +%F)"
-            for group in Added Changed Fixed Removed Security; do
-              [ -f "$RUNNER_TEMP/$group" ] && printf '\n### %s\n\n' "$group" && cat "$RUNNER_TEMP/$group"
-            done
-            echo
-          } > "$RUNNER_TEMP/section"
-          grep -q '^- ' "$RUNNER_TEMP/section" \
-            || { echo "Nothing for users since v$version, so there is no release to offer."; exit 0; }
+          jq -R -s 'split("\n") | map(select(. != "") | split("\t")
+            | {group: .[0], entry: .[1], author: .[2]})' \
+            "$RUNNER_TEMP/entries" > "$RUNNER_TEMP/entries.json"
 
+      # DeepSeek picks up to seven entries worth leading with and writes each as a short name and
+      # one sentence. When this step fails, or the DEEPSEEK_API_KEY secret is not set, the notes
+      # are the full list alone.
+      - name: Write the highlights
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          [ -n "$DEEPSEEK_API_KEY" ] \
+            || { echo "::warning::DEEPSEEK_API_KEY is not set, so the notes have no highlights"; exit 1; }
+          jq -e 'length > 0' "$RUNNER_TEMP/entries.json" > /dev/null \
+            || { echo "Nothing for users since the previous release."; exit 1; }
+          cat > "$RUNNER_TEMP/prompt" <<'EOF'
+          Write up to 7 bullet points for the Patchwork update notes. Patchwork is a desktop app for working with coding agents. Each numbered entry below is one change since the last release, already written for users and labelled with its group.
+
+          Give a feature a bullet only when it lets users do something they could not do before, removes a real limitation they hit in normal use, or cuts meaningful steps or wait time from a common task. Judge the outcome, regardless of the group. A new setting, a large change, or support for one more edge case is not enough.
+
+          Lead with new capabilities. Give a bug fix its own bullet only when the entries show lost work or a core workflow that users could not complete in normal use. Leave isolated failures, cosmetic polish, and routine fixes in the count. Group entries only when they deliver the same user outcome. Seven is a ceiling. Stop when the qualifying changes run out, even if that leaves zero bullets.
+
+          Each bullet has a short feature name and one sentence of at most 20 words. Say what the user can do or what now works. Use names people see in the app and leave out protocol or implementation details. No title, headings, introduction, example prompts, hype, or em dashes.
+
+          Return JSON with a "highlights" array. For each highlight, give "label" (plain text, no final period), "detail" (one sentence), and "entries" (the bracketed numbers of all entries it covers). The release adds the formatting, the count of remaining fixes, and the full list. The json output has this shape: {"highlights": [{"label": "<short feature name>", "detail": "<one sentence>", "entries": [<entry number>, ...]}]}
+          EOF
+          request=$(jq -n --rawfile prompt "$RUNNER_TEMP/prompt" \
+            --slurpfile entries "$RUNNER_TEMP/entries.json" '{
+              model: "deepseek-v4-pro",
+              max_tokens: 16000,
+              response_format: {type: "json_object"},
+              messages: [{role: "system", content: $prompt},
+                {role: "user", content: ($entries[0] | to_entries
+                  | map("[\(.key + 1)] \(.value.group): \(.value.entry)") | join("\n"))}]}')
+          response=$(curl -sS --fail-with-body --max-time 240 https://api.deepseek.com/chat/completions \
+            -H "content-type: application/json" \
+            -H "authorization: Bearer $DEEPSEEK_API_KEY" \
+            -d "$request") \
+            || { echo "::warning::The highlights request failed: $response"; exit 1; }
+          jq -e '.choices[0].finish_reason == "stop"' <<< "$response" > /dev/null \
+            || { echo "::warning::The highlights were cut short: $response"; exit 1; }
+          # JSON mode can answer with blank content, which counts as a failure.
+          jq -r '.choices[0].message.content' <<< "$response" > "$RUNNER_TEMP/highlights.json"
+          jq -e '.highlights | type == "array"' "$RUNNER_TEMP/highlights.json" > /dev/null \
+            || { echo "::warning::The highlights are not in the expected form: $response"; exit 1; }
+
+      # The notes: the count of changes and contributors, the highlights, the fixes they leave out,
+      # and every entry under "Full changelog", which the app's update notes leave out. Without
+      # highlights, the full list alone.
+      - name: Write the release notes
+        env:
+          VERSION: ${{ steps.changes.outputs.version }}
+        run: |
+          entries=$RUNNER_TEMP/entries.json
+          full=$(jq -r '. as $all | ["Added", "Changed", "Fixed", "Removed", "Security"]
+            | map(. as $group | $all | map(select(.group == $group)) | select(length > 0)
+              | "### \($group)\n\n" + (map("- \(.entry)") | join("\n")))
+            | join("\n\n")' "$entries")
+          if [ -s "$RUNNER_TEMP/highlights.json" ] \
+            && summary=$(jq -r --slurpfile entries "$entries" '
+              ($entries[0] | length) as $n
+              | .highlights[:7] as $picked
+              | [$picked[].entries[]] as $covered
+              | if any($covered[]; . < 1 or . > $n) then error("an entry number is out of range") else . end
+              | [range($n) | select((. + 1) as $k | any($covered[]; . == $k) | not)
+                  | select($entries[0][.].group == "Fixed")] | length as $count
+              | (if $count == 1 then "bug fix" else "bug fixes" end) as $kind
+              | ($picked | map("- **\(.label | sub("\\.$"; "")).** \(.detail)") | join("\n")) as $bullets
+              | if $count == 0 then $bullets
+                elif $bullets == "" then "**\($count) \($kind).**"
+                else "\($bullets)\n\n### Plus \($count) more \($kind)." end
+            ' "$RUNNER_TEMP/highlights.json"); then
+            header=$(jq -r --arg version "$VERSION" '
+              def count($n; $word): "\($n) \($word)\(if $n == 1 then "" else "s" end)";
+              "**v\($version)** · \(count(length; "change")) from \(count(map(.author) | unique | length; "contributor"))"
+            ' "$entries")
+            {
+              echo "$header"
+              if [ -n "$summary" ]; then printf '\n%s\n' "$summary"; fi
+              printf '\n<details>\n<summary>Full changelog</summary>\n\n%s\n\n</details>\n' "$full"
+            } > notes.md
+          else
+            [ ! -s "$RUNNER_TEMP/highlights.json" ] \
+              || echo "::warning::The highlights could not be read, so the notes are the full list alone"
+            printf '%s\n' "$full" > notes.md
+          fi
+          { echo "## [$VERSION] - $(date -u +%F)"; echo; cat notes.md; echo; } > section.md
           awk 'FNR == NR { section = section $0 "\n"; next }
             !done && /^## \[/ { printf "%s", section; done = 1 } { print }' \
-            "$RUNNER_TEMP/section" CHANGELOG.md > "$RUNNER_TEMP/changelog"
+            section.md CHANGELOG.md > "$RUNNER_TEMP/changelog"
           mv "$RUNNER_TEMP/changelog" CHANGELOG.md
-          sed -i "/^\[workspace.package\]/,/^\[/s/^version = \".*\"/version = \"$next\"/" Cargo.toml
-          sed -i -E "/^name = \"patchwork(-server|-remote)?\"$/{n;s/^version = \".*\"/version = \"$next\"/}" Cargo.lock
+          sed -i "/^\[workspace.package\]/,/^\[/s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
+          sed -i -E "/^name = \"patchwork(-server|-remote)?\"$/{n;s/^version = \".*\"/version = \"$VERSION\"/}" Cargo.lock
+          cat notes.md >> "$GITHUB_STEP_SUMMARY"
 
-          # The release branch is this job's own: main with the release's one commit on top, made
-          # again from each push, so it is written over rather than added to.
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -q -B release
-          git commit -q -m "Release v$next" -m "Changelog: none" -- CHANGELOG.md Cargo.toml Cargo.lock
-          git push -q --force origin release
-          if [ -n "$(gh pr list --head release --state open --json number --jq '.[].number')" ]; then
-            gh pr edit release --title "Release v$next" --body-file "$RUNNER_TEMP/section"
-          else
-            gh pr create --base main --head release --title "Release v$next" \
-              --body-file "$RUNNER_TEMP/section"
-          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: notes
+          path: |
+            notes.md
+            section.md
+            Cargo.toml
+            Cargo.lock
+            CHANGELOG.md
+          if-no-files-found: error
 
   linux:
-    needs: plan
-    if: needs.plan.outputs.tag != '' || github.event_name == 'workflow_dispatch'
+    needs: notes
+    if: ${{ !cancelled() && (needs.notes.result == 'success' || github.event_name == 'workflow_dispatch') }}
     # The oldest Ubuntu runner, so the AppImage links against an older glibc and runs on newer
     # distributions too.
     runs-on: ubuntu-22.04
@@ -119,6 +182,12 @@ jobs:
       APPIMAGE_EXTRACT_AND_RUN: 1
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # The tag's version and notes, from the notes job.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: github.event_name == 'push'
+        with:
+          name: notes
 
       - name: Install the Linux packages
         timeout-minutes: 10
@@ -156,12 +225,18 @@ jobs:
           if-no-files-found: error
 
   windows:
-    needs: plan
-    if: needs.plan.outputs.tag != '' || github.event_name == 'workflow_dispatch'
+    needs: notes
+    if: ${{ !cancelled() && (needs.notes.result == 'success' || github.event_name == 'workflow_dispatch') }}
     runs-on: windows-2022
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # The tag's version and notes, from the notes job.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: github.event_name == 'push'
+        with:
+          name: notes
 
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
@@ -182,13 +257,19 @@ jobs:
           if-no-files-found: error
 
   macos:
-    needs: plan
-    if: needs.plan.outputs.tag != '' || github.event_name == 'workflow_dispatch'
+    needs: notes
+    if: ${{ !cancelled() && (needs.notes.result == 'success' || github.event_name == 'workflow_dispatch') }}
     # macos-15 runs on Apple silicon, so the build is native arm64.
     runs-on: macos-15
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # The tag's version and notes, from the notes job.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: github.event_name == 'push'
+        with:
+          name: notes
 
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
@@ -249,16 +330,19 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [plan, linux, windows, macos]
-    if: needs.plan.outputs.tag != ''
+    needs: [notes, linux, windows, macos]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      TAG: ${{ needs.plan.outputs.tag }}
+      TAG: ${{ github.ref_name }}
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: notes
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -300,9 +384,6 @@ jobs:
             crates/server/src/updates/release.rs)
           [ -n "$key" ] \
             || { echo "::error::Could not read SIGNING_KEY from crates/server/src/updates/release.rs"; exit 1; }
-          awk -v head="## [$version]" \
-            'index($0, head) == 1 { on = 1; print; next } on && /^## \[/ { exit } on' \
-            CHANGELOG.md > notes.md
           cd release
           assets='[]'
           for name in Patchwork_amd64.AppImage Patchwork_x64.exe Patchwork_aarch64.dmg; do
@@ -344,15 +425,16 @@ jobs:
             $(for name in $helpers; do echo "$name" "$name.minisig"; done)
           gh release edit "$TAG" --draft=false --latest
 
-  # Points the website's download links at the release just published, deploys the site to
-  # Cloudflare Pages, and commits the new links to main with "Changelog: none". The deploy needs
-  # the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets; without them it only commits.
-  site:
-    needs: [plan, publish]
+  # Commits the release's version and notes to main, as "Release vYY.M.N" with "Changelog: none",
+  # points the website's download links at it and deploys the site to Cloudflare Pages. The deploy
+  # needs the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets; without them it only commits.
+  finalize:
+    needs: [notes, publish]
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
-      TAG: ${{ needs.plan.outputs.tag }}
+      TAG: ${{ github.ref_name }}
+      VERSION: ${{ needs.notes.outputs.version }}
     permissions:
       contents: write
     steps:
@@ -360,7 +442,21 @@ jobs:
         with:
           ref: main
 
-      - name: Point the downloads at ${{ needs.plan.outputs.tag }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: notes
+          path: ${{ runner.temp }}/notes
+
+      - name: Set the version and notes on main
+        run: |
+          awk 'FNR == NR { section = section $0 "\n"; next }
+            !done && /^## \[/ { printf "%s", section; done = 1 } { print }' \
+            "$RUNNER_TEMP/notes/section.md" CHANGELOG.md > "$RUNNER_TEMP/changelog"
+          mv "$RUNNER_TEMP/changelog" CHANGELOG.md
+          sed -i "/^\[workspace.package\]/,/^\[/s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
+          sed -i -E "/^name = \"patchwork(-server|-remote)?\"$/{n;s/^version = \".*\"/version = \"$VERSION\"/}" Cargo.lock
+
+      - name: Point the downloads at ${{ github.ref_name }}
         run: node site/refresh-downloads.mjs
 
       # Installed before the deploy token is in any step's environment, from the lockfile in
@@ -381,26 +477,31 @@ jobs:
           .github/deploy/node_modules/.bin/wrangler pages deploy site --project-name patchwork-site \
             --branch main --commit-dirty=true
 
-      - name: Commit the new links to main
+      # main can move while this job runs, so a rejected push rebases and tries again.
+      - name: Commit to main
         run: |
-          git diff --quiet -- site/index.html && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -q -m "Point the website's downloads at $TAG" -m "Changelog: none" \
-            -- site/index.html
-          git pull -q --rebase origin main
-          git push origin HEAD:main
+          git commit -q -m "Release $TAG" -m "Changelog: none" \
+            -- CHANGELOG.md Cargo.toml Cargo.lock site/index.html
+          for attempt in 1 2 3 4 5; do
+            git push origin HEAD:main && exit 0
+            echo "The push was turned down (attempt $attempt), so it rebases onto main."
+            git pull -q --rebase origin main
+          done
+          echo "::error::Could not push the release commit to main"
+          exit 1
 
   # Announces the release in the Discord channel named by the DISCORD_RELEASE_WEBHOOK_URL secret.
   # A trailing /github is dropped, since that suffix makes Discord expect GitHub's payload.
   announce:
-    needs: [plan, publish]
+    needs: publish
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      TAG: ${{ needs.plan.outputs.tag }}
+      TAG: ${{ github.ref_name }}
     steps:
-      - name: Announce ${{ needs.plan.outputs.tag }} on Discord
+      - name: Announce ${{ github.ref_name }} on Discord
         env:
           DISCORD_RELEASE_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
         run: |

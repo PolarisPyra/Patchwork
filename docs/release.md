@@ -4,8 +4,7 @@ How a version of Patchwork is cut, built and published.
 
 ## What a release is
 
-A GitHub release tagged `vYY.M.N` (CalVer: the next N this month, or 0 in a new month, counted by
-the workflow) with:
+A GitHub release tagged `vYY.M.N` (CalVer: the next N this month, or 0 in a new month) with:
 
 | File | What it is |
 | --- | --- |
@@ -17,28 +16,41 @@ the workflow) with:
 | `patchwork-remote-*` (five) | The helpers the app copies to SSH hosts: Linux and macOS on x86_64 and aarch64, and Windows on x86_64 |
 | `patchwork-remote-*.minisig` | The release key's signature over each helper, which the app checks before copying it |
 
-Its notes are the version's section of `CHANGELOG.md`, which the app also shows in Settings →
-Updates.
+Its notes are written when it is published, from the `Changelog:` paragraphs of the commits since
+the previous tag:
+
+- A line with the version and how many changes and contributors it has.
+- Up to seven highlights, each a bold name and one sentence. DeepSeek (`deepseek-v4-pro`, through
+  the `DEEPSEEK_API_KEY` repository secret) picks them from the entries.
+- "Plus N more bug fixes." for the fixes the highlights leave out.
+- Every entry, grouped by Added, Changed, Fixed, Removed and Security, folded under "Full
+  changelog".
+
+The app's update notes and Settings → Updates stop at "Full changelog". Without the secret, or
+when the request fails, the notes are the full list alone and the run shows a warning. The prompt
+and its rules are in the workflow's "Write the highlights" step.
 
 ## Cutting one
 
-1. Push to `main`. The Release workflow (`.github/workflows/release.yml`) opens a pull request
-   named "Release vYY.M.N", or brings the open one up to date. It is one commit on the `release`
-   branch, on top of `main`: the next version in `Cargo.toml` and `Cargo.lock`, and the version's
-   section at the top of `CHANGELOG.md`, `## [YY.M.N] - YYYY-MM-DD`, made from the `Changelog:`
-   paragraphs of the commits since the last tag, grouped by Added, Changed, Fixed, Removed and
-   Security. Every later push makes it again, so the pull request always holds everything since
-   the last release. Pushes with nothing for users (`Changelog: none`) open none.
-2. Merge the pull request when the release should go out.
+Tag the commit on `main` and push the tag:
 
-The merge puts a version on `main` that has no tag, which is what the workflow takes as a release:
-it tags that commit `vYY.M.N`, builds the three apps and the helpers and publishes the release. Setting the
-version and writing the section by hand, and pushing that to `main`, releases the same way.
+```sh
+git tag v26.11.65
+git push origin v26.11.65
+```
+
+The Release workflow (`.github/workflows/release.yml`) then:
+
+1. Writes the notes, sets the tag's version in `Cargo.toml` and `Cargo.lock`, and puts the notes
+   at the top of `CHANGELOG.md` as `## [YY.M.N] - YYYY-MM-DD`, for the builds only.
+2. Builds the three apps and the helpers at that version, signs them and publishes the release.
+3. Commits the version and the notes to `main` as "Release vYY.M.N", points the website's
+   download links at the release, and announces it on Discord. Pull before the next push.
+
 The entries are the commits' own words, so they are right when the commit is written, by the rules
-in [Changelog style](changelog-style.md); to reword one, edit `CHANGELOG.md` on the `release`
-branch before merging, and merge before the next push to `main` makes the branch again.
-Once the release is published, the workflow points the website's download links at it and pushes
-that change to `main` as "Point the website's downloads at vYY.M.N", so pull before the next push.
+in [Changelog style](changelog-style.md), and the highlights use only what the entries say. To
+reword the notes after publishing, edit the release on GitHub and its section in `CHANGELOG.md`;
+the update notes in `latest.json` are signed, so they keep the published words.
 
 ## Signing
 
