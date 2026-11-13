@@ -9,6 +9,7 @@ use gpui::{
     App, Div, FocusHandle, FontWeight, KeyDownEvent, ListOffset, Pixels, Window, div, prelude::*,
     px,
 };
+use patchwork_server::orchestration::{Upkeep, upkeep};
 use patchwork_server::threads::{Message, Role as MessageRole};
 
 use crate::ui::theme::{FS_LG, FS_MD, RADIUS_LG, Theme};
@@ -48,22 +49,14 @@ impl RailState {
     }
 }
 
-/// A `/compact` is a divider and a `/goal clear` is not shown, so neither starts a turn.
+/// A `/compact` is a divider and a goal clear is not shown, so neither starts a turn.
 pub fn starts_turn(m: &Message) -> bool {
-    let text = m.text.trim();
-    m.role == MessageRole::User && text != "/compact" && !is_goal_clear(text)
+    m.role == MessageRole::User && upkeep(&m.text).is_none()
 }
 
-/// `/goal clear` or one of its aliases, as the backend reads them.
+/// A message that has the agent drop its goal, in any of the forms the server sends or reads.
 pub fn is_goal_clear(text: &str) -> bool {
-    let mut words = text.split_whitespace();
-    words.next() == Some("/goal")
-        && words.next().is_some_and(|w| {
-            ["clear", "stop", "off", "reset", "none", "cancel"]
-                .iter()
-                .any(|alias| w.eq_ignore_ascii_case(alias))
-        })
-        && words.next().is_none()
+    upkeep(text) == Some(Upkeep::GoalClear)
 }
 
 pub fn turns_of(rows: &[&Message]) -> Vec<Turn> {

@@ -8,24 +8,50 @@ use std::sync::Arc;
 use super::state::{held_key, signature};
 use crate::Server;
 use crate::events::{AgentEvent, AgentEventEnvelope};
-use crate::provider::AgentKind;
+use crate::provider::{AgentKind, GoalCommand};
 
-/// Whether `text` is upkeep the app also sends on its own rather than work for the agent: an idle
-/// `/compact`, or the message that has the agent drop its goal.
+/// The messages the app also sends on its own rather than as work for the agent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Upkeep {
+    /// `/compact`: the conversation is summarized.
+    Compact,
+    /// `/goal clear`, one of its aliases, or the message that asks an agent with no such command
+    /// to drop its goal.
+    GoalClear,
+}
+
+/// What upkeep `text` is, or None when it is work for the agent.
+#[must_use]
+pub fn upkeep(text: &str) -> Option<Upkeep> {
+    let text = text.trim();
+    if text == "/compact" {
+        Some(Upkeep::Compact)
+    } else if text == STOP_GOAL
+        || matches!(
+            crate::provider::goal_command(text),
+            Some(GoalCommand::Clear)
+        )
+    {
+        Some(Upkeep::GoalClear)
+    } else {
+        None
+    }
+}
+
+/// Whether `text` is upkeep the app also sends on its own rather than work for the agent.
 #[must_use]
 pub fn is_upkeep(text: &str) -> bool {
-    let text = text.trim();
-    text == "/compact"
-        || [AgentKind::Claude, AgentKind::Antigravity]
-            .into_iter()
-            .any(|agent| text == clear_command(agent))
+    upkeep(text).is_some()
 }
+
+/// What an agent with no command to clear a goal is asked instead.
+const STOP_GOAL: &str = "Stop the current goal.";
 
 /// The message that has the agent drop its goal. Antigravity has no command to clear a goal;
 /// its docs say to ask the agent.
 pub(crate) fn clear_command(agent: AgentKind) -> &'static str {
     match agent {
-        AgentKind::Antigravity | AgentKind::OpenCode | AgentKind::Api => "Stop the current goal.",
+        AgentKind::Antigravity | AgentKind::OpenCode | AgentKind::Api => STOP_GOAL,
         AgentKind::Claude | AgentKind::Codex => "/goal clear",
     }
 }

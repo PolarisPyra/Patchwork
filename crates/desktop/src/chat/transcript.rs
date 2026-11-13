@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use gpui::{AnyElement, Div, FollowMode, Role, SharedString, Window, div, list, prelude::*, px};
+use patchwork_server::orchestration::{Upkeep, upkeep};
 use patchwork_server::threads::{Message, MessageStatus, Part, Role as MessageRole, Thread};
 
 use crate::ui::theme::{FS_XS, Theme};
@@ -360,7 +361,7 @@ fn transcript_row(
         // The green notice in the reply already says the goal was cleared.
         return div().id(row).into_any_element();
     }
-    if m.role == MessageRole::User && m.text.trim() == "/compact" {
+    if m.role == MessageRole::User && upkeep(&m.text) == Some(Upkeep::Compact) {
         let was = before
             .get(message)
             .copied()
@@ -377,7 +378,9 @@ fn transcript_row(
         && matches!(m.status, MessageStatus::Streaming | MessageStatus::Complete);
     if m.role == MessageRole::Assistant
         && only_compacts
-        && previous.is_some_and(|p| p.role == MessageRole::User && p.text.trim() == "/compact")
+        && previous.is_some_and(|p| {
+            p.role == MessageRole::User && upkeep(&p.text) == Some(Upkeep::Compact)
+        })
     {
         return div().id(row).into_any_element();
     }
