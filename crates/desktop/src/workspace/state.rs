@@ -200,7 +200,7 @@ pub struct Workspace {
     pub context_menu: Option<ContextMenu>,
     pub renaming: Option<Renaming>,
     pub sort_undo: HashMap<String, SortUndo>,
-    /// The window's title as last set: "Patchwork", then the open chat's title after a dash.
+    /// The window's title as last set: the app's name, then the open chat's title after a dash.
     pub(super) title: String,
 }
 
@@ -338,7 +338,7 @@ impl Workspace {
             background_dialog: None,
             granular_dialog: None,
             onboarding: None,
-            title: "Patchwork".into(),
+            title: crate::APP_TITLE.into(),
             machine_menu: None,
             machine_menu_dismissed: None,
             context_menu: None,

@@ -18,8 +18,8 @@ impl Render for Workspace {
             return self.onboarding_view(window, cx);
         }
         let title = match &self.thread {
-            Some(thread) => format!("Patchwork - {}", display_title(&thread.title)),
-            None => "Patchwork".into(),
+            Some(thread) => format!("{} - {}", crate::APP_TITLE, display_title(&thread.title)),
+            None => crate::APP_TITLE.into(),
         };
         if title != self.title {
             window.set_window_title(&title);

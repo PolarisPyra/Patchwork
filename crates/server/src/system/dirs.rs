@@ -8,7 +8,18 @@ use std::sync::OnceLock;
 
 static DIRS: OnceLock<Dirs> = OnceLock::new();
 
-/// Patchwork's folders, each named `patchwork` inside the platform's own.
+/// The name of the released app's folders.
+const RELEASE_NAME: &str = "patchwork";
+
+/// The name of this build's folders. A debug build keeps its own, so a migration that is not
+/// released yet never reaches the database the released app opens.
+const NAME: &str = if cfg!(debug_assertions) {
+    "patchwork-dev"
+} else {
+    RELEASE_NAME
+};
+
+/// Patchwork's folders, each named after the build inside the platform's own.
 #[derive(Debug, Clone, Default)]
 pub struct Dirs {
     /// What the user edits: skills, agents, hooks, MCP servers and API providers.
@@ -22,6 +33,8 @@ pub struct Dirs {
     pub state: PathBuf,
     /// One folder of logs per launch.
     pub logs: PathBuf,
+    /// The released app's folders, in a debug build, which starts from a copy of them.
+    pub released: Option<Box<Dirs>>,
 }
 
 /// The database and the files SQLite keeps beside it, which move together or not at all.
@@ -51,13 +64,23 @@ impl Dirs {
     /// one folder for config and data, and Windows one for data and cache, so the second goes in a
     /// subfolder of the first rather than among its files. The state folder is `$XDG_STATE_HOME`
     /// on Linux and the data folder elsewhere, which has none; macOS keeps logs in `~/Library/Logs`.
+    #[must_use]
     pub fn new(config_home: &Path, data_home: &Path, cache_home: &Path) -> Self {
-        let config = config_home.join("patchwork");
-        let mut data = data_home.join("patchwork");
+        let mut dirs = Self::named(config_home, data_home, cache_home, NAME);
+        if NAME != RELEASE_NAME {
+            let released = Self::named(config_home, data_home, cache_home, RELEASE_NAME);
+            dirs.released = Some(Box::new(released));
+        }
+        dirs
+    }
+
+    fn named(config_home: &Path, data_home: &Path, cache_home: &Path, name: &str) -> Self {
+        let config = config_home.join(name);
+        let mut data = data_home.join(name);
         if data == config {
             data = config.join("data");
         }
-        let mut cache = cache_home.join("patchwork");
+        let mut cache = cache_home.join(name);
         if cache == data {
             cache = data.join("cache");
         }
@@ -66,7 +89,7 @@ impl Dirs {
                 .map(PathBuf::from)
                 .filter(|path| path.is_absolute())
                 .or_else(|| super::fs::home_dir().map(|home| home.join(".local/state")))
-                .map_or_else(|| data.clone(), |home| home.join("patchwork"))
+                .map_or_else(|| data.clone(), |home| home.join(name))
         } else {
             data.clone()
         };
@@ -74,7 +97,7 @@ impl Dirs {
             .filter(|_| cfg!(target_os = "macos"))
             .map_or_else(
                 || state.join("logs"),
-                |home| home.join("Library/Logs/patchwork"),
+                |home| home.join("Library/Logs").join(name),
             );
         Self {
             config,
@@ -82,7 +105,22 @@ impl Dirs {
             cache,
             state,
             logs,
+            released: None,
         }
+    }
+
+    /// Copies the released app's config folder to this build's, when this one has none yet.
+    /// True when it copied.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a file cannot be read or written.
+    pub fn copy_config_from(&self, released: &Dirs) -> std::io::Result<bool> {
+        if self.config.exists() || !released.config.is_dir() {
+            return Ok(false);
+        }
+        copy_dir(&released.config, &self.config)?;
+        Ok(true)
     }
 
     /// The folder each CLI is launched with: its copies of the enabled skills, its agents, and
@@ -183,6 +221,21 @@ impl Dirs {
             let _ = std::fs::remove_file(&old_file);
         }
     }
+}
+
+/// Copies the folder `from` to `to`, with everything in it.
+fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let target = to.join(entry.file_name());
+        if entry.path().is_dir() {
+            copy_dir(&entry.path(), &target)?;
+        } else {
+            std::fs::copy(entry.path(), &target)?;
+        }
+    }
+    Ok(())
 }
 
 /// Moves a file, copying it when `to` is on another drive.
