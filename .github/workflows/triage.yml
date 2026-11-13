@@ -1,0 +1,244 @@
+name: Triage
+
+# Applies the PR and issue rules in CONTRIBUTING.md. They cover everyone without write access to the
+# repo; bots and the team are left alone.
+#
+# - A PR opened by someone who already has 3 open PRs is closed.
+# - Once a day: a conflicting PR is asked to rebase and labeled needs-rebase, and closed if it
+#   still conflicts after 7 days with no activity. An item labeled closing is closed 3 days after
+#   the label, unless something happened since. An issue labeled needs-info is closed 7 days after
+#   the label unless its author answered.
+#
+# Until the repository variable TRIAGE_ENFORCE is "true", nothing is commented on, labeled or
+# closed, and each run logs what it would have done.
+#
+# pull_request_target runs with a write token, so this never checks out or runs the PR's code.
+
+on:
+  pull_request_target:
+    types: [opened, reopened]
+  schedule:
+    - cron: "40 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: triage-${{ github.event.pull_request.number || 'daily' }}
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Create the labels
+        if: github.event_name != 'pull_request_target'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          while IFS='|' read -r name color description; do
+            gh label create "$name" --color "$color" --description "$description" --force
+          done <<'LABELS'
+          needs-triage|fbca04|Not looked at yet.
+          needs-info|d876e3|Waiting on the author. Closes 7 days after the label.
+          needs-rebase|e99695|Conflicts with main. Closes after 7 days with no activity.
+          closing|b60205|Breaks a contribution rule. Closes 3 days after the label.
+          keep-open|0e8a16|Triage leaves this alone.
+          LABELS
+
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          TRIAGE_ENFORCE: ${{ vars.TRIAGE_ENFORCE }}
+        with:
+          script: |
+            const DAY = 24 * 60 * 60 * 1000;
+            const OPEN_PR_LIMIT = 3;
+            const REBASE_DAYS = 7;
+            const CLOSING_DAYS = 3;
+            const INFO_DAYS = 7;
+            // Activity this soon after a label is the maintainer's own notice, not a reply.
+            const SAME_TIME = 60 * 1000;
+            // Keeps a first run over a backlog from flooding anyone's notifications.
+            const MAX_ACTIONS = 50;
+
+            const repo = context.repo;
+            const enforce = process.env.TRIAGE_ENFORCE === "true";
+            const rules = `https://github.com/${repo.owner}/${repo.repo}/blob/main/CONTRIBUTING.md`;
+            const now = Date.now();
+            let actions = 0;
+
+            // Every failed read throws, which ends the run before it closes anything.
+            const team = new Map();
+            async function isTeam(user) {
+              if (user.type === "Bot") return true;
+              if (!team.has(user.login)) {
+                const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                  ...repo,
+                  username: user.login,
+                });
+                team.set(user.login, ["admin", "maintain", "write"].includes(data.permission));
+              }
+              return team.get(user.login);
+            }
+
+            const has = (item, label) => item.labels.some((l) => (l.name ?? l) === label);
+
+            async function labeledAt(number, label) {
+              const events = await github.paginate(github.rest.issues.listEvents, {
+                ...repo,
+                issue_number: number,
+                per_page: 100,
+              });
+              const last = events.filter((e) => e.event === "labeled" && e.label?.name === label).at(-1);
+              return last ? Date.parse(last.created_at) : undefined;
+            }
+
+            async function act(number, what, steps) {
+              if (actions >= MAX_ACTIONS) return;
+              actions += 1;
+              core.info(`#${number}: ${what}${enforce ? "" : " (dry run)"}`);
+              if (enforce) await steps();
+            }
+
+            const comment = (number, body) =>
+              github.rest.issues.createComment({ ...repo, issue_number: number, body });
+            const addLabel = (number, label) =>
+              github.rest.issues.addLabels({ ...repo, issue_number: number, labels: [label] });
+            async function removeLabel(number, label) {
+              try {
+                await github.rest.issues.removeLabel({ ...repo, issue_number: number, name: label });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
+            }
+            // The label goes too, so a maintainer who reopens it isn't overruled the next day.
+            async function close(item, label, body, reason = "not_planned") {
+              await comment(item.number, body);
+              await github.rest.issues.update({
+                ...repo,
+                issue_number: item.number,
+                state: "closed",
+                ...(item.pull_request ? {} : { state_reason: reason }),
+              });
+              if (label) await removeLabel(item.number, label);
+            }
+
+            async function openPrLimit() {
+              const pr = context.payload.pull_request;
+              if (has(pr, "keep-open") || (await isTeam(pr.user))) return;
+              // A maintainer reopening someone's PR overrides the limit.
+              const reopened = context.payload.action === "reopened";
+              if (reopened && context.payload.sender.login !== pr.user.login) return;
+              const open = await github.paginate(github.rest.pulls.list, { ...repo, state: "open", per_page: 100 });
+              // A new PR counts only older ones, so two opened at once can't close each other.
+              const others = open.filter(
+                (p) => p.user.login === pr.user.login && p.number !== pr.number && (reopened || p.number < pr.number),
+              ).length;
+              core.info(`#${pr.number}: ${pr.user.login} has ${others} other open PRs.`);
+              if (others < OPEN_PR_LIMIT) return;
+              await act(pr.number, "close, over the open PR limit", () =>
+                close(pr, null, [
+                  `@${pr.user.login} already has ${others} open PRs here, and the limit is ${OPEN_PR_LIMIT}. Once one of them is merged or closed, reopen this one.`,
+                  "",
+                  `See [open PRs](${rules}#open-prs).`,
+                ].join("\n")),
+              );
+            }
+
+            async function conflicts() {
+              const open = await github.paginate(github.rest.pulls.list, { ...repo, state: "open", per_page: 100 });
+              for (const listed of open) {
+                if (has(listed, "keep-open") || has(listed, "closing") || (await isTeam(listed.user))) continue;
+                const { data: pr } = await github.rest.pulls.get({ ...repo, pull_number: listed.number });
+                // null means GitHub hasn't worked it out yet; asking starts it, so tomorrow's run will know.
+                if (pr.mergeable === null) continue;
+                const labeled = has(pr, "needs-rebase");
+                if (pr.mergeable && labeled) {
+                  await act(pr.number, "clear needs-rebase", () => removeLabel(pr.number, "needs-rebase"));
+                } else if (!pr.mergeable && !labeled) {
+                  await act(pr.number, "ask for a rebase", async () => {
+                    await comment(pr.number, [
+                      `This conflicts with \`${pr.base.ref}\`. Please rebase it. If it still conflicts after ${REBASE_DAYS} days with no activity, it will be closed.`,
+                      "",
+                      `See [conflicts](${rules}#conflicts).`,
+                    ].join("\n"));
+                    await addLabel(pr.number, "needs-rebase");
+                  });
+                } else if (!pr.mergeable && now - Date.parse(pr.updated_at) >= REBASE_DAYS * DAY) {
+                  await act(pr.number, "close, still conflicting", () =>
+                    close({ ...pr, pull_request: true }, "needs-rebase", [
+                      `Closing: this still conflicts with \`${pr.base.ref}\` and has had no activity for ${REBASE_DAYS} days.`,
+                      "",
+                      `Rebase it and reopen it, or open a new PR that links this one. See [conflicts](${rules}#conflicts).`,
+                    ].join("\n")),
+                  );
+                }
+              }
+            }
+
+            const labeledItems = (label) =>
+              github.paginate(github.rest.issues.listForRepo, { ...repo, state: "open", labels: label, per_page: 100 });
+
+            async function closingNotices() {
+              for (const item of await labeledItems("closing")) {
+                if (has(item, "keep-open")) continue;
+                const since = await labeledAt(item.number, "closing");
+                if (since === undefined) {
+                  core.warning(`#${item.number}: can't tell when it was labeled closing, so it stays open.`);
+                } else if (Date.parse(item.updated_at) - since > SAME_TIME) {
+                  await act(item.number, "clear closing, there was activity", () => removeLabel(item.number, "closing"));
+                } else if (now - since >= CLOSING_DAYS * DAY) {
+                  await act(item.number, "close, notice expired", () =>
+                    close(item, "closing", [
+                      `Closing: ${CLOSING_DAYS} days have passed since the notice above with no reply.`,
+                      "",
+                      `To have it looked at again, fix what the notice says and comment here. See [closing](${rules}#closing).`,
+                    ].join("\n")),
+                  );
+                }
+              }
+            }
+
+            async function waitingOnInfo() {
+              for (const issue of await labeledItems("needs-info")) {
+                if (issue.pull_request || has(issue, "keep-open")) continue;
+                const since = await labeledAt(issue.number, "needs-info");
+                if (since === undefined) {
+                  core.warning(`#${issue.number}: can't tell when it was labeled needs-info, so it stays open.`);
+                  continue;
+                }
+                const replies = await github.paginate(github.rest.issues.listComments, {
+                  ...repo,
+                  issue_number: issue.number,
+                  since: new Date(since).toISOString(),
+                  per_page: 100,
+                });
+                if (replies.some((c) => c.user.login === issue.user.login)) {
+                  await act(issue.number, "author answered, back to triage", async () => {
+                    await removeLabel(issue.number, "needs-info");
+                    await addLabel(issue.number, "needs-triage");
+                  });
+                } else if (now - since >= INFO_DAYS * DAY) {
+                  await act(issue.number, "close, no answer", () =>
+                    close(issue, "needs-info", [
+                      `Closing: we asked for more information ${INFO_DAYS} days ago and haven't heard back.`,
+                      "",
+                      "Comment with the details and we will reopen it.",
+                    ].join("\n")),
+                  );
+                }
+              }
+            }
+
+            if (context.eventName === "pull_request_target") {
+              await openPrLimit();
+            } else {
+              await conflicts();
+              await closingNotices();
+              await waitingOnInfo();
+              core.info(`${enforce ? "" : "Dry run: "}${actions} actions.`);
+            }

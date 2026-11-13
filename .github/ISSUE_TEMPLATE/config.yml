@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Feature request
+  - name: Suggest a feature
     url: https://github.com/PolarisPyra/Patchwork/discussions/categories/ideas
-    about: Suggest an improvement or new capability in Discussions.
-  - name: Security vulnerability
+    about: Features are discussed in Ideas, not issues.
+  - name: Report a security problem
     url: https://github.com/PolarisPyra/Patchwork/security/advisories/new
-    about: Report it privately. Do not open a public issue.
+    about: Report it privately.
