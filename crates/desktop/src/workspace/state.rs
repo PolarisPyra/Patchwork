@@ -321,7 +321,8 @@ impl Workspace {
             user: crate::chat::user::UserState::default(),
             backgrounds: crate::ui::backdrop::Backgrounds::default(),
             streamed: HashSet::new(),
-            transcript_list: ListState::new(0, ListAlignment::Top, gpui::px(800.)),
+            // Every row is measured up front, or the scrollbar thumb jumps as rows scroll in.
+            transcript_list: ListState::new(0, ListAlignment::Top, gpui::px(800.)).measure_all(),
             transcript_rows: (None, Vec::new()),
             transcript_pieces: Vec::new(),
             opened_at: std::time::Instant::now(),

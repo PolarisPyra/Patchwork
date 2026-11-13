@@ -316,10 +316,12 @@ pub fn transcript(
                 .min_h_0()
                 .flex()
                 .flex_col()
+                // The rail's strips reach 44px in from the edge when they widen.
+                .when(rail.is_some(), |d| d.pr(px(28.)))
                 .child(rows),
         )
         .child(crate::ui::selection::overlay(w.transcript_list.clone()))
-        .children(list_scrollbar(&w.transcript_list, 4., 0., t.border_strong))
+        .children(list_scrollbar(&w.transcript_list, 10., 2., t.border_strong))
         .children(rail)
 }
 
