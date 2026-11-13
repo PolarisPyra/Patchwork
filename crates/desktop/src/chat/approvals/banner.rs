@@ -89,6 +89,8 @@ impl Workspace {
                         .id(SharedString::from(format!("allow-{label}")))
                         .role(Role::MenuItem)
                         .aria_label(label.clone())
+                        .tab_index(0)
+                        .focus_visible(crate::ui::focus_ring)
                         .min_w(px(260.))
                         .flex()
                         .flex_col()
@@ -132,6 +134,14 @@ impl Workspace {
                                         this.allow_menu = None;
                                         cx.notify();
                                     }))
+                                    .on_key_down(cx.listener(
+                                        |this, e: &gpui::KeyDownEvent, _, cx| {
+                                            if e.keystroke.key == "escape" {
+                                                this.allow_menu = None;
+                                                cx.notify();
+                                            }
+                                        },
+                                    ))
                                     .children(rows),
                             ),
                     )

@@ -221,6 +221,8 @@ pub(super) fn rule_menu(
             .id(SharedString::from(format!("rule-{id}")))
             .role(Role::MenuItem)
             .aria_label(label.clone())
+            .tab_index(0)
+            .focus_visible(crate::ui::focus_ring)
             .flex()
             .items_center()
             .rounded(px(RADIUS_SM))
@@ -268,7 +270,7 @@ pub(super) fn rule_menu(
             let (scope, rule_id) = (r.scope.clone(), rule.id.clone());
             item("ask", "Ask next time".into()).on_click(cx.listener(move |this, _, _, cx| {
                 this.rule_menu = None;
-                this.save_rules(&scope, |rules| rules.retain(|r| r.id != rule_id), cx);
+                this.save_rules(|s| s.remove_permission_rule(&scope, &rule_id), cx);
             }))
         });
         let saves = saveable.then(|| {
@@ -287,18 +289,7 @@ pub(super) fn rule_menu(
                 item(&format!("save-{i}"), label).on_click(cx.listener(move |this, _, _, cx| {
                     this.rule_menu = None;
                     let rules = suggested_rules(&approval);
-                    this.save_rules(
-                        &scope,
-                        |to| {
-                            to.retain(|r| {
-                                !rules
-                                    .iter()
-                                    .any(|n| n.kind == r.kind && n.pattern == r.pattern)
-                            });
-                            to.extend(rules.iter().cloned());
-                        },
-                        cx,
-                    );
+                    this.save_rules(|s| s.save_permission_rules(&scope, rules), cx);
                 }))
             })
             .collect::<Vec<_>>()
@@ -319,6 +310,12 @@ pub(super) fn rule_menu(
                             .on_mouse_down_out(cx.listener(|this, _, _, cx| {
                                 this.rule_menu = None;
                                 cx.notify();
+                            }))
+                            .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, _, cx| {
+                                if e.keystroke.key == "escape" {
+                                    this.rule_menu = None;
+                                    cx.notify();
+                                }
                             }))
                             .children(info)
                             .children(change)

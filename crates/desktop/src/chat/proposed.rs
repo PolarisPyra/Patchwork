@@ -134,6 +134,8 @@ pub fn proposed_plan(
             .id(SharedString::from(format!("{id}-{key}")))
             .role(Role::MenuItem)
             .aria_label(label)
+            .tab_index(0)
+            .focus_visible(crate::ui::focus_ring)
             .cursor_pointer()
             .flex()
             .w_full()
@@ -184,6 +186,12 @@ pub fn proposed_plan(
             .on_mouse_down_out(cx.listener(|w, _, _, cx| {
                 w.proposed.menu = None;
                 cx.notify();
+            }))
+            .on_key_down(cx.listener(|w, e: &gpui::KeyDownEvent, _, cx| {
+                if e.keystroke.key == "escape" {
+                    w.proposed.menu = None;
+                    cx.notify();
+                }
             }))
             .child(copy)
             .child(download)
