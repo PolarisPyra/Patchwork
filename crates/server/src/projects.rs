@@ -277,7 +277,7 @@ impl Server {
             }
             root
         } else {
-            let Ok(dir) = std::fs::canonicalize(&self.worktrees_dir) else {
+            let Ok(dir) = crate::system::fs::canonicalize(&self.worktrees_dir) else {
                 return Ok(None);
             };
             let Some(first) = Path::new(path)

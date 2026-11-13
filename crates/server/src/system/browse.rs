@@ -84,9 +84,8 @@ pub fn browse(path: Option<&str>) -> Result<DirListing, Error> {
         Some(p) if !p.is_empty() => resolve(&home, p),
         _ => home,
     };
-    let dir = dir
-        .canonicalize()
-        .map_err(|e| format!("Cannot open {}: {e}", dir.display()))?;
+    let dir =
+        super::fs::canonicalize(&dir).map_err(|e| format!("Cannot open {}: {e}", dir.display()))?;
     if !dir.is_dir() {
         return Err(format!("{} is not a folder", dir.display()).into());
     }

@@ -63,7 +63,7 @@ impl ProjectWatcher {
     ) -> Result<Self, Error> {
         // Events name paths under the root as the system resolves it, such as `/private/var`
         // for `/var` on macOS.
-        let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+        let root = crate::system::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
         let (tx, rx) = channel();
         let watcher = notify::recommended_watcher(move |res| {
             let _ = tx.send((Instant::now(), res));

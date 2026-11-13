@@ -70,15 +70,21 @@ pub(super) fn load_settings(conn: &Connection) -> rusqlite::Result<Settings> {
             tokens.claude_compact_window = 200_000;
         }
     }
+    // Folders added on Windows before paths were kept plain carry the `\\?\` prefix.
     let mut stmt = conn.prepare("SELECT id, name, path FROM projects ORDER BY position")?;
     settings.projects = stmt
         .query_map([], |r| {
             Ok(crate::projects::Project {
                 id: r.get(0)?,
                 name: r.get(1)?,
-                path: r.get(2)?,
+                path: plain_path(r.get(2)?),
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
     Ok(settings)
+}
+
+/// `path` without the `\\?\` prefix a Windows path kept by an earlier version may carry.
+fn plain_path(path: String) -> String {
+    crate::system::fs::without_verbatim(std::path::Path::new(&path)).unwrap_or(path)
 }

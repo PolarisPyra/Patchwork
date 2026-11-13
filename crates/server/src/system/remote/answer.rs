@@ -81,10 +81,7 @@ fn json(value: impl Serialize) -> Result<serde_json::Value, Error> {
 pub(super) fn portable(path: &Path) -> String {
     let text = path.to_string_lossy();
     if cfg!(windows) {
-        let text = text.strip_prefix(r"\\?\UNC\").map_or_else(
-            || text.strip_prefix(r"\\?\").unwrap_or(&text).to_string(),
-            |rest| format!(r"\\{rest}"),
-        );
+        let text = crate::system::fs::without_verbatim(path).unwrap_or_else(|| text.to_string());
         text.replace('\\', "/")
     } else {
         text.into_owned()

@@ -106,7 +106,7 @@ fn media_of(root: &Path, base: &Path, rel: &str) -> FileMedia {
     let abs = root.join(rel_path);
     match std::fs::metadata(&abs) {
         Ok(meta) if meta.is_dir() => media(0, PreviewKind::Other),
-        Ok(meta) if std::fs::canonicalize(&abs).is_ok_and(|p| p.starts_with(root)) => {
+        Ok(meta) if crate::system::fs::canonicalize(&abs).is_ok_and(|p| p.starts_with(root)) => {
             media(meta.len(), preview_kind(rel, meta.len()))
         }
         Ok(_) => media(0, PreviewKind::Other),
@@ -124,7 +124,7 @@ pub fn file_media(root: &str, rels: &[String]) -> Result<Vec<FileMedia>, Error> 
     if let Some(at) = crate::system::remote::split(root) {
         return remote_media(root, at, rels);
     }
-    let canonical = std::fs::canonicalize(root).map_err(|e| e.to_string())?;
+    let canonical = crate::system::fs::canonicalize(root).map_err(|e| e.to_string())?;
     Ok(rels
         .iter()
         .take(MAX_MEDIA_PATHS)

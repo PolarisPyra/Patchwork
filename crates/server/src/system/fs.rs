@@ -46,6 +46,32 @@ pub fn resolve(root: &Path, path: &str) -> PathBuf {
     out
 }
 
+/// `path` made absolute, with its links followed, written as the user writes it.
+///
+/// On Windows the system gives a resolved path the `\\?\` prefix, as in `\\?\C:\Users`, which
+/// Patchwork never shows or keeps; the path comes back as `C:\Users`, and a network one as
+/// `\\server\share`. Elsewhere this is [`std::fs::canonicalize`].
+///
+/// # Errors
+///
+/// Returns an error when `path` does not exist or cannot be read.
+pub fn canonicalize(path: impl AsRef<Path>) -> std::io::Result<PathBuf> {
+    let resolved = std::fs::canonicalize(path)?;
+    Ok(without_verbatim(&resolved).map_or(resolved, PathBuf::from))
+}
+
+/// `path` without the `\\?\` prefix Windows gives a resolved path, or `None` when it has none.
+#[must_use]
+pub(crate) fn without_verbatim(path: &Path) -> Option<String> {
+    let text = path.to_str()?;
+    if let Some(share) = text.strip_prefix(r"\\?\UNC\") {
+        return Some(format!(r"\\{share}"));
+    }
+    text.strip_prefix(r"\\?\")
+        .filter(|rest| rest.as_bytes().get(1) == Some(&b':'))
+        .map(str::to_string)
+}
+
 /// `path` with the links in it followed, as far as it exists. A path a link leads out of its
 /// folder is then seen where it really is.
 #[must_use]
@@ -53,7 +79,7 @@ pub fn real(path: &Path) -> PathBuf {
     let mut rest = Vec::new();
     let mut existing = path;
     loop {
-        if let Ok(real) = std::fs::canonicalize(existing) {
+        if let Ok(real) = canonicalize(existing) {
             return rest.iter().rev().fold(real, |path, part| path.join(part));
         }
         match (existing.parent(), existing.file_name()) {

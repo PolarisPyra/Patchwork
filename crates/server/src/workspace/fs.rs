@@ -28,7 +28,8 @@ pub(crate) fn make_project(path: &str) -> Result<Project, Error> {
             path: remote::root(at.host, &dir),
         });
     }
-    let canonical = std::fs::canonicalize(path).map_err(|e| format!("Cannot open {path}: {e}"))?;
+    let canonical =
+        crate::system::fs::canonicalize(path).map_err(|e| format!("Cannot open {path}: {e}"))?;
     if !canonical.is_dir() {
         return Err(format!("{path} is not a folder").into());
     }
@@ -55,7 +56,8 @@ pub(crate) fn create_project_dir(parent: &str, name: &str) -> Result<Project, Er
         git(&root, &["init", "-b", "main"])?;
         return make_project(&root);
     }
-    let parent = std::fs::canonicalize(parent).map_err(|e| format!("Cannot open {parent}: {e}"))?;
+    let parent = crate::system::fs::canonicalize(parent)
+        .map_err(|e| format!("Cannot open {parent}: {e}"))?;
     if !parent.is_dir() {
         return Err(format!("{} is not a folder", parent.display()).into());
     }
@@ -87,8 +89,9 @@ pub fn resolve_inside(root: &str, rel: &str) -> Result<PathBuf, Error> {
         let path = remote::fs::resolve_inside(at.host, at.path, rel)?;
         return Ok(PathBuf::from(remote::root(at.host, &path)));
     }
-    let root = std::fs::canonicalize(root).map_err(|e| e.to_string())?;
-    let path = std::fs::canonicalize(root.join(rel)).map_err(|e| format!("{rel}: {e}"))?;
+    let root = crate::system::fs::canonicalize(root).map_err(|e| e.to_string())?;
+    let path =
+        crate::system::fs::canonicalize(root.join(rel)).map_err(|e| format!("{rel}: {e}"))?;
     if path.starts_with(&root) {
         Ok(path)
     } else {
