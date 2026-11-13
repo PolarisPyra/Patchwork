@@ -65,6 +65,7 @@ fn an_action_reads_from_json_the_way_the_model_sends_it() {
 #[test]
 #[ignore = "needs a display"]
 fn screenshot_captures_the_screen() {
+    super::set_enabled(true);
     let started = std::time::Instant::now();
     let shot = screenshot().expect("a screenshot");
     eprintln!(

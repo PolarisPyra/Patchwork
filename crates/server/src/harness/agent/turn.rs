@@ -82,6 +82,10 @@ pub(super) struct Request {
     /// user to carry it on; 0 sets no limit.
     #[serde(default)]
     pub(super) token_limit: u64,
+    /// Settings → Permissions has computer use on. The agent runs in its own process, which
+    /// never loads the settings, so the turn carries it.
+    #[serde(default)]
+    pub(super) computer_use: bool,
     /// Patchwork's instructions about the user's shell.
     #[serde(default)]
     pub(super) instructions: Option<String>,
@@ -259,6 +263,7 @@ impl Agent {
             .http_status_as_error(false)
             .build()
             .into();
+        crate::computer::set_enabled(request.computer_use);
         let mut tools = crate::harness::tools::definitions(request.plan);
         if let Some(list) = tools.as_array_mut() {
             list.extend(request.mcp_tools.iter().map(|t| {

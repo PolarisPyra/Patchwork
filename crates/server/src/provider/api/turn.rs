@@ -82,6 +82,7 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         "compactWindow": spec.compact_window,
         "unlimitedSteps": spec.unlimited_steps,
         "tokenLimit": spec.token_limit,
+        "computerUse": crate::computer::enabled(),
         "instructions": spec.instructions,
         "command": command,
         "mcpTools": tools,

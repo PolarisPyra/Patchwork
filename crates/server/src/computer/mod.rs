@@ -14,5 +14,5 @@ mod linux;
 #[cfg(test)]
 mod tests;
 
-pub use actions::{set_enabled, enabled, ensure_enabled, Screenshot, Action, screenshot, describe};
+pub use actions::{set_enabled, enabled, Screenshot, Action, screenshot, describe};
 pub(crate) use actions::{screenshot_to_file, perform};
