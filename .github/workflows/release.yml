@@ -139,7 +139,7 @@ jobs:
           entries=$RUNNER_TEMP/entries.json
           full=$(jq -r '. as $all | ["Added", "Changed", "Fixed", "Removed", "Security"]
             | map(. as $group | $all | map(select(.group == $group)) | select(length > 0)
-              | "### \($group)\n\n" + (map("- \(.entry) by @\(.author)"
+              | "### \($group)\n\n" + (map("- \(.entry) by [@\(.author)](https://github.com/\(.author))"
                   + (if .pr != "" then " in #\(.pr)" else "" end)) | join("\n")))
             | join("\n\n")' "$entries")
           if [ -s "$RUNNER_TEMP/highlights.json" ] \
