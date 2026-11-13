@@ -162,15 +162,21 @@ impl Server {
             Some(server) if tool == threads::delegate::TOOL => server
                 .runner
                 .run_sub_agent(&server, thread_id, args, stopped),
+            Some(server) if threads::chat_tools::is_tool(tool) => server
+                .runner
+                .run_chat_tool(&server, thread_id, tool, args, stopped),
             Some(_) => Err(format!("Patchwork has no tool {tool}").into()),
             None => Err("Patchwork is closing".into()),
         }));
         let weak = Arc::downgrade(&server);
         provider::mcp::set_tool_lister(Box::new(move |thread_id| {
             weak.upgrade()
-                .and_then(|server| server.delegate_tool(thread_id))
-                .into_iter()
-                .collect()
+                .map(|server| {
+                    let mut tools = server.chat_tools(thread_id);
+                    tools.extend(server.delegate_tool(thread_id));
+                    tools
+                })
+                .unwrap_or_default()
         }));
         Ok(server)
     }

@@ -32,7 +32,7 @@ type Flag = (
     fn(&Settings) -> bool,
     fn(&mut Settings, bool),
 );
-const FLAGS: [Flag; 5] = [
+const FLAGS: [Flag; 6] = [
     (
         "confirm-answers",
         "Click answers twice to send",
@@ -56,6 +56,12 @@ const FLAGS: [Flag; 5] = [
         "Cross-model review",
         |s| !s.review_off,
         |s, on| s.review_off = !on,
+    ),
+    (
+        "chat-tools",
+        "Agents can start and message chats",
+        |s| !s.chat_tools_off,
+        |s, on| s.chat_tools_off = !on,
     ),
     (
         "step-limit",

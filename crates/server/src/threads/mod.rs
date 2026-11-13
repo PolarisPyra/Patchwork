@@ -3,6 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 mod attachments;
+pub mod chat_tools;
 pub mod delegate;
 mod granular;
 mod messages;
