@@ -29,6 +29,32 @@ impl Framework {
             Self::Expo => "Expo",
         }
     }
+
+    /// How the framework's running app takes changed code. None when every change is a rebuild.
+    #[must_use]
+    pub fn reload(self) -> Option<Reload> {
+        match self {
+            Self::Flutter | Self::Expo => Some(Reload::Typed("r")),
+            Self::ReactNative => Some(Reload::DeviceKeys),
+            Self::KotlinMultiplatform | Self::NativeAndroid => None,
+        }
+    }
+
+    /// What is typed into the tool's terminal to start the app again with its state cleared.
+    #[must_use]
+    pub fn restart(self) -> Option<&'static str> {
+        (self == Self::Flutter).then_some("R")
+    }
+
+    /// Whether saving the project-relative `path` should reload the running app. React Native
+    /// and Expo watch the files themselves; Flutter waits to be told.
+    #[must_use]
+    pub fn reloads_on_save(self, path: &str) -> bool {
+        self == Self::Flutter
+            && std::path::Path::new(path)
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("dart"))
+    }
 }
 
 /// A mobile app found in a project.
@@ -230,4 +256,171 @@ pub enum ScreenInput {
     Text(String),
     /// The room the picture is drawn in, in pixels, which frames are scaled to fit.
     Fit { width: u32, height: u32 },
+}
+
+/// One way the app is built: a product flavor from each dimension the project has, and a build
+/// type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Variant {
+    /// Empty for a project without flavors.
+    pub flavors: Vec<String>,
+    pub build_type: String,
+}
+
+impl Default for Variant {
+    /// The debug build of a project without flavors.
+    fn default() -> Self {
+        Self {
+            flavors: Vec::new(),
+            build_type: "debug".to_string(),
+        }
+    }
+}
+
+impl Variant {
+    /// The flavors as Gradle joins them, such as `freeStaging`. None without flavors.
+    #[must_use]
+    pub fn flavor(&self) -> Option<String> {
+        let (first, rest) = self.flavors.split_first()?;
+        Some(rest.iter().fold(first.clone(), |joined, flavor| {
+            joined + &capitalized(flavor)
+        }))
+    }
+
+    /// The variant's Gradle name, such as `freeDebug`.
+    #[must_use]
+    pub fn name(&self) -> String {
+        match self.flavor() {
+            Some(flavor) => flavor + &capitalized(&self.build_type),
+            None => self.build_type.clone(),
+        }
+    }
+
+    /// The Gradle task that installs the variant, such as `installFreeDebug`.
+    pub(super) fn install_task(&self) -> String {
+        format!("install{}", capitalized(&self.name()))
+    }
+}
+
+/// `word` with its first letter in upper case, as Gradle joins names.
+fn capitalized(word: &str) -> String {
+    let mut letters = word.chars();
+    letters.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(letters).collect()
+    })
+}
+
+/// What running the app is for, which decides whether the framework's tool stays running.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunMode {
+    /// In a terminal the panel keeps, so the tool stays to reload the code as it changes.
+    Attached,
+    /// To its end, for an agent that waits for the result: the tool builds, installs, opens the
+    /// app and exits.
+    Once,
+}
+
+/// The device and build a run is for.
+#[derive(Debug, Clone, Copy)]
+pub struct RunTarget<'a> {
+    pub serial: &'a str,
+    /// The virtual device an emulator runs.
+    pub avd: Option<&'a str>,
+    pub variant: &'a Variant,
+    pub mode: RunMode,
+}
+
+/// How an app that is running takes code that changed since it was built.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reload {
+    /// The framework's tool reloads when this is typed into the terminal it runs in.
+    Typed(&'static str),
+    /// The app reloads when the device is sent the R key twice.
+    DeviceKeys,
+}
+
+/// What is done with a saved state of an emulator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StateAction {
+    Save,
+    Load,
+    Delete,
+}
+
+/// The mobile network an emulator's connection is slowed to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NetworkSpeed {
+    Full,
+    Lte,
+    Hsdpa,
+    Umts,
+    Edge,
+    Gprs,
+}
+
+impl NetworkSpeed {
+    /// Every speed, the fastest first.
+    pub const ALL: [Self; 6] = [
+        Self::Full,
+        Self::Lte,
+        Self::Hsdpa,
+        Self::Umts,
+        Self::Edge,
+        Self::Gprs,
+    ];
+
+    /// The speed's name as a phone's status bar shows it.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Full => "Full speed",
+            Self::Lte => "LTE",
+            Self::Hsdpa => "3.5G (HSDPA)",
+            Self::Umts => "3G (UMTS)",
+            Self::Edge => "2G (EDGE)",
+            Self::Gprs => "2G (GPRS)",
+        }
+    }
+
+    /// The speed's name in the emulator's console.
+    pub(super) fn console_name(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Lte => "lte",
+            Self::Hsdpa => "hsdpa",
+            Self::Umts => "umts",
+            Self::Edge => "edge",
+            Self::Gprs => "gprs",
+        }
+    }
+}
+
+/// A device adb found on the local network, waiting to be paired or connected.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WifiDevice {
+    /// The name the device announces itself under.
+    pub name: String,
+    /// Where it listens, as `192.168.1.20:37251`.
+    pub address: String,
+    /// Whether it is showing a pairing code, rather than waiting for a paired computer.
+    pub pairing: bool,
+}
+
+/// How serious a line of the device's log is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LogLevel {
+    Verbose,
+    Debug,
+    Info,
+    Warn,
+    Error,
+    Fatal,
+}
+
+/// One line of the device's log.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LogLine {
+    /// None for a line that is not an app's, such as one Patchwork adds when the app starts.
+    pub level: Option<LogLevel>,
+    pub text: String,
 }

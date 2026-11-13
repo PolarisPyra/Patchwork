@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use gpui::{Entity, MouseButton, Role, Window, div, prelude::*, px};
+use gpui::{App, Entity, MouseButton, Role, Window, div, prelude::*, px};
 use patchwork_server::Server;
 use patchwork_server::settings::Settings;
 
@@ -79,6 +79,11 @@ impl Workspace {
         self.sync_panel(cx);
         self.panel.update(cx, |p, cx| p.run(launch, cx));
         cx.notify();
+    }
+
+    /// Types `text` into the terminal of the command [`Self::run_in_terminal`] started.
+    pub fn type_in_run(&self, text: &str, cx: &App) {
+        self.panel.read(cx).type_in_task(text);
     }
 
     pub(super) fn close_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {

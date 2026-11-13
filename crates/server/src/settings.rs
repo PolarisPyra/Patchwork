@@ -119,6 +119,8 @@ pub struct Settings {
     pub checks: CheckSettings,
     /// The Android SDK's folder, when the user set one. None finds it.
     pub android_sdk: Option<String>,
+    /// Whether an agent may run the app on Android devices, look at their screens and touch them.
+    pub android_use: bool,
 }
 
 impl Settings {

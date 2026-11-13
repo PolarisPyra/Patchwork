@@ -176,6 +176,14 @@ impl Panel {
         cx.notify();
     }
 
+    /// Types `text` into the terminal of the newest command [`Self::run`] started that still
+    /// runs. Nothing when none does.
+    pub fn type_in_task(&self, text: &str) {
+        if let Some(shell) = self.shells.iter().rev().find(|shell| shell.task) {
+            let _ = shell.input.unbounded_send(text.to_string());
+        }
+    }
+
     /// Runs the command `launch` starts in a terminal tab of its own, without showing the
     /// terminal: the tab is there when the user opens it. It closes when the command succeeds and
     /// stays when it fails, as a shell does, and [`crate::panel::PanelEvent::RunFinished`] says

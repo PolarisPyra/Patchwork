@@ -525,14 +525,16 @@ pub fn overrides(agent: AgentKind, root: &str, thread_id: &str) -> Vec<String> {
             vec![
                 "--mcp-config".into(),
                 serde_json::json!({"mcpServers": servers}).to_string(),
-                // Asking for a secret is the user's to answer, and a sub agent on another agent is
-                // what the user set the chat to start, so neither is asked about first.
+                // Asking for a secret is the user's to answer, a sub agent on another agent is what
+                // the user set the chat to start, and Android devices are used only once the user
+                // has allowed it in Settings, so none is asked about first.
                 "--allowedTools".into(),
-                format!(
-                    "mcp__{0}__{tool},mcp__{0}__{1}",
-                    mcp::OWN_SERVER,
-                    crate::threads::delegate::TOOL
-                ),
+                [tool.to_string(), crate::threads::delegate::TOOL.to_string()]
+                    .into_iter()
+                    .chain(crate::android::tool_names())
+                    .map(|tool| format!("mcp__{}__{tool}", mcp::OWN_SERVER))
+                    .collect::<Vec<_>>()
+                    .join(","),
             ]
         }
         AgentKind::Codex => relays

@@ -9,11 +9,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{Entity, FocusHandle, Pixels, Point, ScrollHandle, Task, WeakEntity, Window, prelude::*};
-use patchwork_server::android::{self, Avd, Boot, Device, MobileProject, Sdk, Snapshot};
+use patchwork_server::android::{
+    self, Avd, Boot, Device, MobileProject, RunMode, RunTarget, Sdk, Snapshot, Variant,
+};
 use patchwork_server::{Error, Server};
 
 use super::create::Create;
+use super::log::LogPane;
 use super::screen::DeviceScreen;
+use super::tools::Sheet;
 use crate::ui::menu::Menu;
 use crate::ui::text_area::{Submitted, TextArea};
 use crate::ui::theme::theme;
@@ -75,10 +79,24 @@ pub struct AndroidPanel {
     pub(super) sdk_field: Entity<TextArea>,
     pub(super) sdk_editing: bool,
     pub(super) run: Run,
+    /// The device the run under way is on.
+    pub(super) running_on: Option<String>,
+    /// Whether the run under way was asked to stop, so its exit code is no failure.
+    pub(super) stop_asked: bool,
+    /// The variants the app can be built as, and the one runs build.
+    pub(super) variants: Vec<Variant>,
+    pub(super) variant: Variant,
+    /// The app's log, while it shows.
+    pub(super) log: Option<LogPane>,
+    /// What is asked for in place of the device lists: a place, a saved state, a phone to pair.
+    pub(super) sheet: Option<Sheet>,
+    /// What a device is being asked to do, and what the last action did.
+    pub(super) working: Option<String>,
+    pub(super) notice: Option<String>,
     pub(super) create: Option<Create>,
-    /// The screen of the device picked, while it is a running emulator.
+    /// The screen of the device picked, while it is running.
     pub(super) screen: Option<Entity<DeviceScreen>>,
-    /// A virtual device's menu, while open, and where it opened.
+    /// The menu that is open, by what it is of, and where it opened.
     pub(super) menu: Option<(String, Entity<Menu>, Point<Pixels>)>,
     pub(super) scroll: ScrollHandle,
     pub(super) focus: FocusHandle,
@@ -126,7 +144,7 @@ impl AndroidPanel {
         });
         let focus = cx.focus_handle();
         window.focus(&focus, cx);
-        Self {
+        let panel = Self {
             selected: server.android_device(&project_id),
             workspace,
             server,
@@ -143,19 +161,30 @@ impl AndroidPanel {
             sdk_field,
             sdk_editing: false,
             run: Run::Idle,
+            running_on: None,
+            stop_asked: false,
+            variants: Vec::new(),
+            variant: Variant::default(),
+            log: None,
+            sheet: None,
+            working: None,
+            notice: None,
             create: None,
             screen: None,
             menu: None,
             scroll: ScrollHandle::new(),
             focus,
             _poll: poll,
-        }
+        };
+        panel.load_variants(cx);
+        panel
     }
 
     /// The project's app was found again, perhaps as another framework or in another folder.
     pub fn set_project(&mut self, project: MobileProject, cx: &mut Context<Self>) {
         if self.project != project {
             self.project = project;
+            self.load_variants(cx);
             cx.notify();
         }
     }
@@ -203,6 +232,7 @@ impl AndroidPanel {
             self.selected = running.or(first);
         }
         self.sync_screen(cx);
+        self.sync_log(cx);
         if !self.acceleration_checked
             && let Some(sdk) = self.sdk().cloned()
         {
@@ -220,13 +250,11 @@ impl AndroidPanel {
         cx.notify();
     }
 
-    /// Shows the screen of the device picked when it is a running emulator, and no screen
-    /// otherwise.
+    /// Shows the screen of the device picked while it runs, and no screen otherwise.
     fn sync_screen(&mut self, cx: &mut Context<Self>) {
         let key = self.selected.as_deref();
         let shown = self.devices().iter().find(|d| {
-            d.emulator
-                && d.state == android::DeviceState::Online
+            d.state == android::DeviceState::Online
                 && (Some(d.serial.as_str()) == key || d.avd.as_deref() == key)
         });
         let current = self.screen.as_ref().map(|s| s.read(cx).serial.clone());
@@ -260,6 +288,7 @@ impl AndroidPanel {
         }
         self.selected = Some(key.clone());
         self.sync_screen(cx);
+        self.sync_log(cx);
         let (server, project) = (Arc::clone(&self.server), self.project_id.clone());
         cx.background_spawn(async move {
             if let Err(e) = server.set_android_device(&project, &key) {
@@ -396,9 +425,19 @@ impl AndroidPanel {
     /// the virtual device an emulator runs.
     fn launch(&mut self, serial: String, avd: Option<String>, cx: &mut Context<Self>) {
         self.run = Run::Preparing;
+        self.stop_asked = false;
+        self.running_on = Some(serial.clone());
         let (server, project) = (Arc::clone(&self.server), self.project.clone());
-        let task = cx
-            .background_spawn(async move { server.android_run(&project, &serial, avd.as_deref()) });
+        let variant = self.variant.clone();
+        let task = cx.background_spawn(async move {
+            let target = RunTarget {
+                serial: &serial,
+                avd: avd.as_deref(),
+                variant: &variant,
+                mode: RunMode::Attached,
+            };
+            server.android_run(&project, &target)
+        });
         cx.spawn(async move |this, cx| {
             let prepared = task.await;
             this.update(cx, |this, cx| {
@@ -425,8 +464,11 @@ impl AndroidPanel {
             return;
         }
         self.run = Run::Idle;
+        self.running_on = None;
         match code {
             Some(0) => {}
+            // A run asked to stop ends as its tool ends when interrupted.
+            _ if std::mem::take(&mut self.stop_asked) => {}
             Some(code) => {
                 self.failure = Some(Error::Tool {
                     message: format!(

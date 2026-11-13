@@ -28,7 +28,7 @@ use super::types::{ScreenFrame, ScreenInput};
 use crate::{Error, Server};
 
 /// The latest frame, or why there will be no more.
-type Latest = Option<Result<Arc<ScreenFrame>, String>>;
+pub(super) type Latest = Option<Result<Arc<ScreenFrame>, String>>;
 
 /// Runs adb on the screen's device with the arguments given, for keys the emulator drops.
 type Adb = Arc<dyn Fn(&[String]) -> Result<(), Error> + Send + Sync>;
@@ -62,6 +62,19 @@ impl ScreenSender {
 }
 
 impl Screen {
+    /// A screen whose frames arrive on `frames` and whose input is read from `input`.
+    pub(super) fn new(
+        frames: watch::Receiver<Latest>,
+        input: UnboundedSender<ScreenInput>,
+        display: (u32, u32),
+    ) -> Self {
+        Self {
+            frames,
+            input: ScreenSender(input),
+            display,
+        }
+    }
+
     /// The newest frame once there is one newer than the last returned, skipping any in between.
     /// None once the screen has ended.
     pub async fn next(&mut self) -> Option<Result<Arc<ScreenFrame>, Error>> {
@@ -200,7 +213,7 @@ fn event(input: ScreenInput, lcd: (u32, u32)) -> Option<InputEvent> {
 /// The adb arguments that press a key or type text on a device whose keyboard is off: the
 /// Android key code for each key the panel sends, and the text quoted for the device's shell,
 /// where `input text` reads a space as `%s`.
-fn adb_args(input: &ScreenInput) -> Option<Vec<String>> {
+pub(super) fn adb_args(input: &ScreenInput) -> Option<Vec<String>> {
     let input_args = |rest: [String; 2]| {
         let mut args = vec!["shell".to_string(), "input".to_string()];
         args.extend(rest);
@@ -383,16 +396,18 @@ async fn stream(
 }
 
 impl Server {
-    /// The screen of the emulator `serial`, streamed until the returned [`Screen`] is dropped.
-    /// Frames start once its size is sent with [`ScreenInput::Fit`].
+    /// The screen of the device `serial`, shown until the returned [`Screen`] is dropped. An
+    /// emulator's is streamed, its frames starting once its size is sent with
+    /// [`ScreenInput::Fit`]; a phone's is a picture taken about once a second.
     ///
     /// # Errors
     ///
-    /// Returns an error when `serial` is not an emulator, or the emulator was started without
-    /// gRPC, so it has only its own window.
+    /// Returns an error when an emulator was started without gRPC, so it has only its own
+    /// window, or a phone has no SDK to reach it with.
     pub fn android_screen(&self, project: &Path, serial: &str) -> Result<Screen, Error> {
-        let console = emulator_port(serial)
-            .ok_or("A phone's screen shows on the phone. Only an emulator's shows here.")?;
+        let Some(console) = emulator_port(serial) else {
+            return Ok(super::mirror::start(self.android_sdk(project)?, serial)?);
+        };
         let endpoint = endpoint(console).ok_or(
             "This emulator was started without its screen stream, so it has only its own \
              window. Stop it and start it here to see it in this panel.",
