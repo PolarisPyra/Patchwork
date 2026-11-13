@@ -19,26 +19,26 @@ Each release adds its notes at the top; see docs/release.md.
 
 ### Fixed
 
-- A folder you named after an agent, such as Claude, counted as one of the folders made by sorting tasks by provider, so it showed the Undo button and Undo emptied it. Only folders made by sorting count now, and folders sorted before this update no longer offer Undo. The buttons on a project's row in the sidebar can now also be reached with the keyboard and read by screen readers. by [@PolarisPyra](https://github.com/PolarisPyra) in #59
-- In Antigravity, OpenCode and API chats, closing a goal's banner left a "Stop the current goal." message in the chat and counted it as a turn. That message is now hidden, as it is in Claude and Codex chats. by [@PolarisPyra](https://github.com/PolarisPyra) in #58
-- In a Go, Elixir or Makefile project with a tests folder, the checks after a reply ran pytest and marked the reply as failed. They now run the project's own test command and use pytest only when nothing else matches. by [@PolarisPyra](https://github.com/PolarisPyra) in #55
-- The menus on approval cards, the approval banner and proposed plans could not be used from the keyboard. Their items can now be reached with Tab and chosen with Enter or Space, and Escape closes the menu. by [@PolarisPyra](https://github.com/PolarisPyra) in #66
-- When reading the open chat failed, Patchwork closed it without saying why. The chat now stays open and the error goes to the log. by [@PolarisPyra](https://github.com/PolarisPyra) in #65
-- In plan mode, an API chat could still edit files if the model called an editing tool anyway. A call to a tool the turn was not given now returns an error to the model instead of running. by [@PolarisPyra](https://github.com/PolarisPyra) in #57
-- Settings → Extensions → Hooks showed an empty Folder row when no folder of your own was set, beside an Open button that opened the default folder. The row now shows the default folder's path. by [@PolarisPyra](https://github.com/PolarisPyra) in #61
-- API chats never got the tools for computer use, even with computer use turned on in Settings → Permissions. They now get them, and while computer use is off a call to them returns an error instead of acting. by [@PolarisPyra](https://github.com/PolarisPyra) in #56
-- When two parts of Patchwork asked for a provider's usage at the same moment, both called the provider, which could run into its rate limit. Patchwork now makes one call at a time, and a second request meanwhile gets the last numbers it has. by [@PolarisPyra](https://github.com/PolarisPyra) in #64
-- In OpenCode chats on SSH projects, hooks that check a tool call before it runs could not start, so the call went ahead even when the hook would have refused it. These hooks now run on the host, in the project folder. by [@PolarisPyra](https://github.com/PolarisPyra) in #54
+- A folder you named after an agent, such as Claude, counted as one of the folders made by sorting tasks by provider, so it showed the Undo button and Undo emptied it. Only folders made by sorting count now, and folders sorted before this update no longer offer Undo. The buttons on a project's row in the sidebar can now also be reached with the keyboard and read by screen readers. by [PolarisPyra in #59](https://github.com/PolarisPyra/Patchwork/pull/59)
+- In Antigravity, OpenCode and API chats, closing a goal's banner left a "Stop the current goal." message in the chat and counted it as a turn. That message is now hidden, as it is in Claude and Codex chats. by [PolarisPyra in #58](https://github.com/PolarisPyra/Patchwork/pull/58)
+- In a Go, Elixir or Makefile project with a tests folder, the checks after a reply ran pytest and marked the reply as failed. They now run the project's own test command and use pytest only when nothing else matches. by [PolarisPyra in #55](https://github.com/PolarisPyra/Patchwork/pull/55)
+- The menus on approval cards, the approval banner and proposed plans could not be used from the keyboard. Their items can now be reached with Tab and chosen with Enter or Space, and Escape closes the menu. by [PolarisPyra in #66](https://github.com/PolarisPyra/Patchwork/pull/66)
+- When reading the open chat failed, Patchwork closed it without saying why. The chat now stays open and the error goes to the log. by [PolarisPyra in #65](https://github.com/PolarisPyra/Patchwork/pull/65)
+- In plan mode, an API chat could still edit files if the model called an editing tool anyway. A call to a tool the turn was not given now returns an error to the model instead of running. by [PolarisPyra in #57](https://github.com/PolarisPyra/Patchwork/pull/57)
+- Settings → Extensions → Hooks showed an empty Folder row when no folder of your own was set, beside an Open button that opened the default folder. The row now shows the default folder's path. by [PolarisPyra in #61](https://github.com/PolarisPyra/Patchwork/pull/61)
+- API chats never got the tools for computer use, even with computer use turned on in Settings → Permissions. They now get them, and while computer use is off a call to them returns an error instead of acting. by [PolarisPyra in #56](https://github.com/PolarisPyra/Patchwork/pull/56)
+- When two parts of Patchwork asked for a provider's usage at the same moment, both called the provider, which could run into its rate limit. Patchwork now makes one call at a time, and a second request meanwhile gets the last numbers it has. by [PolarisPyra in #64](https://github.com/PolarisPyra/Patchwork/pull/64)
+- In OpenCode chats on SSH projects, hooks that check a tool call before it runs could not start, so the call went ahead even when the hook would have refused it. These hooks now run on the host, in the project folder. by [PolarisPyra in #54](https://github.com/PolarisPyra/Patchwork/pull/54)
 
 ### Removed
 
-- The onboarding steps no longer show a line of helper text beside the buttons at the bottom. by [@PolarisPyra](https://github.com/PolarisPyra) in #63
-- Settings → Shortcuts listed five shortcuts that did nothing when pressed: New task here, Jump to the composer, Toggle sidebar, Quote in reply and Remove selected. They are gone from the list. by [@PolarisPyra](https://github.com/PolarisPyra) in #62
+- The onboarding steps no longer show a line of helper text beside the buttons at the bottom. by [PolarisPyra in #63](https://github.com/PolarisPyra/Patchwork/pull/63)
+- Settings → Shortcuts listed five shortcuts that did nothing when pressed: New task here, Jump to the composer, Toggle sidebar, Quote in reply and Remove selected. They are gone from the list. by [PolarisPyra in #62](https://github.com/PolarisPyra/Patchwork/pull/62)
 
 ### Security
 
-- On SSH projects, counting a file's changed lines and creating a folder could reach outside the project folder on the host. Both now stay inside it, like every other file request. by [@PolarisPyra](https://github.com/PolarisPyra) in #53
-- Patchwork's own log file, and the log export that includes it, could hold API keys and tokens as they were written, and the chat report could include secret values from Settings → Terminal. Secrets are now replaced in both before anything is saved, and the export now writes your home folder as ~ instead of its full path. by [@PolarisPyra](https://github.com/PolarisPyra) in #52
+- On SSH projects, counting a file's changed lines and creating a folder could reach outside the project folder on the host. Both now stay inside it, like every other file request. by [PolarisPyra in #53](https://github.com/PolarisPyra/Patchwork/pull/53)
+- Patchwork's own log file, and the log export that includes it, could hold API keys and tokens as they were written, and the chat report could include secret values from Settings → Terminal. Secrets are now replaced in both before anything is saved, and the export now writes your home folder as ~ instead of its full path. by [PolarisPyra in #52](https://github.com/PolarisPyra/Patchwork/pull/52)
 
 </details>
 
