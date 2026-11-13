@@ -4,12 +4,11 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use gpui::{Entity, Window, prelude::*};
+use gpui::{Window, prelude::*};
 use patchwork_server::projects::Project;
 use patchwork_server::workspace::ProjectChanged;
 use crate::workspace::add_project::{AddProject, Closed as AddProjectClosed};
 use super::state::{View, Workspace};
-use crate::sidebar::devices::{DevicesView, OpenDevice};
 
 impl Workspace {
     /// Reads the project's branch and changed files off the main thread, and watches the project
@@ -188,26 +187,28 @@ impl Workspace {
         cx.notify();
     }
 
-    /// The Devices view, made and hooked up the first time it is shown.
-    pub fn devices_view(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Entity<DevicesView> {
-        if let Some(view) = &self.devices_view {
-            return view.clone();
+    /// The device the sidebar shows projects for: the SSH host picked, while the SSH config
+    /// still lists it, or none for this computer.
+    pub fn device(&self, cx: &gpui::App) -> Option<String> {
+        let picked = self.settings.default_machine.clone()?;
+        match self.devices_view.read(cx).devices() {
+            Some(devices) if !devices.iter().any(|(m, _)| !m.local && m.name == picked) => None,
+            _ => Some(picked),
         }
-        let view = cx.new(DevicesView::new);
-        cx.subscribe_in(&view, window, |this, _, open: &OpenDevice, window, cx| {
-            this.open_folder(window, cx);
-            if let Some(dialog) = &this.add_project {
-                let host = open.0.clone();
-                dialog.update(cx, |d, cx| d.open_machine(host, cx));
-            }
-        })
-        .detach();
-        self.devices_view = Some(view.clone());
-        view
+    }
+
+    /// Shows the projects on `host`, or on this computer when it is none, and opens Add Project
+    /// there from now on.
+    pub fn pick_device(&mut self, host: Option<String>, cx: &mut Context<Self>) {
+        if let Err(e) = self
+            .server
+            .store
+            .update_settings(|s| s.default_machine.clone_from(&host))
+        {
+            log::warn!(error:% = e; "could not record the device picked: {{error}}");
+        }
+        self.settings.default_machine = host;
+        cx.notify();
     }
 
     /// Adds the folders dropped on the sidebar as projects, off the main thread, and opens the

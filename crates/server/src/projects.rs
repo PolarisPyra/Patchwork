@@ -30,6 +30,15 @@ pub struct Folder {
     pub name: String,
 }
 
+impl Project {
+    /// Whether the project's folder is on the SSH host `host`, or on this computer when it is
+    /// none.
+    #[must_use]
+    pub fn is_on(&self, host: Option<&str>) -> bool {
+        remote::split(&self.path).map(|l| l.host) == host
+    }
+}
+
 /// `app_state` key for the projects and folders the sidebar has collapsed (JSON array).
 const COLLAPSED_KEY: &str = "collapsed_sections";
 

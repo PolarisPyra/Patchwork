@@ -9,6 +9,7 @@ use patchwork_server::threads::{MessageStatus, Role as MessageRole};
 use super::{View, Workspace, is_busy};
 use crate::ui::menu::{Dismissed, Menu, MenuItem};
 use crate::ui::theme::{ACTIVITY_BAR_W, FS_XS, RADIUS, RADIUS_SM, STATUSBAR_H, TOOLBAR_H, Theme, theme};
+use crate::sidebar::devices::kind_icon;
 use crate::ui::{agent_label, button, display_title, icon, project_tile, spinner};
 
 /// The toolbar's left padding, which lines the project tile up with the activity bar's icons.
@@ -61,6 +62,53 @@ impl Workspace {
         })
         .detach();
         self.project_menu = Some(menu);
+        cx.notify();
+    }
+
+    /// Opens the device menu above the Settings button: this computer and every SSH host, the
+    /// one whose projects the sidebar shows marked. A press on the button while it is open closes
+    /// it.
+    fn toggle_device_menu(&mut self, e: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let closing_press = matches!(e, ClickEvent::Mouse(click)
+            if self.device_menu_dismissed.take() == Some(click.down.position));
+        if closing_press || self.device_menu.take().is_some() {
+            cx.notify();
+            return;
+        }
+        let this = cx.entity().downgrade();
+        let current = self.device(cx);
+        let items: Vec<MenuItem> = self
+            .devices_view
+            .read(cx)
+            .devices()
+            .unwrap_or_default()
+            .iter()
+            .map(|(m, kind)| {
+                let host = (!m.local).then(|| m.name.clone());
+                let checked = host == current;
+                let this = this.clone();
+                let item = MenuItem::new(m.name.clone(), move |_, cx| {
+                    let host = host.clone();
+                    let _ = this.update(cx, |w, cx| w.pick_device(host, cx));
+                })
+                .radio(checked);
+                match kind {
+                    Some(kind) => item.icon(kind_icon(*kind)),
+                    None => item,
+                }
+            })
+            .collect();
+        let menu = Menu::open("Devices", items, window, cx);
+        cx.subscribe_in(&menu, window, |this, _, e: &Dismissed, window, cx| {
+            this.device_menu_dismissed = e.0;
+            this.device_menu = None;
+            window.focus(&this.focus, cx);
+            cx.notify();
+        })
+        .detach();
+        // Beside the picker, 4px right of the activity bar; the menu stays inside the window.
+        let top = window.viewport_size().height - px(STATUSBAR_H + 6. + 28. + 4. + 28.);
+        self.device_menu = Some((menu, point(px(ACTIVITY_BAR_W + 4.), top)));
         cx.notify();
     }
 
@@ -141,6 +189,18 @@ impl Workspace {
 
     pub(super) fn activity_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let t = *theme(cx);
+        let current = self.device(cx);
+        let devices = self.devices_view.read(cx).devices().unwrap_or_default();
+        let shown = devices
+            .iter()
+            .find(|(m, _)| (!m.local).then_some(m.name.as_str()) == current.as_deref());
+        let device = shown.map_or_else(
+            || current.clone().unwrap_or_else(|| "This computer".into()),
+            |(m, _)| m.name.clone(),
+        );
+        let device_icon = shown
+            .and_then(|(_, kind)| *kind)
+            .map_or("devices", kind_icon);
         let entry =
             |view: View, label: &'static str, name: &'static str, cx: &mut Context<Self>| {
                 let active = self.view == Some(view);
@@ -198,12 +258,18 @@ impl Workspace {
             .bg(t.bg_app)
             .py(px(6.))
             .child(entry(View::Tasks, "Tasks", "chats", cx))
-            .child(entry(View::Devices, "Devices", "devices", cx))
             .child(entry(View::Changes, "Source Control", "git-diff", cx))
             .child(entry(View::Archived, "Archived", "archive", cx))
+            .child(entry(View::Devices, "Devices", "devices", cx))
+            .child(
+                activity_button(SharedId("Device"), format!("Device: {device}"), &t, false)
+                    .mt_auto()
+                    .aria_expanded(self.device_menu.is_some())
+                    .child(icon(device_icon, 20.))
+                    .on_click(cx.listener(Self::toggle_device_menu)),
+            )
             .child(
                 activity_button(SharedId("Settings"), "Settings".into(), &t, false)
-                    .mt_auto()
                     .child(icon("gear-six", 20.))
                     .on_click(
                         cx.listener(|this, _, window, cx| this.open_settings(None, window, cx)),
