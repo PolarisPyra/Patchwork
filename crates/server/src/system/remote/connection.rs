@@ -24,6 +24,10 @@ static MASTERS: Mutex<Option<HashMap<String, Master>>> = Mutex::new(None);
 /// Serializes starting masters, so two commands for a new host don't each log in.
 static STARTING: Mutex<()> = Mutex::new(());
 
+/// The hosts that could not be reached lately, with when and why. Until [`RECHECK`] passes,
+/// commands for one fail with that reason at once instead of each waiting out a login.
+static UNREACHABLE: Mutex<Option<HashMap<String, (Instant, String)>>> = Mutex::new(None);
+
 #[derive(Clone, Copy)]
 struct Master {
     checked: Instant,
@@ -115,14 +119,29 @@ fn ensure(host: &str) -> Result<(), Error> {
     {
         return Ok(());
     }
+    recent_failure(host)?;
     let _starting = STARTING.lock().unwrap_or_else(PoisonError::into_inner);
+    // Another command may have tried this host while this one waited.
+    recent_failure(host)?;
     let mut tunnel = known.is_some_and(|m| m.tunnel);
     if control(host, "check") {
         if relay && !tunnel {
             tunnel = forward(host);
         }
     } else {
-        tunnel = start(host)?;
+        tunnel = start(host).inspect_err(|e| {
+            let mut guard = UNREACHABLE.lock().unwrap_or_else(PoisonError::into_inner);
+            guard
+                .get_or_insert_with(HashMap::new)
+                .insert(host.to_string(), (Instant::now(), e.to_string()));
+        })?;
+    }
+    if let Some(failed) = UNREACHABLE
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_mut()
+    {
+        failed.remove(host);
     }
     masters(|m| {
         m.insert(
@@ -134,6 +153,15 @@ fn ensure(host: &str) -> Result<(), Error> {
         )
     });
     Ok(())
+}
+
+/// The reason `host` could not be reached, when that was less than [`RECHECK`] ago.
+fn recent_failure(host: &str) -> Result<(), Error> {
+    let guard = UNREACHABLE.lock().unwrap_or_else(PoisonError::into_inner);
+    match guard.as_ref().and_then(|m| m.get(host)) {
+        Some((when, reason)) if when.elapsed() < RECHECK => Err(reason.clone().into()),
+        _ => Ok(()),
+    }
 }
 
 fn masters<T>(f: impl FnOnce(&mut HashMap<String, Master>) -> T) -> T {
@@ -186,7 +214,7 @@ fn start(host: &str) -> Result<bool, Error> {
         .args(["-o", "ControlMaster=yes", "-o", PERSIST])
         .args([
             "-o",
-            "ServerAliveInterval=30",
+            "ServerAliveInterval=10",
             "-o",
             "ExitOnForwardFailure=no",
         ]);
