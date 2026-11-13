@@ -96,6 +96,16 @@ impl Server {
     /// earlier run left unfinished fails.
     pub fn open(dirs: &system::Dirs, data_dir: &Path, sink: EventSink) -> Result<Arc<Self>, Error> {
         system::dirs::init(dirs.clone());
+        // A debug build's folders start as a copy of the released app's, on its first launch.
+        let mut not_copied = Vec::new();
+        if let Some(released) = &dirs.released {
+            if let Err(e) = dirs.copy_config_from(released) {
+                not_copied.push(format!("config: {e}"));
+            }
+            if let Err(e) = Store::copy(&released.data, &dirs.data) {
+                not_copied.push(format!("database: {e}"));
+            }
+        }
         crate::provider::api::config::init(&dirs.config);
         provider::mcp::init(&dirs.config);
         skills::init(&dirs.config);
@@ -111,6 +121,9 @@ impl Server {
         let store = Store::open(&dirs.data)?;
         logging::start(&logs, &store.settings().logging);
         logging::system::record(&logs);
+        for what in not_copied {
+            log::warn!(what:% = what; "could not copy the released app's data: {{what}}");
+        }
         // Beside a running Patchwork, what looks left behind is that one's live work.
         if store.owns_data() {
             orchestration::turn::recovery::recover(&store)?;

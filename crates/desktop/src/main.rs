@@ -65,6 +65,13 @@ actions!(
 /// How often a scheduled task is looked for. A tick that finds nothing to start does no work.
 const SCHEDULED_TICK: Duration = Duration::from_secs(30);
 
+/// The window's title, marked on debug builds so they are not mistaken for the installed app.
+pub const APP_TITLE: &str = if cfg!(debug_assertions) {
+    "Patchwork (dev)"
+} else {
+    "Patchwork"
+};
+
 /// Writes the app's messages to `main.log` in this launch's log folder, as the desktop app does.
 struct FileLog(Mutex<File>);
 
@@ -251,7 +258,12 @@ fn main() {
     let (events, mut received) = mpsc::unbounded();
     let server = match Server::open(
         &dirs,
-        &data.join("dev.patchwork.ade"),
+        // A debug build keeps its chat folders apart from the released app's, as it does its data.
+        &data.join(if cfg!(debug_assertions) {
+            "dev.patchwork.ade-dev"
+        } else {
+            "dev.patchwork.ade"
+        }),
         Box::new(move |event| {
             let _ = events.unbounded_send(event);
         }),
@@ -306,7 +318,7 @@ fn main() {
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
                     titlebar: Some(TitlebarOptions {
-                        title: Some("Patchwork".into()),
+                        title: Some(APP_TITLE.into()),
                         ..Default::default()
                     }),
                     app_id: Some("patchwork".into()),
