@@ -92,6 +92,117 @@ fn is_setting(word: &str) -> bool {
                 .all(|c| c.is_ascii_hexdigit() || matches!(c, '.' | ',' | '-' | ':' | 'x')))
 }
 
+/// The flags of a wrapper that are followed by a value of their own, which is then not the command
+/// it runs: `sudo -u bob rm`, `env -u HOME rm`, `timeout -s KILL 5 rm`, `xargs -I {} rm {}`.
+const VALUE_FLAGS: [(&str, &[&str]); 8] = [
+    (
+        "sudo",
+        &[
+            "-u",
+            "-g",
+            "-h",
+            "-p",
+            "-C",
+            "-D",
+            "-R",
+            "-T",
+            "-U",
+            "-r",
+            "-t",
+            "--user",
+            "--group",
+            "--host",
+            "--prompt",
+            "--chdir",
+            "--chroot",
+            "--role",
+            "--type",
+            "--other-user",
+            "--close-from",
+            "--command-timeout",
+        ],
+    ),
+    ("doas", &["-u", "-C"]),
+    ("env", &["-u", "-C", "--unset", "--chdir"]),
+    ("timeout", &["-s", "-k", "--signal", "--kill-after"]),
+    (
+        "xargs",
+        &[
+            "-I",
+            "-d",
+            "-a",
+            "-E",
+            "-n",
+            "-P",
+            "-L",
+            "-s",
+            "--delimiter",
+            "--arg-file",
+            "--max-args",
+            "--max-procs",
+            "--max-lines",
+            "--max-chars",
+        ],
+    ),
+    ("stdbuf", &["-i", "-o", "-e"]),
+    ("exec", &["-a"]),
+    ("flock", &["-w", "-E", "--timeout", "--conflict-exit-code"]),
+];
+
+/// How many of the words after the wrapper `program` are its own settings and their values.
+fn own_words(program: &str, rest: &[String]) -> usize {
+    let valued = VALUE_FLAGS
+        .iter()
+        .find(|(wrapper, _)| *wrapper == program)
+        .map_or(&[][..], |(_, flags)| *flags);
+    let takes_value = |word: &str| {
+        valued.contains(&word)
+            // Short flags written together, the last of which takes the value: `sudo -Eu bob`.
+            || (word.len() > 2
+                && !word.starts_with("--")
+                && valued.iter().any(|flag| {
+                    flag.len() == 2 && word.ends_with(flag.trim_start_matches('-'))
+                }))
+    };
+    let mut own = 0;
+    while let Some(word) = rest.get(own).filter(|word| is_setting(word)) {
+        own += 1;
+        if takes_value(word) && own < rest.len() {
+            own += 1;
+        }
+    }
+    own
+}
+
+/// The options git takes before its subcommand that are followed by a value of their own.
+const GIT_VALUE_OPTIONS: [&str; 7] = [
+    "-C",
+    "-c",
+    "--git-dir",
+    "--work-tree",
+    "--namespace",
+    "--config-env",
+    "--super-prefix",
+];
+
+/// `git` and its subcommand without the options written between them, so a rule for `git push`
+/// covers `git -C . push`. None when there are no such options.
+fn git_without_options(words: &[String]) -> Option<Vec<String>> {
+    let mut at = 1;
+    while let Some(word) = words.get(at).filter(|word| word.starts_with('-')) {
+        at += if GIT_VALUE_OPTIONS.contains(&word.as_str()) {
+            2
+        } else {
+            1
+        };
+    }
+    (at > 1 && at < words.len()).then(|| {
+        let mut plain = vec![words[0].clone()];
+        plain.extend_from_slice(&words[at..]);
+        plain
+    })
+}
+
 /// Whether a program is written so that it could be any program: with a pattern the shell fills
 /// in, or a variable. A rule that refuses or asks covers it, as it cannot be told it is not
 /// the rule's command.
@@ -288,7 +399,10 @@ fn add_command(words: &[String], out: &mut Vec<Vec<String>>) -> bool {
         return safe;
     };
     let program = program.rsplit('/').next().unwrap_or_default();
-    if matches!(program, "sh" | "bash" | "zsh" | "dash") {
+    if matches!(
+        program,
+        "sh" | "bash" | "zsh" | "dash" | "ksh" | "mksh" | "ash" | "fish"
+    ) {
         // `-c`, and the forms that carry other flags with it: `-lc`, `-ec`.
         let flag = words[1..]
             .iter()
@@ -307,12 +421,17 @@ fn add_command(words: &[String], out: &mut Vec<Vec<String>>) -> bool {
     out.push(words.to_vec());
     if WRAPPERS.contains(&program) {
         // Past the wrapper's own flags and their values: `nice -n 5 rm`, `timeout 5s rm`.
-        let mut own = words[1..].iter().take_while(|w| is_setting(w)).count();
+        let mut own = own_words(program, &words[1..]);
         // `flock` names the file it locks before the command.
         if program == "flock" && own + 1 < words.len() {
             own += 1;
         }
         safe &= add_command(&words[1 + own..], out);
+    }
+    if program == "git"
+        && let Some(plain) = git_without_options(words)
+    {
+        out.push(plain);
     }
     // `find … -exec rm {} ;` runs the command it names for each file it finds.
     if program == "find" {
@@ -333,7 +452,7 @@ fn add_command(words: &[String], out: &mut Vec<Vec<String>>) -> bool {
 /// The flags that hand each interpreter its code on the command line, by the interpreter's name
 /// without a version: `python3.12 -c`, `node --eval`. The shells are here with none: `sh -c` is
 /// read as the commands it runs, and what is left is a shell fed its script on its input.
-const INTERPRETERS: [(&str, &[&str]); 17] = [
+const INTERPRETERS: [(&str, &[&str]); 22] = [
     ("python", &["-c"]),
     ("pypy", &["-c"]),
     ("perl", &["-e", "-E"]),
@@ -354,6 +473,11 @@ const INTERPRETERS: [(&str, &[&str]); 17] = [
     ("sh", &[]),
     ("bash", &[]),
     ("zsh", &[]),
+    ("dash", &[]),
+    ("ksh", &[]),
+    ("mksh", &[]),
+    ("ash", &[]),
+    ("fish", &[]),
 ];
 
 /// The code a command hands an interpreter, which runs it in place of a program a rule could

@@ -239,15 +239,18 @@ fn answer(
     }
 
     // A file a command writes by redirection is an edit: a rule that refuses the edit refuses the
-    // command, and allow rules answer for the command only where the edit is allowed.
-    if allowable && !writes.is_empty() {
+    // command, and allow rules answer for the command only where the edit is allowed. The edit's
+    // deny and ask rules hold whatever else the command does: a subshell or a substitution beside
+    // the redirect does not make the file any less written.
+    if !writes.is_empty() {
         let edit = Target::new(PermissionKind::Edit, writes);
         match answer(settings, project, root, &edit, skills) {
             Answer::Given(decision) if decision.allow => {}
             Answer::Given(decision) if decision.rule.rule_id.is_some() => {
                 return Answer::Given(decision);
             }
-            Answer::Given(_) | Answer::AskRule | Answer::Open => allowable = false,
+            Answer::AskRule => return Answer::AskRule,
+            Answer::Given(_) | Answer::Open => allowable = false,
         }
     }
 
