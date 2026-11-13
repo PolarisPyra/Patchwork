@@ -8,10 +8,9 @@ use gpui::{
     div, prelude::*, px,
 };
 use patchwork_server::threads::{ApprovalStatus, Thread};
-use crate::ui::theme::{RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_SM, RADIUS_SM, Theme, theme};
 use crate::ui::{agent_label, agent_logo, button, display_title, format_relative, icon, spinner};
 use crate::workspace::{Workspace, is_busy};
-use super::render::FS_XS;
 
 /// The scrollbar's gutter at the tree's right edge, which its thumb sits in.
 pub(super) const TREE_GUTTER: f32 = 10.;
@@ -30,7 +29,7 @@ pub(super) fn indent_guide(left: f32) -> Div {
         .bg(gpui::rgba(0x5858_5866))
 }
 
-/// A project or folder row, which notes when the pointer is over it so it can show its buttons.
+/// A project or folder row.
 pub(super) fn tree_row(
     id: SharedString,
     name: String,
@@ -38,24 +37,14 @@ pub(super) fn tree_row(
     open: bool,
     picked: bool,
     t: &Theme,
-    cx: &mut Context<Workspace>,
 ) -> Stateful<Div> {
     let (fill, hover) = if picked {
         (t.bg_accent_soft, t.tree_selected)
     } else {
         (gpui::transparent_black(), t.tree_hover)
     };
-    let row = id.clone();
     div()
         .id(id)
-        .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
-            if *hovered {
-                this.hovered_row = Some(row.clone());
-            } else if this.hovered_row.as_ref() == Some(&row) {
-                this.hovered_row = None;
-            }
-            cx.notify();
-        }))
         .role(Role::TreeItem)
         .aria_level(level)
         .aria_label(name)
@@ -146,7 +135,7 @@ pub(super) fn thread_row(
         let at = last.map_or(th.created_at, |m| m.created_at);
         let color: Hsla = if picked { t.text_muted } else { t.text_subtle };
         div()
-            .text_size(px(FS_XS))
+            .text_size(px(FS_SM))
             .text_color(color)
             .child(format_relative(at))
             .into_any_element()

@@ -11,24 +11,19 @@ use patchwork_server::workspace::FileChange;
 
 use crate::sidebar::graph;
 use crate::ui::menu::Menu;
-use crate::ui::theme::{RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_MD, FS_SM, RADIUS_SM, Theme, theme};
 use crate::ui::{button, icon, list_scrollbar, scrollbar, tooltip};
 use super::list::{Entry, Group};
 use super::rows::reply_files;
-use super::state::{ChangesView, FS_SM, FS_XS, PANE_MIN};
+use super::state::{ChangesView, PANE_MIN};
 
 impl ChangesView {
     /// A collapsible part of the view: its header, and its body when open.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "each argument is a separate piece of what it draws"
-    )]
     fn pane(
         &self,
         title: &'static str,
         open: bool,
         height: Option<f32>,
-        actions: Option<AnyElement>,
         body: AnyElement,
         t: &Theme,
         cx: &mut Context<Self>,
@@ -60,7 +55,7 @@ impl ChangesView {
                             .min_w_0()
                             .gap(px(4.))
                             .px(px(4.))
-                            .text_size(px(FS_XS))
+                            .text_size(px(FS_SM))
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(t.text)
                             .aria_expanded(open)
@@ -74,8 +69,7 @@ impl ChangesView {
                                 }
                                 cx.notify();
                             })),
-                    )
-                    .children(actions.filter(|_| open)),
+                    ),
             )
             .when(open, |d| d.child(body))
     }
@@ -254,7 +248,7 @@ impl Render for ChangesView {
                     .items_center()
                     .justify_between()
                     .px(px(12.))
-                    .text_size(px(FS_SM))
+                    .text_size(px(FS_MD))
                     .font_weight(FontWeight::SEMIBOLD)
                     .child("Source Control")
                     .child(
@@ -296,25 +290,9 @@ impl Render for ChangesView {
                             }
                         }),
                     )
-                    .child(self.pane(
-                        "Changes",
-                        self.changes_open,
-                        None,
-                        None,
-                        changes_body,
-                        &t,
-                        cx,
-                    ))
+                    .child(self.pane("Changes", self.changes_open, None, changes_body, &t, cx))
                     .children(divider)
-                    .child(self.pane(
-                        "Graph",
-                        self.graph_open,
-                        graph_height,
-                        None,
-                        graph_body,
-                        &t,
-                        cx,
-                    )),
+                    .child(self.pane("Graph", self.graph_open, graph_height, graph_body, &t, cx)),
             )
             .children(menu)
             .into_any_element()

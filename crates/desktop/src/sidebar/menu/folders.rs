@@ -6,6 +6,7 @@ use super::types::SortUndo;
 use super::types::Target;
 use std::sync::Arc;
 use gpui::{Window, prelude::*};
+use patchwork_server::provider::AgentKind;
 use patchwork_server::threads::Thread;
 use crate::ui::{AGENT_KINDS, agent_label};
 use crate::workspace::Workspace;
@@ -49,7 +50,7 @@ impl Workspace {
             .collect();
         // Which tasks go to which folder, by its id or by the name of one still to be made. It is
         // worked out here, and the moves are made off the UI thread.
-        let mut moves: Vec<(Vec<String>, Result<String, &'static str>)> = Vec::new();
+        let mut moves: Vec<(Vec<String>, Result<String, AgentKind>)> = Vec::new();
         for agent in AGENT_KINDS {
             let ids: Vec<String> = tasks
                 .iter()
@@ -59,13 +60,12 @@ impl Workspace {
             if ids.is_empty() {
                 continue;
             }
-            let name = agent_label(agent);
             let folder = self
                 .folders
                 .iter()
-                .find(|f| f.project_id == project_id && f.name == name)
+                .find(|f| f.project_id == project_id && f.sorted_by == Some(agent))
                 .map(|f| f.id.clone())
-                .ok_or(name);
+                .ok_or(agent);
             moves.push((ids, folder));
         }
         let project = project_id.to_string();
@@ -75,7 +75,9 @@ impl Workspace {
             for (ids, folder) in moves {
                 let sorted = match folder {
                     Ok(id) => Ok(id),
-                    Err(name) => server.create_folder(&project, name).map(|f| f.id),
+                    Err(agent) => server
+                        .create_sort_folder(&project, agent_label(agent), agent)
+                        .map(|f| f.id),
                 }
                 .and_then(|folder| server.reorder_threads(&ids, Some(&folder)));
                 if let Err(e) = sorted {
@@ -106,7 +108,7 @@ impl Workspace {
         let agent_folders: Vec<String> = self
             .folders
             .iter()
-            .filter(|f| f.project_id == project_id && is_agent_folder(&f.name))
+            .filter(|f| f.project_id == project_id && f.sorted_by.is_some())
             .map(|f| f.id.clone())
             .collect();
         let before = self.sort_undo.remove(project_id).unwrap_or_default();
@@ -168,9 +170,4 @@ impl Workspace {
         };
         self.change("undo the sort", undo, cx);
     }
-}
-
-/// A folder sorting by provider made, and undoing it removes.
-pub fn is_agent_folder(name: &str) -> bool {
-    AGENT_KINDS.iter().any(|&kind| agent_label(kind) == name)
 }

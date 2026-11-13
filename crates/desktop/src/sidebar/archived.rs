@@ -11,9 +11,9 @@ use gpui::{
 use patchwork_server::threads::Thread;
 
 use super::menu::Target;
-use super::{FS_SM, FS_XS, empty_row, twistie};
+use super::{empty_row, twistie};
 use super::tree::{indent_guide, tree_row};
-use crate::ui::theme::{RADIUS_SM, theme};
+use crate::ui::theme::{FS_MD, FS_SM, RADIUS_SM, theme};
 use crate::ui::{agent_label, agent_logo, button, display_title, icon, scrollbar};
 use crate::workspace::Workspace;
 
@@ -42,7 +42,7 @@ pub fn archived_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl Int
         .justify_between()
         .pl(px(12.))
         .pr(px(18.))
-        .text_size(px(FS_SM))
+        .text_size(px(FS_MD))
         .font_weight(FontWeight::SEMIBOLD)
         .child("Archived")
         .when(!archived.is_empty(), |s| {
@@ -50,7 +50,7 @@ pub fn archived_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl Int
                 button("archived-collapse-all", "Collapse all")
                     .gap(px(4.))
                     .font_weight(FontWeight::NORMAL)
-                    .text_size(px(FS_XS))
+                    .text_size(px(FS_SM))
                     .text_color(muted)
                     .hover(move |s| s.text_color(fg))
                     .child(icon("arrows-in-line-vertical", 15.))
@@ -202,12 +202,11 @@ fn group(
         open,
         false,
         &t,
-        cx,
     )
     .pl(px(if folder { 12. } else { 4. }))
     .child(twistie(open))
     .child(if folder {
-        label.text_size(px(FS_SM))
+        label.text_size(px(FS_MD))
     } else {
         label.font_weight(FontWeight::MEDIUM)
     })

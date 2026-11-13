@@ -11,8 +11,8 @@ use gpui::{AnyElement, SharedString, Window, div, prelude::*, px};
 use patchwork_server::workspace::FileChange;
 
 use super::rows::{group_button, group_header, row_action};
-use super::state::{ChangesView, FS_SM, FS_XS};
-use crate::ui::theme::{RADIUS_SM, theme};
+use super::state::ChangesView;
+use crate::ui::theme::{FS_MD, FS_SM, RADIUS_SM, theme};
 use crate::ui::{base_name, button, icon, spinner, tooltip};
 
 /// A group of changes, which decides the buttons on its header.
@@ -213,7 +213,7 @@ impl ChangesView {
         .rounded(px(RADIUS_SM))
         .pr(px(6.))
         .pl(px(20.))
-        .text_size(px(FS_SM))
+        .text_size(px(FS_MD))
         .text_color(t.text_muted)
         .hover(move |s| s.bg(hover))
         .tooltip(tooltip(path.to_string()))
@@ -228,7 +228,7 @@ impl ChangesView {
         .child(
             div()
                 .flex_none()
-                .text_size(px(FS_XS))
+                .text_size(px(FS_SM))
                 .text_color(t.text_subtle)
                 .child(if missing { "Deleted" } else { "No changes" }),
         )

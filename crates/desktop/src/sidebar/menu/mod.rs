@@ -10,4 +10,3 @@ mod folders;
 mod view;
 
 pub use types::{Target, ContextMenu, Renaming, SortUndo};
-pub use folders::{is_agent_folder};

@@ -415,10 +415,15 @@ impl Store {
         inner
             .conn
             .execute(
-                "INSERT INTO folders (id, project_id, name, position)
-                 VALUES (?1, ?2, ?3,
+                "INSERT INTO folders (id, project_id, name, sorted_by, position)
+                 VALUES (?1, ?2, ?3, ?4,
                          (SELECT COALESCE(MAX(position), -1) + 1 FROM folders WHERE project_id = ?2))",
-                params![folder.id, folder.project_id, folder.name],
+                params![
+                    folder.id,
+                    folder.project_id,
+                    folder.name,
+                    folder.sorted_by.as_ref().map(enc)
+                ],
             )
             .map_err(err)?;
         inner.folders.push(folder);

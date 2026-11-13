@@ -6,10 +6,10 @@ use gpui::{ClickEvent, Div, Focusable, Role, SharedString, Stateful, Window, div
 use patchwork_server::workspace::PullRequest;
 
 use crate::ui::menu::MenuItem;
-use crate::ui::theme::{RADIUS_SM, Theme};
+use crate::ui::theme::{FS_MD, FS_SM, RADIUS_SM, Theme};
 use crate::ui::{button, icon, spinner, tooltip};
 use super::rows::group_button;
-use super::state::{ChangesView, FS_SM, FS_XS, GitAction, git_actions};
+use super::state::{ChangesView, GitAction, git_actions};
 
 impl ChangesView {
     /// The commit message box and the Commit button with its menu (`CommitBox`).
@@ -70,7 +70,7 @@ impl ChangesView {
                             .py(px(4.))
                             .pl(px(8.))
                             .pr(px(28.))
-                            .text_size(px(FS_SM))
+                            .text_size(px(FS_MD))
                             .line_height(px(18.))
                             .child(self.message.clone()),
                     )
@@ -112,7 +112,7 @@ impl ChangesView {
                         .rounded_l(px(RADIUS_SM))
                         .bg(t.accent)
                         .px(px(8.))
-                        .text_size(px(FS_SM))
+                        .text_size(px(FS_MD))
                         .text_color(t.text_on_accent)
                         .when(primary_enabled, |b| b.hover(move |s| s.bg(accent_hover)))
                         .when(!primary_enabled, |b| b.opacity(0.5).cursor_default())
@@ -182,7 +182,7 @@ impl ChangesView {
                         .items_center()
                         .gap(px(6.))
                         .px(px(2.))
-                        .text_size(px(FS_XS))
+                        .text_size(px(FS_SM))
                         .text_color(t.text_muted)
                         .child(div().min_w_0().truncate().child(text))
                         .when_some(pr, |d, pr| {
@@ -197,7 +197,7 @@ impl ChangesView {
                         }),
                 )
             })
-            .when_some(self.error.clone(), |d, e| d.child(alert(e, FS_XS, t)))
+            .when_some(self.error.clone(), |d, e| d.child(alert(e, FS_SM, t)))
     }
 
     /// The branch's open pull request: its checks, its comments, and sending them to the agent.
@@ -242,7 +242,7 @@ impl ChangesView {
                     .flex()
                     .items_center()
                     .gap(px(6.))
-                    .text_size(px(FS_XS))
+                    .text_size(px(FS_SM))
                     .text_color(t.text_muted)
                     .child(
                         button("pr-link", format!("Pull request #{number}"))
@@ -295,7 +295,7 @@ impl ChangesView {
                         )
                     }),
             )
-            .when_some(self.pr_error.clone(), |d, e| d.child(alert(e, FS_XS, t)))
+            .when_some(self.pr_error.clone(), |d, e| d.child(alert(e, FS_SM, t)))
     }
 }
 
