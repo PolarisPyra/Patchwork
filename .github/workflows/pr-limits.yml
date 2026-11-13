@@ -69,24 +69,22 @@ jobs:
             const REBASE_LABEL = "needs-rebase";
             const CLOSING_LABEL = "triage:closing";
             const KEEP_OPEN_LABEL = "triage:keep-open";
-            const UNVOUCHED_LABEL = "vouch:unvouched";
             const WRITE_PERMISSIONS = new Set(["admin", "maintain", "write"]);
             const EXEMPTIONS_PATH = ".github/TRIAGE_EXEMPTIONS.td";
-            const VOUCHED_PATH = ".github/VOUCHED.td";
             const LOGIN_PATTERN = /^github:([A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38})$/;
 
-            // `labels` matches a PR that carries any one of them.
+            // Every open PR: the conflict window applies to everyone outside the team.
             const SWEEP_QUERY = `
-              query ($owner: String!, $repo: String!, $labels: [String!], $cursor: String) {
+              query ($owner: String!, $repo: String!, $cursor: String) {
                 repository(owner: $owner, name: $repo) {
-                  pullRequests(states: OPEN, labels: $labels, first: 50, after: $cursor) {
+                  pullRequests(states: OPEN, first: 50, after: $cursor) {
                     pageInfo { hasNextPage endCursor }
                     nodes {
                       number
                       mergeable
                       baseRefName
                       updatedAt
-                      author { login }
+                      author { __typename login }
                       labels(first: 100) { nodes { name } }
                       timelineItems(itemTypes: [LABELED_EVENT], last: 20) {
                         nodes { ... on LabeledEvent { createdAt label { name } } }
@@ -147,17 +145,6 @@ jobs:
               return logins;
             }
 
-            // VOUCHED.td: one `github:login` per line, `#` comments, and `-github:login reason` to denounce.
-            function vouchedLogins(text) {
-              const logins = new Set();
-              for (const raw of text.split("\n")) {
-                const entry = raw.trim().split(/\s+/)[0];
-                if (entry.startsWith("github:")) logins.add(entry.slice("github:".length).toLowerCase());
-              }
-              if (logins.size === 0) throw new Error(`${VOUCHED_PATH}: no entries`);
-              return logins;
-            }
-
             function labeledAt(pr, name) {
               const last = pr.timelineItems.nodes.filter((event) => event.label?.name === name).at(-1);
               return last ? Date.parse(last.createdAt) : undefined;
@@ -179,7 +166,7 @@ jobs:
               }
 
               const exempt = exemptions.has((pr.author?.login ?? "").toLowerCase());
-              const subject = labels.has(UNVOUCHED_LABEL) && !exempt;
+              const subject = !exempt && pr.author?.__typename !== "Bot";
               if (labels.has(REBASE_LABEL)) {
                 if (!subject || pr.mergeable === "MERGEABLE") return "clear-rebase";
                 // Activity restarts the seven days and keeps the label, so a PR is asked to rebase once.
@@ -217,7 +204,6 @@ jobs:
                     await read(github, SWEEP_QUERY, {
                       ...repo,
                       cursor,
-                      labels: [UNVOUCHED_LABEL, REBASE_LABEL, CLOSING_LABEL],
                     })
                   ).repository.pullRequests;
                   prs.push(...page.nodes);
@@ -322,11 +308,9 @@ jobs:
             async function enforceOpenLimit({ github, context, core, dryRun }) {
               const pr = context.payload.pull_request;
               const author = pr.user.login;
-              // Who is trusted is decided here rather than by the vouch action, which reports its own failed
-              // lookups as "not vouched". Every read below throws on failure, and a throw closes nothing.
+              // Every read below throws on failure, and a throw closes nothing.
               if (pr.user.type === "Bot") return;
               if (parseExemptions(fs.readFileSync(EXEMPTIONS_PATH, "utf8")).has(author.toLowerCase())) return;
-              if (vouchedLogins(fs.readFileSync(VOUCHED_PATH, "utf8")).has(author.toLowerCase())) return;
               const { data: access } = await github.rest.repos.getCollaboratorPermissionLevel({
                 ...context.repo,
                 username: author,
@@ -357,7 +341,7 @@ jobs:
                 context,
                 pr.number,
                 [
-                  `Closing: ${author} already has ${OPEN_LIMIT} or more open PRs here, which is the limit for contributors who are not vouched.`,
+                  `Closing: ${author} already has ${OPEN_LIMIT} or more open PRs here, which is the limit for contributors outside the team.`,
                   "",
                   `Once one of them is merged or closed, open this again. See the [open PR limit](${guideLink(context, "open-pr-limit")}).`,
                 ].join("\n"),

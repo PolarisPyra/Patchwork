@@ -84,9 +84,6 @@ again.
 A PR that conflicts with its base branch gets a `needs-rebase` label. If it still conflicts after 7
 days with no activity, it is closed.
 
-Vouched contributors in [.github/VOUCHED.td](.github/VOUCHED.td) are exempt from this rule and from
-the open PR limit.
-
 ## Bans
 
 - If we decide that you spam us with automation, you will be banned.
