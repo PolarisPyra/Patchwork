@@ -38,7 +38,7 @@ impl Workspace {
         self.folder_check = Some((path.clone(), None));
         let task = cx.background_spawn({
             let path = path.clone();
-            async move { std::path::Path::new(&path).is_dir() }
+            async move { patchwork_server::projects::folder_found(&path) }
         });
         cx.spawn(async move |this, cx| {
             let mut found = task.await;
@@ -48,20 +48,23 @@ impl Workspace {
                     let Some((_, seen)) = check else {
                         return false;
                     };
-                    if *seen != Some(found) {
-                        *seen = Some(found);
+                    if *seen != found {
+                        *seen = found;
                         cx.notify();
                     }
                     true
                 });
-                // Ends once the folder is there, or the project is no longer the open one.
-                if found || !watched.unwrap_or(false) {
+                // Ends once the folder is there, its host cannot be asked, or the project is no longer
+                // the open one.
+                if found != Some(false) || !watched.unwrap_or(false) {
                     return;
                 }
                 cx.background_executor().timer(RECHECK).await;
                 let path = path.clone();
                 found = cx
-                    .background_spawn(async move { std::path::Path::new(&path).is_dir() })
+                    .background_spawn(
+                        async move { patchwork_server::projects::folder_found(&path) },
+                    )
                     .await;
             }
         })

@@ -21,6 +21,29 @@ pub struct Project {
     pub path: String,
 }
 
+impl Project {
+    /// The SSH host the project is on, by its `Host` alias; none for this computer.
+    #[must_use]
+    pub fn host(&self) -> Option<&str> {
+        remote::split(&self.path).map(|l| l.host)
+    }
+}
+
+/// Whether the project folder at `root` is there, on this computer or on its SSH host.
+///
+/// This blocks on the host for a remote root. It is `None` when the host cannot be reached
+/// to ask, so an offline host does not read as a deleted folder.
+#[must_use]
+pub fn folder_found(root: &str) -> Option<bool> {
+    let Some(at) = remote::split(root) else {
+        return Some(Path::new(root).is_dir());
+    };
+    if remote::fs::canonical_dir(at.host, at.path).is_ok() {
+        return Some(true);
+    }
+    remote::home(at.host).ok().map(|_| false)
+}
+
 /// A folder inside a project. Its threads are those whose `folder_id` names it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
