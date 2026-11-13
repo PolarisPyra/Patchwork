@@ -137,7 +137,9 @@ impl Render for Composer {
                     .hover(move |s| s.bg(hover).text_color(fg))
                     .child(icon("x", 10.))
                     .on_click(cx.listener(move |this, _, window, cx| {
-                        this.attachments.remove(i);
+                        if i < this.attachments.len() {
+                            this.attachments.remove(i);
+                        }
                         // The button pressed is gone; the keyboard carries on in the editor.
                         window.focus(&this.editor.focus_handle(cx), cx);
                         cx.notify();

@@ -287,6 +287,7 @@ fn subagent_row(
         .text_color(t.danger)
         .opacity(0.)
         .group_hover(group.clone(), |s| s.opacity(1.))
+        .focus(|s| s.opacity(1.))
         .hover(move |s| s.bg(hover))
         .child(icon("square-fill", 10.))
         .on_click(cx.listener(move |w, _, _, cx| w.stop_subagent(&id, cx)))

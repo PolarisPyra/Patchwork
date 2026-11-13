@@ -380,6 +380,7 @@ pub fn user_message(
         action(format!("restore-{}", m.id), "Restore".into())
             .opacity(0.)
             .group_hover(group.clone(), |s| s.opacity(1.))
+            .focus(|s| s.opacity(1.))
             .tooltip(tooltip(
                 "Put the project's files back as they were before this message",
             ))

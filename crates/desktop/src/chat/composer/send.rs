@@ -232,10 +232,12 @@ impl Composer {
         .detach();
     }
 
-    /// Attaches the pictures and files on the clipboard. False when it holds only text, which
-    /// is the editor's to paste.
+    /// Attaches the pictures and files on the clipboard. False when it holds text, which is the
+    /// editor's to paste.
     pub(super) fn paste_attachments(&mut self, cx: &mut Context<Self>) -> bool {
         let (mut paths, mut pictures) = (Vec::new(), Vec::new());
+        // Text copied along with a picture is still pasted as text.
+        let mut written = false;
         for entry in cx
             .read_from_clipboard()
             .iter()
@@ -247,9 +249,7 @@ impl Composer {
                 // A file copied in a file manager comes as its address.
                 ClipboardEntry::String(text) => {
                     let copied = copied_files(text.text());
-                    if copied.is_empty() && !text.text().trim().is_empty() {
-                        return false;
-                    }
+                    written |= copied.is_empty() && !text.text().trim().is_empty();
                     paths.extend(copied);
                 }
             }
@@ -271,7 +271,7 @@ impl Composer {
             },
             cx,
         );
-        true
+        !written
     }
 }
 

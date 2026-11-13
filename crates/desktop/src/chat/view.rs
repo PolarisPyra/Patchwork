@@ -314,7 +314,17 @@ pub(super) fn empty_chat(w: &Workspace, t: &Theme) -> Div {
                 .max_w(px(560.))
                 .gap(px(8.))
                 .children(suggestions.iter().map(|s| {
+                    let composer = w.composer.clone();
+                    // Written into the composer to finish or send, with what is attached kept.
+                    let text = s.trim_end_matches('…');
                     button(SharedString::from(*s), *s)
+                        .on_click(move |_, window, cx| {
+                            composer.update(cx, |c, cx| {
+                                let attached = c.draft(cx).1;
+                                c.set_draft(text, attached, cx);
+                                c.focus(window, cx);
+                            });
+                        })
                         .h(px(28.))
                         .rounded(px(14.))
                         .border_1()

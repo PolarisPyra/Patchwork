@@ -217,7 +217,8 @@ impl Workspace {
     }
 
     /// The panel takes its keys before the composer's own bindings: Escape, the arrows and Enter,
-    /// and the number of a row. Another field being typed in keeps its keys.
+    /// and the number of a row. Another field being typed in keeps its keys, and so does a
+    /// message already begun in the composer, but for Escape.
     pub fn on_prompt_key(
         &mut self,
         keystroke: &Keystroke,
@@ -228,10 +229,13 @@ impl Workspace {
         if m.control || m.alt || m.shift || m.platform {
             return;
         }
-        let composer = self.composer.read(cx).editor.focus_handle(cx);
+        let editor = &self.composer.read(cx).editor;
+        let composer = editor.focus_handle(cx);
+        // A message already being written keeps its digits, arrows and Enter.
+        let writing = !editor.read(cx).content.is_empty() && keystroke.key != "escape";
         if window
             .focused(cx)
-            .is_some_and(|f| f != composer && f != self.focus)
+            .is_some_and(|f| (f != composer && f != self.focus) || (f == composer && writing))
         {
             return;
         }

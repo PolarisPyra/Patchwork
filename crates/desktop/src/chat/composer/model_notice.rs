@@ -17,11 +17,11 @@ use crate::ui::{BtnKind, btn, icon, spinner};
 /// The most other models offered when the server stopped serving the chat's.
 const MAX_OFFERED: usize = 3;
 
-/// What the last check found for a model: its server's health, or none for a model that is not
-/// on a local server.
+/// What the last check found for a model: its provider's name and its server's health, or none
+/// for a model that is not on a local server.
 #[derive(Default)]
 pub(super) struct ModelHealth {
-    checked: Option<(String, Option<config::ProviderHealth>)>,
+    checked: Option<(String, Option<(String, config::ProviderHealth)>)>,
     finding: bool,
     error: Option<String>,
 }
@@ -50,9 +50,8 @@ impl Composer {
         self.health.checked = Some((model.clone(), None));
         let provider = model.split('/').next().unwrap_or_default().to_string();
         let task = cx.background_spawn(async move {
-            config::provider(&provider)
-                .filter(|p| p.local)
-                .and_then(|_| config::probe(&provider).ok())
+            let found = config::provider(&provider).filter(|p| p.local)?;
+            Some((found.name, config::probe(&provider).ok()?))
         });
         cx.spawn(async move |this, cx| {
             let health = task.await;
@@ -103,10 +102,9 @@ impl Composer {
     ) -> Option<Stateful<Div>> {
         let model = model.filter(|_| agent == AgentKind::Api)?;
         let (checked, health) = self.health.checked.as_ref()?;
-        let health = health.as_ref().filter(|_| checked == model)?;
+        let (name, health) = health.as_ref().filter(|_| checked == model)?;
         let provider = model.split('/').next().unwrap_or_default().to_string();
         let model_id = model[provider.len()..].trim_start_matches('/').to_string();
-        let name = config::provider(&provider).map_or_else(|| provider.clone(), |p| p.name);
         let images = self
             .attachments
             .iter()
