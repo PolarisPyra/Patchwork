@@ -86,31 +86,6 @@ pub(super) fn time_of(schedule: &Schedule) -> &str {
     }
 }
 
-/// What a schedule says in a list row, e.g. `Weekdays at 09:00`.
-pub(super) fn describe_schedule(schedule: &Schedule) -> String {
-    match schedule {
-        Schedule::Hourly { interval_hours: 1 } => "Every hour".into(),
-        Schedule::Hourly { interval_hours } => format!("Every {interval_hours} hours"),
-        Schedule::Daily { time } => format!("Daily at {time}"),
-        Schedule::Weekdays { time } => format!("Weekdays at {time}"),
-        Schedule::Weekly { days, time } => {
-            let names = days
-                .iter()
-                .map(|d| d.short())
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!(
-                "{} at {time}",
-                if names.is_empty() {
-                    "Every day"
-                } else {
-                    &names
-                }
-            )
-        }
-    }
-}
-
 /// When a task last or next runs, in local time: `today 09:00`, `tomorrow 09:00`, `Tue 09:00`.
 pub(super) fn when_label(at: Option<i64>) -> String {
     let Some(at) = at.and_then(|ms| Local.timestamp_millis_opt(ms).single()) else {

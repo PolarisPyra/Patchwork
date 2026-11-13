@@ -143,7 +143,11 @@ pub fn describe(schedule: &Schedule) -> String {
         Schedule::Weekdays { time } => format!("Weekdays at {time}"),
         Schedule::Weekly { days, time } => {
             let names: Vec<&str> = days.iter().map(|day| day.short()).collect();
-            format!("{} at {time}", names.join(", "))
+            if names.is_empty() {
+                format!("Every day at {time}")
+            } else {
+                format!("{} at {time}", names.join(", "))
+            }
         }
     }
 }
@@ -152,6 +156,19 @@ pub fn describe(schedule: &Schedule) -> String {
 /// comes back, unless it went by more than this long ago. A week-old "what changed today" is
 /// worth nothing.
 pub const CATCH_UP_WITHIN_MS: i64 = 24 * 60 * 60 * 1000;
+
+/// Why a skipped run was not run late, in words that follow [`CATCH_UP_WITHIN_MS`].
+#[must_use]
+pub fn skipped_detail() -> String {
+    let hours = CATCH_UP_WITHIN_MS / (60 * 60 * 1000);
+    let window = match hours {
+        24 => "a day".to_string(),
+        1 => "an hour".to_string(),
+        h if h % 24 == 0 => format!("{} days", h / 24),
+        h => format!("{h} hours"),
+    };
+    format!("Its time went by more than {window} ago")
+}
 
 /// What to do with a task on a tick.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

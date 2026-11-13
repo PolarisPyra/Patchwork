@@ -287,7 +287,7 @@ impl Store {
             at: missed.unwrap_or_else(|| now_ms() as i64),
             thread_id: None,
             outcome: RunOutcome::Skipped,
-            detail: Some("Its time went by more than a day ago".into()),
+            detail: Some(crate::scheduled::skipped_detail()),
         };
         record_run(&inner, id, &run)
     }

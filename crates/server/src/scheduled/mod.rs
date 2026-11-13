@@ -15,6 +15,6 @@ mod times;
 mod tests;
 
 pub use types::{Task, Run, RunOutcome, Schedule, Weekday};
-pub use times::{next_after, next_run_at, describe, CATCH_UP_WITHIN_MS, Action, action};
+pub use times::{next_after, next_run_at, describe, skipped_detail, CATCH_UP_WITHIN_MS, Action, action};
 #[cfg(test)]
 pub(crate) use times::prepare;

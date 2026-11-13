@@ -165,12 +165,18 @@ impl Server {
                             "scheduled task {{task}} did not start: {{error}}"
                         );
                         // Record the attempt so a task that cannot start does not retry every tick.
-                        let _ = self.store.scheduled_task_ran(
+                        let ran = self.store.scheduled_task_ran(
                             &task.id,
                             now,
                             next(),
                             Err(e.to_string().as_str()),
                         );
+                        if let Err(e) = ran {
+                            log::warn!(
+                                task:% = task.id, error:% = e;
+                                "scheduled task {{task}}: {{error}}"
+                            );
+                        }
                     }
                 },
             }
