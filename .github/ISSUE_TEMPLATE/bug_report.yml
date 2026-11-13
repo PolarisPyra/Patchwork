@@ -1,120 +1,50 @@
-name: Bug report
-description: Report broken behavior, regressions, crashes, or reliability issues.
-title: "[Bug]: "
+name: Bug
+description: Something in Patchwork doesn't work.
 labels:
   - bug
   - needs-triage
 body:
-  - type: markdown
+  - type: textarea
+    id: what
     attributes:
-      value: |
-        Use this form for broken behavior, regressions, crashes, or reliability problems.
-        Feature requests belong in [Discussions](https://github.com/PolarisPyra/Patchwork/discussions/categories/ideas).
-        Search existing issues first and keep the report focused on one problem.
-
-  - type: checkboxes
-    id: checks
-    attributes:
-      label: Before submitting
-      options:
-        - label: I searched existing issues and did not find a duplicate.
-          required: true
-        - label: I included enough detail to reproduce or investigate the problem.
-          required: true
-
-  - type: dropdown
-    id: area
-    attributes:
-      label: Area
-      description: Which part of Patchwork is affected?
-      options:
-        - Chat and composer
-        - Sidebar, projects, and threads
-        - Settings
-        - Agents (Claude Code, Codex, Antigravity, OpenCode, API)
-        - Terminal and remote machines
-        - Updates and installing
-        - Build, CI, or release tooling
-        - Docs
-        - Not sure
+      label: What happened
+      description: What you saw, and what you expected instead.
     validations:
       required: true
-
   - type: textarea
     id: steps
     attributes:
-      label: Steps to reproduce
-      description: Provide a minimal, deterministic repro.
+      label: How to make it happen
       placeholder: |
-        1. Open a project with ...
-        2. Start a Codex chat and send ...
-        3. Press Stop while the reply streams
-        4. Send another message
+        1.
+        2.
+        3.
     validations:
       required: true
-
-  - type: textarea
-    id: expected
-    attributes:
-      label: Expected behavior
-      placeholder: The chat should resume normally and accept the new message.
-    validations:
-      required: true
-
-  - type: textarea
-    id: actual
-    attributes:
-      label: Actual behavior
-      placeholder: The chat box clears, no new turn starts, and the thread stays in a working state.
-    validations:
-      required: true
-
-  - type: dropdown
-    id: impact
-    attributes:
-      label: Impact
-      description: How bad is this in practice?
-      options:
-        - Blocks work completely
-        - Major degradation or frequent failure
-        - Minor bug or occasional failure
-        - Cosmetic issue
-    validations:
-      required: true
-
   - type: input
     id: version
     attributes:
-      label: Version or commit
-      description: The version in Settings → Updates, or a commit SHA if you built it yourself.
-      placeholder: 26.11.65
-
-  - type: input
-    id: environment
+      label: Patchwork version
+      placeholder: "26.11.65"
+    validations:
+      required: true
+  - type: dropdown
+    id: system
     attributes:
-      label: Environment
-      description: OS, how you installed Patchwork, and the agent CLI and model if relevant.
-      placeholder: Ubuntu 24.04 AppImage, Claude Code 2.1, claude-opus-5-5
-
+      label: System
+      options:
+        - Linux
+        - macOS
+        - Windows
+    validations:
+      required: true
+  - type: input
+    id: agent
+    attributes:
+      label: Agent
+      description: The agent and model the chat was using, if it happened in a chat.
   - type: textarea
     id: logs
     attributes:
-      label: Logs or stack traces
-      description: Paste the most relevant lines from Patchwork's log only. Redact secrets.
-      render: shell
-
-  - type: upload
-    id: attachments
-    attributes:
-      label: Screenshots, recordings, or supporting files
-      description: Upload screenshots, short recordings, or log files. Redact secrets before uploading.
-    validations:
-      required: false
-      accept: ".png,.jpg,.jpeg,.gif,.webp,.svg,.mp4,.mov,.webm,.log,.txt,.json,.zip"
-
-  - type: textarea
-    id: workaround
-    attributes:
-      label: Workaround
-      description: If you found a temporary workaround, include it.
-      placeholder: Restarting the app clears the stuck state.
+      label: Logs or screenshots
+      render: text
