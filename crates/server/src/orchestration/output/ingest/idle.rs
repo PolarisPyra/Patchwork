@@ -5,7 +5,7 @@
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, PoisonError};
 
-use crate::plugins::HookEvent;
+use crate::hooks::HookEvent;
 use crate::events::AgentEvent;
 use crate::provider::AgentKind;
 use crate::threads::Goal;
@@ -16,7 +16,7 @@ use crate::workspace;
 use crate::orchestration::changes::attribution;
 use crate::orchestration::output::stream::Unsaved;
 use crate::orchestration::messages::queue::FollowUp;
-use crate::orchestration::turn::end::{hold_unanswered, plugin_hooks, record_turn};
+use crate::orchestration::turn::end::{hold_unanswered, turn_hooks, record_turn};
 use crate::orchestration::turn::start::Turn;
 
 /// Whether Claude, having ended its reply cleanly, can stay up for the next message.
@@ -114,7 +114,7 @@ pub(super) fn go_idle(
         );
         std::thread::spawn(move || {
             let status = Some(MessageStatus::Cancelled);
-            plugin_hooks(
+            turn_hooks(
                 &server,
                 HookEvent::Interrupt,
                 &thread_id,

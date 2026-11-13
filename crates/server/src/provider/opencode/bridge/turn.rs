@@ -182,7 +182,15 @@ pub(super) fn turn(request: &Request, tx: &Sender<Msg>, rx: &Receiver<Msg>) -> R
     // once a compaction it asked for is done, since the server stops with the turn.
     let mut steers = HashSet::new();
     let (mut compacting, mut ended) = (false, false);
-    for msg in rx {
+    loop {
+        // An ended turn waits for its compaction only so long: one that never reports its end
+        // would otherwise hold the turn open for good.
+        let msg = if ended && compacting {
+            rx.recv_timeout(COMPACTION_WAIT).ok()
+        } else {
+            rx.recv().ok()
+        };
+        let Some(msg) = msg else { return Ok(()) };
         match msg {
             Msg::Input(line) => command(&api, &session_id, &line, &mut steers),
             Msg::Delivered(id) => {
@@ -203,8 +211,10 @@ pub(super) fn turn(request: &Request, tx: &Sender<Msg>, rx: &Receiver<Msg>) -> R
             Msg::StreamClosed => return Err("OpenCode's event stream closed".into()),
         }
     }
-    Ok(())
 }
+
+/// Longest an ended turn waits for a compaction it asked for to finish.
+const COMPACTION_WAIT: Duration = Duration::from_secs(300);
 
 /// Starts the turn: `/compact` compacts the session, a command the folder has runs as that
 /// command, and any other message is a prompt.
@@ -261,7 +271,7 @@ pub(super) fn command(api: &Api, session_id: &str, line: &str, steers: &mut Hash
         Some("permission") => api
             .post(
                 &format!("/api/session/{session_id}/permission/{request}/reply"),
-                &json!({ "decision": v["decision"] }),
+                &json!({ "decision": v["decision"], "message": v["message"] }),
             )
             .map(drop),
         Some("question") => api

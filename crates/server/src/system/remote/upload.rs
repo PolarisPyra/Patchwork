@@ -1,7 +1,7 @@
 //! Copying Patchwork's helper and Patchwork's own files to an SSH host.
 //!
 //! An agent on a host runs with the same launch files it would get here (settings, skills,
-//! plugins, the relay file its hooks read), so the files a command names under Patchwork's own
+//! hooks, the relay file they read), so the files a command names under Patchwork's own
 //! folders are copied to a mirror on the host, and the command names the copies. Patchwork's
 //! binary, which hooks and proxies run, becomes the helper built for the host.
 
@@ -420,7 +420,10 @@ impl Mirror {
         let mut rest = text;
         while let Some(at) = rest.find(root) {
             let tail = &rest[at..];
-            let len = tail.find(ends_path).unwrap_or(tail.len());
+            // Looked for after the folder itself, whose own name may hold a space.
+            let len = tail[root.len()..]
+                .find(ends_path)
+                .map_or(tail.len(), |end| root.len() + end);
             let path = &tail[..len];
             // A longer name that only starts like the folder, such as `patchwork-old`, is
             // something else.

@@ -1,4 +1,4 @@
-//! How a turn ends: its final status saved and published, the plugins' turn hooks, and the next queued message started.
+//! How a turn ends: its final status saved and published, the turn hooks, and the next queued message started.
 
 // Rust guideline compliant 2026-10-09
 
@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::PoisonError;
 use serde_json::Value;
-use crate::plugins::HookEvent;
+use crate::hooks::HookEvent;
 use crate::provider;
 use crate::Server;
 use crate::events::AgentEvent;
@@ -189,6 +189,13 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         if let Err(e) = reset {
             log::warn!(error:% = e; "failed to drop a lost session: {{error}}");
         } else {
+            // Kept so the reply can go back in the chat, with its error, if the rerun never starts.
+            let reply = server.store.thread(&turn.thread_id).and_then(|t| {
+                t.messages
+                    .iter()
+                    .find(|m| m.id == turn.message_id)
+                    .map(|m| (**m).clone())
+            });
             turn.publish(AgentEvent::MessageRemoved {
                 message_id: turn.message_id.clone(),
             });
@@ -208,6 +215,9 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
                 Ok(()) => return,
                 Err(e) => {
                     log::warn!(error:% = e; "failed to rerun the turn in a new session: {{error}}");
+                    if let Some(message) = reply {
+                        turn.publish(AgentEvent::MessageStarted { message });
+                    }
                 }
             }
         }
@@ -260,7 +270,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         );
         std::thread::spawn(move || {
             for event in [ended, HookEvent::SessionEnd] {
-                plugin_hooks(&server, event, &thread_id, &root, agent, Some(status));
+                turn_hooks(&server, event, &thread_id, &root, agent, Some(status));
             }
         })
     };
@@ -368,8 +378,8 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
     }
 }
 
-/// Runs the enabled plugins' hooks for `event` and logs the ones that failed.
-pub(in crate::orchestration) fn plugin_hooks(
+/// Runs the enabled hooks for `event` and logs the ones that failed.
+pub(in crate::orchestration) fn turn_hooks(
     server: &Server,
     event: HookEvent,
     thread_id: &str,
@@ -385,15 +395,15 @@ pub(in crate::orchestration) fn plugin_hooks(
     };
     let agent = name(serde_json::to_value(agent));
     let status = status.map(|status| name(serde_json::to_value(status)));
-    let context = crate::plugins::HookContext {
+    let context = crate::hooks::HookContext {
         event,
         thread_id,
         root,
         agent: &agent,
         status: status.as_deref(),
     };
-    for failure in crate::plugins::run_hooks(&server.store.settings(), &context) {
-        log::warn!(event = event.name(), failure:%; "plugin hook {{event}} {{failure}}");
+    for failure in crate::hooks::run_hooks(&server.store.settings(), &context) {
+        log::warn!(event = event.name(), failure:%; "hook {{event}} {{failure}}");
     }
 }
 

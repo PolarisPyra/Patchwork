@@ -11,7 +11,7 @@ static DIRS: OnceLock<Dirs> = OnceLock::new();
 /// Patchwork's folders, each named `patchwork` inside the platform's own.
 #[derive(Debug, Clone, Default)]
 pub struct Dirs {
-    /// What the user edits: skills, agents, plugins, MCP servers and API providers.
+    /// What the user edits: skills, agents, hooks, MCP servers and API providers.
     pub config: PathBuf,
     /// What Patchwork keeps: the database and the API providers' conversations.
     pub data: PathBuf,

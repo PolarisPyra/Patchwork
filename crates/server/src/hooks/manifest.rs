@@ -4,7 +4,7 @@
 
 use std::path::Path;
 use serde_json::Value;
-use super::{HookEvent, Plugin, PluginApp, PluginHook, PluginHookHandler};
+use super::{HookEvent, Bundle, BundleApp, Hook, HookHandler};
 use crate::provider::AgentKind;
 
 /// Where `plugin.json` sits inside a bundle: Patchwork's own place, then Codex's.
@@ -13,7 +13,7 @@ const MANIFESTS: [&str; 2] = [".patchwork-plugin/plugin.json", ".codex-plugin/pl
 /// Codex writes `plugin.json` as a flat file in some bundles; so do we.
 const ROOT_MANIFEST: &str = "plugin.json";
 
-/// A plugin that only carries hooks can be this one file, named for its folder unless it says
+/// A bundle that only carries hooks can be this one file, named for its folder unless it says
 /// `name`, as Claude Code's `hooks.json` is.
 const HOOKS_ONLY: &str = "hooks.json";
 
@@ -25,7 +25,7 @@ const TIMEOUT_RANGE: (u64, u64) = (1, 600);
 /// Reads one bundle's folder. `None` when it has no manifest or the manifest is not JSON. Each
 /// part is read on its own, so a part this version does not understand is left empty rather than
 /// losing the bundle.
-pub(super) fn read_bundle(dir: &Path, enabled: bool) -> Option<Plugin> {
+pub(super) fn read_bundle(dir: &Path, enabled: bool) -> Option<Bundle> {
     let manifest_path = MANIFESTS
         .iter()
         .chain([&ROOT_MANIFEST, &HOOKS_ONLY])
@@ -45,10 +45,10 @@ pub(super) fn read_bundle(dir: &Path, enabled: bool) -> Option<Plugin> {
     // Without a name it is called after its folder, `patchwork` reading as "Patchwork".
     let mut folder = id.chars();
     let named_for_folder = folder.next().map_or_else(
-        || "Plugin".into(),
+        || "Hooks".into(),
         |first| first.to_uppercase().chain(folder).collect(),
     );
-    Some(Plugin {
+    Some(Bundle {
         name: string("name").unwrap_or(named_for_folder),
         id,
         version: string("version"),
@@ -79,11 +79,11 @@ fn section(dir: &Path, value: Option<&Value>, key: &str) -> Option<Value> {
 
 /// The hooks in `{ "<Event>": [ { "hooks": [ handler, … ] } ] }`, sorted by event. Events this
 /// version does not know are skipped.
-pub(super) fn hooks(events: &Value) -> Vec<PluginHook> {
+pub(super) fn hooks(events: &Value) -> Vec<Hook> {
     let Some(events) = events.as_object() else {
         return Vec::new();
     };
-    let mut hooks: Vec<PluginHook> = events
+    let mut hooks: Vec<Hook> = events
         .iter()
         .filter_map(|(key, groups)| Some((HookEvent::parse(key)?, groups)))
         .flat_map(|(event, groups)| {
@@ -105,7 +105,7 @@ pub(super) fn hooks(events: &Value) -> Vec<PluginHook> {
                         .into_iter()
                         .flatten()
                         .filter_map(handler)
-                        .map(move |handler| PluginHook {
+                        .map(move |handler| Hook {
                             event,
                             matcher: matcher.clone(),
                             run_by: run_by(event, &handler),
@@ -120,13 +120,13 @@ pub(super) fn hooks(events: &Value) -> Vec<PluginHook> {
 
 /// The agents whose turns run a hook. Patchwork runs a command on a turn event itself, for every
 /// agent; the rest run in the agents that run their event, and only a command runs at all.
-fn run_by(event: HookEvent, handler: &PluginHookHandler) -> Vec<AgentKind> {
+fn run_by(event: HookEvent, handler: &HookHandler) -> Vec<AgentKind> {
     let runs = match handler {
-        PluginHookHandler::Command { .. } => true,
-        PluginHookHandler::McpTool { .. }
-        | PluginHookHandler::Prompt
-        | PluginHookHandler::Agent
-        | PluginHookHandler::Unsupported { .. } => false,
+        HookHandler::Command { .. } => true,
+        HookHandler::McpTool { .. }
+        | HookHandler::Prompt
+        | HookHandler::Agent
+        | HookHandler::Unsupported { .. } => false,
     };
     if !runs {
         return Vec::new();
@@ -138,21 +138,21 @@ fn run_by(event: HookEvent, handler: &PluginHookHandler) -> Vec<AgentKind> {
 }
 
 /// One handler, by its `type`. A command without its command line is skipped.
-pub(super) fn handler(value: &Value) -> Option<PluginHookHandler> {
+pub(super) fn handler(value: &Value) -> Option<HookHandler> {
     let field = |key: &str| value.get(key).and_then(Value::as_str).map(str::to_string);
     let kind = field("type").unwrap_or_else(|| "command".into());
     Some(match kind.to_ascii_lowercase().replace('_', "").as_str() {
-        "command" => PluginHookHandler::Command {
+        "command" => HookHandler::Command {
             command: field("command").filter(|command| !command.trim().is_empty())?,
             timeout_secs: timeout(value),
         },
-        "mcptool" => PluginHookHandler::McpTool {
+        "mcptool" => HookHandler::McpTool {
             server: field("server").unwrap_or_default(),
             tool: field("tool").unwrap_or_default(),
         },
-        "prompt" => PluginHookHandler::Prompt,
-        "agent" => PluginHookHandler::Agent,
-        _ => PluginHookHandler::Unsupported { kind },
+        "prompt" => HookHandler::Prompt,
+        "agent" => HookHandler::Agent,
+        _ => HookHandler::Unsupported { kind },
     })
 }
 
@@ -166,13 +166,13 @@ fn timeout(value: &Value) -> u64 {
 }
 
 /// The apps in `{ "<name>": { "id": …, "required": … } }`, by name.
-pub(super) fn apps(apps: &Value) -> Vec<PluginApp> {
+pub(super) fn apps(apps: &Value) -> Vec<BundleApp> {
     let Some(apps) = apps.as_object() else {
         return Vec::new();
     };
-    let mut apps: Vec<PluginApp> = apps
+    let mut apps: Vec<BundleApp> = apps
         .iter()
-        .map(|(name, app)| PluginApp {
+        .map(|(name, app)| BundleApp {
             name: name.clone(),
             id: app
                 .get("id")

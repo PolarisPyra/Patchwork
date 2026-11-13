@@ -7,7 +7,7 @@ use crate::Error;
 use super::claim::Starting;
 use super::running::{NativeTurn, Pending, RunningTurn, TurnRequest};
 use super::turn::{Turn, assistant_message};
-use crate::orchestration::turn::end::{log_cli_version, plugin_hooks};
+use crate::orchestration::turn::end::{log_cli_version, turn_hooks};
 
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
@@ -19,7 +19,7 @@ use std::sync::Mutex;
 use std::sync::PoisonError;
 
 use crate::orchestration::changes::attribution::Attribution;
-use crate::plugins::HookEvent;
+use crate::hooks::HookEvent;
 use crate::provider::TurnSpec;
 use crate::provider;
 use crate::system::scope;
@@ -50,7 +50,6 @@ use crate::orchestration::Runner;
 use crate::orchestration::tasks::subagents::Controls;
 use crate::orchestration::tasks::subagents::Tasks;
 
-/// Refuses a send to a thread whose turn is still starting, rather than starting a second agent.
 /// Refuses a turn in a thread whose agent is replying, rather than starting a second agent beside
 /// it that nothing could stop.
 const ALREADY_REPLYING: &str = "This chat already has a reply running";
@@ -216,7 +215,7 @@ impl Runner {
         }
         .map(|cli| cli.join("skills").to_string_lossy().into_owned());
         let guarded = crate::permissions::guarded(&settings.permissions, project_id.as_deref());
-        let hooks = crate::plugins::agent_hooks(&settings);
+        let hooks = crate::hooks::agent_hooks(&settings);
         // The custom agents, for the CLIs that can start them as subagents.
         let agents = match agent {
             AgentKind::Claude | AgentKind::Codex | AgentKind::OpenCode => {
@@ -250,7 +249,7 @@ impl Runner {
         // comparing git state before and after the turn.
         let attribution = Attribution::shared(workspace::git_changes(&root).unwrap_or_default());
         if !resumes {
-            plugin_hooks(
+            turn_hooks(
                 server,
                 HookEvent::UserPromptSubmit,
                 &thread_id,

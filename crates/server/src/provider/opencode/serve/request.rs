@@ -198,5 +198,10 @@ pub fn approval_reply(
         return json!({"type": "question", "requestID": request, "answers": ordered}).to_string();
     }
     let decision = if allow { "once" } else { "reject" };
-    json!({"type": "permission", "requestID": request, "decision": decision}).to_string()
+    let mut line = json!({"type": "permission", "requestID": request, "decision": decision});
+    // Why a hook refused the call, which OpenCode hands to the model with the refusal.
+    if let Some(message) = reply["message"].as_str() {
+        line["message"] = message.into();
+    }
+    line.to_string()
 }

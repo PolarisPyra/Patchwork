@@ -131,7 +131,7 @@ pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
         AccessMode::Supervised => {}
     }
     // Patchwork's permission hook runs before each tool call when the rules guard any, and the
-    // plugins' hooks on the events Antigravity has.
+    // user's hooks on the events Antigravity has.
     if let Some(dir) = crate::provider::hooks::antigravity_dir(spec) {
         args.push(format!("--add-dir={}", dir.display()));
     }

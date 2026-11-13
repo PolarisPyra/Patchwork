@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{HookEvent, PluginHookHandler, list};
+use super::{HookEvent, HookHandler, list};
 use crate::settings::Settings;
 
 /// A hook an agent runs on one of its own events. The agent gives it the event as JSON on stdin
@@ -47,24 +47,24 @@ impl AgentHook {
     }
 }
 
-/// The hooks of the enabled plugins that the agent runs, rather than Patchwork.
+/// The hooks of the enabled bundles that the agent runs, rather than Patchwork.
 #[must_use]
 pub fn agent_hooks(settings: &Settings) -> Vec<AgentHook> {
     list(settings)
         .into_iter()
-        .filter(|plugin| plugin.enabled)
-        .flat_map(|plugin| plugin.hooks)
+        .filter(|bundle| bundle.enabled)
+        .flat_map(|bundle| bundle.hooks)
         .filter(|hook| !hook.event.runs_in_patchwork())
         .filter_map(|hook| {
             let (action, timeout_secs) = match hook.handler {
-                PluginHookHandler::Command {
+                HookHandler::Command {
                     command,
                     timeout_secs,
                 } => (HookAction::Command { command }, timeout_secs),
-                PluginHookHandler::McpTool { .. }
-                | PluginHookHandler::Prompt
-                | PluginHookHandler::Agent
-                | PluginHookHandler::Unsupported { .. } => return None,
+                HookHandler::McpTool { .. }
+                | HookHandler::Prompt
+                | HookHandler::Agent
+                | HookHandler::Unsupported { .. } => return None,
             };
             Some(AgentHook {
                 event: hook.event,
@@ -95,7 +95,7 @@ fn run_command(hook: &AgentHook, command: &str, input: &Value, root: &str) -> Op
     cmd.current_dir(root);
     let (mut child, range) = crate::system::contained::spawn(cmd, Stdio::piped())
         .inspect_err(
-            |e| log::warn!(event:%, error:% = e; "plugin hook {{event}} did not start: {{error}}"),
+            |e| log::warn!(event:%, error:% = e; "hook {{event}} did not start: {{error}}"),
         )
         .ok()?;
     let read = |pipe: Option<Box<dyn Read + Send>>| {
@@ -141,7 +141,7 @@ fn run_command(hook: &AgentHook, command: &str, input: &Value, root: &str) -> Op
                 let _ = child.wait();
                 log::warn!(
                     event:%, timeout = hook.timeout_secs;
-                    "plugin hook {{event}} ran past {{timeout}}s and was stopped"
+                    "hook {{event}} ran past {{timeout}}s and was stopped"
                 );
                 return None;
             }
@@ -153,7 +153,7 @@ fn run_command(hook: &AgentHook, command: &str, input: &Value, root: &str) -> Op
         Some(2) => Some(
             Some(stderr.trim())
                 .filter(|reason| !reason.is_empty())
-                .unwrap_or("A plugin hook refused this call")
+                .unwrap_or("A hook refused this call")
                 .to_string(),
         ),
         Some(0) => {
@@ -163,7 +163,7 @@ fn run_command(hook: &AgentHook, command: &str, input: &Value, root: &str) -> Op
                 value[key]
                     .as_str()
                     .filter(|reason| !reason.is_empty())
-                    .unwrap_or("A plugin hook refused this call")
+                    .unwrap_or("A hook refused this call")
                     .to_string()
             };
             if output["permissionDecision"] == "deny" {
@@ -175,7 +175,7 @@ fn run_command(hook: &AgentHook, command: &str, input: &Value, root: &str) -> Op
             }
         }
         _ => {
-            log::warn!(event:%, stderr = stderr.trim(); "plugin hook {{event}} failed: {{stderr}}");
+            log::warn!(event:%, stderr = stderr.trim(); "hook {{event}} failed: {{stderr}}");
             None
         }
     }

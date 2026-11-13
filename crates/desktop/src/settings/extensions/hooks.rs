@@ -1,11 +1,11 @@
-//! Extensions → Hooks: plugin bundles of hooks that run on turn events,
+//! Extensions → Hooks: bundles of hooks that run on turn events,
 //! and the apps they ask for. A bundle is a folder with a `hooks.json`, or a `plugin.json` when it
 //! carries more.
 
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, Div, FontWeight, SharedString, div, prelude::*, px};
-use patchwork_server::plugins::{self, HookEvent, Plugin, PluginHook, PluginHookHandler};
+use patchwork_server::hooks::{self, HookEvent, Bundle, Hook, HookHandler};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{switch, token_row};
@@ -14,9 +14,9 @@ use crate::ui::{AGENT_KINDS, BtnKind, agent_label, btn, icon};
 
 use super::{empty, example, list_box};
 
-/// How a plugin is laid out: a folder with a `hooks.json`, whose commands get the event as JSON on
+/// How a bundle is laid out: a folder with a `hooks.json`, whose commands get the event as JSON on
 /// stdin. A tool hook refuses the call with exit code 2 and its reason on stderr.
-const HOOKS_EXAMPLE: &str = "plugins/
+const HOOKS_EXAMPLE: &str = "hooks/
 └── guard/
     └── hooks.json
 
@@ -78,46 +78,46 @@ fn event_name(event: HookEvent) -> String {
 }
 
 /// What a hook that runs no command does, in words.
-fn handler_text(handler: &PluginHookHandler) -> String {
+fn handler_text(handler: &HookHandler) -> String {
     match handler {
-        PluginHookHandler::Command { command, .. } => command.clone(),
-        PluginHookHandler::McpTool { server, tool } => format!("{server} → {tool}"),
-        PluginHookHandler::Prompt => "A prompt hook".into(),
-        PluginHookHandler::Agent => "A agent hook".into(),
-        PluginHookHandler::Unsupported { kind } => format!("A {kind} hook"),
+        HookHandler::Command { command, .. } => command.clone(),
+        HookHandler::McpTool { server, tool } => format!("{server} → {tool}"),
+        HookHandler::Prompt => "A prompt hook".into(),
+        HookHandler::Agent => "An agent hook".into(),
+        HookHandler::Unsupported { kind } => format!("A {kind} hook"),
     }
 }
 
 impl SettingsDialog {
-    fn list_plugins(&mut self, cx: &mut Context<Self>) {
+    fn list_bundles(&mut self, cx: &mut Context<Self>) {
         let settings = self.server.store.settings();
         self.run(
-            move || plugins::list(&settings),
-            |d, list, _| d.extensions.plugins = Some(list),
+            move || hooks::list(&settings),
+            |d, list, _| d.extensions.bundles = Some(list),
             cx,
         );
     }
 
-    fn toggle_plugin(&mut self, id: String, on: bool, cx: &mut Context<Self>) {
-        if let Some(plugin) = self
+    fn toggle_bundle(&mut self, id: String, on: bool, cx: &mut Context<Self>) {
+        if let Some(bundle) = self
             .extensions
-            .plugins
+            .bundles
             .iter_mut()
             .flatten()
             .find(|p| p.id == id)
         {
-            plugin.enabled = on;
+            bundle.enabled = on;
         }
         self.update(
             |s| {
-                s.disabled_plugins.retain(|p| *p != id);
+                s.disabled_hooks.retain(|p| *p != id);
                 if !on {
-                    s.disabled_plugins.push(id);
+                    s.disabled_hooks.push(id);
                 }
             },
             cx,
         );
-        self.list_plugins(cx);
+        self.list_bundles(cx);
     }
 }
 
@@ -138,9 +138,9 @@ fn detail(name: &'static str, value: impl IntoElement, t: &Theme) -> Div {
 
 /// One hook: when it runs and what it does, opening to the event, matcher, and handler as written.
 fn hook_row(
-    plugin: &str,
+    bundle: &str,
     at: usize,
-    hook: &PluginHook,
+    hook: &Hook,
     open: bool,
     t: &Theme,
     cx: &mut Context<SettingsDialog>,
@@ -152,11 +152,11 @@ fn hook_row(
         .map(agent_label)
         .collect();
     let when = when_text(hook.event, shell);
-    let key = (plugin.to_string(), at);
+    let key = (bundle.to_string(), at);
     let hover = t.bg_selected_muted;
-    let command = matches!(hook.handler, PluginHookHandler::Command { .. });
+    let command = matches!(hook.handler, HookHandler::Command { .. });
     let summary = crate::ui::button(
-        SharedString::from(format!("hook-{plugin}-{at}")),
+        SharedString::from(format!("hook-{bundle}-{at}")),
         when.clone(),
     )
     .aria_expanded(open)
@@ -235,7 +235,7 @@ fn hook_row(
             .child(detail("Event", mono(event_name(hook.event)), t))
             .children(hook.matcher.clone().map(|m| detail("Tools", mono(m), t)))
             .map(|d| match &hook.handler {
-                PluginHookHandler::Command {
+                HookHandler::Command {
                     command,
                     timeout_secs,
                 } => d
@@ -262,22 +262,22 @@ fn hook_row(
         .into_any_element()
 }
 
-fn plugin_card(
-    plugin: &Plugin,
+fn bundle_card(
+    bundle: &Bundle,
     d: &SettingsDialog,
     t: &Theme,
     cx: &mut Context<SettingsDialog>,
 ) -> AnyElement {
-    let hooks: Vec<AnyElement> = plugin
+    let hooks: Vec<AnyElement> = bundle
         .hooks
         .iter()
         .enumerate()
         .map(|(i, hook)| {
-            let open = d.extensions.open_hooks.contains(&(plugin.id.clone(), i));
-            hook_row(&plugin.id, i, hook, open, t, cx)
+            let open = d.extensions.open_hooks.contains(&(bundle.id.clone(), i));
+            hook_row(&bundle.id, i, hook, open, t, cx)
         })
         .collect();
-    let (id, on) = (plugin.id.clone(), plugin.enabled);
+    let (id, on) = (bundle.id.clone(), bundle.enabled);
     div()
         .rounded(px(RADIUS))
         .border_1()
@@ -310,16 +310,16 @@ fn plugin_card(
                                     div()
                                         .truncate()
                                         .font_weight(FontWeight::SEMIBOLD)
-                                        .child(plugin.name.clone()),
+                                        .child(bundle.name.clone()),
                                 )
-                                .children(plugin.version.clone().map(|v| {
+                                .children(bundle.version.clone().map(|v| {
                                     div()
                                         .text_size(px(FS_XS))
                                         .text_color(t.text_subtle)
                                         .child(v)
                                 })),
                         )
-                        .children(plugin.description.clone().map(|desc| {
+                        .children(bundle.description.clone().map(|desc| {
                             div()
                                 .mt(px(2.))
                                 .text_size(px(FS_SM))
@@ -333,9 +333,9 @@ fn plugin_card(
                                     .child(list_box(hooks, t).rounded(px(RADIUS_SM))),
                             )
                         })
-                        .when(!plugin.apps.is_empty(), |d| {
+                        .when(!bundle.apps.is_empty(), |d| {
                             d.child(div().mt(px(6.)).flex().flex_wrap().gap(px(4.)).children(
-                                plugin.apps.iter().map(|app| {
+                                bundle.apps.iter().map(|app| {
                                     div()
                                         .flex()
                                         .items_center()
@@ -356,34 +356,34 @@ fn plugin_card(
                 )
                 .child(
                     switch(
-                        SharedString::from(format!("plugin-on-{}", plugin.id)),
-                        format!("{} is on", plugin.name),
+                        SharedString::from(format!("hooks-on-{}", bundle.id)),
+                        format!("{} is on", bundle.name),
                         on,
                         t,
                     )
-                    .on_click(cx.listener(move |d, _, _, cx| d.toggle_plugin(id.clone(), !on, cx))),
+                    .on_click(cx.listener(move |d, _, _, cx| d.toggle_bundle(id.clone(), !on, cx))),
                 ),
         )
         .into_any_element()
 }
 
 pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
-    if !std::mem::replace(&mut d.extensions.asked_plugins, true) {
-        d.list_plugins(cx);
+    if !std::mem::replace(&mut d.extensions.asked_bundles, true) {
+        d.list_bundles(cx);
     }
     let t = *theme(cx);
-    let list = d.extensions.plugins.clone();
-    let on: Vec<&Plugin> = list.iter().flatten().filter(|p| p.enabled).collect();
+    let list = d.extensions.bundles.clone();
+    let on: Vec<&Bundle> = list.iter().flatten().filter(|p| p.enabled).collect();
     let hooks: usize = on.iter().map(|p| p.hooks.len()).sum();
     let count = match &list {
-        None => "Reading plugins…".to_string(),
+        None => "Reading hooks…".to_string(),
         Some(_) => format!(
             "{} on · {hooks} {}",
             on.len(),
             if hooks == 1 { "hook" } else { "hooks" }
         ),
     };
-    let dir = plugins::dir(&d.settings);
+    let dir = hooks::dir(&d.settings);
     let (open_top, open_row) = (dir.clone(), dir.clone());
     let tools = div()
         .flex()
@@ -397,16 +397,16 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 .child(count),
         )
         .child(
-            btn("plugins-refresh", "Refresh", BtnKind::Plain, false, &t)
+            btn("hooks-refresh", "Refresh", BtnKind::Plain, false, &t)
                 .ml_auto()
                 .child("Refresh")
                 .on_click(cx.listener(|d, _, _, cx| {
                     d.extensions.error = None;
-                    d.list_plugins(cx);
+                    d.list_bundles(cx);
                 })),
         )
         .child(
-            btn("plugins-open", "Open folder", BtnKind::Plain, false, &t)
+            btn("hooks-open", "Open folder", BtnKind::Plain, false, &t)
                 .px(px(10.))
                 .child(icon("folder-simple", 13.))
                 .child("Open folder")
@@ -414,11 +414,11 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         );
     let body = match &list {
         Some(list) if !list.is_empty() => {
-            let cards: Vec<AnyElement> = list.iter().map(|p| plugin_card(p, d, &t, cx)).collect();
+            let cards: Vec<AnyElement> = list.iter().map(|p| bundle_card(p, d, &t, cx)).collect();
             div().flex().flex_col().gap(px(8.)).children(cards)
         }
         Some(_) => empty(
-            "No plugins yet. A plugin is a folder with a hooks.json; drop one in the plugins folder.",
+            "No hooks yet. Drop a folder with a hooks.json in the hooks folder.",
             &t,
         ),
         None => div(),
@@ -430,8 +430,8 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .child(body)
         .child(
             div().mt(px(12.)).child(
-                token_row("Folder", d.settings.plugins_dir.as_deref().or(Some("")), &t).child(
-                    btn("plugins-open-row", "Open", BtnKind::Plain, false, &t)
+                token_row("Folder", d.settings.hooks_dir.as_deref().or(Some("")), &t).child(
+                    btn("hooks-open-row", "Open", BtnKind::Plain, false, &t)
                         .child("Open")
                         .on_click(
                             cx.listener(move |d, _, _, cx| d.open_folder(open_row.clone(), cx)),

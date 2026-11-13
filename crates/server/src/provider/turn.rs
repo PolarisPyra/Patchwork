@@ -44,8 +44,8 @@ pub struct TurnSpec<'a> {
     pub guarded: &'a [crate::permissions::Guarded],
     /// The custom agents the turn's CLI can start as its own subagents, by name.
     pub agents: &'a [crate::agents::Agent],
-    /// The enabled plugins' hooks the agent runs on its own events.
-    pub hooks: &'a [crate::plugins::AgentHook],
+    /// The enabled hooks the agent runs on its own events.
+    pub hooks: &'a [crate::hooks::AgentHook],
 }
 
 /// An attached image, base64-encoded for the agent's input.
@@ -118,11 +118,6 @@ pub(super) fn prompt_text(text: &str, attachments: &[Attachment]) -> String {
         .to_string()
 }
 
-/// A message's text, attachments, and images as a provider receives them.
-///
-/// The stdin line that adds a message to a turn that is already running, or None when
-/// the agent cannot take one now and the message waits for the turn to end. Antigravity reads
-/// its whole prompt up front; Codex needs the turn's id, which it reports once started.
 /// A message's content as a provider receives it: its text, attachments, and decoded images.
 #[derive(Debug, Clone, Copy)]
 pub struct Prompt<'a> {

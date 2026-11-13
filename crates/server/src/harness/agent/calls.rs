@@ -1,11 +1,11 @@
-//! Running the model's tool calls: Patchwork's own tools, MCP tools, the plugins' tool hooks, and asking the user.
+//! Running the model's tool calls: Patchwork's own tools, MCP tools, the tool hooks, and asking the user.
 
 // Rust guideline compliant 2026-10-09
 
 use crate::Error;
 use std::fmt::Write as _;
 use serde_json::{Value, json};
-use crate::plugins::HookEvent;
+use crate::hooks::HookEvent;
 use crate::permissions::Target;
 use crate::permissions::PermissionKind;
 use crate::threads::AccessMode;
@@ -154,7 +154,7 @@ impl Agent {
         (text, stop)
     }
 
-    /// Runs the plugins' hooks for `event` that match the tool, with the call as Claude Code gives
+    /// Runs the hooks for `event` that match the tool, with the call as Claude Code gives
     /// it to its hooks, and returns the first one's reason for refusing it.
     pub(super) fn run_hooks(
         &self,
@@ -179,7 +179,7 @@ impl Agent {
         }
         hooks.into_iter().find_map(|hook| {
             input["hook_event_name"] = Value::from(hook.event.cli_name());
-            crate::plugins::run_tool_hook(hook, &input, &self.request.root)
+            crate::hooks::run_tool_hook(hook, &input, &self.request.root)
         })
     }
 

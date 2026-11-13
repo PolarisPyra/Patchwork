@@ -1,8 +1,9 @@
-//! Plugins: a folder with a `plugin.json`, the hooks it runs, and the apps it names.
+//! Hooks: the bundles in the hooks folder, each a folder with a `hooks.json` or a `plugin.json`,
+//! the hooks it runs, and the apps it names.
 //!
-//! Skills belong in the skills folder and MCP servers in Settings → MCP Servers, so a plugin
+//! Skills belong in the skills folder and MCP servers in Settings → MCP Servers, so a bundle
 //! carries neither. The format is Codex's `.codex-plugin/plugin.json` where it can be, so a Codex
-//! bundle works as it is. The app ships none. A plugin that only runs hooks is one `hooks.json`,
+//! bundle works as it is. The app ships none. A bundle that only runs hooks is one `hooks.json`,
 //! named for its folder; a fuller one puts its hooks in its `plugin.json` as `"hooks": { … }`, or
 //! in a file the manifest names, such as Codex's `"hooks": "./hooks.json"`.
 //!
@@ -10,7 +11,8 @@
 //! events, such as before a tool call, so they get the event as JSON on stdin and can refuse it:
 //! Claude Code reads them from its plugin folder, Codex from `-c` overrides, Antigravity from a
 //! `hooks.json` it is pointed at, and Patchwork's own agent runs the tool hooks around its calls.
-//! OpenCode has no hooks of this kind.
+//! OpenCode has no hooks of its own, so Patchwork runs the ones for before a tool call when
+//! OpenCode asks it about the call.
 
 // Rust guideline compliant 2026-10-09
 
@@ -28,7 +30,7 @@ pub use turn_hooks::{HookContext, run_hooks};
 mod types;
 
 #[doc(inline)]
-pub use types::{HookEvent, Plugin, PluginApp, PluginHook, PluginHookHandler};
+pub use types::{HookEvent, Bundle, BundleApp, Hook, HookHandler};
 
 mod folder;
 

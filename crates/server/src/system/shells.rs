@@ -162,7 +162,7 @@ pub fn find_shell(name: &str) -> Option<String> {
     find_program(name).map(|path| path.to_string_lossy().into_owned())
 }
 
-/// The shell that runs commands a model, a plugin or a check writes: bash, which they are written
+/// The shell that runs commands a model, a hook or a check writes: bash, which they are written
 /// for, else `sh`. On Windows, the user's shell, since agents there are told which one runs.
 pub fn command_shell() -> Option<String> {
     if cfg!(windows) {

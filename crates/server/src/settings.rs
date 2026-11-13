@@ -97,10 +97,12 @@ pub struct Settings {
     pub granular_chats: bool,
     /// What a launch does with the replies the last session's closing cut off.
     pub resume_at_launch: ResumeAtLaunch,
-    /// Folder of plugin bundles. None uses `plugins` in the config folder.
-    pub plugins_dir: Option<String>,
-    /// Plugins switched off in Settings, by folder name.
-    pub disabled_plugins: Vec<String>,
+    /// Folder of hook bundles. None uses `hooks` in the config folder.
+    #[serde(alias = "pluginsDir")]
+    pub hooks_dir: Option<String>,
+    /// Hook bundles switched off in Settings, by folder name.
+    #[serde(alias = "disabledPlugins")]
+    pub disabled_hooks: Vec<String>,
     /// Whether the agent may look at the screen and drive the pointer and keyboard.
     pub computer_use: bool,
     /// Whether a project's own check command runs after every task.
@@ -473,6 +475,11 @@ impl Server {
         let guards_changed = !permissions::same_guards(&old.permissions, &settings.permissions);
         // The system prompts are what an agent's launch instructions are made of.
         let prompt_changed = old.system_prompts != settings.system_prompts;
+        // An agent is handed its skills and hooks as it launches.
+        let extensions_changed = old.skills_dir != settings.skills_dir
+            || old.disabled_skills != settings.disabled_skills
+            || old.hooks_dir != settings.hooks_dir
+            || old.disabled_hooks != settings.disabled_hooks;
         let changed = changed_sections(&old, &settings);
         self.store.update_settings(|s| *s = settings)?;
         if !changed.is_empty() {
@@ -481,8 +488,8 @@ impl Server {
         // A rule the user just added may answer requests already waiting.
         self.runner.apply_rules(self);
         // Idle agents were told the old deny and ask rules, or launched with the old system
-        // prompt, so the next message starts a new one.
-        if guards_changed || prompt_changed {
+        // prompt, skills or hooks, so the next message starts a new one.
+        if guards_changed || prompt_changed || extensions_changed {
             self.runner.retire_all_idle();
         }
         Ok(())

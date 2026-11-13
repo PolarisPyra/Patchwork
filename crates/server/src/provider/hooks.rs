@@ -13,15 +13,17 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 
+use crate::permissions::PermissionKind;
 use crate::permissions::hook::HOOK_ARG;
-use crate::plugins::{AgentHook, HookAction, HookEvent};
+use crate::hooks::{AgentHook, HookAction, HookEvent};
 use crate::provider::{AgentKind, TurnSpec};
 
 /// Whether `agent` runs hooks on `event` itself.
 ///
 /// Patchwork runs the turn's own events for every agent; Claude Code and Codex run all the others,
 /// Antigravity its session start and tool calls, and Patchwork's own agent its tool calls. OpenCode
-/// has no hooks of this kind.
+/// has no hooks of its own, but asks Patchwork before a call, so Patchwork runs the hooks for
+/// before a tool call on that request: see `opencode_call`.
 #[must_use]
 pub fn runs(agent: AgentKind, event: HookEvent) -> bool {
     if event.runs_in_patchwork() {
@@ -34,7 +36,23 @@ pub fn runs(agent: AgentKind, event: HookEvent) -> bool {
             HookEvent::SessionStart | HookEvent::PreToolUse | HookEvent::PostToolUse
         ),
         AgentKind::Api => matches!(event, HookEvent::PreToolUse | HookEvent::PostToolUse),
-        AgentKind::OpenCode => false,
+        AgentKind::OpenCode => event == HookEvent::PreToolUse,
+    }
+}
+
+/// The tool call an OpenCode permission request stands for, as a hook reads one.
+///
+/// The tool has the name Claude Code gives it, so one matcher covers every agent: `Bash` with its
+/// `command`, `Edit` with its `file_path`, `WebFetch` with its `url`, and an MCP tool under the
+/// name OpenCode asks with. None for a request no tool hook answers for, such as another folder.
+#[must_use]
+pub fn opencode_call(kind: PermissionKind, resource: &str) -> Option<(String, Value)> {
+    match kind {
+        PermissionKind::Command => Some(("Bash".into(), json!({ "command": resource }))),
+        PermissionKind::Edit => Some(("Edit".into(), json!({ "file_path": resource }))),
+        PermissionKind::Web => Some(("WebFetch".into(), json!({ "url": resource }))),
+        PermissionKind::Mcp => Some((resource.to_string(), json!({}))),
+        PermissionKind::Folder | PermissionKind::Screen => None,
     }
 }
 
@@ -160,10 +178,10 @@ pub fn unguarded(agent: AgentKind, args: &[String]) -> Option<&'static str> {
     }
 }
 
-/// Builds the `-c` overrides that install Codex's permission and plugin hooks.
+/// Builds the `-c` overrides that install Codex's permission hook and the user's hooks.
 ///
 /// `-c` overrides with the hooks Codex runs: Patchwork's permission hook before the tools a rule
-/// can answer for (the shell, file patches, and MCP tools), and the plugins' hooks. The permission
+/// can answer for (the shell, file patches, and MCP tools), and the user's hooks. The permission
 /// hook is installed for every turn, guarded or not, because it asks Patchwork on each call: a
 /// rule added, changed, or removed while the turn runs then decides the calls that follow, with no
 /// relaunch. Codex only runs a hook it trusts, so their hashes are trusted too.
@@ -219,8 +237,8 @@ pub fn codex_args(spec: &TurnSpec) -> Vec<String> {
             .collect()
     } else {
         log::warn!(
-            "Codex did not list Patchwork's hooks, so deny rules are not enforced and plugin \
-             hooks do not run"
+            "Codex did not list Patchwork's hooks, so deny rules are not enforced and the \
+             user's hooks do not run"
         );
         Vec::new()
     }
@@ -384,7 +402,7 @@ pub fn run_prompt_hook() -> i32 {
 ///
 /// The folder Antigravity is given with `--add-dir`, or None when there is nothing to put in it:
 /// the hooks file it loads from there (the system prompt at session start, Patchwork's permission
-/// hook before each tool call, and the plugins' hooks). Rules such as a `GEMINI.md` in that folder
+/// hook before each tool call, and the user's hooks). Rules such as a `GEMINI.md` in that folder
 /// are not read, so the prompt goes through a hook. Each hooks file has a folder of its own, named
 /// by its hash, so turns that differ do not share a file.
 #[must_use]

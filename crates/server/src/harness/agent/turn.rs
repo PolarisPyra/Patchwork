@@ -14,7 +14,7 @@ use std::time::{Duration, SystemTime};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::plugins::AgentHook;
+use crate::hooks::AgentHook;
 use crate::provider::AgentKind;
 use crate::threads::AccessMode;
 
@@ -72,7 +72,7 @@ pub(super) struct Request {
     /// Tools of the MCP servers Patchwork runs, which it calls for the agent.
     #[serde(default)]
     pub(super) mcp_tools: Vec<McpTool>,
-    /// The plugins' tool hooks, which the agent runs around each call.
+    /// The tool hooks, which the agent runs around each call.
     #[serde(default)]
     pub(super) hooks: Vec<AgentHook>,
 }

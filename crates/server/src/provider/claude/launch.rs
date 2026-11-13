@@ -6,7 +6,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use crate::agents::{self, Agent};
-use crate::plugins::AgentHook;
+use crate::hooks::AgentHook;
 use crate::provider::AgentKind;
 use crate::settings::Settings;
 use crate::threads::ResumePoint;
@@ -14,7 +14,7 @@ use crate::threads::ResumePoint;
 /// Builds the arguments that configure Claude's system prompt, skills, and hooks.
 ///
 /// Arguments that append the checklist and shell instructions to Claude's system prompt, and load
-/// Patchwork's skills and the plugins' hooks from the `claude` folder as a plugin. Claude records
+/// Patchwork's skills and the user's hooks from the `claude` folder as a plugin. Claude records
 /// a conversation's system prompt on its first request and resumes with that record, so a prompt
 /// edited in Settings would never reach a chat already started; with the record off the prompt
 /// is built on each request, and the cache still holds it while it stays the same.

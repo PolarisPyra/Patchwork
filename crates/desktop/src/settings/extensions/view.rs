@@ -5,7 +5,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 use gpui::{AnyElement, Div, FontWeight, SharedString, Stateful, Window, div, prelude::*, px};
-use patchwork_server::plugins::Plugin;
+use patchwork_server::hooks::Bundle;
 use patchwork_server::skills::Skill;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert, chip, segmented};
@@ -44,9 +44,9 @@ pub struct ExtensionsState {
     pub(super) skill_query: String,
     /// On or off only; None shows all.
     pub(super) skill_filter: Option<bool>,
-    pub(super) plugins: Option<Vec<Plugin>>,
-    pub(super) asked_plugins: bool,
-    /// The hooks opened to their details, by plugin id and place.
+    pub(super) bundles: Option<Vec<Bundle>>,
+    pub(super) asked_bundles: bool,
+    /// The hooks opened to their details, by bundle id and place.
     pub(super) open_hooks: HashSet<(String, usize)>,
 }
 

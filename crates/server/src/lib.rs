@@ -20,7 +20,7 @@ pub mod logging;
 pub mod orchestration;
 pub mod permissions;
 pub mod persistence;
-pub mod plugins;
+pub mod hooks;
 pub mod projects;
 pub mod provider;
 pub mod scheduled;
@@ -99,7 +99,7 @@ impl Server {
         crate::provider::api::config::init(&dirs.config);
         provider::mcp::init(&dirs.config);
         skills::init(&dirs.config);
-        plugins::init(&dirs.config);
+        hooks::init(&dirs.config);
         let agents = agents::Library::open(&dirs.config);
         std::thread::spawn(system::scope::prepare);
         // Read at launch, so the first command does not wait on the shell.

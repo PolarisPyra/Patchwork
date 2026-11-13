@@ -86,8 +86,35 @@ pub(super) fn call_tool(turn: &Turn, id: Value, server: String, tool: String, ar
     });
 }
 
-/// Asks the user to approve a call, unless a grant from a permission hook or a permission rule
-/// answers it first.
+/// Why a hook refuses the call an OpenCode request asks to make, if one does.
+///
+/// OpenCode has no hooks of its own and asks Patchwork before these calls, so Patchwork runs the
+/// user's hooks for before a tool call here, as the other agents run them themselves.
+fn refused_by_hook(turn: &Turn, target: &permissions::Target) -> Option<String> {
+    let event = crate::hooks::HookEvent::PreToolUse;
+    if turn.agent != AgentKind::OpenCode {
+        return None;
+    }
+    let hooks = crate::hooks::agent_hooks(&turn.server.store.settings());
+    let root = crate::system::remote::here(&turn.root);
+    target.resources.iter().find_map(|resource| {
+        let (tool, input) = provider::hooks::opencode_call(target.kind, resource)?;
+        let call = serde_json::json!({
+            "session_id": turn.session_id,
+            "cwd": root,
+            "hook_event_name": event.cli_name(),
+            "tool_name": tool,
+            "tool_input": input,
+        });
+        hooks
+            .iter()
+            .filter(|hook| hook.event == event && hook.matches(&tool))
+            .find_map(|hook| crate::hooks::run_tool_hook(hook, &call, root))
+    })
+}
+
+/// Asks the user to approve a call, unless a hook, a grant from a permission hook, or a
+/// permission rule answers it first.
 pub(super) fn request_approval(
     turn: &Turn,
     unsaved: &mut Unsaved,
@@ -113,6 +140,24 @@ pub(super) fn request_approval(
         auto: false,
         secret: None,
     };
+    // A hook refuses it, whatever the rules and the user would say.
+    if let Some(reason) = target.as_ref().and_then(|t| refused_by_hook(turn, t)) {
+        let mut reply = reply;
+        reply["message"] = Value::from(reason.as_str());
+        write_line(
+            &turn.stdin,
+            &provider::approval_reply(turn.agent, &reply, false, &HashMap::new()),
+        );
+        approval.detail = format!("{reason}: {}", approval.detail);
+        approval.status = ApprovalStatus::Denied;
+        approval.auto = true;
+        turn.save_text(unsaved);
+        turn.publish(AgentEvent::ApprovalRequested {
+            message_id: turn.message_id.clone(),
+            approval,
+        });
+        return;
+    }
     // The user already allowed it through a permission hook.
     if target.as_ref().is_some_and(|t| {
         turn.server

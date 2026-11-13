@@ -7,7 +7,7 @@ use std::io::Read;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 use crate::settings::Settings;
-use super::{HookEvent, PluginHookHandler, list};
+use super::{HookEvent, HookHandler, list};
 
 /// The turn a hook runs for, as its environment tells it.
 #[derive(Debug)]
@@ -21,31 +21,31 @@ pub struct HookContext<'a> {
     pub status: Option<&'a str>,
 }
 
-/// Runs the enabled plugins' command hooks for an event, returning the failures.
+/// Runs the enabled bundles' command hooks for an event, returning the failures.
 ///
-/// Runs the enabled plugins' command hooks for `context.event`, one after another, in the user's
+/// Runs the enabled bundles' command hooks for `context.event`, one after another, in the user's
 /// shell, or bash where it is not a POSIX one, in the project folder. Returns
-/// `"<plugin name>: <why>"` for each one that failed; a failed hook never stops the turn.
+/// `"<bundle name>: <why>"` for each one that failed; a failed hook never stops the turn.
 #[must_use]
 pub fn run_hooks(settings: &Settings, context: &HookContext<'_>) -> Vec<String> {
     let commands: Vec<(String, String, u64)> = list(settings)
         .into_iter()
-        .filter(|plugin| plugin.enabled)
-        .flat_map(|plugin| {
-            let name = plugin.name;
-            plugin
+        .filter(|bundle| bundle.enabled)
+        .flat_map(|bundle| {
+            let name = bundle.name;
+            bundle
                 .hooks
                 .into_iter()
                 .filter(|hook| hook.event == context.event)
                 .filter_map(move |hook| match hook.handler {
-                    PluginHookHandler::Command {
+                    HookHandler::Command {
                         command,
                         timeout_secs,
                     } => Some((name.clone(), command, timeout_secs)),
-                    PluginHookHandler::McpTool { .. }
-                    | PluginHookHandler::Prompt
-                    | PluginHookHandler::Agent
-                    | PluginHookHandler::Unsupported { .. } => None,
+                    HookHandler::McpTool { .. }
+                    | HookHandler::Prompt
+                    | HookHandler::Agent
+                    | HookHandler::Unsupported { .. } => None,
                 })
         })
         .collect();
@@ -115,7 +115,7 @@ fn run_command(command: &str, timeout_secs: u64, context: &HookContext<'_>) -> R
     let stderr = stderr.join().unwrap_or_default();
     let stdout = stdout.trim();
     if !stdout.is_empty() {
-        log::info!(event = context.event.name(), stdout:%; "plugin hook {{event}}: {{stdout}}");
+        log::info!(event = context.event.name(), stdout:%; "hook {{event}}: {{stdout}}");
     }
     if status.success() {
         Ok(())

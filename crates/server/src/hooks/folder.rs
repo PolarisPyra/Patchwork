@@ -1,4 +1,4 @@
-//! The plugins folder, and the plugins in it.
+//! The hooks folder, and the bundles in it.
 
 // Rust guideline compliant 2026-10-09
 
@@ -7,35 +7,40 @@ use std::sync::OnceLock;
 
 use crate::settings::Settings;
 
-use super::{Plugin, read_bundle};
+use super::{Bundle, read_bundle};
 
 static CONFIG_DIR: OnceLock<PathBuf> = OnceLock::new();
 
-/// Remembers the config folder, where the default plugins folder is.
+/// Remembers the config folder, where the default hooks folder is.
+///
+/// The folder was called `plugins` before, so one left from then is renamed to `hooks`.
 pub fn init(config_dir: &Path) {
     let _ = CONFIG_DIR.set(config_dir.to_path_buf());
+    let (old, new) = (config_dir.join("plugins"), config_dir.join("hooks"));
+    if old.is_dir()
+        && !new.exists()
+        && let Err(e) = std::fs::rename(&old, &new)
+    {
+        log::warn!(error:% = e; "could not rename the plugins folder to hooks: {{error}}");
+    }
 }
 
 fn default_dir() -> PathBuf {
-    CONFIG_DIR
-        .get()
-        .cloned()
-        .unwrap_or_default()
-        .join("plugins")
+    CONFIG_DIR.get().cloned().unwrap_or_default().join("hooks")
 }
 
-/// The plugins folder in use.
+/// The hooks folder in use.
 pub fn dir(settings: &Settings) -> PathBuf {
-    match settings.plugins_dir.as_deref().map(str::trim) {
+    match settings.hooks_dir.as_deref().map(str::trim) {
         Some(path) if !path.is_empty() => PathBuf::from(path),
         _ => default_dir(),
     }
 }
 
-/// Every plugin in the plugins folder, by name.
-pub fn list(settings: &Settings) -> Vec<Plugin> {
+/// Every bundle in the hooks folder, by name.
+pub fn list(settings: &Settings) -> Vec<Bundle> {
     let root = dir(settings);
-    let mut plugins: Vec<Plugin> = std::fs::read_dir(&root)
+    let mut bundles: Vec<Bundle> = std::fs::read_dir(&root)
         .into_iter()
         .flatten()
         .filter_map(Result::ok)
@@ -43,19 +48,19 @@ pub fn list(settings: &Settings) -> Vec<Plugin> {
         .filter_map(|entry| {
             let path = entry.path();
             let id = entry.file_name().to_string_lossy().into_owned();
-            let enabled = !settings.disabled_plugins.contains(&id);
+            let enabled = !settings.disabled_hooks.contains(&id);
             read_bundle(&path, enabled)
         })
         .collect();
-    plugins.sort_by_key(|plugin| plugin.name.to_lowercase());
-    plugins
+    bundles.sort_by_key(|bundle| bundle.name.to_lowercase());
+    bundles
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use super::super::manifest::{DEFAULT_TIMEOUT_SECS, handler};
-    use super::super::{HookContext, HookEvent, PluginApp, PluginHookHandler, run_hooks};
+    use super::super::{HookContext, HookEvent, BundleApp, HookHandler, run_hooks};
     use std::time::Duration;
 
     fn temp_dir() -> PathBuf {
@@ -64,10 +69,10 @@ mod tests {
         dir
     }
 
-    fn settings_with(plugins_dir: &Path, disabled: &[&str]) -> Settings {
+    fn settings_with(hooks_dir: &Path, disabled: &[&str]) -> Settings {
         Settings {
-            plugins_dir: Some(plugins_dir.to_string_lossy().into_owned()),
-            disabled_plugins: disabled.iter().map(|id| (*id).to_string()).collect(),
+            hooks_dir: Some(hooks_dir.to_string_lossy().into_owned()),
+            disabled_hooks: disabled.iter().map(|id| (*id).to_string()).collect(),
             ..Settings::default()
         }
     }
@@ -77,8 +82,8 @@ mod tests {
         std::fs::write(path, text).expect("a file");
     }
 
-    fn command(command: &str, timeout_secs: u64) -> PluginHookHandler {
-        PluginHookHandler::Command {
+    fn command(command: &str, timeout_secs: u64) -> HookHandler {
+        HookHandler::Command {
             command: command.into(),
             timeout_secs,
         }
@@ -105,13 +110,13 @@ mod tests {
                 "apps": { "apps": { "figma": { "id": "asdk_figma", "required": true }, "linear": { "id": "asdk_linear" } } }
             }"#,
         );
-        let plugins = list(&settings_with(&root, &[]));
-        assert_eq!(plugins.len(), 1);
-        let plugin = &plugins[0];
-        assert_eq!(plugin.id, "codexish");
-        assert_eq!(plugin.name, "Codexish");
-        assert_eq!(plugin.version.as_deref(), Some("1.2.3"));
-        let events: Vec<&str> = plugin.hooks.iter().map(|hook| hook.event.name()).collect();
+        let bundles = list(&settings_with(&root, &[]));
+        assert_eq!(bundles.len(), 1);
+        let bundle = &bundles[0];
+        assert_eq!(bundle.id, "codexish");
+        assert_eq!(bundle.name, "Codexish");
+        assert_eq!(bundle.version.as_deref(), Some("1.2.3"));
+        let events: Vec<&str> = bundle.hooks.iter().map(|hook| hook.event.name()).collect();
         assert_eq!(
             events,
             [
@@ -123,40 +128,40 @@ mod tests {
             ]
         );
         assert_eq!(
-            plugin.hooks[0].handler,
+            bundle.hooks[0].handler,
             command("echo hi", DEFAULT_TIMEOUT_SECS)
         );
         assert_eq!(
-            plugin.hooks[1].handler,
-            PluginHookHandler::McpTool {
+            bundle.hooks[1].handler,
+            HookHandler::McpTool {
                 server: "notes".into(),
                 tool: "save".into()
             }
         );
-        assert_eq!(plugin.hooks[2].handler, PluginHookHandler::Prompt);
+        assert_eq!(bundle.hooks[2].handler, HookHandler::Prompt);
         assert_eq!(
-            plugin.hooks[3].handler,
-            PluginHookHandler::Unsupported {
+            bundle.hooks[3].handler,
+            HookHandler::Unsupported {
                 kind: "webhook".into()
             }
         );
-        assert_eq!(plugin.hooks[4].handler, command("echo done", 10));
+        assert_eq!(bundle.hooks[4].handler, command("echo done", 10));
         assert_eq!(
-            plugin.apps,
+            bundle.apps,
             [
-                PluginApp {
+                BundleApp {
                     name: "figma".into(),
                     id: "asdk_figma".into(),
                     required: true
                 },
-                PluginApp {
+                BundleApp {
                     name: "linear".into(),
                     id: "asdk_linear".into(),
                     required: false
                 },
             ]
         );
-        assert!(plugin.enabled);
+        assert!(bundle.enabled);
     }
 
     #[test]
@@ -174,11 +179,11 @@ mod tests {
             &root.join("demo/.app.json"),
             r#"{"apps":{"figma":{"id":"asdk_figma","required":true}}}"#,
         );
-        let plugins = list(&settings_with(&root, &[]));
-        assert_eq!(plugins[0].hooks.len(), 1);
-        assert_eq!(plugins[0].hooks[0].event, HookEvent::Stop);
-        assert_eq!(plugins[0].apps.len(), 1);
-        assert_eq!(plugins[0].apps[0].id, "asdk_figma");
+        let bundles = list(&settings_with(&root, &[]));
+        assert_eq!(bundles[0].hooks.len(), 1);
+        assert_eq!(bundles[0].hooks[0].event, HookEvent::Stop);
+        assert_eq!(bundles[0].apps.len(), 1);
+        assert_eq!(bundles[0].apps[0].id, "asdk_figma");
     }
 
     /// A part in a shape this version does not read used to fail the whole manifest, and the
@@ -190,11 +195,11 @@ mod tests {
             &root.join("demo/.patchwork-plugin/plugin.json"),
             r#"{"name":"Demo","apps":[],"hooks":{"hooks":{"stop":[{"hooks":[{"type":"command","command":"true"}]}]}}}"#,
         );
-        let plugins = list(&settings_with(&root, &[]));
-        assert_eq!(plugins.len(), 1);
-        assert!(plugins[0].apps.is_empty());
-        assert_eq!(plugins[0].hooks.len(), 1);
-        assert_eq!(plugins[0].hooks[0].event, HookEvent::Stop);
+        let bundles = list(&settings_with(&root, &[]));
+        assert_eq!(bundles.len(), 1);
+        assert!(bundles[0].apps.is_empty());
+        assert_eq!(bundles[0].hooks.len(), 1);
+        assert_eq!(bundles[0].hooks[0].event, HookEvent::Stop);
     }
 
     #[test]
@@ -207,7 +212,7 @@ mod tests {
     }
 
     #[test]
-    fn runs_an_enabled_plugins_command_hooks_in_the_project() {
+    fn runs_an_enabled_bundles_command_hooks_in_the_project() {
         let root = temp_dir();
         let project = temp_dir();
         write(
@@ -238,7 +243,7 @@ mod tests {
             !project.join("ended").exists(),
             "only the event's own hooks run"
         );
-        // A disabled plugin runs nothing.
+        // A disabled bundle runs nothing.
         std::fs::remove_file(project.join("hook.txt")).expect("remove");
         assert!(run_hooks(&settings_with(&root, &["demo"]), &context).is_empty());
         assert!(!project.join("hook.txt").exists());
@@ -278,21 +283,21 @@ mod tests {
                 "preToolUse":[{"hooks":[{"type":"command","command":"exit 0","timeoutSec":10}]}]
             }}"#,
         );
-        let plugins = list(&settings_with(&root, &[]));
-        assert_eq!(plugins.len(), 1);
-        let plugin = &plugins[0];
-        assert_eq!(plugin.id, "patchwork");
-        assert_eq!(plugin.name, "Patchwork");
+        let bundles = list(&settings_with(&root, &[]));
+        assert_eq!(bundles.len(), 1);
+        let bundle = &bundles[0];
+        assert_eq!(bundle.id, "patchwork");
+        assert_eq!(bundle.name, "Patchwork");
         assert_eq!(
-            plugin.description.as_deref(),
+            bundle.description.as_deref(),
             Some("Patchwork's own hooks.")
         );
-        assert_eq!(plugin.hooks.len(), 1);
-        let hook = &plugin.hooks[0];
+        assert_eq!(bundle.hooks.len(), 1);
+        let hook = &bundle.hooks[0];
         assert_eq!(hook.event, HookEvent::PreToolUse);
         assert_eq!(
             hook.handler,
-            PluginHookHandler::Command {
+            HookHandler::Command {
                 command: "exit 0".into(),
                 timeout_secs: 10,
             }
@@ -300,7 +305,7 @@ mod tests {
     }
 
     #[test]
-    fn a_folder_without_a_manifest_is_not_a_plugin() {
+    fn a_folder_without_a_manifest_is_not_a_bundle() {
         let root = temp_dir();
         write(
             &root.join("plain/skills/one/SKILL.md"),
