@@ -9,6 +9,7 @@ use patchwork_server::Server;
 use patchwork_server::import::{ImportScan, ImportSource};
 use patchwork_server::provider::{AgentKind, AgentStatus};
 use patchwork_server::settings::Settings;
+use patchwork_server::system::browse;
 use crate::ui::text_area::{Changed, Submitted, TextArea};
 use crate::ui::theme::theme;
 
@@ -139,7 +140,11 @@ pub struct Onboarding {
     pub(super) heading: FocusHandle,
     /// The default agent's tiles, so the arrow keys can move between them.
     pub(super) default_tiles: HashMap<AgentKind, FocusHandle>,
-    pub(super) runs_on: [FocusHandle; 2],
+    /// The SSH hosts in `~/.ssh/config`, once read.
+    pub(super) hosts: Option<Vec<String>>,
+    /// The "Where tasks run" options: this computer, then each host, or the row saying there is
+    /// none.
+    pub(super) runs_on: Vec<FocusHandle>,
     pub(super) scroll: ScrollHandle,
 }
 
@@ -191,10 +196,28 @@ impl Onboarding {
                 .into_iter()
                 .map(|k| (k, cx.focus_handle()))
                 .collect(),
-            runs_on: [cx.focus_handle(), cx.focus_handle()],
+            hosts: None,
+            runs_on: vec![cx.focus_handle(), cx.focus_handle()],
             scroll: ScrollHandle::new(),
         };
         this.check(cx);
+        let task = cx.background_spawn(async move { browse::machines() });
+        cx.spawn(async move |this, cx| {
+            let machines = task.await;
+            this.update(cx, |this, cx| {
+                let hosts = machines
+                    .into_iter()
+                    .filter(|m| !m.local)
+                    .map(|m| m.name)
+                    .collect::<Vec<_>>();
+                this.runs_on = (0..=hosts.len().max(1))
+                    .map(|_| cx.focus_handle())
+                    .collect();
+                this.hosts = Some(hosts);
+                cx.notify();
+            })
+        })
+        .detach();
         this
     }
 

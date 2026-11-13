@@ -61,6 +61,9 @@ pub struct Settings {
     pub integrations: Integrations,
     pub projects: Vec<Project>,
     pub active_project_id: Option<String>,
+    /// The SSH host, by its `Host` alias, whose folders Add Project opens on. None is this
+    /// computer.
+    pub default_machine: Option<String>,
     pub tokens: TokenSettings,
     /// The model that reads the images of a message on Patchwork's own agent and describes them
     /// to the chat's model. None sends the images to the chat's model.

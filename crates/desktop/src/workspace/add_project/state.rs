@@ -148,7 +148,17 @@ impl AddProject {
                     this.browsing = true;
                     this.refocus = true;
                 }
+                // The host picked in setup opens first, while the SSH config still lists it.
+                let default = this
+                    .server
+                    .store
+                    .settings()
+                    .default_machine
+                    .filter(|d| machines.iter().any(|m| !m.local && m.name == *d));
                 this.machines = Some(machines);
+                if default.is_some() {
+                    this.open_machine(default, cx);
+                }
                 cx.notify();
             })
         })
