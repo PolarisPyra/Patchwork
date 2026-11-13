@@ -8,7 +8,7 @@ use super::read::Rows;
 use super::read::cli;
 use gpui::{AnyElement, FontWeight, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_server::provider::cli_info::InfoCommand;
-use crate::settings::providers::rows::tildify;
+use crate::settings::controls::tildify;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
 use crate::ui::theme::{FONT_MONO, FS_LG, FS_SM, FS_XS, RADIUS, RADIUS_SM, theme};

@@ -39,22 +39,6 @@ pub(super) fn describe_agent(status: Option<&Option<AgentStatus>>) -> String {
     }
 }
 
-/// `~/…` for a path under the home folder (`tildify`).
-pub(super) fn tildify(path: &str) -> String {
-    match std::env::var("HOME") {
-        // Only at a folder's edge: `/home/ann` is not the start of `/home/anna`.
-        Ok(home)
-            if !home.is_empty()
-                && path
-                    .strip_prefix(&home)
-                    .is_some_and(|rest| rest.is_empty() || rest.starts_with('/')) =>
-        {
-            format!("~{}", &path[home.len()..])
-        }
-        _ => path.to_string(),
-    }
-}
-
 /// `.badge`, green when `ok`, red when `bad`.
 pub(super) fn status_badge(text: impl Into<SharedString>, ok: bool, bad: bool, t: &Theme) -> Div {
     let b = badge(text, t);

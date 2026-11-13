@@ -11,7 +11,7 @@ mod rows;
 mod state;
 
 pub use form::Draft;
-use state::{Card, Client, Own, Use, dot, target, tildify};
+use state::{Card, Client, Own, Use, dot, target};
 pub use state::McpState;
 pub use render::render;
 use render::pairs_text;
