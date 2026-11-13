@@ -5,7 +5,7 @@ Each release adds its notes at the top; see docs/release.md.
 
 ## [26.11.66] - 2026-11-13
 
-**v26.11.66** · 14 changes from 1 contributor
+**26.11.66** · 14 changes from 1 contributor
 
 - **Computer use tools for API chats.** API chats now get computer use tools when enabled in Settings, and calls error when disabled.
 - **Keyboard-accessible approval menus.** Menus on approval cards, banners, and plans can be reached with Tab and activated with Enter or Space.
@@ -13,8 +13,6 @@ Each release adds its notes at the top; see docs/release.md.
 - **Correct test command after replies.** Go, Elixir, and Makefile projects now run their own test command instead of pytest.
 - **Plan mode blocks editing calls.** In plan mode, API chats that call editing tools now get an error instead of changing files.
 - **SSH hooks work in OpenCode.** Hooks that check tool calls before they run now run on the host for OpenCode SSH projects.
-
-### Plus 4 more bug fixes.
 
 <details>
 <summary>Full changelog</summary>
@@ -46,7 +44,7 @@ Each release adds its notes at the top; see docs/release.md.
 
 ## [26.11.65] - 2026-11-13
 
-**v26.11.65** · 3 changes from 1 contributor
+**26.11.65** · 3 changes from 1 contributor
 
 - **Remote terminals from machine menu.** Pick an SSH host to see and open terminals on that host in its home folder.
 - **Agent run controls.** Set step and token limits, continue after stops, stop immediately keeping partial work, and delegate to a subagent.
