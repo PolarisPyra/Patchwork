@@ -46,7 +46,7 @@ pub struct Run {
 pub enum RunOutcome {
     Started,
     Failed,
-    /// Its time went by more than a day ago, so it was not run late.
+    /// Its time went by longer ago than `CATCH_UP_WITHIN_MS`, so it was not run late.
     Skipped,
 }
 

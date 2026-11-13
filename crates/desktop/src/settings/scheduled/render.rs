@@ -13,7 +13,7 @@ use crate::settings::{SettingsDialog, SettingsEvent};
 use crate::ui::theme::{FS_SM, FS_XS, theme};
 use crate::ui::{BtnKind, agent_label, btn, icon, icon_button, tooltip};
 use super::editor::{editor};
-use super::state::{blank, describe_schedule, run_history, when_label};
+use super::state::{blank, run_history, when_label};
 
 fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
     let t = *theme(cx);
@@ -104,7 +104,10 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                         .gap_y(px(2.))
                         .text_size(px(FS_SM))
                         .text_color(t.text_muted)
-                        .child(meta("calendar-blank", describe_schedule(&task.schedule)))
+                        .child(meta(
+                            "calendar-blank",
+                            patchwork_server::scheduled::describe(&task.schedule),
+                        ))
                         .child(meta(
                             if task.project_id.is_some() {
                                 "folder-simple"
