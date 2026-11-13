@@ -137,10 +137,11 @@ jobs:
           VERSION: ${{ steps.changes.outputs.version }}
         run: |
           entries=$RUNNER_TEMP/entries.json
-          full=$(jq -r '. as $all | ["Added", "Changed", "Fixed", "Removed", "Security"]
+          full=$(jq -r --arg repo "$GITHUB_REPOSITORY" '. as $all | ["Added", "Changed", "Fixed", "Removed", "Security"]
             | map(. as $group | $all | map(select(.group == $group)) | select(length > 0)
-              | "### \($group)\n\n" + (map("- \(.entry) by [@\(.author)](https://github.com/\(.author))"
-                  + (if .pr != "" then " in #\(.pr)" else "" end)) | join("\n")))
+              | "### \($group)\n\n" + (map("- \(.entry) by "
+                  + (if .pr != "" then "[\(.author) in #\(.pr)](https://github.com/\($repo)/pull/\(.pr))"
+                    else "[\(.author)](https://github.com/\(.author))" end)) | join("\n")))
             | join("\n\n")' "$entries")
           if [ -s "$RUNNER_TEMP/highlights.json" ] \
             && summary=$(jq -r --slurpfile entries "$entries" '

@@ -24,9 +24,10 @@ line in the PR body, or the commit message when the body has none. A commit push
 - A line with the version and how many changes and contributors it has.
 - Up to seven highlights, each a bold name and one sentence. DeepSeek (`deepseek-v4-pro`, through
   the `DEEPSEEK_API_KEY` repository secret) picks them from the entries.
-- Every entry, grouped by Added, Changed, Fixed, Removed and Security, with "by @login in #N" for
-  its author and PR, folded under "Full changelog". The login is a plain link to the author's
-  profile rather than a mention, which GitHub would highlight for the author.
+- Every entry, grouped by Added, Changed, Fixed, Removed and Security, with "by login in #N" for
+  its author and PR, folded under "Full changelog". The whole phrase is one link to the PR. The
+  login has no "@", which GitHub would turn into a highlighted mention even inside a link. An
+  entry without a PR links the login to the author's profile.
 
 The app's update notes and Settings → Updates stop at "Full changelog". Without the secret, or
 when the request fails, the notes are the full list alone and the run shows a warning. The prompt
