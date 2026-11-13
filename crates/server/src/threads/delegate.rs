@@ -3,12 +3,16 @@
 //! A CLI only runs its own models, so a chat whose sub agents are set to another agent (see
 //! `granular`) is offered [`TOOL`] on Patchwork's own server. Patchwork runs the work as a chat of
 //! that agent's, and hands its answer back as the tool's result.
+//!
+//! Patchwork's own agent has no sub agents of its own, so it is offered the tool in every chat, and
+//! its sub agents run on itself unless the chat names another agent.
 
 // Rust guideline compliant 2026-10-09
 
 use serde_json::{Value, json};
 
-use super::granular::{AgentPick, delegate_of};
+use super::granular::{AgentPick, sub_agent_of};
+use crate::provider::AgentKind;
 use crate::{Error, Server};
 
 /// The tool a chat's agent starts a sub agent on another agent with.
@@ -34,13 +38,28 @@ pub fn shown(summary: &str) -> &str {
     }
 }
 
-/// What the agent is told the tool does, for sub agents that run at `pick`.
-fn description(pick: &AgentPick) -> String {
+/// What the agent of `caller` is told the tool does, for sub agents that run at `pick`.
+fn description(caller: AgentKind, pick: &AgentPick) -> String {
     let model = pick
         .model
         .as_deref()
         .map(|model| format!(" ({model})"))
         .unwrap_or_default();
+    // Patchwork's own agent runs its calls one at a time and has no sub agents of its own.
+    if caller == AgentKind::Api {
+        let on = if pick.agent == caller {
+            format!("a fresh run of this agent{model}, with the same tools")
+        } else {
+            format!("{:?}{model}, with tools of its own", pick.agent)
+        };
+        return format!(
+            "Hand a self-contained piece of work to a sub agent and wait for its answer: {on}, \
+             working in the same folder. It sees nothing of this conversation, so the prompt must \
+             hold everything it needs, and only its last reply comes back. Use it for work whose \
+             steps would crowd this conversation, such as searching a large codebase or \
+             researching a question."
+        );
+    }
     format!(
         "Run a sub agent on {:?}{model} and wait for its answer. The user set this chat's sub \
          agents to run there: whenever you would hand work to a sub agent, call this instead of \
@@ -80,13 +99,13 @@ impl Ask {
 
 impl Server {
     /// The tool as Patchwork's own server lists it for the thread's agent. None when the
-    /// thread's sub agents run on its own agent.
+    /// thread's CLI runs its sub agents itself.
     pub(crate) fn delegate_tool(&self, thread_id: &str) -> Option<Value> {
         let thread = self.store.thread(thread_id)?;
-        let pick = delegate_of(&self.store, &self.store.settings(), &thread)?;
+        let pick = sub_agent_of(&self.store, &self.store.settings(), &thread)?;
         Some(json!({
             "name": TOOL,
-            "description": description(&pick),
+            "description": description(thread.agent, &pick),
             "inputSchema": {"type": "object", "properties": {
                 "description": {"type": "string", "description": "What the sub agent does, in a few words."},
                 "prompt": {"type": "string", "description": "The whole task, with everything the sub agent needs to know."}

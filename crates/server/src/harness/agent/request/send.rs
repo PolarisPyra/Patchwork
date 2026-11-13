@@ -5,6 +5,8 @@
 use super::watch::emit_usage;
 use super::watch::Speed;
 use super::types::STREAM_IDLE;
+use super::types::STOP_POLL;
+use super::types::STOPPED;
 use super::types::MAX_REASONING;
 use super::watch::LoopWatch;
 use super::types::Call;
@@ -153,6 +155,9 @@ impl Agent {
         );
         let mut attempt = 1;
         loop {
+            if self.stopped() {
+                return Err(Failure::Interrupted(String::new()));
+            }
             let mut request = self
                 .http
                 .post(&url)
@@ -178,9 +183,14 @@ impl Agent {
                         ),
                         Ok(reply) => return Ok(reply),
                         Err(StreamError {
+                            interrupted: Some(text),
+                            ..
+                        }) => return Err(Failure::Interrupted(text)),
+                        Err(StreamError {
                             message,
                             shown,
                             stopped,
+                            interrupted: None,
                         }) => {
                             // Some endpoints, such as LM Studio, accept the request and then
                             // refuse a prompt too long for the loaded context as an error event
@@ -234,7 +244,13 @@ impl Agent {
             emit(
                 &json!({"type": "api.retry", "reason": message, "attempt": attempt, "max": MAX_ATTEMPTS - 1}),
             );
-            std::thread::sleep(retry_delay(attempt, retry_after));
+            let until = Instant::now() + retry_delay(attempt, retry_after);
+            while let Some(left) = until.checked_duration_since(Instant::now()) {
+                if self.stopped() {
+                    return Err(Failure::Interrupted(String::new()));
+                }
+                std::thread::sleep(left.min(STOP_POLL));
+            }
             attempt += 1;
         }
     }
@@ -253,6 +269,7 @@ impl Agent {
                 // A quiet reply, like a summary, shows nothing until it is done.
                 shown: !self.quiet && (!reply.content.is_empty() || !reply.reasoning.is_empty()),
                 stopped: reply.runaway,
+                interrupted: self.stopped().then(|| reply.content.clone()),
             }),
         }
     }
@@ -311,18 +328,26 @@ impl Agent {
             }
         });
         loop {
-            let line = match lines.recv_timeout(STREAM_IDLE) {
-                Ok(line) => line,
-                Err(RecvTimeoutError::Disconnected) => break,
-                Err(RecvTimeoutError::Timeout) => {
-                    return Err(format!(
-                        "{} stopped sending its reply for {} s, so the turn was stopped",
-                        self.request.provider,
-                        STREAM_IDLE.as_secs()
-                    )
-                    .into());
+            let mut idle = Duration::ZERO;
+            let line = loop {
+                if self.stopped() {
+                    return Err(STOPPED.into());
+                }
+                match lines.recv_timeout(STOP_POLL) {
+                    Ok(line) => break Some(line),
+                    Err(RecvTimeoutError::Disconnected) => break None,
+                    Err(RecvTimeoutError::Timeout) if idle < STREAM_IDLE => idle += STOP_POLL,
+                    Err(RecvTimeoutError::Timeout) => {
+                        return Err(format!(
+                            "{} stopped sending its reply for {} s, so the turn was stopped",
+                            self.request.provider,
+                            STREAM_IDLE.as_secs()
+                        )
+                        .into());
+                    }
                 }
             };
+            let Some(line) = line else { break };
             let line = line
                 .map_err(|e| format!("The reply from {} broke off: {e}", self.request.provider))?;
             let Some(data) = line.strip_prefix("data:") else {

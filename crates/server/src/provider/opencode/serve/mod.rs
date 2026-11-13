@@ -7,6 +7,6 @@ mod parse;
 #[cfg(test)]
 mod tests;
 
-pub use request::{uses_serve, bridge_request, mode_asks, steer_line, approval_reply};
+pub use request::{uses_serve, bridge_request, mode_asks, steer_line, interrupt_line, approval_reply};
 pub(in crate::provider::opencode) use request::{action};
 pub(in crate::provider::opencode) use parse::{parse_serve};

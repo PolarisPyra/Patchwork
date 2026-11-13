@@ -1,6 +1,5 @@
 //! Settings → General: the theme, the app icon and the background every chat shows unless it has
-//! its own; how a chat is answered; which finished work raises a notification; and below them, how
-//! much each log records.
+//! its own; which finished work raises a notification; and below them, how much each log records.
 
 // Rust guideline compliant 2026-10-09
 
@@ -11,7 +10,7 @@ use gpui::{
     px,
 };
 use patchwork_server::backgrounds::{BackgroundStrength, ChatBackground};
-use patchwork_server::settings::{LogLevel, LoggingSettings, ResumeAtLaunch, Theme as ThemeSetting};
+use patchwork_server::settings::{LogLevel, LoggingSettings, Theme as ThemeSetting};
 
 use crate::ui::background_picker::{BackgroundPicker, PickerEvent};
 use crate::settings::SettingsDialog;
@@ -30,12 +29,6 @@ const STRENGTHS: [(BackgroundStrength, &str); 3] = [
     (BackgroundStrength::Subtle, "Subtle"),
     (BackgroundStrength::Medium, "Medium"),
     (BackgroundStrength::Strong, "Strong"),
-];
-
-const RESUMES: [(ResumeAtLaunch, &str); 3] = [
-    (ResumeAtLaunch::Always, "Always"),
-    (ResumeAtLaunch::Ask, "Ask"),
-    (ResumeAtLaunch::Never, "Never"),
 ];
 
 /// The log levels, from the most to the least recorded.
@@ -348,47 +341,6 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             |d, strength, cx| d.update(|s| s.chat_background_strength = strength, cx),
             cx,
         )))
-        .child(section_heading("Chats", false, &t))
-        .child(toggle_row(
-            "confirm-answers",
-            "Click answers twice to send",
-            None,
-            s.confirm_answers,
-            |s, on| s.confirm_answers = on,
-            cx,
-        ))
-        .child(toggle_row(
-            "steer-while-working",
-            "Enter steers a running reply",
-            None,
-            s.steer_while_working,
-            |s, on| s.steer_while_working = on,
-            cx,
-        ))
-        .child(toggle_row(
-            "granular-chats",
-            "Granular chats",
-            None,
-            s.granular_chats,
-            |s, on| s.granular_chats = on,
-            cx,
-        ))
-        .child(
-            token_row(
-                "Resume interrupted replies at launch",
-                Some("Replies cut off when Patchwork quit, restarted, or crashed"),
-                &t,
-            )
-            .child(segmented(
-                "resume-at-launch",
-                "Resume interrupted replies at launch",
-                s.resume_at_launch,
-                &RESUMES,
-                &t,
-                |d, resume, cx| d.update(|s| s.resume_at_launch = resume, cx),
-                cx,
-            )),
-        )
         .child(section_heading("Notifications", false, &t))
         .child(toggle_row(
             "goal-complete",

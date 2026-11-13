@@ -36,5 +36,5 @@ pub use relay::{
     OWN_SERVER, PROXY_ARG, own_relay_file, relay_endpoint, relay_file, run_proxy, set_hook_handler,
     set_raise_handler, set_tool_handler, set_tool_lister,
 };
-pub(crate) use relay::call_own;
+pub(crate) use relay::{call_own, own_turn_tools};
 use relay::serve_relay;

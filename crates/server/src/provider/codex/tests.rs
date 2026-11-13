@@ -32,6 +32,8 @@ fn spec(session_id: Option<&'static str>, mode: AccessMode) -> TurnSpec<'static>
         plan: false,
         effort: None,
         compact_window: 0,
+        unlimited_steps: false,
+        token_limit: 0,
         attachments: &[],
         images: &[],
         instructions: None,

@@ -31,6 +31,10 @@ pub struct TurnSpec<'a> {
     pub effort: Option<&'a str>,
     /// The context size at which the agent compacts mid-task; 0 leaves it to the agent.
     pub compact_window: u64,
+    /// Patchwork's own agent runs without a limit on its steps of tool calls.
+    pub unlimited_steps: bool,
+    /// Tokens Patchwork's own agent may spend on the turn; 0 sets no limit.
+    pub token_limit: u64,
     pub attachments: &'a [Attachment],
     /// The image attachments, read from disk by `load_images`.
     pub images: &'a [Image],
@@ -174,7 +178,10 @@ pub fn interrupt(
     match agent {
         AgentKind::Claude => Some(claude::interrupt()),
         AgentKind::Codex => Some(codex::interrupt(session_id?, turn_id?)),
-        AgentKind::Antigravity | AgentKind::OpenCode | AgentKind::Api => None,
+        AgentKind::Api => Some(api::interrupt()),
+        // `opencode run` reads nothing once it starts; only the bridge to `opencode serve` can.
+        AgentKind::OpenCode => opencode::uses_serve().then(opencode::interrupt_line),
+        AgentKind::Antigravity => None,
     }
 }
 

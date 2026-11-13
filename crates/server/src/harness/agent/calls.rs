@@ -52,7 +52,15 @@ impl Agent {
             .iter()
             .position(|t| t.name == call.name);
         let (result, error, stop) = if let Some(index) = mcp {
-            let result = self.call_mcp(index, &call.id, &args);
+            let tool = &self.request.mcp_tools[index];
+            // Patchwork's own tools, such as a sub agent, are what the user set the chat to
+            // have, so they run without asking.
+            let result = if tool.server == crate::provider::mcp::OWN_SERVER {
+                let name = tool.tool.clone();
+                self.call_own(&call.id, &name, &args, NO_RESULT)
+            } else {
+                self.call_mcp(index, &call.id, &args)
+            };
             let error = result.is_err();
             (result, error, false)
         } else {
@@ -183,7 +191,7 @@ impl Agent {
         })
     }
 
-    /// Runs the reads the step starts with all at once, since they change nothing, so a model
+    /// Runs the reads that start at `calls` all at once, since they change nothing, so a model
     /// that reads several files waits for the slowest rather than for each in turn. Only reads
     /// that run without asking anyone are run early; the rest wait for their turn in `call`.
     pub(super) fn prefetch(&mut self, calls: &[Call]) {
@@ -214,10 +222,12 @@ impl Agent {
         self.prefetched.extend(results);
     }
 
-    /// Whether a call only reads the project, with no hook, approval, or permission rule to ask.
+    /// Whether a call only reads the project or the web, with no hook, approval, or permission rule to ask.
     fn reads_alone(&self, name: &str, args: &Value) -> bool {
-        matches!(name, "read_file" | "list_dir" | "glob" | "grep")
-            && !self.request.mcp_tools.iter().any(|t| t.name == name)
+        matches!(
+            name,
+            "read_file" | "list_dir" | "glob" | "grep" | "fetch_url"
+        ) && !self.request.mcp_tools.iter().any(|t| t.name == name)
             && !self.request.hooks.iter().any(|h| h.matches(name))
             && crate::harness::tools::approval(name, args, self.request.mode, &self.root).is_none()
             && !(name == "read_file"
@@ -465,10 +475,15 @@ impl Agent {
     }
 
     /// Waits for the reply to the request `id`, keeping steering messages that come meanwhile.
+    /// None when the turn ends or the user stops it first.
     pub(super) fn wait(&mut self, id: &str) -> Option<Value> {
+        if self.stopped() {
+            return None;
+        }
         while let Ok(v) = self.input.recv() {
             match v["type"].as_str() {
                 Some("reply") if v["id"] == id => return Some(v),
+                Some("interrupt") => return None,
                 Some("steer" | "compact") => self.steers.push(v),
                 Some("compactWindow") => {
                     self.request.compact_window = v["window"].as_u64().unwrap_or(0);

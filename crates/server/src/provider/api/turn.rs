@@ -61,6 +61,11 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         .iter()
         .map(|i| json!({"mediaType": i.media_type, "data": i.data}))
         .collect();
+    let mut tools = mcp::turn_tools(spec.plan);
+    // A sub agent can change files, which planning must not.
+    if !spec.plan {
+        tools.extend(mcp::own_turn_tools(spec.thread_id));
+    }
     let command =
         (spec.attachments.is_empty() && spec.text.trim() == "/compact").then_some("compact");
     let fields = json!({
@@ -75,9 +80,11 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         "plan": spec.plan,
         "effort": spec.effort,
         "compactWindow": spec.compact_window,
+        "unlimitedSteps": spec.unlimited_steps,
+        "tokenLimit": spec.token_limit,
         "instructions": spec.instructions,
         "command": command,
-        "mcpTools": mcp::turn_tools(spec.plan),
+        "mcpTools": tools,
         "hooks": spec
             .hooks
             .iter()
@@ -101,6 +108,13 @@ pub fn steer_line(text: &str, images: &[Image]) -> String {
         .map(|i| json!({"mediaType": i.media_type, "data": i.data}))
         .collect();
     json!({"type": "steer", "text": text, "images": images}).to_string()
+}
+
+/// Stops the turn under way: the agent ends its reply and the call it is on, saves the
+/// conversation, and exits.
+#[must_use]
+pub fn interrupt() -> String {
+    json!({"type": "interrupt"}).to_string()
 }
 
 /// A new compact window for the turn under way, which it compacts by from its next step.

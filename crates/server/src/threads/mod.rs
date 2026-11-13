@@ -21,7 +21,7 @@ pub use messages::{
 };
 #[doc(inline)]
 pub use granular::{AgentPick, Granular, Reserves, delegates_sub_agents, runs_sub_agents_at};
-pub(crate) use granular::{delegate_of, fall_back, fallback_of, project_key, sub_pick};
+pub(crate) use granular::{fall_back, fallback_of, project_key, sub_agent_of, sub_pick};
 #[doc(inline)]
 pub use lifecycle::NewThread;
 #[doc(inline)]

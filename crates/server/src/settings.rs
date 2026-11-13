@@ -95,6 +95,12 @@ pub struct Settings {
     pub steer_while_working: bool,
     /// Each chat picks the model and effort of its agent, its fallback and their sub agents.
     pub granular_chats: bool,
+    /// Patchwork's own agent carries on calling tools for as long as it takes, instead of stopping
+    /// after a set number of steps for the user to carry it on.
+    pub unlimited_steps: bool,
+    /// Tokens a turn of Patchwork's own agent may send and receive before it stops for the user to
+    /// carry it on; 0 sets no limit.
+    pub turn_token_limit: u64,
     /// What a launch does with the replies the last session's closing cut off.
     pub resume_at_launch: ResumeAtLaunch,
     /// Folder of hook bundles. None uses `hooks` in the config folder.

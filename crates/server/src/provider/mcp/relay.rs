@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 use serde_json::{Value, json};
 
+use super::config::TurnTool;
 use super::{CALL_TIMEOUT, REQUEST_TIMEOUT, pool};
 
 /// The argument that starts Patchwork's binary as a relay to one of Patchwork's servers.
@@ -64,6 +65,29 @@ static TOOL_LISTER: OnceLock<ToolLister> = OnceLock::new();
 /// Sets what lists a thread's further tools; called once when the server opens.
 pub fn set_tool_lister(lister: ToolLister) {
     let _ = TOOL_LISTER.set(lister);
+}
+
+/// The tools of Patchwork's own that a thread's agent has beside the one every agent has, as an
+/// API turn offers them to the model.
+pub(crate) fn own_turn_tools(thread_id: &str) -> Vec<TurnTool> {
+    let listed = TOOL_LISTER
+        .get()
+        .map(|list| list(thread_id))
+        .unwrap_or_default();
+    listed
+        .into_iter()
+        .filter_map(|tool| {
+            let name = tool["name"].as_str()?.to_string();
+            Some(TurnTool {
+                tool: name.clone(),
+                name,
+                server: OWN_SERVER.into(),
+                description: tool["description"].as_str().unwrap_or_default().into(),
+                parameters: tool["inputSchema"].clone(),
+                read_only: false,
+            })
+        })
+        .collect()
 }
 
 /// Runs Patchwork's own tool `tool` for the agent of `thread_id`, until `stopped`.

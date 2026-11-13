@@ -33,6 +33,10 @@ use crate::orchestration::tasks::subagents::Controls;
 use crate::orchestration::tasks::subagents::Tasks;
 
 /// Everything the stdout reader needs to persist and publish one turn's events.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate fact about the turn"
+)]
 pub(in crate::orchestration) struct Turn {
     pub(in crate::orchestration) server: Arc<Server>,
     pub(in crate::orchestration) thread_id: String,
@@ -69,6 +73,10 @@ pub(in crate::orchestration) struct Turn {
     pub(in crate::orchestration) plan: bool,
     pub(in crate::orchestration) effort: Option<String>,
     pub(in crate::orchestration) compact_window: u64,
+    /// What `spec` passes as `TurnSpec::unlimited_steps`.
+    pub(in crate::orchestration) unlimited_steps: bool,
+    /// What `spec` passes as `TurnSpec::token_limit`.
+    pub(in crate::orchestration) token_limit: u64,
     pub(in crate::orchestration) attachments: Vec<Attachment>,
     pub(in crate::orchestration) images: Vec<provider::Image>,
     /// What `spec` passes as `TurnSpec::instructions`.
@@ -154,6 +162,8 @@ impl Turn {
             plan: self.plan,
             effort: self.effort.as_deref(),
             compact_window: self.compact_window,
+            unlimited_steps: self.unlimited_steps,
+            token_limit: self.token_limit,
             attachments: &self.attachments,
             images: &self.images,
             instructions: self.instructions.as_deref(),

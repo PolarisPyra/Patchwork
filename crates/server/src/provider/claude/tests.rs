@@ -166,6 +166,8 @@ fn claude_args_include_resume_model_and_mode() {
         plan: false,
         effort: None,
         compact_window: 0,
+        unlimited_steps: false,
+        token_limit: 0,
         attachments: &[],
         images: &[],
         instructions: None,

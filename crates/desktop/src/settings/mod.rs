@@ -6,6 +6,7 @@
 // Rust guideline compliant 2026-10-09
 
 pub(crate) mod controls;
+mod chat;
 mod dialog;
 mod extensions;
 mod general;

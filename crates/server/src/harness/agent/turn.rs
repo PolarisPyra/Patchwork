@@ -4,11 +4,14 @@
 
 use crate::Error;
 use super::prompt::system_prompt;
+use super::request::Failure;
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use serde::Deserialize;
@@ -24,10 +27,22 @@ pub const BRIDGE_ARG: &str = "--api-bridge";
 /// Times a turn goes on with a reply the output limit cut off.
 const MAX_CONTINUES: u32 = 3;
 
+/// Steps of tool calls a turn takes before it stops and leaves the user to carry it on, so a
+/// model that keeps calling tools without getting anywhere does not run, and spend, without end.
+/// Each steering message starts the count again, and Settings → Chat turns the limit off.
+const MAX_STEPS: u32 = 200;
+
+/// The result of a call the turn ended before running.
+const NOT_RUN: &str = "The turn was stopped before this call ran.";
+
 const CONTINUE: &str = "(Your reply reached the output limit and was cut off. Continue exactly where it stopped, without repeating what you already wrote.)";
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate option of the turn"
+)]
 pub(super) struct Request {
     pub(super) base_url: String,
     pub(super) api_key: Option<String>,
@@ -60,6 +75,13 @@ pub(super) struct Request {
     /// leaves it until the provider refuses the conversation as too long.
     #[serde(default)]
     pub(super) compact_window: u64,
+    /// Carries on calling tools for as long as it takes, past `MAX_STEPS`.
+    #[serde(default)]
+    pub(super) unlimited_steps: bool,
+    /// Tokens a turn may send and receive, across all its requests, before it stops and leaves the
+    /// user to carry it on; 0 sets no limit.
+    #[serde(default)]
+    pub(super) token_limit: u64,
     /// Patchwork's instructions about the user's shell.
     #[serde(default)]
     pub(super) instructions: Option<String>,
@@ -142,20 +164,29 @@ pub fn run() -> i32 {
         }
     };
     let (tx, rx) = mpsc::channel();
+    let stop = Arc::new(AtomicBool::new(false));
+    let stopping = Arc::clone(&stop);
     std::thread::spawn(move || {
         for line in stdin.lines() {
             let Ok(line) = line else { break };
             let Ok(v) = serde_json::from_str::<Value>(&line) else {
                 continue;
             };
+            // Set here rather than when the loop takes the line, so a reply streaming or a
+            // retry waiting sees it at once.
+            if v["type"] == "interrupt" {
+                stopping.store(true, Ordering::SeqCst);
+            }
             if tx.send(v).is_err() {
                 break;
             }
         }
     });
-    let mut agent = Agent::new(request, rx);
+    let mut agent = Agent::new(request, rx, stop);
     match agent.turn() {
         Ok(()) => 0,
+        // What the stop cut short is no error.
+        Err(_) if agent.stopped() => 0,
         Err(message) => {
             emit(&json!({"type": "api.error", "message": message}));
             1
@@ -188,6 +219,8 @@ pub(super) struct Agent {
     pub(super) read_images: Vec<ImageIn>,
     /// Stdin closed: Patchwork is ending the turn.
     pub(super) closed: bool,
+    /// The user stopped the turn: the agent ends what it is doing, saves, and exits.
+    stop: Arc<AtomicBool>,
     /// The last tool call, as its name and arguments, and how many times in a row it was made.
     pub(super) last_call: (String, u32),
     /// The step's reply stopped at the output limit, which is why a call's arguments can be cut off.
@@ -205,7 +238,7 @@ pub(super) struct Agent {
 }
 
 impl Agent {
-    fn new(request: Request, input: Receiver<Value>) -> Self {
+    fn new(request: Request, input: Receiver<Value>, stop: Arc<AtomicBool>) -> Self {
         let root = PathBuf::from(&request.root);
         let (session_id, existing) = match &request.session_id {
             Some(id) => (id.clone(), true),
@@ -246,6 +279,7 @@ impl Agent {
             steers: Vec::new(),
             read_images: Vec::new(),
             closed: false,
+            stop,
             last_call: (String::new(), 0),
             cut_off: false,
             seen: HashMap::new(),
@@ -275,16 +309,25 @@ impl Agent {
             .push(json!({"role": "user", "content": content}));
         self.save()?;
 
-        let mut continued = 0;
+        let (mut continued, mut steps, mut spent) = (0, 0, 0);
         loop {
             self.compact_if_full()?;
             let reply = match self.complete(true) {
                 Ok(reply) => reply,
+                // What the reply had shown stays in the conversation, as the user saw it.
+                Err(Failure::Interrupted(text)) => {
+                    if !text.trim().is_empty() {
+                        self.messages
+                            .push(json!({"role": "assistant", "content": text}));
+                    }
+                    return self.save();
+                }
                 Err(failure) => self.recover(failure)?,
             };
             if reply.context > 0 {
                 self.context = reply.context;
             }
+            spent += reply.context;
             let mut message = json!({"role": "assistant", "content": reply.content});
             if reply.reasoning_content && !reply.reasoning.is_empty() {
                 message["reasoning_content"] = json!(reply.reasoning);
@@ -298,33 +341,40 @@ impl Agent {
                 message["tool_calls"] = json!(calls);
             }
             self.messages.push(message);
-            if reply.calls.is_empty() {
-                self.save()?;
-            }
+            self.save()?;
 
-            // Saved once the step's calls are done: a turn stopped midway leaves the file at
-            // the previous step, which the model can continue from.
+            // Saved after each result, so a turn that ends midway, even by a crash, keeps
+            // what its calls did; `load` gives the calls it never ran a result.
             let mut proposed = false;
             self.cut_off = reply.cut_off;
-            self.prefetch(&reply.calls);
-            for call in &reply.calls {
-                let (result, stop) = self.call(call);
-                proposed |= stop;
+            for (i, call) in reply.calls.iter().enumerate() {
+                let result = if self.stopped() {
+                    NOT_RUN.to_string()
+                } else {
+                    if !self.prefetched.contains_key(&call.id) {
+                        self.prefetch(&reply.calls[i..]);
+                    }
+                    let (result, stop) = self.call(call);
+                    proposed |= stop;
+                    result
+                };
                 self.messages
                     .push(json!({"role": "tool", "tool_call_id": call.id, "content": result}));
+                self.save()?;
             }
             if !self.read_images.is_empty() {
                 let images = std::mem::take(&mut self.read_images);
                 let content = self.user_content("The images read_file opened:", &images);
                 self.messages
                     .push(json!({"role": "user", "content": content}));
-            }
-            if !reply.calls.is_empty() {
                 self.save()?;
             }
             self.take_input();
-            if self.closed {
+            if self.closed || self.stopped() {
                 return Ok(());
+            }
+            if !reply.calls.is_empty() {
+                steps += 1;
             }
             let steered = !self.steers.is_empty();
             for steer in std::mem::take(&mut self.steers) {
@@ -353,6 +403,8 @@ impl Agent {
             }
             if steered {
                 self.save()?;
+                steps = 0;
+                spent = 0;
                 continue;
             }
             // A reply the output limit stopped mid-text goes on from where it stopped, a few times
@@ -367,7 +419,27 @@ impl Agent {
             if proposed || reply.calls.is_empty() {
                 return Ok(());
             }
+            if !self.request.unlimited_steps && steps >= MAX_STEPS {
+                emit(&json!({"type": "api.text", "delta": format!(
+                    "\n\n(Stopped after {MAX_STEPS} steps of tool calls. Send a message to continue.)"
+                )}));
+                return Ok(());
+            }
+            let limit = self.request.token_limit;
+            if limit > 0 && spent >= limit {
+                emit(&json!({"type": "api.text", "delta": format!(
+                    "\n\n(Stopped after using {} tokens, past this turn's limit of {}. Send a message to continue.)",
+                    tokens(spent),
+                    tokens(limit),
+                )}));
+                return Ok(());
+            }
         }
+    }
+
+    /// Whether the user stopped the turn.
+    pub(super) fn stopped(&self) -> bool {
+        self.stop.load(Ordering::SeqCst)
     }
 
     /// A user message's content: plain text, or text and images. With a vision model, the
@@ -437,7 +509,59 @@ fn load(path: &Path) -> Option<(Vec<Value>, u64)> {
             call["function"]["arguments"] = json!(history_arguments(arguments));
         }
     }
-    Some((messages, v["context"].as_u64().unwrap_or(0)))
+    Some((close_calls(messages), v["context"].as_u64().unwrap_or(0)))
+}
+
+/// A token count as the user reads it: "800,000" below a million, "5.2 million" from there.
+fn tokens(count: u64) -> String {
+    if count >= 1_000_000 {
+        // Tenths of a million, rounded, so the count reads as "5.2 million".
+        let tenths = (count + 50_000) / 100_000;
+        let whole = tenths / 10;
+        return match tenths % 10 {
+            0 => format!("{whole} million"),
+            tenth => format!("{whole}.{tenth} million"),
+        };
+    }
+    let digits = count.to_string();
+    let mut out = String::new();
+    for (i, digit) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(digit);
+    }
+    out
+}
+
+/// Gives every call a result, as endpoints refuse a conversation with a call left unanswered:
+/// one saved partway through a step, as when the agent was stopped or crashed there, lacks the
+/// results of the calls it never ran.
+fn close_calls(messages: Vec<Value>) -> Vec<Value> {
+    let mut closed = Vec::with_capacity(messages.len());
+    let mut open: Vec<String> = Vec::new();
+    for message in messages {
+        if message["role"] == "tool" {
+            open.retain(|id| message["tool_call_id"] != id.as_str());
+        } else {
+            closed.extend(
+                open.drain(..)
+                    .map(|id| json!({"role": "tool", "tool_call_id": id, "content": NOT_RUN})),
+            );
+        }
+        if let Some(calls) = message["tool_calls"].as_array() {
+            open = calls
+                .iter()
+                .filter_map(|c| c["id"].as_str().map(String::from))
+                .collect();
+        }
+        closed.push(message);
+    }
+    closed.extend(
+        open.into_iter()
+            .map(|id| json!({"role": "tool", "tool_call_id": id, "content": NOT_RUN})),
+    );
+    closed
 }
 
 /// A call's arguments as the conversation keeps them: `{}` in place of arguments that are not a

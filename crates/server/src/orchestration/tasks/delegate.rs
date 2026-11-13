@@ -16,7 +16,7 @@ use crate::orchestration::turn::start::Turn;
 use crate::system::{new_id, now_ms};
 use crate::threads::delegate::{self, Ask};
 use crate::threads::{
-    AgentPick, Message, MessageStatus, Role, SubAgent, Thread, ThreadParent, ToolCall, delegate_of,
+    AgentPick, Message, MessageStatus, Role, SubAgent, Thread, ThreadParent, ToolCall, sub_agent_of,
 };
 use crate::{Error, Server};
 
@@ -54,7 +54,7 @@ pub(in crate::orchestration) fn mark_call(turn: &Turn, tool: &mut ToolCall) {
     let store = &turn.server.store;
     let Some(pick) = store
         .thread(&turn.thread_id)
-        .and_then(|thread| delegate_of(store, &store.settings(), &thread))
+        .and_then(|thread| sub_agent_of(store, &store.settings(), &thread))
     else {
         return;
     };
@@ -200,7 +200,7 @@ impl Runner {
             .store
             .thread(thread_id)
             .ok_or("This chat is no longer here")?;
-        let pick = delegate_of(&server.store, &server.store.settings(), &parent)
+        let pick = sub_agent_of(&server.store, &server.store.settings(), &parent)
             .ok_or("This chat's sub agents run on its own agent; start one with your own tool")?;
         let flags = {
             let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);

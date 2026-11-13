@@ -7,6 +7,7 @@ use crate::ui::menu::Menu;
 use crate::ui::theme::{FS_LG, FS_XS, RADIUS_SM, theme};
 use crate::ui::{icon, icon_button, mix, overflows, scrollbar};
 use super::dialog::{GROUPS, SettingsDialog, SettingsEvent, sections};
+use super::chat;
 use super::controls;
 use super::extensions;
 use super::general;
@@ -25,6 +26,7 @@ impl SettingsDialog {
     pub(super) fn pane(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         match self.section {
             "general" => general::render(self, cx),
+            "chat" => chat::render(self, cx),
             "shortcuts" => shortcuts::render(self, window, cx),
             "providers" => providers::render(self, window, cx),
             "tokens" => tokens::render(self, cx),

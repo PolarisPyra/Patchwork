@@ -47,19 +47,20 @@ pub struct Granular {
     pub reserves: Reserves,
 }
 
-/// Whether `agent`'s CLI can be told which model and effort its own sub agents run at.
+/// Whether the sub agents `agent` starts on itself can be given a model and effort: by its CLI,
+/// or, for Patchwork's own agent, by Patchwork, which runs them.
 #[must_use]
 pub fn runs_sub_agents_at(agent: AgentKind) -> bool {
-    matches!(agent, AgentKind::Claude | AgentKind::Codex)
+    matches!(agent, AgentKind::Claude | AgentKind::Codex | AgentKind::Api)
 }
 
 /// Whether `agent` can hand its sub agents' work to another agent, which Patchwork runs for it:
-/// the agents whose CLI is given Patchwork's own tools.
+/// the agents given Patchwork's own tools.
 #[must_use]
 pub fn delegates_sub_agents(agent: AgentKind) -> bool {
     matches!(
         agent,
-        AgentKind::Claude | AgentKind::Codex | AgentKind::OpenCode
+        AgentKind::Claude | AgentKind::Codex | AgentKind::OpenCode | AgentKind::Api
     )
 }
 
@@ -138,12 +139,30 @@ pub(crate) fn sub_pick(
     saved(store, thread_id).sub.filter(|s| s.agent == agent)
 }
 
-/// The other agent the thread's sub agents run on, when its own can hand work to one.
-pub(crate) fn delegate_of(
+/// Where the thread's `run_sub_agent` calls run: on the other agent its chat names, else, for
+/// Patchwork's own agent, which has no sub agents of its own, on itself at the chat's sub agent
+/// pick or its own model.
+pub(crate) fn sub_agent_of(
     store: &Store,
     settings: &Settings,
     thread: &Thread,
 ) -> Option<AgentPick> {
+    if let Some(pick) = delegate_of(store, settings, thread) {
+        return Some(pick);
+    }
+    if thread.agent != AgentKind::Api || thread.parent.is_some() {
+        return None;
+    }
+    let own = AgentPick {
+        agent: AgentKind::Api,
+        model: thread.model.clone(),
+        effort: thread.effort.clone(),
+    };
+    Some(sub_pick(store, settings, &thread.id, AgentKind::Api).unwrap_or(own))
+}
+
+/// The other agent the thread's sub agents run on, when its own can hand work to one.
+fn delegate_of(store: &Store, settings: &Settings, thread: &Thread) -> Option<AgentPick> {
     if !settings.granular_chats || thread.parent.is_some() || !delegates_sub_agents(thread.agent) {
         return None;
     }

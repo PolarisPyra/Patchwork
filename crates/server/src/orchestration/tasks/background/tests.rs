@@ -242,6 +242,8 @@ fn a_codex_command_open_at_turn_end_is_listed_and_holds_no_stdin() {
         plan: false,
         effort: None,
         compact_window: 0,
+        unlimited_steps: false,
+        token_limit: 0,
         attachments: &[],
         images: &[],
         instructions: None,

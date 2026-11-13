@@ -53,6 +53,11 @@ pub(super) const GROUPS: &[(&str, &[Section])] = &[
                 icon: "gear-six",
             },
             Section {
+                id: "chat",
+                label: "Chat",
+                icon: "chats",
+            },
+            Section {
                 id: "shortcuts",
                 label: "Shortcuts",
                 icon: "keyboard",

@@ -17,7 +17,7 @@ use config::major_version;
 pub use run::{turn_args, parse};
 use run::{todo_plan, tool_name};
 #[doc(inline)]
-pub use serve::{uses_serve, bridge_request, mode_asks, steer_line, approval_reply};
+pub use serve::{uses_serve, bridge_request, mode_asks, steer_line, interrupt_line, approval_reply};
 use serve::{action, parse_serve};
 
 pub mod bridge;

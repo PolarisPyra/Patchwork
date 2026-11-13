@@ -68,6 +68,8 @@ pub(in crate::orchestration) fn live_turn(agent: AgentKind, mode: AccessMode) {
         plan: false,
         effort: None,
         compact_window: 0,
+        unlimited_steps: false,
+        token_limit: 0,
         attachments: &[],
         images: &[],
         instructions: None,

@@ -22,11 +22,17 @@ pub(in crate::harness::agent) struct StreamError {
     pub(super) shown: bool,
     /// The watchdog stopped a reply stuck in a loop, which sending again would repeat.
     pub(super) stopped: bool,
+    /// The user stopped the turn; the text the reply had shown by then.
+    pub(super) interrupted: Option<String>,
 }
 
 /// The longest gap between two lines of a streamed reply before it counts as stalled. Endpoints
 /// that queue or think send keep-alive comments, which count as lines.
 pub(super) const STREAM_IDLE: Duration = Duration::from_secs(180);
+
+/// How often a wait on the provider, for its next line or before a retry, checks whether the user
+/// stopped the turn.
+pub(super) const STOP_POLL: Duration = Duration::from_millis(100);
 
 /// How much a local model may reason without answering or calling a tool before its reply is
 /// stopped: a reasoning loop holds the server until something stops it.
@@ -39,6 +45,9 @@ pub(super) const LOOP_UNIT: std::ops::RangeInclusive<usize> = 64..=1024;
 /// Times in a row a stretch has to repeat at the end of the reply.
 pub(super) const LOOP_TIMES: usize = 8;
 
+/// Why a request ends when the user stopped the turn.
+pub(super) const STOPPED: &str = "The user stopped the turn";
+
 /// Why a request failed: some failures are fixed by making the conversation smaller.
 pub(in crate::harness::agent) enum Failure {
     /// The conversation is longer than the model's context window.
@@ -46,12 +55,15 @@ pub(in crate::harness::agent) enum Failure {
     /// The model or endpoint does not accept images.
     Images(String),
     Other(String),
+    /// The user stopped the turn; the text the reply had shown by then.
+    Interrupted(String),
 }
 
 impl From<Failure> for Error {
     fn from(failure: Failure) -> Error {
         match failure {
             Failure::Context(m) | Failure::Images(m) | Failure::Other(m) => Error::Message(m),
+            Failure::Interrupted(_) => Error::Message(STOPPED.into()),
         }
     }
 }

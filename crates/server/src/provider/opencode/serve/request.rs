@@ -153,6 +153,13 @@ pub fn steer_line(text: &str, attachments: &[Attachment]) -> String {
     json!({"type": "steer", "text": text, "files": image_paths(attachments)}).to_string()
 }
 
+/// The bridge line that stops the running turn: OpenCode ends the step it is on, keeps what it
+/// did, and reports the run as interrupted, and the bridge then exits.
+#[must_use]
+pub fn interrupt_line() -> String {
+    json!({"type": "interrupt"}).to_string()
+}
+
 /// The bridge line that answers a permission request or a question.
 #[must_use]
 pub fn approval_reply(

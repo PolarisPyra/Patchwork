@@ -224,6 +224,8 @@ impl Runner {
             AgentKind::Antigravity | AgentKind::Api => Vec::new(),
         };
         let vision_model = settings.vision.clone();
+        let unlimited_steps = settings.unlimited_steps;
+        let token_limit = settings.turn_token_limit;
         let spec = TurnSpec {
             root: crate::system::remote::here(&root),
             host: crate::system::remote::split(&root).map(|at| at.host),
@@ -236,6 +238,8 @@ impl Runner {
             plan,
             effort: effort.as_deref(),
             compact_window,
+            unlimited_steps,
+            token_limit,
             attachments: &attachments,
             images: &images,
             instructions: instructions.as_deref(),
@@ -439,6 +443,8 @@ impl Runner {
             plan,
             effort,
             compact_window,
+            unlimited_steps,
+            token_limit,
             attachments,
             images,
             instructions,

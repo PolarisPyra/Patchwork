@@ -235,6 +235,7 @@ pub fn summary(name: &str, args: &Value, root: &Path) -> String {
         "bash" => field("command"),
         "job_output" | "job_kill" => field("job_id"),
         "fetch_url" => field("url"),
+        crate::threads::delegate::TOOL => field("description"),
         "glob" | "grep" => field("pattern"),
         "ask_user" => args["questions"][0]["question"]
             .as_str()
