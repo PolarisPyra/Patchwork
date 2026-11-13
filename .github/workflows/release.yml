@@ -458,9 +458,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      # The ruleset on main lets only this deploy key push without a PR.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: main
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
