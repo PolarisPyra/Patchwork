@@ -38,7 +38,6 @@ impl Panel {
         }
         self.screen.busy = true;
         let task = cx.background_spawn(async {
-            patchwork_server::computer::ensure_enabled()?;
             let shot = patchwork_server::computer::screenshot()?;
             let image = Arc::new(Image::from_bytes(ImageFormat::Png, shot.png));
             Ok::<_, patchwork_server::Error>((image, shot.screen_width, shot.screen_height))

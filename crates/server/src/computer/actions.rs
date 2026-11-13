@@ -24,11 +24,8 @@ pub fn enabled() -> bool {
 }
 
 /// Refuses while computer use is off, so a stray call cannot look at the screen or act on it.
-///
-/// # Errors
-///
-/// Returns an error when computer use is turned off in Settings.
-pub fn ensure_enabled() -> Result<(), Error> {
+/// `screenshot` and `perform` call it first.
+fn ensure_enabled() -> Result<(), Error> {
     if enabled() {
         Ok(())
     } else {
@@ -96,6 +93,7 @@ pub(super) fn left() -> String {
 /// Returns an error when the screen cannot be listed or captured, or the picture cannot be encoded
 /// as PNG.
 pub fn screenshot() -> Result<Screenshot, Error> {
+    ensure_enabled()?;
     let Capture {
         image,
         screen_width,
@@ -171,6 +169,7 @@ pub(super) fn pointer() -> Result<Enigo, Error> {
 
 /// Performs one action on the pointer or keyboard.
 pub(crate) fn perform(action: &Action) -> Result<(), Error> {
+    ensure_enabled()?;
     let mut enigo = pointer()?;
     match action {
         Action::Move { x, y } => enigo
