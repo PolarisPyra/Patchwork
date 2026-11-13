@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.63] - 2026-11-13
+
+### Fixed
+
+- On Windows, the taskbar, the title bar and Explorer showed the generic Windows app icon for Patchwork. They now show the Patchwork logo.
+
 ## [26.11.62] - 2026-11-13
 
 ### Changed
