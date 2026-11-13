@@ -2,7 +2,7 @@ name: Release
 
 # Pushing a tag YY.M.N releases the commit it points at. The notes job writes the release notes
 # from the Changelog: lines of the PRs and commits since the previous tag: a line counting the
-# changes, up to seven highlights DeepSeek picks from them, a count of the fixes left out, and every
+# changes, up to seven highlights DeepSeek picks from them, and every
 # entry, credited to its author and PR, folded under "Full changelog". The build jobs build the Linux AppImage (scripts/build.sh),
 # the Windows exe and the macOS (Apple silicon) disk image at the tag's version, and the publish
 # job signs them and publishes the GitHub release beside the latest.json the app's update check
@@ -103,7 +103,7 @@ jobs:
 
           Give a feature a bullet only when it lets users do something they could not do before, removes a real limitation they hit in normal use, or cuts meaningful steps or wait time from a common task. Judge the outcome, regardless of the group. A new setting, a large change, or support for one more edge case is not enough.
 
-          Lead with new capabilities. Give a bug fix its own bullet only when the entries show lost work or a core workflow that users could not complete in normal use. Leave isolated failures, cosmetic polish, and routine fixes in the count. Group entries only when they deliver the same user outcome. Seven is a ceiling. Stop when the qualifying changes run out, even if that leaves zero bullets.
+          Lead with new capabilities. Give a bug fix its own bullet only when the entries show lost work or a core workflow that users could not complete in normal use. Leave out isolated failures, cosmetic polish, and routine fixes. Group entries only when they deliver the same user outcome. Seven is a ceiling. Stop when the qualifying changes run out, even if that leaves zero bullets.
 
           Each bullet has a short feature name and one sentence of at most 20 words. Say what the user can do or what now works. Use names people see in the app and leave out protocol or implementation details. No title, headings, introduction, example prompts, hype, or em dashes.
 
@@ -129,8 +129,8 @@ jobs:
           jq -e '.highlights | type == "array"' "$RUNNER_TEMP/highlights.json" > /dev/null \
             || { echo "::warning::The highlights are not in the expected form: $response"; exit 1; }
 
-      # The notes: the count of changes and contributors, the highlights, the fixes they leave out,
-      # and every entry under "Full changelog", which the app's update notes leave out. Without
+      # The notes: the count of changes and contributors, the highlights, and every entry under
+      # "Full changelog", which the app's update notes leave out. Without
       # highlights, the full list alone.
       - name: Write the release notes
         env:
@@ -146,19 +146,12 @@ jobs:
             && summary=$(jq -r --slurpfile entries "$entries" '
               ($entries[0] | length) as $n
               | .highlights[:7] as $picked
-              | [$picked[].entries[]] as $covered
-              | if any($covered[]; . < 1 or . > $n) then error("an entry number is out of range") else . end
-              | [range($n) | select((. + 1) as $k | any($covered[]; . == $k) | not)
-                  | select($entries[0][.].group == "Fixed")] | length as $count
-              | (if $count == 1 then "bug fix" else "bug fixes" end) as $kind
-              | ($picked | map("- **\(.label | sub("\\.$"; "")).** \(.detail)") | join("\n")) as $bullets
-              | if $count == 0 then $bullets
-                elif $bullets == "" then "**\($count) \($kind).**"
-                else "\($bullets)\n\n### Plus \($count) more \($kind)." end
+              | if any($picked[].entries[]; . < 1 or . > $n) then error("an entry number is out of range") else . end
+              | $picked | map("- **\(.label | sub("\\.$"; "")).** \(.detail)") | join("\n")
             ' "$RUNNER_TEMP/highlights.json"); then
             header=$(jq -r --arg version "$VERSION" '
               def count($n; $word): "\($n) \($word)\(if $n == 1 then "" else "s" end)";
-              "**v\($version)** · \(count(length; "change")) from \(count(map(.author) | unique | length; "contributor"))"
+              "**\($version)** · \(count(length; "change")) from \(count(map(.author) | unique | length; "contributor"))"
             ' "$entries")
             {
               echo "$header"

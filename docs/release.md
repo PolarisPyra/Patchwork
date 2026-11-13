@@ -24,7 +24,6 @@ line in the PR body, or the commit message when the body has none. A commit push
 - A line with the version and how many changes and contributors it has.
 - Up to seven highlights, each a bold name and one sentence. DeepSeek (`deepseek-v4-pro`, through
   the `DEEPSEEK_API_KEY` repository secret) picks them from the entries.
-- "Plus N more bug fixes." for the fixes the highlights leave out.
 - Every entry, grouped by Added, Changed, Fixed, Removed and Security, with "by @login in #N" for
   its author and PR, folded under "Full changelog".
 
