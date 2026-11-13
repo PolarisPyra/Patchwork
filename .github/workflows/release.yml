@@ -133,8 +133,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+          # The helpers for Linux and Windows SSH hosts.
+          targets: x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,x86_64-pc-windows-gnu
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      # zig compiles the helpers' C (SQLite, ring) for both Linux architectures and Windows.
+      - name: Install zig and cargo-zigbuild
+        run: |
+          pip install ziglang==0.15.2
+          cargo install --locked cargo-zigbuild --version 0.23.4
 
       - name: Build the AppImage
         run: scripts/build.sh
@@ -142,7 +150,9 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-linux
-          path: target/release/Patchwork_amd64.AppImage
+          path: |
+            target/release/Patchwork_amd64.AppImage
+            target/release/Patchwork.AppDir/usr/bin/patchwork-remote-*
           if-no-files-found: error
 
   windows:
@@ -183,6 +193,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+          # The helpers for macOS SSH hosts on both architectures.
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
@@ -195,6 +207,11 @@ jobs:
           app=dmg/Patchwork.app
           mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" icon.iconset
           cp target/release/patchwork "$app/Contents/MacOS/"
+          for arch in aarch64 x86_64; do
+            cargo build --release -p patchwork-remote --target $arch-apple-darwin
+            cp target/$arch-apple-darwin/release/patchwork-remote \
+              "$app/Contents/MacOS/patchwork-remote-macos-$arch"
+          done
           for size in 16 32 128 256 512; do
             sips -z $size $size assets/logo.png --out icon.iconset/icon_${size}x${size}.png
             [ $size = 512 ] || sips -z $((size * 2)) $((size * 2)) assets/logo.png \
@@ -226,7 +243,9 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-macos
-          path: Patchwork_aarch64.dmg
+          path: |
+            Patchwork_aarch64.dmg
+            dmg/Patchwork.app/Contents/MacOS/patchwork-remote-*
           if-no-files-found: error
 
   publish:
@@ -298,6 +317,18 @@ jobs:
               '. + [{name: $name, browser_download_url: $url, digest: $digest, signature: $signature}]' \
               <<< "$assets")
           done
+          # The SSH host helpers sit beside the apps, each with its signature, which the app checks
+          # before copying one to a host. The updater never reads them, so latest.json leaves them out.
+          find . -mindepth 2 -type f -name "patchwork-remote-*" -exec mv {} . \;
+          helpers=$(ls patchwork-remote-*)
+          [ "$(echo "$helpers" | wc -l)" = 5 ] \
+            || { echo "::error::Expected 5 SSH host helpers, found: $helpers"; exit 1; }
+          for name in $helpers; do
+            "$signer" signer sign --app-version "$version" "$name" > /dev/null
+            base64 -d "$name.sig" > "$name.minisig"
+            minisign -Vq -P "$key" -m "$name" -x "$name.minisig" \
+              || { echo "::error::The signature of $name does not check out against the app's key"; exit 1; }
+          done
           jq -n --arg tag "$TAG" --rawfile body ../notes.md --argjson assets "$assets" \
             '{tag_name: $tag, body: $body, withdrawn: [], assets: $assets}' > latest.json
           # latest.json is signed too: the app reads its version and the versions it withdraws
@@ -309,7 +340,8 @@ jobs:
           gh release create "$TAG" --draft --title "Patchwork $TAG" \
             --notes-file ../notes.md \
             Patchwork_amd64.AppImage Patchwork_x64.exe Patchwork_aarch64.dmg latest.json \
-            latest.json.minisig
+            latest.json.minisig \
+            $(for name in $helpers; do echo "$name" "$name.minisig"; done)
           gh release edit "$TAG" --draft=false --latest
 
   # Points the website's download links at the release just published, deploys the site to

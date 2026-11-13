@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Builds the Linux AppImage at target/release/Patchwork_amd64.AppImage.
 #
-# It holds only the app: the libraries it links against (X11, Wayland keyboard, D-Bus) are on every
-# Linux desktop. appimagetool comes from PATH, or is downloaded to target/ the first time.
+# It holds the app, whose libraries (X11, Wayland keyboard, D-Bus) are on every Linux desktop, and
+# the helpers Patchwork copies to SSH hosts: static Linux ones for x86_64 and aarch64, and the
+# Windows one. They are built with cargo-zigbuild, which needs zig and cargo-zigbuild on PATH and
+# the two musl targets and x86_64-pc-windows-gnu in rustup.
+# appimagetool comes from PATH, or is downloaded to target/ the first time.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -12,6 +15,12 @@ app=target/release/Patchwork.AppDir
 rm -rf "$app"
 mkdir -p "$app/usr/bin"
 cp target/release/patchwork "$app/usr/bin/"
+for arch in x86_64 aarch64; do
+  cargo zigbuild --release -p patchwork-remote --target "$arch-unknown-linux-musl"
+  cp "target/$arch-unknown-linux-musl/release/patchwork-remote" "$app/usr/bin/patchwork-remote-linux-$arch"
+done
+cargo zigbuild --release -p patchwork-remote --target x86_64-pc-windows-gnu
+cp target/x86_64-pc-windows-gnu/release/patchwork-remote.exe "$app/usr/bin/patchwork-remote-windows-x86_64.exe"
 ln -s usr/bin/patchwork "$app/AppRun"
 sed 's|@EXEC@|patchwork|' packaging/patchwork.desktop > "$app/dev.patchwork.ade.desktop"
 cp assets/logo.png "$app/dev.patchwork.ade.png"
