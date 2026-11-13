@@ -18,9 +18,11 @@ Thanks for helping out. Bug reports, fixes, and new guides are all welcome.
 
 ## Commit messages
 
-Changelog entries are generated from commit subjects, so write each subject as a short,
-sentence-case summary that starts with a verb, such as `Add ...`, `Fix ...`, or `Change ...`.
-See [Releasing](docs/release.md) for how the groups are built.
+Write each subject as a short, sentence-case summary that starts with a verb, such as `Add ...`,
+`Fix ...`, or `Change ...`. Changelog entries are generated from the `Changelog:` paragraph in
+each commit's message, written by the rules in [the changelog style](docs/changelog-style.md);
+a change users can't notice says `Changelog: none`. See [Releasing](docs/release.md) for how the
+groups are built.
 
 ## Adding documentation
 

@@ -14,6 +14,8 @@ the workflow) with:
 | `Patchwork_aarch64.dmg` | macOS on Apple silicon, `Patchwork.app` signed ad hoc |
 | `latest.json` | The release's tag and notes, and each file's address, SHA-256 and signature, which the app's updater reads |
 | `latest.json.minisig` | The release key's signature over `latest.json` |
+| `patchwork-remote-*` (five) | The helpers the app copies to SSH hosts: Linux and macOS on x86_64 and aarch64, and Windows on x86_64 |
+| `patchwork-remote-*.minisig` | The release key's signature over each helper, which the app checks before copying it |
 
 Its notes are the version's section of `CHANGELOG.md`, which the app also shows in Settings →
 Updates.
@@ -30,7 +32,7 @@ Updates.
 2. Merge the pull request when the release should go out.
 
 The merge puts a version on `main` that has no tag, which is what the workflow takes as a release:
-it tags that commit `vYY.M.N`, builds the three files and publishes the release. Setting the
+it tags that commit `vYY.M.N`, builds the three apps and the helpers and publishes the release. Setting the
 version and writing the section by hand, and pushing that to `main`, releases the same way.
 The entries are the commits' own words, so they are right when the commit is written, by the rules
 in [Changelog style](changelog-style.md); to reword one, edit `CHANGELOG.md` on the `release`

@@ -91,7 +91,7 @@ jobs:
             "$RUNNER_TEMP/section" CHANGELOG.md > "$RUNNER_TEMP/changelog"
           mv "$RUNNER_TEMP/changelog" CHANGELOG.md
           sed -i "/^\[workspace.package\]/,/^\[/s/^version = \".*\"/version = \"$next\"/" Cargo.toml
-          sed -i -E "/^name = \"patchwork(-server)?\"$/{n;s/^version = \".*\"/version = \"$next\"/}" Cargo.lock
+          sed -i -E "/^name = \"patchwork(-server|-remote)?\"$/{n;s/^version = \".*\"/version = \"$next\"/}" Cargo.lock
 
           # The release branch is this job's own: main with the release's one commit on top, made
           # again from each push, so it is written over rather than added to.

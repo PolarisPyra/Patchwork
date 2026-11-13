@@ -1,4 +1,4 @@
-# Scheduled tasks, plugins, and computer use
+# Scheduled tasks, hooks, and computer use
 
 Three features that sit around the agents. Each one is off or empty until it is used, and none of
 them changes how a turn is run.
@@ -19,21 +19,21 @@ or named days.
 - A task that fails to start is logged and its next run recorded, so it does not retry every tick.
   A task whose project was deleted runs as a chat rather than not at all.
 
-## Plugins
+## Hooks
 
-A bundle is a folder in the plugins folder (`<config>/plugins` unless Settings chooses another).
-A plugin carries hooks and apps; skills belong in the skills folder and MCP servers in Settings →
-MCP Servers. The app ships no plugins; Settings → Hooks shows an example bundle, one file:
+A bundle is a folder in the hooks folder (`<config>/hooks` unless Settings chooses another).
+A bundle carries hooks and apps; skills belong in the skills folder and MCP servers in Settings →
+MCP Servers. The app ships none; Settings → Hooks shows an example bundle, one file:
 
 ```
-plugins/guard/
+hooks/guard/
 └── hooks.json   { "hooks": { "preToolUse": [ … ], "stop": [ … ] } }
 ```
 
-A plugin that runs hooks alone is that one file. A bundle that also carries apps has a
+A bundle that runs hooks alone is that one file. A bundle that also carries apps has a
 `plugin.json` beside it, with its hooks inline or in a `hooks.json` the manifest names.
 
-`crates/server/src/plugins/` reads the manifest from `.patchwork-plugin/plugin.json`,
+`crates/server/src/hooks/` reads the manifest from `.patchwork-plugin/plugin.json`,
 `.codex-plugin/plugin.json`, or a plain `plugin.json`, so a Codex bundle works as it is, and from
 a `hooks.json` for a folder with none of those. A bundle's name is its folder's unless the file
 gives `name`. `hooks` and `apps` are each either inline or a path, relative to the bundle
@@ -64,10 +64,10 @@ Each agent gets the payload and tool names it uses itself:
 | Codex | every one | `-c hooks.<Event>` overrides, trusted by hash, beside Patchwork's permission hook |
 | Antigravity | `sessionStart`, `preToolUse`, `postToolUse` | the `.agents/hooks.json` it loads from a folder added with `--add-dir` |
 | API providers | `preToolUse`, `postToolUse` | Patchwork's own agent runs them around each call, with Claude Code's payload |
-| OpenCode | none | it has no hooks of this kind |
+| OpenCode | `preToolUse` | Patchwork runs them when OpenCode asks before a shell command, an edit, a web fetch or an MCP tool, with Claude Code's payload and tool names (`Bash`, `Edit`, `WebFetch`) |
 
 Settings → Hooks lists each hook by when it runs and what it does, and names the agents whose turns
-skip it, such as OpenCode for a tool hook.
+skip it, such as OpenCode for a hook after a tool call.
 
 ## Computer use
 

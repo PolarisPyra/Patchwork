@@ -55,8 +55,7 @@ node site/refresh-downloads.mjs --check  # exit 1 if it is stale, for CI
 ```
 
 It reads `https://github.com/PolarisPyra/Patchwork/releases/latest/download/latest.json`, checks
-that the release has all three files, and updates the download links, the release line in the hero
-and the version in the download section. A browser cannot do this itself: GitHub sends no CORS
+that the release has all three files, and points the page's download links at its tag. A browser cannot do this itself: GitHub sends no CORS
 headers for release files, so reading `latest.json` from the page would fail. That is why the tag
 is written into the page at release time instead.
 
@@ -68,4 +67,5 @@ platform, and falls back to the download section on a phone or an unknown system
 `index.html` names `https://patchworkeditor.com/` as its canonical URL and its social card base. If
 the site is going somewhere else, change those, and the `og:image` path, to match.
 
-The page describes version 26.11.0 in three places, all of which `refresh-downloads.mjs` updates.
+The page names the release only in its four download links, all of which `refresh-downloads.mjs`
+updates.

@@ -26,7 +26,13 @@ while and later ones rebuild only what changed.
 scripts/build.sh
 ```
 
-It writes `target/release/Patchwork_amd64.AppImage`; see [Releasing](release.md).
+It writes `target/release/Patchwork_amd64.AppImage`; see [Releasing](release.md). The AppImage
+carries the helpers Patchwork copies to SSH hosts, which the script cross-compiles, so it needs
+`zig` and `cargo-zigbuild` on `PATH`, and these targets in rustup:
+
+```sh
+rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl x86_64-pc-windows-gnu
+```
 
 ## Commit hook
 

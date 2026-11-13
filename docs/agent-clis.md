@@ -1,6 +1,6 @@
 # Agent CLIs
 
-Patchwork has no model access of its own. It runs the `claude`, `codex`, and `agy` CLIs that are
+Patchwork has no model access of its own. It runs the `claude`, `codex`, `agy`, and `opencode` CLIs that are
 installed and signed in on the machine, and reads some of their files. This page lists every
 point where it touches them.
 
@@ -35,7 +35,7 @@ and the agent's instructions name it:
 | Codex | The account's login shell, whatever `SHELL` says |
 | OpenCode, Antigravity, API providers | The chosen shell if it reads POSIX commands, else bash, else `sh`. OpenCode refuses fish and Nushell itself, and Patchwork's own agent calls its tool `bash` |
 
-On Windows every agent gets the chosen shell. Plugin hook commands run in the user's shell, or
+On Windows every agent gets the chosen shell. Hook commands run in the user's shell, or
 bash when it is fish or Nushell. The terminal panel always runs the chosen shell.
 
 ## Claude Code (`claude`)
@@ -45,7 +45,7 @@ bash when it is fish or Nushell. The terminal panel always runs the chosen shell
 | Detect | `claude --version`, then `claude auth status`, whose JSON says whether and how it is signed in. Home is `$CLAUDE_CONFIG_DIR` or `~/.claude`. |
 | Default model | `$ANTHROPIC_MODEL`, else `model` in `~/.claude/settings.json`. |
 | Run | `claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-mode <mode> --permission-prompt-tool stdio [--resume <session>] [--model <m>] [--effort <e>] --system-prompt-snapshot off --append-system-prompt <installed shells, then the system prompt from Settings → Providers>` |
-| Access modes | Supervised `default`, Auto-accept edits `acceptEdits`, Auto `auto`, Full access `bypassPermissions`. |
+| Access modes | Supervised `manual`, Auto-accept edits `acceptEdits`, Auto `auto`, Full access `bypassPermissions`. |
 | Prompt | A stream-json `user` line on stdin, with images as base64 blocks. stdin stays open for the turn. |
 | Output used | `stream_event` text and reasoning deltas; `assistant` tool calls, token usage, and synthetic command output; `user` tool results; `system` init (session id) and the task events `task_started`, `task_updated`, `task_progress`, and `task_notification`; `rate_limit_event` (usage limits); `result` (end of turn, errors). `TodoWrite` becomes the plan, edit tools become touched files, `Task`/`Agent` calls become subagents. |
 | Approvals | `control_request` `can_use_tool` becomes an Allow / Deny request, answered with a `control_response`. In Full access every request is allowed at once, except `AskUserQuestion`. |
@@ -168,8 +168,9 @@ Not as documented:
   documented values; the allow and deny answers match the SDK's `canUseTool`.
 - **Usage limits.** The `api/oauth/usage` and `/profile` endpoints and `rate_limit_event` are
   undocumented.
-- **Fork** copies messages into a new session instead of `--resume <id> --fork-session`, so the
-  fork loses the cache and the CLI's own history.
+- **Fork** branches the session with `--resume-session-at <message> --fork-session` when the
+  message has a place in Claude's own session. Otherwise it copies the messages into a new
+  session, which loses the cache and the CLI's own history.
 
 Not used yet:
 

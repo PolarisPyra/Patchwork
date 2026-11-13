@@ -54,7 +54,7 @@ anything lands.
 - **It all stays on your machine.** No account, no proxy, no telemetry. Requests go straight from
   your computer to your provider.
 
-There's more: scheduled tasks, plugins with skills and MCP servers, a Usage view for your
+There's more: scheduled tasks, skills, MCP servers, hooks, a Usage view for your
 subscription limits, and diagrams or HTML mocks that render right in the chat.
 
 ## Download

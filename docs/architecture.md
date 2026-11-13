@@ -10,7 +10,7 @@ The repo is split into `crates/server` and `crates/desktop`:
   - `src/provider/` — one module per agent CLI (`claude/`, `codex/`, `antigravity.rs`, `opencode/`, `api/`), finding and probing them (`locate.rs`, `probe.rs`), what a turn sends them (`turn.rs`) and reads back (`parsed.rs`), and handing each one its hooks (`hooks.rs`)
   - `src/orchestration/` — runs turns, grouped by feature, one folder each, with `orchestration/mod.rs` as the index: `turn/` (the `Runner`, starting and ending a turn, its process, turns cut off by a restart), `messages/` (sending, steering and queueing), `output/` (reading agent output into agent events and streaming them), `approvals/`, `changes/` (which files each reply changed, and per-turn checkpoints), `tasks/` (background tasks and subagents), and `goal/`
   - `src/permissions/` — the rules Patchwork answers approvals by, and the permission hook Codex and Antigravity run
-  - `src/plugins/` — plugin bundles and their hooks
+  - `src/hooks/` — bundles of hooks
   - `src/persistence/` — SQLite store and schema migrations
   - `src/import/` — reads each CLI's saved sessions for importing
   - `src/usage/` — subscription usage limits per provider
@@ -107,7 +107,7 @@ process's stdin, or through the hook waiter, and the turn carries on.
 
 | Holds | Linux | macOS | Windows |
 |---|---|---|---|
-| Config: what the user edits, `skills/`, `agents/`, `plugins/`, `mcp/` (one `<name>.json` per MCP server), `providers.json` | `~/.config/patchwork` | `~/Library/Application Support/patchwork` | `%APPDATA%\patchwork` |
+| Config: what the user edits, `skills/`, `agents/`, `hooks/`, `mcp/` (one `<name>.json` per MCP server), `providers.json` | `~/.config/patchwork` | `~/Library/Application Support/patchwork` | `%APPDATA%\patchwork` |
 | Data: what Patchwork keeps, `patchwork.db` and `api-sessions/` | `~/.local/share/patchwork` | `~/Library/Application Support/patchwork/data` | `%LOCALAPPDATA%\patchwork` |
 | Cache: what Patchwork rebuilds, `launch/<cli>/` (the skills, agents and hooks each CLI is launched with), `mcp-cli-tools.json`, `screenshots/` | `~/.cache/patchwork` | `~/Library/Caches/patchwork` | `%LOCALAPPDATA%\patchwork\cache` |
 | State: `mcp-relay.json` | `~/.local/state/patchwork` | the data folder | the data folder |
