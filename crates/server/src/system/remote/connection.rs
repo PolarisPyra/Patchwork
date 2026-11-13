@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU16, Ordering};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 /// The relay's port on this machine, once it listens; 0 before.
@@ -21,8 +21,9 @@ static RELAY_PORT: AtomicU16 = AtomicU16::new(0);
 /// The hosts with a master Patchwork checked lately, and whether it carries the relay tunnel.
 static MASTERS: Mutex<Option<HashMap<String, Master>>> = Mutex::new(None);
 
-/// Serializes starting masters, so two commands for a new host don't each log in.
-static STARTING: Mutex<()> = Mutex::new(());
+/// One lock per host, held while its master starts, so two commands for a new host don't each
+/// log in and a host that is slow to answer holds up only its own commands.
+static STARTING: Mutex<Option<HashMap<String, Arc<Mutex<()>>>>> = Mutex::new(None);
 
 /// The hosts that could not be reached lately, with when and why. Until [`RECHECK`] passes,
 /// commands for one fail with that reason at once instead of each waiting out a login.
@@ -120,7 +121,22 @@ fn ensure(host: &str) -> Result<(), Error> {
         return Ok(());
     }
     recent_failure(host)?;
-    let _starting = STARTING.lock().unwrap_or_else(PoisonError::into_inner);
+    let lock = Arc::clone(
+        STARTING
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get_or_insert_with(HashMap::new)
+            .entry(host.to_string())
+            .or_default(),
+    );
+    let _starting = lock.lock().unwrap_or_else(PoisonError::into_inner);
+    // Another command may have started this host's master while this one waited.
+    if let Some(master) = masters(|m| m.get(host).copied())
+        && master.checked.elapsed() < RECHECK
+        && (master.tunnel || !relay)
+    {
+        return Ok(());
+    }
     // Another command may have tried this host while this one waited.
     recent_failure(host)?;
     let mut tunnel = known.is_some_and(|m| m.tunnel);
@@ -219,7 +235,9 @@ fn start(host: &str) -> Result<bool, Error> {
             "ExitOnForwardFailure=no",
         ]);
     let tunnel = tunnel_args(&mut cmd);
-    cmd.args(["-M", "-N", "-f", "--", host])
+    // No `-M` here: with `ControlMaster=yes` it asks ssh to confirm each command that joins the
+    // connection, and with nobody to ask, the master turns them all away.
+    cmd.args(["-N", "-f", "--", host])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(file);

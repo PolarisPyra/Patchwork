@@ -44,6 +44,8 @@ pub(super) struct Installed {
     /// Its file name, in the `bin` folder under [`base`].
     name: String,
     os: Os,
+    /// Whether it is there on the word of an earlier run, not seen by this one.
+    pub remembered: bool,
 }
 
 impl Installed {
@@ -186,26 +188,21 @@ pub(super) fn helper(host: &str) -> Result<Installed, Error> {
     if about.os == Os::Windows {
         name.push_str(".exe");
     }
+    // An earlier run saw this very helper there. A call it fails to answer has it copied anew.
+    let remembered = super::host::helper_name(host).as_deref() == Some(name.as_str());
     let installed = Installed {
         path: format!("{}/bin/{name}", base(host)?),
         name,
         os: about.os,
+        remembered,
     };
-    if about.os == Os::Windows {
-        copy_windows(host, &installed, &bytes)?;
-    } else {
-        let q = quote(&installed.path);
-        let line = format!(
-            "test -x {q} || {{ umask 077 && mkdir -p \"$(dirname {q})\" && cat > {q}.part && chmod 700 {q}.part && mv -f {q}.part {q}; }}"
-        );
-        let out = send(host, &posix(&line), Some(&bytes))?;
-        if !out.status.success() {
-            return Err(format!(
-                "Could not copy Patchwork's helper to {host}: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            )
-            .into());
+    if !remembered {
+        if about.os == Os::Windows {
+            copy_windows(host, &installed, &bytes)?;
+        } else {
+            copy_unix(host, &installed, &bytes)?;
         }
+        super::host::set_helper(host, &installed.name);
     }
     HELPERS
         .lock()
@@ -220,6 +217,44 @@ pub(super) fn helper(host: &str) -> Result<Installed, Error> {
         }
     });
     Ok(installed)
+}
+
+/// Forgets `host`'s helper and what the host said about itself, so both are looked at again:
+/// for a host that was reinstalled, or whose helper was deleted.
+pub fn forget(host: &str) {
+    if let Some(helpers) = HELPERS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_mut()
+    {
+        helpers.remove(host);
+    }
+    super::session::close(host);
+    super::host::forget(host);
+}
+
+/// Copies the helper to a Linux or macOS host, unless it is there already. The helper's bytes
+/// go only to a host that lacks it.
+fn copy_unix(host: &str, installed: &Installed, bytes: &[u8]) -> Result<(), Error> {
+    let q = quote(&installed.path);
+    if send(host, &posix(&format!("test -x {q}")), None)?
+        .status
+        .success()
+    {
+        return Ok(());
+    }
+    let line = format!(
+        "umask 077 && mkdir -p \"$(dirname {q})\" && cat > {q}.part && chmod 700 {q}.part && mv -f {q}.part {q}"
+    );
+    let out = send(host, &posix(&line), Some(bytes))?;
+    if out.status.success() {
+        return Ok(());
+    }
+    Err(format!(
+        "Could not copy Patchwork's helper to {host}: {}",
+        String::from_utf8_lossy(&out.stderr).trim()
+    )
+    .into())
 }
 
 /// Copies the helper to a Windows host over SFTP, unless it answers there already.
@@ -274,16 +309,6 @@ fn sftp(host: &str, batch: &str) -> Result<Output, Error> {
             .map_err(|e| format!("Could not run sftp: {e}"))?;
     }
     Ok(child.wait_with_output()?)
-}
-
-/// Runs the helper on `host` with `args`, which are plain words, and `input` on its stdin.
-///
-/// # Errors
-///
-/// Returns an error when the helper cannot be copied to the host or ssh cannot be started.
-pub(super) fn run_helper(host: &str, args: &[&str], input: Option<&[u8]>) -> Result<Output, Error> {
-    let installed = helper(host)?;
-    send(host, &installed.line(args), input)
 }
 
 /// Patchwork's folders whose files a command may name, and whether a folder named under each

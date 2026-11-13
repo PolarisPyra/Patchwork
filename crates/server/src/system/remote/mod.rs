@@ -4,7 +4,8 @@
 //! host ([`host`]). Commands for it run over one shared connection per host ([`connection`]);
 //! [`command`] turns a command built for a folder into one that runs on the host. Patchwork's
 //! helper there, copied over the first time with the launch files a command names ([`upload`]),
-//! answers questions about the host's folders ([`op`], [`answer`]) and runs long commands
+//! answers questions about the host's folders ([`op`], [`answer`]), from one process that stays
+//! running per host ([`session`]), and runs long commands
 //! ([`serve`]).
 
 // Rust guideline compliant 2026-10-09
@@ -17,6 +18,7 @@ mod host;
 mod location;
 pub mod op;
 pub mod serve;
+mod session;
 mod upload;
 
 #[doc(inline)]
@@ -28,4 +30,4 @@ pub use host::{Host, Os, home, kind, probe};
 #[doc(inline)]
 pub use location::{Location, display, has_drive, here, is_remote, join, quote, root, same_host, split};
 #[doc(inline)]
-pub use upload::mirrored;
+pub use upload::{forget, mirrored};

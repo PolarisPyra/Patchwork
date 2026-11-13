@@ -160,14 +160,29 @@ impl Workspace {
         self.open_thread(id, cx);
     }
 
-    /// Opens the dialog that picks a folder to add as a project.
+    /// Opens the dialog that picks a folder to add as a project, on the machine picked in the
+    /// toolbar.
     pub fn open_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.add_project.is_some() {
+        if self.add_project.is_none() {
+            let host = self.settings.default_machine.clone();
+            self.open_folder_on(host, window, cx);
+        }
+    }
+
+    /// Opens that dialog on `host`, or on this computer when it is none.
+    fn open_folder_on(
+        &mut self,
+        host: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(dialog) = &self.add_project {
+            dialog.update(cx, |d, cx| d.open_machine(host, cx));
             return;
         }
         let return_focus = window.focused(cx);
         let server = Arc::clone(&self.server);
-        let dialog = cx.new(|cx| AddProject::new(server, window, cx));
+        let dialog = cx.new(|cx| AddProject::new(server, host, window, cx));
         cx.subscribe_in(
             &dialog,
             window,
@@ -201,11 +216,7 @@ impl Workspace {
         // The toolbar's machine button shows what the view learns about each machine.
         cx.observe(&view, |_, _, cx| cx.notify()).detach();
         cx.subscribe_in(&view, window, |this, _, open: &OpenDevice, window, cx| {
-            this.open_folder(window, cx);
-            if let Some(dialog) = &this.add_project {
-                let host = open.0.clone();
-                dialog.update(cx, |d, cx| d.open_machine(host, cx));
-            }
+            this.open_folder_on(open.0.clone(), window, cx);
         })
         .detach();
         self.devices_view = Some(view.clone());

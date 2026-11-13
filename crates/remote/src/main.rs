@@ -28,6 +28,8 @@ fn main() {
         serve::RUN_ARG => serve::run_inline,
         // A question about this host's folders, on stdin.
         serve::OP_ARG => serve::answer,
+        // The same questions, one per line, for as long as Patchwork keeps the connection.
+        serve::OPS_ARG => serve::answer_all,
         // A terminal's shell on a Windows host.
         serve::SHELL_ARG => serve::shell,
         // An OpenCode turn's bridge to `opencode serve`.

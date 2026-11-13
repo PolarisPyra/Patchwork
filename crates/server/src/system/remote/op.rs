@@ -90,21 +90,58 @@ pub struct Survey {
 /// helper's reason when it could not answer or the host cannot be reached.
 pub(super) fn call<T: DeserializeOwned>(host: &str, request: &Request) -> Result<T, Error> {
     let body = serde_json::to_vec(request).map_err(|e| e.to_string())?;
-    let out = super::upload::run_helper(host, &[OP_ARG], Some(&body))?;
-    let reply: Reply = serde_json::from_slice(&out.stdout).map_err(|_unreadable| {
+    let installed = super::upload::helper(host)?;
+    let reply = match ask(host, &installed, &body) {
+        // The helper an earlier run left is gone or the host changed: look again, once.
+        Err(Unanswered::Helper(_)) if installed.remembered => {
+            super::upload::forget(host);
+            ask(host, &super::upload::helper(host)?, &body)
+        }
+        reply => reply,
+    };
+    match reply {
+        Ok(Reply::Done(value)) => serde_json::from_value(value).map_err(|e| e.to_string().into()),
+        Ok(Reply::Outside) => Err(Error::OutsideProject),
+        Ok(Reply::Failed(reason)) => Err(reason.into()),
+        Err(Unanswered::Helper(reason)) => {
+            Err(format!("Patchwork's helper on {host} failed: {reason}").into())
+        }
+        Err(Unanswered::Host(e)) => Err(e),
+    }
+}
+
+/// Why a request got no reply.
+enum Unanswered {
+    /// The host could not be reached.
+    Host(Error),
+    /// The host was reached and the helper there did not answer, with what was said instead.
+    Helper(String),
+}
+
+/// The helper's reply to `body`: from the host's session, else from a helper started for it.
+fn ask(host: &str, installed: &super::upload::Installed, body: &[u8]) -> Result<Reply, Unanswered> {
+    if let Some(reply) = super::session::ask(host, installed, body)
+        .and_then(|line| serde_json::from_slice(&line).ok())
+    {
+        return Ok(reply);
+    }
+    let out = super::command::send(host, &installed.line(&[OP_ARG]), Some(body))
+        .map_err(Unanswered::Host)?;
+    serde_json::from_slice(&out.stdout).map_err(|_unreadable| {
         let said = String::from_utf8_lossy(&out.stderr);
         let reason = said
             .lines()
             .map(str::trim)
             .rfind(|l| !l.is_empty() && !l.starts_with("**"))
-            .unwrap_or("no answer");
-        format!("Patchwork's helper on {host} failed: {reason}")
-    })?;
-    match reply {
-        Reply::Done(value) => serde_json::from_value(value).map_err(|e| e.to_string().into()),
-        Reply::Outside => Err(Error::OutsideProject),
-        Reply::Failed(reason) => Err(reason.into()),
-    }
+            .unwrap_or("no answer")
+            .to_string();
+        // 255 is ssh's own failure, which looking at the helper again would not mend.
+        if out.status.code() == Some(255) {
+            Unanswered::Host(format!("Could not connect to {host}: {reason}").into())
+        } else {
+            Unanswered::Helper(reason)
+        }
+    })
 }
 
 /// [`Request::Poll`] for `dir` on `host`.

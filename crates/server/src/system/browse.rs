@@ -7,8 +7,17 @@
 
 use crate::Error;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::{Mutex, PoisonError};
 
 use super::fs::{home_dir, resolve};
+
+/// The folders seen on SSH hosts this session, by host and path, so one seen before shows at
+/// once while it is read again.
+static LISTINGS: Mutex<Option<HashMap<(String, String), DirListing>>> = Mutex::new(None);
+
+/// The most listings kept before they are all dropped.
+const MOST_LISTINGS: usize = 512;
 
 /// A machine the Add Project dialog can open a folder on: this computer, or a host from
 /// `~/.ssh/config`.
@@ -23,14 +32,14 @@ pub struct Machine {
 }
 
 /// One sub-folder in a browsed directory.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DirEntry {
     pub name: String,
     pub path: String,
 }
 
 /// A directory's folders, for the in-app folder browser.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DirListing {
     /// The directory being shown, resolved to an absolute path.
@@ -92,7 +101,12 @@ pub fn browse(path: Option<&str>) -> Result<DirListing, Error> {
     let mut entries: Vec<DirEntry> = std::fs::read_dir(&dir)
         .map_err(|e| format!("Cannot read {}: {e}", dir.display()))?
         .filter_map(std::result::Result::ok)
-        .filter(|e| e.path().is_dir())
+        // The entry says what it is without another look at the disk, except for a link.
+        .filter(|e| match e.file_type() {
+            Ok(kind) if kind.is_dir() => true,
+            Ok(kind) if kind.is_symlink() => e.path().is_dir(),
+            _ => false,
+        })
         .map(|e| DirEntry {
             name: e.file_name().to_string_lossy().into_owned(),
             path: e.path().to_string_lossy().into_owned(),
@@ -117,5 +131,38 @@ pub fn browse(path: Option<&str>) -> Result<DirListing, Error> {
 ///
 /// Returns an error when the host cannot be reached, or the path there cannot be opened.
 pub fn browse_host(host: &str, path: Option<&str>) -> Result<DirListing, Error> {
-    crate::system::remote::op::browse(host, path)
+    let listing = crate::system::remote::op::browse(host, path)?;
+    let mut guard = LISTINGS.lock().unwrap_or_else(PoisonError::into_inner);
+    let seen = guard.get_or_insert_with(HashMap::new);
+    if seen.len() >= MOST_LISTINGS {
+        seen.clear();
+    }
+    // Under the path asked for and the one it resolved to, which a step down or up asks for.
+    for key in [listing_key(path), listing_key(Some(&listing.path))] {
+        seen.insert((host.to_string(), key), listing.clone());
+    }
+    Ok(listing)
+}
+
+/// What [`browse_host`] last found at `path` on `host`, to show while it is read again.
+#[must_use]
+pub fn remembered(host: &str, path: Option<&str>) -> Option<DirListing> {
+    LISTINGS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()?
+        .get(&(host.to_string(), listing_key(path)))
+        .cloned()
+}
+
+/// `path` as [`LISTINGS`] names it: empty for the home folder, and without a closing slash.
+fn listing_key(path: Option<&str>) -> String {
+    let path = path.map_or("", str::trim);
+    let cut = path.trim_end_matches(['/', '\\']);
+    // A root, `/` or `C:/`, keeps its slash.
+    if cut.is_empty() || cut.ends_with(':') {
+        path.to_string()
+    } else {
+        cut.to_string()
+    }
 }

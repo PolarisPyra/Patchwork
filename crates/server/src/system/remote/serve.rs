@@ -29,9 +29,11 @@ pub const SHELL_ARG: &str = "--remote-shell";
 pub const UNPACK_ARG: &str = "--remote-unpack";
 
 #[doc(inline)]
-pub use super::answer::answer;
+pub use super::answer::{answer, answer_all};
 #[doc(inline)]
 pub use super::op::OP_ARG;
+#[doc(inline)]
+pub use super::session::OPS_ARG;
 
 /// Runs the command a staged spec describes, named after [`EXEC_ARG`], and returns its exit
 /// code.

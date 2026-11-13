@@ -1,21 +1,30 @@
 //! What kind of machine an SSH host is: its system, its processor and its home folder.
 //!
 //! A Linux or macOS host answers `uname`; a Windows host, whose OpenSSH server runs commands in
-//! `cmd` or PowerShell, answers with its environment variables instead. The answer is kept for
-//! the rest of the session.
+//! `cmd` or PowerShell, answers with its environment variables instead.
+//!
+//! The answers are kept in a file between runs, so a host Patchwork has met costs no questions
+//! the next time. [`forget`] drops a host whose answers turned out stale.
 
 // Rust guideline compliant 2026-10-09
 
 use crate::Error;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::{Mutex, PoisonError};
+
+use serde::{Deserialize, Serialize};
 
 use super::connection::ssh;
 use crate::system::device::Kind;
 
+/// What Patchwork learned about each host, read from [`file`] on first use.
+static KNOWN: Mutex<Option<HashMap<String, Known>>> = Mutex::new(None);
+
 /// A host's operating system, as far as Patchwork's helper cares.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Os {
     Linux,
     Mac,
@@ -32,29 +41,113 @@ pub struct Host {
     pub home: String,
 }
 
-/// What `host` is, asked once per session.
+/// A host as [`file`] keeps it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Known {
+    os: Os,
+    arch: String,
+    home: String,
+    /// Whether it is a desktop or a laptop, once it said.
+    #[serde(default)]
+    kind: Option<Kind>,
+    /// The file name of the helper last seen installed there.
+    #[serde(default)]
+    helper: Option<String>,
+}
+
+/// The file the hosts are remembered in between runs. Deleting it only makes Patchwork ask
+/// each host again.
+fn file() -> PathBuf {
+    crate::system::dirs().cache.join("remote-hosts.json")
+}
+
+/// Runs `f` on the remembered hosts, and writes them to [`file`] when it returns true.
+fn known<T>(f: impl FnOnce(&mut HashMap<String, Known>) -> (T, bool)) -> T {
+    let mut guard = KNOWN.lock().unwrap_or_else(PoisonError::into_inner);
+    let hosts = guard.get_or_insert_with(|| {
+        std::fs::read(file())
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_default()
+    });
+    let (out, changed) = f(hosts);
+    if changed {
+        let path = file();
+        let part = path.with_extension("json.part");
+        let written = serde_json::to_vec_pretty(hosts)
+            .map_err(std::io::Error::other)
+            .and_then(|body| {
+                if let Some(dir) = path.parent() {
+                    std::fs::create_dir_all(dir)?;
+                }
+                std::fs::write(&part, body)?;
+                std::fs::rename(&part, &path)
+            });
+        if let Err(e) = written {
+            log::warn!(error:% = e; "could not remember the SSH hosts: {{error}}");
+        }
+    }
+    out
+}
+
+/// What `host` is, asked the first time Patchwork reaches it and remembered after.
 ///
 /// # Errors
 ///
 /// Returns an error when the host cannot be reached, or runs a system or processor Patchwork has
 /// no helper for.
 pub fn probe(host: &str) -> Result<Host, Error> {
-    static HOSTS: Mutex<Option<HashMap<String, Host>>> = Mutex::new(None);
-    if let Some(known) = HOSTS
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .get_or_insert_with(HashMap::new)
-        .get(host)
-    {
-        return Ok(known.clone());
+    let remembered = known(|hosts| {
+        let found = hosts.get(host).and_then(|k| {
+            Some(Host {
+                os: k.os,
+                arch: arch(&k.arch)?,
+                home: k.home.clone(),
+            })
+        });
+        (found, false)
+    });
+    if let Some(found) = remembered {
+        return Ok(found);
     }
     let found = ask(host)?;
-    HOSTS
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .get_or_insert_with(HashMap::new)
-        .insert(host.to_string(), found.clone());
+    known(|hosts| {
+        hosts.insert(
+            host.to_string(),
+            Known {
+                os: found.os,
+                arch: found.arch.to_string(),
+                home: found.home.clone(),
+                kind: None,
+                helper: None,
+            },
+        );
+        ((), true)
+    });
     Ok(found)
+}
+
+/// Forgets what `host` said, so it is asked again: for a host that changed since.
+pub(super) fn forget(host: &str) {
+    known(|hosts| ((), hosts.remove(host).is_some()));
+}
+
+/// The file name of the helper last seen installed on `host`.
+pub(super) fn helper_name(host: &str) -> Option<String> {
+    known(|hosts| (hosts.get(host).and_then(|k| k.helper.clone()), false))
+}
+
+/// Remembers that the helper named `name` is installed on `host`.
+pub(super) fn set_helper(host: &str, name: &str) {
+    known(|hosts| {
+        let Some(k) = hosts.get_mut(host) else {
+            return ((), false);
+        };
+        let changed = k.helper.as_deref() != Some(name);
+        k.helper = Some(name.to_string());
+        ((), changed)
+    });
 }
 
 /// The home folder on `host`.
@@ -67,12 +160,27 @@ pub fn home(host: &str) -> Result<String, Error> {
 }
 
 /// Whether `host` is a desktop or a laptop, read from what its system reports about its case and
-/// battery.
+/// battery the first time, and remembered after.
 ///
 /// # Errors
 ///
 /// Returns an error when the host cannot be reached.
 pub fn kind(host: &str) -> Result<Kind, Error> {
+    if let Some(kind) = known(|hosts| (hosts.get(host).and_then(|k| k.kind), false)) {
+        return Ok(kind);
+    }
+    let kind = ask_kind(host)?;
+    known(|hosts| {
+        let Some(k) = hosts.get_mut(host) else {
+            return ((), false);
+        };
+        k.kind = Some(kind);
+        ((), true)
+    });
+    Ok(kind)
+}
+
+fn ask_kind(host: &str) -> Result<Kind, Error> {
     use crate::system::device;
     Ok(match probe(host)?.os {
         Os::Linux => device::from_linux(&say(

@@ -4,7 +4,7 @@
 
 use crate::Error;
 use std::collections::BTreeMap;
-use std::io::{Read, Write};
+use std::io::{BufRead, Read, Write};
 use std::path::{Path, PathBuf};
 
 use base64::Engine as _;
@@ -17,14 +17,7 @@ use super::op::{Reply, Request, Survey};
 pub fn answer() -> i32 {
     let mut input = Vec::new();
     let reply = match std::io::stdin().read_to_end(&mut input) {
-        Ok(_) => match serde_json::from_slice::<Request>(&input) {
-            Ok(request) => match handle(request) {
-                Ok(value) => Reply::Done(value),
-                Err(Error::OutsideProject) => Reply::Outside,
-                Err(e) => Reply::Failed(e.to_string()),
-            },
-            Err(e) => Reply::Failed(format!("Unreadable request: {e}")),
-        },
+        Ok(_) => reply_to(&input),
         Err(e) => Reply::Failed(format!("Unreadable request: {e}")),
     };
     let Ok(body) = serde_json::to_vec(&reply) else {
@@ -35,6 +28,38 @@ pub fn answer() -> i32 {
         return 1;
     }
     0
+}
+
+/// Answers each line of stdin, a request, with a line on stdout, until stdin closes, and returns
+/// the exit code. Patchwork keeps one of these running per host ([`super::session`]).
+#[must_use]
+pub fn answer_all() -> i32 {
+    let mut out = std::io::stdout().lock();
+    for line in std::io::stdin().lock().split(b'\n') {
+        let Ok(line) = line else {
+            return 1;
+        };
+        let Ok(mut body) = serde_json::to_vec(&reply_to(&line)) else {
+            return 1;
+        };
+        body.push(b'\n');
+        if out.write_all(&body).and_then(|()| out.flush()).is_err() {
+            return 1;
+        }
+    }
+    0
+}
+
+/// The reply to the request `input` holds as JSON.
+fn reply_to(input: &[u8]) -> Reply {
+    match serde_json::from_slice::<Request>(input) {
+        Ok(request) => match handle(request) {
+            Ok(value) => Reply::Done(value),
+            Err(Error::OutsideProject) => Reply::Outside,
+            Err(e) => Reply::Failed(e.to_string()),
+        },
+        Err(e) => Reply::Failed(format!("Unreadable request: {e}")),
+    }
 }
 
 fn handle(request: Request) -> Result<serde_json::Value, Error> {

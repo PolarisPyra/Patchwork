@@ -61,7 +61,13 @@ pub(super) fn with_sep(path: &str) -> String {
 }
 
 impl AddProject {
-    pub fn new(server: Arc<Server>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    /// The dialog showing the folders of `host`, or of this computer when it is none.
+    pub fn new(
+        server: Arc<Server>,
+        host: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let t = *theme(cx);
         let field = cx.new(|cx| {
             let mut field = TextArea::new("", "Folder path", cx);
@@ -119,9 +125,7 @@ impl AddProject {
         let focus = cx.focus_handle();
         window.focus(&focus, cx);
 
-        // The machine picked in the toolbar opens at once, alongside the machine list; this
-        // computer when none is picked.
-        let host = server.store.settings().default_machine;
+        // The machine opens at once, alongside the machine list.
         let mut dialog = Self {
             server,
             machines: None,
@@ -162,11 +166,19 @@ impl AddProject {
     }
 
     pub(super) fn browse(&mut self, path: Option<String>, cx: &mut Context<Self>) {
-        self.loading = true;
         self.error = None;
         self.browse_seq += 1;
         let seq = self.browse_seq;
         let host = self.host.clone();
+        // A host's folder seen before shows at once, and is read again behind it.
+        let seen = host
+            .as_deref()
+            .and_then(|h| browse::remembered(h, path.as_deref()));
+        let shown = seen.is_some();
+        if let Some(listing) = seen {
+            self.show(listing, cx);
+        }
+        self.loading = !shown;
         let task = cx.background_spawn(async move {
             match host {
                 Some(host) => browse::browse_host(&host, path.as_deref()),
@@ -180,14 +192,9 @@ impl AddProject {
                     return;
                 }
                 match listing {
-                    Ok(listing) => {
-                        let draft = with_sep(&listing.path);
-                        this.field.update(cx, |f, cx| f.set_text(&draft, cx));
-                        this.last = draft;
-                        this.listing = Some(listing);
-                        this.index = 0;
-                        this.follow = true;
-                    }
+                    // What was shown meanwhile keeps the text typed and the row picked.
+                    Ok(listing) if shown => this.listing = Some(listing),
+                    Ok(listing) => this.show(listing, cx),
                     Err(e) => this.error = Some(e.to_string()),
                 }
                 this.loading = false;
@@ -196,6 +203,16 @@ impl AddProject {
         })
         .detach();
         cx.notify();
+    }
+
+    /// Shows `listing` from its first folder, with its path in the field.
+    fn show(&mut self, listing: DirListing, cx: &mut Context<Self>) {
+        let draft = with_sep(&listing.path);
+        self.field.update(cx, |f, cx| f.set_text(&draft, cx));
+        self.last = draft;
+        self.listing = Some(listing);
+        self.index = 0;
+        self.follow = true;
     }
 
     pub(super) fn add(&mut self, cx: &mut Context<Self>) {

@@ -29,13 +29,14 @@ impl DevicesView {
             devices: None,
             run: 0,
         };
-        this.load(cx);
+        this.load(false, cx);
         this
     }
 
     /// Reads the machines, then asks each what it is, off the UI thread. A host that is slow to
-    /// answer holds up only its own icon.
-    fn load(&mut self, cx: &mut Context<Self>) {
+    /// answer holds up only its own icon. `fresh` asks each host again, where it would otherwise
+    /// say what the host answered before.
+    fn load(&mut self, fresh: bool, cx: &mut Context<Self>) {
         self.run += 1;
         let run = self.run;
         self.devices = None;
@@ -48,7 +49,12 @@ impl DevicesView {
                 }
                 for (i, machine) in machines.iter().enumerate() {
                     let machine = machine.clone();
-                    let task = cx.background_spawn(async move { device::kind(&machine) });
+                    let task = cx.background_spawn(async move {
+                        if fresh {
+                            device::forget(&machine);
+                        }
+                        device::kind(&machine)
+                    });
                     cx.spawn(async move |this, cx| {
                         let kind = task.await;
                         this.update(cx, |this, cx| {
@@ -97,7 +103,7 @@ impl Render for DevicesView {
             .child("Devices")
             .child(
                 icon_button("refresh-devices", "Refresh", "arrows-clockwise", 18., cx)
-                    .on_click(cx.listener(|this, _, _, cx| this.load(cx))),
+                    .on_click(cx.listener(|this, _, _, cx| this.load(true, cx))),
             );
         let rows = self
             .devices

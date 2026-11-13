@@ -6,7 +6,8 @@
 use super::browse::Machine;
 
 /// What kind of computer a machine is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Kind {
     Desktop,
     Laptop,
@@ -60,6 +61,13 @@ pub fn kind(machine: &Machine) -> Kind {
         } else {
             from_pmset(&said)
         }
+    }
+}
+
+/// Forgets what the SSH host `machine` said about itself, so [`kind`] asks it again.
+pub fn forget(machine: &Machine) {
+    if !machine.local {
+        super::remote::forget(&machine.name);
     }
 }
 
