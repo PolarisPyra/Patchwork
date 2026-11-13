@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.65] - 2026-11-13
+
+### Changed
+
+- The terminal now follows the machine picked in the header's machine menu. Picking an SSH host shows the terminals on that host, and opens one in its home folder when it has none; picking this computer brings its own terminals back. Terminal tabs on a host are named after it, and the "New terminal in a shell" menu is hidden there, since a host always starts your login shell.
+
 ## [26.11.64] - 2026-11-13
 
 ### Changed
