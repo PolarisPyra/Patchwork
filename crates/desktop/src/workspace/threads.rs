@@ -235,6 +235,10 @@ impl Workspace {
         if let Some(id) = self.thread.as_ref().map(|t| t.id.clone()) {
             match self.server.thread(&id) {
                 Ok(thread) => self.thread = Some(thread),
+                // A failed read keeps the chat on screen; a deleted chat is gone from the list.
+                Err(e) if self.threads.iter().any(|t| t.id == id) => {
+                    log::warn!(thread:% = id, error:% = e; "reloading thread {{thread}}: {{error}}");
+                }
                 Err(_) => self.thread = None,
             }
         }
