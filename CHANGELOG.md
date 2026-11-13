@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.62] - 2026-11-13
+
+### Changed
+
+- Working on an SSH host is much faster. In the Add a project browser, a host's folders appear almost at once, and a folder you opened before shows immediately while Patchwork checks it for changes. Patchwork also remembers each host between runs, so the first folder after starting it appears quickly too; the refresh button in Devices makes it ask each host about itself anew.
+
 ## [26.11.61] - 2026-11-13
 
 ### Changed
