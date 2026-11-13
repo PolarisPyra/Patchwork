@@ -53,7 +53,10 @@ pub fn report() -> &'static Value {
     REPORT.get_or_init(|| {
         let env: serde_json::Map<String, Value> = ENV
             .iter()
-            .filter_map(|name| Some((name.to_string(), json!(std::env::var(name).ok()?))))
+            .filter_map(|name| {
+                let value = std::env::var(name).ok()?;
+                Some((name.to_string(), json!(shown(Path::new(&value)))))
+            })
             .collect();
         json!({
             "app": "Patchwork",

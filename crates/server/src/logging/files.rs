@@ -246,29 +246,19 @@ pub(super) struct LogFile {
     pub(super) path: PathBuf,
     pub(super) out: Option<BufWriter<File>>,
     pub(super) written: u64,
-    /// The size at which the log moves aside, and how many moved-aside files are kept.
-    max_bytes: u64,
-    keep: usize,
 }
 
 impl LogFile {
     pub(super) fn new(path: PathBuf) -> Self {
-        Self::limited(path, MAX_BYTES, KEEP)
-    }
-
-    /// A log that moves aside at `max_bytes`, keeping `keep` older files.
-    pub(super) fn limited(path: PathBuf, max_bytes: u64, keep: usize) -> Self {
         Self {
             path,
             out: None,
             written: 0,
-            max_bytes,
-            keep,
         }
     }
 
     pub(super) fn append(&mut self, line: &str) {
-        if self.out.is_none() || self.written > self.max_bytes {
+        if self.out.is_none() || self.written > MAX_BYTES {
             self.open();
         }
         let Some(out) = self.out.as_mut() else { return };
@@ -289,7 +279,7 @@ impl LogFile {
             let _ = std::fs::create_dir_all(dir);
         }
         let size = |p: &Path| std::fs::metadata(p).map_or(0, |m| m.len());
-        if size(&self.path) > self.max_bytes {
+        if size(&self.path) > MAX_BYTES {
             self.rotate();
         }
         let file = std::fs::OpenOptions::new()
@@ -304,8 +294,8 @@ impl LogFile {
     /// `<name>.1.log`.
     pub(super) fn rotate(&self) {
         let numbered = |n: usize| self.path.with_extension(format!("{n}.log"));
-        let _ = std::fs::remove_file(numbered(self.keep));
-        for n in (1..self.keep).rev() {
+        let _ = std::fs::remove_file(numbered(KEEP));
+        for n in (1..KEEP).rev() {
             let _ = std::fs::rename(numbered(n), numbered(n + 1));
         }
         let _ = std::fs::rename(&self.path, numbered(1));
