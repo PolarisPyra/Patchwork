@@ -7,7 +7,7 @@ use gpui::{EventEmitter, FontWeight, Role, SharedString, Window, div, prelude::*
 use patchwork_server::system::browse::{self, Machine};
 use patchwork_server::system::device::{self, Kind};
 
-use super::{FS_SM, FS_XS, empty_row};
+use super::{FS_SM, FS_XS};
 use crate::ui::theme::{RADIUS_SM, theme};
 use crate::ui::{button, icon, icon_button, spinner};
 
@@ -174,11 +174,38 @@ impl Render for DevicesView {
                         )
                     })
                     .children(rows)
+                    // With no SSH hosts, a greyed row in the hosts' place says so, laid out like
+                    // the rows above it.
                     .when(self.devices.as_ref().is_some_and(|d| d.len() == 1), |d| {
                         d.child(
                             div()
-                                .px(px(6.))
-                                .child(empty_row("No SSH hosts in ~/.ssh/config", &t)),
+                                .id("device-none")
+                                .role(Role::ListItem)
+                                .aria_label("No remote devices available")
+                                .h(px(28.))
+                                .mx(px(4.))
+                                .px(px(8.))
+                                .flex()
+                                .items_center()
+                                .gap(px(8.))
+                                .text_size(px(FS_SM))
+                                .text_color(t.text_muted)
+                                .opacity(0.6)
+                                .child(
+                                    div()
+                                        .w(px(16.))
+                                        .flex_none()
+                                        .flex()
+                                        .justify_center()
+                                        .child(icon("hard-drives", 16.)),
+                                )
+                                .child(
+                                    div()
+                                        .min_w_0()
+                                        .flex_1()
+                                        .truncate()
+                                        .child("No remote devices available"),
+                                ),
                         )
                     }),
             )
