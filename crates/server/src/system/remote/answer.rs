@@ -68,6 +68,7 @@ fn handle(request: Request) -> Result<serde_json::Value, Error> {
         } => json(survey(&dir, &names, &programs, &read, max)),
         Request::Poll { dir } => json(poll(&dir)),
         Request::Snapshot { dir } => json(snapshot(&dir)?),
+        Request::Prune => json(prune()?),
     }
 }
 
@@ -320,4 +321,48 @@ fn snapshot(dir: &str) -> Result<String, Error> {
         git(dir, &["add", "-A"], Some(&temp)).and_then(|_| git(dir, &["write-tree"], Some(&temp)));
     let _ = std::fs::remove_file(&temp);
     Ok(tree?.trim().to_string())
+}
+
+/// How long a helper copy no Patchwork has started stays before [`prune`] deletes it.
+const UNUSED: std::time::Duration = std::time::Duration::from_secs(30 * 24 * 60 * 60);
+
+/// Marks this helper as in use, then deletes the other helper copies beside it that no Patchwork
+/// has started for [`UNUSED`], with their marks.
+///
+/// Each Patchwork version installs a helper named for its contents, so copies from older
+/// versions pile up otherwise. A copy another running Patchwork still uses was marked when that
+/// one started, and stays.
+fn prune() -> Result<(), Error> {
+    let me = std::env::current_exe().map_err(|e| e.to_string())?;
+    let mark = |exe: &Path| {
+        let mut name = exe.as_os_str().to_owned();
+        name.push(".used");
+        PathBuf::from(name)
+    };
+    std::fs::write(mark(&me), b"").map_err(|e| format!("Cannot mark the helper used: {e}"))?;
+    let Some(bin) = me.parent() else {
+        return Ok(());
+    };
+    let entries = std::fs::read_dir(bin).map_err(|e| e.to_string())?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if path == me
+            || !name.starts_with("patchwork-remote-")
+            || path.extension().is_some_and(|x| x == "used")
+        {
+            continue;
+        }
+        let used = std::fs::metadata(mark(&path))
+            .or_else(|_| entry.metadata())
+            .and_then(|m| m.modified());
+        let stale = used
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age > UNUSED);
+        if stale && std::fs::remove_file(&path).is_ok() {
+            let _ = std::fs::remove_file(mark(&path));
+        }
+    }
+    Ok(())
 }

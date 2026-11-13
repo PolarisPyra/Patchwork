@@ -212,6 +212,13 @@ pub(super) fn helper(host: &str) -> Result<Installed, Error> {
         .unwrap_or_else(PoisonError::into_inner)
         .get_or_insert_with(HashMap::new)
         .insert(host.to_string(), installed.clone());
+    // Off the caller's way: the helper marks itself used and deletes old versions' copies.
+    let host = host.to_string();
+    std::thread::spawn(move || {
+        if let Err(e) = super::op::call::<()>(&host, &super::op::Request::Prune) {
+            log::warn!(host:% = host, error:% = e; "could not clear old helpers on {{host}}: {{error}}");
+        }
+    });
     Ok(installed)
 }
 

@@ -58,6 +58,8 @@ pub(super) enum Request {
     Poll { dir: String },
     /// The tree `git add -A` would give `dir`, written without touching its index.
     Snapshot { dir: String },
+    /// Marks the helper as in use and deletes copies of it no Patchwork has started lately.
+    Prune,
 }
 
 /// The helper's answer to a [`Request`].
