@@ -1,6 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/server", "crates/desktop", "crates/remote"]
+# A bare `cargo run` or `cargo build` is for the app.
+default-members = ["crates/desktop"]
 
 # The app's version, which Settings → Updates compares with the latest release.
 [workspace.package]
