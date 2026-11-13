@@ -33,11 +33,6 @@ impl DevicesView {
         this
     }
 
-    /// The machines, once read, each with its kind once it answered.
-    pub fn devices(&self) -> Option<&[(Machine, Option<Kind>)]> {
-        self.devices.as_deref()
-    }
-
     /// Reads the machines, then asks each what it is, off the UI thread. A host that is slow to
     /// answer holds up only its own icon.
     fn load(&mut self, cx: &mut Context<Self>) {
@@ -80,7 +75,7 @@ impl DevicesView {
 }
 
 /// The icon for a kind of machine.
-pub(crate) fn kind_icon(kind: Kind) -> &'static str {
+fn kind_icon(kind: Kind) -> &'static str {
     match kind {
         Kind::Desktop => "desktop",
         Kind::Laptop => "laptop",

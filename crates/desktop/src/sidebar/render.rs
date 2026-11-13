@@ -21,7 +21,7 @@ pub(super) const FS_SM: f32 = 13.;
 pub fn render(
     w: &mut Workspace,
     view: View,
-    _window: &mut Window,
+    window: &mut Window,
     cx: &mut Context<Workspace>,
 ) -> impl IntoElement + use<> {
     let t = *theme(cx);
@@ -35,7 +35,7 @@ pub fn render(
             .min_h_0()
             .flex()
             .flex_col()
-            .child(w.devices_view.clone())
+            .child(w.devices_view(window, cx))
             .into_any_element(),
         View::Changes => div()
             .flex_1()

@@ -95,21 +95,12 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
         )
         .into_any_element();
     tree = tree.child(section_label("Projects", false, Some(projects_action), &t));
-    // Only the projects on the device picked in the activity bar.
-    let device = w.device(cx);
-    let shown: Vec<_> = w
-        .settings
-        .projects
-        .iter()
-        .filter(|p| p.is_on(device.as_deref()))
-        .cloned()
-        .collect();
-    if shown.is_empty() {
+    if w.settings.projects.is_empty() {
         tree = tree.child(empty_row("No projects yet", &t));
     }
 
     let mut projects = div().mx(px(-8.)).flex_none();
-    for p in &shown {
+    for p in &w.settings.projects {
         let open = !w.collapsed.contains(&p.id);
         let tasks: Vec<&Thread> = live
             .iter()

@@ -30,7 +30,6 @@ use crate::workspace::add_project::AddProject;
 use crate::ui::menu::Menu;
 use crate::workspace::palette::Palette;
 use crate::sidebar::changes::ChangesView;
-use crate::sidebar::devices::OpenDevice;
 use crate::sidebar::menu::{ContextMenu, Renaming, SortUndo};
 use super::background_dialog;
 use super::granular;
@@ -111,8 +110,8 @@ pub struct Workspace {
     pub lineage: Lineage,
     pub(super) _prompt_keys: gpui::Subscription,
     pub changes_view: Entity<ChangesView>,
-    /// The Devices view, which also reads the machines the device picker lists.
-    pub devices_view: Entity<crate::sidebar::devices::DevicesView>,
+    /// The Devices view, made the first time it is shown.
+    pub devices_view: Option<Entity<crate::sidebar::devices::DevicesView>>,
     /// Each reply's files as they stand now, by message id, and a count of the git updates that
     /// makes them load again.
     pub reply_files: HashMap<String, ReplyFiles>,
@@ -199,10 +198,6 @@ pub struct Workspace {
     /// The toolbar's project menu, while open, and where the press that last closed it was.
     pub(super) project_menu: Option<Entity<Menu>>,
     pub(super) project_menu_dismissed: Option<gpui::Point<gpui::Pixels>>,
-    /// The activity bar's device menu, while open, where it opens, and where the press that
-    /// last closed it was.
-    pub(super) device_menu: Option<(Entity<Menu>, gpui::Point<gpui::Pixels>)>,
-    pub(super) device_menu_dismissed: Option<gpui::Point<gpui::Pixels>>,
     /// The task tree's open menu, the row being renamed, and where sorted tasks were.
     pub context_menu: Option<ContextMenu>,
     pub renaming: Option<Renaming>,
@@ -221,21 +216,6 @@ impl Workspace {
         let workspace = cx.entity().downgrade();
         let composer = cx.new(|cx| Composer::new(workspace.clone(), window, cx));
         let changes_view = cx.new(|cx| ChangesView::new(workspace, window, cx));
-        let devices_view = cx.new(crate::sidebar::devices::DevicesView::new);
-        cx.subscribe_in(
-            &devices_view,
-            window,
-            |this, _, open: &OpenDevice, window, cx| {
-                this.open_folder(window, cx);
-                if let Some(dialog) = &this.add_project {
-                    let host = open.0.clone();
-                    dialog.update(cx, |d, cx| d.open_machine(host, cx));
-                }
-            },
-        )
-        .detach();
-        // The device picker shows the kinds as they come in.
-        cx.observe(&devices_view, |_, _, cx| cx.notify()).detach();
         // The panel above the composer answers its keys before the composer's bindings do.
         let weak = cx.entity().downgrade();
         let prompt_keys = cx.intercept_keystrokes(move |ev, window, cx| {
@@ -307,7 +287,7 @@ impl Workspace {
             lineage: Lineage::default(),
             _prompt_keys: prompt_keys,
             changes_view,
-            devices_view,
+            devices_view: None,
             reply_files: HashMap::new(),
             changes_generation: 0,
             project_events,
@@ -364,8 +344,6 @@ impl Workspace {
             title: "Patchwork".into(),
             project_menu: None,
             project_menu_dismissed: None,
-            device_menu: None,
-            device_menu_dismissed: None,
             context_menu: None,
             renaming: None,
             sort_undo: HashMap::new(),

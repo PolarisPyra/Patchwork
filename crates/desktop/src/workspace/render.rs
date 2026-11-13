@@ -201,7 +201,6 @@ impl Render for Workspace {
                     .as_ref()
                     .map(|m| Menu::view(m, bars::project_menu_at())),
             )
-            .children(self.device_menu.as_ref().map(|(m, at)| Menu::view(m, *at)))
             .children(crate::ui::selection::menu(cx))
             .into_any_element()
     }
