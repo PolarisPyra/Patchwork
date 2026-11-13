@@ -149,8 +149,12 @@ impl Terminals {
         let attachment = self.attachments.fetch_add(1, Ordering::Relaxed) + 1;
         let info = TerminalInfo {
             id,
-            name: super::launch::file_name(&launch.shell),
+            name: launch
+                .host
+                .clone()
+                .unwrap_or_else(|| super::launch::file_name(&launch.shell)),
             cwd: launch.cwd.to_string_lossy().into_owned(),
+            host: launch.host.clone(),
             running: true,
             exit_code: None,
         };

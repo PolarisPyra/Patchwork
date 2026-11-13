@@ -239,7 +239,7 @@ impl Server {
             .into());
         }
         let mut launch =
-            crate::terminal::launch(&self.store.settings(), Some(&project.root), None)?;
+            crate::terminal::launch(&self.store.settings(), Some(&project.root), None, None)?;
         launch.args = crate::system::shell_args(&shell, &command.line);
         launch.shell = shell;
         launch.cwd.clone_from(&command.cwd);

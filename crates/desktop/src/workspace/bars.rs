@@ -81,6 +81,7 @@ impl Workspace {
         if elsewhere && let Some(id) = first {
             self.select_project(&id, cx);
         }
+        self.sync_panel(cx);
         cx.notify();
     }
 

@@ -30,6 +30,8 @@ pub struct Shell {
     attachment: u32,
     /// The shell's file name, such as "zsh".
     pub name: String,
+    /// The SSH host it runs on, or None for this computer.
+    pub host: Option<String>,
     /// Set once the shell has ended with an error, while its last output stays readable.
     pub exit_code: Option<u32>,
     /// It runs one command rather than a shell, and has yet to say how the command ended.
@@ -135,6 +137,7 @@ impl Panel {
         self.error = None;
         let server = Arc::clone(&self.server);
         let cwd = self.cwd.clone();
+        let host = self.host.clone();
         let saved = self.picked.clone();
         let (sink, rx) = frames();
         let task = cx.background_spawn(async move {
@@ -145,6 +148,7 @@ impl Panel {
             let launch = patchwork_server::terminal::launch(
                 &server.store.settings(),
                 cwd.as_deref().map(std::path::Path::new),
+                host.as_deref(),
                 path.as_deref(),
             )?;
             server.terminals.spawn(launch, cols, rows, PAGE, sink)
@@ -215,7 +219,7 @@ impl Panel {
     /// instead. Then starts one when there is none, or when one was asked for.
     pub(in crate::panel) fn restore_then_start(&mut self, asked: bool, cx: &mut Context<Self>) {
         self.restore(cx);
-        if asked || self.shells.is_empty() {
+        if asked || self.shown().next().is_none() {
             self.start(asked, None, cx);
         }
     }
@@ -289,6 +293,7 @@ impl Panel {
             id,
             attachment,
             name: attached.info.name,
+            host: attached.info.host,
             exit_code,
             task: false,
             parser,
@@ -348,16 +353,15 @@ impl Panel {
                 output: String::new(),
             });
         }
-        let before = self.shells.len();
-        self.shells.retain(|s| s.id != id);
-        if self.shells.len() == before {
+        let Some(at) = self.shells.iter().position(|s| s.id == id) else {
             return;
-        }
+        };
+        let shown = self.shells.remove(at).host == self.host;
         if self.active == Some(id) {
             self.active = None;
         }
         self.close_in_background(id, cx);
-        if self.shells.is_empty() && self.tab == crate::panel::PanelTab::Terminal {
+        if shown && self.shown().next().is_none() && self.tab == crate::panel::PanelTab::Terminal {
             cx.emit(crate::panel::PanelEvent::Close);
         }
         cx.notify();
@@ -373,11 +377,15 @@ impl Panel {
         .detach();
     }
 
+    /// The shells on the machine the terminal shows.
+    pub(in crate::panel) fn shown(&self) -> impl Iterator<Item = &Shell> {
+        self.shells.iter().filter(|s| s.host == self.host)
+    }
+
     pub(in crate::panel) fn active_shell(&self) -> Option<&Shell> {
-        self.shells
-            .iter()
+        self.shown()
             .find(|s| Some(s.id) == self.active)
-            .or(self.shells.last())
+            .or_else(|| self.shown().last())
     }
 
     pub(super) fn active_shell_mut(&mut self) -> Option<&mut Shell> {

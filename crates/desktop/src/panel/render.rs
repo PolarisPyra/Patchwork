@@ -11,14 +11,14 @@ use super::state::{Panel, PanelEvent, PanelTab};
 impl Render for Panel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = *theme(cx);
-        if self.focus_terminal && !self.shells.is_empty() {
+        if self.focus_terminal && self.shown().next().is_some() {
             self.focus_terminal = false;
             window.focus(&self.term_focus, cx);
         }
         let tools = self.header_tools(cx);
         let body = match self.tab {
             PanelTab::Terminal => {
-                let tabs = (self.shells.len() > 1).then(|| self.shell_tabs(cx));
+                let tabs = (self.shown().count() > 1).then(|| self.shell_tabs(cx));
                 div()
                     .flex()
                     .flex_1()

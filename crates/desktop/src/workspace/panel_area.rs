@@ -54,9 +54,13 @@ pub(super) fn new_panel(
 impl Workspace {
     /// Hands the panel the settings and the open project's folder.
     pub(super) fn sync_panel(&mut self, cx: &mut Context<Self>) {
-        let cwd = self.project().map(|p| p.path.clone());
+        let host = self.machine_host(cx);
+        let cwd = self
+            .project()
+            .filter(|p| p.host() == host.as_deref())
+            .map(|p| p.path.clone());
         self.panel
-            .update(cx, |p, cx| p.sync(&self.settings, cwd, cx));
+            .update(cx, |p, cx| p.sync(&self.settings, host, cwd, cx));
     }
 
     fn open_panel(&mut self, tab: PanelTab, cx: &mut Context<Self>) {

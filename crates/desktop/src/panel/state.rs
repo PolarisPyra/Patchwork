@@ -55,7 +55,9 @@ pub struct Panel {
     pub(super) settings: TerminalSettings,
     pub(super) logging: LoggingSettings,
     pub(super) computer_use: bool,
-    /// The folder new terminals start in: the open project's.
+    /// The machine whose terminals show: an SSH host's alias, or None for this computer.
+    pub(super) host: Option<String>,
+    /// The folder new terminals start in: the open project's, when it is on that machine.
     pub(super) cwd: Option<String>,
     pub(super) shells: Vec<Shell>,
     pub(super) active: Option<u32>,
@@ -106,6 +108,7 @@ impl Panel {
             settings: settings.terminal.clone(),
             logging: settings.logging.clone(),
             computer_use: settings.computer_use,
+            host: None,
             cwd: None,
             shells: Vec::new(),
             active: None,
@@ -132,8 +135,15 @@ impl Panel {
         }
     }
 
-    /// Takes the settings and the open project's folder as they are now.
-    pub fn sync(&mut self, settings: &Settings, cwd: Option<String>, cx: &mut Context<Self>) {
+    /// Takes the settings, the machine and the open project's folder as they are now. A machine
+    /// picked while the terminal shows brings up its own terminals, starting one when it has none.
+    pub fn sync(
+        &mut self,
+        settings: &Settings,
+        host: Option<String>,
+        cwd: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         #[expect(
             clippy::float_cmp,
             reason = "compares the saved settings, not computed values"
@@ -147,6 +157,15 @@ impl Panel {
         self.cwd = cwd;
         if resized {
             self.grid = None;
+        }
+        if self.host != host {
+            self.host = host;
+            self.active = None;
+            self.menu = None;
+            if self.visible && self.tab == PanelTab::Terminal {
+                self.restore_then_start(false, cx);
+                self.focus_terminal = true;
+            }
         }
         if !self.computer_use && self.tab == PanelTab::Screen {
             self.tab = PanelTab::Terminal;
@@ -191,7 +210,7 @@ impl Panel {
 
     /// Moves focus into the terminal, now or once its shell is up.
     pub fn focus_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.shells.is_empty() {
+        if self.shown().next().is_none() {
             self.focus_terminal = true;
         } else {
             window.focus(&self.term_focus, cx);

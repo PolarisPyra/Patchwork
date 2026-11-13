@@ -10,9 +10,11 @@ use serde::Serialize;
 #[serde(rename_all = "camelCase")]
 pub struct TerminalInfo {
     pub id: u32,
-    /// The shell's file name, such as "zsh", for the terminal's tab.
+    /// The shell's file name, such as "zsh", or the SSH host's alias, for the terminal's tab.
     pub name: String,
     pub cwd: String,
+    /// The SSH host the shell runs on, or None for this computer.
+    pub host: Option<String>,
     pub running: bool,
     /// How the shell exited, once it has: its code, or None when it could not be told.
     pub exit_code: Option<u32>,

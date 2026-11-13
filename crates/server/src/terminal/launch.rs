@@ -16,6 +16,8 @@ pub struct Launch {
     pub args: Vec<String>,
     pub cwd: PathBuf,
     pub env: BTreeMap<String, String>,
+    /// The SSH host the shell runs on, or None for this computer.
+    pub host: Option<String>,
 }
 
 /// What `inherit_env: false` keeps of Patchwork's environment: enough to log in and reach the
@@ -95,14 +97,16 @@ pub(super) fn file_name(path: &str) -> String {
 ///
 /// The shell for a terminal in `workspace`, the project folder when there is one: `shell`, else
 /// the user's, interactive, so its startup files and completion are its own. A shell that is not
-/// there is an error rather than another shell.
+/// there is an error rather than another shell. With no `workspace`, the terminal opens in the
+/// home folder of `host`, the SSH host picked as the machine, or of this computer when it is none.
 ///
 /// # Errors
 ///
-/// Returns an error when the chosen shell is not installed.
+/// Returns an error when the chosen shell is not installed, or `host` cannot be reached.
 pub fn launch(
     settings: &Settings,
     workspace: Option<&Path>,
+    host: Option<&str>,
     shell: Option<&str>,
 ) -> Result<Launch, Error> {
     let terminal = &settings.terminal;
@@ -168,9 +172,17 @@ pub fn launch(
     }
 
     let home = crate::system::fs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
-    // A project on an SSH host gets the user's login shell there, over the shared connection.
-    if let Some(at) = crate::system::remote::split(&folder) {
-        let ssh = crate::system::remote::interactive(at.host, at.path)?;
+    // A project on an SSH host, or the host itself, gets the user's login shell there, over the
+    // shared connection.
+    let remote = match (crate::system::remote::split(&folder), host) {
+        (Some(at), _) => Some((at.host.to_string(), at.path.to_string())),
+        (None, Some(host)) if workspace.is_none() => {
+            Some((host.to_string(), crate::system::remote::home(host)?))
+        }
+        _ => None,
+    };
+    if let Some((host, path)) = remote {
+        let ssh = crate::system::remote::interactive(&host, &path)?;
         return Ok(Launch {
             shell: ssh.get_program().to_string_lossy().into_owned(),
             args: ssh
@@ -179,6 +191,7 @@ pub fn launch(
                 .collect(),
             cwd: home,
             env,
+            host: Some(host),
         });
     }
     let base = workspace.map_or_else(|| home.clone(), Path::to_path_buf);
@@ -195,6 +208,7 @@ pub fn launch(
         args,
         cwd,
         env,
+        host: None,
     })
 }
 

@@ -10,6 +10,7 @@ use crate::ui::menu::MenuItem;
 use crate::ui::theme::{FS_SM, theme};
 use crate::ui::{button, icon, icon_button, tooltip};
 use super::state::{MenuFor, Panel, PanelTab};
+use super::terminal::Shell;
 
 impl Panel {
     pub(super) fn tab_button(
@@ -51,7 +52,8 @@ impl Panel {
         match self.tab {
             PanelTab::Terminal => {
                 let mut tools = Vec::new();
-                if let [only] = self.shells.as_slice() {
+                let shown: Vec<&Shell> = self.shown().collect();
+                if let [only] = shown.as_slice() {
                     tools.push(
                         div()
                             .px(px(4.))
@@ -66,19 +68,23 @@ impl Panel {
                         .on_click(cx.listener(|this, _, _, cx| this.start(true, None, cx)))
                         .into_any_element(),
                 );
-                tools.push(
-                    tool(
-                        "terminal-shells",
-                        "New terminal in a shell",
-                        "caret-down",
-                        cx,
-                    )
-                    .aria_expanded(self.menu_open(&MenuFor::Shells))
-                    .on_click(cx.listener(super::state::Panel::shells_menu))
-                    .into_any_element(),
-                );
+                // An SSH host starts the user's login shell there; the shells listed are this
+                // computer's.
+                if self.host.is_none() {
+                    tools.push(
+                        tool(
+                            "terminal-shells",
+                            "New terminal in a shell",
+                            "caret-down",
+                            cx,
+                        )
+                        .aria_expanded(self.menu_open(&MenuFor::Shells))
+                        .on_click(cx.listener(super::state::Panel::shells_menu))
+                        .into_any_element(),
+                    );
+                }
                 // With the tab list showing, each tab has its own kill button.
-                if self.shells.len() < 2 {
+                if shown.len() < 2 {
                     let active = self.active_shell().map(|s| s.id);
                     tools.push(
                         tool("terminal-kill", "Kill terminal", "trash", cx)
@@ -144,7 +150,7 @@ impl Panel {
     pub(super) fn shell_tabs(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = *theme(cx);
         let active = self.active_shell().map(|s| s.id);
-        let tabs = self.shells.iter().enumerate().map(|(i, shell)| {
+        let tabs = self.shown().enumerate().map(|(i, shell)| {
             let id = shell.id;
             let on = active == Some(id);
             let label = if i == 0 {
