@@ -13,4 +13,4 @@ pub(crate) use state::{
     update_is_dismissed, update_releases_held,
 };
 #[doc(inline)]
-pub use stop::is_upkeep;
+pub use stop::{Upkeep, is_upkeep, upkeep};
