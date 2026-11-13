@@ -260,7 +260,8 @@ impl Writer {
             .values_mut()
             .filter_map(|chat| chat.file.as_mut())
             .collect();
-        let close = files.len() > MAX_OPEN;
+        // Only the open ones: a chat's file stays in the list after it is closed.
+        let close = files.iter().filter(|file| file.out.is_some()).count() > MAX_OPEN;
         for file in files {
             if close {
                 file.close();

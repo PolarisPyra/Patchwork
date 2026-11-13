@@ -32,6 +32,9 @@ pub fn settings_file() -> PathBuf {
 pub(crate) fn credentials() -> Option<Value> {
     let file = home().and_then(|h| std::fs::read_to_string(h.join(".credentials.json")).ok());
     let raw = file.or_else(|| {
+        if !cfg!(target_os = "macos") {
+            return None;
+        }
         let out = crate::system::host_command("security")
             .args([
                 "find-generic-password",

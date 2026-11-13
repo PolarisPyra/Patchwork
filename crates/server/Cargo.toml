@@ -53,7 +53,7 @@ tokio = { workspace = true, features = ["macros", "net", "rt", "sync", "time"] }
 tonic = { workspace = true, features = ["channel"] }
 tonic-prost.workspace = true
 
-# Screenshots. On Linux they are taken in src/screen.rs with crates the app already builds, since
+# Screenshots. On Linux they are taken in src/computer/linux.rs with crates the app already builds, since
 # xcap would also build PipeWire, which needs newer headers than the AppImage's build machine has.
 [target.'cfg(not(target_os = "linux"))'.dependencies]
 xcap.workspace = true

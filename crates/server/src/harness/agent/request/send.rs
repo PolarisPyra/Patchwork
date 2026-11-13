@@ -25,6 +25,9 @@ use serde_json::{Value, json};
 use crate::harness::agent::context::CONTEXT_PHRASES;
 use crate::harness::agent::{Agent, emit};
 
+/// The highest index a streamed tool call may carry.
+const MAX_CALL_INDEX: u64 = 255;
+
 impl Agent {
     /// Whether the endpoint is on `host`, such as `openrouter.ai`.
     fn on_host(&self, host: &str) -> bool {
@@ -377,6 +380,9 @@ impl Agent {
             for part in delta["tool_calls"].as_array().into_iter().flatten() {
                 // Calls carry an index; without one, a new id starts a new call.
                 let index = match part["index"].as_u64() {
+                    // A reply holds a handful of calls; an index far past them is a server's
+                    // mistake, and is not given the memory it names.
+                    Some(n) if n > MAX_CALL_INDEX => continue,
                     Some(n) => n as usize,
                     None => match part["id"].as_str() {
                         Some(id) if calls.iter().all(|c| c.id != id) => calls.len(),

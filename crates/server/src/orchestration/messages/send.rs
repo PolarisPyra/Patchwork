@@ -6,6 +6,7 @@ use crate::Error;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::orchestration::turn::start::Starting;
 use crate::orchestration::{ApprovalDecision, Delivery, FollowUpInput, TurnRequest};
 
 use crate::events::{AgentEvent, AgentEventEnvelope};
@@ -48,7 +49,6 @@ fn user_message(text: &str, attachments: Vec<Attachment>) -> Message {
 }
 
 impl Server {
-    /// Stops every running agent; for quitting the app.
     /// How many threads have an agent replying now.
     pub fn running_turns(&self) -> usize {
         self.runner.running().len()
@@ -392,6 +392,17 @@ impl Server {
             }
             Delivery::Resumed => self.capture_checkpoint(&thread_id, &msg.id),
             Delivery::NotRunning => {
+                // Another send may have started the turn since the check at the top. This one is
+                // refused then, and its message taken back out, so it leaves no trace.
+                let starting = match Starting::claim(&self.runner, &thread_id) {
+                    Ok(starting) => starting,
+                    Err(e) => {
+                        self.store.update_thread(&thread_id, |t| {
+                            t.messages.retain(|m| m.id != msg.id);
+                        })?;
+                        return Err(e);
+                    }
+                };
                 // The app adds a message it sent once this returns, but not one the server sends
                 // itself (a goal clear), so the chat learns of it before the reply starts.
                 self.emit(AgentEventEnvelope {
@@ -400,7 +411,7 @@ impl Server {
                         message: msg.clone(),
                     },
                 });
-                self.runner.start_turn(
+                self.runner.start_claimed(
                     self,
                     TurnRequest {
                         thread_id,
@@ -409,6 +420,7 @@ impl Server {
                         images,
                         resumes: false,
                     },
+                    starting,
                 )?;
             }
         }

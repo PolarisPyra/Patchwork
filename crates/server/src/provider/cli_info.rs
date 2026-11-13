@@ -113,13 +113,18 @@ pub fn run(binary: &Path, args: &[&str]) -> Result<String, Error> {
             Err(e) => return Err(format!("Could not run {}: {e}", binary.display()).into()),
         }
     };
-    // The threads end when the process closes its pipes, which it has.
-    let stdout = out
-        .map(|out| out.join().unwrap_or_default())
-        .unwrap_or_default();
-    let stderr = err
-        .map(|err| err.join().unwrap_or_default())
-        .unwrap_or_default();
+    // The threads end when the process closes its pipes, which it has. One it left running may
+    // still hold them open, so its output is given up on after a moment rather than waited for.
+    let read = |pipe: Option<std::thread::JoinHandle<String>>| {
+        let pipe = pipe?;
+        let until = Instant::now() + Duration::from_secs(2);
+        while !pipe.is_finished() && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        pipe.is_finished().then(|| pipe.join().ok()).flatten()
+    };
+    let stdout = read(out).unwrap_or_default();
+    let stderr = read(err).unwrap_or_default();
     let text = if stdout.trim().is_empty() {
         stderr
     } else {

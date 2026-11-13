@@ -127,7 +127,7 @@ impl Server {
             (Some(_), AgentKind::Codex, Some(_)) => "/goal resume".into(),
             _ => note(cut_off),
         };
-        self.runner.start_turn(
+        let started = self.runner.start_turn(
             self,
             TurnRequest {
                 thread_id: thread_id.into(),
@@ -136,7 +136,14 @@ impl Server {
                 images: Vec::new(),
                 resumes: true,
             },
-        )?;
+        );
+        if let Err(e) = started {
+            // The turn did not start, so the goal is still the one a later resume takes up.
+            if let Some(goal) = &goal {
+                goal::note_cut_off(&self.store, thread_id, goal, true);
+            }
+            return Err(e);
+        }
         // Claude takes its goal up again by itself when its session resumes, and Codex reports
         // its own as it goes active. Antigravity keeps the goal with the conversation and
         // reports nothing, so the goal is shown pursued again here.

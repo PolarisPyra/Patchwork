@@ -71,8 +71,8 @@ fn run_probe(
             Ok(Some(status)) => {
                 // Kill leftover group members so a grandchild cannot hold the pipes open.
                 signal_process_group(child.id(), SIGKILL);
-                let _ = out_reader.join();
-                let _ = err_reader.join();
+                settle(&out_reader);
+                settle(&err_reader);
                 break status.success();
             }
             Ok(None) if done(&text(&out)) => {
@@ -95,6 +95,15 @@ fn run_probe(
 }
 
 /// Kills the CLI and anything it started in its process group.
+/// Waits for a pipe's reader to reach the end, but only briefly: a process the CLI left behind
+/// outside its group can hold the pipe open long after the CLI has gone.
+fn settle(reader: &JoinHandle<()>) {
+    let until = Instant::now() + Duration::from_secs(2);
+    while !reader.is_finished() && Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
 pub(super) fn stop(child: &mut Child) {
     signal_process_group(child.id(), SIGKILL);
     let _ = child.kill();

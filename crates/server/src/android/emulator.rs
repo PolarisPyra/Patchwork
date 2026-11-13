@@ -311,7 +311,7 @@ impl Server {
             acceleration(&sdk)?;
             self.emulators.accelerated.store(true, Ordering::Relaxed);
         }
-        self.emulators.started(&self.store);
+        let started = self.emulators.started(&self.store);
         let running = devices::list(&sdk, &self.emulators).unwrap_or_default();
         if running
             .iter()
@@ -319,9 +319,11 @@ impl Server {
         {
             return Err(format!("{avd} is already running").into());
         }
+        // One started a moment ago holds its port before adb lists it.
         let used: Vec<u16> = running
             .iter()
             .filter_map(|d| emulator_port(&d.serial))
+            .chain(started.iter().map(|s| s.port))
             .collect();
         let port = free_port(&used).ok_or(
             "Every emulator port (5554 to 5682) is in use. Close an emulator, then try again.",

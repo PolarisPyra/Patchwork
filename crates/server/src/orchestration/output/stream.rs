@@ -137,7 +137,6 @@ pub(in crate::orchestration) struct Unsaved {
     pub(in crate::orchestration) thinking_since: u64,
 }
 
-/// Applies one event to the stored message. Used for both persistence and replay.
 /// Applies `event` to the stored thread. Removing a message moves the ones after it, so
 /// that goes through `update_thread`; every other event changes at most one message in place.
 pub(in crate::orchestration) fn save_event(

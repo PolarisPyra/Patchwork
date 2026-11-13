@@ -32,16 +32,12 @@ pub fn run_command(
 ) -> RunCommand {
     let line = match project.framework {
         // Not left attached for hot reload: nobody sees the terminal it runs in.
-        Framework::Flutter => format!("flutter run -d {serial} --no-resident"),
+        Framework::Flutter if plain(serial) => format!("flutter run -d {serial} --no-resident"),
+        Framework::Flutter => "flutter run --no-resident".to_string(),
         Framework::ReactNative => "npx react-native run-android".to_string(),
         Framework::Expo => {
             let device = avd.unwrap_or(serial);
-            // Only what a device name or serial is made of goes on a command line.
-            let plain = !device.is_empty()
-                && device
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ':'));
-            if plain {
+            if plain(device) {
                 format!("npx expo run:android --device {device}")
             } else {
                 "npx expo run:android".to_string()
@@ -53,6 +49,15 @@ pub fn run_command(
         line,
         cwd: project.root.clone(),
     }
+}
+
+/// Whether `device` holds only what a device name or serial is made of, so it can go on a
+/// command line as it is.
+fn plain(device: &str) -> bool {
+    !device.is_empty()
+        && device
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ':'))
 }
 
 fn gradle(project: &MobileProject, shell: &str) -> String {

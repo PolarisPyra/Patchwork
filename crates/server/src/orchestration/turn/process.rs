@@ -4,6 +4,7 @@
 
 use std::io::BufRead;
 use std::io::BufReader;
+use std::io::Read;
 use std::io::Write;
 use std::process::Child;
 use std::process::ChildStderr;
@@ -253,10 +254,17 @@ pub(in crate::orchestration) fn next_line(reader: &mut impl BufRead) -> Option<S
 
 /// Reads all of stderr but keeps only roughly the last `STDERR_TAIL_BYTES`.
 pub(in crate::orchestration) fn read_stderr_tail(stderr: ChildStderr, source: &Source) -> String {
+    // A line is read in pieces of at most this, so output with no line ends cannot fill memory.
+    const MOST_AT_ONCE: u64 = 64 * 1024;
     let mut reader = BufReader::new(stderr);
     let mut tail = String::new();
     let mut line = Vec::new();
-    while reader.read_until(b'\n', &mut line).unwrap_or(0) > 0 {
+    while (&mut reader)
+        .take(MOST_AT_ONCE)
+        .read_until(b'\n', &mut line)
+        .unwrap_or(0)
+        > 0
+    {
         let text = String::from_utf8_lossy(&line);
         AGENT_LOG.write(
             LogLevel::Debug,

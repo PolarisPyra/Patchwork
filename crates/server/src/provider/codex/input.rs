@@ -66,6 +66,10 @@ pub fn sub_agent_args(pick: &crate::threads::AgentPick) -> Vec<String> {
 /// A role's instructions and model live in a file of their own, which the role points to.
 #[must_use]
 pub fn agents_args(spec: &TurnSpec) -> Vec<String> {
+    // Listing the models runs the CLI, which a turn with no custom agent has no use for.
+    if spec.agents.is_empty() {
+        return Vec::new();
+    }
     let models = models();
     let mut args = Vec::new();
     for agent in spec.agents {

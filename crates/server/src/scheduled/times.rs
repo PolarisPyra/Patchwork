@@ -116,6 +116,10 @@ pub(crate) fn prepare(mut task: Task) -> Result<Task, Error> {
     if task.prompt.trim().is_empty() {
         return Err("A scheduled task needs a prompt".into());
     }
+    // Saved as the interval it runs at, so its description says the same.
+    if let Schedule::Hourly { interval_hours } = &mut task.schedule {
+        *interval_hours = (*interval_hours).clamp(1, 24 * 7);
+    }
     let next = next_run_at(&task.schedule, Local::now());
     if next.is_none() {
         return Err("The schedule needs a time of day, as HH:MM".into());

@@ -88,12 +88,12 @@ impl Server {
     /// Imports new sessions as threads in the project for their folder, adding
     /// the project if needed. A conversation found by more than one source (a
     /// T3 Code thread is also in the agent's own files) is imported once.
-    /// Returns how many threads were added.
+    /// Returns how many threads were added. A session whose folder cannot be added as a project
+    /// is left out.
     ///
     /// # Errors
     ///
-    /// Returns an error when a session's project folder cannot be added as a project, or when the
-    /// imported threads cannot be saved.
+    /// Returns an error when the imported threads cannot be saved.
     pub fn import_threads(&self, sources: &[ImportSource]) -> Result<u32, Error> {
         ilog!("import started: {sources:?}");
         let mut known = self.store.session_keys();
@@ -136,12 +136,16 @@ impl Server {
                         session.session_id,
                         session.cwd
                     );
-                    let project = workspace::make_project(&session.cwd)
+                    // A folder that cannot be a project costs its own sessions, not the rest.
+                    match workspace::make_project(&session.cwd)
                         .and_then(|p| self.register_project(p, false))
-                        .inspect_err(|e| {
+                    {
+                        Ok(project) => Some(project.id),
+                        Err(e) => {
                             ilog!("{source:?}: couldn't add project {}: {e}", session.cwd);
-                        })?;
-                    Some(project.id)
+                            continue;
+                        }
+                    }
                 };
                 threads.push(import::to_thread(session, project_id));
             }

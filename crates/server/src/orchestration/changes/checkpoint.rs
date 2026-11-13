@@ -535,7 +535,7 @@ impl Server {
     /// Returns an error when a turn is running, when the chat is not a project task or is unknown,
     /// when the message is not found, or when restoring the checkpoint or saving the chat fails.
     pub fn restore_checkpoint(&self, thread_id: &str, message_id: &str) -> Result<Thread, Error> {
-        if self.runner.is_running(thread_id) {
+        if self.runner.is_running(thread_id) || self.runner.is_starting(thread_id) {
             return Err("Stop the running turn before restoring a checkpoint".into());
         }
         // An idle agent still holds the session being undone.
@@ -581,7 +581,7 @@ impl Server {
     /// Returns an error when a turn is running, when the chat is not a project task or is unknown,
     /// when the reply is not found or has no snapshot, or when `git` cannot reverse its changes.
     pub fn undo_reply(&self, thread_id: &str, message_id: &str) -> Result<(), Error> {
-        if self.runner.is_running(thread_id) {
+        if self.runner.is_running(thread_id) || self.runner.is_starting(thread_id) {
             return Err("Stop the running turn before undoing a reply".into());
         }
         let root = self

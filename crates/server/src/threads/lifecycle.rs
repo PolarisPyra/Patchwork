@@ -240,6 +240,7 @@ impl Server {
             .into_iter()
             .filter(|t| t.parent.as_ref().is_some_and(|p| p.thread_id == id));
         children.for_each(|child| {
+            self.forget_thread(&child.id);
             if let Err(e) = self.store.delete_thread(&child.id) {
                 log::warn!(error:% = e; "failed to delete a subagent's thread: {{error}}");
             }
