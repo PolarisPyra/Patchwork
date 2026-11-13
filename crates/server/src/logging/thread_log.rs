@@ -61,6 +61,8 @@ enum Message {
         report: String,
         done: Sender<Result<PathBuf, Error>>,
     },
+    /// Lets go of what is held for a chat that was deleted or archived.
+    Forget(String),
 }
 
 impl LaunchLog for ThreadLog {
@@ -134,6 +136,14 @@ impl ThreadLog {
             ..Source::default()
         };
         self.write(level, event, &source, Data::Text(text));
+    }
+
+    /// Lets go of the lines held for `thread` and closes its file, for a chat that was deleted or
+    /// archived. Should it log again, it starts afresh.
+    pub fn forget(&self, thread: &str) {
+        if let Some(tx) = self.writer.get() {
+            let _ = tx.send(Message::Forget(thread.into()));
+        }
     }
 
     /// Writes `thread`'s file in this launch's folder with `report` at the top, followed by
@@ -213,6 +223,11 @@ impl Writer {
                 done,
             } => {
                 let _ = done.send(self.report(&thread, &report));
+            }
+            Message::Forget(thread) => {
+                if let Some(mut file) = self.chats.remove(&thread).and_then(|chat| chat.file) {
+                    file.close();
+                }
             }
         }
     }

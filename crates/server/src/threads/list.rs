@@ -103,6 +103,7 @@ impl Server {
         self.thread(id)?;
         if archived {
             self.runner.cancel(id, None);
+            crate::logging::THREAD_LOG.forget(id);
         }
         self.store
             .update_thread(id, |t| t.archived_at = archived.then(now_ms))?;

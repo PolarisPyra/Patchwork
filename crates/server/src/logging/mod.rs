@@ -51,6 +51,6 @@ pub use files::{session_dir, channels, LogChunk, read, export};
 #[doc(inline)]
 pub use render::{now_text};
 #[doc(inline)]
-pub use scrub::{Json};
+pub use scrub::{Json, redact};
 #[doc(inline)]
 pub use thread_log::{THREAD_LOG, ThreadLog};

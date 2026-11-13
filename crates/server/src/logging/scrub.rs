@@ -35,23 +35,29 @@ pub(super) fn scrub(json: &mut Json, secret: bool) {
     }
 }
 
-/// `apiKey`, `x-api-key`, `access_token`, `password`, `headers` and the like.
+/// `apiKey`, `x-api-key`, `access_token`, `AWS_SECRET_ACCESS_KEY`, `DB_PASSWD`, `GITHUB_PAT`,
+/// `headers` and the like: the words the text pattern in [`SECRETS`] looks for, anywhere in the
+/// key, and a key that ends in `key` or `pat`.
 fn is_secret(key: &str) -> bool {
     let key: String = key.chars().filter(char::is_ascii_alphanumeric).collect();
     let key = key.to_ascii_lowercase();
-    [
-        "apikey",
-        "token",
-        "secret",
-        "password",
-        "authorization",
-        "cookie",
-        "headers",
-        "credential",
-    ]
-    .iter()
-    .any(|word| key.ends_with(word))
+    SECRET_WORDS.iter().any(|word| key.contains(word))
+        || ["key", "pat"].iter().any(|end| key.ends_with(end))
 }
+
+/// The words that make a field's value a secret.
+const SECRET_WORDS: [&str; 10] = [
+    "token",
+    "secret",
+    "password",
+    "passwd",
+    "pwd",
+    "authorization",
+    "cookie",
+    "header",
+    "credential",
+    "privatekey",
+];
 
 /// What a secret in free text looks like, and what it is replaced with.
 static SECRETS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
@@ -87,7 +93,9 @@ static SECRETS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
     .collect()
 });
 
-pub(super) fn redact(text: &str) -> String {
+/// `text` with the keys, tokens and passwords in it replaced.
+#[must_use]
+pub fn redact(text: &str) -> String {
     SECRETS.iter().fold(text.to_string(), |text, (re, with)| {
         re.replace_all(&text, *with).into_owned()
     })

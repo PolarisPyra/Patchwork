@@ -84,7 +84,8 @@ impl log::Log for FileLog {
         let time = patchwork_server::logging::now_text();
         let mut properties = Properties(Vec::new());
         let _ = record.key_values().visit(&mut properties);
-        let message = properties.fill(&record.args().to_string());
+        let message =
+            patchwork_server::logging::redact(&properties.fill(&record.args().to_string()));
         if let Ok(mut file) = self.0.lock() {
             let _ = writeln!(file, "{time} [{level}] {message}");
         }

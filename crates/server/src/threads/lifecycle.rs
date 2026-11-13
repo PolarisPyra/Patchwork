@@ -218,6 +218,7 @@ impl Server {
         self.runner.forget_jobs(id);
         self.remove_checkpoints(id);
         self.remove_api_session(id);
+        crate::logging::THREAD_LOG.forget(id);
     }
 
     /// Permanently deletes a thread and its messages.
