@@ -206,7 +206,7 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         self.close_context_menu(window, cx);
-        let done: Result<(), patchwork_server::Error> = match (&target, act) {
+        match (&target, act) {
             (_, Act::Rename) => return self.start_rename(target, window, cx),
             (Target::Thread(id), Act::Favorite(_) | Act::Pin(_) | Act::Restore) => {
                 let id = id.clone();
@@ -263,7 +263,6 @@ impl Workspace {
                     return;
                 };
                 cx.reveal_path(std::path::Path::new(&project.path));
-                Ok(())
             }
             (Target::Project(_) | Target::Folder(_), Act::Remove) => {
                 return self.remove_targets(&[target], window, cx);
@@ -287,10 +286,7 @@ impl Workspace {
                 };
                 return self.change("change the task list", change, cx);
             }
-            _ => Ok(()),
-        };
-        if let Err(e) = done {
-            log::warn!(error:% = e; "could not change the task list: {{error}}");
+            _ => {}
         }
         self.reload(cx);
     }

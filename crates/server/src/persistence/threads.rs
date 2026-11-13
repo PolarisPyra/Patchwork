@@ -169,13 +169,15 @@ pub(super) fn save_message(
 }
 
 pub(super) fn load_folders(conn: &Connection) -> rusqlite::Result<Vec<Folder>> {
-    let mut stmt = conn.prepare("SELECT id, project_id, name FROM folders ORDER BY position")?;
+    let mut stmt =
+        conn.prepare("SELECT id, project_id, name, sorted_by FROM folders ORDER BY position")?;
     let folders = stmt
         .query_map([], |r| {
             Ok(Folder {
                 id: r.get(0)?,
                 project_id: r.get(1)?,
                 name: r.get(2)?,
+                sorted_by: r.get::<_, Option<String>>(3)?.map(dec).transpose()?,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;

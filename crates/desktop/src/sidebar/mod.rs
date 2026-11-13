@@ -16,5 +16,5 @@ mod tasks;
 mod tree;
 pub mod usage;
 
-use render::{FS_SM, FS_XS, empty_row, twistie};
+use render::{empty_row, twistie};
 pub use render::render;

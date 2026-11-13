@@ -6,10 +6,10 @@ use std::sync::Arc;
 use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
 use patchwork_server::workspace::FileChange;
 
-use crate::ui::theme::{RADIUS_SM, Theme};
+use crate::ui::theme::{FS_MD, FS_SM, RADIUS_SM, Theme};
 use crate::ui::{base_name, button, dir_name, icon, tooltip};
 use crate::workspace::Workspace;
-use super::state::{ChangesView, FS_SM, FS_XS};
+use super::state::ChangesView;
 
 /// The focused reply's files, listed whether or not they still have uncommitted changes.
 pub(super) fn reply_files(w: &Workspace) -> Vec<String> {
@@ -75,7 +75,7 @@ pub(super) fn group_button(
         .rounded(px(RADIUS_SM))
         .px(px(6.))
         .py(px(2.))
-        .text_size(px(FS_XS))
+        .text_size(px(FS_SM))
         .text_color(t.text_subtle)
         .hover(move |s| s.bg(hover).text_color(fg))
         .child(lead)
@@ -101,7 +101,7 @@ pub(super) fn group_header(
             .items_center()
             .gap(px(4.))
             .px(px(4.))
-            .text_size(px(FS_SM))
+            .text_size(px(FS_MD))
             .child(div().flex_1().min_w_0().truncate().child(title))
             .children(actions)
             .child(
@@ -112,7 +112,7 @@ pub(super) fn group_header(
                     .px(px(6.))
                     .flex()
                     .justify_center()
-                    .text_size(px(FS_XS))
+                    .text_size(px(FS_SM))
                     .line_height(px(18.))
                     .child(count.to_string()),
             ),
@@ -190,7 +190,7 @@ impl ChangesView {
                 .min_w_0()
                 .items_baseline()
                 .gap(px(6.))
-                .text_size(px(FS_SM))
+                .text_size(px(FS_MD))
                 .tooltip(tooltip(format!("{path} • {label}")))
                 .child(
                     div()
@@ -205,7 +205,7 @@ impl ChangesView {
                     div()
                         .min_w_0()
                         .truncate()
-                        .text_size(px(FS_XS))
+                        .text_size(px(FS_SM))
                         .text_color(t.text_subtle)
                         .child(dir_name(&path).to_string()),
                 )
@@ -220,7 +220,7 @@ impl ChangesView {
                     .flex()
                     .flex_none()
                     .gap(px(4.))
-                    .text_size(px(FS_XS))
+                    .text_size(px(FS_SM))
                     .child(
                         div()
                             .min_w(px(28.))
@@ -247,7 +247,7 @@ impl ChangesView {
                     .flex_none()
                     .flex()
                     .justify_center()
-                    .text_size(px(FS_XS))
+                    .text_size(px(FS_SM))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(color)
                     .child(letter),

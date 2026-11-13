@@ -7,16 +7,11 @@ use gpui::{
     AnyElement, Div, ExternalPaths, FontWeight, MouseButton, MouseDownEvent, Role, Window, div,
     prelude::*, px,
 };
-use crate::ui::theme::{RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_MD, FS_SM, RADIUS_SM, Theme, theme};
 use crate::ui::{button, icon};
 use crate::workspace::{SIDEBAR_MAX, SIDEBAR_MIN, View, Workspace};
 use super::tasks::tasks_view;
 use super::usage;
-
-/// The sidebar's own type scale: its small text is a step larger than the chat's.
-pub(super) const FS_XS: f32 = 12.;
-
-pub(super) const FS_SM: f32 = 13.;
 
 pub fn render(
     w: &mut Workspace,
@@ -122,7 +117,7 @@ pub fn render(
                     .border_color(t.border)
                     .bg(t.bg_input)
                     .px(px(8.))
-                    .text_size(px(FS_SM))
+                    .text_size(px(FS_MD))
                     .text_color(t.text_muted)
                     .hover(move |s| s.border_color(border_strong).text_color(fg))
                     .child(icon("magnifying-glass", 18.))
@@ -158,7 +153,7 @@ pub(super) fn empty_row(text: &'static str, t: &Theme) -> Div {
         .flex()
         .items_center()
         .px(px(6.))
-        .text_size(px(FS_SM))
+        .text_size(px(FS_MD))
         .text_color(t.text_muted)
         .child(text)
 }
@@ -173,7 +168,7 @@ pub(super) fn section_label(text: &str, first: bool, action: Option<AnyElement>,
         .justify_between()
         .pt(px(if first { 4. } else { 10. }))
         .pl(px(6.))
-        .text_size(px(FS_XS))
+        .text_size(px(FS_SM))
         .text_color(t.text_muted)
         .child(div().child(text.to_uppercase()))
         .children(action)

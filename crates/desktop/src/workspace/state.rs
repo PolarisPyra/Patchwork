@@ -144,11 +144,9 @@ pub struct Workspace {
     pub sidebar_width: f32,
     /// Where a sidebar drag started: the pointer's x and the width then.
     pub(super) resizing: Option<(f32, f32)>,
-    /// Replies whose folded steps are open, and steps whose details are.
-    /// The project or folder row under the pointer, which shows its buttons.
-    pub hovered_row: Option<gpui::SharedString>,
     /// Rows of the task tree picked together with Ctrl or Shift.
     pub picking: crate::sidebar::pick::Picking,
+    /// Replies whose folded steps are open, and steps whose details are.
     pub open_folds: HashSet<String>,
     /// Notices on running replies, by message id, with the thread each is in.
     pub notices: HashMap<String, (String, ReplyNotice)>,
@@ -308,7 +306,6 @@ impl Workspace {
             status_region,
             sidebar_width: SIDEBAR_WIDTH,
             resizing: None,
-            hovered_row: None,
             picking: crate::sidebar::pick::Picking::default(),
             open_folds: HashSet::new(),
             notices: HashMap::new(),

@@ -3,6 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use crate::Error;
+use crate::provider::AgentKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -51,6 +52,9 @@ pub struct Folder {
     pub id: String,
     pub project_id: String,
     pub name: String,
+    /// The agent whose tasks it holds, when sorting tasks by provider made it.
+    #[serde(default)]
+    pub sorted_by: Option<AgentKind>,
 }
 
 /// `app_state` key for the projects and folders the sidebar has collapsed (JSON array).
@@ -443,11 +447,36 @@ impl Server {
     /// Returns an error when the project is unknown, when `name` is empty or invalid, or when the
     /// database cannot save the folder.
     pub fn create_folder(&self, project_id: &str, name: &str) -> Result<Folder, Error> {
+        self.add_folder(project_id, clean_name(name)?, None)
+    }
+
+    /// Creates the folder `name` that sorting tasks by provider puts `agent`'s tasks in.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `name` is empty or invalid, the project is unknown, or the database
+    /// cannot save the folder.
+    pub fn create_sort_folder(
+        &self,
+        project_id: &str,
+        name: &str,
+        agent: AgentKind,
+    ) -> Result<Folder, Error> {
+        self.add_folder(project_id, clean_name(name)?, Some(agent))
+    }
+
+    fn add_folder(
+        &self,
+        project_id: &str,
+        name: String,
+        sorted_by: Option<AgentKind>,
+    ) -> Result<Folder, Error> {
         self.project_root(project_id)?;
         let folder = Folder {
             id: new_id(),
             project_id: project_id.into(),
-            name: clean_name(name)?,
+            name,
+            sorted_by,
         };
         self.store.create_folder(folder.clone())?;
         Ok(folder)

@@ -13,11 +13,7 @@ use crate::ui::text_area::{Changed, Submitted, TextArea};
 use crate::ui::menu::Menu;
 use crate::ui::theme::theme;
 use crate::workspace::Workspace;
-use super::rows::{reply_files};
-
-/// The sidebar's type scale.
-pub(super) const FS_XS: f32 = 12.;
-pub(super) const FS_SM: f32 = 13.;
+use super::rows::reply_files;
 
 /// The Graph's height while Changes is open too, and the least either pane is dragged to.
 const GRAPH_HEIGHT: f32 = 260.;
@@ -287,7 +283,10 @@ impl ChangesView {
                         });
                     }
                     Ok(_) => {}
-                    Err(_) => this.sync = None,
+                    Err(e) => {
+                        log::warn!(error:% = e; "could not read the branch state: {{error}}");
+                        this.sync = None;
+                    }
                 }
                 cx.notify();
             })

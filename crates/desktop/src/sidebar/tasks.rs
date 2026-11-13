@@ -3,16 +3,17 @@
 // Rust guideline compliant 2026-10-09
 
 use std::sync::Arc;
-use super::menu::{self, Target};
+use super::menu::Target;
 use gpui::{
-    ClickEvent, FontWeight, MouseButton, MouseDownEvent, Role, SharedString, div, prelude::*, px,
+    ClickEvent, Div, FontWeight, MouseButton, MouseDownEvent, Role, SharedString, Stateful, div,
+    prelude::*, px,
 };
 use patchwork_server::projects::Project;
 use patchwork_server::threads::Thread;
-use crate::ui::theme::theme;
+use crate::ui::theme::{FS_MD, RADIUS_SM, theme};
 use crate::ui::{button, icon, icon_button, scrollbar};
 use crate::workspace::Workspace;
-use super::render::{FS_SM, empty_row, section_label, twistie};
+use super::render::{empty_row, section_label, twistie};
 use super::tree::{TREE_GUTTER, indent_guide, reveal_button, thread_row, tree_row};
 
 pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl IntoElement {
@@ -151,17 +152,26 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
                 .child(p.name.clone())
                 .into_any_element()
         });
-        let sorted = folders.iter().any(|f| menu::is_agent_folder(&f.name));
+        let sorted = folders.iter().any(|f| f.sorted_by.is_some());
         let (sort_id, folder_id, task_id) = (p.id.clone(), p.id.clone(), p.id.clone());
         let key = SharedString::from(format!("project:{}", p.id));
-        let shown = w.hovered_row.as_ref() == Some(&key);
-        let row = tree_row(key, p.name.clone(), 1, open, picked, &t, cx)
-            .pl(px(4.))
-            .child(twistie(open))
-            .child(name)
-            .when(shown && sorted, |row| {
-                let undo_id = p.id.clone();
-                row.child(
+        let group = SharedString::from(format!("project-row:{}", p.id));
+        // Shown on hover or focus, and always in the accessibility tree, over the end of the name.
+        let reveal = |b: Stateful<Div>| {
+            b.opacity(0.)
+                .group_hover(group.clone(), |s| s.opacity(1.))
+                .focus(|s| s.opacity(1.))
+        };
+        let undo_id = p.id.clone();
+        let actions = div()
+            .absolute()
+            .right(px(6.))
+            .flex()
+            .items_center()
+            .rounded(px(RADIUS_SM))
+            .group_hover(group.clone(), |s| s.bg(t.tree_hover))
+            .when(sorted, |row| {
+                row.child(reveal(
                     reveal_button(
                         &format!("undo-sort:{}", p.id),
                         format!("Undo sorting tasks in {} by provider", p.name),
@@ -172,46 +182,51 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
                         cx.stop_propagation();
                         this.undo_sort_by_agent(&undo_id, cx);
                     })),
-                )
+                ))
             })
-            .when(shown, |row| {
-                row.child(
-                    reveal_button(
-                        &format!("sort:{}", p.id),
-                        format!("Sort tasks in {} into folders by provider", p.name),
-                        "magic-wand",
-                        &t,
-                    )
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.sort_by_agent(&sort_id, cx);
-                    })),
+            .child(reveal(
+                reveal_button(
+                    &format!("sort:{}", p.id),
+                    format!("Sort tasks in {} into folders by provider", p.name),
+                    "magic-wand",
+                    &t,
                 )
-                .child(
-                    reveal_button(
-                        &format!("folder:{}", p.id),
-                        format!("New folder in {}", p.name),
-                        "folder-plus",
-                        &t,
-                    )
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        cx.stop_propagation();
-                        this.new_folder(&folder_id, window, cx);
-                    })),
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.sort_by_agent(&sort_id, cx);
+                })),
+            ))
+            .child(reveal(
+                reveal_button(
+                    &format!("folder:{}", p.id),
+                    format!("New folder in {}", p.name),
+                    "folder-plus",
+                    &t,
                 )
-                .child(
-                    reveal_button(
-                        &format!("task:{}", p.id),
-                        format!("New task in {}", p.name),
-                        "plus",
-                        &t,
-                    )
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        cx.stop_propagation();
-                        this.new_thread_in(Some(task_id.clone()), None, window, cx);
-                    })),
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    cx.stop_propagation();
+                    this.new_folder(&folder_id, window, cx);
+                })),
+            ))
+            .child(reveal(
+                reveal_button(
+                    &format!("task:{}", p.id),
+                    format!("New task in {}", p.name),
+                    "plus",
+                    &t,
                 )
-            })
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    cx.stop_propagation();
+                    this.new_thread_in(Some(task_id.clone()), None, window, cx);
+                })),
+            ));
+        let row = tree_row(key, p.name.clone(), 1, open, picked, &t)
+            .group(group)
+            .relative()
+            .pl(px(4.))
+            .child(twistie(open))
+            .child(name)
+            .child(actions)
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(move |this, e: &MouseDownEvent, window, cx| {
@@ -240,7 +255,7 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
                         .flex()
                         .items_center()
                         .pl(px(30.))
-                        .text_size(px(FS_SM))
+                        .text_size(px(FS_MD))
                         .text_color(t.text_muted)
                         .child("No tasks yet"),
                 );
@@ -262,34 +277,36 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
                         .flex_1()
                         .min_w_0()
                         .truncate()
-                        .text_size(px(FS_SM))
+                        .text_size(px(FS_MD))
                         .child(f.name.clone())
                         .into_any_element()
                 });
                 let (project_id, folder_id) = (p.id.clone(), f.id.clone());
                 let key = SharedString::from(key);
-                let shown = w.hovered_row.as_ref() == Some(&key);
-                let folder = tree_row(key, f.name.clone(), 2, open, picked, &t, cx)
+                let group = SharedString::from(format!("folder-row:{}", f.id));
+                let folder = tree_row(key, f.name.clone(), 2, open, picked, &t)
+                    .group(group.clone())
                     .pl(px(12.))
                     .child(twistie(open))
                     .child(name)
-                    .when(shown, |row| {
-                        row.child(
-                            reveal_button(
-                                &format!("folder-task:{}", f.id),
-                                format!("New task in {}", f.name),
-                                "plus",
-                                &t,
-                            )
-                            .on_click(cx.listener(
-                                move |this, _, window, cx| {
-                                    cx.stop_propagation();
-                                    let (project, folder) = (project_id.clone(), folder_id.clone());
-                                    this.new_thread_in(Some(project), Some(&folder), window, cx);
-                                },
-                            )),
+                    .child(
+                        reveal_button(
+                            &format!("folder-task:{}", f.id),
+                            format!("New task in {}", f.name),
+                            "plus",
+                            &t,
                         )
-                    })
+                        .opacity(0.)
+                        .group_hover(group, |s| s.opacity(1.))
+                        .focus(|s| s.opacity(1.))
+                        .on_click(cx.listener(
+                            move |this, _, window, cx| {
+                                cx.stop_propagation();
+                                let (project, folder) = (project_id.clone(), folder_id.clone());
+                                this.new_thread_in(Some(project), Some(&folder), window, cx);
+                            },
+                        )),
+                    )
                     .on_mouse_down(
                         MouseButton::Right,
                         cx.listener(move |this, e: &MouseDownEvent, window, cx| {
