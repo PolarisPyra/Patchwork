@@ -3,6 +3,12 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.61] - 2026-11-13
+
+### Changed
+
+- The project menu at the top left of the window is now a machine menu. It shows which computer or SSH host you are working on, with an icon for a desktop or a laptop, and picking a different one switches the sidebar to that machine's projects and chats. Adding a project opens its folder browser on the picked machine.
+
 ## [26.11.60] - 2026-11-13
 
 ### Added
