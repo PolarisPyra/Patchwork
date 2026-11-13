@@ -123,6 +123,34 @@ pub fn relay_file() -> Option<PathBuf> {
         .then(|| crate::system::dirs().state.join(RELAY_FILE))
 }
 
+/// The file that names this copy's relay alone, for the servers a turn is launched with.
+///
+/// `relay_file` names whichever copy of Patchwork started last, where a turn's servers have to
+/// reach the copy that started the turn.
+#[must_use]
+pub fn own_relay_file() -> Option<PathBuf> {
+    let port = relay_endpoint()?["port"].as_u64()?;
+    relay_file().map(|file| file.with_file_name(format!("mcp-relay-{port}.json")))
+}
+
+/// Removes the files that name the relays of copies of Patchwork that have since closed.
+fn sweep_relay_files(state: &std::path::Path) {
+    for entry in std::fs::read_dir(state).into_iter().flatten().flatten() {
+        let name = entry.file_name();
+        let port = name
+            .to_str()
+            .and_then(|n| n.strip_prefix("mcp-relay-")?.strip_suffix(".json"))
+            .and_then(|p| p.parse::<u16>().ok());
+        let Some(port) = port else { continue };
+        let address = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+        if std::net::TcpStream::connect_timeout(&address, std::time::Duration::from_millis(200))
+            .is_err()
+        {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
 /// The relay this copy of Patchwork listens on, as `{"port", "token"}`.
 ///
 /// A turn is handed it outright, so its hooks reach the app that started them: two copies of
@@ -159,8 +187,11 @@ pub(super) fn serve_relay() -> Result<(), Error> {
     let _ = ENDPOINT.set(endpoint.clone());
     crate::system::remote::set_relay_port(port);
     crate::system::instance::listens(&endpoint);
+    let state = &crate::system::dirs().state;
+    sweep_relay_files(state);
+    crate::system::fs::write_private(&state.join(RELAY_FILE), &endpoint.to_string())?;
     crate::system::fs::write_private(
-        &crate::system::dirs().state.join(RELAY_FILE),
+        &state.join(format!("mcp-relay-{port}.json")),
         &endpoint.to_string(),
     )?;
     RELAY_READY.store(true, Ordering::Relaxed);

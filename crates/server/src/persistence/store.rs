@@ -113,9 +113,10 @@ impl Store {
         }
         // A goal that was being pursued when the app quit is no longer pursued: its agent
         // process ended with the app. It is paused, so it can be resumed rather than shown as active.
+        // Beside a running Patchwork the goal is that one's live work, and stays as it is.
         let tx = conn.transaction().map_err(err)?;
         let mut goals_cut_off = Vec::new();
-        for t in &mut threads {
+        for t in threads.iter_mut().filter(|_| owner.is_some()) {
             if let Some(goal) = t
                 .goal
                 .as_mut()

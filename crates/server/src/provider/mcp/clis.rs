@@ -474,7 +474,7 @@ const OWN_TIMEOUT_SECS: u64 = 65 * 60;
 
 /// The command and arguments that reach Patchwork's own server for the agent of `thread_id`.
 pub fn own_server(thread_id: &str) -> Option<(String, Vec<String>)> {
-    let (relay, exe) = (mcp::relay_file()?, std::env::current_exe().ok()?);
+    let (relay, exe) = (mcp::own_relay_file()?, std::env::current_exe().ok()?);
     let args = [
         mcp::PROXY_ARG,
         &relay.display().to_string(),
@@ -571,7 +571,7 @@ pub fn overrides(agent: AgentKind, root: &str, thread_id: &str) -> Vec<String> {
 
 /// The relay arguments for each server the CLI shares with Patchwork, by the CLI's name for it.
 fn shared_relays(agent: AgentKind, root: &str) -> BTreeMap<String, Vec<String>> {
-    let Some(relay) = mcp::relay_file() else {
+    let Some(relay) = mcp::own_relay_file() else {
         return BTreeMap::new();
     };
     let shared = mcp::shared_servers();
