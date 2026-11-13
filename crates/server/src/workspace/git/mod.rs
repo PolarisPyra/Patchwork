@@ -12,7 +12,10 @@ pub use changes::{accept_file, git_changes, git_file_diff, list_files, revert_fi
 pub(crate) use commits::{stage_all, staged_summary, truncated};
 #[doc(inline)]
 pub use commits::{commit, git_log};
-pub(crate) use remote::{CheckState, base_ref, branch_summary, check_state, create_pull_request, gh};
+pub(crate) use remote::{
+    CheckState, base_ref, branch_summary, check_state, create_pull_request, gh,
+    pull_request_checks, pull_request_view,
+};
 #[doc(inline)]
 pub use remote::{git_sync_state, push};
 pub(crate) use run::git;

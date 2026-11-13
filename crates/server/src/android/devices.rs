@@ -99,10 +99,7 @@ pub fn problem(device: &Device) -> Option<Error> {
 ///
 /// Returns an error when the SDK has no adb, or adb fails.
 pub(super) fn list(sdk: &Sdk, emulators: &Emulators) -> Result<Vec<Device>, Error> {
-    let adb = sdk
-        .adb
-        .as_deref()
-        .ok_or_else(|| tool::missing("adb", "Android SDK Platform-Tools", sdk))?;
+    let adb = sdk.adb()?;
     let mut cmd = tool_command(sdk, adb);
     cmd.args(["devices", "-l"]);
     let out = tool::output(cmd, ADB_LIMIT)?;

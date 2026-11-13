@@ -24,6 +24,32 @@ pub(super) fn missing(tool: &str, package: &str, sdk: &Sdk) -> Error {
     }
 }
 
+/// Each of the SDK's tools, or the error that says which package to install for it.
+impl Sdk {
+    pub(super) fn adb(&self) -> Result<&Path, Error> {
+        let adb = self.adb.as_deref();
+        adb.ok_or_else(|| missing("adb", "Android SDK Platform-Tools", self))
+    }
+
+    pub(super) fn emulator(&self) -> Result<&Path, Error> {
+        let emulator = self.emulator.as_deref();
+        emulator.ok_or_else(|| missing("The emulator", "Android Emulator", self))
+    }
+
+    pub(super) fn avdmanager(&self) -> Result<&Path, Error> {
+        let avdmanager = self.avdmanager.as_deref();
+        avdmanager.ok_or_else(|| missing("avdmanager", COMMAND_LINE_TOOLS, self))
+    }
+
+    pub(super) fn sdkmanager(&self) -> Result<&Path, Error> {
+        let sdkmanager = self.sdkmanager.as_deref();
+        sdkmanager.ok_or_else(|| missing("sdkmanager", COMMAND_LINE_TOOLS, self))
+    }
+}
+
+/// The SDK package with `avdmanager` and `sdkmanager`.
+const COMMAND_LINE_TOOLS: &str = "Android SDK Command-line Tools (latest)";
+
 /// One error for each tool the SDK lacks, the ones every action needs first.
 #[must_use]
 pub fn missing_tools(sdk: &Sdk) -> Vec<Error> {
@@ -33,7 +59,7 @@ pub fn missing_tools(sdk: &Sdk) -> Vec<Error> {
         (
             sdk.avdmanager.is_none() || sdk.sdkmanager.is_none(),
             "avdmanager and sdkmanager, which create devices,",
-            "Android SDK Command-line Tools (latest)",
+            COMMAND_LINE_TOOLS,
         ),
     ]
     .into_iter()

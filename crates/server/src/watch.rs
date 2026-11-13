@@ -291,6 +291,21 @@ fn walker(dir: &Path) -> WalkBuilder {
     walk
 }
 
+/// Adds a watch on `path`, logging it when it fails; returns whether it was added.
+fn watch_or_warn(
+    watcher: &mut notify::RecommendedWatcher,
+    path: &Path,
+    mode: notify::RecursiveMode,
+) -> bool {
+    use notify::Watcher;
+    watcher
+        .watch(path, mode)
+        .inspect_err(|e| {
+            log::warn!(path:% = path.display(), error:% = e; "failed to watch {{path}}: {{error}}");
+        })
+        .is_ok()
+}
+
 /// inotify watches one folder at a time, so each folder git keeps gets its own watch, and
 /// ignored folders such as build output cost nothing.
 #[cfg(target_os = "linux")]
@@ -299,7 +314,7 @@ mod linux {
 
     use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
-    use super::walker;
+    use super::{walker, watch_or_warn};
 
     /// Watches every folder of the working tree that git keeps, the top level of `.git`, and its
     /// branches and tags.
@@ -308,9 +323,10 @@ mod linux {
         // In a linked worktree `.git` is a file, and only the working tree is watched.
         let git_dir = root.join(".git");
         if git_dir.is_dir() {
-            let _ = watcher.watch(&git_dir, RecursiveMode::NonRecursive);
+            watch_or_warn(watcher, &git_dir, RecursiveMode::NonRecursive);
             for refs in ["heads", "remotes", "tags"] {
-                let _ = watcher.watch(&git_dir.join("refs").join(refs), RecursiveMode::Recursive);
+                let refs = git_dir.join("refs").join(refs);
+                watch_or_warn(watcher, &refs, RecursiveMode::Recursive);
             }
         }
     }
@@ -337,9 +353,15 @@ mod linux {
     /// Adds a watch on `dir` and each folder under it that git keeps; returns the files found.
     fn watch_tree(watcher: &mut RecommendedWatcher, dir: &Path) -> Vec<PathBuf> {
         let mut files = Vec::new();
+        // Once inotify runs out of watches every folder fails the same way, so it is told once.
+        let mut warned = false;
         for entry in walker(dir).build().flatten() {
             if entry.file_type().is_some_and(|t| t.is_dir()) {
-                let _ = watcher.watch(entry.path(), RecursiveMode::NonRecursive);
+                if warned {
+                    let _ = watcher.watch(entry.path(), RecursiveMode::NonRecursive);
+                } else {
+                    warned = !watch_or_warn(watcher, entry.path(), RecursiveMode::NonRecursive);
+                }
             } else {
                 files.push(entry.into_path());
             }
@@ -354,13 +376,13 @@ mod linux {
 mod tree {
     use std::path::{Path, PathBuf};
 
-    use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+    use notify::{RecommendedWatcher, RecursiveMode};
+
+    use super::watch_or_warn;
 
     /// Watches the whole project, `.git` included, in one recursive watch.
     pub(super) fn watch_project(watcher: &mut RecommendedWatcher, root: &Path) {
-        if let Err(e) = watcher.watch(root, RecursiveMode::Recursive) {
-            log::warn!(path:% = root.display(), error:% = e; "failed to watch {{path}}: {{error}}");
-        }
+        watch_or_warn(watcher, root, RecursiveMode::Recursive);
     }
 
     /// A new folder is inside the recursive watch already, and its files report their own events.

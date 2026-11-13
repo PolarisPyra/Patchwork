@@ -12,7 +12,8 @@ use crate::settings::controls::{FieldKind, letter_badge, token_row};
 use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, theme};
 use crate::ui::{BtnKind, btn, icon, icon_button};
 
-use super::{AGENT_SIGIL, empty, example, filter_chip, list_box};
+use crate::ui::sigils::{SigilKind, default_sigil};
+use super::{empty, example, filter_chip, list_box};
 
 /// The field a new agent's name is typed in.
 const DRAFT_FIELD: &str = "agent-draft";
@@ -244,12 +245,9 @@ pub fn render(
                                 .min_w_0()
                                 .items_center()
                                 .gap(px(6.))
-                                .child(
-                                    div()
-                                        .truncate()
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .child(format!("{AGENT_SIGIL}{}", agent.name)),
-                                )
+                                .child(div().truncate().font_weight(FontWeight::SEMIBOLD).child(
+                                    format!("{}{}", default_sigil(SigilKind::Agents), agent.name),
+                                ))
                                 .when(agent.primary, |row| {
                                     row.child(
                                         div()

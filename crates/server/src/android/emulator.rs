@@ -303,10 +303,7 @@ impl Server {
     /// acceleration, the device already runs, or the emulator does not start.
     pub fn start_emulator(&self, project: &Path, avd: &str, boot: Boot) -> Result<Booting, Error> {
         let sdk = self.android_sdk(project)?;
-        let emulator = sdk
-            .emulator
-            .as_deref()
-            .ok_or_else(|| tool::missing("The emulator", "Android Emulator", &sdk))?;
+        let emulator = sdk.emulator()?;
         if !self.emulators.accelerated.load(Ordering::Relaxed) {
             acceleration(&sdk)?;
             self.emulators.accelerated.store(true, Ordering::Relaxed);
@@ -403,10 +400,7 @@ impl Server {
     /// minutes, with the end of the emulator's log.
     pub fn await_boot(&self, project: &Path, booting: &Booting) -> Result<(), Error> {
         let sdk = self.android_sdk(project)?;
-        let adb = sdk
-            .adb
-            .as_deref()
-            .ok_or_else(|| tool::missing("adb", "Android SDK Platform-Tools", &sdk))?;
+        let adb = sdk.adb()?;
         let port = emulator_port(&booting.serial);
         let deadline = Instant::now() + BOOT_LIMIT;
         while Instant::now() < deadline {
@@ -462,10 +456,7 @@ impl Server {
             .into_iter()
             .find(|entry| entry.port == port);
         let sdk = self.android_sdk(project)?;
-        let adb = sdk
-            .adb
-            .as_deref()
-            .ok_or_else(|| tool::missing("adb", "Android SDK Platform-Tools", &sdk))?;
+        let adb = sdk.adb()?;
         let mut cmd = tool_command(&sdk, adb);
         cmd.args(["-s", serial, "emu", "kill"]);
         let asked = tool::output(cmd, ADB_LIMIT);

@@ -133,7 +133,11 @@ impl Panel {
                     .background_spawn(async move {
                         let ids = list.then(patchwork_server::logging::channels);
                         let chunk = reading.map(|(id, offset)| {
-                            let chunk = patchwork_server::logging::read(&id, offset).ok();
+                            let chunk = patchwork_server::logging::read(&id, offset)
+                                .map_err(|e| {
+                                    log::warn!(error:% = e; "could not read an output log: {{error}}");
+                                })
+                                .ok();
                             (id, offset, chunk)
                         });
                         (ids, chunk)

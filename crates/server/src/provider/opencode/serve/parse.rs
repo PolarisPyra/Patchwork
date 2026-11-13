@@ -235,8 +235,8 @@ pub(in crate::provider::opencode) fn parse_serve(
         )],
         Some("session.retry.scheduled") => vec![Parsed::Retrying {
             reason: crate::provider::one_line(&message_of(v)),
-            attempt: u32::try_from(data["attempt"].as_u64().unwrap_or(0)).unwrap_or(u32::MAX),
-            max_attempts: 0,
+            attempt: data["attempt"].as_u64().and_then(|n| u32::try_from(n).ok()),
+            max_attempts: None,
         }],
         _ => Vec::new(),
     }

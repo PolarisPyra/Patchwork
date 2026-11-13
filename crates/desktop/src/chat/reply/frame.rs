@@ -147,7 +147,7 @@ pub(super) fn foot(
 /// What a running reply's head line says after "Working for 12s".
 fn notice_text(notice: &ReplyNotice) -> String {
     match notice {
-        ReplyNotice::Retrying(reason, attempt, max) if *max > 0 => {
+        ReplyNotice::Retrying(reason, Some(attempt), Some(max)) => {
             format!("· Retrying, {reason} ({attempt}/{max})")
         }
         ReplyNotice::Retrying(reason, _, _) => format!("· Retrying, {reason}"),

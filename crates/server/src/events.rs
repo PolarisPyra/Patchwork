@@ -117,8 +117,10 @@ pub enum AgentEvent {
     Retrying {
         message_id: String,
         reason: String,
-        attempt: u32,
-        max_attempts: u32,
+        /// Which try this is, when the agent says.
+        attempt: Option<u32>,
+        /// How many tries it makes, when the agent says.
+        max_attempts: Option<u32>,
     },
     /// The agent has said nothing since `since` (ms since epoch), as a command that never ends
     /// leaves it. Streamed, not saved; the message's next output ends it.

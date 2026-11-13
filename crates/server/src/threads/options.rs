@@ -4,7 +4,7 @@
 
 use crate::Error;
 use crate::provider::AgentKind;
-use crate::threads::AccessMode;
+use crate::threads::{AccessMode, Thread};
 use crate::Server;
 
 use super::lifecycle::note;
@@ -25,32 +25,50 @@ impl Server {
         model: Option<String>,
     ) -> Result<(), Error> {
         let thread = self.thread(id)?;
-        if thread.agent != agent && !thread.messages.is_empty() && !thread.context_pending {
-            return Err("The agent can't change after the conversation has started".into());
+        can_switch(&thread, agent)?;
+        if thread.agent == agent && thread.model == model {
+            return Ok(());
         }
-        let changed = thread.agent != agent || thread.model != model;
+        let effort = thread.effort.clone();
+        self.switch_agent(&thread, agent, model, effort)?;
+        // An idle agent was started with the old model.
+        self.runner.retire_idle(id);
+        Ok(())
+    }
+
+    /// Saves `agent`, `model` and, when given, `effort` as what `thread` runs with, and notes it.
+    ///
+    /// An undone or forked Claude chat kept its Claude session to resume; another agent is given
+    /// the conversation as a transcript instead, so a new agent drops the session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the change cannot be saved.
+    pub(super) fn switch_agent(
+        &self,
+        thread: &Thread,
+        agent: AgentKind,
+        model: Option<String>,
+        effort: Option<String>,
+    ) -> Result<(), Error> {
         let shown = format!(
-            "agent {agent:?}, model {}",
-            model.as_deref().unwrap_or("default")
+            "agent {agent:?}, model {}, effort {}",
+            model.as_deref().unwrap_or("default"),
+            effort.as_deref().unwrap_or("default")
         );
-        // An undone or forked Claude chat kept its Claude session to resume; another agent is
-        // given the conversation as a transcript instead.
         let switched = thread.agent != agent;
         if switched {
-            self.set_resume_point(id, None)?;
+            self.set_resume_point(&thread.id, None)?;
         }
-        self.store.update_thread(id, |t| {
+        self.store.update_thread(&thread.id, |t| {
             t.agent = agent;
             t.model = model;
+            t.effort = effort;
             if switched {
                 t.session_id = None;
             }
         })?;
-        // An idle agent was started with the old model.
-        if changed {
-            note(id, shown);
-            self.runner.retire_idle(id);
-        }
+        note(&thread.id, shown);
         Ok(())
     }
 
@@ -125,4 +143,17 @@ impl Server {
         }
         Ok(())
     }
+}
+
+/// Refuses a change of agent once the conversation has started, since its session belongs to
+/// one CLI. An imported chat has no session yet, so it can take any agent until its first turn.
+///
+/// # Errors
+///
+/// Returns an error when `agent` differs from the thread's and the conversation has started.
+pub(super) fn can_switch(thread: &Thread, agent: AgentKind) -> Result<(), Error> {
+    if thread.agent != agent && !thread.messages.is_empty() && !thread.context_pending {
+        return Err("The agent can't change after the conversation has started".into());
+    }
+    Ok(())
 }

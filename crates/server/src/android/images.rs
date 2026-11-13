@@ -99,11 +99,7 @@ pub(super) fn parse_list(listing: &str) -> Vec<SystemImage> {
         else {
             continue;
         };
-        let known = |other: &SystemImage| {
-            (other.api.as_str(), other.tag.as_str(), other.abi.as_str())
-                == (image.api.as_str(), image.tag.as_str(), image.abi.as_str())
-        };
-        if !found.iter().any(known) {
+        if !found.iter().any(|other| other.same(&image)) {
             found.push(image);
         }
     }
@@ -122,7 +118,7 @@ pub fn installed_images(sdk: &Sdk) -> Vec<SystemImage> {
 ///
 /// Returns an error when the SDK has no `sdkmanager`, or it could not fetch the list.
 pub fn available_images(sdk: &Sdk) -> Result<Vec<SystemImage>, Error> {
-    let mut cmd = tool_command(sdk, sdkmanager(sdk)?);
+    let mut cmd = tool_command(sdk, sdk.sdkmanager()?);
     cmd.arg("--list").arg(sdk_root(sdk));
     let out = tool::output(cmd, LIST_LIMIT)?;
     let mut images = parse_list(&out.stdout);
@@ -136,27 +132,16 @@ pub fn available_images(sdk: &Sdk) -> Result<Vec<SystemImage>, Error> {
     }
     let installed = installed_in(&sdk.root);
     for image in &mut images {
-        image.installed = installed
-            .iter()
-            .any(|have| (&have.api, &have.tag, &have.abi) == (&image.api, &image.tag, &image.abi));
+        image.installed = installed.iter().any(|have| have.same(image));
     }
     // One the lists no longer offer is still there to use.
     for have in installed {
-        if !images
-            .iter()
-            .any(|image| (&have.api, &have.tag, &have.abi) == (&image.api, &image.tag, &image.abi))
-        {
+        if !images.iter().any(|image| image.same(&have)) {
             images.push(have);
         }
     }
     sort(&mut images);
     Ok(images)
-}
-
-fn sdkmanager(sdk: &Sdk) -> Result<&Path, Error> {
-    sdk.sdkmanager
-        .as_deref()
-        .ok_or_else(|| tool::missing("sdkmanager", "Android SDK Command-line Tools (latest)", sdk))
 }
 
 /// The argument that tells `sdkmanager` which SDK to work on, whichever one it was started from.
@@ -197,7 +182,7 @@ pub fn install_image(
     on_event: &mut dyn FnMut(InstallEvent),
     answers: &Receiver<bool>,
 ) -> Result<(), Error> {
-    let mut cmd = tool_command(sdk, sdkmanager(sdk)?);
+    let mut cmd = tool_command(sdk, sdk.sdkmanager()?);
     cmd.arg("--install")
         .arg(package)
         .arg(sdk_root(sdk))

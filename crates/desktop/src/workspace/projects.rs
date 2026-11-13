@@ -31,7 +31,10 @@ impl Workspace {
         }
         let task = cx.background_spawn(async move {
             let branch = patchwork_server::workspace::git_branch(&root);
-            let changes = patchwork_server::workspace::git_changes(&root).unwrap_or_default();
+            let changes = patchwork_server::workspace::git_changes(&root).unwrap_or_else(|e| {
+                log::warn!(error:% = e; "could not list the changed files: {{error}}");
+                Vec::new()
+            });
             (branch, changes)
         });
         cx.spawn(async move |this, cx| {

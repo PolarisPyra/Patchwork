@@ -296,8 +296,8 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
         Some("api.compacted") => vec![Parsed::Compacted(v["summary"].as_str().map(str::to_string))],
         Some("api.retry") => vec![Parsed::Retrying {
             reason: text("reason").into(),
-            attempt: v["attempt"].as_u64().unwrap_or(1) as u32,
-            max_attempts: v["max"].as_u64().unwrap_or(3) as u32,
+            attempt: v["attempt"].as_u64().and_then(|n| u32::try_from(n).ok()),
+            max_attempts: v["max"].as_u64().and_then(|n| u32::try_from(n).ok()),
         }],
         Some("api.mcp_call") => vec![Parsed::McpCall {
             id: v["id"].clone(),

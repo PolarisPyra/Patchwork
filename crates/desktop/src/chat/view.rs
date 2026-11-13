@@ -264,9 +264,7 @@ pub(super) fn empty_chat(w: &Workspace, t: &Theme) -> Div {
     let agent = w
         .thread
         .as_ref()
-        .map(|t| t.agent)
-        .or(w.settings.agents.first().copied())
-        .unwrap_or(patchwork_server::provider::AgentKind::Claude);
+        .map_or_else(|| w.settings.default_agent(), |t| t.agent);
     let project = w.project();
     let suggestions: &[&str] = if project.is_some() {
         &[

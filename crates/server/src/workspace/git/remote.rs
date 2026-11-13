@@ -171,29 +171,34 @@ pub(crate) fn check_state(check: &serde_json::Value) -> CheckState {
     }
 }
 
+/// The branch's open pull request as `gh pr view` gives it: its number, URL, checks, comments
+/// and reviews.
+///
+/// # Errors
+///
+/// Returns an error when `gh` fails or the branch has no open pull request.
+pub(crate) fn pull_request_view(root: &str) -> Result<serde_json::Value, Error> {
+    let fields = "number,url,state,statusCheckRollup,comments,reviews";
+    let out = gh(root, &["pr", "view", "--json", fields])?;
+    let value: serde_json::Value = serde_json::from_str(&out).map_err(|e| e.to_string())?;
+    if value["state"] != "OPEN" {
+        return Err("The branch has no open pull request".into());
+    }
+    Ok(value)
+}
+
+/// The checks of a pull request read by [`pull_request_view`].
+pub(crate) fn pull_request_checks(
+    pr: &serde_json::Value,
+) -> impl Iterator<Item = &serde_json::Value> {
+    pr["statusCheckRollup"].as_array().into_iter().flatten()
+}
+
 /// The branch's open pull request, if `gh` can tell, with where its checks stand and how many
 /// comments and reviews it has.
 fn open_pull_request(root: &str) -> Option<PullRequest> {
-    let out = gh(
-        root,
-        &[
-            "pr",
-            "view",
-            "--json",
-            "number,url,state,statusCheckRollup,comments,reviews",
-        ],
-    )
-    .ok()?;
-    let value: serde_json::Value = serde_json::from_str(&out).ok()?;
-    if value["state"] != "OPEN" {
-        return None;
-    }
-    let states: Vec<CheckState> = value["statusCheckRollup"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .map(check_state)
-        .collect();
+    let value = pull_request_view(root).ok()?;
+    let states: Vec<CheckState> = pull_request_checks(&value).map(check_state).collect();
     let count = |state| states.iter().filter(|s| **s == state).count() as u32;
     let len = |key: &str| value[key].as_array().map_or(0, Vec::len) as u32;
     Some(PullRequest {

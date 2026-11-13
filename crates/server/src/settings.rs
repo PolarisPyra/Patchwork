@@ -117,6 +117,14 @@ pub struct Settings {
     pub android_sdk: Option<String>,
 }
 
+impl Settings {
+    /// The agent new chats start on: the first connected one, else Claude.
+    #[must_use]
+    pub fn default_agent(&self) -> AgentKind {
+        self.agents.first().copied().unwrap_or(AgentKind::Claude)
+    }
+}
+
 /// A model that reads images: an API provider's `provider/model`, or a model of a CLI the user
 /// is signed in to, which Patchwork runs on its own for each message with images.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
