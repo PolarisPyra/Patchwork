@@ -219,8 +219,8 @@ pub(super) fn helper(host: &str) -> Result<Installed, Error> {
     Ok(installed)
 }
 
-/// Forgets `host`'s helper and what the host said about itself, so both are looked at again:
-/// for a host that was reinstalled, or whose helper was deleted.
+/// Forgets `host`'s helper, the files sent to it, and what the host said about itself, so all
+/// are looked at again: for a host that was reinstalled, or whose helper was deleted.
 pub fn forget(host: &str) {
     if let Some(helpers) = HELPERS
         .lock()
@@ -228,6 +228,9 @@ pub fn forget(host: &str) {
         .as_mut()
     {
         helpers.remove(host);
+    }
+    if let Some(sent) = SENT.lock().unwrap_or_else(PoisonError::into_inner).as_mut() {
+        sent.retain(|(sent_to, _), _| sent_to != host);
     }
     super::session::close(host);
     super::host::forget(host);
