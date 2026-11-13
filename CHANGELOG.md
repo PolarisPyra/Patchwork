@@ -3,6 +3,19 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.60] - 2026-11-13
+
+### Added
+
+- Add Project can now open a folder on an SSH host from ~/.ssh/config, whether it runs Linux, macOS or Windows. Chats, the terminal, checkpoints, checks and scheduled tasks work in that project as they do on this computer. The first time Patchwork connects to a host, it copies a helper program there.
+- Setup's "Where tasks run" step lists each SSH host from your SSH config next to This computer. Pick one and Add Project opens on that host's folders. With no hosts, a greyed "No remote devices available" row takes the place of "Remote device, Coming soon".
+- The activity bar has a Devices view, just above the Settings button. It lists this computer and every SSH host in your SSH config, each with a desktop or laptop icon depending on what the machine reports, or a drive icon for a server or a host that can't be reached. If you have no SSH hosts, a greyed row says so. Click a device to open Add Project on its folders.
+
+### Fixed
+
+- On Windows, project folders were shown and saved with a \\?\ prefix, as in \\?\C:\Users\Name. They now read C:\Users\Name, and folders added earlier lose the prefix the next time Patchwork starts.
+- In setup's project list, the checked project could not be unchecked. Clicking it now clears the check.
+
 ## [26.11.59] - 2026-11-12
 
 ### Changed
