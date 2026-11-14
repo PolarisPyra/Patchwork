@@ -276,7 +276,11 @@ fn subagent_row(
         .focus(|s| s.opacity(1.))
         .hover(move |s| s.bg(hover))
         .child(icon("square-fill", 10.))
-        .on_click(cx.listener(move |w, _, _, cx| w.stop_subagent(&id, cx)))
+        .on_click(cx.listener(move |w, _, _, cx| {
+            // The row behind opens the thread; the stop button only stops.
+            cx.stop_propagation();
+            w.stop_subagent(&id, cx);
+        }))
     });
     // Focus shows the details too, so the keyboard reaches what hovering shows.
     let shown = lineage.details.as_deref() == Some(tool.id.as_str()) || focus.is_focused(window);
@@ -300,6 +304,13 @@ fn subagent_row(
             w.hover_subagent(hover_id.clone(), *hovered, cx);
         }))
         .track_focus(&focus)
+        // Opens the subagent's own thread, as its card in the chat does.
+        .when_some(tool.child_thread_id.clone(), |d, child| {
+            d.role(Role::Button)
+                .aria_label(format!("Open {title}"))
+                .cursor_pointer()
+                .on_click(cx.listener(move |w, _, _, cx| w.open_thread(&child, cx)))
+        })
         .child(
             div()
                 .relative()
