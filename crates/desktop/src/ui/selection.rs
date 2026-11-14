@@ -6,6 +6,7 @@
 
 use std::collections::HashMap;
 use std::ops::Range;
+use std::rc::Rc;
 
 use gpui::{
     AnyElement, App, Bounds, ClipboardItem, CursorStyle, DispatchPhase, Element, ElementId, Entity,
@@ -95,6 +96,8 @@ pub struct Selectable {
     after_tab: bool,
     /// Ranges drawn as rounded chips behind the text, each with its colour.
     chips: Vec<(Range<usize>, Hsla)>,
+    /// Ranges a click opens, each with its address.
+    links: Vec<(Range<usize>, SharedString)>,
 }
 
 /// Wraps `text` so a drag can mark it.
@@ -106,6 +109,7 @@ pub fn selectable(id: u64, text: StyledText) -> Selectable {
         gutter: Pixels::ZERO,
         after_tab: false,
         chips: Vec::new(),
+        links: Vec::new(),
     }
 }
 
@@ -129,6 +133,12 @@ impl Selectable {
     /// Draws each range as a rounded chip in its colour, padded a little past its letters.
     pub fn chips(mut self, chips: Vec<(Range<usize>, Hsla)>) -> Self {
         self.chips = chips;
+        self
+    }
+
+    /// Opens each range's address in the browser when it is clicked.
+    pub fn links(mut self, links: Vec<(Range<usize>, SharedString)>) -> Self {
+        self.links = links;
         self
     }
 }
@@ -238,7 +248,14 @@ impl Element for Selectable {
             window,
             cx,
         );
-        window.set_cursor_style(CursorStyle::IBeam, prepaint);
+        let links = Rc::new(std::mem::take(&mut self.links));
+        let hovered_link = link_under(&layout, &links, prepaint, window);
+        let cursor = if hovered_link.is_some() {
+            CursorStyle::PointingHand
+        } else {
+            CursorStyle::IBeam
+        };
+        window.set_cursor_style(cursor, prepaint);
         let selection = cx.default_global::<Selection>();
         selection.drawn.retain(|drawn| drawn.id != self.id);
         selection.drawn.push(Drawn {
@@ -250,6 +267,10 @@ impl Element for Selectable {
         });
 
         let (id, hitbox) = (self.id, prepaint.clone());
+        let (move_layout, move_links, move_hitbox) =
+            (layout.clone(), Rc::clone(&links), prepaint.clone());
+        let (up_layout, up_links, up_hitbox) =
+            (layout.clone(), Rc::clone(&links), prepaint.clone());
         window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
             let selection = cx.default_global::<Selection>();
             let hovered = phase == DispatchPhase::Bubble && hitbox.is_hovered(window);
@@ -300,12 +321,21 @@ impl Element for Selectable {
                         selection.dragging = false;
                         selection.mark(id, word_at(&text, at), &text);
                     }
-                    open_menu(id, text, event.position, window, cx);
+                    let link =
+                        link_at(&layout, &links, event.position).map(|link| links[link].1.clone());
+                    open_menu(id, text, link, event.position, window, cx);
                 }
                 _ => {}
             }
         });
         window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
+            // The pointer moving onto or off a link changes the cursor.
+            if phase == DispatchPhase::Bubble
+                && !move_links.is_empty()
+                && link_under(&move_layout, &move_links, &move_hitbox, window) != hovered_link
+            {
+                window.refresh();
+            }
             let selection = cx.default_global::<Selection>();
             if phase != DispatchPhase::Bubble
                 || !selection.dragging
@@ -318,18 +348,72 @@ impl Element for Selectable {
             selection.drag_to(event.position);
             window.refresh();
         });
-        window.on_mouse_event(move |event: &MouseUpEvent, _, _, cx| {
-            if event.button == MouseButton::Left {
-                cx.default_global::<Selection>().dragging = false;
+        window.on_mouse_event(move |event: &MouseUpEvent, phase, window, cx| {
+            if event.button != MouseButton::Left {
+                return;
+            }
+            let selection = cx.default_global::<Selection>();
+            selection.dragging = false;
+            // A click that pressed and let go on the same link, marking nothing, opens it.
+            if phase == DispatchPhase::Bubble
+                && selection.marked.is_empty()
+                && let Some((anchor, from)) = selection.anchor
+                && anchor == id
+                && up_hitbox.is_hovered(window)
+                && let Some(link) = link_at(&up_layout, &up_links, event.position)
+                && up_links[link].0.contains(&from)
+            {
+                cx.open_url(&up_links[link].1);
             }
         });
     }
 }
 
-/// Opens the menu for the text `id`, whose words are `text`, at `at`.
-fn open_menu(id: u64, text: String, at: Point<Pixels>, window: &mut Window, cx: &mut App) {
+/// Which of `links` is under the pointer, when it is over the text.
+fn link_under(
+    layout: &TextLayout,
+    links: &[(Range<usize>, SharedString)],
+    hitbox: &Hitbox,
+    window: &Window,
+) -> Option<usize> {
+    if links.is_empty() || !hitbox.is_hovered(window) {
+        return None;
+    }
+    link_at(layout, links, window.mouse_position())
+}
+
+/// Which of `links` holds the letter at `position`.
+fn link_at(
+    layout: &TextLayout,
+    links: &[(Range<usize>, SharedString)],
+    position: Point<Pixels>,
+) -> Option<usize> {
+    let at = layout.index_for_position(position).ok()?;
+    links.iter().position(|(range, _)| range.contains(&at))
+}
+
+/// Opens the menu for the text `id`, whose words are `text`, at `at`, with the link under the
+/// pointer, if any.
+fn open_menu(
+    id: u64,
+    text: String,
+    link: Option<SharedString>,
+    at: Point<Pixels>,
+    window: &mut Window,
+    cx: &mut App,
+) {
     let marked = cx.default_global::<Selection>().text.clone();
     let mut items = Vec::new();
+    if let Some(link) = link {
+        let copy = link.clone();
+        items.push(MenuItem::new("Open link", move |_, cx| cx.open_url(&link)));
+        items.push(
+            MenuItem::new("Copy link", move |_, cx| {
+                cx.write_to_clipboard(ClipboardItem::new_string(copy.to_string()));
+            })
+            .icon("copy"),
+        );
+    }
     if !marked.is_empty() {
         items.push(
             MenuItem::new("Copy", move |_, cx| {
