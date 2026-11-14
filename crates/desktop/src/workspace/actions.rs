@@ -68,7 +68,7 @@ impl Workspace {
                     this.settings_dialog = None;
                 }
                 // A picture added or removed in Settings changes the ones a chat can show.
-                this.backgrounds = crate::ui::backdrop::Backgrounds::default();
+                this.backgrounds.reload();
                 this.sync_panel(cx);
                 this.apply_theme(window, cx);
             }

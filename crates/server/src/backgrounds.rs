@@ -10,6 +10,9 @@ use image::{GenericImageView, ImageFormat, imageops::FilterType};
 use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::logging::THEME_LOG;
+use crate::settings::LogLevel;
+use crate::themes::Scheme;
 use crate::{Error, Server};
 
 /// What shows behind a chat's messages.
@@ -26,16 +29,20 @@ pub enum ChatBackground {
         #[serde(alias = "path", deserialize_with = "file_name")]
         file: String,
     },
+    /// The butterfly the Orchestrator page comes with.
+    Butterfly,
+    /// The animated background with this id.
+    Scene { id: String },
 }
 
-/// How much of a background shows through the window color laid over it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum BackgroundStrength {
-    Subtle,
-    #[default]
-    Medium,
-    Strong,
+/// Whether the text over the preset `id` is that of a light window or a dark one. None for a
+/// preset drawn on the window's own color, and for an id that is no preset.
+pub(crate) fn preset_scheme(id: &str) -> Option<Scheme> {
+    match id {
+        "sky" | "peach" | "mint" | "lavender" => Some(Scheme::Light),
+        "dusk" | "forest" => Some(Scheme::Dark),
+        _ => None,
+    }
 }
 
 /// A picture in Patchwork's backgrounds folder.
@@ -60,15 +67,15 @@ pub struct RemovedBackground {
     pub threads: Vec<String>,
     /// It was the background every chat shares.
     pub shared: bool,
+    /// Which Orchestrator backgrounds showed it: the one every window shows, light windows'
+    /// and dark ones'.
+    #[serde(default)]
+    pub page: [bool; 3],
 }
 
 /// The longest side a picture is kept at. A background is mostly covered by the window color, so
 /// a larger one only costs memory each time a chat shows it.
 const MAX_SIDE: u32 = 2560;
-
-/// The longest side of a picture's blurred copy, and how far it is blurred. A blurred picture
-/// has no detail to lose, and a small one is quick to blur and to stretch.
-const BLUR_SIDE: u32 = 640;
 
 /// The longest side of the picture made from a background an agent drew.
 const DRAWN_SIDE: f32 = 1920.;
@@ -93,7 +100,9 @@ Rules:
   links to other files, no animation.
 - Messages are read over it, under a layer of the window's color. Keep it soft and low in
   contrast, with large shapes rather than fine detail, and nothing that looks like writing.
-- It is stretched to cover chats of any shape, so keep what matters away from the edges."##;
+- It is stretched to cover chats of any shape, so keep what matters away from the edges.
+- A blurred shape is cut off square where its filter ends: give the filter x="-50%" y="-50%"
+  width="200%" height="200%"."##;
 
 /// Whether `id` can name a drawing: lowercase letters, digits and `-`.
 fn is_drawing(id: &str) -> bool {
@@ -128,9 +137,11 @@ impl Server {
     /// Returns an error when the picture cannot be read, or for any reason
     /// `import_background_bytes` fails.
     pub fn import_background_image(&self, path: &str) -> Result<String, Error> {
-        let bytes = std::fs::read(path).map_err(|e| format!("couldn't read {path}: {e}"))?;
         let name = Path::new(path).file_stem().and_then(|n| n.to_str());
-        self.import_background_bytes(bytes, name)
+        let added = std::fs::read(path)
+            .map_err(|e| format!("couldn't read {path}: {e}").into())
+            .and_then(|bytes| self.import_background_bytes(bytes, name));
+        THEME_LOG.outcome(&format!("add the picture {path}"), added)
     }
 
     /// Saves a picture's bytes in Patchwork's folder, shrunk when it is larger than `MAX_SIDE`.
@@ -200,10 +211,10 @@ impl Server {
         self.backgrounds_dir.clone()
     }
 
-    /// The message that has an agent draw a chat background of `description`, and the id its
-    /// drawing will have.
+    /// The message that has an agent draw a chat background of `description` for the windows of
+    /// `scheme`, and the id its drawing will have.
     #[must_use]
-    pub fn chat_background_prompt(&self, description: &str) -> (String, String) {
+    pub fn chat_background_prompt(&self, description: &str, scheme: Scheme) -> (String, String) {
         let mut slug = String::new();
         for c in description.trim().chars().take(40) {
             if c.is_ascii_alphanumeric() {
@@ -220,11 +231,26 @@ impl Server {
             .find(|id| !dir.join(format!("{id}.svg")).exists())
             .unwrap_or_else(|| slug.to_owned());
         if let Err(e) = std::fs::create_dir_all(&dir) {
-            log::warn!(error:% = e; "could not make {}: {{error}}", dir.display());
+            THEME_LOG.text(
+                LogLevel::Error,
+                format!("could not make {}: {e}", dir.display()),
+            );
         }
+        THEME_LOG.text(
+            LogLevel::Info,
+            format!(
+                "a chat is asked to draw chat background {id} in {}",
+                dir.display()
+            ),
+        );
+        let (kind, ground, ink) = match scheme {
+            Scheme::Light => ("light", "near-white", "dark"),
+            Scheme::Dark => ("dark", "near-black", "light"),
+        };
         let prompt = format!(
-            "Draw a Patchwork chat background: {description}\n\nSave it as {} and write nothing \
-             else. Read the file back and check it is valid SVG before you finish.\n\n\
+            "Draw a Patchwork chat background: {description}\n\nIt is for {kind} windows, where \
+             it shows through a {ground} layer under {ink} text, so keep its colors on the \
+             {kind} side. Save it as {} and write nothing else. Read the file back and check it is valid SVG before you finish.\n\n\
              {DRAWING_FORMAT}",
             dir.join(format!("{id}.svg")).display()
         );
@@ -246,43 +272,39 @@ impl Server {
     /// or for any reason `import_background_bytes` fails.
     pub fn import_drawn_background(&self, id: &str) -> Result<String, Error> {
         if !self.chat_background_drawn(id) {
+            THEME_LOG.text(LogLevel::Error, format!("the drawing {id} was never saved"));
             return Err("The chat has not drawn a background.".into());
         }
         let path = self.drawings_dir().join(format!("{id}.svg"));
-        let unusable = || "The background the chat drew cannot be read.".to_owned();
-        let text = std::fs::read_to_string(&path).map_err(|_discarded| unusable())?;
+        // The log has what was wrong with the drawing, and the person a line they can act on.
+        let unusable = |why: String| {
+            THEME_LOG.text(
+                LogLevel::Error,
+                format!("the drawing {} cannot be used: {why}", path.display()),
+            );
+            "The background the chat drew cannot be read.".to_owned()
+        };
+        let text = std::fs::read_to_string(&path).map_err(|e| unusable(e.to_string()))?;
         let tree = resvg::usvg::Tree::from_str(&text, &resvg::usvg::Options::default())
-            .map_err(|_discarded| unusable())?;
+            .map_err(|e| unusable(e.to_string()))?;
         let size = tree.size();
         let scale = DRAWN_SIDE / size.width().max(size.height());
-        let scaled = size.to_int_size().scale_by(scale).ok_or_else(unusable)?;
+        let no_room = || unusable(format!("it is {} by {}", size.width(), size.height()));
+        let scaled = size.to_int_size().scale_by(scale).ok_or_else(no_room)?;
         let mut pixmap =
-            resvg::tiny_skia::Pixmap::new(scaled.width(), scaled.height()).ok_or_else(unusable)?;
+            resvg::tiny_skia::Pixmap::new(scaled.width(), scaled.height()).ok_or_else(no_room)?;
         let fit = resvg::tiny_skia::Transform::from_scale(scale, scale);
         resvg::render(&tree, fit, &mut pixmap.as_mut());
-        let png = pixmap.encode_png().map_err(|_discarded| unusable())?;
-        let file = self.import_background_bytes(png, Some(&id.replace('-', " ")))?;
+        let png = pixmap.encode_png().map_err(|e| unusable(e.to_string()))?;
+        let kept = self.import_background_bytes(png, Some(&id.replace('-', " ")));
+        let file = THEME_LOG.outcome(&format!("keep the drawing {id} as a picture"), kept)?;
         if let Err(e) = std::fs::remove_file(&path) {
-            log::warn!(error:% = e; "couldn't delete the drawing {}: {{error}}", path.display());
+            THEME_LOG.text(
+                LogLevel::Warning,
+                format!("couldn't delete the drawing {}: {e}", path.display()),
+            );
         }
         Ok(file)
-    }
-
-    /// A small copy of a picture in the backgrounds folder, blurred to `level`, made once and
-    /// kept in the cache folder. None when the picture cannot be read, as a GIF cannot.
-    pub(crate) fn blurred_background(&self, file: &str, level: u8) -> Option<PathBuf> {
-        let folder = crate::system::dirs().cache.join("blurred-backgrounds");
-        let copy = folder.join(format!("{file}-{level}.png"));
-        if copy.is_file() {
-            return Some(copy);
-        }
-        let picture = image::open(self.backgrounds_dir.join(file)).ok()?;
-        let soft = picture
-            .thumbnail(BLUR_SIDE, BLUR_SIDE)
-            .blur(f32::from(level));
-        std::fs::create_dir_all(&folder).ok()?;
-        soft.save(&copy).ok()?;
-        Some(copy)
     }
 
     /// The pictures in Patchwork's backgrounds folder, oldest first.
@@ -322,8 +344,9 @@ impl Server {
         }
         let removed_dir = self.removed_backgrounds_dir();
         std::fs::create_dir_all(&removed_dir).map_err(|e| e.to_string())?;
-        std::fs::rename(self.backgrounds_dir.join(file), removed_dir.join(file))
-            .map_err(|e| format!("couldn't delete the picture: {e}"))?;
+        let moved = std::fs::rename(self.backgrounds_dir.join(file), removed_dir.join(file))
+            .map_err(|e| format!("couldn't delete the picture: {e}"));
+        THEME_LOG.outcome(&format!("delete the picture {file}"), moved)?;
         let picture = ChatBackground::Image {
             file: file.to_owned(),
         };
@@ -338,14 +361,18 @@ impl Server {
             self.store.update_thread(id, |t| t.background = None)?;
         }
         let shared = self.store.settings().chat_background == picture;
-        if shared {
-            self.store
-                .update_settings(|s| s.chat_background = ChatBackground::None)?;
-        }
+        let mut page = [false; 3];
+        self.store.update_settings(|s| {
+            if shared {
+                s.chat_background = ChatBackground::None;
+            }
+            page = s.drop_picture(file);
+        })?;
         Ok(RemovedBackground {
             file: file.to_owned(),
             threads,
             shared,
+            page,
         })
     }
 
@@ -376,10 +403,12 @@ impl Server {
                 }
             })?;
         }
-        if removed.shared && self.store.settings().chat_background == ChatBackground::None {
-            self.store
-                .update_settings(|s| s.chat_background = picture.clone())?;
-        }
+        self.store.update_settings(|s| {
+            if removed.shared && s.chat_background == ChatBackground::None {
+                s.chat_background = picture.clone();
+            }
+            s.return_picture(file, removed.page);
+        })?;
         Ok(())
     }
 

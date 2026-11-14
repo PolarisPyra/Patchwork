@@ -24,8 +24,8 @@ pub use library::init;
 pub use schedule::{clock_minutes, clock_text};
 pub use share::{Imported, ImportedKind};
 pub use types::{
-    Anchors, Applied, Backdrop, BackdropChoice, CellSize, Color, Dim, Dust, Entry, Fit, Fonts,
-    MAX_BLUR, Motion, Overrides, Paint, Palette, SavedScene, Scene, SceneFile, Scheme, Shown,
-    Sprite, Theme, ThemeFile, Unreadable,
+    Anchors, Applied, Backdrop, BackdropChoice, CellSize, Color, Dust, Entry, Fonts, Motion,
+    Overrides, Paint, Palette, SavedScene, Scene, SceneFile, Scheme, Shown, Sprite, Theme,
+    ThemeFile, Unreadable,
 };
 pub use watch::Watcher;

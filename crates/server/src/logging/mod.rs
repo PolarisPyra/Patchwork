@@ -8,6 +8,7 @@
 //! ├─ main.log                 Patchwork's own messages (written by the desktop shell)
 //! ├─ system.json              what Patchwork runs on (see `system`)
 //! ├─ imports.log              scans and imports of saved conversations
+//! ├─ themes.log               themes and backgrounds added, written, reset and deleted
 //! ├─ window.log               the window's errors and warnings
 //! ├─ agent-claude.log         one log per agent: its processes and their traffic
 //! └─ chat-<id>.log            one file per chat with a warning or an error in this launch, or
@@ -42,7 +43,7 @@ mod thread_log;
 
 #[doc(inline)]
 pub use debug_log::{
-    AGENT_LOG, Data, DebugLog, IMPORT_LOG, Source, WINDOW_LOG, app_logs, follow, start,
+    AGENT_LOG, Data, DebugLog, IMPORT_LOG, Source, THEME_LOG, WINDOW_LOG, app_logs, follow, start,
 };
 use debug_log::{LaunchLog, Record, may_report_error};
 use files::session;

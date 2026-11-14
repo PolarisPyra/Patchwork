@@ -12,6 +12,6 @@ mod scene;
 mod sky;
 mod state;
 
-pub use background::{PreviewFlight, butterfly_preview};
-pub use scene::scene_preview;
+pub use background::{PreviewFlight, butterfly_backdrop, butterfly_preview};
+pub use scene::{scene_backdrop, scene_preview};
 pub use state::Orchestrator;

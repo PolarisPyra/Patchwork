@@ -297,25 +297,6 @@ pub type Theme = Entry<ThemeFile>;
 /// An animated background that can be picked.
 pub type SavedScene = Entry<SceneFile>;
 
-/// The most a picture is blurred.
-pub const MAX_BLUR: u8 = 20;
-
-/// How far a picture is blurred: a level, or the on and off settings saved before there were
-/// levels.
-fn blur_level<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u8, D::Error> {
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum Saved {
-        Switch(bool),
-        Level(u8),
-    }
-    Ok(match Saved::deserialize(deserializer)? {
-        Saved::Switch(true) => 8,
-        Saved::Switch(false) => 0,
-        Saved::Level(level) => level.min(MAX_BLUR),
-    })
-}
-
 /// What the Orchestrator page shows behind it, as Settings keeps it.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -327,13 +308,10 @@ pub enum BackdropChoice {
     /// A picture in Patchwork's backgrounds folder.
     Image {
         file: String,
-        #[serde(default)]
-        dim: Dim,
-        #[serde(default)]
-        fit: Fit,
-        /// How far it is blurred, from 0 for sharp to [`MAX_BLUR`].
-        #[serde(default, deserialize_with = "blur_level")]
-        blur: u8,
+    },
+    /// One of the backgrounds the app comes with, as a chat's `ChatBackground::Preset`.
+    Preset {
+        id: String,
     },
     /// The animated background with this id.
     Scene {
@@ -343,17 +321,6 @@ pub enum BackdropChoice {
 }
 
 impl BackdropChoice {
-    /// The picture with this file name, shown as a picture is until it is set otherwise.
-    #[must_use]
-    pub fn picture(file: String) -> Self {
-        Self::Image {
-            file,
-            dim: Dim::default(),
-            fit: Fit::default(),
-            blur: 0,
-        }
-    }
-
     /// The file name of the picture it shows.
     #[must_use]
     pub fn picture_file(&self) -> Option<&str> {
@@ -364,59 +331,18 @@ impl BackdropChoice {
     }
 }
 
-/// How far a picture is dimmed toward the window's color, so the page reads over it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Dim {
-    None,
-    Light,
-    #[default]
-    Medium,
-    Strong,
-}
-
-impl Dim {
-    /// The share of the window's color laid over the picture.
-    #[must_use]
-    pub fn share(self) -> f32 {
-        match self {
-            Self::None => 0.,
-            Self::Light => 0.25,
-            Self::Medium => 0.45,
-            Self::Strong => 0.65,
-        }
-    }
-}
-
-/// How a picture fills the page.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Fit {
-    /// It covers the page, cut at the sides it is too long on.
-    #[default]
-    Cover,
-    /// All of it shows, with the window's color beside it.
-    Contain,
-    /// It is stretched to the page's shape.
-    Stretch,
-    /// It repeats at its own size, as a pattern does.
-    Tile,
-}
-
 /// The backdrop to draw.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum Shown {
     None,
     #[default]
     Butterfly,
-    /// The picture at `path`, with `dim` of the window's color over it. `size` is the width
-    /// and height a tile of it is drawn at.
+    /// The picture at `path`, which covers the page.
     Image {
         path: PathBuf,
-        dim: f32,
-        fit: Fit,
-        size: Option<(u32, u32)>,
     },
+    /// The background the app comes with that has this id.
+    Preset(String),
     Scene(Scene),
 }
 

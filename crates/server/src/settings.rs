@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::backgrounds::{BackgroundStrength, ChatBackground};
+use crate::backgrounds::ChatBackground;
 use crate::permissions::PermissionSettings;
 use crate::projects::Project;
 use crate::provider::AgentKind;
@@ -104,8 +104,6 @@ pub struct Settings {
     pub logo: Option<String>,
     /// What shows behind every chat's messages, unless the chat has its own.
     pub chat_background: ChatBackground,
-    /// How much of a chat's background shows through the window color.
-    pub chat_background_strength: BackgroundStrength,
     /// The theme whose colors the app is drawn in, by its id. None draws `theme`.
     pub theme_id: Option<String>,
     /// The color scheme `theme` System draws while the system is light, by its id. None is
@@ -340,6 +338,8 @@ pub struct LoggingSettings {
     pub agents: LogLevel,
     /// `imports.log`: each scan and import of saved conversations.
     pub imports: LogLevel,
+    /// `themes.log`: each theme and background added, written, reset or deleted.
+    pub themes: LogLevel,
     /// `chat-<id>.log`: the events and agent traffic of each chat with a warning or an error.
     pub threads: LogLevel,
     /// A chat's right-click menu has Open logs.
@@ -353,6 +353,7 @@ impl Default for LoggingSettings {
             window: LogLevel::Info,
             agents: LogLevel::Info,
             imports: LogLevel::Info,
+            themes: LogLevel::Info,
             // A chat's log is what gets sent when something goes wrong in it, so it keeps what
             // each tool call and error said.
             threads: LogLevel::Debug,

@@ -50,6 +50,7 @@ fn channel(id: String) -> Channel {
         "main.log" => ("Main".into(), |l| &mut l.app),
         "window.log" => ("Window".into(), |l| &mut l.window),
         "imports.log" => ("Imports".into(), |l| &mut l.imports),
+        "themes.log" => ("Themes".into(), |l| &mut l.themes),
         _ => {
             let agent = id
                 .strip_prefix("agent-")

@@ -11,9 +11,12 @@ use gpui::{
     AnyElement, Bounds, Hsla, ObjectFit, canvas, div, fill, img, linear_color_stop,
     linear_gradient, point, prelude::*, px, rgb, size,
 };
-use patchwork_server::backgrounds::{BackgroundImage, BackgroundStrength, ChatBackground};
+use patchwork_server::backgrounds::{BackgroundImage, ChatBackground};
 
-use crate::ui::theme::Theme;
+use patchwork_server::themes::SavedScene;
+
+use crate::orchestrator::{PreviewFlight, butterfly_backdrop, scene_backdrop};
+use crate::ui::theme::{Theme, applied};
 use crate::workspace::Workspace;
 
 /// What a preset paints over its base.
@@ -44,37 +47,53 @@ fn preset(id: &str) -> Option<(Base, Pattern)> {
     })
 }
 
-/// How much of the window color is laid over a background at each strength.
-pub fn veil(strength: BackgroundStrength) -> f32 {
-    match strength {
-        BackgroundStrength::Subtle => 0.88,
-        BackgroundStrength::Medium => 0.78,
-        BackgroundStrength::Strong => 0.60,
-    }
-}
+/// How much of the window color is laid over a chat's background.
+const VEIL: f32 = 0.78;
 
 /// The pictures in Patchwork's backgrounds folder, read once.
 #[derive(Default)]
 pub struct Backgrounds {
     images: Option<Vec<BackgroundImage>>,
+    /// The pictures changed, so they are listed again the next time a chat shows one.
+    stale: bool,
+    /// The animated backgrounds, read with the pictures.
+    scenes: Vec<Arc<SavedScene>>,
+    /// Where the butterfly behind a chat is, kept between frames.
+    flight: PreviewFlight,
+}
+
+impl Backgrounds {
+    /// Lists the pictures again the next time a chat shows one. The ones listed stay until
+    /// then, so the chat's picture does not blink.
+    pub fn reload(&mut self) {
+        self.stale = true;
+    }
 }
 
 impl Workspace {
     fn load_background_images(&mut self, cx: &mut Context<Self>) {
-        if self.backgrounds.images.is_some() {
+        if self.backgrounds.images.is_some() && !self.backgrounds.stale {
             return;
         }
-        self.backgrounds.images = Some(Vec::new());
+        self.backgrounds.stale = false;
+        self.backgrounds.images.get_or_insert_default();
         let server = Arc::clone(&self.server);
-        let task = cx.background_spawn(async move { server.list_background_images() });
-        cx.spawn(async move |this, cx| match task.await {
-            Ok(images) => {
-                let _ = this.update(cx, |this, cx| {
-                    this.backgrounds.images = Some(images);
-                    cx.notify();
-                });
-            }
-            Err(e) => log::warn!(error:% = e; "could not list the background pictures: {{error}}"),
+        let task =
+            cx.background_spawn(
+                async move { (server.list_background_images(), server.list_scenes()) },
+            );
+        cx.spawn(async move |this, cx| {
+            let (images, scenes) = task.await;
+            let _ = this.update(cx, |this, cx| {
+                match images {
+                    Ok(images) => this.backgrounds.images = Some(images),
+                    Err(e) => {
+                        log::warn!(error:% = e; "could not list the background pictures: {{error}}");
+                    }
+                }
+                this.backgrounds.scenes = scenes.into_iter().map(Arc::new).collect();
+                cx.notify();
+            });
         })
         .detach();
     }
@@ -181,6 +200,24 @@ pub fn chat_backdrop(
     let under = match &background {
         ChatBackground::None => return None,
         ChatBackground::Preset { id } => preset_fill(id, t)?,
+        ChatBackground::Butterfly => {
+            let still = applied(cx).reduce_motion;
+            div()
+                .absolute()
+                .inset_0()
+                .child(butterfly_backdrop(&w.backgrounds.flight, still))
+        }
+        ChatBackground::Scene { id } => {
+            w.load_background_images(cx);
+            let saved = w.backgrounds.scenes.iter().find(|s| &s.id == id)?;
+            let still = applied(cx).reduce_motion;
+            div().absolute().inset_0().child(scene_backdrop(
+                Arc::clone(saved),
+                t.bg_editor,
+                t.text_muted,
+                still,
+            ))
+        }
         ChatBackground::Image { file } => {
             w.load_background_images(cx);
             let path = w
@@ -193,6 +230,8 @@ pub fn chat_backdrop(
                 .clone();
             div().absolute().inset_0().child(
                 img(PathBuf::from(path))
+                    .absolute()
+                    .inset_0()
                     .size_full()
                     .object_fit(ObjectFit::Cover),
             )
@@ -204,11 +243,7 @@ pub fn chat_backdrop(
             .inset_0()
             .overflow_hidden()
             .child(under)
-            .child(
-                div().absolute().inset_0().bg(t
-                    .bg_editor
-                    .opacity(veil(w.settings.chat_background_strength))),
-            )
+            .child(div().absolute().inset_0().bg(t.bg_editor.opacity(VEIL)))
             .into_any_element(),
     )
 }
