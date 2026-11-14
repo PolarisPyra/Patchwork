@@ -3,6 +3,36 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.67] - 2026-11-13
+
+**26.11.67** · 7 changes from 1 contributor
+
+- **Reviewer for granular chats.** Assign a reviewer agent and model to granular chats, and see its verdict after file-changing replies.
+- **Agent-to-agent chats.** Let an agent start a chat with another agent in the same project to hand off work and collect results.
+- **Android device tools and agent access.** Manage Android emulators and phones, including screen mirroring, Wi-Fi pairing, and agent permissions to interact.
+- **Simplified device setup.** Add SSH devices by entering name, address, and user instead of editing SSH config manually.
+
+<details>
+<summary>Full changelog</summary>
+
+### Added
+
+- Granular chats can have a reviewer. Pick an agent and model under Reviewer in a chat's granular settings, and after each reply that changes files, that agent reads the changes and shows its verdict in a card under the reply, with a button that opens its chat. Agent, Reviewer and Fallback are now stacked rows in the granular settings, and Settings → Chat can turn reviews off for every chat. by [PolarisPyra in #71](https://github.com/PolarisPyra/Patchwork/pull/71)
+- An agent can start a chat on any agent in the same project, send it messages and wait for its reply, so one chat can hand work to others and collect the results. Chats started this way show in the sidebar, and Settings → Chat can turn this off. by [PolarisPyra in #72](https://github.com/PolarisPyra/Patchwork/pull/72)
+- The Android devices panel now shows the app's log, reloads Flutter and Expo apps when you save a file, lets you pick a build variant, and shows a connected phone's screen as well as an emulator's. You can also pair a phone over Wi-Fi, install an APK by dropping it on the panel, save and load emulator states, and rotate the emulator or set its location and network speed. With Settings → Permissions → Android devices turned on, agents can run the app, look at the screen, tap, swipe, type and read the log. by [PolarisPyra in #76](https://github.com/PolarisPyra/Patchwork/pull/76)
+
+### Changed
+
+- Settings → SSH is now Settings → Devices, and the Devices button above the Settings cog in the sidebar is gone. In place of the button that opened ~/.ssh/config, Add device asks for a name, address and user, and Save adds the device to your SSH config, creating the file if there is none. by [PolarisPyra in #73](https://github.com/PolarisPyra/Patchwork/pull/73)
+
+### Fixed
+
+- Renaming a chat with a long name wrapped it onto a second line that spilled out of the rename box. Long names now stay on one line and scroll to keep the cursor in view, as they do in every other one-line text box. by [PolarisPyra in #75](https://github.com/PolarisPyra/Patchwork/pull/75)
+- Early-access Claude models such as Mythos 5.2 were listed under Legacy models in the model picker. Only models that a newer version replaces are listed there now. by [PolarisPyra in #78](https://github.com/PolarisPyra/Patchwork/pull/78)
+- In a long chat the scrollbar jumped and changed size as you scrolled, and in a narrow chat the turn timeline covered the end of messages. The scrollbar now moves steadily and matches the one in Settings, and messages end before the timeline. by [PolarisPyra in #77](https://github.com/PolarisPyra/Patchwork/pull/77)
+
+</details>
+
 ## [26.11.66] - 2026-11-13
 
 **26.11.66** · 14 changes from 1 contributor
