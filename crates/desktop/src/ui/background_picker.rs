@@ -116,6 +116,13 @@ impl BackgroundPicker {
         .detach();
     }
 
+    /// Lists the pictures again and picks `file`, a picture saved from outside the picker.
+    pub fn added(&mut self, file: String, cx: &mut Context<Self>) {
+        self.load_images(cx);
+        cx.emit(PickerEvent::PicturesChanged);
+        self.pick(Some(ChatBackground::Image { file }), cx);
+    }
+
     fn pick(&mut self, background: Option<ChatBackground>, cx: &mut Context<Self>) {
         self.error = None;
         self.value.clone_from(&background);

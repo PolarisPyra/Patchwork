@@ -42,6 +42,8 @@ zip = { workspace = true, features = ["deflate-flate2-zlib-rs"] }
 # Computer use: a screenshot of the primary monitor, and the pointer and keyboard under it.
 enigo = { workspace = true, default-features = true }
 image = { workspace = true, features = ["png", "jpeg", "webp"] }
+# A chat background an agent drew as an SVG is kept as a picture.
+resvg.workspace = true
 # Chat background pictures are named after a hash of their bytes, so the same one is kept once.
 sha2 = { workspace = true, default-features = true }
 # Updates: a release's download is checked against the release key's signature.

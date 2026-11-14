@@ -1,5 +1,5 @@
 //! Chat backgrounds: the one every chat shows, kept in Settings, a chat's own, and the pictures
-//! picked for them, which Patchwork keeps in its own folder.
+//! picked for them or drawn by an agent, which Patchwork keeps in its own folder.
 
 // Rust guideline compliant 2026-10-09
 
@@ -69,6 +69,36 @@ const MAX_SIDE: u32 = 2560;
 /// The longest side of a picture's blurred copy, and how far it is blurred. A blurred picture
 /// has no detail to lose, and a small one is quick to blur and to stretch.
 const BLUR_SIDE: u32 = 640;
+
+/// The longest side of the picture made from a background an agent drew.
+const DRAWN_SIDE: f32 = 1920.;
+
+/// What an agent is told to draw a chat background with.
+const DRAWING_FORMAT: &str = r##"A chat background is one SVG file, which Patchwork turns into a picture:
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b2a5c"/>
+      <stop offset="1" stop-color="#5a3f7a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#sky)"/>
+  <circle cx="1240" cy="260" r="90" fill="#f3d9a4" opacity="0.5"/>
+</svg>
+
+Rules:
+- A viewBox of 0 0 1600 1000, and a shape that fills all of it first, so no part is see-through.
+- Shapes, paths, gradients, patterns and filters only: no text, no pictures, no scripts, no
+  links to other files, no animation.
+- Messages are read over it, under a layer of the window's color. Keep it soft and low in
+  contrast, with large shapes rather than fine detail, and nothing that looks like writing.
+- It is stretched to cover chats of any shape, so keep what matters away from the edges."##;
+
+/// Whether `id` can name a drawing: lowercase letters, digits and `-`.
+fn is_drawing(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 64 && id.chars().all(|c| matches!(c, 'a'..='z' | '0'..='9' | '-'))
+}
 
 /// The `app_state` key of the name a picture was picked by.
 fn name_key(file: &str) -> String {
@@ -160,6 +190,80 @@ impl Server {
             && self.store.state(&name_key(&file)).is_none()
         {
             self.store.set_state(&name_key(&file), name)?;
+        }
+        Ok(file)
+    }
+
+    /// The folder the background pictures are in.
+    #[must_use]
+    pub fn backgrounds_dir(&self) -> PathBuf {
+        self.backgrounds_dir.clone()
+    }
+
+    /// The message that has an agent draw a chat background of `description`, and the id its
+    /// drawing will have.
+    #[must_use]
+    pub fn chat_background_prompt(&self, description: &str) -> (String, String) {
+        let mut slug = String::new();
+        for c in description.trim().chars().take(40) {
+            if c.is_ascii_alphanumeric() {
+                slug.push(c.to_ascii_lowercase());
+            } else if !slug.ends_with('-') && !slug.is_empty() {
+                slug.push('-');
+            }
+        }
+        let slug = slug.trim_end_matches('-');
+        let slug = if slug.is_empty() { "background" } else { slug };
+        let dir = self.drawings_dir();
+        let id = std::iter::once(slug.to_owned())
+            .chain((2..100).map(|n| format!("{slug}-{n}")))
+            .find(|id| !dir.join(format!("{id}.svg")).exists())
+            .unwrap_or_else(|| slug.to_owned());
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            log::warn!(error:% = e; "could not make {}: {{error}}", dir.display());
+        }
+        let prompt = format!(
+            "Draw a Patchwork chat background: {description}\n\nSave it as {} and write nothing \
+             else. Read the file back and check it is valid SVG before you finish.\n\n\
+             {DRAWING_FORMAT}",
+            dir.join(format!("{id}.svg")).display()
+        );
+        (prompt, id)
+    }
+
+    /// Whether an agent has saved the drawing with this id.
+    #[must_use]
+    pub fn chat_background_drawn(&self, id: &str) -> bool {
+        is_drawing(id) && self.drawings_dir().join(format!("{id}.svg")).is_file()
+    }
+
+    /// Turns the drawing with this id into a picture in Patchwork's folder, named after it, and
+    /// deletes the drawing. Returns the picture's file name.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when there is no such drawing, when it is not an SVG that can be drawn,
+    /// or for any reason `import_background_bytes` fails.
+    pub fn import_drawn_background(&self, id: &str) -> Result<String, Error> {
+        if !self.chat_background_drawn(id) {
+            return Err("The chat has not drawn a background.".into());
+        }
+        let path = self.drawings_dir().join(format!("{id}.svg"));
+        let unusable = || "The background the chat drew cannot be read.".to_owned();
+        let text = std::fs::read_to_string(&path).map_err(|_discarded| unusable())?;
+        let tree = resvg::usvg::Tree::from_str(&text, &resvg::usvg::Options::default())
+            .map_err(|_discarded| unusable())?;
+        let size = tree.size();
+        let scale = DRAWN_SIDE / size.width().max(size.height());
+        let scaled = size.to_int_size().scale_by(scale).ok_or_else(unusable)?;
+        let mut pixmap =
+            resvg::tiny_skia::Pixmap::new(scaled.width(), scaled.height()).ok_or_else(unusable)?;
+        let fit = resvg::tiny_skia::Transform::from_scale(scale, scale);
+        resvg::render(&tree, fit, &mut pixmap.as_mut());
+        let png = pixmap.encode_png().map_err(|_discarded| unusable())?;
+        let file = self.import_background_bytes(png, Some(&id.replace('-', " ")))?;
+        if let Err(e) = std::fs::remove_file(&path) {
+            log::warn!(error:% = e; "couldn't delete the drawing {}: {{error}}", path.display());
         }
         Ok(file)
     }
@@ -302,6 +406,15 @@ impl Server {
         if let Err(e) = std::fs::remove_dir_all(&dir) {
             log::warn!(error:% = e; "couldn't delete the removed backgrounds: {{error}}");
         }
+    }
+
+    /// Where agents save the chat backgrounds they draw, until each becomes a picture.
+    #[expect(
+        clippy::unused_self,
+        reason = "it reads as the other folders of a background do"
+    )]
+    fn drawings_dir(&self) -> PathBuf {
+        crate::system::dirs().cache.join("background-drawings")
     }
 
     fn removed_backgrounds_dir(&self) -> PathBuf {
