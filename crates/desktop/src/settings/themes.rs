@@ -17,6 +17,7 @@ use patchwork_server::themes::{CodeTheme, SavedScene, Scheme, Theme, Unreadable}
 pub(super) use self::backdrops::backgrounds_pane;
 use self::cards::{Slot, add_card, grid, scheme_cards};
 use self::editor::{Editing, editor};
+use self::generator_pick::generator_chips;
 use self::interface::Fonts;
 pub(super) use self::interface::interface_pane;
 use self::look::{accent_row, schedule_rows};
@@ -33,6 +34,7 @@ mod backdrops;
 mod cards;
 mod editor;
 mod files;
+mod generator_pick;
 mod interface;
 mod look;
 mod reading;
@@ -155,7 +157,11 @@ impl SettingsDialog {
             },
             move |d, (prompt, id), cx| {
                 d.themes.writing[kind as usize] = Some(id.clone());
-                cx.emit(SettingsEvent::GenerateTheme(prompt));
+                // Only the backgrounds have the pickers that set it.
+                let pick = matches!(kind, Kind::Scene | Kind::Picture)
+                    .then(|| d.settings.generator_pick().cloned())
+                    .flatten();
+                cx.emit(SettingsEvent::GenerateTheme(prompt, pick));
                 d.await_themed(kind, id, cx);
             },
             cx,
@@ -277,37 +283,51 @@ fn generator(
     d.on_submit(kind.field(), move |d, _, cx| d.generate_themed(kind, cx));
     let writing = d.themes.writing[kind as usize].clone();
     let busy = writing.is_some();
-    let row = div()
-        .pb(px(10.))
-        .flex()
-        .items_center()
-        .gap(px(8.))
-        .child(div().flex_1().min_w_0().child(describe))
-        .child(
-            btn(
-                SharedString::from(format!("generate-{}", kind.field())),
-                format!("Generate a {noun}"),
-                BtnKind::Primary,
-                busy,
-                &t,
-            )
-            .child("Generate")
-            .when(!busy, |b| {
-                b.on_click(cx.listener(move |d, _, _, cx| d.generate_themed(kind, cx)))
-            }),
+    let chips = match kind {
+        Kind::Scene | Kind::Picture => generator_chips(d, kind.field(), noun, &t, cx),
+        Kind::Scheme | Kind::Code => Vec::new(),
+    };
+    let describe = div().flex_1().min_w_0().child(describe);
+    let generate = btn(
+        SharedString::from(format!("generate-{}", kind.field())),
+        format!("Generate a {noun}"),
+        BtnKind::Primary,
+        busy,
+        &t,
+    )
+    .child("Generate")
+    .when(!busy, |b| {
+        b.on_click(cx.listener(move |d, _, _, cx| d.generate_themed(kind, cx)))
+    });
+    let open_folder = icon_button(
+        SharedString::from(format!("folder-{}", kind.field())),
+        format!("Open the {noun} folder"),
+        "folder-open",
+        16.,
+        cx,
+    )
+    .on_click(cx.listener(move |_, _, _, cx| {
+        SettingsDialog::open_themed_folder(folder.clone(), cx);
+    }));
+    let row = div().pb(px(10.)).flex().gap(px(8.));
+    let row = if chips.is_empty() {
+        row.items_center()
+            .child(describe)
+            .child(generate)
+            .child(open_folder)
+    } else {
+        // With chips, the description takes the row and they go under it, before Generate.
+        row.flex_col().child(div().flex().child(describe)).child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .children(chips)
+                .child(div().flex_1())
+                .child(generate)
+                .child(open_folder),
         )
-        .child(
-            icon_button(
-                SharedString::from(format!("folder-{}", kind.field())),
-                format!("Open the {noun} folder"),
-                "folder-open",
-                16.,
-                cx,
-            )
-            .on_click(cx.listener(move |_, _, _, cx| {
-                SettingsDialog::open_themed_folder(folder.clone(), cx);
-            })),
-        );
+    };
     div()
         .flex()
         .flex_col()
