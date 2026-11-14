@@ -6,8 +6,10 @@
 use std::collections::HashSet;
 use std::sync::{Arc, OnceLock};
 
-use gpui::{AnyElement, FontWeight, Role, SharedString, div, prelude::*, px};
-use patchwork_server::updates::{RELEASES_URL, UpdateState, UpdateStatus};
+use gpui::{
+    AnyElement, App, Div, ElementId, FontWeight, Role, SharedString, Stateful, div, prelude::*, px,
+};
+use patchwork_server::updates::{RELEASES_URL, ReleaseNotes, UpdateState, UpdateStatus};
 
 use crate::ui::markdown::markdown;
 use crate::settings::controls::{minutes_stepper, token_row};
@@ -66,7 +68,19 @@ fn release_notes(section: &str) -> String {
 struct Release {
     version: String,
     date: String,
-    notes: String,
+    notes: ReleaseNotes,
+}
+
+/// The link under notes that leave changes out, to the release's page.
+fn read_more(id: impl Into<ElementId>, url: &str, cx: &App) -> Stateful<Div> {
+    let url = url.to_string();
+    button(id, "Read more")
+        .role(Role::Link)
+        .mt(px(6.))
+        .text_color(theme(cx).accent_text)
+        .hover(gpui::Styled::underline)
+        .child("Read more")
+        .on_click(move |_, _, cx| cx.open_url(&url))
 }
 
 /// The newest three releases in CHANGELOG.md as it was when this copy was built, newest first.
@@ -83,13 +97,7 @@ fn releases() -> &'static [Release] {
                 Release {
                     version: version.to_string(),
                     date: rest.trim_start_matches(" - ").trim().to_string(),
-                    // The folded full changelog is for the release page.
-                    notes: notes
-                        .split("<details>")
-                        .next()
-                        .unwrap_or("")
-                        .trim()
-                        .to_string(),
+                    notes: patchwork_server::updates::notes(version, notes),
                 }
             })
             .collect()
@@ -145,11 +153,21 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 })),
             )
             .when(is_open, |d| {
-                d.child(div().pb(px(12.)).pl(px(18.)).child(markdown(
-                    &r.notes,
-                    format!("release-notes-{i}"),
-                    cx,
-                )))
+                d.child(
+                    div()
+                        .pb(px(12.))
+                        .pl(px(18.))
+                        .flex()
+                        .flex_col()
+                        .items_start()
+                        .child(markdown(&r.notes.text, format!("release-notes-{i}"), cx))
+                        .children(
+                            r.notes
+                                .more
+                                .as_deref()
+                                .map(|url| read_more(("release-more", i), url, cx)),
+                        ),
+                )
             })
     });
     let list: Vec<_> = list.collect();
@@ -194,9 +212,8 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
     // The newer release's notes, which an up-to-date copy has no use for.
     let notes = status
         .notes
-        .as_deref()
-        .filter(|_| status.state != UpdateState::UpToDate)
-        .map(release_notes);
+        .as_ref()
+        .filter(|_| status.state != UpdateState::UpToDate);
     div()
         .flex()
         .flex_col()
@@ -243,7 +260,16 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 .border_color(t.border)
                 .pt(px(4.))
                 .pb(px(12.))
-                .child(markdown(&notes, "update-notes", cx))
+                .flex()
+                .flex_col()
+                .items_start()
+                .child(markdown(&release_notes(&notes.text), "update-notes", cx))
+                .children(
+                    notes
+                        .more
+                        .as_deref()
+                        .map(|url| read_more("update-more", url, cx)),
+                )
         }))
         .child(div().pt(px(4.)).children(list))
         .into_any_element()
