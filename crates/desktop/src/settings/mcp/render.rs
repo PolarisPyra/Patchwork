@@ -7,7 +7,7 @@ use gpui::{AnyElement, Window, div, prelude::*, px};
 use patchwork_server::provider::mcp::ToolInfo;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert, chip, list_box};
-use crate::ui::theme::{FS_SM, radius, theme};
+use crate::ui::theme::{fs_sm, radius, theme};
 use crate::ui::{BtnKind, btn, icon};
 use super::form::Draft;
 use super::rows::{logo, server_row};
@@ -189,7 +189,7 @@ pub fn render(
             .bg(t.warning.opacity(0.1))
             .px(px(12.))
             .py(px(8.))
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .child(format!(
                 "{on_count} tools are on, and an API request takes {budget}. The last {} are left out; turn some off on a server's page.",
                 on_count - budget

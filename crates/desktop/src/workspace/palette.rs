@@ -13,7 +13,7 @@ use patchwork_server::threads::{MessageStatus, Role as MessageRole};
 
 use crate::ui::text_area::{Arrow, Changed, Submitted, TextArea};
 use crate::settings::shortcuts::key_label;
-use crate::ui::theme::{font_mono, FS_LG, FS_MD, FS_XS, radius, radius_lg, theme};
+use crate::ui::theme::{font_mono, fs_lg, fs_md, fs_xs, radius, radius_lg, theme};
 use crate::ui::{display_title, icon, overflows, popup_shadow, scrollbar};
 use crate::workspace::Workspace;
 
@@ -258,7 +258,7 @@ impl Render for Palette {
                         .px(px(12.))
                         .pt(px(12.))
                         .pb(px(6.))
-                        .text_size(px(FS_XS))
+                        .text_size(px(fs_xs()))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(t.text_subtle)
                         .child(item.group.to_uppercase())
@@ -284,7 +284,7 @@ impl Render for Palette {
                     .px(px(12.))
                     .rounded(px(radius()))
                     .cursor_pointer()
-                    .text_size(px(FS_MD))
+                    .text_size(px(fs_md()))
                     .when(is_active, |row| row.bg(t.bg_selected))
                     .when(!is_active, |row| row.hover(|s| s.bg(t.bg_hover)))
                     .on_mouse_move(cx.listener(move |this, _, _, cx| {
@@ -308,7 +308,7 @@ impl Render for Palette {
                             .max_w(px(220.))
                             .truncate()
                             .font_family(font_mono())
-                            .text_size(px(FS_XS))
+                            .text_size(px(fs_xs()))
                             .text_color(if is_active {
                                 t.text_muted
                             } else {
@@ -376,7 +376,7 @@ impl Render for Palette {
                                 div()
                                     .flex_1()
                                     .min_w_0()
-                                    .text_size(px(FS_LG))
+                                    .text_size(px(fs_lg()))
                                     .child(self.search.clone()),
                             ),
                     )
@@ -407,7 +407,7 @@ impl Render for Palette {
                                                 .px(px(12.))
                                                 .py(px(24.))
                                                 .text_center()
-                                                .text_size(px(FS_MD))
+                                                .text_size(px(fs_md()))
                                                 .text_color(t.text_subtle)
                                                 .child("No matches"),
                                         )
@@ -426,7 +426,7 @@ impl Render for Palette {
                             .px(px(16.))
                             .border_t_1()
                             .border_color(t.border)
-                            .text_size(px(FS_XS))
+                            .text_size(px(fs_xs()))
                             .text_color(t.text_subtle)
                             .child("↑↓ navigate")
                             .child("↵ run")

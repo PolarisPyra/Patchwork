@@ -12,7 +12,7 @@ use patchwork_server::{Error, Server};
 
 use super::state::{AndroidPanel, Run};
 use crate::ui::menu::{Menu, MenuItem};
-use crate::ui::theme::{FS_SM, Theme};
+use crate::ui::theme::{fs_sm, Theme};
 use crate::ui::{dropdown_chip, icon_button, spinner, tooltip};
 
 /// What stops a command in a terminal: the interrupt key.
@@ -349,7 +349,7 @@ impl AndroidPanel {
                 .flex()
                 .items_center()
                 .gap(px(8.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
         };
         let working = self.working.as_ref().map(|doing| {

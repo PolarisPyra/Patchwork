@@ -11,7 +11,7 @@ use patchwork_server::provider::cli_info::InfoCommand;
 use crate::settings::controls::tildify;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
-use crate::ui::theme::{font_mono, FS_LG, FS_SM, FS_XS, radius, radius_sm, theme};
+use crate::ui::theme::{font_mono, fs_lg, fs_sm, fs_xs, radius, radius_sm, theme};
 use crate::ui::{BtnKind, agent_label, agent_logo, btn, icon, icon_button};
 
 pub fn render(
@@ -79,7 +79,7 @@ pub fn render(
             div()
                 .id("details-title")
                 .role(Role::Heading)
-                .text_size(px(FS_LG))
+                .text_size(px(fs_lg()))
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(agent_label(kind)),
         );
@@ -138,14 +138,14 @@ pub fn render(
         )
         .child(
             div()
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.text_subtle)
                 .child(tildify(&info.path)),
         )
         .children(spec.rows.map(|rows| {
             div()
                 .ml_auto()
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
                 .child(match rows {
                     Rows::Flags => format!("{enabled} of {} flags on", all.len()),
@@ -194,7 +194,7 @@ pub fn render(
                 .px(px(10.))
                 .rounded(px(radius_sm()))
                 .border_1()
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .map(|b| {
                     if filtered {
                         b.border_color(t.accent)
@@ -255,7 +255,7 @@ pub fn render(
                     .py(px(4.))
                     .pr(px(4.))
                     .pl(px(12.))
-                    .text_size(px(FS_XS))
+                    .text_size(px(fs_xs()))
                     .text_color(t.text_subtle)
                     .child(title)
                     .child(
@@ -277,7 +277,7 @@ pub fn render(
                     .px(px(12.))
                     .py(px(8.))
                     .font_family(font_mono())
-                    .text_size(px(12.))
+                    .text_size(px(crate::ui::theme::fs(12.)))
                     .line_height(px(18.))
                     .child(text),
             )
@@ -306,7 +306,7 @@ pub fn render(
                         .min_w_0()
                         .truncate()
                         .font_family(font_mono())
-                        .text_size(px(12.))
+                        .text_size(px(crate::ui::theme::fs(12.)))
                         .child(f.name.clone()),
                 )
                 .child(
@@ -315,7 +315,7 @@ pub fn render(
                         .max_w(px(260.))
                         .truncate()
                         .font_family(font_mono())
-                        .text_size(px(FS_XS))
+                        .text_size(px(fs_xs()))
                         .text_color(t.text_muted)
                         .tooltip(crate::ui::tooltip(tip))
                         .child(f.detail.clone()),
@@ -325,7 +325,7 @@ pub fn render(
                         .w(px(32.))
                         .flex()
                         .justify_end()
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .map(|c| match f.enabled {
                             Some(true) => c.text_color(t.accent_text).child("on"),
                             Some(false) => c.text_color(t.text_subtle).child("off"),
@@ -349,7 +349,7 @@ pub fn render(
             .rounded(px(radius()))
             .border_1()
             .border_color(t.border)
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .children(rows)
             .when(features.is_empty(), |b| {
                 b.child(
@@ -400,7 +400,7 @@ pub fn render(
                     .child(
                         div()
                             .flex_none()
-                            .text_size(px(FS_XS))
+                            .text_size(px(fs_xs()))
                             .text_color(t.text_subtle)
                             .child(
                                 m.context_window
@@ -411,7 +411,7 @@ pub fn render(
                     .child(
                         div()
                             .flex_none()
-                            .text_size(px(FS_XS))
+                            .text_size(px(fs_xs()))
                             .text_color(t.text_muted)
                             .child(m.efforts.join(" · ")),
                     )
@@ -421,7 +421,7 @@ pub fn render(
                             .rounded(px(radius_sm()))
                             .bg(t.bg_selected_muted)
                             .px(px(6.))
-                            .text_size(px(FS_XS))
+                            .text_size(px(fs_xs()))
                             .text_color(t.text_muted)
                             .child(tag)
                     }))

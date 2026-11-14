@@ -5,7 +5,7 @@
 use gpui::{FontWeight, Role, SharedString, div, prelude::*, px};
 use patchwork_server::threads::Message;
 use crate::ui::highlight::file_label;
-use crate::ui::theme::{FS_LG, FS_SM, radius, Theme};
+use crate::ui::theme::{fs_lg, fs_sm, radius, Theme};
 use crate::ui::{BtnKind, badge, base_name, btn, dir_name, icon, icon_button, tooltip};
 use super::diff::Review;
 use super::state::{Canvas, CanvasTab};
@@ -61,7 +61,7 @@ impl Canvas {
                     .child(
                         div()
                             .id("canvas-name")
-                            .text_size(px(FS_LG))
+                            .text_size(px(fs_lg()))
                             .font_weight(FontWeight::SEMIBOLD)
                             .truncate()
                             .when_some(self.path.clone(), |d, path| d.tooltip(tooltip(path)))
@@ -70,7 +70,7 @@ impl Canvas {
                     .children(subtitle.map(|s| {
                         div()
                             .truncate()
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .text_color(t.text_muted)
                             .child(s)
                     })),

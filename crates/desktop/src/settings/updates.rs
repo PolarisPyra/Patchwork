@@ -14,7 +14,7 @@ use patchwork_server::updates::{RELEASES_URL, ReleaseNotes, UpdateState, UpdateS
 use crate::ui::markdown::markdown;
 use crate::settings::controls::{minutes_stepper, token_row};
 use crate::settings::{SettingsDialog, SettingsEvent};
-use crate::ui::theme::{FS_SM, theme};
+use crate::ui::theme::{fs_sm, theme};
 use crate::ui::{BtnKind, btn, button, icon};
 
 /// The releases opened, by version; None until the pane first draws, which opens the newest.
@@ -238,7 +238,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                             div()
                                 .id("update-status")
                                 .role(if failed { Role::Alert } else { Role::Status })
-                                .text_size(px(FS_SM))
+                                .text_size(px(fs_sm()))
                                 .text_color(if failed { t.danger } else { t.text_muted })
                                 .child(status_text(&status)),
                         ),

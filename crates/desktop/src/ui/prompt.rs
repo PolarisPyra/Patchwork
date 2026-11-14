@@ -10,7 +10,7 @@ use gpui::{
     div, prelude::*, px,
 };
 
-use crate::ui::theme::{FS_LG, FS_MD, radius, radius_sm, theme};
+use crate::ui::theme::{fs_lg, fs_md, radius, radius_sm, theme};
 use crate::ui::popup_shadow;
 
 pub fn build(
@@ -106,7 +106,7 @@ impl Render for Confirm {
                     .border_color(border)
                     .bg(bg)
                     .text_color(fg)
-                    .text_size(px(FS_MD))
+                    .text_size(px(fs_md()))
                     .cursor_pointer()
                     .hover(move |s| s.bg(hover))
                     .when(self.keyboard && self.active == ix, |s| {
@@ -178,7 +178,7 @@ impl Render for Confirm {
                             .line_height(gpui::relative(1.25))
                             .child(
                                 div()
-                                    .text_size(px(FS_LG))
+                                    .text_size(px(fs_lg()))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(t.text)
                                     .child(self.title.clone()),
@@ -186,7 +186,7 @@ impl Render for Confirm {
                             .children(self.detail.clone().map(|detail| {
                                 div()
                                     .mt(px(4.))
-                                    .text_size(px(FS_MD))
+                                    .text_size(px(fs_md()))
                                     .text_color(t.text_muted)
                                     .child(detail)
                             })),

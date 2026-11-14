@@ -10,7 +10,7 @@ use patchwork_server::threads::{Message, StepStatus, ToolCall};
 
 use crate::chat::lineage::{is_active, status_label, title_of};
 use crate::chat::timeline::tool_label;
-use crate::ui::theme::{FS_XS, radius, radius_sm, Theme};
+use crate::ui::theme::{fs_xs, radius, radius_sm, Theme};
 use crate::ui::{agent_logo, button, full_elapsed, icon, now_ms};
 use crate::workspace::Workspace;
 
@@ -124,7 +124,7 @@ fn card(
                                 div()
                                     .min_w_0()
                                     .truncate()
-                                    .text_size(px(FS_XS))
+                                    .text_size(px(fs_xs()))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(t.text)
                                     .child(title.clone()),
@@ -135,7 +135,7 @@ fn card(
                                     d.child(
                                         div()
                                             .flex_none()
-                                            .text_size(px(10.))
+                                            .text_size(px(crate::ui::theme::fs(10.)))
                                             .text_color(if tool.status == StepStatus::Error {
                                                 t.danger
                                             } else {
@@ -150,7 +150,7 @@ fn card(
                         div()
                             .min_w_0()
                             .truncate()
-                            .text_size(px(11.))
+                            .text_size(px(crate::ui::theme::fs(11.)))
                             .text_color(t.text_muted)
                             .child(detail.clone().unwrap_or_else(|| label.to_string())),
                     ),
@@ -158,7 +158,7 @@ fn card(
             .children(elapsed.map(|e| {
                 div()
                     .flex_none()
-                    .text_size(px(FS_XS))
+                    .text_size(px(fs_xs()))
                     .text_color(t.text_subtle)
                     .child(full_elapsed(e))
             }))
@@ -263,7 +263,7 @@ pub fn subagents(
                             .justify_center()
                             .rounded_full()
                             .bg(t.bg_panel)
-                            .text_size(px(10.))
+                            .text_size(px(crate::ui::theme::fs(10.)))
                             .text_color(t.text_muted)
                             .child(format!("+{}", count - 3)),
                     ),
@@ -290,7 +290,7 @@ pub fn subagents(
             .flex_col()
             .flex_1()
             .min_w_0()
-            .text_size(px(FS_XS))
+            .text_size(px(fs_xs()))
             .child(
                 div()
                     .truncate()
@@ -313,7 +313,7 @@ pub fn subagents(
     .children(elapsed.map(|e| {
         div()
             .flex_none()
-            .text_size(px(FS_XS))
+            .text_size(px(fs_xs()))
             .text_color(t.text_subtle)
             .child(full_elapsed(e))
     }))

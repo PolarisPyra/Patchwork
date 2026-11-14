@@ -4,7 +4,7 @@
 
 use gpui::{AnyElement, FontWeight, MouseButton, Role, SharedString, Window, div, prelude::*, px};
 use crate::ui::menu::Menu;
-use crate::ui::theme::{FS_LG, FS_XS, radius_sm, theme};
+use crate::ui::theme::{fs_lg, fs_xs, radius_sm, theme};
 use crate::ui::{icon, icon_button, mix, overflows, scrollbar};
 use super::dialog::{GROUPS, SettingsDialog, SettingsEvent, sections};
 use super::chat;
@@ -70,7 +70,7 @@ impl Render for SettingsDialog {
                     div()
                         .px(px(8.))
                         .pb(px(2.))
-                        .text_size(px(FS_XS))
+                        .text_size(px(fs_xs()))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(t.text_subtle)
                         .child(*label),
@@ -166,7 +166,7 @@ impl Render for SettingsDialog {
                                         div()
                                             .id("settings-title")
                                             .role(Role::Heading)
-                                            .text_size(px(FS_LG))
+                                            .text_size(px(fs_lg()))
                                             .font_weight(FontWeight::SEMIBOLD)
                                             .child(open),
                                     )

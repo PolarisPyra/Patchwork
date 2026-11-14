@@ -12,7 +12,7 @@ use super::menus::below;
 use super::state::{GranularDialog, GranularScope, Part, Slot, agent_of, pick_of, starter_of};
 use crate::chat::composer::effort_label;
 use crate::ui::dialog;
-use crate::ui::theme::{FS_MD, FS_SM, radius, Theme, theme};
+use crate::ui::theme::{fs_md, fs_sm, radius, Theme, theme};
 use crate::ui::{BtnKind, agent_label, agent_logo, btn, button, icon, icon_button};
 use crate::workspace::Workspace;
 use patchwork_server::threads::delegates_sub_agents;
@@ -58,7 +58,7 @@ fn select(
         .border_1()
         .border_color(if open { t.accent } else { t.border_strong })
         .bg(t.bg_editor)
-        .text_size(px(FS_MD))
+        .text_size(px(fs_md()))
         .text_color(if field.unset { t.text_muted } else { t.text })
         .hover(move |s| s.bg(hover))
         .children(field.mark)
@@ -104,7 +104,7 @@ impl Workspace {
                     div()
                         .w(px(52.))
                         .flex_none()
-                        .text_size(px(FS_MD))
+                        .text_size(px(fs_md()))
                         .text_color(t.text_muted)
                         .child(title),
                 )
@@ -152,7 +152,7 @@ impl Workspace {
                 .px(px(10.))
                 .rounded(px(radius()))
                 .bg(t.bg_hover)
-                .text_size(px(FS_MD))
+                .text_size(px(fs_md()))
                 .font_weight(FontWeight::MEDIUM)
                 .child(mark)
                 .child(div().flex_1().min_w_0().truncate().child(name))
@@ -206,7 +206,7 @@ impl Workspace {
                 .border_color(t.border)
                 .child(
                     div()
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(t.text_muted)
                         .child("Sub agents"),
@@ -233,7 +233,7 @@ impl Workspace {
                     .items_center()
                     .justify_between()
                     .h(px(20.))
-                    .text_size(px(FS_MD))
+                    .text_size(px(fs_md()))
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(main.name())
                     .child(reset),
@@ -355,7 +355,7 @@ impl Workspace {
                     div()
                         .id("granular-error")
                         .role(Role::Alert)
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .text_color(t.danger)
                         .child(error)
                 }))

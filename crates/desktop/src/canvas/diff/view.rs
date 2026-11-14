@@ -17,7 +17,7 @@ use gpui::{
 };
 use patchwork_server::workspace::HunkAction;
 use crate::canvas::Canvas;
-use crate::ui::theme::{font_mono, FS_SM, FS_XS, radius, radius_sm, Theme, theme};
+use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, tooltip};
 
 /// A monospace character's width at `--fs-md`, for the widest line's floor.
@@ -77,7 +77,7 @@ impl Canvas {
             // The list scrolls down on its own; without this the wheel also scrolls this sideways.
             .restrict_scroll_to_axis()
             .font_family(font_mono())
-            .text_size(px(crate::ui::theme::FS_MD))
+            .text_size(px(crate::ui::theme::fs_md()))
             .line_height(relative(1.65))
             .text_color(t.text)
             .child(rows)
@@ -268,7 +268,7 @@ impl Canvas {
                     .pr(px(12.))
                     .pl(px(8.))
                     .font_family(crate::ui::theme::font_ui())
-                    .text_size(px(FS_XS))
+                    .text_size(px(fs_xs()))
                     .child(
                         hunk_button(
                             format!("note-{n}"),
@@ -375,7 +375,7 @@ impl Canvas {
             .bg(t.bg_panel)
             .p(px(8.))
             .font_family(crate::ui::theme::font_ui())
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .line_height(relative(1.5))
             .child(
                 div()
@@ -458,7 +458,7 @@ impl Canvas {
             .px(px(12.))
             .py(px(8.))
             .font_family(crate::ui::theme::font_ui())
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .line_height(relative(1.5))
             .child(icon("chat-text", 14.).mt(px(2.)).text_color(t.accent_text))
             .child(

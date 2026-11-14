@@ -11,7 +11,7 @@ use patchwork_server::system::new_id;
 use patchwork_server::threads::{Approval, ApprovalStatus, Message};
 use crate::chat::secret::secret_card;
 use crate::settings::permissions::{kind_label, scope_name};
-use crate::ui::theme::{font_mono, FS_SM, FS_XS, radius, radius_sm, Theme};
+use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme};
 use crate::ui::{button, icon, popup};
 use crate::workspace::Workspace;
 
@@ -84,7 +84,7 @@ pub(super) fn approval(
             .items_center()
             .gap(px(6.))
             .px(px(4.))
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .text_color(t.warning)
             .child(icon("shield-warning", 15.))
             .child(text);
@@ -99,7 +99,7 @@ pub(super) fn approval(
             .bg(t.bg_panel)
             .px(px(12.))
             .py(px(10.))
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
     };
     if !a.questions.is_empty() {
         return card().gap(px(6.)).children(a.questions.iter().map(|q| {
@@ -150,7 +150,7 @@ pub(super) fn approval(
             .items_center()
             .gap(px(6.))
             .px(px(4.))
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .text_color(t.text_muted)
             .child(mark)
             .child(div().flex_none().text_color(t.text).child(a.title.clone()))
@@ -160,7 +160,7 @@ pub(super) fn approval(
                         .min_w_0()
                         .truncate()
                         .font_family(font_mono())
-                        .text_size(px(FS_XS))
+                        .text_size(px(fs_xs()))
                         .child(a.detail.clone()),
                 )
             })
@@ -253,7 +253,7 @@ pub(super) fn rule_menu(
                 .truncate()
                 .px(px(8.))
                 .py(px(4.))
-                .text_size(px(FS_XS))
+                .text_size(px(fs_xs()))
                 .text_color(t.text_muted)
                 .child(text)
         });
@@ -306,7 +306,7 @@ pub(super) fn rule_menu(
                             .role(Role::Menu)
                             .aria_label("Approval rule")
                             .occlude()
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .on_mouse_down_out(cx.listener(|this, _, _, cx| {
                                 this.rule_menu = None;
                                 cx.notify();

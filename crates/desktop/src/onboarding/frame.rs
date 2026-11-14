@@ -12,7 +12,7 @@ use super::{
     IMPORTS_STEP, LAST_STEP, LOGO_BLUE, LOGO_PINK, LOGO_VIOLET, Onboarding, OnboardingEvent,
     PROJECTS_STEP, STEPS, agent_step, imports_step, projects_step, ready_step,
 };
-use crate::ui::theme::{FS_LG, FS_SM, FS_XL, FS_XXL, radius_lg, radius_sm, Theme, theme};
+use crate::ui::theme::{fs_lg, fs_sm, fs_xl, fs_xxl, radius_lg, radius_sm, Theme, theme};
 use crate::ui::{BtnKind, btn, icon, icon_button, spinner, tooltip};
 
 /// The logo's colours as a fill, from `a` to `b`.
@@ -45,7 +45,7 @@ fn stepper(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) -> impl I
             .items_center()
             .justify_center()
             .rounded_full()
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .font_weight(FontWeight::SEMIBOLD)
             .line_height(relative(1.))
             .map(|d| {
@@ -161,7 +161,7 @@ impl Render for Onboarding {
                     .child(img("logos/logo.svg").size(px(36.)).flex_none())
                     .child(
                         div()
-                            .text_size(px(FS_XL))
+                            .text_size(px(fs_xl()))
                             .font_weight(FontWeight::SEMIBOLD)
                             .child("Patchwork"),
                     ),
@@ -237,7 +237,7 @@ impl Render for Onboarding {
                             .track_focus(&self.heading)
                             .role(Role::Heading)
                             .aria_level(1)
-                            .text_size(px(FS_XXL))
+                            .text_size(px(fs_xxl()))
                             .font_weight(FontWeight::SEMIBOLD)
                             .line_height(relative(1.25))
                             .child(current.title),
@@ -245,7 +245,7 @@ impl Render for Onboarding {
                     .child(
                         div()
                             .mt(px(8.))
-                            .text_size(px(FS_LG))
+                            .text_size(px(fs_lg()))
                             .text_color(t.text_muted)
                             .child(current.subtitle),
                     )

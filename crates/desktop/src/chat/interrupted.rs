@@ -11,7 +11,7 @@ use gpui::{Div, Role, div, prelude::*, px};
 use patchwork_server::Server;
 use patchwork_server::threads::{Message, Thread};
 
-use crate::ui::theme::{FS_SM, Theme};
+use crate::ui::theme::{fs_sm, Theme};
 use crate::ui::{BtnKind, btn, now_ms, resets_in};
 use crate::workspace::{Workspace, is_working};
 
@@ -95,7 +95,7 @@ pub(super) fn resume_row(
                 div()
                     .id("resume-waiting")
                     .role(Role::Status)
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .text_color(t.text_muted)
                     .child(format!("Resumes {}", resets_in(at, now)))
             }))

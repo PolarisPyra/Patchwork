@@ -10,7 +10,7 @@ use std::sync::Arc;
 use gpui::{AnyElement, Div, Hsla, Role, SharedString, div, prelude::*, px};
 use patchwork_server::threads::{CheckStatus, Message, TurnChecks};
 
-use crate::ui::theme::{font_mono, FS_SM, FS_XS, radius, radius_sm, Theme};
+use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme};
 use crate::ui::{BtnKind, btn, button, full_elapsed, icon, spinner, tooltip};
 use crate::workspace::Workspace;
 
@@ -170,7 +170,7 @@ pub fn checks_card(
             .min_w_0()
             .truncate()
             .font_family(font_mono())
-            .text_size(px(FS_XS))
+            .text_size(px(fs_xs()))
             .text_color(t.text_muted)
             .tooltip(tooltip(command.clone()))
             .child(command)
@@ -222,7 +222,7 @@ pub fn checks_card(
 
     let note = checks.note.clone().map(|note| {
         div()
-            .text_size(px(FS_XS))
+            .text_size(px(fs_xs()))
             .text_color(t.text_muted)
             .child(note)
     });
@@ -231,7 +231,7 @@ pub fn checks_card(
         let reasons = if checks.failures.is_empty() {
             checks.note.is_none().then(|| {
                 div()
-                    .text_size(px(FS_XS))
+                    .text_size(px(fs_xs()))
                     .text_color(t.text_muted)
                     .child(say_more(checks))
             })
@@ -251,7 +251,7 @@ pub fn checks_card(
                                 d.child(
                                     div()
                                         .font_family(font_mono())
-                                        .text_size(px(FS_XS))
+                                        .text_size(px(fs_xs()))
                                         .text_color(t.text_muted)
                                         .child(failure.detail.clone()),
                                 )
@@ -264,7 +264,7 @@ pub fn checks_card(
             let toggle = button(SharedString::from(format!("checks-output-{id}")), "Output")
                 .aria_expanded(shown)
                 .gap(px(4.))
-                .text_size(px(FS_XS))
+                .text_size(px(fs_xs()))
                 .text_color(t.text_muted)
                 .hover(move |s| s.text_color(fg))
                 .child(icon(if shown { "caret-down" } else { "caret-right" }, 11.))
@@ -290,7 +290,7 @@ pub fn checks_card(
                         .px(px(8.))
                         .py(px(6.))
                         .font_family(font_mono())
-                        .text_size(px(FS_XS))
+                        .text_size(px(fs_xs()))
                         .child(output),
                 )
             })
@@ -319,14 +319,20 @@ pub fn checks_card(
             .pt(px(2.))
             .children(reasons)
             .children(output)
-            .child(div().flex().items_center().text_size(px(FS_XS)).child(auto))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .text_size(px(fs_xs()))
+                    .child(auto),
+            )
     });
 
     let error = w.checks.errors.get(&id).map(|e| {
         div()
             .id(SharedString::from(format!("checks-error-{id}")))
             .role(Role::Alert)
-            .text_size(px(FS_XS))
+            .text_size(px(fs_xs()))
             .text_color(t.danger)
             .child(e.clone())
     });
@@ -342,7 +348,7 @@ pub fn checks_card(
             .bg(t.bg_panel)
             .px(px(12.))
             .py(px(8.))
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .child(
                 div()
                     .id(SharedString::from(format!("checks-row-{id}")))

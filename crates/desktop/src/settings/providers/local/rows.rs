@@ -11,7 +11,7 @@ use crate::settings::providers::PromptOf;
 use crate::settings::providers::rows::status_badge;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert, switch};
-use crate::ui::theme::{font_mono, FS_SM, radius_sm, theme};
+use crate::ui::theme::{font_mono, fs_sm, radius_sm, theme};
 use crate::ui::{BtnKind, btn, icon, provider_logo, spinner};
 
 impl SettingsDialog {
@@ -204,7 +204,7 @@ impl SettingsDialog {
                     div()
                         .w_full()
                         .truncate()
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .text_color(t.text_muted)
                         .child(line),
                 )

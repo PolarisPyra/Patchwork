@@ -14,7 +14,7 @@ use patchwork_server::backgrounds::ChatBackground;
 use patchwork_server::settings::Theme as ThemeSetting;
 use patchwork_server::themes::{BackdropChoice, Dim, Fit, Scheme};
 
-use super::cards::{Extras, card, grid};
+use super::cards::{Extras, add_card, card, grid};
 use super::files::{Filed, file_tools};
 use super::picture::picture_rows;
 use super::reading::strength_cards;
@@ -23,8 +23,7 @@ use crate::orchestrator::{butterfly_preview, scene_preview};
 use crate::settings::controls::{alert, section_heading};
 use crate::settings::{SettingsDialog, SettingsEvent};
 use crate::ui::background_picker::{BackgroundPicker, PickerEvent};
-use crate::ui::theme::{FS_SM, radius_sm, theme};
-use crate::ui::{button, icon};
+use crate::ui::theme::{fs_sm, theme};
 
 impl SettingsDialog {
     /// The kind of window the background cards pick for: the one showing while the app matches
@@ -83,31 +82,6 @@ impl SettingsDialog {
         })
         .detach();
     }
-}
-
-/// The card after the backdrops that adds a picture to them, the size of a card's picture.
-pub(super) fn add_picture_card(cx: &mut Context<SettingsDialog>) -> AnyElement {
-    let t = *theme(cx);
-    button("add-backdrop", "Add background")
-        // The size and place of a card's picture: inside the card's padding and border.
-        .m(px(7.))
-        .w(px(136.))
-        .h(px(64.))
-        .flex_none()
-        .flex_col()
-        .justify_center()
-        .gap(px(6.))
-        .rounded(px(radius_sm()))
-        .border_1()
-        .border_dashed()
-        .border_color(t.border_strong)
-        .text_size(px(FS_SM))
-        .text_color(t.text_muted)
-        .hover(move |s| s.bg(t.bg_hover).text_color(t.text))
-        .child(icon("plus", 16.))
-        .child("Add background")
-        .on_click(cx.listener(|d, _, _, cx| d.add_backdrop_picture(cx)))
-        .into_any_element()
 }
 
 /// The Orchestrator's backdrops: none, the butterfly, the animated backgrounds, the pictures.
@@ -256,7 +230,7 @@ pub(in crate::settings) fn backgrounds_pane(
     let windows = slot.map(|scheme| {
         div()
             .pt(px(10.))
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .text_color(t.text_muted)
             .child(match scheme {
                 Scheme::Light => "In light windows",
@@ -264,7 +238,9 @@ pub(in crate::settings) fn backgrounds_pane(
             })
     });
     let backdrops = backdrop_cards(d, cx);
-    let add_picture = add_picture_card(cx);
+    let add_picture = add_card("add-backdrop", "Add background", &t)
+        .on_click(cx.listener(|d, _, _, cx| d.add_backdrop_picture(cx)))
+        .into_any_element();
     let picture = match *d.settings.backdrop_of(slot) {
         BackdropChoice::Image { dim, fit, blur, .. } => picture_rows(dim, fit, blur, cx),
         _ => Vec::new(),

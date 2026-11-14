@@ -20,7 +20,7 @@ use gpui::{Anchor, FontWeight, MouseButton, anchored, deferred};
 
 use super::state::Orchestrator;
 use super::{background, scene};
-use crate::ui::theme::{font_ui, FS_LG, FS_SM, radius_lg, applied, theme};
+use crate::ui::theme::{font_ui, fs_lg, fs_sm, radius_lg, applied, theme};
 use crate::ui::{agent_logo, button, display_title, icon, spinner};
 
 /// The pill: its size, the room kept at its sides, and how far down the page its top is.
@@ -165,7 +165,7 @@ fn chip_frame() -> gpui::Div {
         .px(px(10.))
         .rounded_full()
         .bg(ink(0.08))
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .text_color(ink(0.8))
 }
 
@@ -409,7 +409,7 @@ impl Orchestrator {
             .border_1()
             .border_color(ink(0.10))
             .bg(glass(0.96))
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .children(rows);
         Some(list.into_any_element())
     }
@@ -423,7 +423,7 @@ fn launch_chip(id: &'static str, label: String, open: bool) -> gpui::Stateful<gp
         .gap(px(6.))
         .px(px(10.))
         .rounded_full()
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .font_weight(FontWeight::MEDIUM)
         .text_color(ink(0.7))
         .when(open, |chip| chip.bg(ink(0.08)))
@@ -569,7 +569,7 @@ impl Render for Orchestrator {
                 spread_radius: px(0.),
                 inset: false,
             }])
-            .text_size(px(FS_LG))
+            .text_size(px(fs_lg()))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 if event.keystroke.key == "escape" && this.escape(window, cx) {
                     cx.stop_propagation();

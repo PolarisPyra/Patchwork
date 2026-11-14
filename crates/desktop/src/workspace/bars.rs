@@ -11,7 +11,7 @@ use patchwork_server::threads::{MessageStatus, Role as MessageRole};
 
 use super::{Page, View, Workspace, is_busy};
 use crate::ui::menu::{Dismissed, Menu, MenuItem};
-use crate::ui::theme::{ACTIVITY_BAR_W, FS_XS, radius, radius_sm, STATUSBAR_H, TOOLBAR_H, Theme, theme};
+use crate::ui::theme::{ACTIVITY_BAR_W, fs_xs, radius, radius_sm, STATUSBAR_H, TOOLBAR_H, Theme, theme};
 use crate::ui::{agent_label, button, display_title, icon, kind_icon, spinner};
 
 /// The machine button's size, the same as the activity bar's buttons.
@@ -206,7 +206,7 @@ impl Workspace {
                             .bg(t.text_tint_6)
                             .px(px(8.))
                             .py(px(1.))
-                            .text_size(px(FS_XS))
+                            .text_size(px(fs_xs()))
                             .line_height(px(16.))
                             .text_color(t.text_muted)
                             .child(patchwork_server::VERSION),
@@ -240,7 +240,7 @@ impl Workspace {
                         .rounded_full()
                         .bg(t.accent)
                         .px(px(4.))
-                        .text_size(px(10.))
+                        .text_size(px(crate::ui::theme::fs(10.)))
                         .line_height(px(16.))
                         .text_color(t.text_on_accent)
                         .flex()
@@ -362,7 +362,7 @@ impl Workspace {
             .border_color(t.border)
             .bg(t.bg_app)
             .px(px(10.))
-            .text_size(px(FS_XS))
+            .text_size(px(fs_xs()))
             .line_height(px(16.))
             .text_color(t.text_muted)
             .child(

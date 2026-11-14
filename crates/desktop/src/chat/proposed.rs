@@ -14,7 +14,7 @@ use gpui::{
 
 use crate::ui::markdown::markdown;
 use crate::chat::plan::plan_title;
-use crate::ui::theme::{FS_MD, FS_SM, radius, radius_sm, Theme};
+use crate::ui::theme::{fs_md, fs_sm, radius, radius_sm, Theme};
 use crate::ui::{BtnKind, badge, btn, button, icon, popup_shadow, slug_file_name};
 use crate::workspace::Workspace;
 
@@ -181,7 +181,7 @@ pub fn proposed_plan(
             .border_color(t.border)
             .bg(t.bg_panel)
             .p(px(4.))
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .shadow(popup_shadow(t))
             .on_mouse_down_out(cx.listener(|w, _, _, cx| {
                 w.proposed.menu = None;
@@ -238,7 +238,7 @@ pub fn proposed_plan(
                         .flex_1()
                         .min_w_0()
                         .truncate()
-                        .text_size(px(FS_MD))
+                        .text_size(px(fs_md()))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(t.text)
                         .child(title),

@@ -2,14 +2,17 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{AnyElement, Div, FontWeight, Hsla, Role, SharedString, Toggled, div, prelude::*, px, rgb};
+use gpui::{
+    AnyElement, Div, FontWeight, Hsla, Role, SharedString, Stateful, Toggled, div, prelude::*, px,
+    rgb,
+};
 use patchwork_server::settings::{Settings, Theme as ThemeSetting};
 use patchwork_server::themes::{Palette, Scheme};
 
 use super::files::{Filed, file_tools};
 use crate::settings::SettingsDialog;
-use crate::ui::theme::{FS_LG, FS_SM, Theme as Colors, radius, radius_sm, theme};
-use crate::ui::{focus_ring, icon, icon_button, tooltip};
+use crate::ui::theme::{fs_lg, fs_sm, Theme as Colors, radius, radius_sm, theme};
+use crate::ui::{button, focus_ring, icon, icon_button, tooltip};
 
 /// The color schemes that are not files, in the order their cards come: the id each has in
 /// the settings, its name, the kind of window it is for, and its colors.
@@ -109,7 +112,7 @@ fn colors_swatch(surface: Hsla, text: Hsla, muted: Hsla, accent: Hsla) -> Div {
         .gap(px(8.))
         .child(
             div()
-                .text_size(px(FS_LG))
+                .text_size(px(fs_lg()))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(text)
                 .child("Aa"),
@@ -117,7 +120,7 @@ fn colors_swatch(surface: Hsla, text: Hsla, muted: Hsla, accent: Hsla) -> Div {
         .child(
             div()
                 .flex_1()
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(muted)
                 .child("Aa"),
         )
@@ -228,13 +231,36 @@ pub(super) fn card(
                 .flex()
                 .items_center()
                 .gap(px(4.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .child(div().flex_1().min_w_0().truncate().child(name))
                 .children(warning)
                 .children(tools),
         )
         .on_click(cx.listener(move |d, _, _, cx| pick(d, cx)))
         .into_any_element()
+}
+
+/// The card after a grid's last one that adds to the grid, the size of a card's picture.
+pub(super) fn add_card(id: &'static str, label: &'static str, t: &Colors) -> Stateful<Div> {
+    let t = *t;
+    button(id, label)
+        // The size and place of a card's picture: inside the card's padding and border.
+        .m(px(7.))
+        .w(px(136.))
+        .h(px(64.))
+        .flex_none()
+        .flex_col()
+        .justify_center()
+        .gap(px(6.))
+        .rounded(px(radius_sm()))
+        .border_1()
+        .border_dashed()
+        .border_color(t.border_strong)
+        .text_size(px(fs_sm()))
+        .text_color(t.text_muted)
+        .hover(move |s| s.bg(t.bg_hover).text_color(t.text))
+        .child(icon("plus", 16.))
+        .child(label)
 }
 
 /// A grid of cards, of which one is picked.

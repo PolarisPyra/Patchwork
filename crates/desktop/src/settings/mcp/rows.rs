@@ -7,7 +7,7 @@ use patchwork_server::provider::AgentKind;
 use patchwork_server::provider::mcp::ToolInfo;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::letter_badge;
-use crate::ui::theme::{font_mono, FS_SM, FS_XS, radius_sm, Theme};
+use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius_sm, Theme};
 use crate::ui::{agent_logo, icon};
 use super::state::{Card, Client, dot};
 
@@ -153,7 +153,7 @@ pub(super) fn server_row(
                 div()
                     .truncate()
                     .font_family(font_mono())
-                    .text_size(px(FS_XS))
+                    .text_size(px(fs_xs()))
                     .text_color(muted)
                     .child(card.target.clone())
             } else {
@@ -169,14 +169,14 @@ pub(super) fn server_row(
                             .bg(t.bg_accent_soft)
                             .px(px(6.))
                             .font_family(font_mono())
-                            .text_size(px(FS_XS))
+                            .text_size(px(fs_xs()))
                             .child(tool.name.clone())
                     }))
                     .when(matches.len() > 3, |d| {
                         d.child(
                             div()
                                 .flex_none()
-                                .text_size(px(FS_XS))
+                                .text_size(px(fs_xs()))
                                 .text_color(muted)
                                 .child(format!("+{}", matches.len() - 3)),
                         )
@@ -202,7 +202,7 @@ pub(super) fn server_row(
             .flex()
             .items_center()
             .justify_end()
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .font_weight(FontWeight::SEMIBOLD)
             .child(tally),
     )

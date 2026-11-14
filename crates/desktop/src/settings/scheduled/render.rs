@@ -9,7 +9,7 @@ use patchwork_server::scheduled::Task;
 
 use crate::settings::controls::{alert, switch};
 use crate::settings::{SettingsDialog, SettingsEvent};
-use crate::ui::theme::{FS_SM, FS_XS, theme};
+use crate::ui::theme::{fs_sm, fs_xs, theme};
 use crate::ui::{BtnKind, agent_label, btn, icon, icon_button, tooltip};
 use super::editor::{editor};
 use super::state::{blank, run_history, when_label};
@@ -87,7 +87,7 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                                     .rounded_full()
                                     .bg(t.bg_hover)
                                     .px(px(8.))
-                                    .text_size(px(FS_XS))
+                                    .text_size(px(fs_xs()))
                                     .text_color(t.text_muted)
                                     .child("Paused"),
                             )
@@ -101,7 +101,7 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                         .items_center()
                         .gap_x(px(12.))
                         .gap_y(px(2.))
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .text_color(t.text_muted)
                         .child(meta(
                             "calendar-blank",
@@ -126,7 +126,7 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                         .items_center()
                         .gap_x(px(12.))
                         .gap_y(px(2.))
-                        .text_size(px(FS_XS))
+                        .text_size(px(fs_xs()))
                         .text_color(t.text_subtle)
                         .child(run_history(task, &t))
                         .when(enabled, |row| {
@@ -262,7 +262,7 @@ pub fn render(
                 )
                 .child(
                     div()
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .text_color(t.text_muted)
                         .child("Tasks run while Patchwork is open."),
                 )
@@ -308,7 +308,7 @@ pub fn render(
                     )
                     .child(
                         div()
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .text_color(t.text_muted)
                             .child("Each run opens a new task that starts with your prompt."),
                     ),

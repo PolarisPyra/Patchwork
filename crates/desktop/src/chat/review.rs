@@ -7,7 +7,7 @@ use gpui::{AnyElement, Div, Hsla, Role, SharedString, div, prelude::*, px};
 use patchwork_server::threads::{Message, ReviewStatus, TurnReview};
 
 use crate::ui::markdown::markdown;
-use crate::ui::theme::{FS_SM, FS_XS, radius, Theme};
+use crate::ui::theme::{fs_sm, fs_xs, radius, Theme};
 use crate::ui::{BtnKind, agent_label, btn, button, icon, spinner, tooltip};
 use crate::workspace::Workspace;
 
@@ -95,7 +95,7 @@ pub fn review_card(
     .on_click(cx.listener(move |w, _, _, cx| w.open_thread(&child, cx)));
 
     let details = (open && has_text).then(|| {
-        div().pt(px(2.)).text_size(px(FS_SM)).child(markdown(
+        div().pt(px(2.)).text_size(px(fs_sm())).child(markdown(
             &review.text,
             format!("review-text-{id}"),
             cx,
@@ -106,7 +106,7 @@ pub fn review_card(
         div()
             .id(SharedString::from(format!("review-error-{id}")))
             .role(Role::Alert)
-            .text_size(px(FS_XS))
+            .text_size(px(fs_xs()))
             .text_color(t.danger)
             .child(review.text.clone())
     });
@@ -122,7 +122,7 @@ pub fn review_card(
             .bg(t.bg_panel)
             .px(px(12.))
             .py(px(8.))
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .child(
                 div()
                     .id(SharedString::from(format!("review-row-{id}")))

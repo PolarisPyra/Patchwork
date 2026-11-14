@@ -7,7 +7,7 @@ use patchwork_server::scheduled::{Schedule, Weekday};
 
 use crate::settings::controls::{FieldKind, chip, select_box, switch};
 use crate::settings::SettingsDialog;
-use crate::ui::theme::{FS_SM, FS_XS, theme};
+use crate::ui::theme::{fs_sm, fs_xs, theme};
 use crate::ui::{AGENT_KINDS, BtnKind, agent_label, btn, icon, tooltip};
 use super::state::{DAYS, MODES, Pick, REPEATS, Repeats, labelled, repeats, time_of};
 
@@ -118,7 +118,7 @@ pub(super) fn editor(
                 .flex()
                 .items_center()
                 .gap(px(6.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
                 .child(hours.w(px(56.)))
                 .child("hours"),
@@ -363,7 +363,7 @@ pub(super) fn editor(
                     .flex()
                     .items_center()
                     .gap(px(6.))
-                    .text_size(px(FS_XS))
+                    .text_size(px(fs_xs()))
                     .text_color(t.text_subtle)
                     .child(icon("folder-simple", 12.))
                     .child(path)
@@ -381,7 +381,7 @@ pub(super) fn editor(
                             .flex()
                             .items_center()
                             .gap(px(8.))
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .text_color(t.text_muted)
                             .child("Enabled")
                             .child(

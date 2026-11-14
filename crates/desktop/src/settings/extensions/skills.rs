@@ -13,7 +13,7 @@ use patchwork_server::skills::{self, Skill};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{letter_badge, switch, token_row};
-use crate::ui::theme::{FS_SM, theme};
+use crate::ui::theme::{fs_sm, theme};
 use crate::ui::{BtnKind, btn, icon};
 
 use crate::ui::sigils::{SigilKind, default_sigil};
@@ -240,7 +240,7 @@ pub fn render(
                         .child(
                             div()
                                 .truncate()
-                                .text_size(px(FS_SM))
+                                .text_size(px(fs_sm()))
                                 .text_color(t.text_muted)
                                 .child(skill.description.clone().unwrap_or_default()),
                         ),

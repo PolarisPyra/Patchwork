@@ -7,7 +7,7 @@
 use gpui::{Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px, relative};
 use patchwork_server::threads::{BackgroundTask, TaskStatus};
 
-use crate::ui::theme::{FS_SM, radius, Theme};
+use crate::ui::theme::{fs_sm, radius, Theme};
 use crate::ui::{button, icon, now_ms, spinner, tooltip};
 use crate::workspace::Workspace;
 
@@ -145,7 +145,7 @@ pub fn background_tasks(
             .flex_col()
             .gap(px(2.))
             .px(px(8.))
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .children(rows),
     )
 }

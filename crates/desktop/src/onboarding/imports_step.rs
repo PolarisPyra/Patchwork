@@ -11,7 +11,7 @@ use patchwork_server::import::{ImportScan, ImportSource};
 use super::{IMPORTS_STEP, ImportProgress, ImportResult, Onboarding, OnboardingEvent};
 use super::rows::{choice_row, heading, key_id, row_end, tick};
 use crate::settings::projects::{import_sources, source_agent, source_label};
-use crate::ui::theme::{FS_SM, Theme};
+use crate::ui::theme::{fs_sm, Theme};
 use crate::ui::{agent_logo, badge, spinner};
 
 impl Onboarding {
@@ -253,7 +253,7 @@ pub fn imports_step(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) 
                 .flex()
                 .items_center()
                 .gap(px(8.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
                 .when_some(progress, |d, (spin, text)| d.child(spin).child(text)),
         )
@@ -262,7 +262,7 @@ pub fn imports_step(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) 
                 div()
                     .id("setup-import-error")
                     .role(Role::Alert)
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .text_color(t.danger)
                     .child(e),
             )

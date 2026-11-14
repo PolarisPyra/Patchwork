@@ -8,7 +8,7 @@ use patchwork_server::android::SystemImage;
 use super::state::{Create, Install, Step};
 use crate::android::rows::radio_row;
 use crate::android::state::AndroidPanel;
-use crate::ui::theme::{font_mono, FS_SM, FS_XS, radius, Theme};
+use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, Theme};
 use crate::ui::{BtnKind, badge, btn, checkbox, input_box, spinner};
 
 impl AndroidPanel {
@@ -84,7 +84,7 @@ impl AndroidPanel {
                     .child(
                         div()
                             .flex_none()
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .text_color(t.text_muted)
                             .child(profile.oem.clone()),
                     )
@@ -172,7 +172,7 @@ impl AndroidPanel {
                 .child(
                     div()
                         .flex_none()
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .text_color(t.text_muted)
                         .child(format!("{} · {}", image.variant(), image.abi)),
                 )
@@ -221,7 +221,7 @@ impl AndroidPanel {
                     create.every_abi,
                     t,
                 )
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .on_click(cx.listener(|this, _, _, cx| {
                     if let Some(create) = &mut this.create {
                         create.every_abi = !create.every_abi;
@@ -273,7 +273,7 @@ impl AndroidPanel {
                         .bg(t.bg_app)
                         .p(px(10.))
                         .font_family(font_mono())
-                        .text_size(px(FS_XS))
+                        .text_size(px(fs_xs()))
                         .text_color(t.text_muted)
                         .children(license.lines().map(|line| {
                             div()
@@ -367,7 +367,7 @@ fn working(what: &'static str, t: &Theme) -> AnyElement {
         .flex()
         .items_center()
         .gap(px(8.))
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .text_color(t.text_muted)
         .child(spinner(14., t.text_muted))
         .child(what)

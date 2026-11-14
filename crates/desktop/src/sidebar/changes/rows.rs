@@ -6,7 +6,7 @@ use std::sync::Arc;
 use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
 use patchwork_server::workspace::FileChange;
 
-use crate::ui::theme::{FS_MD, FS_SM, radius_sm, Theme};
+use crate::ui::theme::{fs_md, fs_sm, radius_sm, Theme};
 use crate::ui::{base_name, button, dir_name, icon, tooltip};
 use crate::workspace::Workspace;
 use super::state::ChangesView;
@@ -75,7 +75,7 @@ pub(super) fn group_button(
         .rounded(px(radius_sm()))
         .px(px(6.))
         .py(px(2.))
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .text_color(t.text_subtle)
         .hover(move |s| s.bg(hover).text_color(fg))
         .child(lead)
@@ -101,7 +101,7 @@ pub(super) fn group_header(
             .items_center()
             .gap(px(4.))
             .px(px(4.))
-            .text_size(px(FS_MD))
+            .text_size(px(fs_md()))
             .child(div().flex_1().min_w_0().truncate().child(title))
             .children(actions)
             .child(
@@ -112,7 +112,7 @@ pub(super) fn group_header(
                     .px(px(6.))
                     .flex()
                     .justify_center()
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .line_height(px(18.))
                     .child(count.to_string()),
             ),
@@ -190,7 +190,7 @@ impl ChangesView {
                 .min_w_0()
                 .items_baseline()
                 .gap(px(6.))
-                .text_size(px(FS_MD))
+                .text_size(px(fs_md()))
                 .tooltip(tooltip(format!("{path} • {label}")))
                 .child(
                     div()
@@ -205,7 +205,7 @@ impl ChangesView {
                     div()
                         .min_w_0()
                         .truncate()
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .text_color(t.text_subtle)
                         .child(dir_name(&path).to_string()),
                 )
@@ -220,7 +220,7 @@ impl ChangesView {
                     .flex()
                     .flex_none()
                     .gap(px(4.))
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .child(
                         div()
                             .min_w(px(28.))
@@ -247,7 +247,7 @@ impl ChangesView {
                     .flex_none()
                     .flex()
                     .justify_center()
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(color)
                     .child(letter),

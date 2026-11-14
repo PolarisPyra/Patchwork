@@ -9,7 +9,7 @@ use patchwork_server::permissions::{
 use patchwork_server::projects::Project;
 use patchwork_server::system::new_id;
 use crate::settings::SettingsDialog;
-use crate::ui::theme::{FS_SM, Theme};
+use crate::ui::theme::{fs_sm, Theme};
 
 /// The kinds of request the pane offers rules for (`PERMISSION_KINDS`): its label and an example.
 pub(super) const PERMISSION_KINDS: [(PermissionKind, &str, &str); 1] =
@@ -129,7 +129,7 @@ pub(super) fn heading(text: &'static str, t: &Theme) -> Div {
     div()
         .mt(px(16.))
         .mb(px(2.))
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(t.text_muted)
         .child(text)

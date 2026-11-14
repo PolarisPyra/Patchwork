@@ -8,7 +8,7 @@ use gpui::{AnyElement, Div, FollowMode, Role, SharedString, Window, div, list, p
 use patchwork_server::orchestration::{Upkeep, upkeep};
 use patchwork_server::threads::{Message, MessageStatus, Part, Role as MessageRole, Thread};
 
-use crate::ui::theme::{FS_XS, Theme};
+use crate::ui::theme::{fs_xs, Theme};
 use crate::ui::{format_tokens, list_scrollbar, spinner};
 use crate::workspace::{Workspace, is_busy};
 
@@ -254,7 +254,7 @@ fn compacted_divider(
                 .w_full()
                 .items_center()
                 .gap(px(12.))
-                .text_size(px(FS_XS))
+                .text_size(px(fs_xs()))
                 .text_color(t.text_subtle)
                 .child(rule())
                 .child(label)
@@ -318,8 +318,7 @@ pub fn transcript(
                 .flex_col()
                 // The rail's strips reach 44px in from the edge when they widen.
                 .when(rail.is_some(), |d| d.pr(px(28.)))
-                .font_family(crate::ui::theme::chat_font(cx))
-                .text_size(px(crate::ui::theme::FS_MD * t.scale))
+                .text_size(px(crate::ui::theme::fs_md()))
                 .child(rows),
         )
         .child(crate::ui::selection::overlay(w.transcript_list.clone()))

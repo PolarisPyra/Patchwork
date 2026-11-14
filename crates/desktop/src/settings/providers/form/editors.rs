@@ -7,7 +7,7 @@ use patchwork_server::provider::api::config::Header;
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
-use crate::ui::theme::{font_mono, FS_SM, radius_sm, theme};
+use crate::ui::theme::{font_mono, fs_sm, radius_sm, theme};
 use crate::ui::{BtnKind, btn, button, icon, icon_button, spinner};
 use super::render::{label_text};
 use super::state::{Form};
@@ -139,7 +139,7 @@ impl SettingsDialog {
                     .pl(px(8.))
                     .pr(px(2.))
                     .font_family(font_mono())
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .child(id.clone())
                     .child(
                         button(
@@ -183,7 +183,7 @@ impl SettingsDialog {
                         .px(px(8.))
                         .py(px(4.))
                         .font_family(font_mono())
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .hover(move |s| s.bg(hover))
                         .child(
                             div()
@@ -251,7 +251,7 @@ impl SettingsDialog {
                                 div()
                                     .px(px(8.))
                                     .py(px(6.))
-                                    .text_size(px(FS_SM))
+                                    .text_size(px(fs_sm()))
                                     .text_color(muted)
                                     .child("No models"),
                             )

@@ -7,7 +7,7 @@ use super::steps::reply_step;
 use super::frame::head;
 use gpui::{Div, SharedString, div, prelude::*, px};
 use patchwork_server::threads::{Message, MessageStatus, Thread};
-use crate::ui::theme::{FS_MD, FS_XS, radius_sm, Theme};
+use crate::ui::theme::{fs_md, fs_xs, radius_sm, Theme};
 use crate::ui::{button, icon};
 use crate::workspace::Workspace;
 use crate::ui::markdown::{self, FindIn};
@@ -27,7 +27,7 @@ pub(super) fn action_button(
         .gap(px(4.))
         .rounded(px(radius_sm()))
         .px(px(6.))
-        .text_size(px(FS_XS))
+        .text_size(px(fs_xs()))
         .text_color(t.text_muted)
         .hover(move |s| s.bg(hover).text_color(fg))
         .child(icon(name, 13.))
@@ -158,7 +158,7 @@ pub(super) fn goal_cleared(
                 .min_h(px(24.))
                 .flex()
                 .gap(px(6.))
-                .text_size(px(FS_MD * t.scale))
+                .text_size(px(fs_md()))
                 .text_color(t.text_muted)
                 .child(
                     div()

@@ -11,7 +11,7 @@ use patchwork_server::system::ssh::{self, Host, Test};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
-use crate::ui::theme::{font_mono, FS_SM, FS_XS, radius_sm, theme};
+use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius_sm, theme};
 use crate::ui::{BtnKind, btn, icon, spinner};
 
 /// The add form's fields share this prefix, so closing it forgets them.
@@ -129,7 +129,7 @@ fn labeled(label: &'static str, field: gpui::Div, muted: gpui::Hsla) -> gpui::Di
         .gap(px(4.))
         .child(
             div()
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(muted)
                 .child(label),
@@ -299,7 +299,7 @@ pub fn render(
                             .id(SharedString::from(format!("ssh-line-{}", h.name)))
                             .when(result.is_some(), |d| d.role(gpui::Role::Status))
                             .truncate()
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .map(|d| {
                                 if failed {
                                     d.text_color(t.danger)
@@ -320,7 +320,7 @@ pub fn render(
                     .px(px(6.))
                     .rounded(px(radius_sm()))
                     .bg(color.opacity(0.14))
-                    .text_size(px(FS_XS))
+                    .text_size(px(fs_xs()))
                     .text_color(color)
                     .child(if r.ok { "Connected" } else { "Failed" })
             }))

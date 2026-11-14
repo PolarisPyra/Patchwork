@@ -5,7 +5,7 @@
 use std::ops::Range;
 use gpui::{Div, Role, SharedString, div, prelude::*, px};
 use patchwork_server::threads::{Message, MessageStatus, StepStatus};
-use crate::ui::theme::{font_mono, FS_MD, FS_SM, FS_XS, radius_sm, Theme};
+use crate::ui::theme::{font_mono, fs_md, fs_sm, fs_xs, radius_sm, Theme};
 use crate::ui::{button, icon, spinner};
 use crate::workspace::Workspace;
 use crate::ui::markdown::{self, FindIn, markdown, markdown_part};
@@ -86,7 +86,7 @@ pub(super) fn reply_step(
                 .flex()
                 .items_center()
                 .gap(px(12.))
-                .text_size(px(FS_XS))
+                .text_size(px(fs_xs()))
                 .text_color(t.text_subtle)
                 .child(div().h(px(1.)).flex_1().bg(t.border))
                 .child(if *running {
@@ -132,7 +132,7 @@ pub(super) fn entry_row(
             .bg(t.text_tint_8)
             .px(px(6.))
             .font_family(font_mono())
-            .text_size(px(FS_XS))
+            .text_size(px(fs_xs()))
             .line_height(px(18.))
             .text_color(color)
             .child(text)
@@ -183,7 +183,7 @@ pub(super) fn entry_row(
             .ml(px(28.))
             .mt(px(2.))
             .mb(px(4.))
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .text_color(t.text_muted)
             .child(markdown(text, format!("{key}-thinking"), cx))
             .into_any_element(),
@@ -199,7 +199,7 @@ pub(super) fn entry_row(
             .px(px(8.))
             .py(px(6.))
             .font_family(font_mono())
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .text_color(t.text_muted)
             .child(details_of(tool))
             .into_any_element(),
@@ -217,7 +217,7 @@ pub(super) fn entry_row(
                 .w_full()
                 .gap(px(6.))
                 .py(px(2.))
-                .text_size(px(FS_MD * t.scale))
+                .text_size(px(fs_md()))
                 .text_color(t.text_muted)
                 .hover(move |s| s.text_color(fg))
                 .child(

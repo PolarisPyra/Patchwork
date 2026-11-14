@@ -139,8 +139,6 @@ impl Server {
             system_backdrops,
             accent: look.accent.or(settings.accent),
             ui_font: named(&settings.ui_font),
-            code_font: named(&settings.code_font),
-            chat_font: named(&settings.chat_font),
             text_size: settings.text_size,
             density: settings.density,
             switch_in: clock.map(|(_, wait)| wait),

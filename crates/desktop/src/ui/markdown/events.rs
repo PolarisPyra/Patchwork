@@ -17,7 +17,7 @@ use gpui::{
     StyledText, UnderlineStyle, div, prelude::*, px, relative,
 };
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Tag, TagEnd};
-use crate::ui::theme::{font_mono, FS_LG, FS_MD, FS_SM, FS_XS, radius, radius_sm, Theme};
+use crate::ui::theme::{font_mono, fs_lg, fs_md, fs_sm, fs_xs, radius, radius_sm, Theme};
 use crate::ui::selection::{Selectable, selectable, text_id};
 use crate::ui::{button, icon};
 
@@ -308,7 +308,7 @@ impl Markdown<'_> {
                     let table = div()
                         .flex()
                         .flex_col()
-                        .text_size(px(FS_SM * t.scale))
+                        .text_size(px(fs_sm()))
                         .children(rows.into_iter().map(|cells| div().flex().children(cells)));
                     self.push(table, 8., 8.);
                 }
@@ -354,13 +354,13 @@ impl Markdown<'_> {
         let level = self.heading.take();
         let text = self.take_inline();
         let size = if level == Some(HeadingLevel::H1) {
-            FS_LG
+            fs_lg()
         } else {
-            FS_MD
+            fs_md()
         };
         self.push(
             div()
-                .text_size(px(size * self.t.scale))
+                .text_size(px(size))
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(text),
             12.,
@@ -428,7 +428,7 @@ impl Markdown<'_> {
                     .py(px(2.))
                     .pr(px(4.))
                     .pl(px(10.))
-                    .text_size(px(FS_XS))
+                    .text_size(px(fs_xs()))
                     .text_color(t.text_subtle)
                     .child(div().min_w_0().truncate().child(if lang.is_empty() {
                         "text".into()
@@ -452,7 +452,7 @@ impl Markdown<'_> {
                 div()
                     .px(px(12.))
                     .py(px(10.))
-                    .text_size(px(FS_SM * t.scale))
+                    .text_size(px(fs_sm()))
                     .line_height(relative(1.5))
                     .font_family(font_mono())
                     .child(text),

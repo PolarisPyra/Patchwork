@@ -9,7 +9,7 @@ use gpui::{AnyElement, FontWeight, SharedString, Window, div, prelude::*, px};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, letter_badge, token_row};
-use crate::ui::theme::{font_mono, FS_SM, FS_XS, theme};
+use crate::ui::theme::{font_mono, fs_sm, fs_xs, theme};
 use crate::ui::{BtnKind, btn, icon, icon_button};
 
 use crate::ui::sigils::{SigilKind, default_sigil};
@@ -255,7 +255,7 @@ pub fn render(
                                             .rounded(px(4.))
                                             .bg(t.bg_accent_soft)
                                             .px(px(6.))
-                                            .text_size(px(FS_XS))
+                                            .text_size(px(fs_xs()))
                                             .text_color(t.accent_text)
                                             .child("Primary"),
                                     )
@@ -264,7 +264,7 @@ pub fn render(
                         .child(
                             div()
                                 .truncate()
-                                .text_size(px(FS_SM))
+                                .text_size(px(fs_sm()))
                                 .text_color(t.text_muted)
                                 .child(agent.description.clone().unwrap_or_default()),
                         ),
@@ -275,7 +275,7 @@ pub fn render(
                         .max_w(px(180.))
                         .truncate()
                         .font_family(font_mono())
-                        .text_size(px(FS_XS))
+                        .text_size(px(fs_xs()))
                         .text_color(t.text_muted)
                         .child(model)
                 }))

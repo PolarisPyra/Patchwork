@@ -11,7 +11,7 @@ use patchwork_server::android::{self, Avd, Boot, Device, DeviceState};
 use super::state::{AndroidPanel, Busy, Confirm, Run, device_key};
 use super::tools::device_menu;
 use crate::ui::menu::{Menu, MenuItem};
-use crate::ui::theme::{FS_SM, radius, Theme, theme};
+use crate::ui::theme::{fs_sm, radius, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, icon_button, spinner, tooltip};
 
 /// A row that is one of several choices: a dot, filled when it is the one picked, then what its
@@ -69,7 +69,7 @@ fn status(
         .flex()
         .items_center()
         .gap(px(6.))
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .text_color(t.text_muted)
         .when(turning, |d| d.child(spinner(12., t.text_muted)))
         .child(text)
@@ -273,7 +273,7 @@ impl AndroidPanel {
                     .child(
                         div()
                             .truncate()
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .text_color(t.text_muted)
                             .child(facts),
                     ),
@@ -312,7 +312,7 @@ impl AndroidPanel {
                     .pl(px(28.))
                     .pr(px(8.))
                     .pb(px(6.))
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .child(div().flex_1().min_w_0().child(question))
                     .child(
                         btn(("avd-wipe-cancel", i), "Cancel", BtnKind::Plain, false, t)
@@ -397,7 +397,7 @@ impl AndroidPanel {
                     .child(
                         div()
                             .truncate()
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .text_color(t.text_muted)
                             .child(device.serial.clone()),
                     ),
@@ -423,7 +423,7 @@ impl AndroidPanel {
                         .pl(px(28.))
                         .pr(px(8.))
                         .pb(px(6.))
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .text_color(t.text_muted)
                         .child(problem),
                 )

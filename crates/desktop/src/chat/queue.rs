@@ -12,7 +12,7 @@ use gpui::{App, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, 
 use patchwork_server::threads::{Attachment, Message};
 
 use crate::chat::goal::strip_action;
-use crate::ui::theme::{FS_SM, FS_XS, radius_sm, Theme};
+use crate::ui::theme::{fs_sm, fs_xs, radius_sm, Theme};
 use crate::ui::{button, icon, scrollbar, tooltip};
 use crate::workspace::{Workspace, is_working};
 
@@ -327,7 +327,7 @@ fn queued_row(
     .px(px(6.))
     .rounded(px(radius_sm()))
     .border_1()
-    .text_size(px(FS_XS))
+    .text_size(px(fs_xs()))
     .text_color(t.accent_text)
     .child(icon("arrow-right", 13.))
     .child("Steer");
@@ -433,7 +433,7 @@ pub fn queued_strip(
         )
         .child(
             div()
-                .text_size(px(FS_XS))
+                .text_size(px(fs_xs()))
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(title),
         )
@@ -475,7 +475,7 @@ pub fn queued_strip(
             .border_1()
             .border_color(t.border_strong)
             .bg(t.bg_panel)
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .shadow_sm()
             .child(
                 div()

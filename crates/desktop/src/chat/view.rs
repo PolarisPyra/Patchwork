@@ -4,7 +4,7 @@
 
 use gpui::{Div, FontWeight, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_server::threads::{MessageStatus, Thread};
-use crate::ui::theme::{FS_SM, FS_XL, FS_XS, radius, radius_sm, Theme, theme};
+use crate::ui::theme::{fs_sm, fs_xl, fs_xs, radius, radius_sm, Theme, theme};
 use crate::ui::{agent_logo, button, display_title, format_tokens, icon, icon_button, tooltip};
 use crate::workspace::Workspace;
 use super::transcript::{sync_transcript, transcript};
@@ -170,7 +170,7 @@ pub(super) fn subagent_footer(
             .border_color(t.border)
             .px(px(24.))
             .py(px(10.))
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .text_color(t.text_muted)
             .children(back)
             .child(div().flex_none().child("Subagent of"))
@@ -208,7 +208,7 @@ pub(super) fn floating(
                 .border_1()
                 .border_color(t.border)
                 .bg(t.bg_panel)
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .shadow(vec![gpui::BoxShadow {
                     color: gpui::hsla(0., 0., 0., 0.12),
                     offset: gpui::point(px(0.), px(1.)),
@@ -305,7 +305,7 @@ pub(super) fn empty_chat(w: &Workspace, t: &Theme) -> Div {
         ))
         .child(
             div()
-                .text_size(px(FS_XL))
+                .text_size(px(fs_xl()))
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(match project {
                     Some(p) => format!("What should we build in {}?", p.name),
@@ -359,7 +359,7 @@ pub(crate) fn usage_line(thread: &Thread, warn_above: u64, t: &Theme) -> Div {
         .justify_end()
         .gap_x(px(12.))
         .pr(px(12.))
-        .text_size(px(FS_XS))
+        .text_size(px(fs_xs()))
         .line_height(px(16.));
     let Some(last) = thread.messages.iter().rev().find_map(|m| m.usage.as_ref()) else {
         return line.invisible().child("Context");

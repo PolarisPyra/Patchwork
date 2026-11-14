@@ -10,7 +10,7 @@ use gpui::{
 };
 use patchwork_server::projects::Project;
 use patchwork_server::threads::Thread;
-use crate::ui::theme::{FS_MD, radius_sm, theme};
+use crate::ui::theme::{fs_md, radius_sm, theme};
 use crate::ui::{button, icon, icon_button, scrollbar};
 use crate::workspace::Workspace;
 use super::render::{empty_row, section_label, twistie};
@@ -255,7 +255,7 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
                         .flex()
                         .items_center()
                         .pl(px(30.))
-                        .text_size(px(FS_MD))
+                        .text_size(px(fs_md()))
                         .text_color(t.text_muted)
                         .child("No tasks yet"),
                 );
@@ -277,7 +277,7 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
                         .flex_1()
                         .min_w_0()
                         .truncate()
-                        .text_size(px(FS_MD))
+                        .text_size(px(fs_md()))
                         .child(f.name.clone())
                         .into_any_element()
                 });

@@ -4,7 +4,7 @@
 
 use gpui::{Role, Window, div, prelude::*, px};
 use crate::ui::menu::Menu;
-use crate::ui::theme::{FS_SM, theme};
+use crate::ui::theme::{fs_sm, theme};
 use crate::ui::{icon_button, tooltip};
 use super::state::{Panel, PanelEvent, PanelTab};
 
@@ -108,7 +108,7 @@ impl Render for Panel {
                     .flex_none()
                     .px(px(12.))
                     .pb(px(4.))
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .text_color(t.danger)
                     .child(e)
             }))

@@ -7,7 +7,7 @@ use gpui::{EventEmitter, FontWeight, Role, SharedString, Window, div, prelude::*
 use patchwork_server::system::browse::{self, Machine};
 use patchwork_server::system::device::{self, Kind};
 
-use crate::ui::theme::{FS_MD, FS_SM, radius_sm, theme};
+use crate::ui::theme::{fs_md, fs_sm, radius_sm, theme};
 use crate::ui::{button, icon, icon_button, kind_icon, spinner};
 
 /// A device was picked: the SSH host's alias, or none for this computer.
@@ -97,7 +97,7 @@ impl Render for DevicesView {
             .justify_between()
             .pl(px(12.))
             .pr(px(8.))
-            .text_size(px(FS_MD))
+            .text_size(px(fs_md()))
             .font_weight(FontWeight::SEMIBOLD)
             .child("Devices")
             .child(
@@ -123,7 +123,7 @@ impl Render for DevicesView {
                     .mx(px(4.))
                     .px(px(8.))
                     .rounded(px(radius_sm()))
-                    .text_size(px(FS_MD))
+                    .text_size(px(fs_md()))
                     .text_color(fg)
                     .hover(move |s| s.bg(hover))
                     .child(
@@ -140,7 +140,7 @@ impl Render for DevicesView {
                         row.child(
                             div()
                                 .flex_none()
-                                .text_size(px(FS_SM))
+                                .text_size(px(fs_sm()))
                                 .text_color(t.text_subtle)
                                 .child("This computer"),
                         )
@@ -189,7 +189,7 @@ impl Render for DevicesView {
                                 .flex()
                                 .items_center()
                                 .gap(px(8.))
-                                .text_size(px(FS_MD))
+                                .text_size(px(fs_md()))
                                 .text_color(t.text_muted)
                                 .opacity(0.6)
                                 .child(

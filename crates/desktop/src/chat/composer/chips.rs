@@ -9,7 +9,7 @@ use gpui::{
     div, point, prelude::*, px,
 };
 use patchwork_server::threads::Thread;
-use crate::ui::theme::{FS_MD, radius, radius_sm, Theme};
+use crate::ui::theme::{fs_md, radius, radius_sm, Theme};
 use crate::ui::{above, button, icon};
 use super::menus::{Menu, Pick};
 use super::state::{Composer, Picks, offered};
@@ -210,7 +210,7 @@ pub(super) fn chip(
         .gap(px(4.))
         .rounded(px(radius_sm()))
         .px(px(6.))
-        .text_size(px(FS_MD))
+        .text_size(px(fs_md()))
         .font_weight(FontWeight::MEDIUM)
         .text_color(t.text_muted)
         .hover(move |s| s.bg(hover).text_color(fg))

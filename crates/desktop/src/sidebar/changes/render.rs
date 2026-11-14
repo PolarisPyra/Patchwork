@@ -11,7 +11,7 @@ use patchwork_server::workspace::FileChange;
 
 use crate::sidebar::graph;
 use crate::ui::menu::Menu;
-use crate::ui::theme::{FS_MD, FS_SM, radius_sm, Theme, theme};
+use crate::ui::theme::{fs_md, fs_sm, radius_sm, Theme, theme};
 use crate::ui::{button, icon, list_scrollbar, scrollbar, tooltip};
 use super::list::{Entry, Group};
 use super::rows::reply_files;
@@ -55,7 +55,7 @@ impl ChangesView {
                             .min_w_0()
                             .gap(px(4.))
                             .px(px(4.))
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(t.text)
                             .aria_expanded(open)
@@ -248,7 +248,7 @@ impl Render for ChangesView {
                     .items_center()
                     .justify_between()
                     .px(px(12.))
-                    .text_size(px(FS_MD))
+                    .text_size(px(fs_md()))
                     .font_weight(FontWeight::SEMIBOLD)
                     .child("Source Control")
                     .child(

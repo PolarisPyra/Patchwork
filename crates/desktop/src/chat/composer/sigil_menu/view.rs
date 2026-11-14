@@ -13,7 +13,7 @@ use patchwork_server::provider::{AgentKind, ProviderSlashCommand};
 use crate::chat::composer::Composer;
 use crate::chat::composer::menus::Roles;
 use crate::ui::sigils::{SigilKind, Sigils};
-use crate::ui::theme::{font_mono, FS_SM, radius, Theme};
+use crate::ui::theme::{font_mono, fs_sm, radius, Theme};
 use crate::ui::{button, icon, popup_shadow};
 
 impl Composer {
@@ -143,7 +143,7 @@ impl Composer {
             .on_click(cx.listener(move |this, _, window, cx| this.sigil_select(i, window, cx)));
             if kind == SigilKind::Files {
                 row.font_family(font_mono())
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .when(item.name.ends_with('/'), |r| {
                         r.child(div().flex_none().mr(px(6.)).child(icon("folder", 13.)))
                     })
@@ -155,7 +155,7 @@ impl Composer {
                     .child(
                         div()
                             .min_w_0()
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .text_color(t.text_muted)
                             .child(item.description.clone()),
                     )
@@ -184,7 +184,7 @@ impl Composer {
                     div()
                         .px(px(8.))
                         .py(px(6.))
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .text_color(t.text_muted)
                         .child(empty),
                 )

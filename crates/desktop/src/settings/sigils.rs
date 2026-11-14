@@ -7,7 +7,7 @@ use gpui::{AnyElement, KeyDownEvent, SharedString, div, prelude::*, px};
 
 use crate::settings::SettingsDialog;
 use crate::ui::sigils::{SIGIL_KINDS, Sigils, default_sigil, save};
-use crate::ui::theme::{FS_SM, radius_sm, Theme};
+use crate::ui::theme::{fs_sm, radius_sm, Theme};
 use crate::ui::{button, icon, tooltip};
 
 pub const SIGILS_PAGE: &str = "Sigils";
@@ -126,7 +126,7 @@ pub fn rows(
                                 if recording {
                                     b.child(
                                         div()
-                                            .text_size(px(FS_SM))
+                                            .text_size(px(fs_sm()))
                                             .text_color(t.accent_text)
                                             .child("Type a symbol…"),
                                     )
@@ -160,7 +160,7 @@ pub fn rows(
                             .role(gpui::Role::Alert)
                             .mt(px(2.))
                             .text_right()
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .text_color(t.danger)
                             .child(e)
                     }))

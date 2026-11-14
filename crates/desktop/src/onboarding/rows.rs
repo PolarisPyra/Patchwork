@@ -3,13 +3,13 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Stateful, Toggled, div, prelude::*, px};
-use crate::ui::theme::{FS_LG, FS_MD, FS_SM, radius, radius_sm, Theme};
+use crate::ui::theme::{fs_lg, fs_md, fs_sm, radius, radius_sm, Theme};
 use crate::ui::{icon, mix};
 
 /// A step's small heading.
 pub(super) fn heading(text: &'static str) -> Div {
     div()
-        .text_size(px(FS_MD))
+        .text_size(px(fs_md()))
         .font_weight(FontWeight::SEMIBOLD)
         .child(text)
 }
@@ -70,13 +70,13 @@ pub(super) fn choice_row(
                 .min_w_0()
                 .child(
                     div()
-                        .text_size(px(FS_LG))
+                        .text_size(px(fs_lg()))
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(name.to_string()),
                 )
                 .child(
                     div()
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .text_color(t.text_muted)
                         .child(detail),
                 ),

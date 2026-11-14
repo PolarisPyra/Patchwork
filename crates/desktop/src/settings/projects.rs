@@ -12,7 +12,7 @@ use patchwork_server::provider::AgentKind;
 use crate::settings::controls::{alert, section_heading, switch, token_row};
 use crate::settings::themes::project_look;
 use crate::settings::{SettingsDialog, SettingsEvent};
-use crate::ui::theme::{font_mono, FS_SM, FS_XS, theme};
+use crate::ui::theme::{font_mono, fs_sm, fs_xs, theme};
 use crate::ui::{AGENT_KINDS, BtnKind, agent_label, agent_logo, btn, icon_button, tooltip};
 
 #[derive(Default)]
@@ -177,7 +177,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                         div()
                             .truncate()
                             .font_family(font_mono())
-                            .text_size(px(FS_XS))
+                            .text_size(px(fs_xs()))
                             .text_color(t.text_muted)
                             .child(p.path.clone()),
                     ),
@@ -189,7 +189,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                         format!("Use the default checks setting in {}", p.name),
                     )
                     .whitespace_nowrap()
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .text_color(accent)
                     .hover(gpui::Styled::underline)
                     .child("Use the default")
@@ -207,7 +207,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             .children(look.take().into_iter().flatten())
             .child(
                 div()
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .text_color(t.text_muted)
                     .child("Checks"),
             )
@@ -274,12 +274,12 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                         .child(div().font_weight(FontWeight::SEMIBOLD).child(label))
                         .child(
                             div()
-                                .text_size(px(FS_SM))
+                                .text_size(px(fs_sm()))
                                 .text_color(t.text_muted)
                                 .child(desc),
                         )
                         .when(hidden > 0, |col| {
-                            col.child(div().text_size(px(FS_SM)).text_color(t.text_muted).child(
+                            col.child(div().text_size(px(fs_sm())).text_color(t.text_muted).child(
                                 format!(
                                     "{hidden} sub-agent {} hidden",
                                     if hidden == 1 {
@@ -321,7 +321,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 div()
                     .px(px(12.))
                     .py(px(8.))
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .text_color(t.text_subtle)
                     .child("No projects yet"),
             )

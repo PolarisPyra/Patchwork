@@ -11,7 +11,7 @@ use gpui::{
 };
 use patchwork_server::threads::{ApprovalStatus, MessageStatus, Role as MessageRole};
 
-use crate::ui::theme::{FS_MD, FS_SM, FS_XS, radius, radius_sm, Theme};
+use crate::ui::theme::{fs_md, fs_sm, fs_xs, radius, radius_sm, Theme};
 use crate::ui::button;
 use crate::workspace::{Workspace, is_working};
 
@@ -316,7 +316,7 @@ pub fn choice_panel(
         .rounded(px(radius_sm()))
         .px(px(10.))
         .py(px(6.))
-        .text_size(px(FS_MD))
+        .text_size(px(fs_md()))
         .text_color(t.text)
         .map(|r| {
             if active == Some(i) {
@@ -346,7 +346,7 @@ pub fn choice_panel(
                                 .flex_basis(px(0.))
                                 .min_w_0()
                                 .truncate()
-                                .text_size(px(FS_SM))
+                                .text_size(px(fs_sm()))
                                 .text_color(t.text_muted)
                                 .child(d.clone())
                         }),
@@ -384,7 +384,7 @@ pub fn choice_panel(
                 .px(px(10.))
                 .pt(px(4.))
                 .pb(px(6.))
-                .text_size(px(FS_MD))
+                .text_size(px(fs_md()))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(t.text)
                 .child(q)
@@ -417,7 +417,7 @@ fn kbd(n: usize, t: &Theme) -> Div {
         .rounded(px(4.))
         .bg(t.bg_selected_muted)
         .text_color(t.text_muted)
-        .text_size(px(FS_XS))
+        .text_size(px(fs_xs()))
         .font_weight(FontWeight::MEDIUM)
         .child(n.to_string())
 }

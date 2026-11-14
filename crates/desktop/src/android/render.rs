@@ -12,7 +12,7 @@ use patchwork_server::android::{self, Sdk};
 
 use super::state::AndroidPanel;
 use crate::ui::menu::Menu;
-use crate::ui::theme::{font_mono, FS_LG, FS_SM, FS_XS, radius, Theme, theme};
+use crate::ui::theme::{font_mono, fs_lg, fs_sm, fs_xs, radius, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, icon_button, input_box, scrollbar, spinner, tooltip};
 
 /// What dismissing an alert does.
@@ -138,7 +138,7 @@ impl AndroidPanel {
                         div()
                             .id("android-title")
                             .role(Role::Heading)
-                            .text_size(px(FS_LG))
+                            .text_size(px(fs_lg()))
                             .font_weight(FontWeight::SEMIBOLD)
                             .truncate()
                             .child("Android devices"),
@@ -146,7 +146,7 @@ impl AndroidPanel {
                     .child(
                         div()
                             .truncate()
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .text_color(t.text_muted)
                             .child(format!(
                                 "{} · {}",
@@ -331,7 +331,7 @@ impl AndroidPanel {
                 .border_color(t.border)
                 .py(px(8.))
                 .px(px(20.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
                 .child(body)
                 .into_any_element(),
@@ -395,7 +395,7 @@ impl AndroidPanel {
             .bg(t.danger_soft)
             .py(px(8.))
             .px(px(10.))
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .child(
                 div()
                     .flex()
@@ -449,7 +449,7 @@ impl AndroidPanel {
                                 .bg(t.bg_app)
                                 .p(px(8.))
                                 .font_family(font_mono())
-                                .text_size(px(FS_XS))
+                                .text_size(px(fs_xs()))
                                 .text_color(t.text_muted)
                                 .children(detail.lines().map(|line| {
                                     div()

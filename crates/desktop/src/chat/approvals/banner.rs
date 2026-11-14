@@ -9,7 +9,7 @@ use gpui::{
     Anchor, Div, FontWeight, MouseButton, Role, SharedString, anchored, deferred, div, point,
     prelude::*, px,
 };
-use crate::ui::theme::{font_mono, FS_SM, FS_XS, radius, radius_sm, theme};
+use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, theme};
 use crate::ui::{button, icon, popup};
 use crate::workspace::Workspace;
 
@@ -60,7 +60,7 @@ impl Workspace {
                 .justify_center()
                 .rounded(px(radius_sm()))
                 .border_1()
-                .text_size(px(crate::ui::theme::FS_MD))
+                .text_size(px(crate::ui::theme::fs_md()))
                 .child(label)
         };
         let (hover, accent_hover) = (t.bg_hover, t.accent_hover);
@@ -109,7 +109,7 @@ impl Workspace {
                                     .max_w(px(360.))
                                     .truncate()
                                     .font_family(font_mono())
-                                    .text_size(px(FS_XS))
+                                    .text_size(px(fs_xs()))
                                     .text_color(t.text_muted)
                                     .child(patterns.clone()),
                             )
@@ -199,7 +199,7 @@ impl Workspace {
                 .border_color(t.warning)
                 .bg(t.bg_panel)
                 .p(px(10.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .child(
                     div()
                         .flex()

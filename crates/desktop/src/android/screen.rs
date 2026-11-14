@@ -14,7 +14,7 @@ use gpui::{
 use patchwork_server::android::{ScreenFrame, ScreenInput, ScreenSender};
 use patchwork_server::{Error, Server};
 
-use crate::ui::theme::{FS_SM, theme};
+use crate::ui::theme::{fs_sm, theme};
 use crate::ui::{button, icon_button, spinner, tooltip};
 
 /// The frame around the screen, as wide on every side.
@@ -230,7 +230,7 @@ impl DeviceScreen {
                 .id("screen-error")
                 .role(Role::Alert)
                 .p(px(16.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(rgb(0xd0_d0_d6))
                 .child(e.to_string())
                 .into_any_element(),

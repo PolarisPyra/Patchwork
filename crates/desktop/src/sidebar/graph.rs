@@ -15,7 +15,7 @@ use patchwork_server::workspace::GitCommit;
 
 use super::changes::ChangesView;
 use crate::ui::menu::MenuItem;
-use crate::ui::theme::{FS_MD, FS_SM, radius_sm, Theme};
+use crate::ui::theme::{fs_md, fs_sm, radius_sm, Theme};
 use crate::ui::{agent_logo, button, mix, tooltip};
 
 /// Row height, lane width, and the radius of the bends where a lane shifts over.
@@ -335,7 +335,7 @@ pub fn section(
             .id("graph-error")
             .role(Role::Alert)
             .px(px(12.))
-            .text_size(px(FS_MD))
+            .text_size(px(fs_md()))
             .text_color(t.danger)
             .child(e.clone())
             .into_any_element();
@@ -344,7 +344,7 @@ pub fn section(
     if rows.is_empty() {
         return div()
             .px(px(12.))
-            .text_size(px(FS_MD))
+            .text_size(px(fs_md()))
             .text_color(t.text_muted)
             .child("No commits")
             .into_any_element();
@@ -468,7 +468,7 @@ pub fn section(
                 .max_w(px(120.))
                 .flex_none()
                 .truncate()
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(if head.is_some() { t.accent } else { row.color })
                 .child(match head {
@@ -496,7 +496,7 @@ pub fn section(
                     div()
                         .min_w_0()
                         .truncate()
-                        .text_size(px(FS_MD))
+                        .text_size(px(fs_md()))
                         .when(head.is_some(), |d| d.font_weight(FontWeight::SEMIBOLD))
                         .child(commit.subject.clone()),
                 )
@@ -505,7 +505,7 @@ pub fn section(
                         .flex_1()
                         .min_w_0()
                         .truncate()
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .text_color(t.text_subtle)
                         .child(commit.author.clone()),
                 )
@@ -533,7 +533,7 @@ pub fn section(
         list = list.child(
             div().h(px(ROW)).flex().items_center().px(px(12.)).child(
                 button("load-more", "Load more")
-                    .text_size(px(FS_MD))
+                    .text_size(px(fs_md()))
                     .text_color(t.accent_text)
                     .hover(gpui::Styled::underline)
                     .child("Load more")
@@ -545,7 +545,7 @@ pub fn section(
         div()
             .px(px(12.))
             .pb(px(4.))
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .text_color(t.danger)
             .child(e)
     });
