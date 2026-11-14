@@ -17,7 +17,7 @@ use patchwork_server::themes::{CodeTheme, SavedScene, Scheme, Theme, Unreadable}
 pub(super) use self::backdrops::backgrounds_pane;
 use self::cards::{Slot, add_card, grid, scheme_cards};
 use self::editor::{Editing, editor};
-use self::generator_pick::generator_chips;
+use self::generator_pick::generator_row;
 use self::interface::Fonts;
 pub(super) use self::interface::interface_pane;
 use self::look::{accent_row, schedule_rows};
@@ -280,7 +280,6 @@ fn generator(
     d.on_submit(kind.field(), move |d, _, cx| d.generate_themed(kind, cx));
     let writing = d.themes.writing[kind as usize].clone();
     let busy = writing.is_some();
-    let chips = generator_chips(d, kind.field(), noun, &t, cx);
     let describe = div().flex_1().min_w_0().child(describe);
     let generate = btn(
         SharedString::from(format!("generate-{}", kind.field())),
@@ -303,23 +302,14 @@ fn generator(
     .on_click(cx.listener(move |_, _, _, cx| {
         SettingsDialog::open_themed_folder(folder.clone(), cx);
     }));
-    // The description takes the row, and the chips go under it, before Generate.
     let row = div()
         .pb(px(10.))
         .flex()
-        .flex_col()
+        .items_center()
         .gap(px(8.))
-        .child(div().flex().child(describe))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(8.))
-                .children(chips)
-                .child(div().flex_1())
-                .child(generate)
-                .child(open_folder),
-        );
+        .child(describe)
+        .child(generate)
+        .child(open_folder);
     div()
         .flex()
         .flex_col()
@@ -430,6 +420,7 @@ pub fn render(
         window,
         cx,
     );
+    let generate_with = generator_row(d, &t, cx);
     let unreadable: Vec<_> = d
         .themes
         .unreadable
@@ -468,5 +459,6 @@ pub fn render(
         .child(accent)
         .child(code)
         .child(new_code)
+        .child(generate_with)
         .into_any_element()
 }

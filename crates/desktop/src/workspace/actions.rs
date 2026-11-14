@@ -147,10 +147,12 @@ impl Workspace {
     ) {
         use patchwork_server::orchestration::Target;
         let new = self.composer.read(cx).new_thread(None, &self.settings);
-        let new = match pick {
+        let mut new = match pick {
             Some(pick) => new.picked(pick, &self.settings),
             None => new,
         };
+        // The effort is the one picked in Settings, never the one left in the composer.
+        new.effort = pick.and_then(|pick| pick.effort.clone());
         let server = Arc::clone(&self.server);
         let sent = cx
             .background_spawn(async move { server.dispatch_to(&prompt, &Target::New(None), &new) });
