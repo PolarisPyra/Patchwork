@@ -3,6 +3,21 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.68] - 2026-11-14
+
+**26.11.68** · 1 change from 1 contributor
+
+- **Background sub agents.** Start a sub agent in the background and keep working until you need its answer
+
+<details>
+<summary>Full changelog</summary>
+
+### Fixed
+
+- In chats on an API provider's model, the agent stopped working while a sub agent it had started was running, and only carried on once the sub agent finished. It can now start a sub agent in the background, keep working, and collect the sub agent's answer when it needs it. by [PolarisPyra in #80](https://github.com/PolarisPyra/Patchwork/pull/80)
+
+</details>
+
 ## [26.11.67] - 2026-11-13
 
 **26.11.67** · 7 changes from 1 contributor
