@@ -2,9 +2,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::rc::Rc;
+
 use gpui::{
-    AnyElement, Div, FontWeight, Hsla, Role, SharedString, Stateful, Toggled, div, prelude::*, px,
-    rgb,
+    AnyElement, Div, FontWeight, Hsla, MouseButton, MouseDownEvent, Role, SharedString, Stateful,
+    Toggled, WeakEntity, div, prelude::*, px, rgb,
 };
 use patchwork_server::settings::{Settings, Theme as ThemeSetting};
 use patchwork_server::themes::{Palette, Scheme};
@@ -12,6 +14,7 @@ use patchwork_server::themes::{Palette, Scheme};
 use super::files::{Filed, file_tools};
 use crate::settings::SettingsDialog;
 use crate::ui::theme::{fs_lg, fs_sm, Theme as Colors, radius, radius_sm, theme};
+use crate::ui::menu::MenuItem;
 use crate::ui::{button, focus_ring, icon, icon_button, tooltip};
 
 /// The color schemes that are not files, in the order their cards come: the id each has in
@@ -137,29 +140,72 @@ fn palette_swatch(palette: &Colors) -> Div {
     )
 }
 
-/// A small button on a card, beside its name.
-pub(super) fn tool(
+/// What a tool does to the dialog.
+type Act = Rc<dyn Fn(&mut SettingsDialog, &mut Context<SettingsDialog>)>;
+
+/// Something done to a card's file: a small button beside the card's name, and a row of the
+/// menu a right click on the card opens.
+pub(super) struct Tool {
     key: String,
+    /// The button's name, which says whose file it is: "Delete Koi pond".
     label: String,
+    /// The menu row's name: "Delete".
+    title: &'static str,
     icon: &'static str,
-    act: impl Fn(&mut SettingsDialog, &mut Context<SettingsDialog>) + 'static,
-    cx: &mut Context<SettingsDialog>,
-) -> AnyElement {
-    icon_button(SharedString::from(key), label, icon, 14., cx)
-        .size(px(22.))
-        .flex_none()
-        .on_click(cx.listener(move |d, _, _, cx| {
-            cx.stop_propagation();
-            act(d, cx);
-        }))
-        .into_any_element()
+    act: Act,
 }
+
+impl Tool {
+    pub(super) fn new(
+        key: String,
+        (title, label): (&'static str, String),
+        icon: &'static str,
+        act: impl Fn(&mut SettingsDialog, &mut Context<SettingsDialog>) + 'static,
+    ) -> Self {
+        Self {
+            key,
+            label,
+            title,
+            icon,
+            act: Rc::new(act),
+        }
+    }
+
+    fn button(&self, cx: &mut Context<SettingsDialog>) -> AnyElement {
+        let act = Rc::clone(&self.act);
+        let key = SharedString::from(self.key.clone());
+        icon_button(key, self.label.clone(), self.icon, 14., cx)
+            .size(px(22.))
+            .flex_none()
+            .on_click(cx.listener(move |d, _, _, cx| {
+                cx.stop_propagation();
+                act(d, cx);
+            }))
+            .into_any_element()
+    }
+
+    fn menu_item(&self, dialog: &WeakEntity<SettingsDialog>) -> MenuItem {
+        let (act, dialog) = (Rc::clone(&self.act), dialog.clone());
+        let item = MenuItem::new(self.title, move |_, cx| {
+            let _ = dialog.update(cx, |d, cx| act(d, cx));
+        })
+        .icon(self.icon);
+        if self.title == DELETE {
+            item.danger().separated()
+        } else {
+            item
+        }
+    }
+}
+
+/// The name of the menu row that deletes a card's file.
+pub(super) const DELETE: &str = "Delete";
 
 /// What a card shows beside its name: what is wrong with it, and its buttons.
 #[derive(Default)]
 pub(super) struct Extras<'a> {
     pub(super) notes: &'a [String],
-    pub(super) tools: Vec<AnyElement>,
+    pub(super) tools: Vec<Tool>,
 }
 
 /// A card to pick in one of the grids: a picture over a name.
@@ -175,6 +221,23 @@ pub(super) fn card(
     let t = *theme(cx);
     let name: SharedString = name.into();
     let Extras { notes, tools } = extras;
+    let buttons: Vec<AnyElement> = tools.iter().map(|tool| tool.button(cx)).collect();
+    let menu = (!tools.is_empty()).then(|| {
+        let (menu_key, title) = (format!("menu-{key}"), name.clone());
+        cx.listener(move |d, e: &MouseDownEvent, window, cx| {
+            cx.stop_propagation();
+            let dialog = cx.entity().downgrade();
+            let items = tools.iter().map(|tool| tool.menu_item(&dialog)).collect();
+            d.toggle_menu(
+                menu_key.clone(),
+                title.clone(),
+                items,
+                e.position,
+                window,
+                cx,
+            );
+        })
+    });
     let warning = (!notes.is_empty()).then(|| {
         let notes = notes.join(". ");
         div()
@@ -234,9 +297,12 @@ pub(super) fn card(
                 .text_size(px(fs_sm()))
                 .child(div().flex_1().min_w_0().truncate().child(name))
                 .children(warning)
-                .children(tools),
+                .children(buttons),
         )
         .on_click(cx.listener(move |d, _, _, cx| pick(d, cx)))
+        .when_some(menu, |card, menu| {
+            card.on_mouse_down(MouseButton::Right, menu)
+        })
         .into_any_element()
 }
 
@@ -316,29 +382,27 @@ pub(super) fn scheme_cards(
         let key = format!("scheme-{}-{id}", slot.key());
         let name = scheme.file.name.clone();
         let mut tools = vec![
-            tool(
+            Tool::new(
                 format!("edit-{key}"),
-                format!("Edit {name}"),
+                ("Edit", format!("Edit {name}")),
                 "pencil-simple",
                 {
                     let id = id.clone();
                     move |d, cx| d.edit_theme(&id, cx)
                 },
-                cx,
             ),
-            tool(
+            Tool::new(
                 format!("export-{key}"),
-                format!("Export {name}"),
+                ("Export", format!("Export {name}")),
                 "export",
                 {
                     let id = id.clone();
                     move |d, cx| d.export_theme(id.clone(), cx)
                 },
-                cx,
             ),
         ];
         let state = (scheme.custom, scheme.edited);
-        tools.extend(file_tools(&key, &name, Filed::Scheme, &id, state, cx));
+        tools.extend(file_tools(&key, &name, Filed::Scheme, &id, state));
         // It brings the background it names to the windows it is picked for.
         let backdrop = scheme.file.backdrop_choice();
         cards.push(card(

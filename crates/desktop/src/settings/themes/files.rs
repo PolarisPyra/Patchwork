@@ -5,9 +5,9 @@
 
 use std::sync::Arc;
 
-use gpui::{AnyElement, prelude::*};
+use gpui::prelude::*;
 
-use super::cards::tool;
+use super::cards::{DELETE, Tool};
 use crate::settings::SettingsDialog;
 
 /// The kinds of file a card stands for.
@@ -71,7 +71,7 @@ impl SettingsDialog {
     }
 }
 
-/// The buttons on the card of a file: Delete on one that was added, and Reset on one Patchwork
+/// The buttons and menu rows on the card of a file: Delete on one that was added, and Reset on one Patchwork
 /// comes with that was changed.
 pub(super) fn file_tools(
     key: &str,
@@ -79,27 +79,24 @@ pub(super) fn file_tools(
     kind: Filed,
     id: &str,
     (custom, edited): (bool, bool),
-    cx: &mut Context<SettingsDialog>,
-) -> Vec<AnyElement> {
+) -> Vec<Tool> {
     let mut tools = Vec::new();
     if edited {
         let id = id.to_string();
-        tools.push(tool(
+        tools.push(Tool::new(
             format!("reset-{key}"),
-            format!("Reset {name} to built-in"),
+            ("Reset to built-in", format!("Reset {name} to built-in")),
             "arrow-counter-clockwise",
             move |d, cx| d.reset_themed(kind, id.clone(), cx),
-            cx,
         ));
     }
     if custom {
         let id = id.to_string();
-        tools.push(tool(
+        tools.push(Tool::new(
             format!("delete-{key}"),
-            format!("Delete {name}"),
+            (DELETE, format!("Delete {name}")),
             "trash",
             move |d, cx| d.remove_themed(kind, id.clone(), cx),
-            cx,
         ));
     }
     tools

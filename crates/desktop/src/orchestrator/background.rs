@@ -448,3 +448,8 @@ pub struct PreviewFlight(Rc<RefCell<Flight>>);
 pub fn butterfly_preview(flight: &PreviewFlight, still: bool) -> impl IntoElement + use<> {
     field(no_pill, still, Rc::clone(&flight.0), Some(PREVIEW_PAGE))
 }
+
+/// The butterfly's backdrop at its full size, filling its parent, as a chat shows it.
+pub fn butterfly_backdrop(flight: &PreviewFlight, still: bool) -> impl IntoElement + use<> {
+    field(no_pill, still, Rc::clone(&flight.0), None)
+}

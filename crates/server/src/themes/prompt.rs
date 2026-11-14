@@ -3,9 +3,13 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::path::Path;
+
 use super::library::{CODE, SCENES, THEMES};
 use super::types::Scheme;
 use crate::Server;
+use crate::logging::THEME_LOG;
+use crate::settings::LogLevel;
 
 /// A color scheme's file format, as the agent is told it.
 const THEME_FORMAT: &str = r##"A color scheme is one JSON file:
@@ -121,6 +125,7 @@ impl Server {
         let id = THEMES.free_id(description);
         let path = THEMES.path(&id);
         make_dir(&THEMES.dir());
+        asked(THEMES.noun, &id, &path);
         let prompt = format!(
             "Write a Patchwork color scheme: {description}\n\nSave it as {} and write nothing \
              else. Read the file back and check it is valid JSON before you finish.\n\n\
@@ -137,6 +142,7 @@ impl Server {
         let id = SCENES.free_id(description);
         let path = SCENES.path(&id);
         make_dir(&SCENES.dir());
+        asked(SCENES.noun, &id, &path);
         let prompt = format!(
             "Write a Patchwork animated background: {description}\n\nSave it as {} and write \
              nothing else. Read the file back and check it is valid JSON before you finish.\n\n\
@@ -155,6 +161,7 @@ impl Server {
         let id = CODE.free_id(description);
         let path = CODE.path(&id);
         make_dir(&CODE.dir());
+        asked(CODE.noun, &id, &path);
         let (kind, ground) = match scheme {
             Scheme::Light => ("light", "a near-white background"),
             Scheme::Dark => ("dark", "a near-black background"),
@@ -171,8 +178,19 @@ impl Server {
 }
 
 /// Makes the folder an agent is about to write a file into.
-fn make_dir(dir: &std::path::Path) {
+fn make_dir(dir: &Path) {
     if let Err(e) = std::fs::create_dir_all(dir) {
-        log::warn!(error:% = e; "could not make {}: {{error}}", dir.display());
+        THEME_LOG.text(
+            LogLevel::Error,
+            format!("could not make {}: {e}", dir.display()),
+        );
     }
+}
+
+/// Records that a chat is asked to write the file at `path`.
+fn asked(noun: &str, id: &str, path: &Path) {
+    THEME_LOG.text(
+        LogLevel::Info,
+        format!("a chat is asked to write {noun} {id} to {}", path.display()),
+    );
 }

@@ -25,7 +25,7 @@ pub(crate) const LOG_LEVELS: [(LogLevel, &str); 6] = [
 
 /// The log files Patchwork writes: their title, what each holds, and its field of the settings.
 type LogField = fn(&mut LoggingSettings) -> &mut LogLevel;
-const LOGS: [(&str, &str, LogField); 5] = [
+const LOGS: [(&str, &str, LogField); 6] = [
     ("Main", "Patchwork's own messages, in main.log", |l| {
         &mut l.app
     }),
@@ -40,6 +40,11 @@ const LOGS: [(&str, &str, LogField); 5] = [
     ("Imports", "Each scan and import, in imports.log", |l| {
         &mut l.imports
     }),
+    (
+        "Themes",
+        "Each theme and background change, in themes.log",
+        |l| &mut l.themes,
+    ),
     (
         "Chats",
         "Each chat with a warning or error, in chat-<id>.log",

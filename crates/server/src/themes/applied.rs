@@ -7,8 +7,9 @@ use serde::{Deserialize, Serialize};
 
 use super::library::{SCENES, palette, syntax};
 use super::schedule::dark_now;
-use super::types::{Applied, Backdrop, BackdropChoice, Color, Fit, Paint, Palette, Scheme, Shown};
+use super::types::{Applied, Backdrop, BackdropChoice, Color, Paint, Palette, Scheme, Shown};
 use crate::Server;
+use crate::backgrounds::{ChatBackground, preset_scheme};
 use crate::settings::{Settings, Theme as ThemeSetting};
 
 /// How much room rows and their padding take.
@@ -152,33 +153,18 @@ impl Server {
             BackdropChoice::None => (Shown::None, None),
             // The butterfly is drawn on its own night sky, whatever the colors.
             BackdropChoice::Butterfly => (Shown::Butterfly, Some(Scheme::Dark)),
-            BackdropChoice::Image {
-                file,
-                dim,
-                fit,
-                blur,
-            } => {
+            BackdropChoice::Image { file } => {
                 let path = self.backgrounds_dir.join(file);
                 // Only a file of the folder itself, which still exists.
                 let inside = !file.contains(['/', '\\']) && path.is_file();
                 let shown = if inside {
-                    let size = (*fit == Fit::Tile)
-                        .then(|| image::image_dimensions(&path).ok())
-                        .flatten();
-                    let soft = (*blur > 0)
-                        .then(|| self.blurred_background(file, *blur))
-                        .flatten();
-                    Shown::Image {
-                        path: soft.unwrap_or(path),
-                        dim: dim.share(),
-                        fit: *fit,
-                        size,
-                    }
+                    Shown::Image { path }
                 } else {
                     Shown::None
                 };
                 (shown, None)
             }
+            BackdropChoice::Preset { id } => (Shown::Preset(id.clone()), preset_scheme(id)),
             BackdropChoice::Scene { id } => SCENES.load(id).map_or((Shown::None, None), |saved| {
                 (Shown::Scene(saved.file.scene), Some(saved.file.scheme))
             }),
@@ -206,6 +192,9 @@ impl Settings {
     /// Stops showing the animated background `id`, which was deleted.
     pub fn drop_scene(&mut self, id: &str) {
         let gone = BackdropChoice::Scene { id: id.to_string() };
+        if matches!(&self.chat_background, ChatBackground::Scene { id: shown } if shown == id) {
+            self.chat_background = ChatBackground::None;
+        }
         if self.orchestrator_backdrop == gone {
             self.orchestrator_backdrop = BackdropChoice::default();
         }
@@ -216,6 +205,44 @@ impl Settings {
             if slot.as_ref() == Some(&gone) {
                 *slot = None;
             }
+        }
+    }
+
+    /// Stops showing the picture `file` behind the Orchestrator page. Returns which of the
+    /// three backgrounds showed it: the one every window shows, light windows' and dark ones'.
+    pub(crate) fn drop_picture(&mut self, file: &str) -> [bool; 3] {
+        let shown = |choice: &BackdropChoice| choice.picture_file() == Some(file);
+        let was = [
+            shown(&self.orchestrator_backdrop),
+            self.system_light_backdrop.as_ref().is_some_and(shown),
+            self.system_dark_backdrop.as_ref().is_some_and(shown),
+        ];
+        if was[0] {
+            self.orchestrator_backdrop = BackdropChoice::default();
+        }
+        if was[1] {
+            self.system_light_backdrop = None;
+        }
+        if was[2] {
+            self.system_dark_backdrop = None;
+        }
+        was
+    }
+
+    /// Shows the picture `file` behind the Orchestrator page wherever `was` says
+    /// [`Self::drop_picture`] took it from, unless another background was picked there since.
+    pub(crate) fn return_picture(&mut self, file: &str, was: [bool; 3]) {
+        let picture = BackdropChoice::Image {
+            file: file.to_owned(),
+        };
+        if was[0] && self.orchestrator_backdrop == BackdropChoice::default() {
+            self.orchestrator_backdrop = picture.clone();
+        }
+        if was[1] && self.system_light_backdrop.is_none() {
+            self.system_light_backdrop = Some(picture.clone());
+        }
+        if was[2] && self.system_dark_backdrop.is_none() {
+            self.system_dark_backdrop = Some(picture);
         }
     }
 

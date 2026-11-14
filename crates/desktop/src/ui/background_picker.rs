@@ -1,5 +1,6 @@
 //! The background picker, shared by Settings → General and a
-//! chat's own background dialog: the default, the presets, and the pictures picked from disk,
+//! chat's own background dialog: the default, the presets, the butterfly and the animated
+//! backgrounds, and the pictures picked from disk,
 //! each removable with a short while to take it back.
 
 // Rust guideline compliant 2026-10-09
@@ -9,14 +10,19 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, ClipboardEntry, EventEmitter, FocusHandle, FontWeight, KeyDownEvent, ObjectFit,
-    Role, SharedString, Toggled, Window, div, img, prelude::*, px, relative,
+    AnyElement, ClipboardEntry, Entity, EventEmitter, FocusHandle, FontWeight, KeyDownEvent,
+    MouseButton, MouseDownEvent, ObjectFit, Pixels, Point, Role, SharedString, Toggled, Window,
+    div, img, prelude::*, px, relative,
 };
 use patchwork_server::Server;
 use patchwork_server::backgrounds::{BackgroundImage, ChatBackground, RemovedBackground};
 
+use patchwork_server::themes::SavedScene;
+
+use crate::orchestrator::{PreviewFlight, butterfly_preview, scene_preview};
 use crate::ui::backdrop::{PRESETS, preset_fill};
-use crate::ui::theme::{fs_sm, radius_sm, Theme, theme};
+use crate::ui::menu::{Menu, MenuItem};
+use crate::ui::theme::{applied, fs_sm, radius_sm, Theme, theme};
 use crate::ui::{button, focus_ring, icon, spinner, tooltip};
 
 /// How long a deleted picture can be brought back from the picker.
@@ -47,12 +53,19 @@ pub struct BackgroundPicker {
     /// The background all chats share, shown on the first choice when it picks None.
     shared: Option<ChatBackground>,
     images: Option<Vec<BackgroundImage>>,
+    /// The animated backgrounds, read with the pictures.
+    scenes: Vec<Arc<SavedScene>>,
+    /// Where the butterfly on its choice is, kept between frames.
+    flight: PreviewFlight,
     importing: bool,
     /// The picture just removed, by name, with what takes it back.
     undo: Option<(String, RemovedBackground)>,
     error: Option<String>,
     /// One per choice, in order, for the arrow keys to move the focus along.
     radios: Vec<FocusHandle>,
+    /// The menu a right click or the menu key opened on a picture, where it opened, and the
+    /// picture's place among the choices, which takes the focus when the menu closes.
+    menu: Option<(Entity<Menu>, Point<Pixels>, usize)>,
 }
 
 impl EventEmitter<PickerEvent> for BackgroundPicker {}
@@ -78,10 +91,13 @@ impl BackgroundPicker {
             cleared,
             shared,
             images: None,
+            scenes: Vec::new(),
+            flight: PreviewFlight::default(),
             importing: false,
             undo: None,
             error: None,
             radios: Vec::new(),
+            menu: None,
         };
         this.load_images(cx);
         this
@@ -102,10 +118,14 @@ impl BackgroundPicker {
 
     fn load_images(&mut self, cx: &mut Context<Self>) {
         let server = Arc::clone(&self.server);
-        let task = cx.background_spawn(async move { server.list_background_images() });
+        let task =
+            cx.background_spawn(
+                async move { (server.list_background_images(), server.list_scenes()) },
+            );
         cx.spawn(async move |this, cx| {
-            let images = task.await;
+            let (images, scenes) = task.await;
             let _ = this.update(cx, |p, cx| {
+                p.scenes = scenes.into_iter().map(Arc::new).collect();
                 match images {
                     Ok(images) => p.images = Some(images),
                     Err(e) => p.error = Some(e.to_string()),
@@ -221,13 +241,20 @@ impl BackgroundPicker {
         .detach();
     }
 
-    /// What each choice picks, in order: the first choice, the presets, then the pictures.
+    /// What each choice picks, in order: the first choice, the presets, the butterfly, the
+    /// animated backgrounds, then the pictures.
     fn choices(&self) -> Vec<Option<ChatBackground>> {
         std::iter::once(self.cleared.clone())
             .chain(
                 PRESETS
                     .iter()
                     .map(|&(id, _)| Some(ChatBackground::Preset { id: id.to_string() })),
+            )
+            .chain(std::iter::once(Some(ChatBackground::Butterfly)))
+            .chain(
+                self.scenes
+                    .iter()
+                    .map(|s| Some(ChatBackground::Scene { id: s.id.clone() })),
             )
             .chain(self.images.iter().flatten().map(|i| {
                 Some(ChatBackground::Image {
@@ -280,7 +307,7 @@ impl BackgroundPicker {
 
     /// Deletes a picture, and moves whatever showed it back to its default, for a while
     /// offering to take that back.
-    fn remove_picture(&mut self, file: &str, name: String, cx: &mut Context<Self>) {
+    pub fn remove_picture(&mut self, file: &str, name: String, cx: &mut Context<Self>) {
         self.error = None;
         match self.server.remove_background_image(file) {
             Ok(removed) => {
@@ -300,6 +327,41 @@ impl BackgroundPicker {
             }
             Err(e) => self.error = Some(e.to_string()),
         }
+        cx.notify();
+    }
+
+    /// Opens the menu of the picture at `at` among the choices: its one row deletes it.
+    fn open_menu(
+        &mut self,
+        (at, file, name): (usize, String, String),
+        position: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let picker = cx.entity().downgrade();
+        let removed = name.clone();
+        let delete = MenuItem::new("Delete", move |_, cx| {
+            let _ = picker.update(cx, |p, cx| p.remove_picture(&file, removed.clone(), cx));
+        })
+        .icon("trash")
+        .danger();
+        let menu = Menu::open_for(
+            name,
+            vec![delete],
+            window,
+            cx,
+            |p: &mut Self, window, cx| {
+                // The picture may be gone, and then the choice now in its place takes the focus.
+                if let Some((_, _, at)) = p.menu.take() {
+                    let focus = p.radios.get(at).or_else(|| p.radios.first());
+                    if let Some(focus) = focus {
+                        window.focus(focus, cx);
+                    }
+                }
+                cx.notify();
+            },
+        );
+        self.menu = Some((menu, position, at));
         cx.notify();
     }
 
@@ -461,6 +523,43 @@ impl Render for BackgroundPicker {
                 p.pick(Some(ChatBackground::Preset { id: id.to_string() }), cx);
             }))
         });
+        let still = applied(cx).reduce_motion;
+        let butterfly = swatch(
+            "background-butterfly".into(),
+            "Butterfly".into(),
+            value == Some(ChatBackground::Butterfly),
+            &radios[1 + PRESETS.len()],
+            &t,
+        )
+        .child(
+            div()
+                .absolute()
+                .inset_0()
+                .child(butterfly_preview(&self.flight, still)),
+        )
+        .on_click(cx.listener(|p, _, _, cx| p.pick(Some(ChatBackground::Butterfly), cx)));
+        let first_scene = 2 + PRESETS.len();
+        let scenes = self.scenes.iter().enumerate().map(|(n, saved)| {
+            let id = saved.id.clone();
+            let checked = matches!(&value, Some(ChatBackground::Scene { id: s }) if *s == id);
+            swatch(
+                SharedString::from(format!("background-scene-{id}")),
+                saved.file.name.clone().into(),
+                checked,
+                &radios[first_scene + n],
+                &t,
+            )
+            .child(div().absolute().inset_0().child(scene_preview(
+                Arc::clone(saved),
+                t.bg_editor,
+                t.text_muted,
+                still,
+            )))
+            .on_click(cx.listener(move |p, _, _, cx| {
+                p.pick(Some(ChatBackground::Scene { id: id.clone() }), cx);
+            }))
+        });
+        let first_picture = first_scene + self.scenes.len();
         let images = self.images.iter().flatten().enumerate().map(|(i, image)| {
             let name = image
                 .name
@@ -471,27 +570,37 @@ impl Render for BackgroundPicker {
             let (pick, remove) = (image.file.clone(), image.file.clone());
             let group = SharedString::from(format!("picture-{i}"));
             let removed_name = name.clone();
+            let at = first_picture + i;
+            let clicked = (at, image.file.clone(), name.clone());
+            let keyed = (image.file.clone(), name.clone());
             div()
                 .group(group.clone())
                 .relative()
                 .child(
-                    swatch(
-                        group.clone(),
-                        name.clone().into(),
-                        checked,
-                        &radios[1 + PRESETS.len() + i],
-                        &t,
-                    )
-                    .child(
-                        img(PathBuf::from(&image.path))
-                            .absolute()
-                            .inset_0()
-                            .size_full()
-                            .object_fit(ObjectFit::Cover),
-                    )
-                    .on_click(cx.listener(move |p, _, _, cx| {
-                        p.pick(Some(ChatBackground::Image { file: pick.clone() }), cx);
-                    })),
+                    swatch(group.clone(), name.clone().into(), checked, &radios[at], &t)
+                        .on_mouse_down(
+                            MouseButton::Right,
+                            cx.listener(move |p, e: &MouseDownEvent, window, cx| {
+                                cx.stop_propagation();
+                                p.open_menu(clicked.clone(), e.position, window, cx);
+                            }),
+                        )
+                        .on_key_down(cx.listener(move |p, e: &KeyDownEvent, _, cx| {
+                            if e.keystroke.key == "delete" {
+                                cx.stop_propagation();
+                                p.remove_picture(&keyed.0, keyed.1.clone(), cx);
+                            }
+                        }))
+                        .child(
+                            img(PathBuf::from(&image.path))
+                                .absolute()
+                                .inset_0()
+                                .size_full()
+                                .object_fit(ObjectFit::Cover),
+                        )
+                        .on_click(cx.listener(move |p, _, _, cx| {
+                            p.pick(Some(ChatBackground::Image { file: pick.clone() }), cx);
+                        })),
                 )
                 .child(
                     button(
@@ -532,6 +641,8 @@ impl Render for BackgroundPicker {
                     .gap(px(8.))
                     .child(clear)
                     .children(presets)
+                    .child(butterfly)
+                    .children(scenes)
                     .children(images)
                     .when(importing, |g| {
                         g.child(
@@ -599,6 +710,11 @@ impl Render for BackgroundPicker {
                     .text_color(t.danger)
                     .child(e)
             }))
+            .children(
+                self.menu
+                    .as_ref()
+                    .map(|(menu, at, _)| Menu::view(menu, *at)),
+            )
             .line_height(relative(1.5))
     }
 }

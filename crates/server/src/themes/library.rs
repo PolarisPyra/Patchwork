@@ -13,12 +13,14 @@ use sha2::{Digest, Sha256};
 use super::code::{CodeTheme, CodeThemeFile, Syntax};
 use super::contrast;
 use super::types::{Entry, Palette, SavedScene, SceneFile, Scheme, Theme, ThemeFile, Unreadable};
+use crate::logging::THEME_LOG;
+use crate::settings::LogLevel;
 use crate::{Error, Server};
 
 /// One kind of file that can be picked: its folder, and the files Patchwork comes with.
 pub(super) struct Shelf<T> {
     /// What one of its files is called in a message.
-    noun: &'static str,
+    pub(super) noun: &'static str,
     /// The folder's name in Patchwork's configuration folder.
     folder: &'static str,
     /// The id of each file Patchwork comes with, and its text.
@@ -243,7 +245,10 @@ impl<T: DeserializeOwned + Serialize + PartialEq> Shelf<T> {
                     return Some(self.entry(id, preset.is_none(), edited, file));
                 }
                 Err(e) => {
-                    log::warn!(id, noun, error:% = e; "{{noun}} {{id}} cannot be read: {{error}}");
+                    THEME_LOG.text(
+                        LogLevel::Warning,
+                        format!("{noun} {id} cannot be read: {e}"),
+                    );
                 }
             }
         }
@@ -296,9 +301,10 @@ impl<T: DeserializeOwned + Serialize + PartialEq> Shelf<T> {
         let noun = self.noun;
         let id = self.free_id(name);
         let text = serde_json::to_string_pretty(file).map_err(|e| e.to_string())?;
-        std::fs::create_dir_all(self.dir())
+        let saved = std::fs::create_dir_all(self.dir())
             .and_then(|()| std::fs::write(self.path(&id), text))
-            .map_err(|e| format!("couldn't save the {noun}: {e}"))?;
+            .map_err(|e| format!("couldn't save the {noun}: {e}"));
+        THEME_LOG.outcome(&format!("add {noun} {id}"), saved)?;
         Ok(id)
     }
 
@@ -320,10 +326,12 @@ impl<T: DeserializeOwned + Serialize + PartialEq> Shelf<T> {
 
     fn remove(&self, id: &str) -> Result<(), Error> {
         let noun = self.noun;
-        if !is_id(id) {
-            return Err(format!("{id} is not a {noun}").into());
-        }
-        std::fs::remove_file(self.path(id)).map_err(|e| format!("couldn't delete {id}: {e}"))?;
+        let removed = if is_id(id) {
+            std::fs::remove_file(self.path(id)).map_err(|e| format!("couldn't delete {id}: {e}"))
+        } else {
+            Err(format!("{id} is not a {noun}"))
+        };
+        THEME_LOG.outcome(&format!("delete {noun} {id}"), removed)?;
         Ok(())
     }
 
@@ -334,23 +342,34 @@ impl<T: DeserializeOwned + Serialize + PartialEq> Shelf<T> {
             return Err(format!("{id} is not a {noun}").into());
         }
         let text = serde_json::to_string_pretty(file).map_err(|e| e.to_string())?;
+        // The editor writes with every change, so only one that fails is logged.
         std::fs::create_dir_all(self.dir())
             .and_then(|()| std::fs::write(self.path(id), text))
-            .map_err(|e| format!("couldn't save the {noun}: {e}"))?;
+            .map_err(|e| {
+                let error = format!("couldn't save the {noun}: {e}");
+                THEME_LOG.text(
+                    LogLevel::Error,
+                    format!("write {noun} {id} failed: {error}"),
+                );
+                error
+            })?;
         Ok(())
     }
 
     /// Writes the file Patchwork comes with under this id over the one in the folder.
     fn reset(&self, id: &str) -> Result<(), Error> {
         let noun = self.noun;
-        let (_, text) = self
+        let reset = self
             .presets
             .iter()
             .find(|(preset, _)| *preset == id)
-            .ok_or_else(|| format!("Patchwork has no {noun} {id} of its own"))?;
-        std::fs::create_dir_all(self.dir())
-            .and_then(|()| std::fs::write(self.path(id), text))
-            .map_err(|e| format!("couldn't reset {id}: {e}"))?;
+            .ok_or_else(|| format!("Patchwork has no {noun} {id} of its own"))
+            .and_then(|(_, text)| {
+                std::fs::create_dir_all(self.dir())
+                    .and_then(|()| std::fs::write(self.path(id), text))
+                    .map_err(|e| format!("couldn't reset {id}: {e}"))
+            });
+        THEME_LOG.outcome(&format!("reset {noun} {id}"), reset)?;
         Ok(())
     }
 

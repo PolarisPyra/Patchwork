@@ -4,6 +4,7 @@
 // Rust guideline compliant 2026-10-09
 
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use gpui::{
@@ -105,6 +106,8 @@ pub struct Orchestrator {
     pub(super) picker: Option<Picker>,
     /// Where the butterfly is, kept between frames.
     pub(super) flight: Rc<RefCell<Flight>>,
+    /// The picture last drawn behind the page, under the one drawn now.
+    pub(super) pictures: [Option<PathBuf>; 2],
     _subscriptions: [Subscription; 7],
 }
 
@@ -166,6 +169,7 @@ impl Orchestrator {
             generation: 0,
             picker: None,
             flight: Rc::default(),
+            pictures: [None, None],
             _subscriptions: subscriptions,
         }
     }

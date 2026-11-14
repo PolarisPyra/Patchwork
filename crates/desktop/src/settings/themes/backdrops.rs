@@ -1,5 +1,6 @@
 //! Settings → Backgrounds: what is behind the Orchestrator page and behind chats. The
-//! Orchestrator has a card for none, the butterfly, each animated background and each picture,
+//! Orchestrator has a card for none, the butterfly, each animated background, each of the
+//! backgrounds chats come with and each picture,
 //! and the card that adds a picture; an agent can be asked to write an animated one.
 //!
 //! Matching the system, light windows and dark ones each have their own background, and the
@@ -12,16 +13,15 @@ use std::sync::Arc;
 use gpui::{AnyElement, App, Entity, FontWeight, ObjectFit, Window, div, img, prelude::*, px};
 use patchwork_server::backgrounds::ChatBackground;
 use patchwork_server::settings::Theme as ThemeSetting;
-use patchwork_server::themes::{BackdropChoice, Dim, Fit, Scheme};
+use patchwork_server::themes::{BackdropChoice, Scheme};
 
-use super::cards::{Extras, add_card, card, grid};
+use super::cards::{DELETE, Extras, Tool, add_card, card, grid};
 use super::files::{Filed, file_tools};
-use super::picture::picture_rows;
-use super::reading::strength_cards;
 use super::{Kind, generator};
 use crate::orchestrator::{butterfly_preview, scene_preview};
 use crate::settings::controls::{alert, section_heading};
 use crate::settings::{SettingsDialog, SettingsEvent};
+use crate::ui::backdrop::{PRESETS, preset_fill};
 use crate::ui::background_picker::{BackgroundPicker, PickerEvent};
 use crate::ui::theme::{fs_sm, theme};
 
@@ -70,7 +70,7 @@ impl SettingsDialog {
                         d.themes.error = None;
                         let slot = d.backdrop_slot(cx);
                         d.update(
-                            |s| *s.backdrop_mut(slot) = BackdropChoice::picture(file),
+                            |s| *s.backdrop_mut(slot) = BackdropChoice::Image { file },
                             cx,
                         );
                         d.load_themes(cx);
@@ -98,6 +98,14 @@ pub(super) fn backdrop_cards(
         ("None", div().bg(t.bg_app), BackdropChoice::None),
         ("Butterfly", butterfly, BackdropChoice::Butterfly),
     ];
+    let presets = PRESETS.iter().map(|&(id, name)| {
+        (
+            name.to_string(),
+            div().relative().bg(t.bg_app).children(preset_fill(id, &t)),
+            BackdropChoice::Preset { id: id.to_string() },
+            None,
+        )
+    });
     let scenes = d.themes.scenes.iter().map(|saved| {
         let id = saved.id.clone();
         (
@@ -109,39 +117,27 @@ pub(super) fn backdrop_cards(
                 still,
             )),
             BackdropChoice::Scene { id: id.clone() },
-            Some((id, (saved.custom, saved.edited))),
+            Some(File::Scene(id, (saved.custom, saved.edited))),
         )
     });
     let pictures = d.themes.pictures.iter().map(|picture| {
-        // The picked picture keeps how it is shown, and its card shows it that way.
-        let choice = if current.picture_file() == Some(picture.file.as_str()) {
-            current.clone()
-        } else {
-            BackdropChoice::picture(picture.file.clone())
-        };
-        let (dim, fit) = match &choice {
-            BackdropChoice::Image { dim, fit, .. } => (*dim, *fit),
-            _ => (Dim::default(), Fit::default()),
-        };
         let shown = img(picture.path.clone())
             .size_full()
-            .object_fit(object_fit(fit));
+            .object_fit(ObjectFit::Cover);
         (
             picture.name.clone().unwrap_or_else(|| "Picture".into()),
-            // Dimmed toward the window's color, as the page shows it.
-            div()
-                .relative()
-                .bg(t.bg_app)
-                .child(shown)
-                .child(div().absolute().inset_0().bg(t.bg_app.opacity(dim.share()))),
-            choice,
-            None,
+            div().bg(t.bg_app).child(shown),
+            BackdropChoice::Image {
+                file: picture.file.clone(),
+            },
+            Some(File::Picture(picture.file.clone())),
         )
     });
     let all: Vec<_> = fixed
         .into_iter()
         .map(|(name, swatch, choice)| (name.to_string(), swatch, choice, None))
         .chain(scenes)
+        .chain(presets)
         .chain(pictures)
         .collect();
     all.into_iter()
@@ -149,9 +145,19 @@ pub(super) fn backdrop_cards(
         .map(|(n, (name, swatch, choice, file))| {
             let checked = choice == current;
             let key = format!("backdrop-{n}");
-            let tools = file.map_or_else(Vec::new, |(id, state)| {
-                file_tools(&key, &name, Filed::Scene, &id, state, cx)
-            });
+            let tools = match file {
+                Some(File::Scene(id, state)) => file_tools(&key, &name, Filed::Scene, &id, state),
+                Some(File::Picture(file)) => {
+                    let removed = name.clone();
+                    vec![Tool::new(
+                        format!("delete-{key}"),
+                        (DELETE, format!("Delete {name}")),
+                        "trash",
+                        move |d, cx| d.remove_picture(&file, removed.clone(), cx),
+                    )]
+                }
+                None => Vec::new(),
+            };
             card(
                 key,
                 name,
@@ -169,18 +175,24 @@ pub(super) fn backdrop_cards(
         .collect()
 }
 
-/// How a picture is laid on a card for each way it can fill the page. A card is too small to
-/// tile, so a tiled picture fills it.
-fn object_fit(fit: Fit) -> ObjectFit {
-    match fit {
-        Fit::Cover | Fit::Tile => ObjectFit::Cover,
-        Fit::Contain => ObjectFit::Contain,
-        Fit::Stretch => ObjectFit::Fill,
-    }
+/// The file behind a background's card, which its buttons and its menu change.
+enum File {
+    /// An animated background's id, and whether it is the person's own and whether it is edited.
+    Scene(String, (bool, bool)),
+    /// A picture's file name.
+    Picture(String),
 }
 
 /// The background picker, made on the first look at the pane, showing the saved background.
 impl SettingsDialog {
+    /// Deletes a picture through the chat background picker, which shows it removed and
+    /// offers to take that back.
+    fn remove_picture(&mut self, file: &str, name: String, cx: &mut Context<Self>) {
+        if let Some(picker) = &self.themes.picker {
+            picker.update(cx, |p, cx| p.remove_picture(file, name, cx));
+        }
+    }
+
     /// Makes a picture of the chat background a chat drew, and puts it behind every chat.
     pub(super) fn keep_drawn_background(&mut self, id: String, cx: &mut Context<Self>) {
         let server = Arc::clone(&self.server);
@@ -265,10 +277,6 @@ pub(in crate::settings) fn backgrounds_pane(
     let add_picture = add_card("add-backdrop", "Add background", &t)
         .on_click(cx.listener(|d, _, _, cx| d.add_backdrop_picture(cx)))
         .into_any_element();
-    let picture = match *d.settings.backdrop_of(slot) {
-        BackdropChoice::Image { dim, fit, blur, .. } => picture_rows(dim, fit, blur, cx),
-        _ => Vec::new(),
-    };
     let scenes_dir = d.server.scenes_dir();
     let new_scene = generator(d, Kind::Scene, "A koi pond at dusk", scenes_dir, window, cx);
     let pictures_dir = d.server.backgrounds_dir();
@@ -280,7 +288,6 @@ pub(in crate::settings) fn backgrounds_pane(
         window,
         cx,
     );
-    let strength = strength_cards(d, cx);
     div()
         .id("backgrounds-pane")
         .flex()
@@ -293,19 +300,23 @@ pub(in crate::settings) fn backgrounds_pane(
         )
         .child(section_heading("Orchestrator", true, &t))
         .children(windows)
+        .child(
+            div()
+                .pt(px(10.))
+                .pb(px(8.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .child("Orchestrator background"),
+        )
         .child(grid(
             "backdrops",
             "Orchestrator background",
             backdrops,
             Some(add_picture),
         ))
-        .children(picture)
         .child(new_scene)
         .child(section_heading("Chats", false, &t))
         .child(
             div()
-                .border_b_1()
-                .border_color(t.border)
                 .py(px(10.))
                 .child(
                     div()
@@ -315,7 +326,7 @@ pub(in crate::settings) fn backgrounds_pane(
                 )
                 .child(chat_background),
         )
+        // The row that draws a picture comes right under the pictures, with no line between.
         .child(new_picture)
-        .child(strength)
         .into_any_element()
 }

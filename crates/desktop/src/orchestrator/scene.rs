@@ -347,6 +347,17 @@ pub fn scene_preview(
     )
 }
 
+/// An animated background at its full size, filling its parent, as a chat shows it.
+pub fn scene_backdrop(
+    saved: Arc<SavedScene>,
+    surface: Hsla,
+    faint: Hsla,
+    still: bool,
+) -> impl IntoElement + use<> {
+    let fallback = Fallback { surface, faint };
+    field(saved, saved_scene, fallback, no_pill, still, None)
+}
+
 /// The scene of a file.
 #[expect(
     clippy::unnecessary_wraps,

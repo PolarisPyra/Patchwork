@@ -10,7 +10,8 @@ use std::time::Duration;
 
 use gpui::{AnyElement, Entity, ExternalPaths, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_server::backgrounds::BackgroundImage;
-use patchwork_server::settings::Theme as ThemeSetting;
+use patchwork_server::logging::THEME_LOG;
+use patchwork_server::settings::{LogLevel, Theme as ThemeSetting};
 use patchwork_server::themes::{CodeTheme, SavedScene, Scheme, Theme, Unreadable};
 
 pub(super) use self::backdrops::backgrounds_pane;
@@ -34,7 +35,6 @@ mod editor;
 mod files;
 mod interface;
 mod look;
-mod picture;
 mod reading;
 mod share;
 mod slider;
@@ -139,7 +139,7 @@ impl SettingsDialog {
         }
         self.themes.error = None;
         area.update(cx, |area, cx| area.set_text("", cx));
-        // A code theme is written for the kind of window that is showing, whose cards show.
+        // A code theme and a chat background are made for the kind of window that is showing.
         let scheme = if theme(cx).is_dark() {
             Scheme::Dark
         } else {
@@ -151,7 +151,7 @@ impl SettingsDialog {
                 Kind::Scheme => server.theme_prompt(&description),
                 Kind::Scene => server.scene_prompt(&description),
                 Kind::Code => server.code_theme_prompt(&description, scheme),
-                Kind::Picture => server.chat_background_prompt(&description),
+                Kind::Picture => server.chat_background_prompt(&description, scheme),
             },
             move |d, (prompt, id), cx| {
                 d.themes.writing[kind as usize] = Some(id.clone());
@@ -221,6 +221,9 @@ impl SettingsDialog {
                     (true, false) => Some(format!("The {noun} the chat wrote cannot be read.")),
                     (false, false) => Some(format!("The chat has not written a {noun}.")),
                 };
+                if let Some(error) = &d.themes.error {
+                    THEME_LOG.text(LogLevel::Error, format!("{noun} {id}: {error}"));
+                }
                 cx.notify();
             });
         })

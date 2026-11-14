@@ -27,6 +27,10 @@ pub static WINDOW_LOG: DebugLog = DebugLog::new("window.log");
 /// import added. Written with `import::ilog!`.
 pub static IMPORT_LOG: DebugLog = DebugLog::new("imports.log");
 
+/// `themes.log`: each color scheme, animated background, code theme and background picture
+/// added, written by a chat, reset or deleted, and each file that cannot be read or written.
+pub static THEME_LOG: DebugLog = DebugLog::new("themes.log");
+
 /// How much `main.log` records. The desktop shell's logger checks it for every message, since
 /// the logger sets the `log` crate's own maximum when it starts.
 static APP_LEVEL: AtomicU8 = AtomicU8::new(LogLevel::Info as u8);
@@ -162,6 +166,25 @@ impl DebugLog {
         self.send(level, event, source, data);
     }
 
+    /// Logs the message `text` at `level`.
+    pub fn text(&self, level: LogLevel, text: String) {
+        self.send(level, "", &Source::default(), Data::Text(text));
+    }
+
+    /// Logs how `what` went, and hands `done` on: at Info when it worked, and at Error with the
+    /// reason when it did not.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error in `done`.
+    pub fn outcome<T, E: std::fmt::Display>(&self, what: &str, done: Result<T, E>) -> Result<T, E> {
+        match &done {
+            Ok(_) => self.text(LogLevel::Info, what.to_string()),
+            Err(e) => self.text(LogLevel::Error, format!("{what} failed: {e}")),
+        }
+        done
+    }
+
     /// Logs `data` at `level` to this log alone.
     fn send(&self, level: LogLevel, event: &'static str, source: &Source, data: Data) {
         if !self.logs(level) {
@@ -233,11 +256,12 @@ pub(super) trait LaunchLog {
 
 /// Every log but `main.log`, which the desktop shell writes, with its level in `levels`. A new
 /// log is a row here, its field in `LoggingSettings`, and its row in Settings → General → Logs.
-fn launch_logs(levels: &LoggingSettings) -> [(&'static dyn LaunchLog, LogLevel); 4] {
+fn launch_logs(levels: &LoggingSettings) -> [(&'static dyn LaunchLog, LogLevel); 5] {
     [
         (&AGENT_LOG, levels.agents),
         (&WINDOW_LOG, levels.window),
         (&IMPORT_LOG, levels.imports),
+        (&THEME_LOG, levels.themes),
         (&THREAD_LOG, levels.threads),
     ]
 }

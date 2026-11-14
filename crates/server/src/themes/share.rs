@@ -10,6 +10,7 @@ use super::code::from_base16 as code_base16;
 use super::foreign::{from_base16, from_color_theme, from_zed_family, relaxed};
 use super::library::{CODE, SCENES, THEMES};
 use super::types::{SceneFile, ThemeFile};
+use crate::logging::THEME_LOG;
 use crate::{Error, Server};
 
 /// A color scheme with the animated background it names, as one file.
@@ -59,7 +60,12 @@ impl Server {
             .map(|saved| saved.file);
         let text =
             serde_json::to_string_pretty(&Bundle { theme, scene }).map_err(|e| e.to_string())?;
-        std::fs::write(to, text).map_err(|e| format!("couldn't write {}: {e}", to.display()))?;
+        let written =
+            std::fs::write(to, text).map_err(|e| format!("couldn't write {}: {e}", to.display()));
+        THEME_LOG.outcome(
+            &format!("export color scheme {id} to {}", to.display()),
+            written,
+        )?;
         Ok(())
     }
 
@@ -71,53 +77,56 @@ impl Server {
     ///
     /// Returns an error when the file cannot be read, is none of those, or cannot be saved.
     pub fn import_theme(&self, path: &Path) -> Result<Imported, Error> {
-        let name = path.file_name().map_or_else(
-            || path.display().to_string(),
-            |name| name.to_string_lossy().into_owned(),
-        );
-        let size = std::fs::metadata(path)
-            .map_err(|e| format!("couldn't read {name}: {e}"))?
-            .len();
-        if size > MAX_BYTES {
-            return Err(format!("{name} is too large to be a theme").into());
+        THEME_LOG.outcome(&format!("import {}", path.display()), read_theme(path))
+    }
+}
+
+/// Adds the file at `path` to the folder it belongs in, and says what it was.
+fn read_theme(path: &Path) -> Result<Imported, Error> {
+    let name = path.file_name().map_or_else(
+        || path.display().to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    );
+    let size = std::fs::metadata(path)
+        .map_err(|e| format!("couldn't read {name}: {e}"))?
+        .len();
+    if size > MAX_BYTES {
+        return Err(format!("{name} is too large to be a theme").into());
+    }
+    let text = std::fs::read_to_string(path).map_err(|e| format!("couldn't read {name}: {e}"))?;
+    let strict = serde_json::from_str::<serde_json::Value>(&text).ok();
+    let Some(json) = strict.or_else(|| relaxed(&text)) else {
+        let code = code_base16(&text).ok_or_else(|| format!("{name} is not a theme"))?;
+        CODE.add(&code.name, &code)?;
+        let theme = from_base16(&text, &code).ok_or_else(|| format!("{name} is not a theme"))?;
+        return add_foreign(vec![theme], &name);
+    };
+    let unusable = |e: String| format!("{name} cannot be used: {e}");
+    if json.get("theme").is_some() {
+        let Bundle { mut theme, scene } =
+            serde_json::from_value(json).map_err(|e| unusable(e.to_string()))?;
+        if let Some(scene) = scene {
+            SCENES.check(&scene).map_err(unusable)?;
+            theme.backdrop = Some(SCENES.add(&scene.name, &scene)?);
         }
-        let text =
-            std::fs::read_to_string(path).map_err(|e| format!("couldn't read {name}: {e}"))?;
-        let strict = serde_json::from_str::<serde_json::Value>(&text).ok();
-        let Some(json) = strict.or_else(|| relaxed(&text)) else {
-            let code = code_base16(&text).ok_or_else(|| format!("{name} is not a theme"))?;
-            CODE.add(&code.name, &code)?;
-            let theme =
-                from_base16(&text, &code).ok_or_else(|| format!("{name} is not a theme"))?;
-            return add_foreign(vec![theme], &name);
-        };
-        let unusable = |e: String| format!("{name} cannot be used: {e}");
-        if json.get("theme").is_some() {
-            let Bundle { mut theme, scene } =
-                serde_json::from_value(json).map_err(|e| unusable(e.to_string()))?;
-            if let Some(scene) = scene {
-                SCENES.check(&scene).map_err(unusable)?;
-                theme.backdrop = Some(SCENES.add(&scene.name, &scene)?);
-            }
-            let id = THEMES.add(&theme.name, &theme)?;
-            Ok(imported(ImportedKind::Scheme, id, theme.name))
-        } else if json.pointer("/colors/surface").is_some() {
-            let theme = THEMES.parse(&text).map_err(unusable)?;
-            let id = THEMES.add(&theme.name, &theme)?;
-            Ok(imported(ImportedKind::Scheme, id, theme.name))
-        } else if json.pointer("/colors/keyword").is_some() {
-            let code = CODE.parse(&text).map_err(unusable)?;
-            let id = CODE.add(&code.name, &code)?;
-            Ok(imported(ImportedKind::Code, id, code.name))
-        } else if let Some(theme) = from_color_theme(&json, stem(path).as_str()) {
-            add_foreign(vec![theme], &name)
-        } else if json.get("themes").is_some() {
-            add_foreign(from_zed_family(&json), &name)
-        } else {
-            let scene = SCENES.parse(&text).map_err(unusable)?;
-            let id = SCENES.add(&scene.name, &scene)?;
-            Ok(imported(ImportedKind::Scene, id, scene.name))
-        }
+        let id = THEMES.add(&theme.name, &theme)?;
+        Ok(imported(ImportedKind::Scheme, id, theme.name))
+    } else if json.pointer("/colors/surface").is_some() {
+        let theme = THEMES.parse(&text).map_err(unusable)?;
+        let id = THEMES.add(&theme.name, &theme)?;
+        Ok(imported(ImportedKind::Scheme, id, theme.name))
+    } else if json.pointer("/colors/keyword").is_some() {
+        let code = CODE.parse(&text).map_err(unusable)?;
+        let id = CODE.add(&code.name, &code)?;
+        Ok(imported(ImportedKind::Code, id, code.name))
+    } else if let Some(theme) = from_color_theme(&json, stem(path).as_str()) {
+        add_foreign(vec![theme], &name)
+    } else if json.get("themes").is_some() {
+        add_foreign(from_zed_family(&json), &name)
+    } else {
+        let scene = SCENES.parse(&text).map_err(unusable)?;
+        let id = SCENES.add(&scene.name, &scene)?;
+        Ok(imported(ImportedKind::Scene, id, scene.name))
     }
 }
 

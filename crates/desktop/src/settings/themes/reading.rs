@@ -1,13 +1,9 @@
-//! The cards that show how text reads: each code theme of Settings → Themes, each strength of
-//! the chat background of Settings → Backgrounds, and each size of a chat's text and whether
-//! anything moves of Settings → Interface.
+//! The cards that show how text reads: each code theme of Settings → Themes, and each size of
+//! a chat's text and whether anything moves of Settings → Interface.
 
 // Rust guideline compliant 2026-10-09
 
-use std::path::PathBuf;
-
-use gpui::{AnyElement, Div, FontWeight, Hsla, ObjectFit, SharedString, div, img, prelude::*, px, rgb};
-use patchwork_server::backgrounds::{BackgroundStrength, ChatBackground};
+use gpui::{AnyElement, Div, FontWeight, Hsla, SharedString, div, prelude::*, px, rgb};
 use patchwork_server::settings::{Settings, TextSize};
 use patchwork_server::themes::Scheme;
 
@@ -15,14 +11,7 @@ use super::cards::{Extras, add_card, card, grid};
 use super::files::{Filed, file_tools};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{switch, token_row};
-use crate::ui::backdrop::{preset_fill, veil};
-use crate::ui::theme::{fs_md, fs_xs, Theme as Colors, font_mono, theme};
-
-const STRENGTHS: [(BackgroundStrength, &str); 3] = [
-    (BackgroundStrength::Subtle, "Subtle"),
-    (BackgroundStrength::Medium, "Medium"),
-    (BackgroundStrength::Strong, "Strong"),
-];
+use crate::ui::theme::{fs_xs, Theme as Colors, font_mono, theme};
 
 const SIZES: [(TextSize, &str); 3] = [
     (TextSize::Small, "Small"),
@@ -97,7 +86,7 @@ pub(super) fn code_theme_cards(
         let id = code.id.clone();
         let card_key = format!("{key}-{id}");
         let state = (code.custom, code.edited);
-        let tools = file_tools(&card_key, &code.file.name, Filed::Code, &id, state, cx);
+        let tools = file_tools(&card_key, &code.file.name, Filed::Code, &id, state);
         cards.push(card(
             card_key,
             code.file.name.clone(),
@@ -156,60 +145,6 @@ fn text_swatch(font: SharedString, scale: f32, sample: &'static str, t: &Colors)
                 .text_color(t.text_muted)
                 .child(sample),
         )
-}
-
-/// How much of the chat background shows: each strength over the background picked, or over
-/// one of the app's own when none is.
-pub(super) fn strength_cards(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
-    let t = *theme(cx);
-    let sample = if t.is_dark() { "dusk" } else { "sky" };
-    let picture = match &d.settings.chat_background {
-        ChatBackground::Image { file } => {
-            let found = d.themes.pictures.iter().find(|p| &p.file == file);
-            found.map(|p| PathBuf::from(p.path.clone()))
-        }
-        _ => None,
-    };
-    let preset = match &d.settings.chat_background {
-        ChatBackground::Preset { id } => id.as_str(),
-        _ => sample,
-    };
-    let cards = STRENGTHS
-        .into_iter()
-        .map(|(strength, name)| {
-            let under = match &picture {
-                Some(path) => div()
-                    .absolute()
-                    .inset_0()
-                    .child(img(path.clone()).size_full().object_fit(ObjectFit::Cover)),
-                None => preset_fill(preset, &t).unwrap_or_else(div),
-            };
-            let over = div()
-                .absolute()
-                .inset_0()
-                .bg(t.bg_editor.opacity(veil(strength)))
-                .px(px(10.))
-                .flex()
-                .items_center()
-                .text_size(px(fs_md()))
-                .text_color(t.text)
-                .child("Aa");
-            card(
-                format!("strength-{name}"),
-                name,
-                div().relative().child(under).child(over),
-                d.settings.chat_background_strength == strength,
-                Extras {
-                    notes: &[],
-                    tools: Vec::new(),
-                },
-                move |d, cx| d.update(|s| s.chat_background_strength = strength, cx),
-                cx,
-            )
-        })
-        .collect();
-    let cards = grid("strength", "Background strength", cards, None);
-    titled("Background strength", cards, &t)
 }
 
 /// How large the app's text is.
