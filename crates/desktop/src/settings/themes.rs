@@ -10,16 +10,18 @@ use std::time::Duration;
 use gpui::{
     AnyElement, Entity, ExternalPaths, FontWeight, Role, SharedString, Window, div, prelude::*, px,
 };
-use patchwork_server::backgrounds::{BackgroundImage, BackgroundStrength, ChatBackground};
+use patchwork_server::backgrounds::{BackgroundImage, ChatBackground};
 use patchwork_server::settings::Theme as ThemeSetting;
 use patchwork_server::themes::{BackdropChoice, CodeTheme, SavedScene, Scheme, Theme, Unreadable};
 
 use self::cards::{Slot, add_picture_card, backdrop_cards, grid, scheme_cards};
 use self::picture::picture_rows;
-use self::reading::{code_theme_row, font_row, installed_fonts, motion_row, text_size_row};
+use self::reading::{
+    code_theme_row, font_cards, installed_fonts, motion_row, strength_cards, text_size_cards,
+};
 use super::{SettingsDialog, SettingsEvent};
 use crate::orchestrator::PreviewFlight;
-use crate::settings::controls::{alert, section_heading, segmented, switch, token_row};
+use crate::settings::controls::{alert, section_heading, switch, token_row};
 use crate::ui::background_picker::{BackgroundPicker, PickerEvent};
 use crate::ui::theme::{FS_SM, theme};
 use crate::ui::{BtnKind, btn, icon_button, spinner};
@@ -28,12 +30,6 @@ mod cards;
 mod picture;
 mod reading;
 mod share;
-
-const STRENGTHS: [(BackgroundStrength, &str); 3] = [
-    (BackgroundStrength::Subtle, "Subtle"),
-    (BackgroundStrength::Medium, "Medium"),
-    (BackgroundStrength::Strong, "Strong"),
-];
 
 /// How often a folder is looked at for the file a chat is writing, and how many times before
 /// giving up: ten minutes.
@@ -483,7 +479,12 @@ pub fn render(
         code_theme_row(d, Scheme::Light, cx),
         code_theme_row(d, Scheme::Dark, cx),
     ];
-    let (font, text_size, motion) = (font_row(d, cx), text_size_row(d, cx), motion_row(d, cx));
+    let (strength, font, text_size) = (
+        strength_cards(d, cx),
+        font_cards(d, cx),
+        text_size_cards(d, cx),
+    );
+    let motion = motion_row(d, cx);
     let code_folder = d.server.code_themes_dir();
     let code_files = token_row("Code themes", None, &t).child(
         icon_button(
@@ -561,15 +562,7 @@ pub fn render(
                 )
                 .child(chat_background),
         )
-        .child(token_row("Background strength", None, &t).child(segmented(
-            "strength",
-            "Background strength",
-            d.settings.chat_background_strength,
-            &STRENGTHS,
-            &t,
-            |d, strength, cx| d.update(|s| s.chat_background_strength = strength, cx),
-            cx,
-        )))
+        .child(strength)
         .child(font)
         .child(text_size)
         .into_any_element()

@@ -45,7 +45,7 @@ fn preset(id: &str) -> Option<(Base, Pattern)> {
 }
 
 /// How much of the window color is laid over a background at each strength.
-fn veil(strength: BackgroundStrength) -> f32 {
+pub fn veil(strength: BackgroundStrength) -> f32 {
     match strength {
         BackgroundStrength::Subtle => 0.88,
         BackgroundStrength::Medium => 0.78,
