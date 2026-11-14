@@ -42,6 +42,7 @@ portable-pty = { version = "0.9", default-features = false }
 prost = { version = "0.14", default-features = false }
 pulldown-cmark = { version = "0.13", default-features = false }
 regex = { version = "1", default-features = false }
+resvg = { version = "0.46", default-features = false }
 rusqlite = { version = "0.41", default-features = false }
 rust-embed = { version = "8", default-features = false }
 serde = { version = "1.0", default-features = false }

@@ -180,6 +180,30 @@ fn object_fit(fit: Fit) -> ObjectFit {
 }
 
 /// The background picker, made on the first look at the pane, showing the saved background.
+impl SettingsDialog {
+    /// Makes a picture of the chat background a chat drew, and puts it behind every chat.
+    pub(super) fn keep_drawn_background(&mut self, id: String, cx: &mut Context<Self>) {
+        let server = Arc::clone(&self.server);
+        self.run(
+            move || server.import_drawn_background(&id),
+            |d, drawn, cx| {
+                d.themes.writing[Kind::Picture as usize] = None;
+                match drawn {
+                    Ok(file) => match &d.themes.picker {
+                        Some(picker) => picker.update(cx, |p, cx| p.added(file, cx)),
+                        None => {
+                            d.update(|s| s.chat_background = ChatBackground::Image { file }, cx);
+                        }
+                    },
+                    Err(e) => d.themes.error = Some(e.to_string()),
+                }
+                cx.notify();
+            },
+            cx,
+        );
+    }
+}
+
 fn picker(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> Entity<BackgroundPicker> {
     let value = d.settings.chat_background.clone();
     if let Some(picker) = &d.themes.picker {
@@ -247,6 +271,15 @@ pub(in crate::settings) fn backgrounds_pane(
     };
     let scenes_dir = d.server.scenes_dir();
     let new_scene = generator(d, Kind::Scene, "A koi pond at dusk", scenes_dir, window, cx);
+    let pictures_dir = d.server.backgrounds_dir();
+    let new_picture = generator(
+        d,
+        Kind::Picture,
+        "Soft hills in morning fog",
+        pictures_dir,
+        window,
+        cx,
+    );
     let strength = strength_cards(d, cx);
     div()
         .id("backgrounds-pane")
@@ -282,6 +315,7 @@ pub(in crate::settings) fn backgrounds_pane(
                 )
                 .child(chat_background),
         )
+        .child(new_picture)
         .child(strength)
         .into_any_element()
 }

@@ -53,6 +53,7 @@ enum Kind {
     Scheme,
     Scene,
     Code,
+    Picture,
 }
 
 impl Kind {
@@ -62,6 +63,7 @@ impl Kind {
             Self::Scheme => "describe-scheme",
             Self::Scene => "describe-scene",
             Self::Code => "describe-code-theme",
+            Self::Picture => "describe-chat-background",
         }
     }
 
@@ -70,6 +72,7 @@ impl Kind {
             Self::Scheme => "color scheme",
             Self::Scene => "background",
             Self::Code => "code theme",
+            Self::Picture => "chat background",
         }
     }
 }
@@ -91,8 +94,9 @@ pub struct ThemesState {
     editing: Option<Editing>,
     /// The lists were asked for. Cleared to read them again.
     pub(super) loaded: bool,
-    /// The id of the color scheme a chat is writing, of the background and of the code theme.
-    writing: [Option<String>; 3],
+    /// The id of the color scheme a chat is writing, of the background, of the code theme and
+    /// of the chat background.
+    writing: [Option<String>; 4],
     error: Option<String>,
 }
 
@@ -147,6 +151,7 @@ impl SettingsDialog {
                 Kind::Scheme => server.theme_prompt(&description),
                 Kind::Scene => server.scene_prompt(&description),
                 Kind::Code => server.code_theme_prompt(&description, scheme),
+                Kind::Picture => server.chat_background_prompt(&description),
             },
             move |d, (prompt, id), cx| {
                 d.themes.writing[kind as usize] = Some(id.clone());
@@ -178,6 +183,7 @@ impl SettingsDialog {
                             Kind::Scheme => server.theme_written(&id),
                             Kind::Scene => server.scene_written(&id),
                             Kind::Code => server.code_theme_written(&id),
+                            Kind::Picture => server.chat_background_drawn(&id),
                         }
                     })
                     .await;
@@ -187,6 +193,10 @@ impl SettingsDialog {
             }
             // The agent reads its file back and may correct it once more.
             cx.background_executor().timer(LOOK_EVERY).await;
+            if kind == Kind::Picture {
+                let _ = this.update(cx, |d, cx| d.keep_drawn_background(id, cx));
+                return;
+            }
             let listed = Arc::clone(&server);
             let (themes, scenes, codes) = cx
                 .background_spawn(async move {
@@ -199,6 +209,7 @@ impl SettingsDialog {
                     Kind::Scheme => themes.iter().any(|t| t.custom && t.id == id),
                     Kind::Scene => scenes.iter().any(|s| s.custom && s.id == id),
                     Kind::Code => codes.iter().any(|c| c.custom && c.id == id),
+                    Kind::Picture => false,
                 };
                 let noun = kind.noun();
                 d.themes.writing[kind as usize] = None;
@@ -218,7 +229,7 @@ impl SettingsDialog {
 
     /// The chat that was to write a file could not be started.
     pub fn theme_failed(&mut self, error: String, cx: &mut Context<Self>) {
-        self.themes.writing = [None, None, None];
+        self.themes.writing = Default::default();
         self.themes.error = Some(error);
         cx.notify();
     }
