@@ -17,6 +17,7 @@ use patchwork_server::themes::{BackdropChoice, Scheme};
 
 use super::cards::{DELETE, Extras, Tool, add_card, card, grid};
 use super::files::{Filed, file_tools};
+use super::generator_pick::generator_row;
 use super::{Kind, generator};
 use crate::orchestrator::{butterfly_preview, scene_preview};
 use crate::settings::controls::{alert, section_heading};
@@ -299,6 +300,7 @@ pub(in crate::settings) fn backgrounds_pane(
         window,
         cx,
     );
+    let generate_with = generator_row(d, &t, cx);
     div()
         .id("backgrounds-pane")
         .flex()
@@ -339,5 +341,6 @@ pub(in crate::settings) fn backgrounds_pane(
         )
         // The row that draws a picture comes right under the pictures, with no line between.
         .child(new_picture)
+        .child(generate_with)
         .into_any_element()
 }

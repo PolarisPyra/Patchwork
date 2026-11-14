@@ -1,16 +1,17 @@
-//! The agent, model and effort of the chats that write themes and backgrounds, picked beside Generate.
+//! The agent, model and effort of the chats that write themes and backgrounds, picked on one row
+//! of each pane that generates them.
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{AnyElement, ClickEvent, SharedString, prelude::*};
+use gpui::{AnyElement, ClickEvent, Role, SharedString, div, prelude::*, px};
 use patchwork_server::threads::AgentPick;
 
 use crate::chat::composer::{effort_label, efforts};
 use crate::settings::SettingsDialog;
-use crate::settings::controls::choice;
+use crate::settings::controls::{choice, token_row};
 use crate::ui::menu::MenuItem;
 use crate::ui::theme::Theme;
-use crate::ui::{AGENT_KINDS, agent_label, dropdown_chip};
+use crate::ui::{AGENT_KINDS, agent_label, dropdown_chip, spinner};
 
 /// What a chip picks.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -45,6 +46,23 @@ impl SettingsDialog {
             },
             cx,
         );
+    }
+
+    /// What a chat on `agent` runs when no model is picked: the agent's model for new chats, else
+    /// its CLI's own, as "Default (name)".
+    fn default_model_label(&self, agent: patchwork_server::provider::AgentKind) -> String {
+        let models = self.tokens.models.get(&agent);
+        let name = match self.settings.tokens.default_models.get(&agent) {
+            Some(id) => Some(
+                models
+                    .and_then(|models| models.iter().find(|m| m.id.as_ref() == Some(id)))
+                    .map_or_else(|| id.clone(), |m| m.label.clone()),
+            ),
+            None => models
+                .and_then(|models| models.iter().find(|m| m.id.is_none()))
+                .and_then(|m| m.default_model.clone()),
+        };
+        name.map_or_else(|| "Default".to_string(), |name| format!("Default ({name})"))
     }
 
     /// The rows of a chip's dropdown.
@@ -89,7 +107,7 @@ impl SettingsDialog {
                 };
                 let default = choice(
                     this.clone(),
-                    "Default",
+                    self.default_model_label(agent),
                     pick.model.is_none(),
                     to_model(None),
                 );
@@ -144,54 +162,82 @@ impl SettingsDialog {
     }
 }
 
-/// The chips beside Generate for the `noun` described in the field `field`: the agent when more
-/// than one is connected, its model, and the effort when the model takes one.
-pub(super) fn generator_chips(
+/// The row that picks what the chats that write themes and backgrounds run on: the agent when
+/// more than one is connected, its model, and the effort when the model takes one.
+pub(super) fn generator_row(
     d: &mut SettingsDialog,
-    field: &'static str,
-    noun: &'static str,
     t: &Theme,
     cx: &mut Context<SettingsDialog>,
-) -> Vec<AnyElement> {
+) -> AnyElement {
     let pick = d.generator_pick();
     d.load_models(pick.agent, cx);
-    let models = d.tokens.models.get(&pick.agent).map(Vec::as_slice);
+    let row = token_row("Generate with", None, t);
+    // Until the models are listed, a spinner holds the model's place.
+    let Some(models) = d.tokens.models.get(&pick.agent).map(Vec::as_slice) else {
+        let agent = d.settings.agents.len() > 1;
+        let loading = div()
+            .id("generator-models-loading")
+            .role(Role::Status)
+            .aria_label("Loading models")
+            .flex()
+            .items_center()
+            .h(px(28.))
+            .px(px(6.))
+            .child(spinner(14., t.text_muted));
+        let chips = agent.then(|| chip(d, Part::Agent, agent_label(pick.agent).to_string(), t, cx));
+        return row.children(chips).child(loading).into_any_element();
+    };
     let model = pick.model.as_deref().map_or_else(
-        || "Default model".to_string(),
+        || d.default_model_label(pick.agent),
         |id| {
             models
-                .and_then(|models| models.iter().find(|m| m.id.as_deref() == Some(id)))
+                .iter()
+                .find(|m| m.id.as_deref() == Some(id))
                 .map_or_else(|| id.to_string(), |m| m.label.clone())
         },
     );
     let effort = pick
         .effort
         .as_deref()
-        .map_or_else(|| "Default effort".to_string(), effort_label);
-    let takes_effort = !efforts(pick.agent, pick.model.as_deref(), models).is_empty();
+        .map_or_else(|| "Default".to_string(), effort_label);
+    let takes_effort = !efforts(pick.agent, pick.model.as_deref(), Some(models)).is_empty();
     let chips = [
         (
             Part::Agent,
-            "Agent",
             agent_label(pick.agent).to_string(),
             d.settings.agents.len() > 1,
         ),
-        (Part::Model, "Model", model, true),
-        (Part::Effort, "Effort", effort, takes_effort),
+        (Part::Model, model, true),
+        (Part::Effort, effort, takes_effort),
     ];
-    chips
+    let chips: Vec<_> = chips
         .into_iter()
         .filter(|(.., shown)| *shown)
-        .map(|(part, name, current, _)| {
-            let key = SharedString::from(format!("{field}-{name}"));
-            let title = format!("{name} for the {noun}");
-            let open = d.menu_open(&key);
-            dropdown_chip(key.clone(), format!("{title}: {current}"), current, open, t)
-                .on_click(cx.listener(move |d, e: &ClickEvent, window, cx| {
-                    let items = d.generator_items(part, cx);
-                    d.toggle_menu(key.clone(), title.clone(), items, e.position(), window, cx);
-                }))
-                .into_any_element()
-        })
-        .collect()
+        .map(|(part, current, _)| chip(d, part, current, t, cx))
+        .collect();
+    row.children(chips).into_any_element()
+}
+
+/// One chip of the row, showing `current` and opening the dropdown of `part`.
+fn chip(
+    d: &SettingsDialog,
+    part: Part,
+    current: String,
+    t: &Theme,
+    cx: &mut Context<SettingsDialog>,
+) -> AnyElement {
+    let name = match part {
+        Part::Agent => "Agent",
+        Part::Model => "Model",
+        Part::Effort => "Effort",
+    };
+    let key = SharedString::from(format!("generator-{}", name.to_lowercase()));
+    let title = format!("{name} that generates themes and backgrounds");
+    let open = d.menu_open(&key);
+    dropdown_chip(key.clone(), format!("{title}: {current}"), current, open, t)
+        .on_click(cx.listener(move |d, e: &ClickEvent, window, cx| {
+            let items = d.generator_items(part, cx);
+            d.toggle_menu(key.clone(), title.clone(), items, e.position(), window, cx);
+        }))
+        .into_any_element()
 }
