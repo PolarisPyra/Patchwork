@@ -168,13 +168,13 @@ fn delete_tool(
 
 /// What a card shows beside its name: what is wrong with it, and its buttons.
 #[derive(Default)]
-struct Extras<'a> {
-    notes: &'a [String],
-    tools: Vec<AnyElement>,
+pub(super) struct Extras<'a> {
+    pub(super) notes: &'a [String],
+    pub(super) tools: Vec<AnyElement>,
 }
 
 /// A card to pick in one of the grids: a picture over a name.
-fn card(
+pub(super) fn card(
     key: String,
     name: impl Into<SharedString>,
     swatch: Div,
