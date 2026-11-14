@@ -36,7 +36,16 @@ pub struct UpdateStatus {
     pub can_install: bool,
     pub state: UpdateState,
     /// The notes of the newer release the last check found, from its section of CHANGELOG.md.
-    pub notes: Option<String>,
+    pub notes: Option<ReleaseNotes>,
+}
+
+/// A release's notes as the app shows them: its highlights, then its changes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseNotes {
+    /// Markdown.
+    pub text: String,
+    /// The release's page, when it has more changes than `text` lists.
+    pub more: Option<String>,
 }
 
 /// What `Server::restart_to_update` found.

@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use super::install;
 use super::release;
-use super::types::{RestartResult, UpdateState, UpdateStatus};
+use super::types::{ReleaseNotes, RestartResult, UpdateState, UpdateStatus};
 use crate::settings::ResumeAtLaunch;
 use crate::{Error, Server};
 
@@ -38,7 +38,7 @@ struct Inner {
     run: u64,
     last_check: Option<Instant>,
     /// The notes of the newer release the last check found.
-    notes: Option<String>,
+    notes: Option<ReleaseNotes>,
 }
 
 /// Where updating stands, and what to tell when it changes.
@@ -176,14 +176,11 @@ impl Updates {
             });
         }
         let version = release.version().to_string();
-        // The update notes end where the release's folded full changelog starts.
         self.lock().notes = release
             .body
             .as_deref()
-            .and_then(|body| body.split("<details>").next())
-            .map(str::trim)
-            .filter(|notes| !notes.is_empty())
-            .map(str::to_string);
+            .map(|body| release::notes(&version, body))
+            .filter(|notes| !notes.text.is_empty());
         if !install::can_install() {
             return self.finish(|_, _| Some(UpdateState::Available { version }));
         }

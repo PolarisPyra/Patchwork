@@ -14,5 +14,5 @@ mod types;
 pub use install::restart_path;
 pub(crate) use check::Updates;
 pub(crate) use release::helper as release_helper;
-pub use release::RELEASES_URL;
-pub use types::{RestartResult, UpdateState, UpdateStatus};
+pub use release::{RELEASES_URL, notes};
+pub use types::{ReleaseNotes, RestartResult, UpdateState, UpdateStatus};
