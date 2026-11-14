@@ -3,6 +3,21 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.70] - 2026-11-14
+
+**26.11.70** · 1 change from 1 contributor
+
+- **Release highlights in Settings → Updates.** Settings → Updates now lists a release's changes under its highlights, up to ten, with a Read more link.
+
+<details>
+<summary>Full changelog</summary>
+
+### Changed
+
+- Settings → Updates now lists a release's changes under its highlights, up to ten of them, with a Read more link to the release's page when there are more. A release with no highlights used to show only its count of changes. by [PolarisPyra in #82](https://github.com/PolarisPyra/Patchwork/pull/82)
+
+</details>
+
 ## [26.11.69] - 2026-11-14
 
 **26.11.69** · 1 change from 1 contributor
