@@ -1,14 +1,16 @@
-//! The files the window draws with, built into the binary: the fonts and icons in `assets/` and the
-//! provider marks in the repository's `assets/`.
+//! The files the window draws with, built into the binary: the fonts, icons and provider marks in
+//! the repository's `assets/`.
 //!
 //! The derived files are made from these npm packages:
 //!
-//! - `assets/fonts/`: `Inter-{400,500,600,700,400-italic}.ttf` and `JetBrainsMono-{400,700}.ttf`
-//!   are static instances of the `latin` variable fonts in `@fontsource-variable/inter` and
+//! - `assets/fonts/`: `Inter-{400,500,600,700,400-italic}.ttf` and `JetBrainsMono-{400,700}.ttf`,
+//!   the fonts the app and code are set in until Settings picks one the computer has. They are
+//!   static instances of the `latin` variable fonts in `@fontsource-variable/inter` and
 //!   `@fontsource-variable/jetbrains-mono`. Decompress each `*-latin-wght-*.woff2` with
 //!   `uvx --with brotli --from fonttools fonttools ttLib.woff2 decompress <in> -o <out>.ttf`, then
 //!   pin a weight with `uvx --from fonttools fonttools varLib.instancer <out>.ttf wght=<weight>
-//!   --update-name-table -o <Family>-<weight>.ttf`.
+//!   --update-name-table -o <Family>-<weight>.ttf`. Each family's license is in
+//!   `docs/font-licenses/`.
 //! - `assets/icons/`: one SVG per Phosphor icon the app draws, as `<kebab-name>.svg`
 //!   (regular), `-bold.svg` and `-fill.svg`, written from the `dist/defs/<Name>.es.js` files of
 //!   `@phosphor-icons/react` with their path data in a 256×256 `viewBox`. `twistie.svg` is the
@@ -23,12 +25,15 @@ use gpui::{AssetSource, Result, SharedString};
 use rust_embed::RustEmbed;
 
 #[derive(RustEmbed)]
-#[folder = "assets"]
+#[folder = "../../assets"]
+#[include = "fonts/*"]
+#[include = "icons/*"]
 struct Own;
 
 #[derive(RustEmbed)]
 #[folder = "../../assets"]
 #[include = "*.svg"]
+#[exclude = "icons/*"]
 struct Logos;
 
 /// Serves `fonts/…` and `icons/…` from this app's assets, and from the shared ones `logos/…`, the
