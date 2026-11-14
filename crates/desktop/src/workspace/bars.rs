@@ -380,20 +380,24 @@ impl Workspace {
                     }),
             )
             .child(div().flex_1())
-            .when_some(thread, |bar, thread| {
-                bar.child(
-                    div()
-                        .h(px(20.))
-                        .min_w_0()
-                        .max_w(relative(0.4))
-                        .flex()
-                        .items_center()
-                        .gap(px(4.))
-                        .pr(px(6.))
-                        .child(icon("circle-fill", 8.).text_color(t.accent))
-                        .child(div().truncate().child(display_title(&thread.title))),
-                )
-            })
+            // The orchestrator page belongs to no chat, so the open one is not named on it.
+            .when_some(
+                thread.filter(|_| self.page == Page::Chats),
+                |bar, thread| {
+                    bar.child(
+                        div()
+                            .h(px(20.))
+                            .min_w_0()
+                            .max_w(relative(0.4))
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .pr(px(6.))
+                            .child(icon("circle-fill", 8.).text_color(t.accent))
+                            .child(div().truncate().child(display_title(&thread.title))),
+                    )
+                },
+            )
             .child(
                 button(
                     "open-changes",
