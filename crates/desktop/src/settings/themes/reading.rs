@@ -1,39 +1,27 @@
-//! The parts of Settings → Themes that set how code and chats read: the code themes, whether
-//! anything moves, and a card for each strength of the chat background, each chat font and each
-//! size of a chat's text.
+//! The cards that show how text reads: each code theme of Settings → Themes, each strength of
+//! the chat background of Settings → Backgrounds, and each size of a chat's text and whether
+//! anything moves of Settings → Interface.
 
 // Rust guideline compliant 2026-10-09
 
 use std::path::PathBuf;
 
-use gpui::{
-    AnyElement, App, ClickEvent, Div, FontWeight, ObjectFit, SharedString, div, img, prelude::*, px,
-};
+use gpui::{AnyElement, Div, FontWeight, Hsla, ObjectFit, SharedString, div, img, prelude::*, px, rgb};
 use patchwork_server::backgrounds::{BackgroundStrength, ChatBackground};
 use patchwork_server::settings::{Settings, TextSize};
 use patchwork_server::themes::Scheme;
 
 use super::cards::{Extras, card, grid};
+use super::files::{Filed, file_tools};
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{choice, select_box, switch, token_row};
+use crate::settings::controls::{switch, token_row};
 use crate::ui::backdrop::{preset_fill, veil};
-use crate::ui::theme::{FS_MD, Theme as Colors, font_ui, theme};
+use crate::ui::theme::{FS_MD, FS_XS, Theme as Colors, font_mono, theme};
 
 const STRENGTHS: [(BackgroundStrength, &str); 3] = [
     (BackgroundStrength::Subtle, "Subtle"),
     (BackgroundStrength::Medium, "Medium"),
     (BackgroundStrength::Strong, "Strong"),
-];
-
-/// The family name that stands for the system's own font.
-const SYSTEM_FONT: &str = ".SystemUIFont";
-
-/// The fonts made to be easy to read, offered when they are installed.
-const READING_FONTS: [&str; 4] = [
-    "OpenDyslexic",
-    "Atkinson Hyperlegible",
-    "Atkinson Hyperlegible Next",
-    "Lexend",
 ];
 
 const SIZES: [(TextSize, &str); 3] = [
@@ -42,103 +30,91 @@ const SIZES: [(TextSize, &str); 3] = [
     (TextSize::Large, "Large"),
 ];
 
-/// The reading fonts this computer has.
-pub(super) fn installed_fonts(cx: &App) -> Vec<SharedString> {
-    let installed = cx.text_system().all_font_names();
-    READING_FONTS
-        .into_iter()
-        .filter(|font| installed.iter().any(|name| name == font))
-        .map(SharedString::new_static)
-        .collect()
+/// The picture of a code theme on its card: a line of code in its colors.
+fn code_swatch(colors: [Hsla; 4], t: &Colors) -> Div {
+    let [keyword, function, string, comment] = colors;
+    let part = |text: &'static str, color: Hsla| div().text_color(color).child(text);
+    div()
+        .bg(t.bg_editor)
+        .px(px(10.))
+        .flex()
+        .flex_col()
+        .justify_center()
+        .font_family(font_mono())
+        .text_size(px(FS_XS))
+        .child(part("// hello", comment))
+        .child(
+            div()
+                .flex()
+                .gap(px(4.))
+                .child(part("fn", keyword))
+                .child(part("main", function)),
+        )
+        .child(part("\"text\"", string))
 }
 
-/// A row with a select: what is picked, and a menu of `options` as `(value, name)`.
-fn select_row(
-    d: &SettingsDialog,
-    key: &'static str,
-    title: &'static str,
-    current: Option<String>,
-    options: Vec<(Option<String>, SharedString)>,
-    set: fn(&mut Settings, Option<String>),
-    cx: &mut Context<SettingsDialog>,
-) -> AnyElement {
-    let t = *theme(cx);
-    let shown = options
-        .iter()
-        .find(|(value, _)| *value == current)
-        .map(|(_, name)| name.clone())
-        .or_else(|| current.clone().map(SharedString::from))
-        .unwrap_or_default();
-    let select = select_box(key, title, shown, d.menu_open(key), &t)
-        .w(px(220.))
-        .on_click(cx.listener(move |d, e: &ClickEvent, window, cx| {
-            let weak = cx.entity().downgrade();
-            let items = options
-                .iter()
-                .map(|(value, name)| {
-                    let value = value.clone();
-                    choice(
-                        weak.clone(),
-                        name.clone(),
-                        value == current,
-                        move |d, cx| {
-                            let value = value.clone();
-                            d.menu = None;
-                            d.update(|s| set(s, value), cx);
-                        },
-                    )
-                })
-                .collect();
-            d.toggle_menu(key, title, items, e.position(), window, cx);
-        }));
-    token_row(title, None, &t).child(select).into_any_element()
-}
-
-/// The code theme of light windows or of dark ones.
-pub(super) fn code_theme_row(
+/// The code themes of light windows or of dark ones: the color scheme's own, then each file.
+pub(super) fn code_theme_cards(
     d: &SettingsDialog,
     scheme: Scheme,
     cx: &mut Context<SettingsDialog>,
 ) -> AnyElement {
-    let own = (None, SharedString::new_static("From the color scheme"));
-    let options = std::iter::once(own)
-        .chain(
-            d.themes
-                .codes
-                .iter()
-                .filter(|code| code.file.scheme == scheme)
-                .map(|code| {
-                    (
-                        Some(code.id.clone()),
-                        SharedString::from(code.file.name.clone()),
-                    )
-                }),
-        )
-        .collect();
-    match scheme {
-        Scheme::Light => select_row(
-            d,
+    let t = *theme(cx);
+    let (key, title, current, set): (_, _, _, fn(&mut Settings, Option<String>)) = match scheme {
+        Scheme::Light => (
             "code-theme-light",
             "Code in light windows",
             d.settings.code_theme_light.clone(),
-            options,
             |s, id| s.code_theme_light = id,
-            cx,
         ),
-        Scheme::Dark => select_row(
-            d,
+        Scheme::Dark => (
             "code-theme-dark",
             "Code in dark windows",
             d.settings.code_theme_dark.clone(),
-            options,
             |s, id| s.code_theme_dark = id,
-            cx,
         ),
+    };
+    let own = [t.syn_keyword, t.syn_function, t.syn_string, t.syn_comment];
+    let mut cards = vec![card(
+        format!("{key}-own"),
+        "From the color scheme",
+        code_swatch(own, &t),
+        current.is_none(),
+        Extras::default(),
+        move |d, cx| d.update(|s| set(s, None), cx),
+        cx,
+    )];
+    for code in d.themes.codes.iter().filter(|c| c.file.scheme == scheme) {
+        let colors = code.file.colors;
+        let inks = [
+            colors.keyword,
+            colors.function,
+            colors.string,
+            colors.comment,
+        ]
+        .map(|color| Hsla::from(rgb(color.0)));
+        let id = code.id.clone();
+        let card_key = format!("{key}-{id}");
+        let state = (code.custom, code.edited);
+        let tools = file_tools(&card_key, &code.file.name, Filed::Code, &id, state, cx);
+        cards.push(card(
+            card_key,
+            code.file.name.clone(),
+            code_swatch(inks, &t),
+            current.as_deref() == Some(id.as_str()),
+            Extras { notes: &[], tools },
+            move |d, cx| {
+                let id = id.clone();
+                d.update(|s| set(s, Some(id)), cx);
+            },
+            cx,
+        ));
     }
+    titled(title, grid(key, title, cards, None), &t)
 }
 
 /// A titled grid of cards, as the chat background has.
-fn titled(title: &'static str, cards: AnyElement, t: &Colors) -> AnyElement {
+pub(super) fn titled(title: &'static str, cards: AnyElement, t: &Colors) -> AnyElement {
     div()
         .border_b_1()
         .border_color(t.border)
@@ -225,44 +201,6 @@ pub(super) fn strength_cards(d: &SettingsDialog, cx: &mut Context<SettingsDialog
         .collect();
     let cards = grid("strength", "Background strength", cards, None);
     titled("Background strength", cards, &t)
-}
-
-/// The font chats are set in: the app's, the system's, or an installed reading font.
-pub(super) fn font_cards(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
-    let t = *theme(cx);
-    let fixed = [
-        (None, SharedString::new_static("Default")),
-        (
-            Some(SYSTEM_FONT.to_string()),
-            SharedString::new_static("System"),
-        ),
-    ];
-    let fonts = d.themes.fonts.clone();
-    let named = fonts.into_iter().map(|font| (Some(font.to_string()), font));
-    let cards = fixed
-        .into_iter()
-        .chain(named)
-        .map(|(value, name)| {
-            let family = value.clone().map_or_else(font_ui, SharedString::from);
-            let checked = d.settings.chat_font == value;
-            card(
-                format!("chat-font-{name}"),
-                name,
-                text_swatch(family, 1., "The quick brown fox", &t),
-                checked,
-                Extras {
-                    notes: &[],
-                    tools: Vec::new(),
-                },
-                move |d, cx| {
-                    let value = value.clone();
-                    d.update(|s| s.chat_font = value, cx);
-                },
-                cx,
-            )
-        })
-        .collect();
-    titled("Chat font", grid("chat-font", "Chat font", cards, None), &t)
 }
 
 /// How large the text of chats is.

@@ -262,7 +262,7 @@ fn archived_row(
         .aria_selected(picked)
         .aria_label(title.clone())
         .tab_index(0)
-        .h(px(28.))
+        .h(px(crate::ui::theme::roomy(28.)))
         .flex_none()
         .flex()
         .items_center()

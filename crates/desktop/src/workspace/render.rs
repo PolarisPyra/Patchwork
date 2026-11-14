@@ -17,6 +17,7 @@ impl Render for Workspace {
         if !self.settings.onboarded {
             return self.onboarding_view(window, cx);
         }
+        self.follow_project_look(window, cx);
         // The orchestrator page belongs to no chat, so the open one stays out of its title.
         let title = match &self.thread {
             _ if self.page == Page::Orchestrator => {

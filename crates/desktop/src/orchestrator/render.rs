@@ -3,13 +3,13 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use gpui::{
-    AnyElement, Bounds, BoxShadow, Hsla, KeyDownEvent, ObjectFit, Pixels, Role, SharedString,
+    AnyElement, Bounds, BoxShadow, Hsla, KeyDownEvent, ObjectFit, Pixels, Role, SharedString, Size,
     Window, div, hsla, img, point, prelude::*, px, relative, size,
 };
 use patchwork_server::orchestration::Target;
@@ -66,7 +66,7 @@ pub(super) fn warm() -> Hsla {
 
 /// The scene the settings picked for the backdrop, when it is one.
 fn shown_scene(look: &Arc<Applied>) -> Option<&Scene> {
-    match &look.backdrop {
+    match &look.backdrop.shown {
         Shown::Scene(scene) => Some(scene),
         _ => None,
     }
@@ -169,30 +169,80 @@ fn chip_frame() -> gpui::Div {
         .text_color(ink(0.8))
 }
 
+/// The most tiles a picture is repeated in. A smaller picture is drawn larger to stay under it.
+const MAX_TILES: f32 = 400.;
+
+/// A picture repeated at its own size over a page of this size.
+fn tiles(path: &Path, (width, height): (u32, u32), page: Size<Pixels>) -> AnyElement {
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a picture's side is far below where a float loses whole numbers"
+    )]
+    let (width, height) = (width.max(1) as f32, height.max(1) as f32);
+    let (across, down) = (f32::from(page.width), f32::from(page.height));
+    let count = (across / width).ceil() * (down / height).ceil();
+    let grow = (count / MAX_TILES).sqrt().max(1.);
+    let (width, height) = (width * grow, height * grow);
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the count is positive and at most a few hundred"
+    )]
+    let count = ((across / width).ceil() * (down / height).ceil()).max(1.) as usize;
+    div()
+        .size_full()
+        .overflow_hidden()
+        .flex()
+        .flex_wrap()
+        .content_start()
+        .children((0..count).map(|_| {
+            img(path.to_path_buf())
+                .w(px(width))
+                .h(px(height))
+                .flex_none()
+                .object_fit(ObjectFit::Fill)
+        }))
+        .into_any_element()
+}
+
 impl Orchestrator {
     /// What is drawn behind the page: what the theme settings came to.
-    fn backdrop(&self, cx: &Context<Self>) -> AnyElement {
+    fn backdrop(&self, page: Size<Pixels>, cx: &Context<Self>) -> AnyElement {
         let look = applied(cx);
         let still = look.reduce_motion;
         let t = theme(cx);
-        match &look.backdrop {
+        match &look.backdrop.shown {
             Shown::None => div().size_full().bg(t.bg_app).into_any_element(),
             Shown::Butterfly => {
                 let flight = Rc::clone(&self.flight);
                 background::field(pill_bounds, still, flight, None).into_any_element()
             }
             // The picture is dimmed toward the window's color, so the page reads over it.
-            Shown::Image { path, dim, fit } => div()
-                .size_full()
-                .relative()
-                .bg(t.bg_app)
-                .child(img(PathBuf::from(path)).size_full().object_fit(match fit {
-                    Fit::Cover => ObjectFit::Cover,
-                    Fit::Contain => ObjectFit::Contain,
-                    Fit::Stretch => ObjectFit::Fill,
-                }))
-                .child(div().absolute().inset_0().bg(t.bg_app.opacity(*dim)))
-                .into_any_element(),
+            Shown::Image {
+                path,
+                dim,
+                fit,
+                size,
+            } => {
+                let picture = match (fit, size) {
+                    (Fit::Tile, Some(size)) => tiles(path, *size, page),
+                    _ => img(PathBuf::from(path))
+                        .size_full()
+                        .object_fit(match fit {
+                            Fit::Cover | Fit::Tile => ObjectFit::Cover,
+                            Fit::Contain => ObjectFit::Contain,
+                            Fit::Stretch => ObjectFit::Fill,
+                        })
+                        .into_any_element(),
+                };
+                div()
+                    .size_full()
+                    .relative()
+                    .bg(t.bg_app)
+                    .child(picture)
+                    .child(div().absolute().inset_0().bg(t.bg_app.opacity(*dim)))
+                    .into_any_element()
+            }
             Shown::Scene(_) => {
                 let fallback = scene::Fallback {
                     surface: t.bg_app,
@@ -462,7 +512,8 @@ impl Orchestrator {
 impl Render for Orchestrator {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let dark = applied(cx)
-            .backdrop_scheme
+            .backdrop
+            .scheme
             .map_or_else(|| theme(cx).is_dark(), |scheme| scheme == Scheme::Dark);
         LIGHT.store(!dark, Ordering::Relaxed);
         // The field keeps its own colors, so they follow the backdrop here.
@@ -566,7 +617,7 @@ impl Render for Orchestrator {
                 .child(div().flex_none().h(px(PILL_H + 6.)))
                 .child(list)
         });
-        let backdrop = self.backdrop(cx);
+        let backdrop = self.backdrop(window.viewport_size(), cx);
         div()
             .id("orchestrator")
             .role(Role::Main)

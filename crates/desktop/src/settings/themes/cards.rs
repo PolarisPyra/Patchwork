@@ -2,20 +2,14 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::sync::Arc;
-
-use gpui::{
-    AnyElement, Div, FontWeight, Hsla, ObjectFit, Role, SharedString, Toggled, div, img,
-    prelude::*, px, rgb,
-};
+use gpui::{AnyElement, Div, FontWeight, Hsla, Role, SharedString, Toggled, div, prelude::*, px, rgb};
 use patchwork_server::settings::{Settings, Theme as ThemeSetting};
-use patchwork_server::themes::{BackdropChoice, Dim, Fit, Palette, Scheme};
+use patchwork_server::themes::{Palette, Scheme};
 
-use super::Kind;
-use crate::orchestrator::{butterfly_preview, scene_preview};
+use super::files::{Filed, file_tools};
 use crate::settings::SettingsDialog;
-use crate::ui::theme::{FS_LG, FS_SM, radius, radius_sm, Theme as Colors, theme};
-use crate::ui::{button, focus_ring, icon, icon_button, tooltip};
+use crate::ui::theme::{FS_LG, FS_SM, Theme as Colors, radius, radius_sm, theme};
+use crate::ui::{focus_ring, icon, icon_button, tooltip};
 
 /// The color schemes that are not files, in the order their cards come: the id each has in
 /// the settings, its name, the kind of window it is for, and its colors.
@@ -42,6 +36,15 @@ impl Slot {
             Self::Fixed => "fixed",
             Self::Light => "light",
             Self::Dark => "dark",
+        }
+    }
+
+    /// The kind of window whose background a color scheme picked here brings its own to.
+    fn windows(self) -> Option<Scheme> {
+        match self {
+            Self::Fixed => None,
+            Self::Light => Some(Scheme::Light),
+            Self::Dark => Some(Scheme::Dark),
         }
     }
 
@@ -132,7 +135,7 @@ fn palette_swatch(palette: &Colors) -> Div {
 }
 
 /// A small button on a card, beside its name.
-fn tool(
+pub(super) fn tool(
     key: String,
     label: String,
     icon: &'static str,
@@ -147,23 +150,6 @@ fn tool(
             act(d, cx);
         }))
         .into_any_element()
-}
-
-/// The button on a card that deletes its file.
-fn delete_tool(
-    key: &str,
-    name: &str,
-    kind: Kind,
-    id: String,
-    cx: &mut Context<SettingsDialog>,
-) -> AnyElement {
-    tool(
-        format!("delete-{key}"),
-        format!("Delete {name}"),
-        "trash",
-        move |d, cx| d.remove_themed(kind, id.clone(), cx),
-        cx,
-    )
 }
 
 /// What a card shows beside its name: what is wrong with it, and its buttons.
@@ -303,24 +289,32 @@ pub(super) fn scheme_cards(
         let id = scheme.id.clone();
         let key = format!("scheme-{}-{id}", slot.key());
         let name = scheme.file.name.clone();
-        let mut tools = vec![tool(
-            format!("export-{key}"),
-            format!("Export {name}"),
-            "export",
-            {
-                let id = id.clone();
-                move |d, cx| d.export_theme(id.clone(), cx)
-            },
-            cx,
-        )];
-        if scheme.custom {
-            tools.push(delete_tool(&key, &name, Kind::Scheme, id.clone(), cx));
-        }
-        // Picked as the one color scheme, it brings the background it names.
-        let backdrop = scheme
-            .file
-            .backdrop_choice()
-            .filter(|_| slot == Slot::Fixed);
+        let mut tools = vec![
+            tool(
+                format!("edit-{key}"),
+                format!("Edit {name}"),
+                "pencil-simple",
+                {
+                    let id = id.clone();
+                    move |d, cx| d.edit_theme(&id, cx)
+                },
+                cx,
+            ),
+            tool(
+                format!("export-{key}"),
+                format!("Export {name}"),
+                "export",
+                {
+                    let id = id.clone();
+                    move |d, cx| d.export_theme(id.clone(), cx)
+                },
+                cx,
+            ),
+        ];
+        let state = (scheme.custom, scheme.edited);
+        tools.extend(file_tools(&key, &name, Filed::Scheme, &id, state, cx));
+        // It brings the background it names to the windows it is picked for.
+        let backdrop = scheme.file.backdrop_choice();
         cards.push(card(
             key,
             name,
@@ -341,7 +335,7 @@ pub(super) fn scheme_cards(
                     |s| {
                         slot.pick(s, &id, true);
                         if let Some(backdrop) = backdrop {
-                            s.orchestrator_backdrop = backdrop;
+                            *s.backdrop_mut(slot.windows()) = backdrop;
                         }
                     },
                     cx,
@@ -351,122 +345,4 @@ pub(super) fn scheme_cards(
         ));
     }
     cards
-}
-
-/// The card after the backdrops that adds a picture to them, the size of a card's picture.
-pub(super) fn add_picture_card(cx: &mut Context<SettingsDialog>) -> AnyElement {
-    let t = *theme(cx);
-    button("add-backdrop", "Add background")
-        // The size and place of a card's picture: inside the card's padding and border.
-        .m(px(7.))
-        .w(px(136.))
-        .h(px(64.))
-        .flex_none()
-        .flex_col()
-        .justify_center()
-        .gap(px(6.))
-        .rounded(px(radius_sm()))
-        .border_1()
-        .border_dashed()
-        .border_color(t.border_strong)
-        .text_size(px(FS_SM))
-        .text_color(t.text_muted)
-        .hover(move |s| s.bg(t.bg_hover).text_color(t.text))
-        .child(icon("plus", 16.))
-        .child("Add background")
-        .on_click(cx.listener(|d, _, _, cx| d.add_backdrop_picture(cx)))
-        .into_any_element()
-}
-
-/// The Orchestrator's backdrops: none, the butterfly, the animated backgrounds, the pictures.
-pub(super) fn backdrop_cards(
-    d: &SettingsDialog,
-    cx: &mut Context<SettingsDialog>,
-) -> Vec<AnyElement> {
-    let t = *theme(cx);
-    let current = d.settings.orchestrator_backdrop.clone();
-    let still = d.settings.reduce_motion;
-    let butterfly = div().child(butterfly_preview(&d.themes.flight, still));
-    let fixed = [
-        ("None", div().bg(t.bg_app), BackdropChoice::None),
-        ("Butterfly", butterfly, BackdropChoice::Butterfly),
-    ];
-    let scenes = d.themes.scenes.iter().map(|saved| {
-        let id = saved.id.clone();
-        (
-            saved.file.name.clone(),
-            div().child(scene_preview(
-                Arc::clone(saved),
-                t.bg_app,
-                t.text_muted,
-                still,
-            )),
-            BackdropChoice::Scene { id: id.clone() },
-            saved.custom.then_some((Kind::Scene, id)),
-        )
-    });
-    let pictures = d.themes.pictures.iter().map(|picture| {
-        // The picked picture keeps how it is shown, and its card shows it that way.
-        let choice = if current.picture_file() == Some(picture.file.as_str()) {
-            current.clone()
-        } else {
-            BackdropChoice::picture(picture.file.clone())
-        };
-        let (dim, fit) = match &choice {
-            BackdropChoice::Image { dim, fit, .. } => (*dim, *fit),
-            _ => (Dim::default(), Fit::default()),
-        };
-        let shown = img(picture.path.clone())
-            .size_full()
-            .object_fit(object_fit(fit));
-        (
-            picture.name.clone().unwrap_or_else(|| "Picture".into()),
-            // Dimmed toward the window's color, as the page shows it.
-            div()
-                .relative()
-                .bg(t.bg_app)
-                .child(shown)
-                .child(div().absolute().inset_0().bg(t.bg_app.opacity(dim.share()))),
-            choice,
-            None,
-        )
-    });
-    let all: Vec<_> = fixed
-        .into_iter()
-        .map(|(name, swatch, choice)| (name.to_string(), swatch, choice, None))
-        .chain(scenes)
-        .chain(pictures)
-        .collect();
-    all.into_iter()
-        .enumerate()
-        .map(|(n, (name, swatch, choice, delete))| {
-            let checked = choice == current;
-            let key = format!("backdrop-{n}");
-            let tools = delete
-                .map(|(kind, id)| delete_tool(&key, &name, kind, id, cx))
-                .into_iter()
-                .collect();
-            card(
-                key,
-                name,
-                swatch,
-                checked,
-                Extras { notes: &[], tools },
-                move |d, cx| {
-                    let choice = choice.clone();
-                    d.update(|s| s.orchestrator_backdrop = choice, cx);
-                },
-                cx,
-            )
-        })
-        .collect()
-}
-
-/// How a picture is laid on the page for each way it can fill it.
-fn object_fit(fit: Fit) -> ObjectFit {
-    match fit {
-        Fit::Cover => ObjectFit::Cover,
-        Fit::Contain => ObjectFit::Contain,
-        Fit::Stretch => ObjectFit::Fill,
-    }
 }

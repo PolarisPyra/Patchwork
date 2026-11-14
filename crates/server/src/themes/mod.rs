@@ -7,20 +7,25 @@
 
 // Rust guideline compliant 2026-10-09
 
+mod applied;
 mod code;
 mod contrast;
+mod foreign;
 mod library;
 mod prompt;
+mod schedule;
 mod share;
 mod types;
 mod watch;
 
+pub use applied::{Density, Follow, ProjectLook};
 pub use code::{CodeTheme, CodeThemeFile, Syntax};
 pub use library::init;
+pub use schedule::{clock_minutes, clock_text};
 pub use share::{Imported, ImportedKind};
 pub use types::{
-    Anchors, Applied, BackdropChoice, CellSize, Color, Dim, Dust, Entry, Fit, Fonts, Motion,
-    Overrides, Paint, Palette, SavedScene, Scene, SceneFile, Scheme, Shown, Sprite, Theme,
-    ThemeFile, Unreadable,
+    Anchors, Applied, Backdrop, BackdropChoice, CellSize, Color, Dim, Dust, Entry, Fit, Fonts,
+    MAX_BLUR, Motion, Overrides, Paint, Palette, SavedScene, Scene, SceneFile, Scheme, Shown,
+    Sprite, Theme, ThemeFile, Unreadable,
 };
 pub use watch::Watcher;

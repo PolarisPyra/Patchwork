@@ -69,7 +69,6 @@ const MAX_SIDE: u32 = 2560;
 /// The longest side of a picture's blurred copy, and how far it is blurred. A blurred picture
 /// has no detail to lose, and a small one is quick to blur and to stretch.
 const BLUR_SIDE: u32 = 640;
-const BLUR: f32 = 8.;
 
 /// The `app_state` key of the name a picture was picked by.
 fn name_key(file: &str) -> String {
@@ -165,16 +164,18 @@ impl Server {
         Ok(file)
     }
 
-    /// A small, blurred copy of a picture in the backgrounds folder, made once and kept in the
-    /// cache folder. None when the picture cannot be read, as a GIF cannot.
-    pub(crate) fn blurred_background(&self, file: &str) -> Option<PathBuf> {
+    /// A small copy of a picture in the backgrounds folder, blurred to `level`, made once and
+    /// kept in the cache folder. None when the picture cannot be read, as a GIF cannot.
+    pub(crate) fn blurred_background(&self, file: &str, level: u8) -> Option<PathBuf> {
         let folder = crate::system::dirs().cache.join("blurred-backgrounds");
-        let copy = folder.join(format!("{file}.png"));
+        let copy = folder.join(format!("{file}-{level}.png"));
         if copy.is_file() {
             return Some(copy);
         }
         let picture = image::open(self.backgrounds_dir.join(file)).ok()?;
-        let soft = picture.thumbnail(BLUR_SIDE, BLUR_SIDE).blur(BLUR);
+        let soft = picture
+            .thumbnail(BLUR_SIDE, BLUR_SIDE)
+            .blur(f32::from(level));
         std::fs::create_dir_all(&folder).ok()?;
         soft.save(&copy).ok()?;
         Some(copy)

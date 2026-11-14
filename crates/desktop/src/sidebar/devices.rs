@@ -118,7 +118,7 @@ impl Render for DevicesView {
                 };
                 button(SharedString::from(format!("device-{i}")), name.clone())
                     .role(Role::ListItem)
-                    .h(px(28.))
+                    .h(px(crate::ui::theme::roomy(28.)))
                     .gap(px(8.))
                     .mx(px(4.))
                     .px(px(8.))
@@ -183,7 +183,7 @@ impl Render for DevicesView {
                                 .id("device-none")
                                 .role(Role::ListItem)
                                 .aria_label("No remote devices available")
-                                .h(px(28.))
+                                .h(px(crate::ui::theme::roomy(28.)))
                                 .mx(px(4.))
                                 .px(px(8.))
                                 .flex()

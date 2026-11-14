@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, PoisonError, RwLock};
 
 use gpui::{App, Global, Hsla, Rgba, SharedString, WindowAppearance};
-use patchwork_server::themes::{Applied, Paint, Palette, Scheme, Syntax, ThemeFile};
+use patchwork_server::themes::{Applied, Color, Paint, Palette, Scheme, Syntax, ThemeFile};
 
 /// The colors one of `theme.css`'s three palettes gives each token.
 #[derive(Clone, Copy)]
@@ -290,6 +290,30 @@ impl Theme {
         theme
     }
 
+    /// Draws buttons, links and what is selected in `accent`, in place of the palette's own.
+    fn accented(&mut self, Color(accent): Color) {
+        let code = |color: Hsla| {
+            let Rgba { r, g, b, .. } = color.into();
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "a channel is between zero and one"
+            )]
+            let [r, g, b] = [r, g, b].map(|c| (c.clamp(0., 1.) * 255.).round() as u32);
+            r << 16 | g << 8 | b
+        };
+        let (surface, text) = (code(self.bg_app), code(self.text));
+        let lit = gpui::rgb(accent);
+        let bright = 0.299 * lit.r + 0.587 * lit.g + 0.114 * lit.b > 0.6;
+        self.accent = hex(accent);
+        self.accent_hover = mix(text, accent, 0.12);
+        self.accent_text = mix(text, accent, 0.20);
+        self.bg_selected = mix(accent, surface, 0.30);
+        self.tree_selected = tint(accent, 0.30);
+        self.bg_accent_soft = tint(accent, 0.16);
+        self.text_on_accent = hex(if bright { 0x0010_1114 } else { 0x00ff_ffff });
+    }
+
     /// Highlights code in a code theme's colors.
     fn highlight(&mut self, syntax: Syntax) {
         self.syn_keyword = hex(syntax.keyword.0);
@@ -340,12 +364,16 @@ fn dark(appearance: WindowAppearance) -> bool {
 
 /// Draws the app in what the appearance settings came to. `appearance` picks the palette when
 /// the app follows the system.
-pub fn apply(applied: Applied, appearance: WindowAppearance, cx: &mut App) {
+pub fn apply(mut applied: Applied, appearance: WindowAppearance, cx: &mut App) {
+    let night = dark(appearance);
+    if let (Paint::System { .. }, Some(pair)) = (&applied.paint, &applied.system_backdrops) {
+        applied.backdrop = pair[usize::from(night)].clone();
+    }
     let palette = match &applied.paint {
         Paint::Fixed(palette) => palette,
-        Paint::System { light, dark: night } => {
-            if dark(appearance) {
-                night
+        Paint::System { light, dark } => {
+            if night {
+                dark
             } else {
                 light
             }
@@ -362,9 +390,23 @@ pub fn apply(applied: Applied, appearance: WindowAppearance, cx: &mut App) {
             .map_or(SharedString::new_static(own), SharedString::from)
     };
     *FONTS.write().unwrap_or_else(PoisonError::into_inner) = [
-        family(file.and_then(|f| f.fonts.ui.as_ref()), FONT_UI),
-        family(file.and_then(|f| f.fonts.code.as_ref()), FONT_MONO),
+        family(
+            applied
+                .ui_font
+                .as_ref()
+                .or(file.and_then(|f| f.fonts.ui.as_ref())),
+            FONT_UI,
+        ),
+        family(
+            applied
+                .code_font
+                .as_ref()
+                .or(file.and_then(|f| f.fonts.code.as_ref())),
+            FONT_MONO,
+        ),
     ];
+    let roomy = applied.density.scale();
+    DENSITY.store(roomy.to_bits(), Ordering::Relaxed);
     let corner = file.and_then(|f| f.radius).unwrap_or(RADIUS);
     CORNER.store(corner.clamp(0., MAX_RADIUS).to_bits(), Ordering::Relaxed);
     let code = if theme.is_dark() {
@@ -374,6 +416,9 @@ pub fn apply(applied: Applied, appearance: WindowAppearance, cx: &mut App) {
     };
     if let Some(syntax) = code {
         theme.highlight(syntax);
+    }
+    if let Some(accent) = applied.accent {
+        theme.accented(accent);
     }
     theme.scale = applied.text_size.scale();
     cx.set_reduce_motion(applied.reduce_motion);
@@ -413,6 +458,12 @@ static FONTS: RwLock<[SharedString; 2]> = RwLock::new([
     SharedString::new_static(FONT_MONO),
 ]);
 static CORNER: AtomicU32 = AtomicU32::new(RADIUS.to_bits());
+static DENSITY: AtomicU32 = AtomicU32::new(1_f32.to_bits());
+
+/// A row's height or its padding at the density in Settings: `size` is the comfortable one.
+pub fn roomy(size: f32) -> f32 {
+    (size * f32::from_bits(DENSITY.load(Ordering::Relaxed))).round()
+}
 
 fn font_family(index: usize) -> SharedString {
     FONTS.read().unwrap_or_else(PoisonError::into_inner)[index].clone()

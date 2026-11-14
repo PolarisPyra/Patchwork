@@ -251,7 +251,7 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
             if tasks.is_empty() && folders.is_empty() {
                 children = children.child(
                     div()
-                        .h(px(28.))
+                        .h(px(crate::ui::theme::roomy(28.)))
                         .flex()
                         .items_center()
                         .pl(px(30.))

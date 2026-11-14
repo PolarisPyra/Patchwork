@@ -12,11 +12,7 @@ use sha2::{Digest, Sha256};
 
 use super::code::{CodeTheme, CodeThemeFile, Syntax};
 use super::contrast;
-use super::types::{
-    Applied, BackdropChoice, Entry, Paint, Palette, SavedScene, SceneFile, Scheme, Shown, Theme,
-    ThemeFile, Unreadable,
-};
-use crate::settings::Theme as ThemeSetting;
+use super::types::{Entry, Palette, SavedScene, SceneFile, Scheme, Theme, ThemeFile, Unreadable};
 use crate::{Error, Server};
 
 /// One kind of file that can be picked: its folder, and the files Patchwork comes with.
@@ -223,10 +219,11 @@ impl<T: DeserializeOwned + Serialize + PartialEq> Shelf<T> {
         }
     }
 
-    fn entry(&self, id: &str, custom: bool, file: T) -> Entry<T> {
+    fn entry(&self, id: &str, custom: bool, edited: bool, file: T) -> Entry<T> {
         Entry {
             id: id.to_string(),
             custom,
+            edited,
             notes: (self.notes)(&file),
             file,
         }
@@ -238,18 +235,22 @@ impl<T: DeserializeOwned + Serialize + PartialEq> Shelf<T> {
             return None;
         }
         let noun = self.noun;
+        let preset = self.presets.iter().find(|(preset, _)| *preset == id);
         if let Ok(text) = std::fs::read_to_string(self.path(id)) {
             match self.parse(&text) {
-                Ok(file) => return Some(self.entry(id, !self.comes_with(id), file)),
+                Ok(file) => {
+                    let edited = preset.is_some_and(|(_, ours)| *ours != text);
+                    return Some(self.entry(id, preset.is_none(), edited, file));
+                }
                 Err(e) => {
                     log::warn!(id, noun, error:% = e; "{{noun}} {{id}} cannot be read: {{error}}");
                 }
             }
         }
-        let (_, text) = self.presets.iter().find(|(preset, _)| *preset == id)?;
+        let (_, text) = preset?;
         self.parse(text)
             .ok()
-            .map(|file| self.entry(id, false, file))
+            .map(|file| self.entry(id, false, false, file))
     }
 
     /// The ids of the files in the folder, by name.
@@ -323,6 +324,33 @@ impl<T: DeserializeOwned + Serialize + PartialEq> Shelf<T> {
             return Err(format!("{id} is not a {noun}").into());
         }
         std::fs::remove_file(self.path(id)).map_err(|e| format!("couldn't delete {id}: {e}"))?;
+        Ok(())
+    }
+
+    /// Writes `file` over the one with this id.
+    pub(super) fn write(&self, id: &str, file: &T) -> Result<(), Error> {
+        let noun = self.noun;
+        if !is_id(id) {
+            return Err(format!("{id} is not a {noun}").into());
+        }
+        let text = serde_json::to_string_pretty(file).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(self.dir())
+            .and_then(|()| std::fs::write(self.path(id), text))
+            .map_err(|e| format!("couldn't save the {noun}: {e}"))?;
+        Ok(())
+    }
+
+    /// Writes the file Patchwork comes with under this id over the one in the folder.
+    fn reset(&self, id: &str) -> Result<(), Error> {
+        let noun = self.noun;
+        let (_, text) = self
+            .presets
+            .iter()
+            .find(|(preset, _)| *preset == id)
+            .ok_or_else(|| format!("Patchwork has no {noun} {id} of its own"))?;
+        std::fs::create_dir_all(self.dir())
+            .and_then(|()| std::fs::write(self.path(id), text))
+            .map_err(|e| format!("couldn't reset {id}: {e}"))?;
         Ok(())
     }
 
@@ -450,74 +478,54 @@ impl Server {
         SCENES.remove(id)
     }
 
-    /// What the appearance settings come to: the palettes, the code themes, the backdrop.
-    /// Reads their files, so call it off the UI thread once the window is open.
-    #[must_use]
-    pub fn applied_theme(&self) -> Applied {
-        let settings = self.store.settings();
-        let picked = settings.theme_id.as_deref().and_then(palette);
-        let paint = match (picked, settings.theme) {
-            (Some(palette), _) => Paint::Fixed(palette),
-            (None, ThemeSetting::Light) => Paint::Fixed(Palette::Light),
-            (None, ThemeSetting::Dark) => Paint::Fixed(Palette::Dark),
-            (None, ThemeSetting::Oled) => Paint::Fixed(Palette::Oled),
-            (None, ThemeSetting::System) => Paint::System {
-                light: settings
-                    .system_light
-                    .as_deref()
-                    .and_then(palette)
-                    .unwrap_or(Palette::Light),
-                dark: settings
-                    .system_dark
-                    .as_deref()
-                    .and_then(palette)
-                    .unwrap_or(Palette::Dark),
-            },
-        };
-        let (backdrop, backdrop_scheme) = match &settings.orchestrator_backdrop {
-            BackdropChoice::None => (Shown::None, None),
-            // The butterfly is drawn on its own night sky, whatever the colors.
-            BackdropChoice::Butterfly => (Shown::Butterfly, Some(Scheme::Dark)),
-            BackdropChoice::Image {
-                file,
-                dim,
-                fit,
-                blur,
-            } => {
-                let path = self.backgrounds_dir.join(file);
-                // Only a file of the folder itself, which still exists.
-                let inside = !file.contains(['/', '\\']) && path.is_file();
-                let shown = if inside {
-                    let soft = blur.then(|| self.blurred_background(file)).flatten();
-                    Shown::Image {
-                        path: soft.unwrap_or(path),
-                        dim: dim.share(),
-                        fit: *fit,
-                    }
-                } else {
-                    Shown::None
-                };
-                (shown, None)
-            }
-            BackdropChoice::Scene { id } => SCENES.load(id).map_or((Shown::None, None), |saved| {
-                (Shown::Scene(saved.file.scene), Some(saved.file.scheme))
-            }),
-        };
-        Applied {
-            paint,
-            code_light: syntax(settings.code_theme_light.as_deref(), Scheme::Light),
-            code_dark: syntax(settings.code_theme_dark.as_deref(), Scheme::Dark),
-            backdrop,
-            backdrop_scheme,
-            chat_font: settings.chat_font.filter(|font| !font.trim().is_empty()),
-            text_size: settings.text_size,
-            reduce_motion: settings.reduce_motion,
-        }
+    /// Deletes a code theme's file. A setting that picked it uses the color scheme's colors.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `id` is not a code theme's id or its file cannot be deleted.
+    pub fn remove_code_theme(&self, id: &str) -> Result<(), Error> {
+        CODE.remove(id)
+    }
+
+    /// Puts a color scheme Patchwork comes with back as it came.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when Patchwork has no such color scheme or its file cannot be written.
+    pub fn reset_theme(&self, id: &str) -> Result<(), Error> {
+        THEMES.reset(id)
+    }
+
+    /// Puts an animated background Patchwork comes with back as it came.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when Patchwork has no such background or its file cannot be written.
+    pub fn reset_scene(&self, id: &str) -> Result<(), Error> {
+        SCENES.reset(id)
+    }
+
+    /// Puts a code theme Patchwork comes with back as it came.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when Patchwork has no such code theme or its file cannot be written.
+    pub fn reset_code_theme(&self, id: &str) -> Result<(), Error> {
+        CODE.reset(id)
+    }
+
+    /// Writes a color scheme over the file with this id, as the editor in Settings changes it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `id` cannot be a file's name or the file cannot be written.
+    pub fn write_theme(&self, id: &str, file: &ThemeFile) -> Result<(), Error> {
+        THEMES.write(id, file)
     }
 }
 
 /// The palette with this id: a color scheme's file, else one Patchwork comes with.
-fn palette(id: &str) -> Option<Palette> {
+pub(super) fn palette(id: &str) -> Option<Palette> {
     THEMES
         .load(id)
         .map(|theme| Palette::File(Box::new(theme.file)))
@@ -525,7 +533,7 @@ fn palette(id: &str) -> Option<Palette> {
 }
 
 /// The colors of the code theme with this id, when it is one for `scheme` windows.
-fn syntax(id: Option<&str>, scheme: Scheme) -> Option<Syntax> {
+pub(super) fn syntax(id: Option<&str>, scheme: Scheme) -> Option<Syntax> {
     let theme = CODE.load(id?)?;
     (theme.file.scheme == scheme).then_some(theme.file.colors)
 }

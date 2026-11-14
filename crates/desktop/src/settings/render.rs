@@ -29,6 +29,8 @@ impl SettingsDialog {
             "general" => general::render(self, cx),
             "chat" => chat::render(self, cx),
             "themes" => themes::render(self, window, cx),
+            "backgrounds" => themes::backgrounds_pane(self, window, cx),
+            "interface" => themes::interface_pane(self, window, cx),
             "shortcuts" => shortcuts::render(self, window, cx),
             "providers" => providers::render(self, window, cx),
             "tokens" => tokens::render(self, cx),
