@@ -14,7 +14,7 @@ Native desktop app in Rust: the UI is drawn with GPUI, over the backend in `crat
 - `src/` holds `main.rs` and folders, never loose files. A folder is one piece of UI (`chat`, `sidebar`, `settings`, `canvas`, `panel`, `workspace`, `onboarding`), with its state and entry view in their own files (`state.rs`, `render.rs`, `view.rs`). A sub-feature takes the same shape one level down: `chat/composer/`, `settings/{providers,extensions,mcp}/`.
 - `ui/` holds only what two or more features use: the shared controls in `ui/controls.rs` (`button`, `icon_button`, `spinner`, `scrollbar`, …), the colours and sizes in `ui/theme.rs`, the embedded icons and fonts in `ui/assets.rs`, and the shared menus, dialogs and text tools.
 - New code goes in the feature that uses it. Move it up into `ui/` once a second feature needs it, and down into the feature when only one is left.
-- `ui/assets.rs` embeds `crates/desktop/assets/` (fonts, icons) and the provider logos in the root `assets/`.
+- `ui/assets.rs` embeds the fonts, icons and provider logos in the root `assets/`.
 
 ### `crates/server/src`
 

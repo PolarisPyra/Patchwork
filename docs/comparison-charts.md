@@ -59,7 +59,7 @@ go where the person asked for them, usually the Desktop.
 |---|---|
 | Canvas | 1600 × 900, rendered at 2× to 3200 × 1800 |
 | Background | `#0b0b0c` |
-| Font | Inter, from `crates/desktop/assets/fonts` |
+| Font | Inter, from `assets/fonts` |
 | Text | `#f4f4f5` for the title, labels and the time now; `#b4b4bc` for the time before and the legend; `#8b8b94` for the axis labels and each label's second line |
 | Bars | grey `#5c5c66` for before, blue `#4682fa` for now; 20 tall, the before bar's right end rounded by 4 |
 | Axis | the zero line is `#3a3a42` and the others `#1f1f23`, 1.5 thick; labels are 20 px and the last one carries the unit |
@@ -133,7 +133,7 @@ the repo root, with `f` set to the SVG's path:
 ```sh
 f=~/Desktop/patchwork-speedups.svg
 mkdir -p target/chart-scratch
-printf '<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd"><fontconfig><dir>%s/crates/desktop/assets/fonts</dir><cachedir>%s/target/chart-scratch/cache</cachedir></fontconfig>' "$PWD" "$PWD" > target/chart-scratch/fonts.conf
+printf '<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd"><fontconfig><dir>%s/assets/fonts</dir><cachedir>%s/target/chart-scratch/cache</cachedir></fontconfig>' "$PWD" "$PWD" > target/chart-scratch/fonts.conf
 FONTCONFIG_FILE=$PWD/target/chart-scratch/fonts.conf rsvg-convert -z 2 "$f" -o "${f%.svg}.png"
 rm -r target/chart-scratch
 ```
