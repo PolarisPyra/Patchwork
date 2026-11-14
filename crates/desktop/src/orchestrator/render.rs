@@ -1,4 +1,4 @@
-//! The orchestrator page drawn: a dark pill to write a request in, over the dust, and under
+//! The orchestrator page drawn: a dark pill to write a request in, over the butterfly, and under
 //! it the requests sent, each with the chat that has it.
 
 // Rust guideline compliant 2026-10-09
