@@ -57,7 +57,8 @@ CI runs the check form of each of the last three on every push to `main`.
 ## Running the app
 
 - I usually have Patchwork open. Don't stop or restart an instance you didn't start.
-- To see a change, build and start your own with `cargo run -p patchwork` in the background, and say so. Stop it by its PID when you're done.
+- A debug build is its own app, "Patchwork (dev)": it keeps `patchwork-dev` folders, which start as a copy of the installed app's config and database with the scheduled tasks turned off, so it opens beside the installed app and never touches its data. I try a change with `cargo run -p patchwork`, before anything is committed.
+- To see a change, build and start your own with `cargo run -p patchwork` in the background, and say so. Stop it by its PID when you're done. When a dev build is already open, yours would only raise that one: give yours its own folders by setting the four `XDG_*_HOME` variables to folders under `target/own-xdg`.
 - There is no hot reload: every change needs a rebuild and a restart of your instance.
 
 ## While I'm watching
@@ -104,13 +105,14 @@ Measure lag in a debug build you started:
 - Don't commit until I've reviewed the change and say so, and don't push until I ask.
 - Every change reaches `main` through a PR that is squash-merged, so it lands as one commit whose subject is the PR title plus "(#N)". A ruleset on `main` requires the PR, CI and the PR Changelog check; only the release workflow pushes to `main` directly. One PR per change: two features are two PRs, each with its own entry.
 - "Push to git", or just "push", covers the whole job without asking again or waiting for review:
-  1. Run `git pull --rebase origin main` (each release's workflow pushes "Release YY.M.N" to `main`, so the remote is often one ahead), then make a branch per change from `main`.
+  1. Run `git pull --rebase origin main` (each release's workflow pushes "Release YY.M.N" to `main`, so the remote is often one ahead), then make a branch per change from `origin/main`.
   2. Commit each change on its branch with its `Changelog:` paragraph, and push the branch.
   3. Open the PR with `gh pr create`: the title is the commit subject, and the body fills in `.github/pull_request_template.md`, with the same `Changelog:` line at the start of a line. The release notes read it from there.
-  4. Run `gh pr merge --squash --auto --delete-branch`, so it merges once the checks pass. Then switch back to `main`.
+  4. Run `gh pr merge --squash --auto --delete-branch`, so it merges once the checks pass.
+  5. Switch back to `main`, run `git pull --rebase origin main`, and `git cherry-pick` each branch's commit, so the working tree still has the change while its PR waits on the checks. A later `git pull --rebase origin main` drops that commit once the squash-merge is on the remote.
 
   That is all a push is. Say what went up.
-- "Release" means: run `git pull --rebase origin main`, then tag `main` with the next `YY.M.N` (the next N this month, or 0 in a new month) and push the tag. The Release workflow writes the notes, builds and publishes, then commits the version and the `CHANGELOG.md` section to `main` as "Release YY.M.N" (`docs/release.md`). Never set the version or write the changelog section yourself.
+- "Release" means: run `git pull --rebase origin main`, then tag `origin/main` (local `main` may hold a commit whose PR has not merged) with the next `YY.M.N` (the next N this month, or 0 in a new month) and push the tag. The Release workflow writes the notes, builds and publishes, then commits the version and the `CHANGELOG.md` section to `main` as "Release YY.M.N" (`docs/release.md`). Never set the version or write the changelog section yourself.
 - Force-pushing, moving or deleting a pushed tag, and rewriting pushed history still need their own ask.
 - Commit subjects are short, sentence-case, and imperative, with no prefix. Describe the user-visible change, for example "Nudge the header project dropdown 2px left".
 - `CHANGELOG.md` is user-facing: the app shows it in Settings → Updates. Every commit that changes the app needs a paragraph in its message starting with `Changelog:` and its group (Added, Changed, Fixed, Removed, or Security), written for users by the rules in `docs/changelog-style.md`: what they see or can do now, where, and what is different, for example "Changelog: Changed: Every loading indicator now uses the steady spinner from the thread list: plan steps, background tasks, … The old one rotated and looked like it shook." A Fixed entry says what went wrong and what happens now, never "again" or "back". Run every `Changelog:` paragraph through the declauding skill before committing it. A change users can't notice gets `Changelog: none`, and so does a follow-up to a change that hasn't been released yet. The `commit-msg` hook (`git config core.hooksPath scripts/hooks`) enforces both; if it turns a commit down, fix the message rather than bypassing the hook.
