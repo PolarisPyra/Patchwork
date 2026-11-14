@@ -60,10 +60,10 @@ impl Orchestrator {
         let workspace = self.workspace.upgrade()?;
         let workspace = workspace.read(cx);
         let project = workspace.settings.active_project_id.clone();
-        let new = workspace
+        let new = self
             .composer
             .read(cx)
-            .new_thread(project, &workspace.settings);
+            .launch_thread(project, &workspace.settings);
         Some((Arc::clone(&workspace.server), new))
     }
 

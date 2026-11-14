@@ -71,6 +71,10 @@ pub struct Composer {
     pub(super) sigil: sigil_menu::SigilMenu,
     /// The favourite models, as `agent:model` keys, read once in the background and saved there.
     pub(super) favorites: Vec<String>,
+    /// The agent and model picked on the Orchestrator page for the chats a request starts.
+    pub(super) launch: Option<(AgentKind, Option<String>)>,
+    /// The open model picker is the Orchestrator page's, not the chat's.
+    pub(super) launching: bool,
     /// Where Up has stepped to among the messages sent in this chat.
     pub(super) recalled: Option<super::recall::Recall>,
 }
@@ -179,6 +183,8 @@ impl Composer {
             sigil: sigil_menu::SigilMenu::default(),
             recalled: None,
             favorites: Vec::new(),
+            launch: None,
+            launching: false,
         }
     }
 

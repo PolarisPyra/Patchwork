@@ -16,10 +16,12 @@ use patchwork_server::orchestration::Target;
 use patchwork_server::themes::{Applied, Fit, Scene, Scheme, Shown};
 use patchwork_server::threads::AskKind;
 
+use gpui::{Anchor, FontWeight, MouseButton, anchored, deferred};
+
 use super::state::Orchestrator;
 use super::{background, scene};
 use crate::ui::theme::{font_ui, FS_LG, FS_SM, radius_lg, applied, theme};
-use crate::ui::{button, display_title, icon, spinner};
+use crate::ui::{agent_logo, button, display_title, icon, spinner};
 
 /// The pill: its size, the room kept at its sides, and how far down the page its top is.
 const PILL_W: f32 = 640.;
@@ -294,8 +296,102 @@ impl Orchestrator {
     }
 }
 
+/// A chip under the pill that opens a menu.
+fn launch_chip(id: &'static str, label: String, open: bool) -> gpui::Stateful<gpui::Div> {
+    button(id, label)
+        .aria_expanded(open)
+        .h(px(28.))
+        .gap(px(6.))
+        .px(px(10.))
+        .rounded_full()
+        .text_size(px(FS_SM))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(ink(0.7))
+        .when(open, |chip| chip.bg(ink(0.08)))
+        .hover(|s| s.bg(ink(0.08)).text_color(ink(1.)))
+        // The press leaves the keys in the field, where they go back once a pick is made.
+        .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
+}
+
+/// A chip's open menu, placed under the chip.
+fn under(menu: Option<AnyElement>) -> Option<gpui::Div> {
+    let menu = menu?;
+    Some(
+        div().absolute().bottom_0().left_0().child(
+            deferred(
+                anchored()
+                    .anchor(Anchor::TopLeft)
+                    .offset(point(px(0.), px(4.)))
+                    .snap_to_window_with_margin(px(8.))
+                    .child(menu),
+            )
+            .with_priority(1),
+        ),
+    )
+}
+
+impl Orchestrator {
+    /// The chips under the pill: the agent and model a request's new chat starts with, then its
+    /// effort, each with the menu that changes it open under it.
+    fn model_chip(&self, window: &mut Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let settings = &self.workspace.upgrade()?.read(cx).settings;
+        let composer = self.composer.read(cx);
+        let (agent, model) = composer.launch_pick(settings);
+        let name = composer.model_name(agent, model.as_deref());
+        let effort = composer.launch_effort_name(settings);
+        let (open, effort_open) = (composer.launch_picker_open(), composer.launch_effort_open());
+        let (picker, levels) = self.composer.update(cx, |composer, cx| {
+            let picker = composer.launch_picker(window, cx);
+            (picker, composer.launch_effort_menu(cx))
+        });
+        let composer = self.composer.clone();
+        let model_chip = launch_chip("orchestrator-model", format!("Choose model: {name}"), open)
+            .child(agent_logo(agent, model.as_deref(), 14.))
+            .child(div().max_w(px(220.)).truncate().child(name))
+            .child(icon("caret-down", 12.))
+            .on_click(move |event, window, cx| {
+                composer.update(cx, |composer, cx| {
+                    composer.toggle_launch_picker(event, window, cx);
+                });
+            });
+        let composer = self.composer.clone();
+        let effort_chip = effort.map(|effort| {
+            let chip = launch_chip(
+                "orchestrator-effort",
+                format!("Effort: {effort}"),
+                effort_open,
+            )
+            .child(icon("lightbulb", 14.))
+            .child(effort)
+            .child(icon("caret-down", 12.))
+            .on_click(move |event, window, cx| {
+                composer.update(cx, |composer, cx| {
+                    composer.toggle_launch_effort(event, window, cx);
+                });
+            });
+            div().relative().flex().child(chip).children(under(levels))
+        });
+        let row = div()
+            .w_full()
+            .max_w(px(PILL_W))
+            .mt(px(6.))
+            .px(px(12.))
+            .flex()
+            .gap(px(2.))
+            .child(
+                div()
+                    .relative()
+                    .flex()
+                    .child(model_chip)
+                    .children(under(picker)),
+            )
+            .children(effort_chip);
+        Some(row.into_any_element())
+    }
+}
+
 impl Render for Orchestrator {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let dark = applied(cx)
             .backdrop_scheme
             .map_or_else(|| theme(cx).is_dark(), |scheme| scheme == Scheme::Dark);
@@ -373,6 +469,7 @@ impl Render for Orchestrator {
                     .child(icon(glyph, 16.))
                     .on_click(cx.listener(|this, _, window, cx| this.enter(window, cx))),
             );
+        let model = self.model_chip(window, cx);
         let requests = div()
             .id("orchestrator-requests")
             .role(Role::List)
@@ -411,7 +508,7 @@ impl Render for Orchestrator {
             .font_family(font_ui())
             .text_color(ink(0.9))
             .child(div().absolute().inset_0().child(backdrop))
-            .child(column().child(pill).child(requests))
+            .child(column().child(pill).children(model).child(requests))
             .children(picker)
     }
 }
