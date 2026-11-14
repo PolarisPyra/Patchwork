@@ -19,7 +19,7 @@ use super::cards::{DELETE, Extras, Tool, add_card, card, grid};
 use super::files::{Filed, file_tools};
 use super::{Kind, generator};
 use crate::orchestrator::{butterfly_preview, scene_preview};
-use crate::settings::controls::{alert, section_heading};
+use crate::settings::controls::{alert, anchored, section_heading};
 use crate::settings::{SettingsDialog, SettingsEvent};
 use crate::ui::backdrop::{PRESETS, preset_fill};
 use crate::ui::background_picker::{BackgroundPicker, PickerEvent};
@@ -312,11 +312,14 @@ pub(in crate::settings) fn backgrounds_pane(
         .child(section_heading("Orchestrator", true, &t))
         .children(windows)
         .child(
-            div()
-                .pt(px(10.))
-                .pb(px(8.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .child("Orchestrator background"),
+            anchored(
+                div().id("label-orchestrator-background"),
+                "Orchestrator background",
+            )
+            .pt(px(10.))
+            .pb(px(8.))
+            .font_weight(FontWeight::SEMIBOLD)
+            .child("Orchestrator background"),
         )
         .child(grid(
             "backdrops",
@@ -327,7 +330,7 @@ pub(in crate::settings) fn backgrounds_pane(
         .child(new_scene)
         .child(section_heading("Chats", false, &t))
         .child(
-            div()
+            anchored(div().id("label-chat-background"), "Chat background")
                 .py(px(10.))
                 .child(
                     div()

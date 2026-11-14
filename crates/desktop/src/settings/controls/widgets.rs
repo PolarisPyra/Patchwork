@@ -2,10 +2,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::cell::RefCell;
 use std::rc::Rc;
 use gpui::{
-    AnyElement, Div, FontWeight, Hsla, Role, SharedString, Stateful, Toggled, div, hsla,
-    prelude::*, px,
+    AnyElement, Div, FontWeight, Hsla, Role, ScrollAnchor, SharedString, Stateful, Toggled, div,
+    hsla, prelude::*, px,
 };
 use crate::ui::menu::MenuItem;
 use crate::settings::SettingsDialog;
@@ -37,11 +38,31 @@ pub fn letter_badge(name: &str, size: f32) -> Div {
         .child(letter)
 }
 
+thread_local! {
+    /// The setting a search result opened, by its name, with what scrolls the pane to its row.
+    static SOUGHT: RefCell<Option<(&'static str, ScrollAnchor)>> = const { RefCell::new(None) };
+}
+
+/// Has the row named `name` scroll the pane to itself, or no row once `sought` is None.
+pub fn seek(sought: Option<(&'static str, ScrollAnchor)>) {
+    SOUGHT.with_borrow_mut(|s| *s = sought);
+}
+
+/// `el`, which the pane scrolls to while a search result names `name`.
+pub fn anchored<E: StatefulInteractiveElement>(el: E, name: &str) -> E {
+    let anchor = SOUGHT.with_borrow(|s| {
+        s.as_ref()
+            .filter(|(sought, _)| sought.eq_ignore_ascii_case(name))
+            .map(|(_, anchor)| anchor.clone())
+    });
+    el.anchor_scroll(anchor)
+}
+
 /// One setting: its name and what it does, with the control on the right.
 pub fn token_row(title: impl Into<SharedString>, desc: Option<&str>, t: &Theme) -> Stateful<Div> {
     let title = title.into();
-    div()
-        .id(SharedString::from(format!("row-{title}")))
+    let row = div().id(SharedString::from(format!("row-{title}")));
+    anchored(row, &title)
         .role(Role::Group)
         .aria_label(title.clone())
         .flex()
@@ -65,14 +86,16 @@ pub fn token_row(title: impl Into<SharedString>, desc: Option<&str>, t: &Theme) 
 }
 
 /// A heading over a run of rows, for a pane that holds more than one kind of setting.
-pub fn section_heading(text: impl Into<SharedString>, first: bool, t: &Theme) -> Div {
-    div()
+pub fn section_heading(text: impl Into<SharedString>, first: bool, t: &Theme) -> Stateful<Div> {
+    let text = text.into();
+    let heading = div().id(SharedString::from(format!("heading-{text}")));
+    anchored(heading, &text)
         .when(!first, |d| d.mt(px(16.)))
         .mb(px(2.))
         .text_size(px(fs_sm()))
         .font_weight(FontWeight::MEDIUM)
         .text_color(t.text_subtle)
-        .child(text.into())
+        .child(text)
 }
 
 /// `.toggle`: a switch, its knob at the right when on.
