@@ -102,6 +102,8 @@ pub struct Workspace {
     /// A redraw is due in a second, for the elapsed times on screen.
     pub(super) ticking: bool,
     pub queue_open: bool,
+    /// The queued strip's rows, for its scrollbar.
+    pub queue_scroll: ScrollHandle,
     pub queued_edit: Option<QueuedEdit>,
     pub chat_drafts: ChatDrafts,
     pub steer_pressed: bool,
@@ -281,6 +283,7 @@ impl Workspace {
             goal_closed: None,
             ticking: false,
             queue_open: true,
+            queue_scroll: ScrollHandle::new(),
             queued_edit: None,
             chat_drafts: ChatDrafts::default(),
             steer_pressed: false,
