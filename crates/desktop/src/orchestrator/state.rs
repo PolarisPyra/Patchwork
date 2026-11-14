@@ -13,6 +13,7 @@ use patchwork_server::orchestration::{Dispatched, Routing, Target};
 use patchwork_server::threads::{Ask, asks};
 
 use super::butterfly::Flight;
+use crate::chat::composer::Composer;
 use crate::ui::display_title;
 use crate::ui::text_area::{Arrow, BackspaceEmpty, Changed, Submitted, Tabbed, TextArea};
 use crate::workspace::Workspace;
@@ -78,6 +79,8 @@ pub(super) struct Picker {
 pub struct Orchestrator {
     pub(super) workspace: WeakEntity<Workspace>,
     pub(super) field: Entity<TextArea>,
+    /// The chat box, which holds the model picker and the model a request's chat starts with.
+    pub(super) composer: Entity<Composer>,
     /// The requests sent since the app started, newest first.
     pub(super) requests: Vec<Request>,
     pub(super) next_id: usize,
@@ -102,11 +105,16 @@ pub struct Orchestrator {
     pub(super) picker: Option<Picker>,
     /// Where the butterfly is, kept between frames.
     pub(super) flight: Rc<RefCell<Flight>>,
-    _subscriptions: [Subscription; 6],
+    _subscriptions: [Subscription; 7],
 }
 
 impl Orchestrator {
-    pub fn new(workspace: &Entity<Workspace>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        workspace: &Entity<Workspace>,
+        composer: Entity<Composer>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let field = cx.new(|cx| {
             let mut field = TextArea::new(PLACEHOLDER, "Request", cx);
             field.single_line = true;
@@ -137,10 +145,13 @@ impl Orchestrator {
                 this.settle(window, cx);
                 cx.notify();
             }),
+            // The model picker is the chat box's, drawn on this page.
+            cx.observe(&composer, |_, _, cx| cx.notify()),
         ];
         Self {
             workspace: workspace.downgrade(),
             field,
+            composer,
             requests: Vec::new(),
             next_id: 0,
             waiting: Vec::new(),

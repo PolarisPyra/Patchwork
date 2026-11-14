@@ -275,7 +275,7 @@ impl Workspace {
                 cx,
             )
         });
-        let orchestrator = cx.new(|cx| Orchestrator::new(&entity, window, cx));
+        let orchestrator = cx.new(|cx| Orchestrator::new(&entity, composer.clone(), window, cx));
         let status_region =
             cx.new(|cx| Region::new(&entity, |w, _, cx| w.status_bar(cx).into_any_element(), cx));
         let (panel, panel_height) =

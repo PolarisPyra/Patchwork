@@ -41,6 +41,7 @@ impl Composer {
             self.menu_came_from = window.focused(cx);
         }
         self.menu = Some(menu);
+        self.launching = false;
         self.picker = None;
         self.highlight = usize::MAX;
         match menu {
@@ -88,7 +89,16 @@ impl Composer {
             self.close_menu(window, cx);
             return;
         }
+        let launching = self.launching;
         self.close_menu(window, cx);
+        if launching {
+            match pick {
+                Pick::Model(agent, model) => self.launch = Some((agent, model)),
+                Pick::Effort(effort) => self.draft.effort = effort,
+                _ => {}
+            }
+            return;
+        }
         let Some(workspace) = self.workspace.upgrade() else {
             return;
         };
@@ -150,7 +160,8 @@ impl Composer {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
-        let open = self.menu == Some(menu);
+        // The Orchestrator page's menus are drawn there.
+        let open = self.menu == Some(menu) && !self.launching;
         let chip = chip.aria_expanded(open).on_click(
             cx.listener(move |this, e, window, cx| this.toggle_menu(menu, e, window, cx)),
         );

@@ -4,6 +4,7 @@
 // Rust guideline compliant 2026-10-09
 
 mod chips;
+mod launch;
 mod menus;
 mod model_notice;
 mod model_picker;
