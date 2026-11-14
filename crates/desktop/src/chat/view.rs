@@ -5,7 +5,7 @@
 use gpui::{Div, FontWeight, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_server::threads::{MessageStatus, Thread};
 use crate::ui::theme::{FS_SM, FS_XL, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
-use crate::ui::{agent_logo, button, display_title, format_tokens, icon, tooltip};
+use crate::ui::{agent_logo, button, display_title, format_tokens, icon, icon_button, tooltip};
 use crate::workspace::Workspace;
 use super::transcript::{sync_transcript, transcript};
 use crate::ui::backdrop;
@@ -145,6 +145,20 @@ pub(super) fn subagent_footer(
             .on_click(cx.listener(move |w, _, _, cx| w.open_thread(&id, cx))),
         None => link.cursor_default(),
     };
+    // Back to the chat shown before, or to the parent when the subagent was opened first.
+    let parent_id = found.map(|p| p.id.clone());
+    let back = (w.can_go_back() || parent_id.is_some()).then(|| {
+        icon_button("subagent-back", "Go back", "arrow-left", 14., cx)
+            .flex_none()
+            .tooltip(tooltip("Go back"))
+            .on_click(cx.listener(move |w, _, _, cx| {
+                if w.can_go_back() {
+                    w.go_back(cx);
+                } else if let Some(id) = &parent_id {
+                    w.open_thread(id, cx);
+                }
+            }))
+    });
     Some(
         div()
             .flex()
@@ -158,6 +172,7 @@ pub(super) fn subagent_footer(
             .py(px(10.))
             .text_size(px(FS_SM))
             .text_color(t.text_muted)
+            .children(back)
             .child(div().flex_none().child("Subagent of"))
             .child(link)
             .child(

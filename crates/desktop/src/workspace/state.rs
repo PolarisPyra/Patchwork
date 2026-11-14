@@ -106,6 +106,9 @@ pub struct Workspace {
     pub chat_drafts: ChatDrafts,
     pub steer_pressed: bool,
     pub lineage: Lineage,
+    /// Chats opened before and after the one shown, newest last, for going back and forward.
+    pub(super) history_back: Vec<String>,
+    pub(super) history_forward: Vec<String>,
     pub(super) _prompt_keys: gpui::Subscription,
     pub changes_view: Entity<ChangesView>,
     /// The Devices view, made the first time it is shown.
@@ -282,6 +285,8 @@ impl Workspace {
             chat_drafts: ChatDrafts::default(),
             steer_pressed: false,
             lineage: Lineage::default(),
+            history_back: Vec::new(),
+            history_forward: Vec::new(),
             _prompt_keys: prompt_keys,
             changes_view,
             devices_view: None,

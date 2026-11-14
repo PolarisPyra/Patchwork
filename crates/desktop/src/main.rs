@@ -58,7 +58,9 @@ actions!(
         NewTerminal,
         TogglePanel,
         ToggleOutput,
-        DeleteChat
+        DeleteChat,
+        GoBack,
+        GoForward
     ]
 );
 

@@ -110,6 +110,18 @@ pub(super) const COMMANDS: &[Command] = &[
         Some("Unselects highlighted chat text"),
     ),
     cmd("chat.find", "Chat", "Find in chat", None),
+    cmd(
+        "chat.back",
+        "Chat",
+        "Go back",
+        Some("Opens the chat shown before this one"),
+    ),
+    cmd(
+        "chat.forward",
+        "Chat",
+        "Go forward",
+        Some("Opens the chat you went back from"),
+    ),
     fixed(
         "sidebar.selectAll",
         "Sidebar",
@@ -144,6 +156,8 @@ pub(super) const DEFAULT_RULES: &[(&str, &str, bool)] = &[
     ("palette.toggle", "mod+k", false),
     ("chat.new", "mod+t", false),
     ("chat.find", "mod+f", false),
+    ("chat.back", "alt+left", false),
+    ("chat.forward", "alt+right", false),
     ("settings.open", "mod+,", false),
     ("terminal.toggle", "mod+`", false),
     ("terminal.new", "mod+shift+~", false),
@@ -165,6 +179,8 @@ pub(super) const DEFAULT_RULES: &[(&str, &str, bool)] = &[
 
 /// Keys the editor and the mouse own, listed on the page they belong to.
 pub(super) const FIXED_KEYS: &[(&str, &[&str], &str)] = &[
+    ("Chat", &["Mouse back"], "Go back"),
+    ("Chat", &["Mouse forward"], "Go forward"),
     ("Panel", &["Ctrl", "Shift", "C"], "Copy in the terminal"),
     ("Panel", &["Ctrl", "Shift", "V"], "Paste in the terminal"),
     (
@@ -332,6 +348,8 @@ fn action_for(id: &str) -> Option<Box<dyn Action>> {
         "palette.toggle" => Box::new(crate::TogglePalette),
         "chat.new" => Box::new(crate::NewChat),
         "chat.find" => Box::new(crate::FindInChat),
+        "chat.back" => Box::new(crate::GoBack),
+        "chat.forward" => Box::new(crate::GoForward),
         "settings.open" => Box::new(crate::OpenSettings),
         "sidebar.showTasks" => Box::new(crate::ShowTasks),
         "sidebar.showChanges" => Box::new(crate::ShowChanges),
