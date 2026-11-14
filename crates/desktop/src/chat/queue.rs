@@ -13,7 +13,7 @@ use patchwork_server::threads::{Attachment, Message};
 
 use crate::chat::goal::strip_action;
 use crate::ui::theme::{FS_SM, FS_XS, RADIUS_SM, Theme};
-use crate::ui::{button, icon, tooltip};
+use crate::ui::{button, icon, scrollbar, tooltip};
 use crate::workspace::{Workspace, is_working};
 
 /// What is written and attached in the composer, unsent.
@@ -362,7 +362,8 @@ fn queued_row(
         .role(Role::ListItem)
         .flex()
         .min_w_0()
-        .items_center()
+        // A tall message keeps its buttons at the top right, beside its first line.
+        .items_start()
         .gap(px(8.))
         .border_t_1()
         .border_color(t.border)
@@ -370,13 +371,21 @@ fn queued_row(
         .py(px(6.))
         .child(
             div()
-                .id(SharedString::from(format!("queued-text-{}", m.id)))
-                .tooltip(tooltip(text.clone()))
+                .flex()
                 .flex_1()
                 .min_w_0()
-                .truncate()
-                .text_color(t.text)
-                .child(text),
+                .min_h(px(24.))
+                .items_center()
+                .child(
+                    div()
+                        .id(SharedString::from(format!("queued-text-{}", m.id)))
+                        .tooltip(tooltip(text.clone()))
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_color(t.text)
+                        .child(text),
+                ),
         )
         .child(edit)
         .child(steer)
@@ -483,13 +492,19 @@ pub fn queued_strip(
             .when(open, |d| {
                 d.child(
                     div()
-                        .id("queued-rows")
-                        .role(Role::List)
-                        .aria_label("Queued messages")
-                        // About four rows, then the list scrolls.
-                        .max_h(px(148.))
-                        .overflow_y_scroll()
-                        .children(rows),
+                        .relative()
+                        .child(
+                            div()
+                                .id("queued-rows")
+                                .role(Role::List)
+                                .aria_label("Queued messages")
+                                // About four rows, then the list scrolls.
+                                .max_h(px(148.))
+                                .overflow_y_scroll()
+                                .track_scroll(&w.queue_scroll)
+                                .children(rows),
+                        )
+                        .children(scrollbar(&w.queue_scroll, 4., 3., t.border_strong)),
                 )
             }),
     )
