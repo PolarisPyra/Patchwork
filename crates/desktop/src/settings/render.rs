@@ -2,11 +2,15 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{AnyElement, FontWeight, MouseButton, Role, SharedString, Window, div, prelude::*, px};
+use std::time::Duration;
+use gpui::{
+    Animation, AnimationExt, ease_out_quint, AnyElement, FontWeight, MouseButton, Role, Window,
+    div, prelude::*, px,
+};
 use crate::ui::menu::Menu;
-use crate::ui::theme::{fs_lg, fs_xs, radius_sm, theme};
-use crate::ui::{icon, icon_button, mix, overflows, scrollbar};
-use super::dialog::{GROUPS, SettingsDialog, SettingsEvent, sections};
+use crate::ui::theme::{fs_lg, theme};
+use crate::ui::{icon_button, overflows, scrollbar};
+use super::dialog::{SettingsDialog, SettingsEvent, entry_of};
 use super::chat;
 use super::controls;
 use super::extensions;
@@ -26,8 +30,16 @@ use super::updates;
 impl SettingsDialog {
     pub(super) fn pane(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         match self.section {
-            "general" => general::render(self, cx),
-            "chat" => chat::render(self, cx),
+            "general" => {
+                let t = *theme(cx);
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(general::render(self, cx))
+                    .child(controls::section_heading("Chat", false, &t))
+                    .child(chat::render(self, cx))
+                    .into_any_element()
+            }
             "themes" => themes::render(self, window, cx),
             "backgrounds" => themes::backgrounds_pane(self, window, cx),
             "interface" => themes::interface_pane(self, window, cx),
@@ -55,51 +67,15 @@ impl Render for SettingsDialog {
             .nav_focus
             .get_or_insert_with(|| cx.focus_handle())
             .clone();
-        let open = sections()
-            .find(|s| s.id == self.section)
-            .map_or("General", |s| s.label);
+        let open = entry_of(self.section).map_or("General", |(_, _, pane)| pane.label);
         let overflows = overflows(&self.scroll, window, cx);
-        let section = self.section;
-        let nav = GROUPS.iter().enumerate().map(|(g, (label, entries))| {
-            div()
-                .flex()
-                .flex_col()
-                .gap(px(2.))
-                .when(g > 0, |d| d.mt(px(12.)))
-                .child(
-                    div()
-                        .px(px(8.))
-                        .pb(px(2.))
-                        .text_size(px(fs_xs()))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(t.text_subtle)
-                        .child(*label),
-                )
-                .children(entries.iter().map(|s| {
-                    let current = s.id == section;
-                    let id = s.id;
-                    let selected_hover = mix(t.bg_selected, t.text, 92.);
-                    crate::ui::button(SharedString::from(format!("section-{id}")), s.label)
-                        .aria_selected(current)
-                        .h(px(32.))
-                        .gap(px(10.))
-                        .rounded(px(radius_sm()))
-                        .px(px(8.))
-                        .text_color(t.text)
-                        .map(|b| {
-                            if current {
-                                b.bg(t.bg_selected).hover(move |s| s.bg(selected_hover))
-                            } else {
-                                b.hover(move |s| s.bg(t.bg_hover))
-                            }
-                        })
-                        .child(icon(s.icon, 18.))
-                        .child(s.label)
-                        .on_click(cx.listener(move |d, _, _, cx| d.open_section(id, cx)))
-                }))
-        });
-        let nav: Vec<_> = nav.collect();
-        let pane = self.pane(window, cx);
+        let nav = self.nav(window, cx);
+        // A pane fades in as it opens.
+        let pane = div().child(self.pane(window, cx)).with_animation(
+            self.section,
+            Animation::new(Duration::from_millis(140)).with_easing(ease_out_quint()),
+            gpui::Styled::opacity,
+        );
         let menu = self
             .menu
             .as_ref()
@@ -136,12 +112,13 @@ impl Render for SettingsDialog {
                             .flex()
                             .flex_col()
                             .flex_none()
-                            .w(px(192.))
+                            .w(px(216.))
                             .overflow_y_scroll()
                             .border_r_1()
                             .border_color(t.border)
                             .bg(t.bg_panel)
                             // The web list always keeps room for its 10px scrollbar.
+                            .gap(px(2.))
                             .pl(px(8.))
                             .pr(px(18.))
                             .py(px(10.))

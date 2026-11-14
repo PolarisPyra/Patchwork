@@ -12,6 +12,7 @@ mod extensions;
 mod general;
 mod keys;
 mod mcp;
+mod nav;
 pub(crate) mod permissions;
 pub(crate) mod projects;
 mod providers;

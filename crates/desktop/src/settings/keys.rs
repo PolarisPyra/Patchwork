@@ -2,8 +2,9 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{App, Context, KeyDownEvent, Window};
-use super::dialog::{Section, SettingsDialog, SettingsEvent, sections};
+use gpui::{App, Context, Focusable, KeyDownEvent, Window};
+use super::dialog::{SettingsDialog, SettingsEvent};
+use super::nav::pane_order;
 
 impl SettingsDialog {
     pub(super) fn on_key(&mut self, e: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -13,6 +14,10 @@ impl SettingsDialog {
         let step = match e.keystroke.key.as_str() {
             "escape" => {
                 cx.stop_propagation();
+                // The search empties first.
+                if !self.query(cx).is_empty() {
+                    return self.clear_search(cx);
+                }
                 // A form open in the section closes first, and the dialog on the next press.
                 let closed = self.cancel_draft(cx)
                     || match self.section {
@@ -35,30 +40,28 @@ impl SettingsDialog {
             "down" => 1,
             _ => return,
         };
-        // Up and Down move along the list while a section of it has focus.
-        let all: Vec<&'static Section> = sections().collect();
-        let Some(at) = all.iter().position(|s| s.id == self.section) else {
-            return;
-        };
         if !self.nav_focused(window, cx) {
             return;
         }
-        let next = (at as isize + step).clamp(0, all.len() as isize - 1) as usize;
-        self.open_section(all[next].id, cx);
-        // The focus goes along when a section's button has it, as the buttons are next to each other.
-        let on_list = self
-            .general
-            .nav_focus
-            .as_ref()
-            .is_some_and(|f| f.is_focused(window));
-        if next != at && !on_list {
-            if step > 0 {
-                window.focus_next(cx);
-            } else {
-                window.focus_prev(cx);
-            }
-        }
         cx.stop_propagation();
+        // On a search result, Up and Down move the highlight from the search field.
+        if !self.query(cx).is_empty() {
+            if let Some(search) = &self.search {
+                let focus = search.read(cx).focus_handle(cx);
+                window.focus(&focus, cx);
+            }
+            return self.step_hit(step, cx);
+        }
+        // Up and Down walk every pane in the list's order, and the focus goes along.
+        let panes: Vec<_> = pane_order().collect();
+        let Some(at) = panes.iter().position(|id| *id == self.section) else {
+            return;
+        };
+        let next = panes[(at as isize + step).clamp(0, panes.len() as isize - 1) as usize];
+        if next != self.section {
+            self.open_section(next, cx);
+        }
+        self.focus_row(next, window, cx);
     }
 
     /// Tab and Shift+Tab go round the dialog's own controls, never on to the window behind it.
