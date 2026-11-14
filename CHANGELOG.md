@@ -3,6 +3,21 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.71] - 2026-11-14
+
+**26.11.71** · 1 change from 1 contributor
+
+- **Agent picker alignment in Granular chat settings.** The agent picker now shows an Agent label and lines up with Model and Effort
+
+<details>
+<summary>Full changelog</summary>
+
+### Changed
+
+- In Granular chat settings, the agent picker at the top of each panel now sits beside an "Agent" label and lines up with Model and Effort, like the sub agents picker. by [PolarisPyra in #84](https://github.com/PolarisPyra/Patchwork/pull/84)
+
+</details>
+
 ## [26.11.70] - 2026-11-14
 
 **26.11.70** · 1 change from 1 contributor
