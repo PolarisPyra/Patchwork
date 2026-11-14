@@ -7,7 +7,7 @@ use gpui::{EventEmitter, FontWeight, Role, SharedString, Window, div, prelude::*
 use patchwork_server::system::browse::{self, Machine};
 use patchwork_server::system::device::{self, Kind};
 
-use crate::ui::theme::{FS_MD, FS_SM, RADIUS_SM, theme};
+use crate::ui::theme::{FS_MD, FS_SM, radius_sm, theme};
 use crate::ui::{button, icon, icon_button, kind_icon, spinner};
 
 /// A device was picked: the SSH host's alias, or none for this computer.
@@ -122,7 +122,7 @@ impl Render for DevicesView {
                     .gap(px(8.))
                     .mx(px(4.))
                     .px(px(8.))
-                    .rounded(px(RADIUS_SM))
+                    .rounded(px(radius_sm()))
                     .text_size(px(FS_MD))
                     .text_color(fg)
                     .hover(move |s| s.bg(hover))

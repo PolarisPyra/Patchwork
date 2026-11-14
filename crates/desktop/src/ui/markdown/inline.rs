@@ -6,7 +6,7 @@ use std::cell::{Cell, RefCell};
 use std::ops::Range;
 use std::rc::Rc;
 use gpui::{AnyElement, Div, HighlightStyle, Hsla, SharedString, StyledText, TextLayout};
-use crate::ui::theme::FONT_MONO;
+use crate::ui::theme::font_mono;
 
 /// One block with the margins CSS gives it; adjacent margins collapse into the larger one.
 pub(super) struct Block {
@@ -82,7 +82,7 @@ impl Inline {
         let mono: Vec<_> = mono
             .into_iter()
             .filter(|r| r.end <= len)
-            .map(|r| (r, SharedString::from(FONT_MONO)))
+            .map(|r| (r, font_mono()))
             .collect();
         StyledText::new(text)
             .with_highlights(highlights)

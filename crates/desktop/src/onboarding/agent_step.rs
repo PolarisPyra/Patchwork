@@ -10,7 +10,7 @@ use patchwork_server::provider::AgentKind;
 
 use super::{AGENT_KINDS, Onboarding, Probe};
 use super::rows::{choice_row, heading, key_id, picked, row_end, tick};
-use crate::ui::theme::{FS_SM, RADIUS, Theme};
+use crate::ui::theme::{FS_SM, radius, Theme};
 use crate::ui::{BtnKind, agent_label, agent_logo, badge, btn, button, icon, spinner};
 
 impl Onboarding {
@@ -343,7 +343,7 @@ fn default_agent(
             .flex_col()
             .items_center()
             .gap(px(10.))
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .px(px(12.))
             .pt(px(16.))
@@ -356,7 +356,7 @@ fn default_agent(
                     .flex()
                     .items_center()
                     .justify_center()
-                    .rounded(px(RADIUS))
+                    .rounded(px(radius()))
                     .bg(t.bg_selected_muted)
                     .child(agent_logo(kind, None, 22.)),
             )

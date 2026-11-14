@@ -1,6 +1,7 @@
 {
   "name": "Night Reef",
   "scheme": "dark",
+  "backdrop": "night-reef",
   "colors": {
     "surface": "#080d26",
     "text": "#e6ecff",

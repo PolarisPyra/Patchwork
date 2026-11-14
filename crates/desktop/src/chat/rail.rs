@@ -12,7 +12,7 @@ use gpui::{
 use patchwork_server::orchestration::{Upkeep, upkeep};
 use patchwork_server::threads::{Message, Role as MessageRole};
 
-use crate::ui::theme::{FS_LG, FS_MD, RADIUS_LG, Theme};
+use crate::ui::theme::{FS_LG, FS_MD, radius_lg, Theme};
 use crate::ui::{button, popup_shadow};
 use crate::workspace::Workspace;
 
@@ -276,7 +276,7 @@ pub fn turn_rail(
                 div()
                     .flex_none()
                     .w(px(384.))
-                    .rounded(px(RADIUS_LG))
+                    .rounded(px(radius_lg()))
                     .border_1()
                     .border_color(t.border)
                     .bg(t.bg_elevated)

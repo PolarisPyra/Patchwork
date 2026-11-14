@@ -7,7 +7,7 @@ use gpui::{AnyElement, KeyDownEvent, SharedString, div, prelude::*, px};
 
 use crate::settings::SettingsDialog;
 use crate::ui::sigils::{SIGIL_KINDS, Sigils, default_sigil, save};
-use crate::ui::theme::{FS_SM, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_SM, radius_sm, Theme};
 use crate::ui::{button, icon, tooltip};
 
 pub const SIGILS_PAGE: &str = "Sigils";
@@ -91,7 +91,7 @@ pub fn rows(
                                 )
                                 .size(px(24.))
                                 .justify_center()
-                                .rounded(px(RADIUS_SM))
+                                .rounded(px(radius_sm()))
                                 .text_color(muted)
                                 .hover(move |s| s.bg(hover).text_color(fg))
                                 .child(icon("arrow-counter-clockwise", 12.))
@@ -109,7 +109,7 @@ pub fn rows(
                                 SharedString::from(format!("change-sigil-{key}")),
                                 format!("Change sigil for {title}"),
                             )
-                            .rounded(px(RADIUS_SM))
+                            .rounded(px(radius_sm()))
                             .border_1()
                             .px(px(8.))
                             .py(px(4.))

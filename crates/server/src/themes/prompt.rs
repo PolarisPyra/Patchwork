@@ -11,6 +11,8 @@ const THEME_FORMAT: &str = r##"A color scheme is one JSON file:
 {
   "name": "Night Reef",
   "scheme": "dark",            // "dark" or "light": which kind of window it is for
+  "backdrop": "night-reef",    // optional: the animated background picked along with it, by
+                               // its file's name without .json, or "butterfly" or "none"
   "colors": {                  // six-digit hex colors; the rest of the app is mixed from these
     "surface": "#0a1230",      // the window's background
     "text": "#e6ecff",         // the main text; it must read clearly on surface
@@ -29,6 +31,10 @@ textOnAccent, accentHover, accentText (links), success, danger, warning, bubble 
 message), and "syntax": an object with all of keyword, string, property, ty (type names),
 number, comment, function and tag. Leave "overrides" out unless the description asks for
 something the four colors cannot give.
+
+Two more keys are optional, for a description that asks for them: "fonts", an object with "ui"
+(the app's text) and "code" (code and terminals), each the name of a font installed on the
+machine, and "radius", how round corners are, from 0 for square to 12 (the app's own is 6).
 
 Rules:
 - Real JSON: no comments, no trailing commas. The comments above only explain.

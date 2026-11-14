@@ -26,7 +26,7 @@ use gpui::{
 
 use super::butterfly::{self, Flight};
 use super::sky;
-use crate::ui::theme::FONT_MONO;
+use crate::ui::theme::font_mono;
 
 /// The sky's characters, and the butterfly's smaller ones: font size and line height.
 pub(super) const SKY: (f32, f32) = (13., 16.);
@@ -223,7 +223,7 @@ pub(super) fn paint_layer(
     // The font's ligatures would join "::" and "**" into shapes of their own.
     let mono = Font {
         features: FontFeatures::disable_ligatures(),
-        ..font(FONT_MONO)
+        ..font(font_mono())
     };
     let run = |ink: Ink| TextRun {
         len: 0,
@@ -336,7 +336,7 @@ pub(super) fn depth_in_pill(frost: Bounds<Pixels>, at: Point<Pixels>) -> f32 {
 pub(super) fn cell_width(font_size: f32, window: &Window) -> f32 {
     let run = TextRun {
         len: 1,
-        font: font(FONT_MONO),
+        font: font(font_mono()),
         color: backdrop(),
         background_color: None,
         underline: None,

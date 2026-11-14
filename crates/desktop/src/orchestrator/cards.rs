@@ -12,7 +12,7 @@ use patchwork_server::threads::{Standing, Thread};
 
 use super::render::{glass, ink, warm};
 use super::state::{Orchestrator, Outcome, Request};
-use crate::ui::theme::{FS_SM, FS_XS, RADIUS_LG};
+use crate::ui::theme::{FS_SM, FS_XS, radius_lg};
 use crate::ui::{button, display_title, icon, spinner};
 
 /// A chat as a card shows it.
@@ -89,7 +89,7 @@ fn plate(card: Stateful<Div>) -> Stateful<Div> {
         .gap(px(2.))
         .px(px(14.))
         .py(px(7.))
-        .rounded(px(RADIUS_LG))
+        .rounded(px(radius_lg()))
         .border_1()
         .border_color(ink(0.06))
         .bg(glass(0.5))

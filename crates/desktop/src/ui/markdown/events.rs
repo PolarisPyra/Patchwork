@@ -17,7 +17,7 @@ use gpui::{
     StyledText, UnderlineStyle, div, prelude::*, px, relative,
 };
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Tag, TagEnd};
-use crate::ui::theme::{FONT_MONO, FS_LG, FS_MD, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
+use crate::ui::theme::{font_mono, FS_LG, FS_MD, FS_SM, FS_XS, radius, radius_sm, Theme};
 use crate::ui::selection::{Selectable, selectable, text_id};
 use crate::ui::{button, icon};
 
@@ -413,7 +413,7 @@ impl Markdown<'_> {
         let text = highlighted(code, &lang, t);
         let text = self.selectable(text);
         let block = div()
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .border_color(t.border)
             .bg(t.bg_panel)
@@ -439,7 +439,7 @@ impl Markdown<'_> {
                         button(id, "Copy code")
                             .h(px(24.))
                             .px(px(6.))
-                            .rounded(px(RADIUS_SM))
+                            .rounded(px(radius_sm()))
                             .text_color(t.text_muted)
                             .hover(move |s| s.bg(hover).text_color(fg))
                             .child(icon("copy", 13.))
@@ -454,7 +454,7 @@ impl Markdown<'_> {
                     .py(px(10.))
                     .text_size(px(FS_SM * t.scale))
                     .line_height(relative(1.5))
-                    .font_family(FONT_MONO)
+                    .font_family(font_mono())
                     .child(text),
             );
         self.push(block, 8., 8.);

@@ -17,7 +17,7 @@ use patchwork_server::threads::{Message, Role as MessageRole, Thread};
 use crate::ui::markdown::{FindIn, find_in};
 use crate::ui::text_area::{Changed, Submitted, SubmittedBack, TextArea};
 use crate::chat::timeline::{Step, steps_of};
-use crate::ui::theme::{FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_SM, FS_XS, radius, radius_sm, Theme, theme};
 use crate::ui::{button, icon};
 use crate::workspace::Workspace;
 
@@ -245,7 +245,7 @@ fn small_button(
         .flex_none()
         .size(px(20.))
         .justify_center()
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .text_color(t.text_muted)
         .child(icon(name, 13.));
     if enabled {
@@ -285,7 +285,7 @@ pub fn find_field(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>) -> 
         .w(px(if open { 288. } else { 28. }))
         .items_center()
         .overflow_hidden()
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .border_1()
         .border_color(t.border)
         .bg(t.bg_panel)

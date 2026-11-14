@@ -9,7 +9,7 @@ use gpui::{
 };
 use crate::ui::menu::MenuItem;
 use crate::settings::SettingsDialog;
-use crate::ui::theme::{FS_SM, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_SM, radius_sm, Theme};
 use crate::ui::{button, icon};
 
 /// A letter on a colour picked from the name, so each row is easy to spot.
@@ -138,7 +138,7 @@ pub fn segmented<T: Copy + PartialEq + 'static>(
         .grid_cols_min_content(options.len() as u16)
         .flex_none()
         .overflow_hidden()
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .border_1()
         .border_color(t.border_strong)
         .children(options.iter().enumerate().map(|(i, (option, text))| {
@@ -192,7 +192,7 @@ pub fn select_box(
         .h(px(28.))
         .justify_between()
         .gap(px(6.))
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .border_1()
         .border_color(t.border_strong)
         .bg(t.bg_editor)
@@ -259,7 +259,7 @@ pub fn minutes_stepper(
         .flex_none()
         .items_center()
         .overflow_hidden()
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .border_1()
         .border_color(t.border_strong)
         .child(step("less-often", "Less often", "minus", at.checked_sub(1)))
@@ -330,7 +330,7 @@ pub fn list_box(rows: Vec<AnyElement>, t: &Theme) -> Div {
         .flex()
         .flex_col()
         .overflow_hidden()
-        .rounded(px(crate::ui::theme::RADIUS))
+        .rounded(px(crate::ui::theme::radius()))
         .border_1()
         .border_color(border)
         .children(rows.into_iter().enumerate().map(move |(i, row)| {

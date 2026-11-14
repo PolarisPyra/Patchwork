@@ -13,7 +13,7 @@ use patchwork_server::threads::Thread;
 use super::menu::Target;
 use super::{empty_row, twistie};
 use super::tree::{indent_guide, tree_row};
-use crate::ui::theme::{FS_MD, FS_SM, RADIUS_SM, theme};
+use crate::ui::theme::{FS_MD, FS_SM, radius_sm, theme};
 use crate::ui::{agent_label, agent_logo, button, display_title, icon, scrollbar};
 use crate::workspace::Workspace;
 
@@ -271,7 +271,7 @@ fn archived_row(
         .mr(px(4.))
         .pl(px(8.))
         .pr(px(8.))
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .cursor_pointer()
         .text_color(t.text)
         .bg(fill)
@@ -285,7 +285,7 @@ fn archived_row(
             .size(px(20.))
             .flex_none()
             .justify_center()
-            .rounded(px(RADIUS_SM))
+            .rounded(px(radius_sm()))
             .text_color(t.text_muted)
             .hover(move |s| s.bg(btn_hover).text_color(fg))
             .opacity(0.)

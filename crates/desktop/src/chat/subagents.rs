@@ -10,7 +10,7 @@ use patchwork_server::threads::{Message, StepStatus, ToolCall};
 
 use crate::chat::lineage::{is_active, status_label, title_of};
 use crate::chat::timeline::tool_label;
-use crate::ui::theme::{FS_XS, RADIUS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_XS, radius, radius_sm, Theme};
 use crate::ui::{agent_logo, button, full_elapsed, icon, now_ms};
 use crate::workspace::Workspace;
 
@@ -104,7 +104,7 @@ fn card(
         d.w_full()
             .min_w_0()
             .gap(px(10.))
-            .rounded(px(RADIUS_SM))
+            .rounded(px(radius_sm()))
             .px(px(8.))
             .py(px(6.))
             .child(avatar(agent, Some(dot_of(tool.status, t)), t))
@@ -277,7 +277,7 @@ pub fn subagents(
     .w_full()
     .min_w_0()
     .gap(px(10.))
-    .rounded(px(RADIUS_SM))
+    .rounded(px(radius_sm()))
     .px(px(8.))
     .py(px(6.))
     .hover(move |s| s.bg(hover))
@@ -335,7 +335,7 @@ pub fn subagents(
                 .flex()
                 .flex_col()
                 .gap(px(1.))
-                .rounded(px(RADIUS))
+                .rounded(px(radius()))
                 .border_1()
                 .border_color(t.border)
                 .bg(t.bg_panel)

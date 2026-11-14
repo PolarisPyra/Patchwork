@@ -1,6 +1,7 @@
 {
   "name": "Blossom",
   "scheme": "light",
+  "backdrop": "blossom",
   "colors": {
     "surface": "#fff6f8",
     "text": "#3a2230",

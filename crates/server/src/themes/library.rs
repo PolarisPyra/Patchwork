@@ -2,14 +2,19 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::path::PathBuf;
 
+use serde::Serialize;
 use serde::de::DeserializeOwned;
+use sha2::{Digest, Sha256};
 
-use super::code::syntax;
+use super::code::{CodeTheme, CodeThemeFile, Syntax};
+use super::contrast;
 use super::types::{
     Applied, BackdropChoice, Entry, Paint, Palette, SavedScene, SceneFile, Scheme, Shown, Theme,
-    ThemeFile,
+    ThemeFile, Unreadable,
 };
 use crate::settings::Theme as ThemeSetting;
 use crate::{Error, Server};
@@ -23,6 +28,8 @@ pub(super) struct Shelf<T> {
     /// The id of each file Patchwork comes with, and its text.
     presets: &'static [(&'static str, &'static str)],
     check: fn(&T) -> Result<(), String>,
+    /// What to tell a person about a file that can be used but has something wrong with it.
+    notes: fn(&T) -> Vec<String>,
 }
 
 /// The color schemes.
@@ -52,6 +59,7 @@ pub(super) const THEMES: Shelf<ThemeFile> = Shelf {
         ),
     ],
     check: |_| Ok(()),
+    notes: contrast::notes,
 };
 
 /// The animated backgrounds.
@@ -77,7 +85,72 @@ pub(super) const SCENES: Shelf<SceneFile> = Shelf {
         ),
     ],
     check: SceneFile::check,
+    notes: |_| Vec::new(),
 };
+
+/// The code themes.
+pub(super) const CODE: Shelf<CodeThemeFile> = Shelf {
+    noun: "code theme",
+    folder: "code-themes",
+    presets: &[
+        (
+            "github-light",
+            include_str!("../../../../assets/code-themes/github-light.json"),
+        ),
+        (
+            "catppuccin-latte",
+            include_str!("../../../../assets/code-themes/catppuccin-latte.json"),
+        ),
+        (
+            "rose-pine-dawn",
+            include_str!("../../../../assets/code-themes/rose-pine-dawn.json"),
+        ),
+        (
+            "light-high-contrast",
+            include_str!("../../../../assets/code-themes/light-high-contrast.json"),
+        ),
+        (
+            "light-colorblind",
+            include_str!("../../../../assets/code-themes/light-colorblind.json"),
+        ),
+        (
+            "github-dark",
+            include_str!("../../../../assets/code-themes/github-dark.json"),
+        ),
+        (
+            "catppuccin-mocha",
+            include_str!("../../../../assets/code-themes/catppuccin-mocha.json"),
+        ),
+        (
+            "rose-pine",
+            include_str!("../../../../assets/code-themes/rose-pine.json"),
+        ),
+        (
+            "dark-high-contrast",
+            include_str!("../../../../assets/code-themes/dark-high-contrast.json"),
+        ),
+        (
+            "dark-colorblind",
+            include_str!("../../../../assets/code-themes/dark-colorblind.json"),
+        ),
+    ],
+    check: |_| Ok(()),
+    notes: |_| Vec::new(),
+};
+
+/// The text of each file Patchwork wrote into a folder, as a hash under `folder/id`.
+///
+/// A file that still has the hash was not edited, so a newer Patchwork may write over it.
+type Seeded = BTreeMap<String, String>;
+
+fn hash(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
+        .iter()
+        .fold(String::new(), |mut hash, b| {
+            let _ = write!(hash, "{b:02x}");
+            hash
+        })
+}
 
 /// Whether `id` can be a file's name: letters, digits, `-` and `_`.
 fn is_id(id: &str) -> bool {
@@ -88,7 +161,7 @@ fn is_id(id: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
-impl<T: DeserializeOwned> Shelf<T> {
+impl<T: DeserializeOwned + Serialize + PartialEq> Shelf<T> {
     /// The folder its files are in: the ones Patchwork comes with, and the ones a person or
     /// an agent wrote.
     pub(super) fn dir(&self) -> PathBuf {
@@ -100,10 +173,15 @@ impl<T: DeserializeOwned> Shelf<T> {
         self.dir().join(format!("{id}.json"))
     }
 
-    fn parse(&self, text: &str) -> Result<T, String> {
+    pub(super) fn parse(&self, text: &str) -> Result<T, String> {
         let file: T = serde_json::from_str(text).map_err(|e| e.to_string())?;
         (self.check)(&file)?;
         Ok(file)
+    }
+
+    /// Checks a file that was read as part of another.
+    pub(super) fn check(&self, file: &T) -> Result<(), String> {
+        (self.check)(file)
     }
 
     /// Whether Patchwork comes with a file of this id.
@@ -112,8 +190,11 @@ impl<T: DeserializeOwned> Shelf<T> {
     }
 
     /// Writes the files Patchwork comes with into the folder, so they can be read and edited
-    /// there. One that is already there is left as it is.
-    fn seed(&self) {
+    /// there.
+    ///
+    /// A missing one is written, and so is one a newer Patchwork changed, as long as the file
+    /// is still what Patchwork wrote. An edited one is left as it is.
+    fn seed(&self, seeded: &mut Seeded) {
         let (dir, noun) = (self.dir(), self.noun);
         if let Err(e) = std::fs::create_dir_all(&dir) {
             log::warn!(noun, error:% = e; "could not make the {{noun}} folder: {{error}}");
@@ -121,45 +202,58 @@ impl<T: DeserializeOwned> Shelf<T> {
         }
         for (id, text) in self.presets {
             let path = self.path(id);
-            if !path.exists()
-                && let Err(e) = std::fs::write(&path, text)
-            {
-                log::warn!(id, noun, error:% = e; "could not write {{noun}} {{id}}: {{error}}");
+            let key = format!("{}/{id}", self.folder);
+            let ours = hash(text.as_bytes());
+            let theirs = std::fs::read(&path).ok().map(|bytes| hash(&bytes));
+            if theirs.as_ref() == Some(&ours) {
+                seeded.insert(key, ours);
+                continue;
+            }
+            if theirs.is_some() && theirs.as_ref() != seeded.get(&key) {
+                continue;
+            }
+            match std::fs::write(&path, text) {
+                Ok(()) => {
+                    seeded.insert(key, ours);
+                }
+                Err(e) => {
+                    log::warn!(id, noun, error:% = e; "could not write {{noun}} {{id}}: {{error}}");
+                }
             }
         }
     }
 
+    fn entry(&self, id: &str, custom: bool, file: T) -> Entry<T> {
+        Entry {
+            id: id.to_string(),
+            custom,
+            notes: (self.notes)(&file),
+            file,
+        }
+    }
+
     /// The file with this id: the one in the folder, else the one Patchwork comes with.
-    fn load(&self, id: &str) -> Option<Entry<T>> {
+    pub(super) fn load(&self, id: &str) -> Option<Entry<T>> {
         if !is_id(id) {
             return None;
         }
         let noun = self.noun;
         if let Ok(text) = std::fs::read_to_string(self.path(id)) {
             match self.parse(&text) {
-                Ok(file) => {
-                    return Some(Entry {
-                        id: id.to_string(),
-                        custom: !self.comes_with(id),
-                        file,
-                    });
-                }
+                Ok(file) => return Some(self.entry(id, !self.comes_with(id), file)),
                 Err(e) => {
                     log::warn!(id, noun, error:% = e; "{{noun}} {{id}} cannot be read: {{error}}");
                 }
             }
         }
         let (_, text) = self.presets.iter().find(|(preset, _)| *preset == id)?;
-        self.parse(text).ok().map(|file| Entry {
-            id: id.to_string(),
-            custom: false,
-            file,
-        })
+        self.parse(text)
+            .ok()
+            .map(|file| self.entry(id, false, file))
     }
 
-    /// The ones Patchwork comes with, then the files in the folder by name. A file with the id
-    /// of one Patchwork comes with stands in for it.
-    fn list(&self) -> Vec<Entry<T>> {
+    /// The ids of the files in the folder, by name.
+    fn ids(&self) -> Vec<String> {
         let mut ids: Vec<String> = std::fs::read_dir(self.dir())
             .into_iter()
             .flatten()
@@ -172,6 +266,45 @@ impl<T: DeserializeOwned> Shelf<T> {
             })
             .collect();
         ids.sort();
+        ids
+    }
+
+    /// The files in the folder that cannot be used, and why.
+    fn unreadable(&self) -> Vec<Unreadable> {
+        self.ids()
+            .into_iter()
+            .filter_map(|id| {
+                let error = match std::fs::read_to_string(self.path(&id)) {
+                    Ok(text) => self.parse(&text).err()?,
+                    Err(e) => e.to_string(),
+                };
+                Some(Unreadable {
+                    file: format!("{}/{id}.json", self.folder),
+                    error,
+                })
+            })
+            .collect()
+    }
+
+    /// Writes `file` into the folder under an id made from `name`, and returns the id. A file
+    /// that is already there with the same contents is kept, and its id returned.
+    pub(super) fn add(&self, name: &str, file: &T) -> Result<String, Error> {
+        if let Some(same) = self.list().into_iter().find(|entry| &entry.file == file) {
+            return Ok(same.id);
+        }
+        let noun = self.noun;
+        let id = self.free_id(name);
+        let text = serde_json::to_string_pretty(file).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(self.dir())
+            .and_then(|()| std::fs::write(self.path(&id), text))
+            .map_err(|e| format!("couldn't save the {noun}: {e}"))?;
+        Ok(id)
+    }
+
+    /// The ones Patchwork comes with, then the files in the folder by name. A file with the id
+    /// of one Patchwork comes with stands in for it.
+    fn list(&self) -> Vec<Entry<T>> {
+        let ids = self.ids();
         let presets = self.presets.iter().map(|(id, _)| (*id).to_string());
         let custom = ids.iter().filter(|id| !self.comes_with(id));
         presets
@@ -213,11 +346,27 @@ impl<T: DeserializeOwned> Shelf<T> {
     }
 }
 
-/// Puts the color schemes and animated backgrounds Patchwork comes with in their folders.
-/// Call it once the config folder is known.
+/// Puts the color schemes, animated backgrounds and code themes Patchwork comes with in their
+/// folders. Call it once the config folder is known.
 pub fn init() {
-    THEMES.seed();
-    SCENES.seed();
+    let path = crate::system::dirs().data.join("themes-seeded.json");
+    let before: Seeded = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default();
+    let mut seeded = before.clone();
+    THEMES.seed(&mut seeded);
+    SCENES.seed(&mut seeded);
+    CODE.seed(&mut seeded);
+    if seeded == before {
+        return;
+    }
+    let saved = serde_json::to_string_pretty(&seeded)
+        .map_err(|e| e.to_string())
+        .and_then(|text| std::fs::write(&path, text).map_err(|e| e.to_string()));
+    if let Err(e) = saved {
+        log::warn!(error:% = e; "could not save which themes were written: {{error}}");
+    }
 }
 
 impl Server {
@@ -233,6 +382,29 @@ impl Server {
     #[must_use]
     pub fn list_scenes(&self) -> Vec<SavedScene> {
         SCENES.list()
+    }
+
+    /// The code themes that can be picked: the ones Patchwork comes with, then the files in the
+    /// code themes folder by name. Reads files, so call it off the UI thread.
+    #[must_use]
+    pub fn list_code_themes(&self) -> Vec<CodeTheme> {
+        CODE.list()
+    }
+
+    /// The files in the themes, scenes and code themes folders that cannot be used, and why.
+    /// Reads files, so call it off the UI thread.
+    #[must_use]
+    pub fn unreadable_themes(&self) -> Vec<Unreadable> {
+        let mut out = THEMES.unreadable();
+        out.extend(SCENES.unreadable());
+        out.extend(CODE.unreadable());
+        out
+    }
+
+    /// The folder the code themes are in.
+    #[must_use]
+    pub fn code_themes_dir(&self) -> PathBuf {
+        CODE.dir()
     }
 
     /// The folder the color schemes are in.
@@ -306,12 +478,22 @@ impl Server {
             BackdropChoice::None => (Shown::None, None),
             // The butterfly is drawn on its own night sky, whatever the colors.
             BackdropChoice::Butterfly => (Shown::Butterfly, Some(Scheme::Dark)),
-            BackdropChoice::Image { file } => {
+            BackdropChoice::Image {
+                file,
+                dim,
+                fit,
+                blur,
+            } => {
                 let path = self.backgrounds_dir.join(file);
                 // Only a file of the folder itself, which still exists.
                 let inside = !file.contains(['/', '\\']) && path.is_file();
                 let shown = if inside {
-                    Shown::Image(path)
+                    let soft = blur.then(|| self.blurred_background(file)).flatten();
+                    Shown::Image {
+                        path: soft.unwrap_or(path),
+                        dim: dim.share(),
+                        fit: *fit,
+                    }
                 } else {
                     Shown::None
                 };
@@ -340,4 +522,10 @@ fn palette(id: &str) -> Option<Palette> {
         .load(id)
         .map(|theme| Palette::File(Box::new(theme.file)))
         .or_else(|| Palette::built_in(id))
+}
+
+/// The colors of the code theme with this id, when it is one for `scheme` windows.
+fn syntax(id: Option<&str>, scheme: Scheme) -> Option<Syntax> {
+    let theme = CODE.load(id?)?;
+    (theme.file.scheme == scheme).then_some(theme.file.colors)
 }

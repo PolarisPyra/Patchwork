@@ -12,7 +12,7 @@ use super::menus::below;
 use super::state::{GranularDialog, GranularScope, Part, Slot, agent_of, pick_of, starter_of};
 use crate::chat::composer::effort_label;
 use crate::ui::dialog;
-use crate::ui::theme::{FS_MD, FS_SM, RADIUS, Theme, theme};
+use crate::ui::theme::{FS_MD, FS_SM, radius, Theme, theme};
 use crate::ui::{BtnKind, agent_label, agent_logo, btn, button, icon, icon_button};
 use crate::workspace::Workspace;
 use patchwork_server::threads::delegates_sub_agents;
@@ -54,7 +54,7 @@ fn select(
         .h(px(SELECT_HEIGHT))
         .gap(px(8.))
         .px(px(10.))
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .border_1()
         .border_color(if open { t.accent } else { t.border_strong })
         .bg(t.bg_editor)
@@ -150,7 +150,7 @@ impl Workspace {
                 .h(px(SELECT_HEIGHT))
                 .gap(px(8.))
                 .px(px(10.))
-                .rounded(px(RADIUS))
+                .rounded(px(radius()))
                 .bg(t.bg_hover)
                 .text_size(px(FS_MD))
                 .font_weight(FontWeight::MEDIUM)
@@ -223,7 +223,7 @@ impl Workspace {
             .flex_col()
             .gap(px(10.))
             .p(px(12.))
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .border_color(t.border)
             .bg(t.bg_panel)

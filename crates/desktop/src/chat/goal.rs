@@ -8,7 +8,7 @@ use gpui::{FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
 use patchwork_server::provider::AgentKind;
 use patchwork_server::threads::{Goal, GoalStatus};
 
-use crate::ui::theme::{FS_SM, FS_XS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_SM, FS_XS, radius_sm, Theme};
 use crate::ui::{button, format_tokens, full_elapsed, icon, now_ms, tooltip};
 use crate::workspace::{Workspace, is_working};
 
@@ -71,7 +71,7 @@ pub fn strip_action(id: &'static str, label: &'static str, t: &Theme) -> Statefu
         .flex_none()
         .h(px(24.))
         .px(px(10.))
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .border_1()
         .border_color(t.border_strong)
         .bg(t.bg_editor)
@@ -264,7 +264,7 @@ pub fn goal_banner(
             .mx(px(8.))
             .mb(px(6.))
             .overflow_hidden()
-            .rounded(px(RADIUS_SM))
+            .rounded(px(radius_sm()))
             .border_1()
             .border_color(t.border_strong)
             .bg(t.bg_panel)

@@ -1,6 +1,7 @@
 {
   "name": "Terminal",
   "scheme": "dark",
+  "backdrop": "terminal",
   "colors": {
     "surface": "#050a06",
     "text": "#c8f7d0",

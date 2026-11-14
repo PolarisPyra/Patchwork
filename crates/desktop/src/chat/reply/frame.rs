@@ -6,7 +6,7 @@ use super::pieces::is_open;
 use super::pieces::action_button;
 use gpui::{AnyElement, ClipboardItem, Div, FontWeight, Role, SharedString, div, prelude::*, px};
 use patchwork_server::threads::{Message, MessageStatus, Part, Role as MessageRole, Thread};
-use crate::ui::theme::{FS_MD, FS_SM, FS_XS, RADIUS, Theme};
+use crate::ui::theme::{FS_MD, FS_SM, FS_XS, radius, Theme};
 use crate::ui::{button, format_clock, full_elapsed, icon, now_ms};
 use crate::workspace::{ReplyNotice, Workspace};
 use crate::chat::timeline::{fold_head_of, fold_layout_of, steps_of};
@@ -46,7 +46,7 @@ pub(super) fn foot(
             div()
                 .id(SharedString::from(format!("refusal-{}", m.id)))
                 .role(Role::Alert)
-                .rounded(px(RADIUS))
+                .rounded(px(radius()))
                 .bg(t.warning_soft)
                 .px(px(12.))
                 .py(px(8.))
@@ -80,7 +80,7 @@ pub(super) fn foot(
             div()
                 .id(SharedString::from(format!("error-{}", m.id)))
                 .role(Role::Alert)
-                .rounded(px(RADIUS))
+                .rounded(px(radius()))
                 .bg(t.danger_soft)
                 .px(px(12.))
                 .py(px(8.))

@@ -13,7 +13,7 @@ use gpui::{
 use patchwork_server::provider::AgentKind;
 use patchwork_server::threads::{Role as MessageRole, StepStatus, Thread, ToolCall};
 
-use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_LG, Theme};
+use crate::ui::theme::{font_mono, FS_SM, FS_XS, radius, radius_lg, Theme};
 use crate::ui::{
     agent_logo, button, compact_elapsed, full_elapsed, icon, now_ms, popup, popup_shadow, spinner,
 };
@@ -160,7 +160,7 @@ fn details_card(tool: &ToolCall, tools: &[&ToolCall], elapsed: Option<u64>, t: &
         .flex()
         .flex_col()
         .gap(px(6.))
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .border_1()
         .border_color(t.border)
         .bg(t.bg_panel)
@@ -198,7 +198,7 @@ fn details_card(tool: &ToolCall, tools: &[&ToolCall], elapsed: Option<u64>, t: &
                 .min_w_0()
                 .items_center()
                 .gap(px(6.))
-                .font_family(FONT_MONO)
+                .font_family(font_mono())
                 .text_size(px(FS_XS))
                 .text_color(t.text_muted)
                 .child(icon("terminal", 12.).flex_none())
@@ -269,7 +269,7 @@ fn subagent_row(
         .right_0()
         .size(px(20.))
         .justify_center()
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .text_color(t.danger)
         .opacity(0.)
         .group_hover(group.clone(), |s| s.opacity(1.))
@@ -296,7 +296,7 @@ fn subagent_row(
         .min_w_0()
         .items_center()
         .gap(px(8.))
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .px(px(6.))
         .py(px(4.))
         .hover(move |s| s.bg(hover))
@@ -435,7 +435,7 @@ pub fn lineage_card(
                 .role(Role::MenuItem)
                 .w_full()
                 .gap(px(8.))
-                .rounded(px(RADIUS))
+                .rounded(px(radius()))
                 .px(px(8.))
                 .py(px(6.))
                 .text_color(if enabled { fg } else { subtle })
@@ -494,7 +494,7 @@ pub fn lineage_card(
         .role(Role::Region)
         .aria_label("Lineage")
         .w(px(280.))
-        .rounded(px(RADIUS_LG))
+        .rounded(px(radius_lg()))
         .border_1()
         .border_color(t.border)
         .bg(t.bg_panel)
@@ -529,7 +529,7 @@ pub fn lineage_card(
                                 .size(px(24.))
                                 .flex_none()
                                 .justify_center()
-                                .rounded(px(RADIUS))
+                                .rounded(px(radius()))
                                 .text_color(subtle)
                                 .hover(move |s| s.bg(hover).text_color(fg))
                                 .child(icon("dots-three", 14.))

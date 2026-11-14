@@ -12,7 +12,7 @@ use patchwork_server::threads::Message;
 use patchwork_server::workspace::{FileChange, FileMedia, PreviewKind, file_media, missing_files};
 
 use crate::canvas::CanvasTab;
-use crate::ui::theme::{FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_SM, FS_XS, radius, radius_sm, Theme};
 use crate::ui::{BtnKind, base_name, btn, button, dir_name, icon, tooltip};
 use crate::workspace::{View, Workspace};
 
@@ -199,7 +199,7 @@ fn file_cards(
             .aria_label("Files from this reply")
             .flex()
             .flex_col()
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .border_color(t.border)
             .bg(t.bg_panel)
@@ -232,7 +232,7 @@ fn produced_file(
         // A neutral backing keeps a transparent image visible on both themes.
         img(PathBuf::from(&file.absolute))
             .size(px(24.))
-            .rounded(px(RADIUS_SM))
+            .rounded(px(radius_sm()))
             .bg(t.bg_hover)
             .object_fit(ObjectFit::Cover)
             .into_any_element()
@@ -257,7 +257,7 @@ fn produced_file(
     .min_h(px(28.))
     .gap(px(8.))
     .px(px(4.))
-    .rounded(px(RADIUS_SM))
+    .rounded(px(radius_sm()))
     .tooltip(tooltip(file.path.clone()))
     .child(thumb)
     .child(
@@ -275,7 +275,7 @@ fn produced_file(
                 .flex_none()
                 .max_w(px(80.))
                 .truncate()
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .bg(t.bg_hover)
                 .px(px(4.))
                 .text_size(px(FS_XS))
@@ -335,7 +335,7 @@ fn produced_file(
                     )
                     .size(px(24.))
                     .justify_center()
-                    .rounded(px(RADIUS_SM))
+                    .rounded(px(radius_sm()))
                     .text_color(t.text_muted)
                     .hover(move |s| s.bg(hover).text_color(fg))
                     .tooltip(tooltip("Open in its app"))
@@ -409,7 +409,7 @@ fn change_summary(
         .flex()
         .flex_col()
         .gap(px(4.))
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .border_1()
         .border_color(t.border)
         .bg(t.bg_panel)
@@ -495,7 +495,7 @@ fn changed_file(
     .min_w_0()
     .gap(px(8.))
     .px(px(4.))
-    .rounded(px(RADIUS_SM))
+    .rounded(px(radius_sm()))
     .hover(move |s| s.bg(hover))
     .tooltip(tooltip(path.to_string()))
     .child(
@@ -563,7 +563,7 @@ fn more_button(
         .w_full()
         .min_h(px(24.))
         .px(px(4.))
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .text_color(t.text_muted)
         .hover(move |s| s.bg(hover).text_color(fg))
         .child(label)

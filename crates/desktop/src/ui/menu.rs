@@ -12,7 +12,7 @@ use gpui::{
     Role, SharedString, Toggled, Window, anchored, deferred, div, prelude::*, px,
 };
 
-use crate::ui::theme::{RADIUS, RADIUS_SM, theme};
+use crate::ui::theme::{radius, radius_sm, theme};
 use crate::ui::{icon, popup_shadow};
 
 /// What a row does when it is picked.
@@ -192,7 +192,7 @@ impl Render for Menu {
                 .items_center()
                 .gap(px(6.))
                 .px(px(8.))
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .cursor_pointer()
                 .whitespace_nowrap()
                 .text_color(if item.danger { t.danger } else { t.text })
@@ -221,7 +221,7 @@ impl Render for Menu {
             .flex_col()
             .min_w(px(160.))
             .p(px(4.))
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .border_color(t.border_strong)
             .bg(t.bg_elevated)

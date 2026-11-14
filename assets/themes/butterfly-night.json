@@ -1,6 +1,7 @@
 {
   "name": "Butterfly Night",
   "scheme": "dark",
+  "backdrop": "butterfly",
   "colors": {
     "surface": "#0b0e1a",
     "text": "#e8ecfb",

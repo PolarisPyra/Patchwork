@@ -9,13 +9,13 @@ use gpui::{
     prelude::*, px, rgb,
 };
 use patchwork_server::settings::{Settings, Theme as ThemeSetting};
-use patchwork_server::themes::{BackdropChoice, Palette, Scheme};
+use patchwork_server::themes::{BackdropChoice, Dim, Fit, Palette, Scheme};
 
 use super::Kind;
 use crate::orchestrator::{butterfly_preview, scene_preview};
 use crate::settings::SettingsDialog;
-use crate::ui::theme::{FS_LG, FS_SM, RADIUS, RADIUS_SM, Theme as Colors, theme};
-use crate::ui::{button, focus_ring, icon, icon_button};
+use crate::ui::theme::{FS_LG, FS_SM, radius, radius_sm, Theme as Colors, theme};
+use crate::ui::{button, focus_ring, icon, icon_button, tooltip};
 
 /// The color schemes that are not files, in the order their cards come: the id each has in
 /// the settings, its name, the kind of window it is for, and its colors.
@@ -131,38 +131,79 @@ fn palette_swatch(palette: &Colors) -> Div {
     )
 }
 
-/// A card to pick in one of the grids: a picture over a name, and a way to delete it when it
-/// is a file.
+/// A small button on a card, beside its name.
+fn tool(
+    key: String,
+    label: String,
+    icon: &'static str,
+    act: impl Fn(&mut SettingsDialog, &mut Context<SettingsDialog>) + 'static,
+    cx: &mut Context<SettingsDialog>,
+) -> AnyElement {
+    icon_button(SharedString::from(key), label, icon, 14., cx)
+        .size(px(22.))
+        .flex_none()
+        .on_click(cx.listener(move |d, _, _, cx| {
+            cx.stop_propagation();
+            act(d, cx);
+        }))
+        .into_any_element()
+}
+
+/// The button on a card that deletes its file.
+fn delete_tool(
+    key: &str,
+    name: &str,
+    kind: Kind,
+    id: String,
+    cx: &mut Context<SettingsDialog>,
+) -> AnyElement {
+    tool(
+        format!("delete-{key}"),
+        format!("Delete {name}"),
+        "trash",
+        move |d, cx| d.remove_themed(kind, id.clone(), cx),
+        cx,
+    )
+}
+
+/// What a card shows beside its name: what is wrong with it, and its buttons.
+#[derive(Default)]
+struct Extras<'a> {
+    notes: &'a [String],
+    tools: Vec<AnyElement>,
+}
+
+/// A card to pick in one of the grids: a picture over a name.
 fn card(
     key: String,
     name: impl Into<SharedString>,
     swatch: Div,
     checked: bool,
-    delete: Option<(Kind, String)>,
+    extras: Extras<'_>,
     pick: impl Fn(&mut SettingsDialog, &mut Context<SettingsDialog>) + 'static,
     cx: &mut Context<SettingsDialog>,
 ) -> AnyElement {
     let t = *theme(cx);
     let name: SharedString = name.into();
-    let delete = delete.map(|(kind, id)| {
-        icon_button(
-            SharedString::from(format!("delete-{key}")),
-            format!("Delete {name}"),
-            "trash",
-            14.,
-            cx,
-        )
-        .size(px(22.))
-        .flex_none()
-        .on_click(cx.listener(move |d, _, _, cx| {
-            cx.stop_propagation();
-            d.remove_themed(kind, id.clone(), cx);
-        }))
+    let Extras { notes, tools } = extras;
+    let warning = (!notes.is_empty()).then(|| {
+        let notes = notes.join(". ");
+        div()
+            .id(SharedString::from(format!("notes-{key}")))
+            .flex_none()
+            .text_color(t.warning)
+            .child(icon("warning", 14.))
+            .tooltip(tooltip(notes))
     });
+    // The card's name says what is wrong with it, for a reader that cannot hover.
+    let label = std::iter::once(name.to_string())
+        .chain(notes.iter().cloned())
+        .collect::<Vec<_>>()
+        .join(". ");
     div()
         .id(SharedString::from(key))
         .role(Role::RadioButton)
-        .aria_label(name.clone())
+        .aria_label(label)
         .aria_toggled(if checked {
             Toggled::True
         } else {
@@ -177,7 +218,7 @@ fn card(
         .flex_col()
         .gap(px(4.))
         .p(px(6.))
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .border_1()
         .map(|card| {
             if checked {
@@ -190,7 +231,7 @@ fn card(
         .child(
             swatch
                 .h(px(64.))
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .border_1()
                 .border_color(t.border)
                 .overflow_hidden(),
@@ -203,7 +244,8 @@ fn card(
                 .gap(px(4.))
                 .text_size(px(FS_SM))
                 .child(div().flex_1().min_w_0().truncate().child(name))
-                .children(delete),
+                .children(warning)
+                .children(tools),
         )
         .on_click(cx.listener(move |d, _, _, cx| pick(d, cx)))
         .into_any_element()
@@ -247,7 +289,7 @@ pub(super) fn scheme_cards(
                 *name,
                 palette_swatch(&Colors::of(palette)),
                 !picked_file && picked == id,
-                None,
+                Extras::default(),
                 move |d, cx| d.update(|s| slot.pick(s, id, false), cx),
                 cx,
             )
@@ -259,9 +301,29 @@ pub(super) fn scheme_cards(
         }
         let colors = scheme.file.colors;
         let id = scheme.id.clone();
+        let key = format!("scheme-{}-{id}", slot.key());
+        let name = scheme.file.name.clone();
+        let mut tools = vec![tool(
+            format!("export-{key}"),
+            format!("Export {name}"),
+            "export",
+            {
+                let id = id.clone();
+                move |d, cx| d.export_theme(id.clone(), cx)
+            },
+            cx,
+        )];
+        if scheme.custom {
+            tools.push(delete_tool(&key, &name, Kind::Scheme, id.clone(), cx));
+        }
+        // Picked as the one color scheme, it brings the background it names.
+        let backdrop = scheme
+            .file
+            .backdrop_choice()
+            .filter(|_| slot == Slot::Fixed);
         cards.push(card(
-            format!("scheme-{}-{id}", slot.key()),
-            scheme.file.name.clone(),
+            key,
+            name,
             colors_swatch(
                 rgb(colors.surface.0).into(),
                 rgb(colors.text.0).into(),
@@ -269,8 +331,22 @@ pub(super) fn scheme_cards(
                 rgb(colors.accent.0).into(),
             ),
             picked_file && picked == id,
-            scheme.custom.then(|| (Kind::Scheme, id.clone())),
-            move |d, cx| d.update(|s| slot.pick(s, &id, true), cx),
+            Extras {
+                notes: &scheme.notes,
+                tools,
+            },
+            move |d, cx| {
+                let backdrop = backdrop.clone();
+                d.update(
+                    |s| {
+                        slot.pick(s, &id, true);
+                        if let Some(backdrop) = backdrop {
+                            s.orchestrator_backdrop = backdrop;
+                        }
+                    },
+                    cx,
+                );
+            },
             cx,
         ));
     }
@@ -289,7 +365,7 @@ pub(super) fn add_picture_card(cx: &mut Context<SettingsDialog>) -> AnyElement {
         .flex_col()
         .justify_center()
         .gap(px(6.))
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .border_1()
         .border_dashed()
         .border_color(t.border_strong)
@@ -330,10 +406,19 @@ pub(super) fn backdrop_cards(
         )
     });
     let pictures = d.themes.pictures.iter().map(|picture| {
-        let file = picture.file.clone();
+        // The picked picture keeps how it is shown, and its card shows it that way.
+        let choice = if current.picture_file() == Some(picture.file.as_str()) {
+            current.clone()
+        } else {
+            BackdropChoice::picture(picture.file.clone())
+        };
+        let (dim, fit) = match &choice {
+            BackdropChoice::Image { dim, fit, .. } => (*dim, *fit),
+            _ => (Dim::default(), Fit::default()),
+        };
         let shown = img(picture.path.clone())
             .size_full()
-            .object_fit(ObjectFit::Cover);
+            .object_fit(object_fit(fit));
         (
             picture.name.clone().unwrap_or_else(|| "Picture".into()),
             // Dimmed toward the window's color, as the page shows it.
@@ -341,8 +426,8 @@ pub(super) fn backdrop_cards(
                 .relative()
                 .bg(t.bg_app)
                 .child(shown)
-                .child(div().absolute().inset_0().bg(t.bg_app.opacity(0.45))),
-            BackdropChoice::Image { file },
+                .child(div().absolute().inset_0().bg(t.bg_app.opacity(dim.share()))),
+            choice,
             None,
         )
     });
@@ -356,12 +441,17 @@ pub(super) fn backdrop_cards(
         .enumerate()
         .map(|(n, (name, swatch, choice, delete))| {
             let checked = choice == current;
+            let key = format!("backdrop-{n}");
+            let tools = delete
+                .map(|(kind, id)| delete_tool(&key, &name, kind, id, cx))
+                .into_iter()
+                .collect();
             card(
-                format!("backdrop-{n}"),
+                key,
                 name,
                 swatch,
                 checked,
-                delete,
+                Extras { notes: &[], tools },
                 move |d, cx| {
                     let choice = choice.clone();
                     d.update(|s| s.orchestrator_backdrop = choice, cx);
@@ -370,4 +460,13 @@ pub(super) fn backdrop_cards(
             )
         })
         .collect()
+}
+
+/// How a picture is laid on the page for each way it can fill it.
+fn object_fit(fit: Fit) -> ObjectFit {
+    match fit {
+        Fit::Cover => ObjectFit::Cover,
+        Fit::Contain => ObjectFit::Contain,
+        Fit::Stretch => ObjectFit::Fill,
+    }
 }

@@ -8,7 +8,7 @@ use gpui::{AnyElement, Focusable, Window, div, prelude::*, px, relative};
 
 use super::Workspace;
 use crate::onboarding::{Onboarding, OnboardingEvent};
-use crate::ui::theme::{FONT_UI, FS_MD, theme};
+use crate::ui::theme::{font_ui, FS_MD, theme};
 
 impl Workspace {
     pub(super) fn onboarding_view(
@@ -45,7 +45,7 @@ impl Workspace {
         let t = *theme(cx);
         div()
             .size_full()
-            .font_family(FONT_UI)
+            .font_family(font_ui())
             .text_size(px(FS_MD))
             .line_height(relative(1.5))
             .text_color(t.text)

@@ -14,7 +14,7 @@ use patchwork_server::settings::{LogLevel, LoggingSettings};
 
 use super::Panel;
 use super::cells::ordered;
-use crate::ui::theme::{FONT_MONO, FS_SM, Theme, theme};
+use crate::ui::theme::{font_mono, FS_SM, Theme, theme};
 use crate::ui::agent_label;
 
 /// How often a shown log is read for new lines.
@@ -258,7 +258,7 @@ impl Panel {
             .clone();
         let text = window.text_system();
         self.output.char_w = text
-            .advance(text.resolve_font(&font(FONT_MONO)), px(FS_SM), 'm')
+            .advance(text.resolve_font(&font(font_mono())), px(FS_SM), 'm')
             .map_or(FS_SM * 0.6, |a| f32::from(a.width));
         let char_w = self.output.char_w;
         let selection = self.output.selection.map(ordered).filter(|(a, b)| a != b);
@@ -331,7 +331,7 @@ impl Panel {
                 }),
             )
             .child(list)
-            .font_family(FONT_MONO)
+            .font_family(font_mono())
             .text_size(px(FS_SM))
             .line_height(px(FS_SM * 1.5))
             .into_any_element()

@@ -7,7 +7,7 @@ use gpui::{
     StyleRefinement, Window, deferred, div, prelude::*, px, relative,
 };
 use crate::ui::menu::Menu;
-use crate::ui::theme::{FONT_UI, FS_MD, RADIUS, RADIUS_SM, STATUSBAR_H, Theme, theme};
+use crate::ui::theme::{font_ui, FS_MD, radius, radius_sm, STATUSBAR_H, Theme, theme};
 use crate::ui::{button, display_title, icon};
 use super::state::{Page, SIDEBAR_MAX, SIDEBAR_MIN, View, Workspace};
 use super::bars;
@@ -176,7 +176,7 @@ impl Render for Workspace {
             .flex()
             .flex_col()
             .bg(t.bg_app)
-            .font_family(FONT_UI)
+            .font_family(font_ui())
             .text_size(px(FS_MD))
             .line_height(relative(1.5))
             .text_color(t.text)
@@ -290,7 +290,7 @@ impl Workspace {
                     .flex()
                     .items_center()
                     .gap(px(8.))
-                    .rounded(px(RADIUS))
+                    .rounded(px(radius()))
                     .border_1()
                     .border_color(t.danger)
                     .bg(t.bg_elevated)
@@ -306,7 +306,7 @@ impl Workspace {
                             .size(px(28.))
                             .flex_none()
                             .justify_center()
-                            .rounded(px(RADIUS_SM))
+                            .rounded(px(radius_sm()))
                             .text_color(t.text_muted)
                             .hover(move |s| s.bg(hover).text_color(fg))
                             .child(icon("x", 14.))

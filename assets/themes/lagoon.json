@@ -1,6 +1,7 @@
 {
   "name": "Lagoon",
   "scheme": "light",
+  "backdrop": "lagoon",
   "colors": {
     "surface": "#eef9fa",
     "text": "#12303a",

@@ -8,7 +8,7 @@ use gpui::{App, FontWeight, PromptLevel, Role, Window, deferred, div, prelude::*
 use patchwork_server::Server;
 use patchwork_server::updates::{RELEASES_URL, RestartResult, UpdateState, restart_path};
 
-use crate::ui::theme::{RADIUS, RADIUS_SM, Theme};
+use crate::ui::theme::{radius, radius_sm, Theme};
 use crate::ui::{BtnKind, btn, button, icon, popup_shadow};
 use super::state::Workspace;
 
@@ -101,7 +101,7 @@ impl Workspace {
                     .flex()
                     .items_center()
                     .gap(px(8.))
-                    .rounded(px(RADIUS))
+                    .rounded(px(radius()))
                     .border_1()
                     .border_color(t.border_strong)
                     .bg(t.bg_elevated)
@@ -135,7 +135,7 @@ impl Workspace {
                             .size(px(28.))
                             .flex_none()
                             .justify_center()
-                            .rounded(px(RADIUS_SM))
+                            .rounded(px(radius_sm()))
                             .text_color(t.text_muted)
                             .hover(move |s| s.bg(hover).text_color(fg))
                             .child(icon("x", 14.))

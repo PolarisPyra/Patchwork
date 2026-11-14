@@ -1,0 +1,14 @@
+{
+  "name": "Rosé Pine Dawn",
+  "scheme": "light",
+  "colors": {
+    "keyword": "#286983",
+    "string": "#ea9d34",
+    "property": "#907aa9",
+    "ty": "#56949f",
+    "number": "#d7827e",
+    "comment": "#9893a5",
+    "function": "#b4637a",
+    "tag": "#56949f"
+  }
+}

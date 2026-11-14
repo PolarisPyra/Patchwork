@@ -10,7 +10,7 @@ use gpui::{
     SharedString, Stateful, StyleRefinement, Toggled, Window, anchored, canvas, deferred, div,
     point, prelude::*, px,
 };
-use crate::ui::theme::{FS_MD, FS_SM, RADIUS, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_MD, FS_SM, radius, radius_sm, Theme, theme};
 
 /// A Phosphor icon by its kebab-case name, as `@phosphor-icons/react` draws it at `size`.
 pub fn icon(name: &str, size: f32) -> Icon {
@@ -114,7 +114,7 @@ pub fn icon_button(
     button(id, label)
         .size(px(28.))
         .justify_center()
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .text_color(t.text_muted)
         .hover(move |s| s.bg(hover).text_color(fg))
         .child(icon(name, size))
@@ -203,7 +203,7 @@ pub fn popup(t: &Theme) -> Div {
         .flex()
         .flex_col()
         .min_w(px(200.))
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .border_1()
         .border_color(t.border_strong)
         .bg(t.bg_elevated)
@@ -262,7 +262,7 @@ pub fn menu_item(
         .items_center()
         .gap(px(6.))
         .min_w(px(160.))
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .px(px(8.))
         .py(px(5.))
         .whitespace_nowrap()
@@ -334,7 +334,7 @@ impl Render for Tooltip {
         let t = theme(cx);
         div()
             .max_w(px(360.))
-            .rounded(px(RADIUS_SM))
+            .rounded(px(radius_sm()))
             .border_1()
             .border_color(t.border_strong)
             .bg(t.bg_elevated)
@@ -389,7 +389,7 @@ pub fn btn(
         .justify_center()
         .gap(px(6.))
         .px(px(14.))
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .border_1()
         .border_color(border)
         .bg(bg)
@@ -416,7 +416,7 @@ pub fn badge(text: impl Into<SharedString>, t: &Theme) -> Div {
         .flex()
         .items_center()
         .px(px(6.))
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .bg(t.bg_selected_muted)
         .text_size(px(crate::ui::theme::FS_XS))
         .text_color(t.text_muted)
@@ -438,7 +438,7 @@ pub fn dropdown_chip(
         .flex_none()
         .h(px(28.))
         .gap(px(4.))
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .px(px(6.))
         .text_size(px(FS_MD))
         .font_weight(FontWeight::MEDIUM)
@@ -456,7 +456,7 @@ pub fn input_box(focused: bool, t: &Theme) -> Div {
         .h(px(28.))
         .min_w_0()
         .overflow_hidden()
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .border_1()
         .border_color(if focused { t.accent } else { t.border_strong })
         .bg(t.bg_editor)

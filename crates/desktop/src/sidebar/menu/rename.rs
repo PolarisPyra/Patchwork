@@ -6,7 +6,7 @@ use super::types::Renaming;
 use super::types::Target;
 use gpui::{AnyElement, Focusable, KeyDownEvent, Window, div, prelude::*, px};
 use crate::ui::text_area::{Changed, Submitted, TextArea};
-use crate::ui::theme::{RADIUS_SM, theme};
+use crate::ui::theme::{radius_sm, theme};
 use crate::workspace::Workspace;
 
 impl Workspace {
@@ -95,7 +95,7 @@ impl Workspace {
                 .flex()
                 .items_center()
                 .px(px(4.))
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .border_1()
                 .border_color(t.accent)
                 .bg(t.bg_input)

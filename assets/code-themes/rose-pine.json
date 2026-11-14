@@ -1,0 +1,14 @@
+{
+  "name": "Rosé Pine",
+  "scheme": "dark",
+  "colors": {
+    "keyword": "#3e8fb0",
+    "string": "#f6c177",
+    "property": "#c4a7e7",
+    "ty": "#9ccfd8",
+    "number": "#f6c177",
+    "comment": "#6e6a86",
+    "function": "#ebbcba",
+    "tag": "#9ccfd8"
+  }
+}

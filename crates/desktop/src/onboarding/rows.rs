@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Stateful, Toggled, div, prelude::*, px};
-use crate::ui::theme::{FS_LG, FS_MD, FS_SM, RADIUS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_LG, FS_MD, FS_SM, radius, radius_sm, Theme};
 use crate::ui::{icon, mix};
 
 /// A step's small heading.
@@ -46,7 +46,7 @@ pub(super) fn choice_row(
         .w_full()
         .items_center()
         .gap(px(16.))
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .border_1()
         .p(px(16.))
         .text_color(t.text)
@@ -57,7 +57,7 @@ pub(super) fn choice_row(
                 .flex()
                 .items_center()
                 .justify_center()
-                .rounded(px(RADIUS))
+                .rounded(px(radius()))
                 .bg(t.bg_selected_muted)
                 .child(logo),
         )
@@ -116,7 +116,7 @@ pub(super) fn tick(checked: bool, t: &Theme) -> AnyElement {
         .flex()
         .items_center()
         .justify_center()
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .border_1()
         .text_color(t.text_on_accent)
         .map(|b| {

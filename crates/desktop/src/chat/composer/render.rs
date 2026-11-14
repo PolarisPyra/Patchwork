@@ -8,7 +8,7 @@ use gpui::{
 };
 use crate::ui::text_area::Paste;
 use crate::chat::user::attachment_chip;
-use crate::ui::theme::{FS_MD, RADIUS, RADIUS_LG, theme};
+use crate::ui::theme::{FS_MD, radius, radius_lg, theme};
 use crate::ui::{agent_logo, button, icon, tooltip};
 use crate::workspace::{Workspace, is_busy, is_working};
 use super::menus::{Menu, access_of, compact_label, effort_label, efforts};
@@ -160,7 +160,7 @@ impl Render for Composer {
             .size(px(32.))
             .flex_none()
             .justify_center()
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .bg(t.bg_selected_muted)
             .text_color(t.text)
             .hover(move |s| s.bg(hover))
@@ -200,9 +200,9 @@ impl Render for Composer {
                 .justify_center()
                 .map(|b| {
                     if split {
-                        b.rounded_l(px(RADIUS))
+                        b.rounded_l(px(radius()))
                     } else {
-                        b.rounded(px(RADIUS))
+                        b.rounded(px(radius()))
                     }
                 })
                 .child(icon(if editing { "check" } else { "arrow-up" }, 16.));
@@ -228,7 +228,7 @@ impl Render for Composer {
                 .w(px(24.))
                 .flex_none()
                 .justify_center()
-                .rounded_r(px(RADIUS))
+                .rounded_r(px(radius()))
                 .border_l_1()
                 .border_color(t.text_on_accent.opacity(0.2))
                 .bg(t.accent)
@@ -328,7 +328,7 @@ impl Render for Composer {
             .flex()
             .flex_col()
             .gap(px(8.))
-            .rounded(px(RADIUS_LG))
+            .rounded(px(radius_lg()))
             .pt(px(14.))
             .pr(px(12.))
             .pb(px(10.))

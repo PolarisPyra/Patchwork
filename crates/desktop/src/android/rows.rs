@@ -11,7 +11,7 @@ use patchwork_server::android::{self, Avd, Boot, Device, DeviceState};
 use super::state::{AndroidPanel, Busy, Confirm, Run, device_key};
 use super::tools::device_menu;
 use crate::ui::menu::{Menu, MenuItem};
-use crate::ui::theme::{FS_SM, RADIUS, Theme, theme};
+use crate::ui::theme::{FS_SM, radius, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, icon_button, spinner, tooltip};
 
 /// A row that is one of several choices: a dot, filled when it is the one picked, then what its
@@ -33,7 +33,7 @@ pub(super) fn radio_row(
         .flex_none()
         .min_h(px(32.))
         .gap(px(8.))
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .px(px(8.))
         .when(checked, |row| row.bg(t.bg_selected_muted))
         .hover(move |s| s.bg(hover))

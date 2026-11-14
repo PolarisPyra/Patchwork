@@ -6,7 +6,7 @@ use gpui::{AnyElement, FontWeight, Role, SharedString, Toggled, div, prelude::*,
 
 use super::{ImportResult, Onboarding};
 use super::rows::{heading, picked};
-use crate::ui::theme::{FS_LG, RADIUS, Theme};
+use crate::ui::theme::{FS_LG, radius, Theme};
 use crate::ui::{agent_label, icon};
 
 fn describe_import(imported: Option<ImportResult>) -> String {
@@ -114,7 +114,7 @@ fn runs_on(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) -> impl I
             .w_full()
             .items_center()
             .gap(px(16.))
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .p(px(16.))
             .text_color(t.text)
@@ -126,7 +126,7 @@ fn runs_on(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) -> impl I
             .flex()
             .items_center()
             .justify_center()
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .bg(t.bg_selected_muted)
             .text_color(t.accent_text)
             .child(icon(name, 20.))

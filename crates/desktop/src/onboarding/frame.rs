@@ -12,7 +12,7 @@ use super::{
     IMPORTS_STEP, LAST_STEP, LOGO_BLUE, LOGO_PINK, LOGO_VIOLET, Onboarding, OnboardingEvent,
     PROJECTS_STEP, STEPS, agent_step, imports_step, projects_step, ready_step,
 };
-use crate::ui::theme::{FS_LG, FS_SM, FS_XL, FS_XXL, RADIUS_LG, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_LG, FS_SM, FS_XL, FS_XXL, radius_lg, radius_sm, Theme, theme};
 use crate::ui::{BtnKind, btn, icon, icon_button, spinner, tooltip};
 
 /// The logo's colours as a fill, from `a` to `b`.
@@ -101,7 +101,7 @@ fn stepper(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) -> impl I
                     .flex()
                     .items_center()
                     .gap(px(20.))
-                    .rounded(px(RADIUS_SM))
+                    .rounded(px(radius_sm()))
                     .px(px(8.))
                     .py(px(4.))
                     .text_color(t.text_muted)
@@ -212,7 +212,7 @@ impl Render for Onboarding {
             .gap(px(16.))
             .when(self.step != PROJECTS_STEP, |s| {
                 s.min_h(px(520.))
-                    .rounded(px(RADIUS_LG))
+                    .rounded(px(radius_lg()))
                     .bg(t.bg_editor)
                     .p(px(24.))
             })

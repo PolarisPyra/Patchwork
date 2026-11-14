@@ -11,7 +11,7 @@ use patchwork_server::workspace::FileChange;
 
 use crate::sidebar::graph;
 use crate::ui::menu::Menu;
-use crate::ui::theme::{FS_MD, FS_SM, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_MD, FS_SM, radius_sm, Theme, theme};
 use crate::ui::{button, icon, list_scrollbar, scrollbar, tooltip};
 use super::list::{Entry, Group};
 use super::rows::reply_files;
@@ -255,7 +255,7 @@ impl Render for ChangesView {
                         button("refresh-changes", "Refresh")
                             .size(px(28.))
                             .justify_center()
-                            .rounded(px(RADIUS_SM))
+                            .rounded(px(radius_sm()))
                             .text_color(t.text_muted)
                             .hover(move |s| s.bg(hover).text_color(fg))
                             .tooltip(tooltip("Refresh"))

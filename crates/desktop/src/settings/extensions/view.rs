@@ -9,7 +9,7 @@ use patchwork_server::hooks::Bundle;
 use patchwork_server::skills::Skill;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert, chip, segmented};
-use crate::ui::theme::{FONT_MONO, FS_XS, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{font_mono, FS_XS, radius_sm, Theme, theme};
 use crate::ui::icon;
 use super::agents;
 use super::skills;
@@ -177,13 +177,13 @@ pub(super) fn example(text: &'static str, t: &Theme) -> Div {
         )
         .child(
             div()
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .border_1()
                 .border_color(t.border_strong)
                 .bg(t.bg_editor)
                 .px(px(12.))
                 .py(px(10.))
-                .font_family(FONT_MONO)
+                .font_family(font_mono())
                 .text_size(px(FS_XS))
                 .line_height(gpui::relative(1.6))
                 .text_color(t.text_muted)

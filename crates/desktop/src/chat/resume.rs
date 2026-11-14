@@ -7,7 +7,7 @@ use gpui::{Div, div, prelude::*, px};
 use patchwork_server::provider::AgentKind;
 use patchwork_server::threads::{Role as MessageRole, Thread};
 
-use crate::ui::theme::{FS_SM, RADIUS, Theme};
+use crate::ui::theme::{FS_SM, radius, Theme};
 use crate::ui::{BtnKind, btn, checkbox, compact_elapsed, format_tokens, now_ms};
 use crate::workspace::{Workspace, is_working};
 
@@ -114,7 +114,7 @@ pub fn resume_prompt(w: &Workspace, t: &Theme, cx: &mut Context<Workspace>) -> O
             .flex()
             .flex_col()
             .gap(px(8.))
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .border_color(t.border_strong)
             .bg(t.bg_panel)

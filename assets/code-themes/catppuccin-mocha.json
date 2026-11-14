@@ -1,0 +1,14 @@
+{
+  "name": "Catppuccin Mocha",
+  "scheme": "dark",
+  "colors": {
+    "keyword": "#cba6f7",
+    "string": "#a6e3a1",
+    "property": "#b4befe",
+    "ty": "#f9e2af",
+    "number": "#fab387",
+    "comment": "#9399b2",
+    "function": "#89b4fa",
+    "tag": "#74c7ec"
+  }
+}

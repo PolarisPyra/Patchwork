@@ -12,7 +12,7 @@ use patchwork_server::secrets::SecretStatus;
 use patchwork_server::threads::{Approval, ApprovalStatus};
 
 use crate::ui::text_area::{Changed, Submitted, TextArea};
-use crate::ui::theme::{FONT_MONO, FS_SM, RADIUS, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{font_mono, FS_SM, radius, radius_sm, Theme, theme};
 use crate::ui::{BtnKind, btn, icon};
 use crate::workspace::Workspace;
 
@@ -183,7 +183,7 @@ pub fn secret_card(
         .flex()
         .flex_col()
         .gap(px(8.))
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .border_1()
         .border_color(t.warning)
         .bg(t.bg_panel)
@@ -215,11 +215,11 @@ pub fn secret_card(
                 .flex()
                 .items_center()
                 .px(px(8.))
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .border_1()
                 .border_color(t.border_strong)
                 .bg(t.bg_input)
-                .font_family(FONT_MONO)
+                .font_family(font_mono())
                 .when(busy, |d| d.opacity(0.5))
                 .child(field.clone()),
         )

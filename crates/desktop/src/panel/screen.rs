@@ -12,7 +12,7 @@ use gpui::{
 };
 
 use super::Panel;
-use crate::ui::theme::{FS_SM, RADIUS_SM, theme};
+use crate::ui::theme::{FS_SM, radius_sm, theme};
 use crate::ui::{BtnKind, btn, icon, spinner};
 
 /// How long Live waits after a capture finishes before taking the next. A capture itself takes
@@ -203,7 +203,7 @@ impl Panel {
                             .w(px(*w as f32 * fit + 2.))
                             .h(px(*h as f32 * fit + 2.))
                             .object_fit(ObjectFit::Contain)
-                            .rounded(px(RADIUS_SM))
+                            .rounded(px(radius_sm()))
                             .border_1()
                             .border_color(t.border)
                     })),

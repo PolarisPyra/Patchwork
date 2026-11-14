@@ -10,7 +10,7 @@ use gpui::{
 use crate::ui::text_area::{Changed, TextArea};
 use crate::settings::SettingsDialog;
 use crate::settings::sigils::SIGILS_PAGE;
-use crate::ui::theme::{FS_MD, FS_SM, FS_XS, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_MD, FS_SM, FS_XS, radius_sm, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, tooltip};
 use super::keys::{
     COMMANDS, Command, DEFAULT_RULES, FIXED_KEYS, Overrides, PAGES, STATE_KEY, bind_keys,
@@ -102,7 +102,7 @@ pub fn kbd(parts: &[String], t: &Theme) -> gpui::Div {
                 .items_center()
                 .justify_center()
                 .px(px(5.))
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .bg(t.bg_selected_muted)
                 .text_size(px(FS_XS))
                 .font_weight(FontWeight::MEDIUM)
@@ -187,7 +187,7 @@ pub fn render(
                         button(SharedString::from(format!("{name}-{id}")), label)
                             .size(px(24.))
                             .justify_center()
-                            .rounded(px(RADIUS_SM))
+                            .rounded(px(radius_sm()))
                             .text_color(muted)
                             .hover(move |s| s.bg(hover).text_color(fg))
                             .child(icon(glyph, 12.))
@@ -258,7 +258,7 @@ pub fn render(
                                         SharedString::from(format!("change-{id}")),
                                         format!("Change shortcut for {}", c.title),
                                     )
-                                    .rounded(px(RADIUS_SM))
+                                    .rounded(px(radius_sm()))
                                     .border_1()
                                     .px(px(8.))
                                     .py(px(4.))
@@ -348,7 +348,7 @@ pub fn render(
                                     SharedString::from(format!("fixed-{action}")),
                                     format!("{action}: fixed shortcut"),
                                 )
-                                .rounded(px(RADIUS_SM))
+                                .rounded(px(radius_sm()))
                                 .border_1()
                                 .border_color(gpui::transparent_black())
                                 .px(px(8.))
@@ -417,7 +417,7 @@ pub fn render(
             .flex()
             .h(px(28.))
             .items_center()
-            .rounded(px(RADIUS_SM))
+            .rounded(px(radius_sm()))
             .px(px(10.))
             .text_size(px(FS_SM))
             .map(|tab| {
@@ -458,7 +458,7 @@ pub fn render(
                                 .h(px(28.))
                                 .flex()
                                 .items_center()
-                                .rounded(px(RADIUS_SM))
+                                .rounded(px(radius_sm()))
                                 .border_1()
                                 .border_color(if search_focused {
                                     t.accent

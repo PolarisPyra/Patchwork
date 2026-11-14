@@ -10,7 +10,7 @@ use patchwork_server::settings::{LogLevel, LoggingSettings};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{alert, choice, section_heading, switch, token_row};
-use crate::ui::theme::{RADIUS_SM, theme};
+use crate::ui::theme::{radius_sm, theme};
 use crate::ui::{BtnKind, btn, dropdown_chip, tooltip};
 
 /// The log levels, from the most to the least recorded.
@@ -174,7 +174,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                     .flex()
                     .items_center()
                     .justify_center()
-                    .rounded(px(RADIUS_SM))
+                    .rounded(px(radius_sm()))
                     .border_1()
                     .map(|b| {
                         if checked {

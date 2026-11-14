@@ -13,7 +13,7 @@ use patchwork_server::threads::{MessageStatus, Role as MessageRole};
 
 use crate::ui::text_area::{Arrow, Changed, Submitted, TextArea};
 use crate::settings::shortcuts::key_label;
-use crate::ui::theme::{FONT_MONO, FS_LG, FS_MD, FS_XS, RADIUS, RADIUS_LG, theme};
+use crate::ui::theme::{font_mono, FS_LG, FS_MD, FS_XS, radius, radius_lg, theme};
 use crate::ui::{display_title, icon, overflows, popup_shadow, scrollbar};
 use crate::workspace::Workspace;
 
@@ -282,7 +282,7 @@ impl Render for Palette {
                     .items_center()
                     .gap(px(12.))
                     .px(px(12.))
-                    .rounded(px(RADIUS))
+                    .rounded(px(radius()))
                     .cursor_pointer()
                     .text_size(px(FS_MD))
                     .when(is_active, |row| row.bg(t.bg_selected))
@@ -307,7 +307,7 @@ impl Render for Palette {
                             .flex_none()
                             .max_w(px(220.))
                             .truncate()
-                            .font_family(FONT_MONO)
+                            .font_family(font_mono())
                             .text_size(px(FS_XS))
                             .text_color(if is_active {
                                 t.text_muted
@@ -354,7 +354,7 @@ impl Render for Palette {
                     .max_w(viewport.width - px(32.))
                     .max_h(viewport.height * 0.6)
                     .overflow_hidden()
-                    .rounded(px(RADIUS_LG))
+                    .rounded(px(radius_lg()))
                     .border_1()
                     .border_color(t.border_strong)
                     .bg(t.bg_elevated)

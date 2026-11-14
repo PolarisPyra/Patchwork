@@ -10,7 +10,7 @@ use std::sync::Arc;
 use gpui::{AnyElement, Div, Hsla, Role, SharedString, div, prelude::*, px};
 use patchwork_server::threads::{CheckStatus, Message, TurnChecks};
 
-use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
+use crate::ui::theme::{font_mono, FS_SM, FS_XS, radius, radius_sm, Theme};
 use crate::ui::{BtnKind, btn, button, full_elapsed, icon, spinner, tooltip};
 use crate::workspace::Workspace;
 
@@ -169,7 +169,7 @@ pub fn checks_card(
             .id(SharedString::from(format!("checks-command-{id}")))
             .min_w_0()
             .truncate()
-            .font_family(FONT_MONO)
+            .font_family(font_mono())
             .text_size(px(FS_XS))
             .text_color(t.text_muted)
             .tooltip(tooltip(command.clone()))
@@ -250,7 +250,7 @@ pub fn checks_card(
                             .when(!failure.detail.is_empty(), |d| {
                                 d.child(
                                     div()
-                                        .font_family(FONT_MONO)
+                                        .font_family(font_mono())
                                         .text_size(px(FS_XS))
                                         .text_color(t.text_muted)
                                         .child(failure.detail.clone()),
@@ -285,11 +285,11 @@ pub fn checks_card(
                         .mt(px(6.))
                         .max_h(px(320.))
                         .overflow_y_scroll()
-                        .rounded(px(RADIUS_SM))
+                        .rounded(px(radius_sm()))
                         .bg(t.bg_editor)
                         .px(px(8.))
                         .py(px(6.))
-                        .font_family(FONT_MONO)
+                        .font_family(font_mono())
                         .text_size(px(FS_XS))
                         .child(output),
                 )
@@ -336,7 +336,7 @@ pub fn checks_card(
             .flex()
             .flex_col()
             .gap(px(4.))
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .border_color(t.border)
             .bg(t.bg_panel)

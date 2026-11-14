@@ -6,7 +6,7 @@ use std::sync::Arc;
 use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
 use patchwork_server::workspace::FileChange;
 
-use crate::ui::theme::{FS_MD, FS_SM, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_MD, FS_SM, radius_sm, Theme};
 use crate::ui::{base_name, button, dir_name, icon, tooltip};
 use crate::workspace::Workspace;
 use super::state::ChangesView;
@@ -51,7 +51,7 @@ pub(super) fn row_action(
         .size(px(20.))
         .flex_none()
         .justify_center()
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .text_color(t.text_muted)
         .hover(move |s| s.bg(hover).text_color(fg))
         .tooltip(tooltip(label.to_string()))
@@ -72,7 +72,7 @@ pub(super) fn group_button(
     button(id, label)
         .flex_none()
         .gap(px(4.))
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .px(px(6.))
         .py(px(2.))
         .text_size(px(FS_SM))
@@ -177,7 +177,7 @@ impl ChangesView {
             .flex()
             .items_center()
             .gap(px(4.))
-            .rounded(px(RADIUS_SM))
+            .rounded(px(radius_sm()))
             .pr(px(4.))
             .pl(px(20.))
             .hover(move |s| s.bg(hover))

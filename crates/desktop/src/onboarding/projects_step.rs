@@ -14,7 +14,7 @@ use patchwork_server::Server;
 use super::{Onboarding, OnboardingEvent};
 use super::rows::picked;
 use crate::ui::input_box;
-use crate::ui::theme::{FONT_MONO, FS_LG, FS_SM, RADIUS, RADIUS_LG, RADIUS_SM, Theme};
+use crate::ui::theme::{font_mono, FS_LG, FS_SM, radius, radius_lg, radius_sm, Theme};
 use crate::ui::{BtnKind, btn, button, icon};
 
 impl Onboarding {
@@ -135,7 +135,7 @@ fn way_in(
         .flex_col()
         .justify_center()
         .gap(px(12.))
-        .rounded(px(RADIUS_LG))
+        .rounded(px(radius_lg()))
         .px(px(24.))
         .py(px(28.))
         .text_size(px(FS_LG))
@@ -148,7 +148,7 @@ fn way_in(
                 .flex()
                 .items_center()
                 .justify_center()
-                .rounded(px(RADIUS))
+                .rounded(px(radius()))
                 .bg(t.bg_selected_muted)
                 .text_color(t.text_muted)
                 .child(icon(icon_name, 22.)),
@@ -205,7 +205,7 @@ pub fn projects_step(
         div()
             .flex()
             .gap(px(8.))
-            .rounded(px(RADIUS_LG))
+            .rounded(px(radius_lg()))
             .bg(t.bg_panel)
             .p(px(12.))
             .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, window, cx| {
@@ -240,7 +240,7 @@ pub fn projects_step(
         })
         .w_full()
         .gap(px(12.))
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .border_1()
         .border_color(gpui::transparent_black())
         .px(px(12.))
@@ -265,7 +265,7 @@ pub fn projects_step(
                 .min_w_0()
                 .truncate()
                 .text_right()
-                .font_family(FONT_MONO)
+                .font_family(font_mono())
                 .text_size(px(FS_SM))
                 .text_color(t.text_muted)
                 .child(p.path.clone()),

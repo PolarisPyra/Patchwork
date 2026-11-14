@@ -11,7 +11,7 @@ use patchwork_server::system::ssh::{self, Host, Test};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
-use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS_SM, theme};
+use crate::ui::theme::{font_mono, FS_SM, FS_XS, radius_sm, theme};
 use crate::ui::{BtnKind, btn, icon, spinner};
 
 /// The add form's fields share this prefix, so closing it forgets them.
@@ -304,7 +304,7 @@ pub fn render(
                                 if failed {
                                     d.text_color(t.danger)
                                 } else {
-                                    d.font_family(FONT_MONO).text_color(t.text_muted)
+                                    d.font_family(font_mono()).text_color(t.text_muted)
                                 }
                             })
                             .child(line),
@@ -318,7 +318,7 @@ pub fn render(
                     .flex()
                     .items_center()
                     .px(px(6.))
-                    .rounded(px(RADIUS_SM))
+                    .rounded(px(radius_sm()))
                     .bg(color.opacity(0.14))
                     .text_size(px(FS_XS))
                     .text_color(color)

@@ -11,7 +11,7 @@ use patchwork_server::threads::{MessageStatus, Role as MessageRole};
 
 use super::{Page, View, Workspace, is_busy};
 use crate::ui::menu::{Dismissed, Menu, MenuItem};
-use crate::ui::theme::{ACTIVITY_BAR_W, FS_XS, RADIUS, RADIUS_SM, STATUSBAR_H, TOOLBAR_H, Theme, theme};
+use crate::ui::theme::{ACTIVITY_BAR_W, FS_XS, radius, radius_sm, STATUSBAR_H, TOOLBAR_H, Theme, theme};
 use crate::ui::{agent_label, button, display_title, icon, kind_icon, spinner};
 
 /// The machine button's size, the same as the activity bar's buttons.
@@ -165,7 +165,7 @@ impl Workspace {
                     .h(px(MACHINE_BUTTON))
                     .min_w(px(MACHINE_BUTTON))
                     .gap(px(6.))
-                    .rounded(px(RADIUS))
+                    .rounded(px(radius()))
                     .pl(px((MACHINE_BUTTON - 20.) / 2.))
                     .pr(px(6.))
                     .text_color(t.text_muted)
@@ -200,7 +200,7 @@ impl Workspace {
                     .gap(px(6.))
                     .child(
                         div()
-                            .rounded(px(RADIUS_SM))
+                            .rounded(px(radius_sm()))
                             .border_1()
                             .border_color(t.border)
                             .bg(t.text_tint_6)
@@ -448,7 +448,7 @@ fn activity_button(
         .relative()
         .size(px(28.))
         .justify_center()
-        .rounded(px(RADIUS));
+        .rounded(px(radius()));
     if active {
         base.bg(t.bg_selected).text_color(t.text)
     } else {

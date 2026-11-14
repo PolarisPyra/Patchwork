@@ -6,7 +6,7 @@ use gpui::{ClickEvent, Div, Focusable, Role, SharedString, Stateful, Window, div
 use patchwork_server::workspace::PullRequest;
 
 use crate::ui::menu::MenuItem;
-use crate::ui::theme::{FS_MD, FS_SM, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_MD, FS_SM, radius_sm, Theme};
 use crate::ui::{button, icon, spinner, tooltip};
 use super::rows::group_button;
 use super::state::{ChangesView, GitAction, git_actions};
@@ -54,7 +54,7 @@ impl ChangesView {
                 div()
                     .relative()
                     .flex()
-                    .rounded(px(RADIUS_SM))
+                    .rounded(px(radius_sm()))
                     .border_1()
                     .border_color(if focused { t.accent } else { t.border })
                     .bg(t.bg_input)
@@ -81,7 +81,7 @@ impl ChangesView {
                             .right(px(2.))
                             .size(px(24.))
                             .justify_center()
-                            .rounded(px(RADIUS_SM))
+                            .rounded(px(radius_sm()))
                             .text_color(t.text_muted)
                             .tooltip(tooltip("Write commit message"))
                             .when(write_enabled, |b| {
@@ -109,7 +109,7 @@ impl ChangesView {
                         .min_w_0()
                         .justify_center()
                         .gap(px(6.))
-                        .rounded_l(px(RADIUS_SM))
+                        .rounded_l(px(radius_sm()))
                         .bg(t.accent)
                         .px(px(8.))
                         .text_size(px(FS_MD))
@@ -137,7 +137,7 @@ impl ChangesView {
                             .h(px(28.))
                             .w(px(24.))
                             .justify_center()
-                            .rounded_r(px(RADIUS_SM))
+                            .rounded_r(px(radius_sm()))
                             .border_l_1()
                             .border_color(gpui::black().opacity(0.2))
                             .bg(t.accent)

@@ -11,7 +11,7 @@ use super::state::peak;
 use super::state::limited_until;
 use gpui::{AnyElement, FontWeight, Role, SharedString, deferred, div, prelude::*, px, relative};
 use patchwork_server::provider::AgentKind;
-use crate::ui::theme::{FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_SM, FS_XS, radius, radius_sm, Theme};
 use crate::ui::{
     agent_label, agent_logo, button, icon, now_ms, popup_shadow, resets_in, spinner, tooltip,
 };
@@ -36,7 +36,7 @@ pub fn footer(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>) -> AnyE
                 .h(px(28.))
                 .gap(px(6.))
                 .px(px(8.))
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .text_size(px(FS_SM))
                 .aria_expanded(open)
                 .map(|b| {
@@ -94,7 +94,7 @@ pub(super) fn popover(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>)
         }))
         .flex()
         .overflow_hidden()
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .border_1()
         .border_color(t.border_strong)
         .bg(t.bg_elevated)
@@ -151,7 +151,7 @@ pub(super) fn popover(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>)
                 .flex()
                 .items_center()
                 .justify_center()
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .map(|tab| {
                     if active {
                         tab.bg(t.bg_hover)
@@ -170,7 +170,7 @@ pub(super) fn popover(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>)
             .size(px(28.))
             .flex_none()
             .justify_center()
-            .rounded(px(RADIUS_SM))
+            .rounded(px(radius_sm()))
             .text_color(t.text_muted)
             .hover({
                 let (hover, fg) = (t.bg_hover, t.text);
@@ -271,7 +271,7 @@ pub(super) fn usage_header(
                 .flex()
                 .items_center()
                 .px(px(6.))
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .bg(t.danger_soft)
                 .text_color(t.danger)
                 .text_size(px(FS_XS))

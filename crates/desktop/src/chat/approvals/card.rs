@@ -11,7 +11,7 @@ use patchwork_server::system::new_id;
 use patchwork_server::threads::{Approval, ApprovalStatus, Message};
 use crate::chat::secret::secret_card;
 use crate::settings::permissions::{kind_label, scope_name};
-use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
+use crate::ui::theme::{font_mono, FS_SM, FS_XS, radius, radius_sm, Theme};
 use crate::ui::{button, icon, popup};
 use crate::workspace::Workspace;
 
@@ -93,7 +93,7 @@ pub(super) fn approval(
         div()
             .flex()
             .flex_col()
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .border_color(t.border_strong)
             .bg(t.bg_panel)
@@ -159,7 +159,7 @@ pub(super) fn approval(
                     div()
                         .min_w_0()
                         .truncate()
-                        .font_family(FONT_MONO)
+                        .font_family(font_mono())
                         .text_size(px(FS_XS))
                         .child(a.detail.clone()),
                 )
@@ -225,7 +225,7 @@ pub(super) fn rule_menu(
             .focus_visible(crate::ui::focus_ring)
             .flex()
             .items_center()
-            .rounded(px(RADIUS_SM))
+            .rounded(px(radius_sm()))
             .px(px(8.))
             .py(px(5.))
             .whitespace_nowrap()
@@ -372,11 +372,11 @@ pub(super) fn suggested_rules(a: &Approval) -> Vec<PermissionRule> {
 /// The command or paths being approved, in a sunken mono box.
 pub(super) fn code_block(text: &str, t: &Theme) -> Div {
     div()
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .bg(t.bg_editor)
         .px(px(8.))
         .py(px(6.))
-        .font_family(FONT_MONO)
+        .font_family(font_mono())
         .text_color(t.text)
         .child(text.to_string())
 }

@@ -17,7 +17,7 @@ use gpui::{
 };
 
 use crate::ui::menu::{Dismissed, Menu, MenuItem};
-use crate::ui::theme::{RADIUS_SM, theme};
+use crate::ui::theme::{radius_sm, theme};
 
 /// How far a chip reaches past its first and last letter, and how far in from its line's top and
 /// bottom it stops, so chips on lines above each other keep apart.
@@ -211,7 +211,7 @@ impl Element for Selectable {
                         quad.bottom() - px(CHIP_INSET_Y),
                     ),
                 );
-                window.paint_quad(fill(quad, *color).corner_radii(px(RADIUS_SM)));
+                window.paint_quad(fill(quad, *color).corner_radii(px(radius_sm())));
             }
         }
         let selection = cx.default_global::<Selection>();

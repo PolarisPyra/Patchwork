@@ -7,7 +7,7 @@ use super::steps::reply_step;
 use super::frame::head;
 use gpui::{Div, SharedString, div, prelude::*, px};
 use patchwork_server::threads::{Message, MessageStatus, Thread};
-use crate::ui::theme::{FS_MD, FS_XS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_MD, FS_XS, radius_sm, Theme};
 use crate::ui::{button, icon};
 use crate::workspace::Workspace;
 use crate::ui::markdown::{self, FindIn};
@@ -25,7 +25,7 @@ pub(super) fn action_button(
     button(SharedString::from(id), label)
         .h(px(24.))
         .gap(px(4.))
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .px(px(6.))
         .text_size(px(FS_XS))
         .text_color(t.text_muted)

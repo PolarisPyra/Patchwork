@@ -8,7 +8,7 @@ use std::sync::Arc;
 use gpui::{Div, FontWeight, div, prelude::*, px};
 
 use crate::chat::goal::strip_action;
-use crate::ui::theme::{FS_SM, FS_XS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_SM, FS_XS, radius_sm, Theme};
 use crate::ui::{icon, tooltip};
 use crate::workspace::Workspace;
 
@@ -117,7 +117,7 @@ pub fn missing_folder(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>)
             .mx(px(8.))
             .mb(px(6.))
             .overflow_hidden()
-            .rounded(px(RADIUS_SM))
+            .rounded(px(radius_sm()))
             .border_1()
             .border_color(t.border_strong)
             .bg(t.bg_panel)

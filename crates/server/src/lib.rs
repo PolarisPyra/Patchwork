@@ -69,6 +69,7 @@ pub struct Server {
     project_watch: std::sync::Mutex<Option<(String, watch::ProjectWatcher)>>,
     /// The watcher on the skills folder, while Settings shows the skills.
     skills_watch: std::sync::Mutex<Option<skills::Watcher>>,
+    themes_watch: std::sync::Mutex<Option<themes::Watcher>>,
     /// The custom agents that `&name` summons.
     pub agents: Arc<agents::Library>,
     /// The integrated terminal's running shells.
@@ -142,6 +143,7 @@ impl Server {
             sink,
             project_watch: std::sync::Mutex::default(),
             skills_watch: std::sync::Mutex::default(),
+            themes_watch: std::sync::Mutex::default(),
             agents,
             terminals: terminal::Terminals::default(),
             secrets: secrets::Waiters::default(),

@@ -11,7 +11,7 @@ use gpui::{
 };
 
 use crate::ui::popup_shadow;
-use crate::ui::theme::{FS_LG, RADIUS_LG, Theme};
+use crate::ui::theme::{FS_LG, radius_lg, Theme};
 
 /// The layer a dialog sits on: over the whole window, which it keeps the pointer from, with the
 /// card centred across it. `dim` darkens the window behind; a dialog that shows its effect on
@@ -44,7 +44,7 @@ pub fn card(
         .aria_label(label)
         .track_focus(focus)
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-        .rounded(px(RADIUS_LG))
+        .rounded(px(radius_lg()))
         .border_1()
         .border_color(t.border_strong)
         .bg(t.bg_elevated)

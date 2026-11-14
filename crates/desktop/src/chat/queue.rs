@@ -12,7 +12,7 @@ use gpui::{App, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, 
 use patchwork_server::threads::{Attachment, Message};
 
 use crate::chat::goal::strip_action;
-use crate::ui::theme::{FS_SM, FS_XS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_SM, FS_XS, radius_sm, Theme};
 use crate::ui::{button, icon, scrollbar, tooltip};
 use crate::workspace::{Workspace, is_working};
 
@@ -275,7 +275,7 @@ fn icon_action(id: String, label: &'static str, name: &'static str, t: &Theme) -
         .flex_none()
         .size(px(24.))
         .justify_center()
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .text_color(t.text_subtle)
         .hover(move |s| s.bg(hover).text_color(fg))
         .child(icon(name, 13.))
@@ -325,7 +325,7 @@ fn queued_row(
     .h(px(24.))
     .gap(px(4.))
     .px(px(6.))
-    .rounded(px(RADIUS_SM))
+    .rounded(px(radius_sm()))
     .border_1()
     .text_size(px(FS_XS))
     .text_color(t.accent_text)
@@ -471,7 +471,7 @@ pub fn queued_strip(
             .mx(px(8.))
             .mb(px(6.))
             .overflow_hidden()
-            .rounded(px(RADIUS_SM))
+            .rounded(px(radius_sm()))
             .border_1()
             .border_color(t.border_strong)
             .bg(t.bg_panel)

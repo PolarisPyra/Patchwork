@@ -1,0 +1,14 @@
+{
+  "name": "Colorblind",
+  "scheme": "light",
+  "colors": {
+    "keyword": "#b35900",
+    "string": "#0a3069",
+    "property": "#0550ae",
+    "ty": "#8a4600",
+    "number": "#0550ae",
+    "comment": "#6e7781",
+    "function": "#8250df",
+    "tag": "#0969da"
+  }
+}

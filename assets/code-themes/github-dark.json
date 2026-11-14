@@ -1,0 +1,14 @@
+{
+  "name": "GitHub Dark",
+  "scheme": "dark",
+  "colors": {
+    "keyword": "#ff7b72",
+    "string": "#a5d6ff",
+    "property": "#79c0ff",
+    "ty": "#ffa657",
+    "number": "#79c0ff",
+    "comment": "#8b949e",
+    "function": "#d2a8ff",
+    "tag": "#7ee787"
+  }
+}

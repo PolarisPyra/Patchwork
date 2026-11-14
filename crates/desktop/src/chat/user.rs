@@ -15,7 +15,7 @@ use gpui::{
 use patchwork_server::threads::{Attachment, AttachmentKind, Message};
 
 use crate::ui::markdown::{FindIn, markdown_found};
-use crate::ui::theme::{FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_SM, FS_XS, radius, radius_sm, Theme};
 use crate::ui::{button, format_clock, icon, tooltip};
 use crate::workspace::{Workspace, is_working};
 
@@ -124,7 +124,7 @@ pub fn attachment_chip(id: impl Into<SharedString>, a: &Attachment, t: &Theme) -
         .max_w(px(280.))
         .items_center()
         .gap(px(6.))
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .border_1()
         .border_color(t.border_strong)
         .bg(t.bg_panel)
@@ -169,7 +169,7 @@ fn attachment_tile(id: String, a: &Attachment, size: Option<(u32, u32)>, t: &The
         .tooltip(tooltip(a.path.clone()))
         .child(
             image
-                .rounded(px(RADIUS))
+                .rounded(px(radius()))
                 .border_1()
                 .border_color(t.border)
                 .object_fit(ObjectFit::Cover)
@@ -368,7 +368,7 @@ pub fn user_message(
         button(SharedString::from(id), label)
             .h(px(24.))
             .gap(px(4.))
-            .rounded(px(RADIUS_SM))
+            .rounded(px(radius_sm()))
             .px(px(6.))
             .text_size(px(FS_XS))
             .text_color(t.text_muted)

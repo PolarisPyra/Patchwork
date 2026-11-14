@@ -7,7 +7,7 @@ use patchwork_server::provider::AgentKind;
 use patchwork_server::provider::mcp::ToolInfo;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::letter_badge;
-use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS_SM, Theme};
+use crate::ui::theme::{font_mono, FS_SM, FS_XS, radius_sm, Theme};
 use crate::ui::{agent_logo, icon};
 use super::state::{Card, Client, dot};
 
@@ -152,7 +152,7 @@ pub(super) fn server_row(
             .child(if matches.is_empty() {
                 div()
                     .truncate()
-                    .font_family(FONT_MONO)
+                    .font_family(font_mono())
                     .text_size(px(FS_XS))
                     .text_color(muted)
                     .child(card.target.clone())
@@ -165,10 +165,10 @@ pub(super) fn server_row(
                         div()
                             .min_w_0()
                             .truncate()
-                            .rounded(px(RADIUS_SM))
+                            .rounded(px(radius_sm()))
                             .bg(t.bg_accent_soft)
                             .px(px(6.))
-                            .font_family(FONT_MONO)
+                            .font_family(font_mono())
                             .text_size(px(FS_XS))
                             .child(tool.name.clone())
                     }))

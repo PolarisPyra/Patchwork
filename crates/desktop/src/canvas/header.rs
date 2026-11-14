@@ -5,7 +5,7 @@
 use gpui::{FontWeight, Role, SharedString, div, prelude::*, px};
 use patchwork_server::threads::Message;
 use crate::ui::highlight::file_label;
-use crate::ui::theme::{FS_LG, FS_SM, RADIUS, Theme};
+use crate::ui::theme::{FS_LG, FS_SM, radius, Theme};
 use crate::ui::{BtnKind, badge, base_name, btn, dir_name, icon, icon_button, tooltip};
 use super::diff::Review;
 use super::state::{Canvas, CanvasTab};
@@ -201,7 +201,7 @@ impl Canvas {
                     .gap(px(6.))
                     .h(px(28.))
                     .px(px(10.))
-                    .rounded(px(RADIUS))
+                    .rounded(px(radius()))
                     .cursor_pointer()
                     .whitespace_nowrap()
                     .text_color(if on { fg } else { muted })
