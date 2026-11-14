@@ -73,8 +73,8 @@ impl Workspace {
                 this.apply_theme(window, cx);
             }
             crate::settings::SettingsEvent::ThreadsChanged => this.reload(cx),
-            crate::settings::SettingsEvent::GenerateTheme(prompt) => {
-                this.generate_theme(prompt.clone(), cx);
+            crate::settings::SettingsEvent::GenerateTheme(prompt, pick) => {
+                this.generate_theme(prompt.clone(), pick.as_ref(), cx);
             }
             crate::settings::SettingsEvent::RestartToUpdate => {
                 super::updates::restart_to_update(&this.server, window, cx);
@@ -139,9 +139,18 @@ impl Workspace {
 
     /// Starts a chat with `prompt`, which has its agent write a theme. Settings stays open and
     /// is told when the chat could not be started.
-    fn generate_theme(&mut self, prompt: String, cx: &mut Context<Self>) {
+    fn generate_theme(
+        &mut self,
+        prompt: String,
+        pick: Option<&patchwork_server::threads::AgentPick>,
+        cx: &mut Context<Self>,
+    ) {
         use patchwork_server::orchestration::Target;
         let new = self.composer.read(cx).new_thread(None, &self.settings);
+        let new = match pick {
+            Some(pick) => new.picked(pick, &self.settings),
+            None => new,
+        };
         let server = Arc::clone(&self.server);
         let sent = cx
             .background_spawn(async move { server.dispatch_to(&prompt, &Target::New(None), &new) });

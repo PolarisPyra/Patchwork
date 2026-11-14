@@ -6,9 +6,9 @@ use std::sync::Arc;
 use crate::Error;
 use crate::provider::AgentKind;
 use crate::system::{now_ms, new_id};
-use crate::threads::{AccessMode, Message, ResumePoint, Thread};
+use crate::threads::{AccessMode, AgentPick, Message, ResumePoint, Thread};
 use crate::logging::THREAD_LOG;
-use crate::settings::LogLevel;
+use crate::settings::{LogLevel, Settings};
 use crate::Server;
 
 /// The options for a new task or chat, as the desktop app sends them.
@@ -27,6 +27,29 @@ pub struct NewThread {
     #[serde(default)]
     pub compact_window: Option<u64>,
     pub plan_mode: bool,
+}
+
+impl NewThread {
+    /// These options on the agent, model and effort of `pick`. What the pick leaves open stays,
+    /// except on another agent or model: there the model is the agent's for new chats, and the
+    /// effort is the agent's own.
+    #[must_use]
+    pub fn picked(mut self, pick: &AgentPick, settings: &Settings) -> Self {
+        if pick.agent != self.agent || pick.model.is_some() {
+            self.effort = None;
+        }
+        if pick.agent != self.agent {
+            self.agent = pick.agent;
+            self.model = settings.tokens.default_models.get(&pick.agent).cloned();
+        }
+        if pick.model.is_some() {
+            self.model.clone_from(&pick.model);
+        }
+        if pick.effort.is_some() {
+            self.effort.clone_from(&pick.effort);
+        }
+        self
+    }
 }
 
 /// Notes a change to the chat `id` in its log.

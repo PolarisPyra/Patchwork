@@ -34,8 +34,9 @@ pub enum SettingsEvent {
     ThreadsChanged,
     /// The user asked to restart into the installed update.
     RestartToUpdate,
-    /// Start a chat with this message, whose agent writes a theme.
-    GenerateTheme(String),
+    /// Start a chat with this message, whose agent writes a theme, on this agent, model and
+    /// effort when they were picked.
+    GenerateTheme(String, Option<patchwork_server::threads::AgentPick>),
     Closed,
 }
 

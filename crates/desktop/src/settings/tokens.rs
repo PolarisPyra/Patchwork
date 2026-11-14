@@ -24,7 +24,7 @@ const COMPACT_WINDOWS: [u64; 5] = [128_000, 200_000, 256_000, 512_000, 0];
 #[derive(Default)]
 pub struct TokensState {
     asked: HashSet<AgentKind>,
-    models: HashMap<AgentKind, Vec<ModelOption>>,
+    pub(super) models: HashMap<AgentKind, Vec<ModelOption>>,
 }
 
 /// The field that holds `kind`'s compact window (`COMPACT_SETTINGS`).
@@ -71,7 +71,7 @@ fn context_levels(
 }
 
 impl SettingsDialog {
-    fn load_models(&mut self, kind: AgentKind, cx: &mut Context<Self>) {
+    pub(super) fn load_models(&mut self, kind: AgentKind, cx: &mut Context<Self>) {
         if !self.tokens.asked.insert(kind) {
             return;
         }

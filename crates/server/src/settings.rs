@@ -13,6 +13,7 @@ use crate::permissions::PermissionSettings;
 use crate::projects::Project;
 use crate::provider::AgentKind;
 use crate::themes::{BackdropChoice, Color, Density, Follow, ProjectLook};
+use crate::threads::AgentPick;
 use crate::Server;
 use crate::{permissions, skills};
 
@@ -116,6 +117,8 @@ pub struct Settings {
     pub code_theme_light: Option<String>,
     /// The code theme of dark windows, by its id. None uses the color scheme's own colors.
     pub code_theme_dark: Option<String>,
+    /// What the chats that write a background run on. None is what a new chat runs on.
+    pub generator: Option<AgentPick>,
     /// How large the app's text is.
     pub text_size: TextSize,
     /// Nothing moves on its own: animations and the Orchestrator's backdrop hold still.
@@ -182,6 +185,14 @@ impl Settings {
     #[must_use]
     pub fn default_agent(&self) -> AgentKind {
         self.agents.first().copied().unwrap_or(AgentKind::Claude)
+    }
+
+    /// What the chats that write a background run on, while its agent is still connected.
+    #[must_use]
+    pub fn generator_pick(&self) -> Option<&AgentPick> {
+        self.generator
+            .as_ref()
+            .filter(|pick| self.agents.contains(&pick.agent))
     }
 }
 
