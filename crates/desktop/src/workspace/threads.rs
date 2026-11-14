@@ -37,7 +37,58 @@ impl Workspace {
     }
 
     pub fn open_thread(&mut self, id: &str, cx: &mut Context<Self>) {
-        match self.server.thread(id) {
+        let from = self.thread.as_ref().map(|t| t.id.clone());
+        if self.show_thread(id, cx)
+            && let Some(from) = from.filter(|from| from != id)
+        {
+            self.history_back.push(from);
+            self.history_forward.clear();
+        }
+    }
+
+    /// Whether there is a chat to go back to.
+    pub fn can_go_back(&self) -> bool {
+        !self.history_back.is_empty()
+    }
+
+    /// Opens the chat shown before this one, as a browser's back button does.
+    pub fn go_back(&mut self, cx: &mut Context<Self>) {
+        self.step_history(true, cx);
+    }
+
+    /// Opens the chat gone back from.
+    pub fn go_forward(&mut self, cx: &mut Context<Self>) {
+        self.step_history(false, cx);
+    }
+
+    /// Steps one chat back or forward, skipping any deleted since.
+    fn step_history(&mut self, back: bool, cx: &mut Context<Self>) {
+        let from = self.thread.as_ref().map(|t| t.id.clone());
+        loop {
+            let next = if back {
+                self.history_back.pop()
+            } else {
+                self.history_forward.pop()
+            };
+            let Some(next) = next else {
+                return;
+            };
+            if self.show_thread(&next, cx) {
+                if let Some(from) = from {
+                    if back {
+                        self.history_forward.push(from);
+                    } else {
+                        self.history_back.push(from);
+                    }
+                }
+                return;
+            }
+        }
+    }
+
+    /// Shows chat `id`, and whether it could be opened.
+    fn show_thread(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
+        let opened = match self.server.thread(id) {
             Ok(thread) => {
                 let changed_project =
                     self.thread.as_ref().map(|t| &t.project_id) != Some(&thread.project_id);
@@ -69,10 +120,15 @@ impl Workspace {
                 if changed_project {
                     self.load_git(cx);
                 }
+                true
             }
-            Err(e) => log::warn!(id:%, error:% = e; "could not open chat {{id}}: {{error}}"),
-        }
+            Err(e) => {
+                log::warn!(id:%, error:% = e; "could not open chat {{id}}: {{error}}");
+                false
+            }
+        };
         cx.notify();
+        opened
     }
 
     /// Opens `id` and sends it `text`, as the pull request's feedback does.

@@ -3,8 +3,8 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Role, StyleRefinement, Window,
-    deferred, div, prelude::*, px, relative,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, NavigationDirection, Role,
+    StyleRefinement, Window, deferred, div, prelude::*, px, relative,
 };
 use crate::ui::menu::Menu;
 use crate::ui::theme::{FONT_UI, FS_MD, RADIUS, RADIUS_SM, STATUSBAR_H, Theme, theme};
@@ -68,6 +68,17 @@ impl Render for Workspace {
                 }
             }))
             .on_action(|_: &crate::FocusPrev, window, cx| window.focus_prev(cx))
+            .on_action(cx.listener(|this, _: &crate::GoBack, _, cx| this.go_back(cx)))
+            .on_action(cx.listener(|this, _: &crate::GoForward, _, cx| this.go_forward(cx)))
+            // The mouse's side buttons go back and forward, as in a browser.
+            .on_mouse_down(
+                MouseButton::Navigate(NavigationDirection::Back),
+                cx.listener(|this, _: &MouseDownEvent, _, cx| this.go_back(cx)),
+            )
+            .on_mouse_down(
+                MouseButton::Navigate(NavigationDirection::Forward),
+                cx.listener(|this, _: &MouseDownEvent, _, cx| this.go_forward(cx)),
+            )
             .on_action(|_: &crate::ui::selection::CopySelection, _, cx| {
                 crate::ui::selection::copy(cx);
             })
