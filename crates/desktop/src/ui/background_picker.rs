@@ -22,7 +22,7 @@ use patchwork_server::themes::SavedScene;
 use crate::orchestrator::{PreviewFlight, butterfly_preview, scene_preview};
 use crate::ui::backdrop::{PRESETS, preset_fill};
 use crate::ui::menu::{Menu, MenuItem};
-use crate::ui::theme::{applied, fs_sm, radius_sm, Theme, theme};
+use crate::ui::theme::{applied, fs_sm, radius, radius_sm, Theme, theme};
 use crate::ui::{button, focus_ring, icon, spinner, tooltip};
 
 /// How long a deleted picture can be brought back from the picker.
@@ -30,8 +30,9 @@ const UNDO: Duration = Duration::from_secs(6);
 
 const PICTURE_EXTENSIONS: [&str; 5] = ["png", "jpg", "jpeg", "webp", "gif"];
 
-/// The grid's columns, which Up and Down move across.
-const COLUMNS: usize = 5;
+/// A card's width and the height of its picture, the same as a background's card in Settings.
+const CARD: f32 = 150.;
+const PICTURE: f32 = 64.;
 
 /// How much of the window color covers the shared background on "Same as all chats".
 const SHARED_VEIL: f32 = 0.55;
@@ -244,17 +245,18 @@ impl BackgroundPicker {
     /// What each choice picks, in order: the first choice, the presets, the butterfly, the
     /// animated backgrounds, then the pictures.
     fn choices(&self) -> Vec<Option<ChatBackground>> {
+        // The order of the Orchestrator's backgrounds in Settings.
         std::iter::once(self.cleared.clone())
-            .chain(
-                PRESETS
-                    .iter()
-                    .map(|&(id, _)| Some(ChatBackground::Preset { id: id.to_string() })),
-            )
             .chain(std::iter::once(Some(ChatBackground::Butterfly)))
             .chain(
                 self.scenes
                     .iter()
                     .map(|s| Some(ChatBackground::Scene { id: s.id.clone() })),
+            )
+            .chain(
+                PRESETS
+                    .iter()
+                    .map(|&(id, _)| Some(ChatBackground::Preset { id: id.to_string() })),
             )
             .chain(self.images.iter().flatten().map(|i| {
                 Some(ChatBackground::Image {
@@ -278,10 +280,9 @@ impl BackgroundPicker {
         let choices = self.choices();
         let last = choices.len().saturating_sub(1);
         let next = match ks.key.as_str() {
-            "right" => at + 1,
-            "left" => at.saturating_sub(1),
-            "down" => at + COLUMNS,
-            "up" => at.saturating_sub(COLUMNS),
+            // The cards wrap to the width they are given, so Up and Down step like Left and Right.
+            "right" | "down" => at + 1,
+            "left" | "up" => at.saturating_sub(1),
             "home" => 0,
             "end" => last,
             _ => return,
@@ -406,37 +407,14 @@ impl BackgroundPicker {
                 }),
             _ => None,
         };
-        let (selected_muted, fg) = (t.bg_selected_muted, t.text);
         let cleared = self.cleared.clone();
-        div()
-            .id("background-none")
-            .role(Role::RadioButton)
-            .aria_label(label)
-            .aria_toggled(if checked {
-                Toggled::True
-            } else {
-                Toggled::False
-            })
-            .track_focus(focus)
-            .focus_visible(focus_ring)
-            .cursor_pointer()
-            .relative()
-            .overflow_hidden()
-            .aspect_ratio(4. / 3.)
+        let fill = div()
+            .absolute()
+            .inset_0()
             .flex()
             .items_center()
             .justify_center()
-            .rounded(px(radius_sm()))
-            .border_2()
-            .border_color(if checked {
-                t.accent
-            } else {
-                gpui::transparent_black()
-            })
             .bg(t.bg_hover)
-            .text_color(fg)
-            .hover(move |s| s.bg(selected_muted))
-            .tooltip(tooltip(label))
             .when_some(shared, |d, shared| {
                 d.child(shared).child(
                     div()
@@ -445,21 +423,31 @@ impl BackgroundPicker {
                         .bg(t.bg_editor.opacity(SHARED_VEIL)),
                 )
             })
-            .child(div().relative().child(icon("prohibit", 26.)))
-            .on_click(cx.listener(move |p, _, _, cx| p.pick(cleared.clone(), cx)))
-            .into_any_element()
+            .child(div().relative().child(icon("prohibit", 26.)));
+        swatch(
+            "background-none".into(),
+            label.into(),
+            checked,
+            focus,
+            fill,
+            t,
+        )
+        .on_click(cx.listener(move |p, _, _, cx| p.pick(cleared.clone(), cx)))
+        .into_any_element()
     }
 }
 
-/// A choice of the picker: a 4:3 tile, outlined when it is the one picked.
+/// A choice of the picker: the card Settings draws for a background, with `fill` as its picture
+/// and its name beneath.
 fn swatch(
     id: SharedString,
     name: SharedString,
     checked: bool,
     focus: &FocusHandle,
+    fill: impl IntoElement,
     t: &Theme,
 ) -> gpui::Stateful<gpui::Div> {
-    let strong = t.border_strong;
+    let hover = t.bg_hover;
     div()
         .id(id)
         .role(Role::RadioButton)
@@ -472,15 +460,41 @@ fn swatch(
         .track_focus(focus)
         .focus_visible(focus_ring)
         .cursor_pointer()
-        .relative()
-        .aspect_ratio(4. / 3.)
-        .overflow_hidden()
-        .rounded(px(radius_sm()))
-        .border_2()
-        .bg(t.bg_editor)
-        .border_color(if checked { t.accent } else { t.border })
-        .when(!checked, |s| s.hover(move |s| s.border_color(strong)))
-        .tooltip(tooltip(name))
+        .w(px(CARD))
+        .flex_none()
+        .flex()
+        .flex_col()
+        .gap(px(4.))
+        .p(px(6.))
+        .rounded(px(radius()))
+        .border_1()
+        .map(|card| {
+            if checked {
+                card.border_color(t.accent).bg(t.bg_accent_soft)
+            } else {
+                card.border_color(gpui::transparent_black())
+                    .hover(move |s| s.bg(hover))
+            }
+        })
+        .child(
+            div()
+                .relative()
+                .h(px(PICTURE))
+                .rounded(px(radius_sm()))
+                .border_1()
+                .border_color(t.border)
+                .bg(t.bg_editor)
+                .overflow_hidden()
+                .child(fill),
+        )
+        .child(
+            div()
+                .h(px(22.))
+                .flex()
+                .items_center()
+                .text_size(px(fs_sm()))
+                .child(div().flex_1().min_w_0().truncate().child(name)),
+        )
 }
 
 impl Render for BackgroundPicker {
@@ -509,16 +523,18 @@ impl Render for BackgroundPicker {
             .map(|(i, f)| f.clone().tab_index(0).tab_stop(i == stop))
             .collect();
         let clear = self.clear_choice(&radios[0], &t, cx);
+        let first_scene = 2;
+        let first_preset = first_scene + self.scenes.len();
         let presets = PRESETS.iter().enumerate().map(|(n, &(id, name))| {
             let checked = matches!(&value, Some(ChatBackground::Preset { id: p }) if p == id);
             swatch(
                 SharedString::from(format!("background-{id}")),
                 name.into(),
                 checked,
-                &radios[1 + n],
+                &radios[first_preset + n],
+                div().absolute().inset_0().children(preset_fill(id, &t)),
                 &t,
             )
-            .children(preset_fill(id, &t))
             .on_click(cx.listener(move |p, _, _, cx| {
                 p.pick(Some(ChatBackground::Preset { id: id.to_string() }), cx);
             }))
@@ -528,17 +544,14 @@ impl Render for BackgroundPicker {
             "background-butterfly".into(),
             "Butterfly".into(),
             value == Some(ChatBackground::Butterfly),
-            &radios[1 + PRESETS.len()],
-            &t,
-        )
-        .child(
+            &radios[1],
             div()
                 .absolute()
                 .inset_0()
                 .child(butterfly_preview(&self.flight, still)),
+            &t,
         )
         .on_click(cx.listener(|p, _, _, cx| p.pick(Some(ChatBackground::Butterfly), cx)));
-        let first_scene = 2 + PRESETS.len();
         let scenes = self.scenes.iter().enumerate().map(|(n, saved)| {
             let id = saved.id.clone();
             let checked = matches!(&value, Some(ChatBackground::Scene { id: s }) if *s == id);
@@ -547,19 +560,19 @@ impl Render for BackgroundPicker {
                 saved.file.name.clone().into(),
                 checked,
                 &radios[first_scene + n],
+                div().absolute().inset_0().child(scene_preview(
+                    Arc::clone(saved),
+                    t.bg_editor,
+                    t.text_muted,
+                    still,
+                )),
                 &t,
             )
-            .child(div().absolute().inset_0().child(scene_preview(
-                Arc::clone(saved),
-                t.bg_editor,
-                t.text_muted,
-                still,
-            )))
             .on_click(cx.listener(move |p, _, _, cx| {
                 p.pick(Some(ChatBackground::Scene { id: id.clone() }), cx);
             }))
         });
-        let first_picture = first_scene + self.scenes.len();
+        let first_picture = first_preset + PRESETS.len();
         let images = self.images.iter().flatten().enumerate().map(|(i, image)| {
             let name = image
                 .name
@@ -577,30 +590,34 @@ impl Render for BackgroundPicker {
                 .group(group.clone())
                 .relative()
                 .child(
-                    swatch(group.clone(), name.clone().into(), checked, &radios[at], &t)
-                        .on_mouse_down(
-                            MouseButton::Right,
-                            cx.listener(move |p, e: &MouseDownEvent, window, cx| {
-                                cx.stop_propagation();
-                                p.open_menu(clicked.clone(), e.position, window, cx);
-                            }),
-                        )
-                        .on_key_down(cx.listener(move |p, e: &KeyDownEvent, _, cx| {
-                            if e.keystroke.key == "delete" {
-                                cx.stop_propagation();
-                                p.remove_picture(&keyed.0, keyed.1.clone(), cx);
-                            }
-                        }))
-                        .child(
-                            img(PathBuf::from(&image.path))
-                                .absolute()
-                                .inset_0()
-                                .size_full()
-                                .object_fit(ObjectFit::Cover),
-                        )
-                        .on_click(cx.listener(move |p, _, _, cx| {
-                            p.pick(Some(ChatBackground::Image { file: pick.clone() }), cx);
-                        })),
+                    swatch(
+                        group.clone(),
+                        name.clone().into(),
+                        checked,
+                        &radios[at],
+                        img(PathBuf::from(&image.path))
+                            .absolute()
+                            .inset_0()
+                            .size_full()
+                            .object_fit(ObjectFit::Cover),
+                        &t,
+                    )
+                    .on_mouse_down(
+                        MouseButton::Right,
+                        cx.listener(move |p, e: &MouseDownEvent, window, cx| {
+                            cx.stop_propagation();
+                            p.open_menu(clicked.clone(), e.position, window, cx);
+                        }),
+                    )
+                    .on_key_down(cx.listener(move |p, e: &KeyDownEvent, _, cx| {
+                        if e.keystroke.key == "delete" {
+                            cx.stop_propagation();
+                            p.remove_picture(&keyed.0, keyed.1.clone(), cx);
+                        }
+                    }))
+                    .on_click(cx.listener(move |p, _, _, cx| {
+                        p.pick(Some(ChatBackground::Image { file: pick.clone() }), cx);
+                    })),
                 )
                 .child(
                     button(
@@ -608,8 +625,9 @@ impl Render for BackgroundPicker {
                         format!("Remove {name}"),
                     )
                     .absolute()
-                    .top(px(-6.))
-                    .right(px(-6.))
+                    // On the corner of the card's picture.
+                    .top(px(2.))
+                    .right(px(2.))
                     .size(px(16.))
                     .justify_center()
                     .rounded_full()
@@ -636,13 +654,13 @@ impl Render for BackgroundPicker {
                     .id("chat-background")
                     .role(Role::RadioGroup)
                     .aria_label(self.label)
-                    .grid()
-                    .grid_cols(5)
-                    .gap(px(8.))
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(4.))
                     .child(clear)
-                    .children(presets)
                     .child(butterfly)
                     .children(scenes)
+                    .children(presets)
                     .children(images)
                     .when(importing, |g| {
                         g.child(
@@ -650,32 +668,43 @@ impl Render for BackgroundPicker {
                                 .id("adding-picture")
                                 .role(Role::Status)
                                 .aria_label("Adding the picture")
-                                .aspect_ratio(4. / 3.)
+                                // The size and place of a card's picture.
+                                .m(px(7.))
+                                .w(px(CARD - 14.))
+                                .h(px(PICTURE))
+                                .flex_none()
                                 .flex()
                                 .items_center()
                                 .justify_center()
                                 .rounded(px(radius_sm()))
-                                .border_2()
+                                .border_1()
                                 .border_color(t.border)
                                 .child(spinner(18., muted)),
                         )
                     })
                     .child(
-                        button("choose-picture", "Choose a picture")
-                            .aspect_ratio(4. / 3.)
+                        // The same card as the one that adds a background in Settings.
+                        button("choose-picture", "Add background")
+                            .m(px(7.))
+                            .w(px(CARD - 14.))
+                            .h(px(PICTURE))
+                            .flex_none()
+                            .flex_col()
                             .justify_center()
+                            .gap(px(6.))
                             .rounded(px(radius_sm()))
                             .border_1()
                             .border_dashed()
                             .border_color(t.border_strong)
+                            .text_size(px(crate::ui::theme::fs_sm()))
                             .text_color(muted)
-                            .tooltip(tooltip("Choose a picture"))
-                            .child(icon("image", 18.))
+                            .child(icon("plus", 16.))
+                            .child("Add background")
                             .map(|b| {
                                 if importing {
                                     b.cursor_default()
                                 } else {
-                                    b.hover(move |s| s.bg(hover))
+                                    b.hover(move |s| s.bg(hover).text_color(t.text))
                                         .on_click(cx.listener(|p, _, _, cx| p.choose_picture(cx)))
                                 }
                             }),
