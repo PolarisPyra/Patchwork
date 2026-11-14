@@ -23,6 +23,10 @@ pub(super) struct Inline {
     pub(super) mono: Vec<Range<usize>>,
     /// Sigil chips, drawn as rounded shapes behind the text rather than as a run background.
     pub(super) chips: Vec<(Range<usize>, Hsla)>,
+    /// Links a click opens, each with its address.
+    pub(super) links: Vec<(Range<usize>, SharedString)>,
+    /// The open link: where it started and its address.
+    pub(super) link: Option<(usize, String)>,
     /// Open spans: where each started and how it looks.
     open: Vec<(usize, HighlightStyle)>,
 }
@@ -110,6 +114,58 @@ pub fn find_in(text: &str, needle: &str) -> Vec<usize> {
         at += i + needle.len();
     }
     found
+}
+
+/// Whether a click may hand `url` to the browser or mail client.
+pub(super) fn opens_outside(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    ["https://", "http://", "mailto:"]
+        .iter()
+        .any(|scheme| lower.starts_with(scheme))
+}
+
+/// Where bare `http://` and `https://` addresses sit in `text`, without the punctuation that ends
+/// the sentence around them or a closing bracket they did not open.
+pub(super) fn urls_in(text: &str) -> Vec<Range<usize>> {
+    let mut urls = Vec::new();
+    let mut from = 0;
+    while let Some(i) = text[from..].find("http") {
+        let start = from + i;
+        let rest = &text[start..];
+        let boundary = text[..start]
+            .chars()
+            .next_back()
+            .is_none_or(|c| !c.is_alphanumeric());
+        let scheme = ["https://", "http://"]
+            .into_iter()
+            .find(|s| rest.starts_with(s));
+        let Some(scheme) = scheme.filter(|_| boundary) else {
+            from = start + "http".len();
+            continue;
+        };
+        let mut end = rest
+            .find(|c: char| c.is_whitespace() || "<>\"`".contains(c))
+            .unwrap_or(rest.len());
+        loop {
+            let url = &rest[..end];
+            let Some(last) = url.chars().next_back() else {
+                break;
+            };
+            let unopened = |open: char| url.matches(last).count() > url.matches(open).count();
+            let trim = ".,;:!?'*_".contains(last)
+                || (last == ')' && unopened('('))
+                || (last == ']' && unopened('['));
+            if !trim {
+                break;
+            }
+            end -= last.len_utf8();
+        }
+        if end > scheme.len() {
+            urls.push(start..start + end);
+        }
+        from = start + end.max(scheme.len());
+    }
+    urls
 }
 
 /// A container blocks are gathered into while it is open.

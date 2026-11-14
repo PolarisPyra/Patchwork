@@ -8,7 +8,7 @@ use super::inline::Block;
 use super::inline::Frame;
 use std::ops::Range;
 use gpui::{AnyElement, App, Div, SharedString, div, prelude::*, px, relative};
-use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag};
+use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TextMergeStream};
 use crate::ui::theme::{Theme, theme};
 
 pub struct Markdown<'a> {
@@ -135,7 +135,7 @@ pub(super) fn render(
         find,
         item_prefix: None,
     };
-    for event in Parser::new_ext(source, options()) {
+    for event in TextMergeStream::new(Parser::new_ext(source, options())) {
         md.event(event);
     }
     md.flush_paragraph();

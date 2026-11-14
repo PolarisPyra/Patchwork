@@ -9,6 +9,7 @@ use super::inline::Inline;
 use super::inline::Block;
 use super::code::chip_spans;
 use super::inline::find_in;
+use super::inline::{opens_outside, urls_in};
 use super::render::LIST_INDENT;
 use super::render::Markdown;
 use gpui::{
@@ -16,7 +17,7 @@ use gpui::{
     StyledText, UnderlineStyle, div, prelude::*, px, relative,
 };
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Tag, TagEnd};
-use crate::ui::theme::{FONT_MONO, FS_LG, FS_MD, FS_SM, FS_XS, RADIUS, RADIUS_SM};
+use crate::ui::theme::{FONT_MONO, FS_LG, FS_MD, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
 use crate::ui::selection::{Selectable, selectable, text_id};
 use crate::ui::{button, icon};
 
@@ -34,9 +35,10 @@ impl Markdown<'_> {
 
     fn take_inline(&mut self) -> Selectable {
         let chips = std::mem::take(&mut self.inline.chips);
+        let links = std::mem::take(&mut self.inline.links);
         let Some(find) = self.find else {
             let text = self.inline.take();
-            return self.selectable(text).chips(chips);
+            return self.selectable(text).chips(chips).links(links);
         };
         let t = self.t;
         let len = self.inline.text.trim_end().len();
@@ -67,13 +69,24 @@ impl Markdown<'_> {
         if let Some(start) = current {
             *find.target.borrow_mut() = Some((text.layout().clone(), start));
         }
-        self.selectable(text).chips(chips)
+        self.selectable(text).chips(chips).links(links)
     }
 
     /// Adds text to the open run, marking its chips when this message draws them.
     fn text(&mut self, text: &str) {
         let base = self.inline.text.len();
         self.inline.text.push_str(text);
+        if self.inline.link.is_none() {
+            for url in urls_in(text) {
+                let range = base + url.start..base + url.end;
+                self.inline
+                    .highlights
+                    .push((range.clone(), link_style(self.t)));
+                self.inline
+                    .links
+                    .push((range, text[url].to_string().into()));
+            }
+        }
         if !self.chips {
             return;
         }
@@ -221,15 +234,10 @@ impl Markdown<'_> {
                     }),
                     ..Default::default()
                 }),
-                Tag::Link { .. } => self.inline.open(HighlightStyle {
-                    color: Some(t.accent_text),
-                    underline: Some(UnderlineStyle {
-                        thickness: px(1.),
-                        color: Some(t.accent_text),
-                        wavy: false,
-                    }),
-                    ..Default::default()
-                }),
+                Tag::Link { dest_url, .. } => {
+                    self.inline.open(link_style(t));
+                    self.inline.link = Some((self.inline.text.len(), dest_url.to_string()));
+                }
                 _ => {}
             },
             Event::End(end) => match end {
@@ -304,8 +312,18 @@ impl Markdown<'_> {
                         .children(rows.into_iter().map(|cells| div().flex().children(cells)));
                     self.push(table, 8., 8.);
                 }
-                TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough | TagEnd::Link => {
+                TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough => {
                     self.inline.close();
+                }
+                TagEnd::Link => {
+                    self.inline.close();
+                    if let Some((start, url)) = self.inline.link.take()
+                        && start < self.inline.text.len()
+                        && opens_outside(&url)
+                    {
+                        let end = self.inline.text.len();
+                        self.inline.links.push((start..end, url.into()));
+                    }
                 }
                 _ => {}
             },
@@ -440,5 +458,18 @@ impl Markdown<'_> {
                     .child(text),
             );
         self.push(block, 8., 8.);
+    }
+}
+
+/// How a link is drawn: in the accent colour, underlined.
+fn link_style(t: &Theme) -> HighlightStyle {
+    HighlightStyle {
+        color: Some(t.accent_text),
+        underline: Some(UnderlineStyle {
+            thickness: px(1.),
+            color: Some(t.accent_text),
+            wavy: false,
+        }),
+        ..Default::default()
     }
 }
