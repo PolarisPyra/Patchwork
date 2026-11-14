@@ -89,7 +89,8 @@ fn is_id(id: &str) -> bool {
 }
 
 impl<T: DeserializeOwned> Shelf<T> {
-    /// The folder of the files a person or an agent wrote.
+    /// The folder its files are in: the ones Patchwork comes with, and the ones a person or
+    /// an agent wrote.
     pub(super) fn dir(&self) -> PathBuf {
         crate::system::dirs().config.join(self.folder)
     }
@@ -105,6 +106,29 @@ impl<T: DeserializeOwned> Shelf<T> {
         Ok(file)
     }
 
+    /// Whether Patchwork comes with a file of this id.
+    fn comes_with(&self, id: &str) -> bool {
+        self.presets.iter().any(|(preset, _)| *preset == id)
+    }
+
+    /// Writes the files Patchwork comes with into the folder, so they can be read and edited
+    /// there. One that is already there is left as it is.
+    fn seed(&self) {
+        let (dir, noun) = (self.dir(), self.noun);
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            log::warn!(noun, error:% = e; "could not make the {{noun}} folder: {{error}}");
+            return;
+        }
+        for (id, text) in self.presets {
+            let path = self.path(id);
+            if !path.exists()
+                && let Err(e) = std::fs::write(&path, text)
+            {
+                log::warn!(id, noun, error:% = e; "could not write {{noun}} {{id}}: {{error}}");
+            }
+        }
+    }
+
     /// The file with this id: the one in the folder, else the one Patchwork comes with.
     fn load(&self, id: &str) -> Option<Entry<T>> {
         if !is_id(id) {
@@ -116,7 +140,7 @@ impl<T: DeserializeOwned> Shelf<T> {
                 Ok(file) => {
                     return Some(Entry {
                         id: id.to_string(),
-                        custom: true,
+                        custom: !self.comes_with(id),
                         file,
                     });
                 }
@@ -149,9 +173,7 @@ impl<T: DeserializeOwned> Shelf<T> {
             .collect();
         ids.sort();
         let presets = self.presets.iter().map(|(id, _)| (*id).to_string());
-        let custom = ids
-            .iter()
-            .filter(|id| !self.presets.iter().any(|(preset, _)| preset == id));
+        let custom = ids.iter().filter(|id| !self.comes_with(id));
         presets
             .chain(custom.cloned())
             .filter_map(|id| self.load(&id))
@@ -191,6 +213,13 @@ impl<T: DeserializeOwned> Shelf<T> {
     }
 }
 
+/// Puts the color schemes and animated backgrounds Patchwork comes with in their folders.
+/// Call it once the config folder is known.
+pub fn init() {
+    THEMES.seed();
+    SCENES.seed();
+}
+
 impl Server {
     /// The color schemes that can be picked: the ones Patchwork comes with, then the files in
     /// the themes folder by name. Reads files, so call it off the UI thread.
@@ -206,13 +235,13 @@ impl Server {
         SCENES.list()
     }
 
-    /// The folder of the color schemes a person or an agent wrote.
+    /// The folder the color schemes are in.
     #[must_use]
     pub fn themes_dir(&self) -> PathBuf {
         THEMES.dir()
     }
 
-    /// The folder of the animated backgrounds a person or an agent wrote.
+    /// The folder the animated backgrounds are in.
     #[must_use]
     pub fn scenes_dir(&self) -> PathBuf {
         SCENES.dir()

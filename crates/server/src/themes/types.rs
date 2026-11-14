@@ -228,7 +228,8 @@ impl SceneFile {
 pub struct Entry<T> {
     /// Its file's name without `.json`.
     pub id: String,
-    /// It is a file in the folder, which can be deleted.
+    /// It is a file a person or an agent added, which can be deleted. One Patchwork comes with
+    /// is written to the folder anew when it is missing.
     pub custom: bool,
     pub file: T,
 }

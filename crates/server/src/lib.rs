@@ -111,6 +111,7 @@ impl Server {
         provider::mcp::init(&dirs.config);
         skills::init(&dirs.config);
         hooks::init(&dirs.config);
+        themes::init();
         let agents = agents::Library::open(&dirs.config);
         std::thread::spawn(system::scope::prepare);
         // Read at launch, so the first command does not wait on the shell.
