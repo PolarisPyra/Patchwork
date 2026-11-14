@@ -4,7 +4,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -15,7 +15,8 @@ use crate::orchestration::Runner;
 use super::wait::Unanswered;
 use crate::orchestration::turn::start::Turn;
 use crate::system::{new_id, now_ms};
-use crate::threads::delegate::{self, Ask};
+use crate::provider::AgentKind;
+use crate::threads::delegate::{self, Ask, RESULT};
 use crate::threads::{
     AgentPick, Message, MessageStatus, SubAgent, Thread, ThreadParent, ToolCall, sub_agent_of,
 };
@@ -197,13 +198,9 @@ impl Runner {
             .ok_or("This chat is no longer here")?;
         let pick = sub_agent_of(&server.store, &server.store.settings(), &parent)
             .ok_or("This chat's sub agents run on its own agent; start one with your own tool")?;
-        let flags = {
-            let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
-            let turn = turns
-                .get(thread_id)
-                .ok_or("This turn is no longer running")?;
-            [Arc::clone(&turn.cancelled), Arc::clone(&turn.exited)]
-        };
+        // Only Patchwork's own agent is offered the background, and the tool that ends it.
+        let background = ask.background && parent.agent == AgentKind::Api;
+        let flags = self.turn_flags(thread_id)?;
         let gone = || stopped() || flags.iter().any(|f| f.load(Ordering::SeqCst));
         let call = self.claim_call(thread_id, &ask.description, &gone);
         let thread = child_thread(parent, pick, &ask, call);
@@ -214,11 +211,80 @@ impl Runner {
             event: AgentEvent::ThreadCreated { thread },
         });
         let sent = server.send_message(child_id.clone(), ask.prompt, Vec::new(), false)?;
+        if !background {
+            return self.await_child(server, &child_id, &sent.id, &gone);
+        }
+        // It outlives the call, and the turn when that ends on its own: only stopping the turn
+        // stops it. Its answer is read from its chat by `sub_agent_result`.
+        let (server, child, [cancelled, _]) = (Arc::clone(server), child_id.clone(), flags);
+        std::thread::spawn(move || {
+            let gone = || cancelled.load(Ordering::SeqCst);
+            let _ = server.runner.await_child(&server, &child, &sent.id, &gone);
+        });
+        Ok(format!(
+            "Started sub agent {child_id}. Carry on with your own work, and call {RESULT} with this id for its answer."
+        ))
+    }
+
+    /// Waits for the answer of a sub agent the thread's agent started in the background, while
+    /// the caller's turn runs. The sub agent is left running when the caller stops waiting.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the arguments name no sub agent of this chat, the caller's turn
+    /// ends first, or the sub agent ends without finishing its work.
+    pub(crate) fn sub_agent_result(
+        &self,
+        server: &Arc<Server>,
+        thread_id: &str,
+        args: &Value,
+        stopped: &dyn Fn() -> bool,
+    ) -> Result<String, Error> {
+        let id = args["sub_agent_id"]
+            .as_str()
+            .map(str::trim)
+            .unwrap_or_default();
+        let child = server
+            .store
+            .thread(id)
+            .filter(|t| t.parent.as_ref().is_some_and(|p| p.thread_id == thread_id))
+            .ok_or("No sub agent with that id in this chat")?;
+        let flags = self.turn_flags(thread_id)?;
+        let gone = || stopped() || flags.iter().any(|f| f.load(Ordering::SeqCst));
+        self.wait_for_reply(server, &child.id, None, &gone, MAX_RUN)
+            .map_err(|why| {
+                Error::from(match why {
+                    Unanswered::Stopped => "Stopped waiting with this turn",
+                    Unanswered::TimedOut => "The sub agent was still working after an hour",
+                    Unanswered::NotStarted => "The sub agent did not start",
+                })
+            })
+            .and_then(result)
+    }
+
+    /// The flags of the turn running in the thread: stopped by the user, and its agent exited.
+    fn turn_flags(&self, thread_id: &str) -> Result<[Arc<AtomicBool>; 2], Error> {
+        let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+        let turn = turns
+            .get(thread_id)
+            .ok_or("This turn is no longer running")?;
+        Ok([Arc::clone(&turn.cancelled), Arc::clone(&turn.exited)])
+    }
+
+    /// Waits for the sub agent's turn in `child_id` to end and returns its answer to the message
+    /// `sent_id`. The turn is stopped when `gone` or at `MAX_RUN`.
+    fn await_child(
+        &self,
+        server: &Arc<Server>,
+        child_id: &str,
+        sent_id: &str,
+        gone: &dyn Fn() -> bool,
+    ) -> Result<String, Error> {
         let reply = self
-            .wait_for_reply(server, &child_id, Some(&sent.id), &gone, MAX_RUN)
+            .wait_for_reply(server, child_id, Some(sent_id), gone, MAX_RUN)
             .map_err(|why| {
                 if why != Unanswered::NotStarted {
-                    server.stop_turn(&child_id, false);
+                    server.stop_turn(child_id, false);
                 }
                 Error::from(match why {
                     Unanswered::Stopped => {
@@ -231,7 +297,7 @@ impl Runner {
                 })
             });
         // Its work is done, so the agent is not kept up for a message that will not come.
-        self.retire_idle(&child_id);
+        self.retire_idle(child_id);
         reply.and_then(result)
     }
 }

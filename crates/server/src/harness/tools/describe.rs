@@ -234,6 +234,7 @@ pub fn summary(name: &str, args: &Value, root: &Path) -> String {
     let summary = match name {
         "bash" => field("command"),
         "job_output" | "job_kill" => field("job_id"),
+        crate::threads::delegate::RESULT => field("sub_agent_id"),
         "fetch_url" => field("url"),
         crate::threads::delegate::TOOL => field("description"),
         "glob" | "grep" => field("pattern"),
