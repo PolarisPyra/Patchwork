@@ -17,7 +17,11 @@ impl Render for Workspace {
         if !self.settings.onboarded {
             return self.onboarding_view(window, cx);
         }
+        // The orchestrator page belongs to no chat, so the open one stays out of its title.
         let title = match &self.thread {
+            _ if self.page == Page::Orchestrator => {
+                format!("{} - Orchestrator mode", crate::APP_TITLE)
+            }
             Some(thread) => format!("{} - {}", crate::APP_TITLE, display_title(&thread.title)),
             None => crate::APP_TITLE.into(),
         };
