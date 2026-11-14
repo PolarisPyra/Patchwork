@@ -19,6 +19,7 @@ use super::scheduled;
 use super::shortcuts;
 use super::ssh;
 use super::terminal;
+use super::themes;
 use super::tokens;
 use super::updates;
 
@@ -27,6 +28,7 @@ impl SettingsDialog {
         match self.section {
             "general" => general::render(self, cx),
             "chat" => chat::render(self, cx),
+            "themes" => themes::render(self, window, cx),
             "shortcuts" => shortcuts::render(self, window, cx),
             "providers" => providers::render(self, window, cx),
             "tokens" => tokens::render(self, cx),

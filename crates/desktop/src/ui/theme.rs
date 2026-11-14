@@ -2,8 +2,10 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{App, Global, Hsla, Rgba, WindowAppearance};
-use patchwork_server::settings::Theme as ThemeSetting;
+use std::sync::Arc;
+
+use gpui::{App, Global, Hsla, Rgba, SharedString, WindowAppearance};
+use patchwork_server::themes::{Applied, Paint, Palette, Scheme, Syntax, ThemeFile};
 
 /// The colors one of `theme.css`'s three palettes gives each token.
 #[derive(Clone, Copy)]
@@ -53,6 +55,8 @@ pub struct Theme {
     /// Inline code and pills: `color-mix(in srgb, var(--text) 6% or 8%, transparent)`.
     pub text_tint_6: Hsla,
     pub text_tint_8: Hsla,
+    /// What the sizes of a chat's text are multiplied by.
+    pub scale: f32,
 }
 
 fn hex(value: u32) -> Hsla {
@@ -135,6 +139,7 @@ impl Theme {
             bubble: mix(0x00df_e1e5, 0x001e_1f22, 0.10),
             text_tint_6: tint(0x00df_e1e5, 0.06),
             text_tint_8: tint(0x00df_e1e5, 0.08),
+            scale: 1.,
         }
     }
 
@@ -197,19 +202,117 @@ impl Theme {
             bubble: mix(0x0000_0000, 0x00ff_ffff, 0.10),
             text_tint_6: tint(0x0000_0000, 0.06),
             text_tint_8: tint(0x0000_0000, 0.08),
+            scale: 1.,
         }
     }
 
-    /// The palette a theme setting resolves to; `System` follows the window's appearance.
-    pub fn for_setting(setting: ThemeSetting, appearance: WindowAppearance) -> Self {
-        match setting {
-            ThemeSetting::Light => Self::light(),
-            ThemeSetting::Dark => Self::dark(),
-            ThemeSetting::Oled => Self::oled(),
-            ThemeSetting::System => match appearance {
-                WindowAppearance::Light | WindowAppearance::VibrantLight => Self::light(),
-                WindowAppearance::Dark | WindowAppearance::VibrantDark => Self::dark(),
-            },
+    /// The palette of a color scheme's file: mixed from its four colors, then the colors it
+    /// names itself. What neither reaches (the diff and status colors) is the light or dark
+    /// palette's.
+    pub fn from_file(file: &ThemeFile) -> Self {
+        let anchors = file.colors;
+        let (surface, text) = (anchors.surface.0, anchors.text.0);
+        let (muted, accent) = (anchors.muted.0, anchors.accent.0);
+        let over = |pct: f32| mix(text, surface, pct);
+        let lit = gpui::rgb(accent);
+        let bright = 0.299 * lit.r + 0.587 * lit.g + 0.114 * lit.b > 0.6;
+        let mut theme = Self {
+            bg_app: hex(surface),
+            bg_panel: over(0.04),
+            bg_editor: hex(surface),
+            bg_input: hex(surface),
+            bg_hover: over(0.10),
+            bg_selected: mix(accent, surface, 0.30),
+            bg_selected_muted: over(0.14),
+            tree_hover: tint(text, 0.08),
+            tree_selected: tint(accent, 0.30),
+            bg_elevated: over(0.05),
+            bg_accent_soft: tint(accent, 0.16),
+            border: over(0.12),
+            border_strong: over(0.22),
+            text: hex(text),
+            text_muted: hex(muted),
+            text_subtle: mix(muted, surface, 0.7),
+            text_on_accent: hex(if bright { 0x0010_1114 } else { 0x00ff_ffff }),
+            accent: hex(accent),
+            accent_hover: mix(text, accent, 0.12),
+            accent_text: mix(text, accent, 0.20),
+            bubble: over(0.10),
+            text_tint_6: tint(text, 0.06),
+            text_tint_8: tint(text, 0.08),
+            ..match file.scheme {
+                Scheme::Light => Self::light(),
+                Scheme::Dark => Self::dark(),
+            }
+        };
+        let named = file.overrides;
+        macro_rules! lay {
+            ($($token:ident),*) => {
+                $(if let Some(color) = named.$token {
+                    theme.$token = hex(color.0);
+                })*
+            };
+        }
+        lay!(
+            bg_panel,
+            bg_editor,
+            bg_input,
+            bg_hover,
+            bg_selected,
+            bg_selected_muted,
+            bg_elevated,
+            border,
+            border_strong,
+            text_subtle,
+            text_on_accent,
+            accent_hover,
+            accent_text,
+            success,
+            danger,
+            warning,
+            bubble
+        );
+        // The washes behind a status follow the status color the file names.
+        if let Some(color) = named.success {
+            theme.diff_add_bg = tint(color.0, 0.18);
+        }
+        if let Some(color) = named.danger {
+            theme.danger_soft = tint(color.0, 0.14);
+            theme.diff_del_bg = tint(color.0, 0.18);
+        }
+        if let Some(color) = named.warning {
+            theme.warning_soft = tint(color.0, 0.14);
+        }
+        if let Some(syntax) = named.syntax {
+            theme.highlight(syntax);
+        }
+        theme
+    }
+
+    /// Highlights code in a code theme's colors.
+    fn highlight(&mut self, syntax: Syntax) {
+        self.syn_keyword = hex(syntax.keyword.0);
+        self.syn_string = hex(syntax.string.0);
+        self.syn_property = hex(syntax.property.0);
+        self.syn_type = hex(syntax.ty.0);
+        self.syn_number = hex(syntax.number.0);
+        self.syn_comment = hex(syntax.comment.0);
+        self.syn_function = hex(syntax.function.0);
+        self.syn_tag = hex(syntax.tag.0);
+    }
+
+    /// Whether the window is dark, so what is drawn over it should be light.
+    pub fn is_dark(&self) -> bool {
+        self.bg_app.l < 0.5
+    }
+
+    /// The colors of a palette.
+    pub fn of(palette: &Palette) -> Self {
+        match palette {
+            Palette::Light => Self::light(),
+            Palette::Dark => Self::dark(),
+            Palette::Oled => Self::oled(),
+            Palette::File(file) => Self::from_file(file),
         }
     }
 }
@@ -219,6 +322,70 @@ impl Global for Theme {}
 /// The theme in use.
 pub fn theme(cx: &App) -> &Theme {
     cx.global::<Theme>()
+}
+
+/// What the theme settings came to, kept for the Orchestrator's backdrop.
+struct Look(Arc<Applied>);
+
+impl Global for Look {}
+
+/// Whether a window of this appearance is dark.
+fn dark(appearance: WindowAppearance) -> bool {
+    matches!(
+        appearance,
+        WindowAppearance::Dark | WindowAppearance::VibrantDark
+    )
+}
+
+/// Draws the app in what the appearance settings came to. `appearance` picks the palette when
+/// the app follows the system.
+pub fn apply(applied: Applied, appearance: WindowAppearance, cx: &mut App) {
+    let palette = match &applied.paint {
+        Paint::Fixed(palette) => palette,
+        Paint::System { light, dark: night } => {
+            if dark(appearance) {
+                night
+            } else {
+                light
+            }
+        }
+    };
+    let mut theme = Theme::of(palette);
+    let code = if theme.is_dark() {
+        applied.code_dark
+    } else {
+        applied.code_light
+    };
+    if let Some(syntax) = code {
+        theme.highlight(syntax);
+    }
+    theme.scale = applied.text_size.scale();
+    cx.set_reduce_motion(applied.reduce_motion);
+    cx.set_global(theme);
+    cx.set_global(Look(Arc::new(applied)));
+}
+
+/// Draws the app for a new appearance of the system, from the settings last applied.
+pub fn follow(appearance: WindowAppearance, cx: &mut App) {
+    let look = applied(cx);
+    if matches!(look.paint, Paint::System { .. }) {
+        apply(Applied::clone(&look), appearance, cx);
+        cx.refresh_windows();
+    }
+}
+
+/// The font family chats are set in.
+pub fn chat_font(cx: &App) -> SharedString {
+    applied(cx)
+        .chat_font
+        .clone()
+        .map_or(SharedString::new_static(FONT_UI), SharedString::from)
+}
+
+/// What the theme settings came to.
+pub fn applied(cx: &App) -> Arc<Applied> {
+    cx.try_global::<Look>()
+        .map_or_else(Arc::default, |look| Arc::clone(&look.0))
 }
 
 /// Font families and sizes, from `theme.css`'s `:root`.

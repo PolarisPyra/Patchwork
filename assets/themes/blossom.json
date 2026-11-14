@@ -1,0 +1,10 @@
+{
+  "name": "Blossom",
+  "scheme": "light",
+  "colors": {
+    "surface": "#fff6f8",
+    "text": "#3a2230",
+    "muted": "#8a6878",
+    "accent": "#d6477a"
+  }
+}

@@ -1,0 +1,161 @@
+{
+  "name": "Night Reef",
+  "scheme": "dark",
+  "sky": [
+    "#070b24",
+    "#0a2540"
+  ],
+  "dust": {
+    "glyphs": "o.",
+    "color": "#3f8fa6",
+    "density": 0.006,
+    "twinkle": false,
+    "drift": [
+      0,
+      -14
+    ]
+  },
+  "sprites": [
+    {
+      "art": [
+        "    gggggg      ",
+        "  ggsdssdsgg  hh",
+        " gsdssddssdsghhe",
+        "fgssddssddssghh ",
+        " gsdssddssdsg   ",
+        "  gggggggggg    ",
+        "  ff      ff    "
+      ],
+      "colors": {
+        "g": "#1f8f7e",
+        "s": "#5b46d6",
+        "d": "#3a2c9c",
+        "h": "#2fb7a6",
+        "e": "#0a1230",
+        "f": "#2fb7a6"
+      },
+      "at": [
+        0.85,
+        0.26
+      ],
+      "filled": true,
+      "glow": true,
+      "motion": {
+        "kind": "bob",
+        "height": 12,
+        "period": 7
+      }
+    },
+    {
+      "art": [
+        "><>      ><>",
+        "    ><>     ",
+        " ><>     ><>"
+      ],
+      "colors": {
+        ">": "#f2a65a",
+        "<": "#f2a65a"
+      },
+      "at": [
+        0.2,
+        0.2
+      ],
+      "motion": {
+        "kind": "drift",
+        "speed": [
+          16,
+          0
+        ]
+      }
+    },
+    {
+      "art": [
+        "<><   <><",
+        "   <><   "
+      ],
+      "colors": {
+        ">": "#6fc3ff",
+        "<": "#6fc3ff"
+      },
+      "at": [
+        0.7,
+        0.82
+      ],
+      "motion": {
+        "kind": "drift",
+        "speed": [
+          -11,
+          0
+        ]
+      }
+    },
+    {
+      "art": [
+        "  .-~~-.  ",
+        " (      ) ",
+        "  `-..-'  ",
+        "  | || |  ",
+        "  ; :: ;  ",
+        "  ' '' '  "
+      ],
+      "colors": {
+        ".": "#c58cff",
+        "-": "#c58cff",
+        "~": "#c58cff",
+        "(": "#c58cff",
+        ")": "#c58cff",
+        "`": "#c58cff",
+        "'": "#8f6ad0",
+        "|": "#8f6ad0",
+        ";": "#8f6ad0",
+        ":": "#8f6ad0"
+      },
+      "at": [
+        0.11,
+        0.5
+      ],
+      "glow": true,
+      "motion": {
+        "kind": "bob",
+        "height": 18,
+        "period": 9
+      }
+    },
+    {
+      "art": [
+        "   Y  y    ",
+        " y |Y |  Y ",
+        " |Y||Y| y| ",
+        " ||||||Y|| ",
+        "_||||||||||_"
+      ],
+      "colors": {
+        "Y": "#ff7a90",
+        "y": "#ff9d6e",
+        "|": "#c9577a",
+        "_": "#28406a"
+      },
+      "at": [
+        0.09,
+        0.93
+      ]
+    },
+    {
+      "art": [
+        "  ( )   ( ) ",
+        " ( ) ) ( ( )",
+        "  ) ( ) ) ( ",
+        " _(_)_(_)_)_"
+      ],
+      "colors": {
+        "(": "#2fb7a6",
+        ")": "#249484",
+        "_": "#28406a"
+      },
+      "at": [
+        0.92,
+        0.94
+      ]
+    }
+  ]
+}

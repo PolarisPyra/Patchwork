@@ -1,0 +1,10 @@
+{
+  "name": "Night Reef",
+  "scheme": "dark",
+  "colors": {
+    "surface": "#080d26",
+    "text": "#e6ecff",
+    "muted": "#8f9bc4",
+    "accent": "#3fd0c0"
+  }
+}

@@ -1,35 +1,17 @@
-//! Settings → General: the theme, the app icon and the background every chat shows unless it has
-//! its own; which finished work raises a notification; and below them, how much each log records.
+//! Settings → General: the app icon, which finished work raises a notification, and below them,
+//! how much each log records.
 
 // Rust guideline compliant 2026-10-09
 
 use std::sync::{Arc, OnceLock};
 
-use gpui::{
-    AnyElement, Entity, FocusHandle, FontWeight, Role, SharedString, Toggled, div, img, prelude::*,
-    px,
-};
-use patchwork_server::backgrounds::{BackgroundStrength, ChatBackground};
-use patchwork_server::settings::{LogLevel, LoggingSettings, Theme as ThemeSetting};
+use gpui::{AnyElement, FocusHandle, FontWeight, Role, SharedString, Toggled, div, img, prelude::*, px};
+use patchwork_server::settings::{LogLevel, LoggingSettings};
 
-use crate::ui::background_picker::{BackgroundPicker, PickerEvent};
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{alert, choice, section_heading, segmented, switch, token_row};
+use crate::settings::controls::{alert, choice, section_heading, switch, token_row};
 use crate::ui::theme::{RADIUS_SM, theme};
 use crate::ui::{BtnKind, btn, dropdown_chip, tooltip};
-
-const THEMES: [(ThemeSetting, &str); 4] = [
-    (ThemeSetting::Light, "Light"),
-    (ThemeSetting::Dark, "Dark"),
-    (ThemeSetting::Oled, "OLED"),
-    (ThemeSetting::System, "System"),
-];
-
-const STRENGTHS: [(BackgroundStrength, &str); 3] = [
-    (BackgroundStrength::Subtle, "Subtle"),
-    (BackgroundStrength::Medium, "Medium"),
-    (BackgroundStrength::Strong, "Strong"),
-];
 
 /// The log levels, from the most to the least recorded.
 pub(crate) const LOG_LEVELS: [(LogLevel, &str); 6] = [
@@ -65,12 +47,11 @@ const LOGS: [(&str, &str, LogField); 5] = [
     ),
 ];
 
-/// The pane's own state: the pictures, and what the picker and the log buttons are doing.
+/// The pane's own state: what the log buttons are doing.
 #[derive(Default)]
 pub struct GeneralState {
     /// The section list, so Up and Down move along it while it has focus.
     pub nav_focus: Option<FocusHandle>,
-    picker: Option<Entity<BackgroundPicker>>,
     exporting: bool,
     log_error: Option<String>,
 }
@@ -145,44 +126,8 @@ impl SettingsDialog {
     }
 }
 
-/// The background picker, made on the first look at the pane, showing the saved background.
-fn picker(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> Entity<BackgroundPicker> {
-    let value = d.settings.chat_background.clone();
-    if let Some(picker) = &d.general.picker {
-        picker.update(cx, |p, _| p.set_value(Some(value), None));
-        return picker.clone();
-    }
-    let server = Arc::clone(&d.server);
-    let picker = cx.new(|cx| {
-        BackgroundPicker::new(
-            server,
-            "Chat background",
-            Some(value),
-            Some(ChatBackground::None),
-            None,
-            cx,
-        )
-    });
-    cx.subscribe(&picker, |d, _, e: &PickerEvent, cx| match e {
-        PickerEvent::Picked(Some(background)) => {
-            let background = background.clone();
-            d.update(|s| s.chat_background = background, cx);
-        }
-        PickerEvent::Picked(None) => {}
-        PickerEvent::PicturesChanged => {
-            d.settings = d.server.store.settings();
-            cx.emit(super::SettingsEvent::Changed);
-            cx.notify();
-        }
-    })
-    .detach();
-    d.general.picker = Some(picker.clone());
-    picker
-}
-
 pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
     let t = *theme(cx);
-    let picker = picker(d, cx);
     let s = &d.settings;
     let notifications = s.notifications.clone();
     let (logos, default_logo) = logos();
@@ -296,22 +241,6 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .flex_col()
         .child(section_heading("Appearance", true, &t))
         .child(
-            token_row(
-                "Theme",
-                Some("Light, dark, or follow the system setting"),
-                &t,
-            )
-            .child(segmented(
-                "theme",
-                "Theme",
-                s.theme,
-                &THEMES,
-                &t,
-                |d, theme, cx| d.update(|s| s.theme = theme, cx),
-                cx,
-            )),
-        )
-        .child(
             div()
                 .border_b_1()
                 .border_color(t.border)
@@ -319,28 +248,6 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 .child(div().font_weight(FontWeight::SEMIBOLD).child("App icon"))
                 .child(icons),
         )
-        .child(
-            div()
-                .border_b_1()
-                .border_color(t.border)
-                .py(px(10.))
-                .child(
-                    div()
-                        .pb(px(8.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child("Chat background"),
-                )
-                .child(picker),
-        )
-        .child(token_row("Background strength", None, &t).child(segmented(
-            "strength",
-            "Background strength",
-            s.chat_background_strength,
-            &STRENGTHS,
-            &t,
-            |d, strength, cx| d.update(|s| s.chat_background_strength = strength, cx),
-            cx,
-        )))
         .child(section_heading("Notifications", false, &t))
         .child(toggle_row(
             "goal-complete",

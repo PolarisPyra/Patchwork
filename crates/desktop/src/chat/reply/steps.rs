@@ -217,7 +217,7 @@ pub(super) fn entry_row(
                 .w_full()
                 .gap(px(6.))
                 .py(px(2.))
-                .text_size(px(FS_MD))
+                .text_size(px(FS_MD * t.scale))
                 .text_color(t.text_muted)
                 .hover(move |s| s.text_color(fg))
                 .child(

@@ -158,7 +158,7 @@ pub(super) fn goal_cleared(
                 .min_h(px(24.))
                 .flex()
                 .gap(px(6.))
-                .text_size(px(FS_MD))
+                .text_size(px(FS_MD * t.scale))
                 .text_color(t.text_muted)
                 .child(
                     div()

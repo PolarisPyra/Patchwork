@@ -29,6 +29,7 @@ pub mod settings;
 pub mod skills;
 pub mod system;
 pub mod terminal;
+pub mod themes;
 pub mod threads;
 pub mod updates;
 pub mod usage;

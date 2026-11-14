@@ -308,7 +308,7 @@ impl Markdown<'_> {
                     let table = div()
                         .flex()
                         .flex_col()
-                        .text_size(px(FS_SM))
+                        .text_size(px(FS_SM * t.scale))
                         .children(rows.into_iter().map(|cells| div().flex().children(cells)));
                     self.push(table, 8., 8.);
                 }
@@ -360,7 +360,7 @@ impl Markdown<'_> {
         };
         self.push(
             div()
-                .text_size(px(size))
+                .text_size(px(size * self.t.scale))
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(text),
             12.,
@@ -452,7 +452,7 @@ impl Markdown<'_> {
                 div()
                     .px(px(12.))
                     .py(px(10.))
-                    .text_size(px(FS_SM))
+                    .text_size(px(FS_SM * t.scale))
                     .line_height(relative(1.5))
                     .font_family(FONT_MONO)
                     .child(text),

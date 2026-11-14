@@ -44,6 +44,14 @@ pub enum View {
     Archived,
 }
 
+/// Somewhere the back and forward buttons return to.
+#[derive(Clone, PartialEq, Eq)]
+pub(super) enum Place {
+    Orchestrator,
+    /// A chat, by its id.
+    Chat(String),
+}
+
 /// What fills the window beside the activity bar.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Page {
@@ -122,9 +130,10 @@ pub struct Workspace {
     pub chat_drafts: ChatDrafts,
     pub steer_pressed: bool,
     pub lineage: Lineage,
-    /// Chats opened before and after the one shown, newest last, for going back and forward.
-    pub(super) history_back: Vec<String>,
-    pub(super) history_forward: Vec<String>,
+    /// What was shown before and after what is shown now, newest last, for going back and
+    /// forward.
+    pub(super) history_back: Vec<Place>,
+    pub(super) history_forward: Vec<Place>,
     pub(super) _prompt_keys: gpui::Subscription,
     pub changes_view: Entity<ChangesView>,
     /// The Devices view, made the first time it is shown.
@@ -381,6 +390,8 @@ impl Workspace {
         }
         // The app opens on the orchestrator page, with the last chat ready behind it.
         this.page = Page::Orchestrator;
+        // Getting that chat ready is not a step to go back from.
+        this.history_back.clear();
         this.watch_rail_focus(window, cx);
         // A focused control that goes away, such as a shell's kill button, hands focus to the
         // nearest place around it still shown, so the app's keys keep working.
@@ -394,6 +405,11 @@ impl Workspace {
         // A key hides the mouse pointer only while something has the focus to type in. With
         // nothing focused, Space opens and closes the sidebar and the pointer stays.
         let focus = this.focus.clone();
+        // Following the system, the app changes palette when the system does.
+        cx.observe_window_appearance(window, |_, window, cx| {
+            crate::ui::theme::follow(window.appearance(), cx);
+        })
+        .detach();
         cx.on_focus(&focus, window, |_, _, cx| {
             cx.set_cursor_hide_mode(gpui::CursorHideMode::Never);
         })

@@ -1,0 +1,129 @@
+{
+  "name": "Lagoon",
+  "scheme": "light",
+  "sky": [
+    "#e9f8f9",
+    "#bfe8ee"
+  ],
+  "dust": {
+    "glyphs": "~",
+    "color": "#8fcfd8",
+    "density": 0.012,
+    "twinkle": true,
+    "drift": [
+      6,
+      0
+    ]
+  },
+  "sprites": [
+    {
+      "art": [
+        "    gggggg      ",
+        "  ggsdssdsgg  hh",
+        " gsdssddssdsghhe",
+        "fgssddssddssghh ",
+        " gsdssddssdsg   ",
+        "  gggggggggg    ",
+        "  ff      ff    "
+      ],
+      "colors": {
+        "g": "#2f9e7f",
+        "s": "#7fd6b4",
+        "d": "#4fb894",
+        "h": "#58b9a0",
+        "e": "#12303a",
+        "f": "#58b9a0"
+      },
+      "at": [
+        0.14,
+        0.3
+      ],
+      "filled": true,
+      "motion": {
+        "kind": "wander",
+        "speed": 14
+      }
+    },
+    {
+      "art": [
+        "><>    ><>",
+        "   ><>    "
+      ],
+      "colors": {
+        ">": "#f08a4b",
+        "<": "#f08a4b"
+      },
+      "at": [
+        0.8,
+        0.22
+      ],
+      "motion": {
+        "kind": "drift",
+        "speed": [
+          -14,
+          0
+        ]
+      }
+    },
+    {
+      "art": [
+        "<><  <><  <><"
+      ],
+      "colors": {
+        ">": "#3a8fd0",
+        "<": "#3a8fd0"
+      },
+      "at": [
+        0.3,
+        0.84
+      ],
+      "motion": {
+        "kind": "drift",
+        "speed": [
+          12,
+          0
+        ]
+      }
+    },
+    {
+      "art": [
+        "    __ _    ",
+        "  _/  V \\_  ",
+        " /  \\ | / \\ ",
+        "     \\|/    ",
+        "      |     ",
+        "      |     ",
+        " ____/_\\____"
+      ],
+      "colors": {
+        "_": "#d9b470",
+        "/": "#3f9e6a",
+        "\\": "#3f9e6a",
+        "V": "#3f9e6a",
+        "|": "#9a7445"
+      },
+      "at": [
+        0.91,
+        0.9
+      ]
+    },
+    {
+      "art": [
+        "  y   Y  ",
+        " yY| Y|y ",
+        " ||||||| ",
+        "_|||||||_"
+      ],
+      "colors": {
+        "Y": "#f0708a",
+        "y": "#f59a6a",
+        "|": "#d9628a",
+        "_": "#d9b470"
+      },
+      "at": [
+        0.07,
+        0.94
+      ]
+    }
+  ]
+}

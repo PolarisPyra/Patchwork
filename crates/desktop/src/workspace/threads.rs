@@ -7,7 +7,7 @@ use std::time::Duration;
 use gpui::{Focusable, FollowMode, Window, prelude::*};
 use patchwork_server::events::{AgentEvent, AgentEventEnvelope};
 use patchwork_server::threads::{Attachment, NewThread, Part};
-use super::state::{ReplyNotice, Workspace, end_thinking, message_mut};
+use super::state::{Place, ReplyNotice, Workspace, end_thinking, message_mut};
 
 impl Workspace {
     /// Makes a change to what is stored off the UI thread, which a write to the database would
@@ -36,34 +36,42 @@ impl Workspace {
         .detach();
     }
 
+    /// What the window shows now, as a place to come back to.
+    fn place(&self) -> Option<Place> {
+        match self.page {
+            super::Page::Orchestrator => Some(Place::Orchestrator),
+            super::Page::Chats => self.thread.as_ref().map(|t| Place::Chat(t.id.clone())),
+        }
+    }
+
     pub fn open_thread(&mut self, id: &str, cx: &mut Context<Self>) {
-        let from = self.thread.as_ref().map(|t| t.id.clone());
+        let from = self.place();
         if self.show_thread(id, cx)
-            && let Some(from) = from.filter(|from| from != id)
+            && let Some(from) = from.filter(|from| *from != Place::Chat(id.to_string()))
         {
             self.history_back.push(from);
             self.history_forward.clear();
         }
     }
 
-    /// Whether there is a chat to go back to.
+    /// Whether there is a place to go back to.
     pub fn can_go_back(&self) -> bool {
         !self.history_back.is_empty()
     }
 
-    /// Opens the chat shown before this one, as a browser's back button does.
+    /// Shows what was shown before this, as a browser's back button does.
     pub fn go_back(&mut self, cx: &mut Context<Self>) {
         self.step_history(true, cx);
     }
 
-    /// Opens the chat gone back from.
+    /// Shows what was gone back from.
     pub fn go_forward(&mut self, cx: &mut Context<Self>) {
         self.step_history(false, cx);
     }
 
-    /// Steps one chat back or forward, skipping any deleted since.
+    /// Steps one place back or forward, skipping any chat deleted since.
     fn step_history(&mut self, back: bool, cx: &mut Context<Self>) {
-        let from = self.thread.as_ref().map(|t| t.id.clone());
+        let from = self.place();
         loop {
             let next = if back {
                 self.history_back.pop()
@@ -73,7 +81,15 @@ impl Workspace {
             let Some(next) = next else {
                 return;
             };
-            if self.show_thread(&next, cx) {
+            let shown = match &next {
+                Place::Orchestrator => {
+                    self.page = super::Page::Orchestrator;
+                    cx.notify();
+                    true
+                }
+                Place::Chat(id) => self.show_thread(id, cx),
+            };
+            if shown {
                 if let Some(from) = from {
                     if back {
                         self.history_forward.push(from);
