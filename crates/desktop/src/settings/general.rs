@@ -9,7 +9,7 @@ use gpui::{AnyElement, FocusHandle, FontWeight, Role, SharedString, Toggled, div
 use patchwork_server::settings::{LogLevel, LoggingSettings};
 
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{alert, choice, section_heading, switch, token_row};
+use crate::settings::controls::{alert, anchored, choice, section_heading, switch, token_row};
 use crate::ui::theme::{radius_sm, theme};
 use crate::ui::{BtnKind, btn, dropdown_chip, tooltip};
 
@@ -259,7 +259,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .flex_col()
         .child(section_heading("Appearance", true, &t))
         .child(
-            div()
+            anchored(div().id("row-app-icon"), "App icon")
                 .border_b_1()
                 .border_color(t.border)
                 .py(px(10.))

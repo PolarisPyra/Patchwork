@@ -4,12 +4,13 @@
 
 use std::time::Duration;
 use gpui::{
-    Animation, AnimationExt, ease_out_quint, AnyElement, Entity, Focusable, Role, SharedString,
-    Window, div, prelude::*, px,
+    Animation, AnimationExt, ease_out_quint, AnyElement, Entity, Focusable, Role, ScrollAnchor,
+    SharedString, Window, div, prelude::*, px,
 };
 use crate::ui::text_area::{Arrow, Changed, Submitted, TextArea};
 use crate::ui::theme::{Theme, fs_md, fs_sm, input_placeholder, radius_sm, theme};
 use crate::ui::{button, icon, mix};
+use super::controls::seek;
 use super::dialog::{ENTRIES, SettingsDialog, entry_of};
 
 /// How tall a pane's row under its entry is.
@@ -63,13 +64,18 @@ const INDEX: &[(&str, &[&str])] = &[
             "Accent",
             "Switch with",
             "Code theme",
+            "Generate with",
             "Text size",
             "Reduce motion",
         ],
     ),
     (
         "backgrounds",
-        &["Orchestrator background", "Chat background"],
+        &[
+            "Orchestrator background",
+            "Chat background",
+            "Generate with",
+        ],
     ),
     ("interface", &["Font"]),
     ("shortcuts", &["Keyboard shortcuts", "Reset all"]),
@@ -198,6 +204,20 @@ impl SettingsDialog {
         self.clear_search(cx);
         self.open_section(hit.pane, cx);
         self.focus_row(hit.pane, window, cx);
+        if hit.place.is_empty() {
+            return;
+        }
+        // The setting's row is drawn on the next frame, and the pane scrolls to it on the one
+        // after.
+        let anchor = ScrollAnchor::for_handle(self.scroll.clone());
+        seek(Some((hit.name, anchor.clone())));
+        window.on_next_frame(move |window, cx| {
+            anchor.scroll_to(window, cx);
+            window.on_next_frame(|window, _| {
+                seek(None);
+                window.refresh();
+            });
+        });
     }
 
     pub(super) fn clear_search(&mut self, cx: &mut Context<Self>) {
