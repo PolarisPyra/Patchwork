@@ -26,6 +26,7 @@ use crate::chat::lineage::Lineage;
 use crate::chat::plan::ShownPlan;
 use crate::chat::prompts::Answering;
 use crate::chat::queue::{ChatDrafts, QueuedEdit};
+use crate::orchestrator::Orchestrator;
 use crate::workspace::add_project::AddProject;
 use crate::ui::menu::Menu;
 use crate::workspace::palette::Palette;
@@ -41,6 +42,14 @@ pub enum View {
     Tasks,
     Changes,
     Archived,
+}
+
+/// What fills the window beside the activity bar.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Page {
+    /// The sidebar, the open chat, and the panels around it.
+    Chats,
+    Orchestrator,
 }
 
 /// The sidebar's width: its default, and how narrow and wide a drag may make it.
@@ -76,6 +85,11 @@ pub struct Workspace {
     /// The open chat, in full.
     pub thread: Option<Thread>,
     pub view: Option<View>,
+    pub page: Page,
+    /// Whether the orchestrator page has the task list beside it. Its own, so opening or closing
+    /// it leaves the chats' sidebar as it was.
+    pub(super) orchestrator_tasks: bool,
+    pub(super) orchestrator: Entity<Orchestrator>,
     pub branch: Option<String>,
     /// The project's uncommitted files, as git reports them.
     pub changes: Vec<FileChange>,
@@ -238,7 +252,7 @@ impl Workspace {
         let sidebar_region = cx.new(|cx| {
             Region::new(
                 &entity,
-                |w, _, cx| match w.view {
+                |w, _, cx| match w.sidebar_view() {
                     Some(view) => crate::sidebar::render(w, view, cx).into_any_element(),
                     None => gpui::Empty.into_any_element(),
                 },
@@ -252,6 +266,7 @@ impl Workspace {
                 cx,
             )
         });
+        let orchestrator = cx.new(|cx| Orchestrator::new(&entity, window, cx));
         let status_region =
             cx.new(|cx| Region::new(&entity, |w, _, cx| w.status_bar(cx).into_any_element(), cx));
         let (panel, panel_height) =
@@ -265,6 +280,9 @@ impl Workspace {
             archived_collapsed: HashSet::new(),
             thread: None,
             view: Some(View::Tasks),
+            page: Page::Orchestrator,
+            orchestrator_tasks: true,
+            orchestrator,
             branch: None,
             changes: Vec::new(),
             change_focus: None,
@@ -361,6 +379,8 @@ impl Workspace {
         if let Some(id) = last {
             this.open_thread(&id, cx);
         }
+        // The app opens on the orchestrator page, with the last chat ready behind it.
+        this.page = Page::Orchestrator;
         this.watch_rail_focus(window, cx);
         // A focused control that goes away, such as a shell's kill button, hands focus to the
         // nearest place around it still shown, so the app's keys keep working.
@@ -376,6 +396,15 @@ impl Workspace {
         let composer = this.composer.read(cx).editor.focus_handle(cx);
         window.focus(&composer, cx);
         this
+    }
+
+    /// What the sidebar shows, if it is open: the chats' view, or beside the orchestrator page
+    /// the task list that page opens and closes for itself.
+    pub(super) fn sidebar_view(&self) -> Option<View> {
+        match self.page {
+            Page::Chats => self.view,
+            Page::Orchestrator => self.orchestrator_tasks.then_some(View::Tasks),
+        }
     }
 
     /// The project the window is about: the open chat's, else the active one.

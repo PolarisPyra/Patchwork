@@ -137,7 +137,7 @@ impl Workspace {
     /// The file panel's width: the dragged one, else `max(420px, 46%)` of the row it sits in,
     /// kept between its narrowest and 70% of the row.
     pub(super) fn canvas_width(&self, window: &Window) -> (f32, f32) {
-        let sidebar = if self.view.is_some() {
+        let sidebar = if self.sidebar_view().is_some() {
             self.sidebar_width
         } else {
             0.

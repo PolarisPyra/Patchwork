@@ -3,6 +3,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+pub(in crate::orchestration) mod dispatch;
 pub(in crate::orchestration) mod queue;
 pub(in crate::orchestration) mod queued;
 pub(in crate::orchestration) mod send;

@@ -13,6 +13,7 @@ mod android;
 mod canvas;
 mod chat;
 mod onboarding;
+mod orchestrator;
 mod panel;
 mod settings;
 mod sidebar;

@@ -9,7 +9,7 @@ use gpui::{
 use patchwork_server::system::device::Kind;
 use patchwork_server::threads::{MessageStatus, Role as MessageRole};
 
-use super::{View, Workspace, is_busy};
+use super::{Page, View, Workspace, is_busy};
 use crate::ui::menu::{Dismissed, Menu, MenuItem};
 use crate::ui::theme::{ACTIVITY_BAR_W, FS_XS, RADIUS, RADIUS_SM, STATUSBAR_H, TOOLBAR_H, Theme, theme};
 use crate::ui::{agent_label, button, display_title, icon, kind_icon, spinner};
@@ -214,11 +214,22 @@ impl Workspace {
             )
     }
 
+    /// Shows the orchestrator page. On the page, opens or closes its task list, as a view's icon
+    /// does for the chats. The focus stays on the icon, so Space does the same again.
+    fn toggle_orchestrator(&mut self, cx: &mut Context<Self>) {
+        if self.page == Page::Orchestrator {
+            self.orchestrator_tasks = !self.orchestrator_tasks;
+        } else {
+            self.page = Page::Orchestrator;
+        }
+        cx.notify();
+    }
+
     pub(super) fn activity_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let t = *theme(cx);
         let entry =
             |view: View, label: &'static str, name: &'static str, cx: &mut Context<Self>| {
-                let active = self.view == Some(view);
+                let active = self.page == Page::Chats && self.view == Some(view);
                 let count = self.changes.len();
                 let badge = (view == View::Changes && count > 0).then(|| {
                     div()
@@ -250,14 +261,17 @@ impl Workspace {
                     .child(icon(name, 20.))
                     .children(badge)
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.view = if this.view == Some(view) {
+                        // From the orchestrator page, a view's icon goes to that view.
+                        this.view = if this.page == Page::Chats && this.view == Some(view) {
                             None
                         } else {
                             Some(view)
                         };
+                        this.page = Page::Chats;
                         cx.notify();
                     }))
             };
+        let orchestrating = self.page == Page::Orchestrator;
         div()
             .id("activity-bar")
             .role(Role::Navigation)
@@ -272,6 +286,16 @@ impl Workspace {
             .border_color(t.border)
             .bg(t.bg_app)
             .py(px(6.))
+            .child(
+                activity_button("Orchestrator", "Orchestrator".into(), &t, orchestrating)
+                    .aria_toggled(if orchestrating {
+                        gpui::Toggled::True
+                    } else {
+                        gpui::Toggled::False
+                    })
+                    .child(icon("butterfly", 20.))
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle_orchestrator(cx))),
+            )
             .child(entry(View::Tasks, "Tasks", "chats", cx))
             .child(entry(View::Changes, "Source Control", "git-diff", cx))
             .child(entry(View::Archived, "Archived", "archive", cx))
