@@ -7,7 +7,7 @@ use gpui::{AnyElement, Div, Hsla, Role, SharedString, div, prelude::*, px};
 use patchwork_server::threads::{Message, ReviewStatus, TurnReview};
 
 use crate::ui::markdown::markdown;
-use crate::ui::theme::{FS_SM, FS_XS, RADIUS, Theme};
+use crate::ui::theme::{FS_SM, FS_XS, radius, Theme};
 use crate::ui::{BtnKind, agent_label, btn, button, icon, spinner, tooltip};
 use crate::workspace::Workspace;
 
@@ -116,7 +116,7 @@ pub fn review_card(
             .flex()
             .flex_col()
             .gap(px(4.))
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .border_color(t.border)
             .bg(t.bg_panel)

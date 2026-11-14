@@ -9,7 +9,7 @@ use gpui::{
     Anchor, Div, FontWeight, MouseButton, Role, SharedString, anchored, deferred, div, point,
     prelude::*, px,
 };
-use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_SM, theme};
+use crate::ui::theme::{font_mono, FS_SM, FS_XS, radius, radius_sm, theme};
 use crate::ui::{button, icon, popup};
 use crate::workspace::Workspace;
 
@@ -58,7 +58,7 @@ impl Workspace {
                 .h(px(28.))
                 .px(px(14.))
                 .justify_center()
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .border_1()
                 .text_size(px(crate::ui::theme::FS_MD))
                 .child(label)
@@ -95,7 +95,7 @@ impl Workspace {
                         .flex()
                         .flex_col()
                         .gap(px(2.))
-                        .rounded(px(RADIUS_SM))
+                        .rounded(px(radius_sm()))
                         .px(px(8.))
                         .py(px(5.))
                         .cursor_pointer()
@@ -108,7 +108,7 @@ impl Workspace {
                                 div()
                                     .max_w(px(360.))
                                     .truncate()
-                                    .font_family(FONT_MONO)
+                                    .font_family(font_mono())
                                     .text_size(px(FS_XS))
                                     .text_color(t.text_muted)
                                     .child(patterns.clone()),
@@ -156,7 +156,7 @@ impl Workspace {
                         .h(px(28.))
                         .px(px(6.))
                         .justify_center()
-                        .rounded_r(px(RADIUS_SM))
+                        .rounded_r(px(radius_sm()))
                         .relative()
                         .border_1()
                         .border_color(t.accent)
@@ -194,7 +194,7 @@ impl Workspace {
                 .flex()
                 .flex_col()
                 .gap(px(8.))
-                .rounded(px(RADIUS))
+                .rounded(px(radius()))
                 .border_1()
                 .border_color(t.warning)
                 .bg(t.bg_panel)

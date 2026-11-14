@@ -10,7 +10,7 @@ use patchwork_server::threads::{
     ApprovalStatus, MessageStatus, NewThread, Part, PlanStep, Role as MessageRole, StepStatus,
 };
 
-use crate::ui::theme::{FS_SM, RADIUS, Theme};
+use crate::ui::theme::{FS_SM, radius, Theme};
 use crate::ui::{BtnKind, btn, button, icon, mix, spinner};
 use crate::workspace::{Workspace, is_working};
 
@@ -208,7 +208,7 @@ pub fn plan_panel(
     };
     div()
         .mb(px(6.))
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .border_1()
         .border_color(t.border)
         .bg(t.bg_panel)
@@ -295,7 +295,7 @@ pub fn ready_bar(plan: &str, t: &Theme, cx: &mut Context<Workspace>) -> Stateful
         .flex()
         .items_center()
         .gap(px(8.))
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .border_1()
         .border_color(t.border)
         .bg(t.bg_panel)

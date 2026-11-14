@@ -5,7 +5,7 @@
 
 use gpui::{AnyElement, App, ClickEvent, SharedString, prelude::*, px};
 use patchwork_server::settings::{Settings, TextSize};
-use patchwork_server::themes::{CODE_THEMES, Scheme};
+use patchwork_server::themes::Scheme;
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{choice, segmented, select_box, switch, token_row};
@@ -89,13 +89,14 @@ pub(super) fn code_theme_row(
     let own = (None, SharedString::new_static("From the color scheme"));
     let options = std::iter::once(own)
         .chain(
-            CODE_THEMES
+            d.themes
+                .codes
                 .iter()
-                .filter(|code| code.scheme == scheme)
+                .filter(|code| code.file.scheme == scheme)
                 .map(|code| {
                     (
-                        Some(code.id.to_string()),
-                        SharedString::new_static(code.name),
+                        Some(code.id.clone()),
+                        SharedString::from(code.file.name.clone()),
                     )
                 }),
         )

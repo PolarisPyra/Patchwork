@@ -9,7 +9,7 @@ use patchwork_server::hooks::{self, HookEvent, Bundle, Hook, HookHandler};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{switch, tildify, token_row};
-use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{font_mono, FS_SM, FS_XS, radius, radius_sm, Theme, theme};
 use crate::ui::{AGENT_KINDS, BtnKind, agent_label, btn, icon};
 
 use super::{empty, example, list_box};
@@ -183,11 +183,11 @@ fn hook_row(
             .children(hook.matcher.clone().filter(|_| !shell).map(|m| {
                 div()
                     .truncate()
-                    .rounded(px(RADIUS_SM))
+                    .rounded(px(radius_sm()))
                     .bg(t.bg_selected_muted)
                     .px(px(6.))
                     .py(px(2.))
-                    .font_family(FONT_MONO)
+                    .font_family(font_mono())
                     .text_color(t.text_muted)
                     .child(m)
             }))
@@ -213,7 +213,7 @@ fn hook_row(
             .w_full()
             .truncate()
             .text_color(t.text_muted)
-            .when(command, |d| d.font_family(FONT_MONO))
+            .when(command, |d| d.font_family(font_mono()))
             .child(handler_text(&hook.handler)),
     )
     .on_click(cx.listener(move |d, _, _, cx| {
@@ -224,7 +224,7 @@ fn hook_row(
     }));
 
     let details = open.then(|| {
-        let mono = |text: String| div().font_family(FONT_MONO).child(text);
+        let mono = |text: String| div().font_family(font_mono()).child(text);
         div()
             .flex()
             .flex_col()
@@ -242,11 +242,11 @@ fn hook_row(
                     .child(detail(
                         "Command",
                         div()
-                            .rounded(px(RADIUS_SM))
+                            .rounded(px(radius_sm()))
                             .bg(t.bg_selected_muted)
                             .px(px(8.))
                             .py(px(6.))
-                            .font_family(FONT_MONO)
+                            .font_family(font_mono())
                             .text_color(t.text)
                             .child(command.clone()),
                         t,
@@ -279,7 +279,7 @@ fn bundle_card(
         .collect();
     let (id, on) = (bundle.id.clone(), bundle.enabled);
     div()
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .border_1()
         .border_color(t.border)
         .p(px(12.))
@@ -330,7 +330,7 @@ fn bundle_card(
                             d.child(
                                 div()
                                     .mt(px(8.))
-                                    .child(list_box(hooks, t).rounded(px(RADIUS_SM))),
+                                    .child(list_box(hooks, t).rounded(px(radius_sm()))),
                             )
                         })
                         .when(!bundle.apps.is_empty(), |d| {
@@ -340,7 +340,7 @@ fn bundle_card(
                                         .flex()
                                         .items_center()
                                         .gap(px(4.))
-                                        .rounded(px(RADIUS_SM))
+                                        .rounded(px(radius_sm()))
                                         .bg(t.bg_selected_muted)
                                         .px(px(6.))
                                         .py(px(2.))

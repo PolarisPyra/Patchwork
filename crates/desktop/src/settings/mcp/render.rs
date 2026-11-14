@@ -7,7 +7,7 @@ use gpui::{AnyElement, Window, div, prelude::*, px};
 use patchwork_server::provider::mcp::ToolInfo;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert, chip, list_box};
-use crate::ui::theme::{FS_SM, RADIUS, theme};
+use crate::ui::theme::{FS_SM, radius, theme};
 use crate::ui::{BtnKind, btn, icon};
 use super::form::Draft;
 use super::rows::{logo, server_row};
@@ -183,7 +183,7 @@ pub fn render(
     let warning = over.then(|| {
         div()
             .mb(px(12.))
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .border_color(t.warning.opacity(0.4))
             .bg(t.warning.opacity(0.1))

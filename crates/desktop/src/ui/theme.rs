@@ -2,7 +2,8 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, PoisonError, RwLock};
 
 use gpui::{App, Global, Hsla, Rgba, SharedString, WindowAppearance};
 use patchwork_server::themes::{Applied, Paint, Palette, Scheme, Syntax, ThemeFile};
@@ -351,6 +352,21 @@ pub fn apply(applied: Applied, appearance: WindowAppearance, cx: &mut App) {
         }
     };
     let mut theme = Theme::of(palette);
+    let file = match palette {
+        Palette::File(file) => Some(file),
+        _ => None,
+    };
+    let family = |named: Option<&String>, own: &'static str| {
+        named
+            .filter(|font| !font.trim().is_empty())
+            .map_or(SharedString::new_static(own), SharedString::from)
+    };
+    *FONTS.write().unwrap_or_else(PoisonError::into_inner) = [
+        family(file.and_then(|f| f.fonts.ui.as_ref()), FONT_UI),
+        family(file.and_then(|f| f.fonts.code.as_ref()), FONT_MONO),
+    ];
+    let corner = file.and_then(|f| f.radius).unwrap_or(RADIUS);
+    CORNER.store(corner.clamp(0., MAX_RADIUS).to_bits(), Ordering::Relaxed);
     let code = if theme.is_dark() {
         applied.code_dark
     } else {
@@ -379,7 +395,7 @@ pub fn chat_font(cx: &App) -> SharedString {
     applied(cx)
         .chat_font
         .clone()
-        .map_or(SharedString::new_static(FONT_UI), SharedString::from)
+        .map_or_else(font_ui, SharedString::from)
 }
 
 /// What the theme settings came to.
@@ -388,7 +404,46 @@ pub fn applied(cx: &App) -> Arc<Applied> {
         .map_or_else(Arc::default, |look| Arc::clone(&look.0))
 }
 
-/// Font families and sizes, from `theme.css`'s `:root`.
+/// The font families and the corner radius in use: the app's own, or the color scheme's.
+///
+/// They are read where no `App` is at hand, so they are kept beside the `Theme` global, and
+/// `apply` sets both.
+static FONTS: RwLock<[SharedString; 2]> = RwLock::new([
+    SharedString::new_static(FONT_UI),
+    SharedString::new_static(FONT_MONO),
+]);
+static CORNER: AtomicU32 = AtomicU32::new(RADIUS.to_bits());
+
+fn font_family(index: usize) -> SharedString {
+    FONTS.read().unwrap_or_else(PoisonError::into_inner)[index].clone()
+}
+
+/// The font family of the app's own text.
+pub fn font_ui() -> SharedString {
+    font_family(0)
+}
+
+/// The font family of code and terminals.
+pub fn font_mono() -> SharedString {
+    font_family(1)
+}
+
+/// The corner radius of a button or a field.
+pub fn radius() -> f32 {
+    f32::from_bits(CORNER.load(Ordering::Relaxed))
+}
+
+/// The corner radius of something small, such as a chip.
+pub fn radius_sm() -> f32 {
+    radius() * RADIUS_SM / RADIUS
+}
+
+/// The corner radius of something large, such as a dialog.
+pub fn radius_lg() -> f32 {
+    radius() * RADIUS_LG / RADIUS
+}
+
+/// The font families the app comes with, and its sizes, from `theme.css`'s `:root`.
 pub const FONT_UI: &str = "Inter";
 pub const FONT_MONO: &str = "JetBrains Mono";
 pub const FS_XS: f32 = 11.;
@@ -397,9 +452,11 @@ pub const FS_MD: f32 = 13.;
 pub const FS_LG: f32 = 15.;
 pub const FS_XL: f32 = 20.;
 pub const FS_XXL: f32 = 28.;
-pub const RADIUS_SM: f32 = 4.;
-pub const RADIUS: f32 = 6.;
-pub const RADIUS_LG: f32 = 10.;
+const RADIUS_SM: f32 = 4.;
+const RADIUS: f32 = 6.;
+const RADIUS_LG: f32 = 10.;
+/// The roundest a color scheme may make a button's corners.
+const MAX_RADIUS: f32 = 16.;
 pub const TOOLBAR_H: f32 = 40.;
 pub const STATUSBAR_H: f32 = 27.;
 pub const ACTIVITY_BAR_W: f32 = 40.;

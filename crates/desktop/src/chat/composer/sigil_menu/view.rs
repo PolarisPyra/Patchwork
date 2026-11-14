@@ -13,7 +13,7 @@ use patchwork_server::provider::{AgentKind, ProviderSlashCommand};
 use crate::chat::composer::Composer;
 use crate::chat::composer::menus::Roles;
 use crate::ui::sigils::{SigilKind, Sigils};
-use crate::ui::theme::{FONT_MONO, FS_SM, RADIUS, Theme};
+use crate::ui::theme::{font_mono, FS_SM, radius, Theme};
 use crate::ui::{button, icon, popup_shadow};
 
 impl Composer {
@@ -131,7 +131,7 @@ impl Composer {
             .flex_none()
             .px(px(8.))
             .py(px(6.))
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .text_color(t.text)
             .map(|b| {
                 if active {
@@ -142,7 +142,7 @@ impl Composer {
             })
             .on_click(cx.listener(move |this, _, window, cx| this.sigil_select(i, window, cx)));
             if kind == SigilKind::Files {
-                row.font_family(FONT_MONO)
+                row.font_family(font_mono())
                     .text_size(px(FS_SM))
                     .when(item.name.ends_with('/'), |r| {
                         r.child(div().flex_none().mr(px(6.)).child(icon("folder", 13.)))
@@ -151,7 +151,7 @@ impl Composer {
             } else {
                 row.items_start()
                     .gap(px(10.))
-                    .child(div().flex_none().font_family(FONT_MONO).child(shown))
+                    .child(div().flex_none().font_family(font_mono()).child(shown))
                     .child(
                         div()
                             .min_w_0()
@@ -172,7 +172,7 @@ impl Composer {
             .max_h(px(512.))
             .overflow_y_scroll()
             .track_scroll(&self.sigil.scroll)
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .border_color(t.border)
             .bg(t.bg_panel)

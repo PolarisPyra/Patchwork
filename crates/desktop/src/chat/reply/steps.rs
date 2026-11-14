@@ -5,7 +5,7 @@
 use std::ops::Range;
 use gpui::{Div, Role, SharedString, div, prelude::*, px};
 use patchwork_server::threads::{Message, MessageStatus, StepStatus};
-use crate::ui::theme::{FONT_MONO, FS_MD, FS_SM, FS_XS, RADIUS_SM, Theme};
+use crate::ui::theme::{font_mono, FS_MD, FS_SM, FS_XS, radius_sm, Theme};
 use crate::ui::{button, icon, spinner};
 use crate::workspace::Workspace;
 use crate::ui::markdown::{self, FindIn, markdown, markdown_part};
@@ -128,10 +128,10 @@ pub(super) fn entry_row(
     let pill = |text: String, color: gpui::Hsla| {
         div()
             .flex_none()
-            .rounded(px(RADIUS_SM))
+            .rounded(px(radius_sm()))
             .bg(t.text_tint_8)
             .px(px(6.))
-            .font_family(FONT_MONO)
+            .font_family(font_mono())
             .text_size(px(FS_XS))
             .line_height(px(18.))
             .text_color(color)
@@ -194,11 +194,11 @@ pub(super) fn entry_row(
             .mb(px(4.))
             .max_h(px(256.))
             .overflow_y_scroll()
-            .rounded(px(RADIUS_SM))
+            .rounded(px(radius_sm()))
             .bg(t.bg_editor)
             .px(px(8.))
             .py(px(6.))
-            .font_family(FONT_MONO)
+            .font_family(font_mono())
             .text_size(px(FS_SM))
             .text_color(t.text_muted)
             .child(details_of(tool))

@@ -11,7 +11,7 @@ use crate::settings::providers::PromptOf;
 use crate::settings::providers::rows::status_badge;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert, switch};
-use crate::ui::theme::{FONT_MONO, FS_SM, RADIUS_SM, theme};
+use crate::ui::theme::{font_mono, FS_SM, radius_sm, theme};
 use crate::ui::{BtnKind, btn, icon, provider_logo, spinner};
 
 impl SettingsDialog {
@@ -138,7 +138,7 @@ impl SettingsDialog {
             window,
             cx,
         )
-        .font_family(FONT_MONO)
+        .font_family(font_mono())
     }
 
     fn selected_local(&self) -> Option<&ProviderView> {
@@ -231,7 +231,7 @@ impl SettingsDialog {
                 )
                 .size(px(28.))
                 .justify_center()
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .text_color(t.text_muted)
                 .hover(move |s| s.bg(hover).text_color(fg))
                 .tooltip(crate::ui::tooltip("Recheck"))

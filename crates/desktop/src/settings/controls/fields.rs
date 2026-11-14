@@ -7,7 +7,7 @@ use gpui::{AnyElement, Div, Entity, Focusable, SharedString, Window, div, prelud
 use crate::ui::text_area::{BackspaceEmpty, Changed, Submitted, TextArea};
 use crate::ui::menu::{Menu, MenuItem};
 use crate::settings::SettingsDialog;
-use crate::ui::theme::{FONT_MONO, theme};
+use crate::ui::theme::{font_mono, theme};
 use crate::ui::input_box;
 
 /// What a text field does with its text when it is left or Enter is pressed.
@@ -177,7 +177,7 @@ impl SettingsDialog {
             .when(kind.lines, |d| {
                 d.h_auto().min_h(px(70.)).items_start().py(px(6.))
             })
-            .when(kind.mono, |d| d.font_family(FONT_MONO))
+            .when(kind.mono, |d| d.font_family(font_mono()))
             .child(div().flex_1().min_w_0().child(field.area.clone()))
     }
 

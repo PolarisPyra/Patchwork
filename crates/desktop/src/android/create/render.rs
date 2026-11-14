@@ -8,7 +8,7 @@ use patchwork_server::android::SystemImage;
 use super::state::{Create, Install, Step};
 use crate::android::rows::radio_row;
 use crate::android::state::AndroidPanel;
-use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, Theme};
+use crate::ui::theme::{font_mono, FS_SM, FS_XS, radius, Theme};
 use crate::ui::{BtnKind, badge, btn, checkbox, input_box, spinner};
 
 impl AndroidPanel {
@@ -267,12 +267,12 @@ impl AndroidPanel {
                         .tab_index(0)
                         .max_h(px(320.))
                         .overflow_y_scroll()
-                        .rounded(px(RADIUS))
+                        .rounded(px(radius()))
                         .border_1()
                         .border_color(t.border)
                         .bg(t.bg_app)
                         .p(px(10.))
-                        .font_family(FONT_MONO)
+                        .font_family(font_mono())
                         .text_size(px(FS_XS))
                         .text_color(t.text_muted)
                         .children(license.lines().map(|line| {
@@ -390,7 +390,7 @@ fn list_box(
         .max_h(px(300.))
         .overflow_y_scroll()
         .track_scroll(scroll)
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .border_1()
         .border_color(t.border)
         .p(px(4.))

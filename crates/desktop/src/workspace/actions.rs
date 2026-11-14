@@ -3,6 +3,8 @@
 // Rust guideline compliant 2026-10-09
 
 use std::sync::Arc;
+
+use futures::StreamExt;
 use gpui::{Window, prelude::*};
 use patchwork_server::permissions::PermissionScope;
 use crate::workspace::palette::{Action, Closed, Palette};
@@ -153,6 +155,36 @@ impl Workspace {
                 }
                 this.reload(cx);
             });
+        })
+        .detach();
+    }
+
+    /// Draws the app again whenever a file in the theme folders changes, and has the open
+    /// settings list what can be picked again.
+    pub(super) fn watch_themes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let (sender, mut received) = futures::channel::mpsc::unbounded::<()>();
+        let server = Arc::clone(&self.server);
+        cx.background_spawn(async move {
+            let watched = server.watch_themes(move || {
+                let _ = sender.unbounded_send(());
+            });
+            if let Err(e) = watched {
+                log::warn!(error:% = e; "couldn't watch the theme folders: {{error}}");
+            }
+        })
+        .detach();
+        cx.spawn_in(window, async move |this, cx| {
+            while received.next().await.is_some() {
+                let applied = this.update_in(cx, |this, window, cx| {
+                    this.apply_theme(window, cx);
+                    if let Some(dialog) = &this.settings_dialog {
+                        dialog.update(cx, crate::settings::SettingsDialog::themes_changed);
+                    }
+                });
+                if applied.is_err() {
+                    break;
+                }
+            }
         })
         .detach();
     }

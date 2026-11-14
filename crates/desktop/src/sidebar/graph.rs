@@ -15,7 +15,7 @@ use patchwork_server::workspace::GitCommit;
 
 use super::changes::ChangesView;
 use crate::ui::menu::MenuItem;
-use crate::ui::theme::{FS_MD, FS_SM, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_MD, FS_SM, radius_sm, Theme};
 use crate::ui::{agent_logo, button, mix, tooltip};
 
 /// Row height, lane width, and the radius of the bends where a lane shifts over.
@@ -408,7 +408,7 @@ pub fn section(
                 .size(px(16.))
                 .flex_none()
                 .justify_center()
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .hover(move |s| s.bg(hover))
                 .tooltip(tooltip(label))
                 .child(logo)
@@ -441,7 +441,7 @@ pub fn section(
                 .size(px(16.))
                 .flex_none()
                 .justify_center()
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .text_color(t.text_muted)
                 .hover(move |s| s.bg(hover))
                 .tooltip(tooltip("Undo a reply"))

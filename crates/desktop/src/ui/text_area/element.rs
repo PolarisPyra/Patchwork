@@ -13,7 +13,7 @@ use gpui::{
 };
 use super::markdown;
 use super::state::{DrawnLine, TextArea};
-use crate::ui::theme::FONT_MONO;
+use crate::ui::theme::font_mono;
 
 impl Render for TextArea {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -144,7 +144,7 @@ fn shape(
             font.style = FontStyle::Italic;
         }
         if flags & markdown::CODE != 0 {
-            font.family = FONT_MONO.into();
+            font.family = font_mono();
         }
         TextRun {
             len,

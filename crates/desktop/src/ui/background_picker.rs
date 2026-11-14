@@ -16,7 +16,7 @@ use patchwork_server::Server;
 use patchwork_server::backgrounds::{BackgroundImage, ChatBackground, RemovedBackground};
 
 use crate::ui::backdrop::{PRESETS, preset_fill};
-use crate::ui::theme::{FS_SM, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_SM, radius_sm, Theme, theme};
 use crate::ui::{button, focus_ring, icon, spinner, tooltip};
 
 /// How long a deleted picture can be brought back from the picker.
@@ -357,7 +357,7 @@ impl BackgroundPicker {
             .flex()
             .items_center()
             .justify_center()
-            .rounded(px(RADIUS_SM))
+            .rounded(px(radius_sm()))
             .border_2()
             .border_color(if checked {
                 t.accent
@@ -406,7 +406,7 @@ fn swatch(
         .relative()
         .aspect_ratio(4. / 3.)
         .overflow_hidden()
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .border_2()
         .bg(t.bg_editor)
         .border_color(if checked { t.accent } else { t.border })
@@ -536,7 +536,7 @@ impl Render for BackgroundPicker {
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .rounded(px(RADIUS_SM))
+                                .rounded(px(radius_sm()))
                                 .border_2()
                                 .border_color(t.border)
                                 .child(spinner(18., muted)),
@@ -546,7 +546,7 @@ impl Render for BackgroundPicker {
                         button("choose-picture", "Choose a picture")
                             .aspect_ratio(4. / 3.)
                             .justify_center()
-                            .rounded(px(RADIUS_SM))
+                            .rounded(px(radius_sm()))
                             .border_1()
                             .border_dashed()
                             .border_color(t.border_strong)

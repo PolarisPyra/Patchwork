@@ -4,7 +4,7 @@
 
 use gpui::{AnyElement, FontWeight, MouseButton, Role, SharedString, Window, div, prelude::*, px};
 use crate::ui::menu::Menu;
-use crate::ui::theme::{FS_LG, FS_XS, RADIUS_SM, theme};
+use crate::ui::theme::{FS_LG, FS_XS, radius_sm, theme};
 use crate::ui::{icon, icon_button, mix, overflows, scrollbar};
 use super::dialog::{GROUPS, SettingsDialog, SettingsEvent, sections};
 use super::chat;
@@ -81,7 +81,7 @@ impl Render for SettingsDialog {
                         .aria_selected(current)
                         .h(px(32.))
                         .gap(px(10.))
-                        .rounded(px(RADIUS_SM))
+                        .rounded(px(radius_sm()))
                         .px(px(8.))
                         .text_color(t.text)
                         .map(|b| {

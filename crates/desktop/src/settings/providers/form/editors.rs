@@ -7,7 +7,7 @@ use patchwork_server::provider::api::config::Header;
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
-use crate::ui::theme::{FONT_MONO, FS_SM, RADIUS_SM, theme};
+use crate::ui::theme::{font_mono, FS_SM, radius_sm, theme};
 use crate::ui::{BtnKind, btn, button, icon, icon_button, spinner};
 use super::render::{label_text};
 use super::state::{Form};
@@ -134,11 +134,11 @@ impl SettingsDialog {
                     .items_center()
                     .gap(px(4.))
                     .h(px(24.))
-                    .rounded(px(RADIUS_SM))
+                    .rounded(px(radius_sm()))
                     .bg(t.bg_selected)
                     .pl(px(8.))
                     .pr(px(2.))
-                    .font_family(FONT_MONO)
+                    .font_family(font_mono())
                     .text_size(px(FS_SM))
                     .child(id.clone())
                     .child(
@@ -148,7 +148,7 @@ impl SettingsDialog {
                         )
                         .size(px(20.))
                         .justify_center()
-                        .rounded(px(RADIUS_SM))
+                        .rounded(px(radius_sm()))
                         .text_color(muted)
                         .hover(move |s| s.bg(hover).text_color(fg))
                         .child(icon("x", 11.))
@@ -182,7 +182,7 @@ impl SettingsDialog {
                         .w_full()
                         .px(px(8.))
                         .py(px(4.))
-                        .font_family(FONT_MONO)
+                        .font_family(font_mono())
                         .text_size(px(FS_SM))
                         .hover(move |s| s.bg(hover))
                         .child(
@@ -192,7 +192,7 @@ impl SettingsDialog {
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .rounded(px(RADIUS_SM))
+                                .rounded(px(radius_sm()))
                                 .border_1()
                                 .text_color(t.text_on_accent)
                                 .map(|b| {
@@ -223,7 +223,7 @@ impl SettingsDialog {
                 .flex()
                 .flex_col()
                 .overflow_hidden()
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .border_1()
                 .border_color(t.border)
                 .children(search.map(|s| {
@@ -298,7 +298,7 @@ impl SettingsDialog {
                     .flex_wrap()
                     .items_center()
                     .gap(px(6.))
-                    .rounded(px(RADIUS_SM))
+                    .rounded(px(radius_sm()))
                     .border_1()
                     .border_color(t.border_strong)
                     .bg(t.bg_editor)

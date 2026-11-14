@@ -13,12 +13,12 @@ use gpui::{
     Window, div, hsla, img, point, prelude::*, px, relative, size,
 };
 use patchwork_server::orchestration::Target;
-use patchwork_server::themes::{Applied, Scene, Scheme, Shown};
+use patchwork_server::themes::{Applied, Fit, Scene, Scheme, Shown};
 use patchwork_server::threads::AskKind;
 
 use super::state::Orchestrator;
 use super::{background, scene};
-use crate::ui::theme::{FONT_UI, FS_LG, FS_SM, RADIUS_LG, applied, theme};
+use crate::ui::theme::{font_ui, FS_LG, FS_SM, radius_lg, applied, theme};
 use crate::ui::{button, display_title, icon, spinner};
 
 /// The pill: its size, the room kept at its sides, and how far down the page its top is.
@@ -113,16 +113,16 @@ impl Orchestrator {
                 background::field(pill_bounds, still, flight, None).into_any_element()
             }
             // The picture is dimmed toward the window's color, so the page reads over it.
-            Shown::Image(path) => div()
+            Shown::Image { path, dim, fit } => div()
                 .size_full()
                 .relative()
                 .bg(t.bg_app)
-                .child(
-                    img(PathBuf::from(path))
-                        .size_full()
-                        .object_fit(ObjectFit::Cover),
-                )
-                .child(div().absolute().inset_0().bg(t.bg_app.opacity(0.45)))
+                .child(img(PathBuf::from(path)).size_full().object_fit(match fit {
+                    Fit::Cover => ObjectFit::Cover,
+                    Fit::Contain => ObjectFit::Contain,
+                    Fit::Stretch => ObjectFit::Fill,
+                }))
+                .child(div().absolute().inset_0().bg(t.bg_app.opacity(*dim)))
                 .into_any_element(),
             Shown::Scene(_) => {
                 let fallback = scene::Fallback {
@@ -284,7 +284,7 @@ impl Orchestrator {
             .flex()
             .flex_col()
             .p(px(4.))
-            .rounded(px(RADIUS_LG))
+            .rounded(px(radius_lg()))
             .border_1()
             .border_color(ink(0.10))
             .bg(glass(0.96))
@@ -408,7 +408,7 @@ impl Render for Orchestrator {
             .relative()
             .size_full()
             .overflow_hidden()
-            .font_family(FONT_UI)
+            .font_family(font_ui())
             .text_color(ink(0.9))
             .child(div().absolute().inset_0().child(backdrop))
             .child(column().child(pill).child(requests))

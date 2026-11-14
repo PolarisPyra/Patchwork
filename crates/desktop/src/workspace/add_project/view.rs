@@ -9,7 +9,7 @@ use gpui::{
     prelude::*, px,
 };
 use crate::ui::dialog;
-use crate::ui::theme::{FONT_MONO, FS_MD, FS_SM, FS_XS, RADIUS, theme};
+use crate::ui::theme::{font_mono, FS_MD, FS_SM, FS_XS, radius, theme};
 use crate::ui::{BtnKind, btn, icon, icon_button, spinner, tooltip};
 
 impl Focusable for AddProject {
@@ -50,7 +50,7 @@ impl Render for AddProject {
                 .items_center()
                 .gap(px(12.))
                 .px(px(12.))
-                .rounded(px(RADIUS))
+                .rounded(px(radius()))
                 .text_size(px(FS_MD))
                 .text_color(t.text)
         };
@@ -181,7 +181,7 @@ impl Render for AddProject {
                                 .flex_none()
                                 .max_w(px(160.))
                                 .truncate()
-                                .font_family(FONT_MONO)
+                                .font_family(font_mono())
                                 .text_size(px(FS_MD))
                                 .text_color(t.text_muted)
                                 .child(format!("{host}:"))
@@ -191,7 +191,7 @@ impl Render for AddProject {
                                 .ml(px(4.))
                                 .flex_1()
                                 .min_w_0()
-                                .font_family(FONT_MONO)
+                                .font_family(font_mono())
                                 .text_size(px(FS_MD))
                                 .child(self.field.clone()),
                         )
@@ -335,7 +335,7 @@ impl Render for AddProject {
                                         .flex_none()
                                         .max_w(px(220.))
                                         .truncate()
-                                        .font_family(FONT_MONO)
+                                        .font_family(font_mono())
                                         .text_size(px(FS_XS))
                                         .text_color(t.text_subtle)
                                         .child(h)

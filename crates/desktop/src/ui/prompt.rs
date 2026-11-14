@@ -10,7 +10,7 @@ use gpui::{
     div, prelude::*, px,
 };
 
-use crate::ui::theme::{FS_LG, FS_MD, RADIUS, RADIUS_SM, theme};
+use crate::ui::theme::{FS_LG, FS_MD, radius, radius_sm, theme};
 use crate::ui::popup_shadow;
 
 pub fn build(
@@ -101,7 +101,7 @@ impl Render for Confirm {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .rounded(px(RADIUS_SM))
+                    .rounded(px(radius_sm()))
                     .border_1()
                     .border_color(border)
                     .bg(bg)
@@ -162,7 +162,7 @@ impl Render for Confirm {
                     .flex()
                     .flex_col()
                     .overflow_hidden()
-                    .rounded(px(RADIUS))
+                    .rounded(px(radius()))
                     .border_1()
                     .border_color(t.border_strong)
                     .bg(t.bg_elevated)

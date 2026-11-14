@@ -8,7 +8,7 @@ use gpui::{
     div, prelude::*, px,
 };
 use patchwork_server::threads::{ApprovalStatus, Thread};
-use crate::ui::theme::{FS_SM, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_SM, radius_sm, Theme, theme};
 use crate::ui::{agent_label, agent_logo, button, display_title, format_relative, icon, spinner};
 use crate::workspace::{Workspace, is_busy};
 
@@ -58,7 +58,7 @@ pub(super) fn tree_row(
         .flex()
         .items_center()
         .cursor_pointer()
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .pr(px(6.))
         .text_color(t.text)
         .bg(fill)
@@ -72,7 +72,7 @@ pub(super) fn reveal_button(id: &str, label: String, name: &str, t: &Theme) -> S
         .size(px(20.))
         .flex_none()
         .justify_center()
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .text_color(t.text_muted)
         .hover(move |s| s.bg(hover).text_color(fg))
         .child(icon(name, 17.))
@@ -168,7 +168,7 @@ pub(super) fn thread_row(
         .mb(px(2.))
         .pl(px(8.))
         .pr(px(8.))
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .cursor_pointer()
         .text_color(t.text)
         .bg(fill)
@@ -197,7 +197,7 @@ pub(super) fn thread_row(
                     .absolute()
                     .size(px(20.))
                     .justify_center()
-                    .rounded(px(RADIUS_SM))
+                    .rounded(px(radius_sm()))
                     .text_color(t.text_muted)
                     .hover(move |s| s.bg(btn_hover).text_color(fg))
                     .opacity(0.)

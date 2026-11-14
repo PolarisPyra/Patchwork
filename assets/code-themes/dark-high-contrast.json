@@ -1,0 +1,14 @@
+{
+  "name": "High contrast",
+  "scheme": "dark",
+  "colors": {
+    "keyword": "#ff9492",
+    "string": "#addcff",
+    "property": "#91cbff",
+    "ty": "#ffb757",
+    "number": "#91cbff",
+    "comment": "#bdc4cc",
+    "function": "#dbb7ff",
+    "tag": "#72f088"
+  }
+}

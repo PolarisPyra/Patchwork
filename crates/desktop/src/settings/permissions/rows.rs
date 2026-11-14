@@ -10,7 +10,7 @@ use gpui::{ClickEvent, Div, SharedString, Window, div, prelude::*, px};
 use patchwork_server::permissions::{PermissionRule, PermissionScope};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, choice, segmented, select_box};
-use crate::ui::theme::{FONT_MONO, RADIUS_SM, theme};
+use crate::ui::theme::{font_mono, radius_sm, theme};
 use crate::ui::{BtnKind, btn, icon_button, tooltip};
 
 pub(super) fn rule_row(
@@ -115,7 +115,7 @@ pub(super) fn rule_row(
         .items_center()
         .gap(px(6.))
         .mx(px(-6.))
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .px(px(6.))
         .py(px(2.))
         .when(picked, |row| row.bg(t.bg_selected_muted))
@@ -186,7 +186,7 @@ pub(super) fn add_rule_row(
         .gap(px(6.))
         .py(px(10.))
         .child(select)
-        .child(field.flex_1().font_family(FONT_MONO))
+        .child(field.flex_1().font_family(font_mono()))
         .child(
             btn("perm-add-rule", "Add rule", BtnKind::Plain, empty, &t)
                 .child("Add rule")

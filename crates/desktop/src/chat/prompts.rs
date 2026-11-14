@@ -11,7 +11,7 @@ use gpui::{
 };
 use patchwork_server::threads::{ApprovalStatus, MessageStatus, Role as MessageRole};
 
-use crate::ui::theme::{FS_MD, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_MD, FS_SM, FS_XS, radius, radius_sm, Theme};
 use crate::ui::button;
 use crate::workspace::{Workspace, is_working};
 
@@ -313,7 +313,7 @@ pub fn choice_panel(
         .aria_selected(active == Some(i))
         .w_full()
         .gap(px(12.))
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .px(px(10.))
         .py(px(6.))
         .text_size(px(FS_MD))
@@ -374,7 +374,7 @@ pub fn choice_panel(
         .flex()
         .flex_col()
         .gap(px(1.))
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .border_1()
         .border_color(t.border)
         .bg(t.bg_panel)

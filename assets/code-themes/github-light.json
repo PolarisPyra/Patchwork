@@ -1,0 +1,14 @@
+{
+  "name": "GitHub Light",
+  "scheme": "light",
+  "colors": {
+    "keyword": "#cf222e",
+    "string": "#0a3069",
+    "property": "#0550ae",
+    "ty": "#953800",
+    "number": "#0550ae",
+    "comment": "#6e7781",
+    "function": "#8250df",
+    "tag": "#116329"
+  }
+}

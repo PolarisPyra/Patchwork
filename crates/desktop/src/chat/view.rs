@@ -4,7 +4,7 @@
 
 use gpui::{Div, FontWeight, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_server::threads::{MessageStatus, Thread};
-use crate::ui::theme::{FS_SM, FS_XL, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_SM, FS_XL, FS_XS, radius, radius_sm, Theme, theme};
 use crate::ui::{agent_logo, button, display_title, format_tokens, icon, icon_button, tooltip};
 use crate::workspace::Workspace;
 use super::transcript::{sync_transcript, transcript};
@@ -135,7 +135,7 @@ pub(super) fn subagent_footer(
     let link = button("subagent-parent", title.clone())
         .min_w_0()
         .truncate()
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .px(px(4.))
         .text_color(t.text)
         .child(title);
@@ -204,7 +204,7 @@ pub(super) fn floating(
                 .h(px(28.))
                 .gap(px(6.))
                 .px(px(12.))
-                .rounded(px(RADIUS))
+                .rounded(px(radius()))
                 .border_1()
                 .border_color(t.border)
                 .bg(t.bg_panel)
@@ -238,7 +238,7 @@ pub(super) fn floating(
             .flex_none()
             .size(px(28.))
             .justify_center()
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .border_color(t.border)
             .bg(t.bg_panel)

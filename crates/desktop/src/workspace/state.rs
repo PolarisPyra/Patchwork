@@ -393,6 +393,7 @@ impl Workspace {
         // Getting that chat ready is not a step to go back from.
         this.history_back.clear();
         this.watch_rail_focus(window, cx);
+        this.watch_themes(window, cx);
         // A focused control that goes away, such as a shell's kill button, hands focus to the
         // nearest place around it still shown, so the app's keys keep working.
         cx.on_focus_lost(window, |this, window, cx| {

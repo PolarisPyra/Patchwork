@@ -17,7 +17,7 @@ use gpui::{
 };
 use patchwork_server::workspace::HunkAction;
 use crate::canvas::Canvas;
-use crate::ui::theme::{FONT_MONO, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{font_mono, FS_SM, FS_XS, radius, radius_sm, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, tooltip};
 
 /// A monospace character's width at `--fs-md`, for the widest line's floor.
@@ -76,7 +76,7 @@ impl Canvas {
             .overflow_x_scroll()
             // The list scrolls down on its own; without this the wheel also scrolls this sideways.
             .restrict_scroll_to_axis()
-            .font_family(FONT_MONO)
+            .font_family(font_mono())
             .text_size(px(crate::ui::theme::FS_MD))
             .line_height(relative(1.65))
             .text_color(t.text)
@@ -222,7 +222,7 @@ impl Canvas {
         let hunk_button = |id: String, label: String, text: &'static str| {
             let (hover, fg) = (t.bg_hover, t.text);
             button(SharedString::from(id), label.clone())
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .px(px(6.))
                 .py(px(2.))
                 .text_color(t.text_muted)
@@ -267,7 +267,7 @@ impl Canvas {
                     .gap(px(4.))
                     .pr(px(12.))
                     .pl(px(8.))
-                    .font_family(crate::ui::theme::FONT_UI)
+                    .font_family(crate::ui::theme::font_ui())
                     .text_size(px(FS_XS))
                     .child(
                         hunk_button(
@@ -369,18 +369,18 @@ impl Canvas {
             .flex()
             .flex_col()
             .gap(px(8.))
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .border_color(t.border)
             .bg(t.bg_panel)
             .p(px(8.))
-            .font_family(crate::ui::theme::FONT_UI)
+            .font_family(crate::ui::theme::font_ui())
             .text_size(px(FS_SM))
             .line_height(relative(1.5))
             .child(
                 div()
                     .min_h(px(60.))
-                    .rounded(px(RADIUS_SM))
+                    .rounded(px(radius_sm()))
                     .border_1()
                     .border_color(if focused { t.accent } else { t.border })
                     .bg(t.bg_input)
@@ -430,7 +430,7 @@ impl Canvas {
                 .size(px(20.))
                 .flex_none()
                 .justify_center()
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .text_color(t.text_muted)
                 .hover(move |s| s.bg(hover).text_color(fg))
                 .opacity(0.)
@@ -451,13 +451,13 @@ impl Canvas {
             .flex()
             .items_start()
             .gap(px(8.))
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .border_color(t.border)
             .bg(t.bg_panel)
             .px(px(12.))
             .py(px(8.))
-            .font_family(crate::ui::theme::FONT_UI)
+            .font_family(crate::ui::theme::font_ui())
             .text_size(px(FS_SM))
             .line_height(relative(1.5))
             .child(icon("chat-text", 14.).mt(px(2.)).text_color(t.accent_text))

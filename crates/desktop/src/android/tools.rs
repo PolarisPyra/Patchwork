@@ -16,7 +16,7 @@ use patchwork_server::android::{Device, NetworkSpeed, StateAction, WifiDevice};
 use super::state::AndroidPanel;
 use crate::ui::menu::MenuItem;
 use crate::ui::text_area::{Submitted, TextArea};
-use crate::ui::theme::{FONT_MONO, FS_SM, RADIUS, Theme, theme};
+use crate::ui::theme::{font_mono, FS_SM, radius, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, icon_button, input_box, spinner, tooltip};
 
 /// How often the network is asked which phones announce themselves while pairing is open.
@@ -368,7 +368,7 @@ impl AndroidPanel {
         let input = |field: &Entity<TextArea>, cx: &App| {
             let focused = gpui::Focusable::focus_handle(field.read(cx), cx).is_focused(window);
             input_box(focused, t)
-                .font_family(FONT_MONO)
+                .font_family(font_mono())
                 .child(div().flex_1().min_w_0().child(field.clone()))
         };
         let (title, action, body): (&'static str, &'static str, Vec<AnyElement>) = match sheet {
@@ -565,7 +565,7 @@ impl AndroidPanel {
                 )
                 .min_h(px(32.))
                 .gap(px(8.))
-                .rounded(px(RADIUS))
+                .rounded(px(radius()))
                 .px(px(8.))
                 .hover(move |s| s.bg(hover))
                 .child(icon("plugs-connected", 16.).text_color(t.text_muted))
@@ -579,7 +579,7 @@ impl AndroidPanel {
                 .child(
                     div()
                         .flex_none()
-                        .font_family(FONT_MONO)
+                        .font_family(font_mono())
                         .text_size(px(FS_SM))
                         .text_color(t.text_muted)
                         .child(SharedString::from(phone.address.clone())),

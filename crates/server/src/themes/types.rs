@@ -61,10 +61,47 @@ pub struct ThemeFile {
     pub name: String,
     #[serde(default)]
     pub scheme: Scheme,
+    /// The Orchestrator background picked along with it: an animated background's id,
+    /// `butterfly` or `none`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backdrop: Option<String>,
     pub colors: Anchors,
     /// The colors it names itself, in place of the ones mixed from `colors`.
     #[serde(default)]
     pub overrides: Overrides,
+    #[serde(default, skip_serializing_if = "Fonts::is_empty")]
+    pub fonts: Fonts,
+    /// How round corners are: the radius of a button's, in pixels. None is the app's own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub radius: Option<f32>,
+}
+
+impl ThemeFile {
+    /// The Orchestrator background it names.
+    #[must_use]
+    pub fn backdrop_choice(&self) -> Option<BackdropChoice> {
+        Some(match self.backdrop.as_deref()? {
+            "none" => BackdropChoice::None,
+            "butterfly" => BackdropChoice::Butterfly,
+            id => BackdropChoice::Scene { id: id.to_string() },
+        })
+    }
+}
+
+/// The font families a color scheme sets. One it leaves out is the app's own.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Fonts {
+    /// The font of the app's own text.
+    pub ui: Option<String>,
+    /// The font of code and terminals.
+    pub code: Option<String>,
+}
+
+impl Fonts {
+    fn is_empty(&self) -> bool {
+        self.ui.is_none() && self.code.is_none()
+    }
 }
 
 /// The colors a color scheme may name itself. One it leaves out is mixed from its four.
@@ -231,7 +268,17 @@ pub struct Entry<T> {
     /// It is a file a person or an agent added, which can be deleted. One Patchwork comes with
     /// is written to the folder anew when it is missing.
     pub custom: bool,
+    /// What is wrong with it that it can still be used with, such as text that is hard to read.
+    pub notes: Vec<String>,
     pub file: T,
+}
+
+/// A file in one of the folders that cannot be used.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Unreadable {
+    /// Its folder and name, as `themes/blossom.json`.
+    pub file: String,
+    pub error: String,
 }
 
 /// A color scheme that can be picked.
@@ -251,6 +298,12 @@ pub enum BackdropChoice {
     /// A picture in Patchwork's backgrounds folder.
     Image {
         file: String,
+        #[serde(default)]
+        dim: Dim,
+        #[serde(default)]
+        fit: Fit,
+        #[serde(default)]
+        blur: bool,
     },
     /// The animated background with this id.
     Scene {
@@ -259,14 +312,77 @@ pub enum BackdropChoice {
     },
 }
 
+impl BackdropChoice {
+    /// The picture with this file name, shown as a picture is until it is set otherwise.
+    #[must_use]
+    pub fn picture(file: String) -> Self {
+        Self::Image {
+            file,
+            dim: Dim::default(),
+            fit: Fit::default(),
+            blur: false,
+        }
+    }
+
+    /// The file name of the picture it shows.
+    #[must_use]
+    pub fn picture_file(&self) -> Option<&str> {
+        match self {
+            Self::Image { file, .. } => Some(file),
+            _ => None,
+        }
+    }
+}
+
+/// How far a picture is dimmed toward the window's color, so the page reads over it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Dim {
+    None,
+    Light,
+    #[default]
+    Medium,
+    Strong,
+}
+
+impl Dim {
+    /// The share of the window's color laid over the picture.
+    #[must_use]
+    pub fn share(self) -> f32 {
+        match self {
+            Self::None => 0.,
+            Self::Light => 0.25,
+            Self::Medium => 0.45,
+            Self::Strong => 0.65,
+        }
+    }
+}
+
+/// How a picture fills the page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Fit {
+    /// It covers the page, cut at the sides it is too long on.
+    #[default]
+    Cover,
+    /// All of it shows, with the window's color beside it.
+    Contain,
+    /// It is stretched to the page's shape.
+    Stretch,
+}
+
 /// The backdrop to draw.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum Shown {
     None,
     #[default]
     Butterfly,
-    /// The picture at this path.
-    Image(PathBuf),
+    /// The picture at `path`, with `dim` of the window's color over it.
+    Image {
+        path: PathBuf,
+        dim: f32,
+        fit: Fit,
+    },
     Scene(Scene),
 }
 

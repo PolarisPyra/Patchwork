@@ -14,7 +14,7 @@ use gpui::{
 
 use crate::ui::markdown::markdown;
 use crate::chat::plan::plan_title;
-use crate::ui::theme::{FS_MD, FS_SM, RADIUS, RADIUS_SM, Theme};
+use crate::ui::theme::{FS_MD, FS_SM, radius, radius_sm, Theme};
 use crate::ui::{BtnKind, badge, btn, button, icon, popup_shadow, slug_file_name};
 use crate::workspace::Workspace;
 
@@ -140,7 +140,7 @@ pub fn proposed_plan(
             .flex()
             .w_full()
             .items_center()
-            .rounded(px(RADIUS_SM))
+            .rounded(px(radius_sm()))
             .px(px(8.))
             .py(px(5.))
             .whitespace_nowrap()
@@ -176,7 +176,7 @@ pub fn proposed_plan(
             .flex()
             .flex_col()
             .min_w(px(180.))
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .border_color(t.border)
             .bg(t.bg_panel)
@@ -205,7 +205,7 @@ pub fn proposed_plan(
         .aria_expanded(menu_open)
         .justify_center()
         .size(px(24.))
-        .rounded(px(RADIUS_SM))
+        .rounded(px(radius_sm()))
         .border_1()
         .border_color(t.border)
         .text_color(t.text_muted)

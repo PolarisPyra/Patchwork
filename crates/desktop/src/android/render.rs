@@ -12,7 +12,7 @@ use patchwork_server::android::{self, Sdk};
 
 use super::state::AndroidPanel;
 use crate::ui::menu::Menu;
-use crate::ui::theme::{FONT_MONO, FS_LG, FS_SM, FS_XS, RADIUS, Theme, theme};
+use crate::ui::theme::{font_mono, FS_LG, FS_SM, FS_XS, radius, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, icon_button, input_box, scrollbar, spinner, tooltip};
 
 /// What dismissing an alert does.
@@ -351,7 +351,7 @@ impl AndroidPanel {
             .child(
                 input_box(focused, t)
                     .flex_1()
-                    .font_family(FONT_MONO)
+                    .font_family(font_mono())
                     .child(div().flex_1().min_w_0().child(self.sdk_field.clone())),
             )
             .child(
@@ -389,7 +389,7 @@ impl AndroidPanel {
             .flex()
             .flex_col()
             .gap(px(6.))
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .border_color(t.danger)
             .bg(t.danger_soft)
@@ -445,10 +445,10 @@ impl AndroidPanel {
                                 .tab_index(0)
                                 .max_h(px(220.))
                                 .overflow_y_scroll()
-                                .rounded(px(RADIUS))
+                                .rounded(px(radius()))
                                 .bg(t.bg_app)
                                 .p(px(8.))
-                                .font_family(FONT_MONO)
+                                .font_family(font_mono())
                                 .text_size(px(FS_XS))
                                 .text_color(t.text_muted)
                                 .children(detail.lines().map(|line| {

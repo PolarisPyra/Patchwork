@@ -11,7 +11,7 @@ use patchwork_server::provider::cli_info::InfoCommand;
 use crate::settings::controls::tildify;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
-use crate::ui::theme::{FONT_MONO, FS_LG, FS_SM, FS_XS, RADIUS, RADIUS_SM, theme};
+use crate::ui::theme::{font_mono, FS_LG, FS_SM, FS_XS, radius, radius_sm, theme};
 use crate::ui::{BtnKind, agent_label, agent_logo, btn, icon, icon_button};
 
 pub fn render(
@@ -192,7 +192,7 @@ pub fn render(
                 })
                 .h(px(28.))
                 .px(px(10.))
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .border_1()
                 .text_size(px(FS_SM))
                 .map(|b| {
@@ -241,7 +241,7 @@ pub fn render(
         div()
             .mb(px(12.))
             .overflow_hidden()
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .border_color(t.border)
             .child(
@@ -276,7 +276,7 @@ pub fn render(
                     .overflow_y_scroll()
                     .px(px(12.))
                     .py(px(8.))
-                    .font_family(FONT_MONO)
+                    .font_family(font_mono())
                     .text_size(px(12.))
                     .line_height(px(18.))
                     .child(text),
@@ -305,7 +305,7 @@ pub fn render(
                         .flex_1()
                         .min_w_0()
                         .truncate()
-                        .font_family(FONT_MONO)
+                        .font_family(font_mono())
                         .text_size(px(12.))
                         .child(f.name.clone()),
                 )
@@ -314,7 +314,7 @@ pub fn render(
                         .id(SharedString::from(format!("feature-detail-{}", f.name)))
                         .max_w(px(260.))
                         .truncate()
-                        .font_family(FONT_MONO)
+                        .font_family(font_mono())
                         .text_size(px(FS_XS))
                         .text_color(t.text_muted)
                         .tooltip(crate::ui::tooltip(tip))
@@ -346,7 +346,7 @@ pub fn render(
             .aria_label(what)
             .max_h(px(300.))
             .overflow_y_scroll()
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .border_color(t.border)
             .text_size(px(FS_SM))
@@ -375,7 +375,7 @@ pub fn render(
             .aria_label("Models")
             .mt(px(12.))
             .overflow_hidden()
-            .rounded(px(RADIUS))
+            .rounded(px(radius()))
             .border_1()
             .border_color(t.border)
             .children(info.models.iter().enumerate().map(|(i, m)| {
@@ -418,7 +418,7 @@ pub fn render(
                     .children(m.tag.clone().map(|tag| {
                         div()
                             .flex_none()
-                            .rounded(px(RADIUS_SM))
+                            .rounded(px(radius_sm()))
                             .bg(t.bg_selected_muted)
                             .px(px(6.))
                             .text_size(px(FS_XS))

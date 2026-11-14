@@ -12,7 +12,7 @@ use patchwork_server::settings::TerminalSettings;
 use patchwork_server::terminal::{AttachedTerminal, FrameSink, TerminalFrame};
 
 use crate::panel::Panel;
-use crate::ui::theme::FONT_MONO;
+use crate::ui::theme::font_mono;
 
 /// The page this window's shells are attached as.
 const PAGE: &str = "native";
@@ -64,7 +64,7 @@ impl Metrics {
             .font_family
             .clone()
             .filter(|f| !f.trim().is_empty())
-            .unwrap_or_else(|| FONT_MONO.to_string())
+            .unwrap_or_else(|| font_mono().to_string())
             .into();
         let size = px(settings.font_size);
         let text = window.text_system();

@@ -8,7 +8,7 @@ use patchwork_server::provider::mcp::{self, McpServer, clis};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, letter_badge, switch};
-use crate::ui::theme::{FONT_MONO, FS_LG, FS_SM, FS_XS, RADIUS, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{font_mono, FS_LG, FS_SM, FS_XS, radius, radius_sm, Theme, theme};
 use crate::ui::{BtnKind, btn, icon_button};
 
 use super::{Card, Client, Draft, Own};
@@ -65,7 +65,7 @@ fn use_row(
                 )
                 .min_w_0()
                 .truncate()
-                .font_family(FONT_MONO)
+                .font_family(font_mono())
                 .text_color(muted)
                 .hover(move |s| s.text_color(fg).underline())
                 .tooltip(crate::ui::tooltip("Open in editor"))
@@ -90,7 +90,7 @@ fn use_row(
         .flex()
         .items_center()
         .gap(px(12.))
-        .rounded(px(RADIUS))
+        .rounded(px(radius()))
         .border_1()
         .border_color(t.border)
         .px(px(12.))
@@ -122,7 +122,7 @@ fn use_row(
         .children(u.scope.clone().map(|scope| {
             div()
                 .flex_none()
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .bg(t.bg_hover)
                 .px(px(6.))
                 .text_size(px(FS_XS))
@@ -279,7 +279,7 @@ pub fn render(
                 )
                 .child(
                     div()
-                        .font_family(FONT_MONO)
+                        .font_family(font_mono())
                         .text_size(px(FS_SM))
                         .text_color(t.text_muted)
                         .child(card.target.clone()),
@@ -324,7 +324,7 @@ pub fn render(
                 .items_center()
                 .justify_between()
                 .gap(px(12.))
-                .rounded(px(RADIUS))
+                .rounded(px(radius()))
                 .border_1()
                 .border_color(t.border)
                 .px(px(12.))
@@ -343,10 +343,10 @@ pub fn render(
             .gap(px(6.))
             .children(card.env.iter().map(|e| {
                 div()
-                    .rounded(px(RADIUS_SM))
+                    .rounded(px(radius_sm()))
                     .bg(t.bg_hover)
                     .px(px(6.))
-                    .font_family(FONT_MONO)
+                    .font_family(font_mono())
                     .text_size(px(FS_XS))
                     .text_color(t.text_muted)
                     .child(e.clone())
@@ -397,7 +397,7 @@ pub fn render(
             let body = |d: gpui::Stateful<gpui::Div>| {
                 d.min_w_0()
                     .overflow_hidden()
-                    .rounded(px(RADIUS_SM))
+                    .rounded(px(radius_sm()))
                     .border_1()
                     .px(px(10.))
                     .py(px(6.))
@@ -405,7 +405,7 @@ pub fn render(
                     .child(
                         div()
                             .truncate()
-                            .font_family(FONT_MONO)
+                            .font_family(font_mono())
                             .text_size(px(FS_SM))
                             .child(tool.name.clone()),
                     )

@@ -7,12 +7,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use gpui::{AnyElement, Entity, FontWeight, Role, SharedString, Window, div, prelude::*, px};
+use gpui::{
+    AnyElement, Entity, ExternalPaths, FontWeight, Role, SharedString, Window, div, prelude::*, px,
+};
 use patchwork_server::backgrounds::{BackgroundImage, BackgroundStrength, ChatBackground};
 use patchwork_server::settings::Theme as ThemeSetting;
-use patchwork_server::themes::{BackdropChoice, SavedScene, Scheme, Theme};
+use patchwork_server::themes::{BackdropChoice, CodeTheme, SavedScene, Scheme, Theme, Unreadable};
 
 use self::cards::{Slot, add_picture_card, backdrop_cards, grid, scheme_cards};
+use self::picture::picture_rows;
 use self::reading::{code_theme_row, font_row, installed_fonts, motion_row, text_size_row};
 use super::{SettingsDialog, SettingsEvent};
 use crate::orchestrator::PreviewFlight;
@@ -22,7 +25,9 @@ use crate::ui::theme::{FS_SM, theme};
 use crate::ui::{BtnKind, btn, icon_button, spinner};
 
 mod cards;
+mod picture;
 mod reading;
+mod share;
 
 const STRENGTHS: [(BackgroundStrength, &str); 3] = [
     (BackgroundStrength::Subtle, "Subtle"),
@@ -65,6 +70,9 @@ pub struct ThemesState {
     picker: Option<Entity<BackgroundPicker>>,
     themes: Vec<Theme>,
     scenes: Vec<Arc<SavedScene>>,
+    codes: Vec<CodeTheme>,
+    /// The files in the folders that cannot be used.
+    unreadable: Vec<Unreadable>,
     /// The butterfly on its backdrop's card.
     flight: PreviewFlight,
     pictures: Vec<BackgroundImage>,
@@ -86,15 +94,24 @@ impl SettingsDialog {
         self.run(
             move || {
                 let pictures = server.list_background_images().unwrap_or_default();
-                (server.list_themes(), server.list_scenes(), pictures)
+                let files = (server.list_code_themes(), server.unreadable_themes());
+                (server.list_themes(), server.list_scenes(), pictures, files)
             },
-            |d, (themes, scenes, pictures), _| {
+            |d, (themes, scenes, pictures, (codes, unreadable)), _| {
                 d.themes.themes = themes;
                 d.themes.scenes = scenes.into_iter().map(Arc::new).collect();
                 d.themes.pictures = pictures;
+                d.themes.codes = codes;
+                d.themes.unreadable = unreadable;
             },
             cx,
         );
+    }
+
+    /// A file in one of the theme folders changed: what can be picked is read again.
+    pub fn themes_changed(&mut self, cx: &mut Context<Self>) {
+        self.themes.loaded = false;
+        cx.notify();
     }
 
     /// Deletes a file. A setting that picked it goes back to what it is without one.
@@ -168,7 +185,7 @@ impl SettingsDialog {
                     Ok(file) => {
                         d.themes.error = None;
                         d.update(
-                            |s| s.orchestrator_backdrop = BackdropChoice::Image { file },
+                            |s| s.orchestrator_backdrop = BackdropChoice::picture(file),
                             cx,
                         );
                         d.load_themes(cx);
@@ -362,6 +379,10 @@ fn generator(
                 b.on_click(cx.listener(move |d, _, _, cx| d.generate_themed(kind, cx)))
             }),
         )
+        .children((kind == Kind::Scheme).then(|| {
+            icon_button("import-theme", "Import a theme", "plus", 16., cx)
+                .on_click(cx.listener(|d, _, _, cx| d.pick_themes(cx)))
+        }))
         .child(
             icon_button(
                 SharedString::from(format!("folder-{}", kind.field())),
@@ -463,22 +484,59 @@ pub fn render(
         code_theme_row(d, Scheme::Dark, cx),
     ];
     let (font, text_size, motion) = (font_row(d, cx), text_size_row(d, cx), motion_row(d, cx));
+    let code_folder = d.server.code_themes_dir();
+    let code_files = token_row("Code themes", None, &t).child(
+        icon_button(
+            "folder-code-themes",
+            "Open the code themes folder",
+            "folder-open",
+            16.,
+            cx,
+        )
+        .on_click(cx.listener(move |_, _, _, cx| {
+            SettingsDialog::open_themed_folder(code_folder.clone(), cx);
+        })),
+    );
+    let picture = match d.settings.orchestrator_backdrop {
+        BackdropChoice::Image { dim, fit, blur, .. } => picture_rows(dim, fit, blur, cx),
+        _ => Vec::new(),
+    };
+    let unreadable: Vec<_> = d
+        .themes
+        .unreadable
+        .iter()
+        .map(|broken| {
+            alert(
+                format!("unreadable-{}", broken.file),
+                format!("{} cannot be used: {}", broken.file, broken.error),
+                t.danger,
+            )
+        })
+        .collect();
 
     div()
+        .id("themes-pane")
         .flex()
         .flex_col()
+        // A theme's file dropped anywhere on the pane is imported.
+        .drag_over::<ExternalPaths>(move |style, _, _, _| style.bg(t.bg_hover))
+        .on_drop(cx.listener(|d, files: &ExternalPaths, _, cx| {
+            d.import_themes(files.paths().to_vec(), cx);
+        }))
         .children(
             d.themes
                 .error
                 .clone()
                 .map(|e| alert("themes-error", e, t.danger)),
         )
+        .children(unreadable)
         .child(section_heading("Color scheme", true, &t))
         .child(follow)
         .children(schemes)
         .child(new_scheme)
         .child(section_heading("Code", false, &t))
         .children(code)
+        .child(code_files)
         .child(section_heading("Orchestrator background", false, &t))
         .child(grid(
             "backdrops",
@@ -486,6 +544,7 @@ pub fn render(
             backdrops,
             Some(add_picture),
         ))
+        .children(picture)
         .child(new_scene)
         .child(motion)
         .child(section_heading("Chats", false, &t))

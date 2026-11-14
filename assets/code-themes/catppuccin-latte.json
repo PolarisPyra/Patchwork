@@ -1,0 +1,14 @@
+{
+  "name": "Catppuccin Latte",
+  "scheme": "light",
+  "colors": {
+    "keyword": "#8839ef",
+    "string": "#40a02b",
+    "property": "#7287fd",
+    "ty": "#df8e1d",
+    "number": "#fe640b",
+    "comment": "#7c7f93",
+    "function": "#1e66f5",
+    "tag": "#209fb5"
+  }
+}

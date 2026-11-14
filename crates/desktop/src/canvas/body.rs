@@ -8,7 +8,7 @@ use gpui::{
     prelude::*, px, relative, uniform_list,
 };
 use patchwork_server::threads::{Message, StepStatus};
-use crate::ui::theme::{FONT_MONO, FS_MD, FS_SM, Theme, theme};
+use crate::ui::theme::{font_mono, FS_MD, FS_SM, Theme, theme};
 use crate::ui::{BtnKind, base_name, btn, icon, spinner, tooltip};
 use super::state::{Canvas, CanvasTab};
 
@@ -142,7 +142,7 @@ impl Canvas {
         .track_scroll(&self.code_scroll)
         .size_full()
         .py(px(12.))
-        .font_family(FONT_MONO)
+        .font_family(font_mono())
         .text_size(px(FS_MD))
         .line_height(relative(1.65))
         .text_color(t.text)
@@ -280,7 +280,7 @@ pub(super) fn plan_view(message: Option<&Message>, t: &Theme) -> gpui::Div {
                             .id(i)
                             .py(px(4.))
                             .px(px(8.))
-                            .font_family(FONT_MONO)
+                            .font_family(font_mono())
                             .text_size(px(FS_SM))
                             .truncate()
                             .tooltip(tooltip(file.clone()))

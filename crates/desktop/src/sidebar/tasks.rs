@@ -10,7 +10,7 @@ use gpui::{
 };
 use patchwork_server::projects::Project;
 use patchwork_server::threads::Thread;
-use crate::ui::theme::{FS_MD, RADIUS_SM, theme};
+use crate::ui::theme::{FS_MD, radius_sm, theme};
 use crate::ui::{button, icon, icon_button, scrollbar};
 use crate::workspace::Workspace;
 use super::render::{empty_row, section_label, twistie};
@@ -168,7 +168,7 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
             .right(px(6.))
             .flex()
             .items_center()
-            .rounded(px(RADIUS_SM))
+            .rounded(px(radius_sm()))
             .group_hover(group.clone(), |s| s.bg(t.tree_hover))
             .when(sorted, |row| {
                 row.child(reveal(

@@ -7,7 +7,7 @@ use patchwork_server::provider::api::config::KeyStore;
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
-use crate::ui::theme::{FS_SM, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_SM, radius_sm, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, icon_button, provider_logo};
 
 /// A field's name over it.
@@ -144,7 +144,7 @@ pub fn render(
                 )
                 .size(px(32.))
                 .justify_center()
-                .rounded(px(RADIUS_SM))
+                .rounded(px(radius_sm()))
                 .border_1()
                 .border_dashed()
                 .border_color(if logo.is_some() {

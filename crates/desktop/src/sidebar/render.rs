@@ -7,7 +7,7 @@ use gpui::{
     AnyElement, Div, ExternalPaths, FontWeight, MouseButton, MouseDownEvent, Role, div, prelude::*,
     px,
 };
-use crate::ui::theme::{FS_MD, FS_SM, RADIUS_SM, Theme, theme};
+use crate::ui::theme::{FS_MD, FS_SM, radius_sm, Theme, theme};
 use crate::ui::{button, icon};
 use crate::workspace::{SIDEBAR_MAX, SIDEBAR_MIN, View, Workspace};
 use super::tasks::tasks_view;
@@ -104,7 +104,7 @@ pub fn render(
                     .h(px(32.))
                     .flex_none()
                     .gap(px(6.))
-                    .rounded(px(RADIUS_SM))
+                    .rounded(px(radius_sm()))
                     .border_1()
                     .border_color(t.border)
                     .bg(t.bg_input)
