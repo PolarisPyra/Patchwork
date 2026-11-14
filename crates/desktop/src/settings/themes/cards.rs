@@ -295,7 +295,15 @@ pub(super) fn card(
                 .items_center()
                 .gap(px(4.))
                 .text_size(px(fs_sm()))
-                .child(div().flex_1().min_w_0().truncate().child(name))
+                .child(
+                    div()
+                        .id("name")
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .tooltip(tooltip(name.clone()))
+                        .child(name),
+                )
                 .children(warning)
                 .children(buttons),
         )

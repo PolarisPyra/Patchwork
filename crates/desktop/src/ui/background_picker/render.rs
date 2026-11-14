@@ -1,385 +1,26 @@
-//! The background picker, shared by Settings → General and a
-//! chat's own background dialog: the default, the presets, the butterfly and the animated
-//! backgrounds, and the pictures picked from disk,
-//! each removable with a short while to take it back.
+//! The picker drawn: its cards in a wrapping grid, the card that adds a picture, and the line
+//! that takes a removed picture back.
 
 // Rust guideline compliant 2026-10-09
 
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
-use std::time::Duration;
 
 use gpui::{
-    AnyElement, ClipboardEntry, Entity, EventEmitter, FocusHandle, FontWeight, KeyDownEvent,
-    MouseButton, MouseDownEvent, ObjectFit, Pixels, Point, Role, SharedString, Toggled, Window,
-    div, img, prelude::*, px, relative,
+    AnyElement, FocusHandle, FontWeight, KeyDownEvent, MouseButton, MouseDownEvent, ObjectFit,
+    Role, SharedString, Toggled, Window, canvas, div, img, prelude::*, px, relative,
 };
-use patchwork_server::Server;
-use patchwork_server::backgrounds::{BackgroundImage, ChatBackground, RemovedBackground};
+use patchwork_server::backgrounds::ChatBackground;
 
-use patchwork_server::themes::SavedScene;
-
-use crate::orchestrator::{PreviewFlight, butterfly_preview, scene_preview};
+use super::state::{BackgroundPicker, CARD, GAP, PICTURE, SHARED_VEIL};
+use crate::orchestrator::{butterfly_preview, scene_preview};
 use crate::ui::backdrop::{PRESETS, preset_fill};
-use crate::ui::menu::{Menu, MenuItem};
-use crate::ui::theme::{applied, fs_sm, radius, radius_sm, Theme, theme};
+use crate::ui::menu::Menu;
+use crate::ui::theme::{Theme, applied, fs_sm, radius, radius_sm, theme};
 use crate::ui::{button, focus_ring, icon, spinner, tooltip};
 
-/// How long a deleted picture can be brought back from the picker.
-const UNDO: Duration = Duration::from_secs(6);
-
-const PICTURE_EXTENSIONS: [&str; 5] = ["png", "jpg", "jpeg", "webp", "gif"];
-
-/// A card's width and the height of its picture, the same as a background's card in Settings.
-const CARD: f32 = 150.;
-const PICTURE: f32 = 64.;
-
-/// How much of the window color covers the shared background on "Same as all chats".
-const SHARED_VEIL: f32 = 0.55;
-
-pub enum PickerEvent {
-    /// A choice was picked; None is "Same as all chats".
-    Picked(Option<ChatBackground>),
-    /// A picture was removed or brought back, which moves the backgrounds that showed it.
-    PicturesChanged,
-}
-
-pub struct BackgroundPicker {
-    server: Arc<Server>,
-    label: &'static str,
-    value: Option<ChatBackground>,
-    /// What the first choice picks: "No background" in Settings, and for one chat None, the
-    /// background all chats share.
-    cleared: Option<ChatBackground>,
-    /// The background all chats share, shown on the first choice when it picks None.
-    shared: Option<ChatBackground>,
-    images: Option<Vec<BackgroundImage>>,
-    /// The animated backgrounds, read with the pictures.
-    scenes: Vec<Arc<SavedScene>>,
-    /// Where the butterfly on its choice is, kept between frames.
-    flight: PreviewFlight,
-    importing: bool,
-    /// The picture just removed, by name, with what takes it back.
-    undo: Option<(String, RemovedBackground)>,
-    error: Option<String>,
-    /// One per choice, in order, for the arrow keys to move the focus along.
-    radios: Vec<FocusHandle>,
-    /// The menu a right click or the menu key opened on a picture, where it opened, and the
-    /// picture's place among the choices, which takes the focus when the menu closes.
-    menu: Option<(Entity<Menu>, Point<Pixels>, usize)>,
-}
-
-impl EventEmitter<PickerEvent> for BackgroundPicker {}
-
-fn is_picture(path: &str) -> bool {
-    path.rsplit_once('.')
-        .is_some_and(|(_, ext)| PICTURE_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
-}
-
 impl BackgroundPicker {
-    pub fn new(
-        server: Arc<Server>,
-        label: &'static str,
-        value: Option<ChatBackground>,
-        cleared: Option<ChatBackground>,
-        shared: Option<ChatBackground>,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        let mut this = Self {
-            server,
-            label,
-            value,
-            cleared,
-            shared,
-            images: None,
-            scenes: Vec::new(),
-            flight: PreviewFlight::default(),
-            importing: false,
-            undo: None,
-            error: None,
-            radios: Vec::new(),
-            menu: None,
-        };
-        this.load_images(cx);
-        this
-    }
-
-    /// Follows the value and the shared background as they are saved elsewhere.
-    pub fn set_value(&mut self, value: Option<ChatBackground>, shared: Option<ChatBackground>) {
-        self.value = value;
-        self.shared = shared;
-    }
-
-    /// Shows why the last pick was not saved, with the value as it stands.
-    pub fn failed(&mut self, value: Option<ChatBackground>, error: String, cx: &mut Context<Self>) {
-        self.value = value;
-        self.error = Some(error);
-        cx.notify();
-    }
-
-    fn load_images(&mut self, cx: &mut Context<Self>) {
-        let server = Arc::clone(&self.server);
-        let task =
-            cx.background_spawn(
-                async move { (server.list_background_images(), server.list_scenes()) },
-            );
-        cx.spawn(async move |this, cx| {
-            let (images, scenes) = task.await;
-            let _ = this.update(cx, |p, cx| {
-                p.scenes = scenes.into_iter().map(Arc::new).collect();
-                match images {
-                    Ok(images) => p.images = Some(images),
-                    Err(e) => p.error = Some(e.to_string()),
-                }
-                cx.notify();
-            });
-        })
-        .detach();
-    }
-
-    /// Lists the pictures again and picks `file`, a picture saved from outside the picker.
-    pub fn added(&mut self, file: String, cx: &mut Context<Self>) {
-        self.load_images(cx);
-        cx.emit(PickerEvent::PicturesChanged);
-        self.pick(Some(ChatBackground::Image { file }), cx);
-    }
-
-    fn pick(&mut self, background: Option<ChatBackground>, cx: &mut Context<Self>) {
-        self.error = None;
-        self.value.clone_from(&background);
-        cx.emit(PickerEvent::Picked(background));
-        cx.notify();
-    }
-
-    /// Asks for a picture, copies it into Patchwork's folder, and picks it.
-    fn choose_picture(&mut self, cx: &mut Context<Self>) {
-        let picked = cx.prompt_for_paths(gpui::PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: false,
-            prompt: None,
-        });
-        cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(paths))) = picked.await else {
-                return;
-            };
-            let Some(path) = paths
-                .first()
-                .map(|p| p.to_string_lossy().into_owned())
-                .filter(|p| is_picture(p))
-            else {
-                return;
-            };
-            let _ = this.update(cx, |p, cx| {
-                p.add(
-                    move |s| s.import_background_image(&path).map(|f| vec![f]),
-                    cx,
-                );
-            });
-        })
-        .detach();
-    }
-
-    /// Ctrl+V: a picture copied in a file manager comes as its path, a copied image as its pixels.
-    fn paste(&mut self, cx: &mut Context<Self>) {
-        let (mut paths, mut pixels) = (Vec::new(), None);
-        for entry in cx
-            .read_from_clipboard()
-            .iter()
-            .flat_map(gpui::ClipboardItem::entries)
-        {
-            match entry {
-                ClipboardEntry::Image(image) => pixels = Some(image.bytes.clone()),
-                ClipboardEntry::String(s) => paths.extend(
-                    s.text()
-                        .lines()
-                        .map(|l| l.trim().trim_start_matches("file://").to_string())
-                        .filter(|p| is_picture(p) && std::path::Path::new(p).is_file()),
-                ),
-                ClipboardEntry::ExternalPaths(_) => {}
-            }
-        }
-        self.add(
-            move |s| match pixels {
-                _ if !paths.is_empty() => {
-                    paths.iter().map(|p| s.import_background_image(p)).collect()
-                }
-                Some(bytes) => s.import_background_bytes(bytes, None).map(|f| vec![f]),
-                None => Err("The clipboard holds no picture".into()),
-            },
-            cx,
-        );
-    }
-
-    /// Saves the pictures `load` brings in, off the main thread, and picks the last.
-    fn add(
-        &mut self,
-        load: impl FnOnce(&Server) -> Result<Vec<String>, patchwork_server::Error> + Send + 'static,
-        cx: &mut Context<Self>,
-    ) {
-        self.importing = true;
-        self.error = None;
-        cx.notify();
-        let server = Arc::clone(&self.server);
-        let task = cx.background_spawn(async move { load(&server) });
-        cx.spawn(async move |this, cx| {
-            let added = task.await;
-            let _ = this.update(cx, |p, cx| {
-                p.importing = false;
-                match added {
-                    Ok(files) => {
-                        p.load_images(cx);
-                        cx.emit(PickerEvent::PicturesChanged);
-                        if let Some(file) = files.last() {
-                            p.pick(Some(ChatBackground::Image { file: file.clone() }), cx);
-                        }
-                    }
-                    Err(e) => p.error = Some(e.to_string()),
-                }
-                cx.notify();
-            });
-        })
-        .detach();
-    }
-
-    /// What each choice picks, in order: the first choice, the presets, the butterfly, the
-    /// animated backgrounds, then the pictures.
-    fn choices(&self) -> Vec<Option<ChatBackground>> {
-        // The order of the Orchestrator's backgrounds in Settings.
-        std::iter::once(self.cleared.clone())
-            .chain(std::iter::once(Some(ChatBackground::Butterfly)))
-            .chain(
-                self.scenes
-                    .iter()
-                    .map(|s| Some(ChatBackground::Scene { id: s.id.clone() })),
-            )
-            .chain(
-                PRESETS
-                    .iter()
-                    .map(|&(id, _)| Some(ChatBackground::Preset { id: id.to_string() })),
-            )
-            .chain(self.images.iter().flatten().map(|i| {
-                Some(ChatBackground::Image {
-                    file: i.file.clone(),
-                })
-            }))
-            .collect()
-    }
-
-    /// The choices are one stop for Tab; the arrow keys move between them and pick, as in any
-    /// group of radio buttons, with Up and Down moving a row of the grid.
-    fn on_key(&mut self, e: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        let ks = &e.keystroke;
-        if ks.key == "v" && (ks.modifiers.control || ks.modifiers.platform) {
-            cx.stop_propagation();
-            return self.paste(cx);
-        }
-        let Some(at) = self.radios.iter().position(|f| f.is_focused(window)) else {
-            return;
-        };
-        let choices = self.choices();
-        let last = choices.len().saturating_sub(1);
-        let next = match ks.key.as_str() {
-            // The cards wrap to the width they are given, so Up and Down step like Left and Right.
-            "right" | "down" => at + 1,
-            "left" | "up" => at.saturating_sub(1),
-            "home" => 0,
-            "end" => last,
-            _ => return,
-        }
-        .min(last);
-        cx.stop_propagation();
-        if let (Some(focus), Some(choice)) = (self.radios.get(next), choices.get(next)) {
-            window.focus(focus, cx);
-            self.pick(choice.clone(), cx);
-        }
-    }
-
-    /// Whether the first choice is the one picked.
-    fn clear_checked(&self) -> bool {
-        match (&self.cleared, &self.value) {
-            (None, value) => value.is_none(),
-            (Some(cleared), Some(value)) => {
-                std::mem::discriminant(cleared) == std::mem::discriminant(value)
-            }
-            (Some(_), None) => false,
-        }
-    }
-
-    /// Deletes a picture, and moves whatever showed it back to its default, for a while
-    /// offering to take that back.
-    pub fn remove_picture(&mut self, file: &str, name: String, cx: &mut Context<Self>) {
-        self.error = None;
-        match self.server.remove_background_image(file) {
-            Ok(removed) => {
-                self.undo = Some((name.clone(), removed));
-                self.load_images(cx);
-                cx.emit(PickerEvent::PicturesChanged);
-                cx.spawn(async move |this, cx| {
-                    cx.background_executor().timer(UNDO).await;
-                    let _ = this.update(cx, |p, cx| {
-                        if p.undo.as_ref().is_some_and(|(n, _)| *n == name) {
-                            p.undo = None;
-                            cx.notify();
-                        }
-                    });
-                })
-                .detach();
-            }
-            Err(e) => self.error = Some(e.to_string()),
-        }
-        cx.notify();
-    }
-
-    /// Opens the menu of the picture at `at` among the choices: its one row deletes it.
-    fn open_menu(
-        &mut self,
-        (at, file, name): (usize, String, String),
-        position: Point<Pixels>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let picker = cx.entity().downgrade();
-        let removed = name.clone();
-        let delete = MenuItem::new("Delete", move |_, cx| {
-            let _ = picker.update(cx, |p, cx| p.remove_picture(&file, removed.clone(), cx));
-        })
-        .icon("trash")
-        .danger();
-        let menu = Menu::open_for(
-            name,
-            vec![delete],
-            window,
-            cx,
-            |p: &mut Self, window, cx| {
-                // The picture may be gone, and then the choice now in its place takes the focus.
-                if let Some((_, _, at)) = p.menu.take() {
-                    let focus = p.radios.get(at).or_else(|| p.radios.first());
-                    if let Some(focus) = focus {
-                        window.focus(focus, cx);
-                    }
-                }
-                cx.notify();
-            },
-        );
-        self.menu = Some((menu, position, at));
-        cx.notify();
-    }
-
-    fn take_back(&mut self, cx: &mut Context<Self>) {
-        let Some((_, removed)) = self.undo.take() else {
-            return;
-        };
-        match self.server.restore_background_image(&removed) {
-            Ok(()) => {
-                self.load_images(cx);
-                cx.emit(PickerEvent::PicturesChanged);
-            }
-            Err(e) => self.error = Some(e.to_string()),
-        }
-        cx.notify();
-    }
-
     /// The first choice: "No background", or the shared background under a veil.
     fn clear_choice(&self, focus: &FocusHandle, t: &Theme, cx: &mut Context<Self>) -> AnyElement {
         let checked = self.clear_checked();
@@ -464,7 +105,7 @@ fn swatch(
         .flex_none()
         .flex()
         .flex_col()
-        .gap(px(4.))
+        .gap(px(GAP))
         .p(px(6.))
         .rounded(px(radius()))
         .border_1()
@@ -493,7 +134,15 @@ fn swatch(
                 .flex()
                 .items_center()
                 .text_size(px(fs_sm()))
-                .child(div().flex_1().min_w_0().truncate().child(name)),
+                .child(
+                    div()
+                        .id("name")
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .tooltip(tooltip(name.clone()))
+                        .child(name),
+                ),
         )
 }
 
@@ -647,6 +296,13 @@ impl Render for BackgroundPicker {
                 )
         });
         let importing = self.importing;
+        let width = Rc::clone(&self.grid_width);
+        let measure = canvas(
+            move |bounds, _, _| width.set(bounds.size.width.into()),
+            |_, (), _, _| {},
+        )
+        .absolute()
+        .inset_0();
         div()
             .on_key_down(cx.listener(Self::on_key))
             .child(
@@ -654,9 +310,12 @@ impl Render for BackgroundPicker {
                     .id("chat-background")
                     .role(Role::RadioGroup)
                     .aria_label(self.label)
+                    .relative()
                     .flex()
                     .flex_wrap()
-                    .gap(px(4.))
+                    .gap(px(GAP))
+                    // Up and Down move a row of the grid, so its width is read as it is drawn.
+                    .child(measure)
                     .child(clear)
                     .child(butterfly)
                     .children(scenes)
