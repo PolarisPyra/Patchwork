@@ -85,7 +85,7 @@ jobs:
             | {group: .[0], entry: .[1], author: .[2], pr: .[3]})' \
             "$RUNNER_TEMP/entries" > "$RUNNER_TEMP/entries.json"
 
-      # DeepSeek picks up to seven entries worth leading with and writes each as a short name and
+      # DeepSeek picks one to seven entries worth leading with and writes each as a short name and
       # one sentence. When this step fails, or the DEEPSEEK_API_KEY secret is not set, the notes
       # are the full list alone.
       - name: Write the highlights
@@ -99,11 +99,11 @@ jobs:
           jq -e 'length > 0' "$RUNNER_TEMP/entries.json" > /dev/null \
             || { echo "Nothing for users since the previous release."; exit 1; }
           cat > "$RUNNER_TEMP/prompt" <<'EOF'
-          Write up to 7 bullet points for the Patchwork update notes. Patchwork is a desktop app for working with coding agents. Each numbered entry below is one change since the last release, already written for users and labelled with its group.
+          Write 1 to 7 bullet points for the Patchwork update notes. Patchwork is a desktop app for working with coding agents. Each numbered entry below is one change since the last release, already written for users and labelled with its group.
 
           Give a feature a bullet only when it lets users do something they could not do before, removes a real limitation they hit in normal use, or cuts meaningful steps or wait time from a common task. Judge the outcome, regardless of the group. A new setting, a large change, or support for one more edge case is not enough.
 
-          Lead with new capabilities. Give a bug fix its own bullet only when the entries show lost work or a core workflow that users could not complete in normal use. Leave out isolated failures, cosmetic polish, and routine fixes. Group entries only when they deliver the same user outcome. Seven is a ceiling. Stop when the qualifying changes run out, even if that leaves zero bullets.
+          Lead with new capabilities. Give a bug fix its own bullet only when the entries show lost work or a core workflow that users could not complete in normal use. Leave out isolated failures, cosmetic polish, and routine fixes. Group entries only when they deliver the same user outcome. Seven is a ceiling. Stop when the qualifying changes run out. When none qualifies, give one bullet to the change users will notice most, so the notes always have at least one.
 
           Each bullet has a short feature name and one sentence of at most 20 words. Say what the user can do or what now works. Use names people see in the app and leave out protocol or implementation details. No title, headings, introduction, example prompts, hype, or em dashes.
 
@@ -128,9 +128,11 @@ jobs:
           jq -r '.choices[0].message.content' <<< "$response" > "$RUNNER_TEMP/highlights.json"
           jq -e '.highlights | type == "array"' "$RUNNER_TEMP/highlights.json" > /dev/null \
             || { echo "::warning::The highlights are not in the expected form: $response"; exit 1; }
+          jq -e '.highlights | length > 0' "$RUNNER_TEMP/highlights.json" > /dev/null \
+            || echo "::warning::DeepSeek picked no highlight, so the notes lead with none"
 
       # The notes: the count of changes and contributors, the highlights, and every entry under
-      # "Full changelog", which the app's update notes leave out. Without
+      # "Full changelog", of which the app's update notes show the first ten. Without
       # highlights, the full list alone.
       - name: Write the release notes
         env:
