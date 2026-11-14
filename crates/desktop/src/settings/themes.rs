@@ -157,10 +157,7 @@ impl SettingsDialog {
             },
             move |d, (prompt, id), cx| {
                 d.themes.writing[kind as usize] = Some(id.clone());
-                // Only the backgrounds have the pickers that set it.
-                let pick = matches!(kind, Kind::Scene | Kind::Picture)
-                    .then(|| d.settings.generator_pick().cloned())
-                    .flatten();
+                let pick = d.settings.generator_pick().cloned();
                 cx.emit(SettingsEvent::GenerateTheme(prompt, pick));
                 d.await_themed(kind, id, cx);
             },
@@ -283,10 +280,7 @@ fn generator(
     d.on_submit(kind.field(), move |d, _, cx| d.generate_themed(kind, cx));
     let writing = d.themes.writing[kind as usize].clone();
     let busy = writing.is_some();
-    let chips = match kind {
-        Kind::Scene | Kind::Picture => generator_chips(d, kind.field(), noun, &t, cx),
-        Kind::Scheme | Kind::Code => Vec::new(),
-    };
+    let chips = generator_chips(d, kind.field(), noun, &t, cx);
     let describe = div().flex_1().min_w_0().child(describe);
     let generate = btn(
         SharedString::from(format!("generate-{}", kind.field())),
@@ -309,15 +303,14 @@ fn generator(
     .on_click(cx.listener(move |_, _, _, cx| {
         SettingsDialog::open_themed_folder(folder.clone(), cx);
     }));
-    let row = div().pb(px(10.)).flex().gap(px(8.));
-    let row = if chips.is_empty() {
-        row.items_center()
-            .child(describe)
-            .child(generate)
-            .child(open_folder)
-    } else {
-        // With chips, the description takes the row and they go under it, before Generate.
-        row.flex_col().child(div().flex().child(describe)).child(
+    // The description takes the row, and the chips go under it, before Generate.
+    let row = div()
+        .pb(px(10.))
+        .flex()
+        .flex_col()
+        .gap(px(8.))
+        .child(div().flex().child(describe))
+        .child(
             div()
                 .flex()
                 .items_center()
@@ -326,8 +319,7 @@ fn generator(
                 .child(div().flex_1())
                 .child(generate)
                 .child(open_folder),
-        )
-    };
+        );
     div()
         .flex()
         .flex_col()
