@@ -1,4 +1,4 @@
-//! The controls every view is built from: icons, buttons, the spinner, scrollbars, popups, menus' rows, checkboxes, tooltips and badges.
+//! The controls every view is built from: icons, buttons, the spinner, popups, menus' rows, checkboxes, tooltips and badges.
 
 // Rust guideline compliant 2026-10-09
 
@@ -195,55 +195,6 @@ pub fn overflows<V: 'static>(
         }
     });
     seen.1 > px(0.)
-}
-
-/// A scrollbar thumb for the element `handle` tracks, `width` wide with `inset` of clear space
-/// around it. None when nothing scrolls.
-pub fn scrollbar(handle: &gpui::ScrollHandle, width: f32, inset: f32, color: Hsla) -> Option<Div> {
-    let view = f32::from(handle.bounds().size.height);
-    let max = f32::from(handle.max_offset().y);
-    thumb(
-        view,
-        max,
-        -f32::from(handle.offset().y),
-        width,
-        inset,
-        color,
-    )
-}
-
-/// `scrollbar` for a `list`, sized from the rows it has measured so far.
-pub fn list_scrollbar(state: &gpui::ListState, width: f32, inset: f32, color: Hsla) -> Option<Div> {
-    let view = f32::from(state.viewport_bounds().size.height);
-    let max = f32::from(state.max_offset_for_scrollbar().y);
-    let scrolled = -f32::from(state.scroll_px_offset_for_scrollbar().y);
-    thumb(view, max, scrolled, width, inset, color)
-}
-
-pub(super) fn thumb(
-    view: f32,
-    max: f32,
-    scrolled: f32,
-    width: f32,
-    inset: f32,
-    color: Hsla,
-) -> Option<Div> {
-    if max <= 0. || view <= 0. {
-        return None;
-    }
-    let scrolled = scrolled.clamp(0., max);
-    let thumb = (view * view / (view + max)).max(20.);
-    let top = scrolled / max * (view - thumb);
-    Some(
-        div()
-            .absolute()
-            .top(px(top))
-            .right_0()
-            .w(px(width))
-            .h(px(thumb))
-            .p(px(inset))
-            .child(div().size_full().rounded(px(width / 2.)).bg(color)),
-    )
 }
 
 /// `Dropdown`'s menu: a raised box with a strong border and the popup shadow.
