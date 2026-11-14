@@ -9,7 +9,7 @@ use gpui::{
 use crate::ui::menu::Menu;
 use crate::ui::theme::{FONT_UI, FS_MD, RADIUS, RADIUS_SM, STATUSBAR_H, Theme, theme};
 use crate::ui::{button, display_title, icon};
-use super::state::{SIDEBAR_MAX, SIDEBAR_MIN, View, Workspace};
+use super::state::{Page, SIDEBAR_MAX, SIDEBAR_MIN, View, Workspace};
 use super::bars;
 
 impl Render for Workspace {
@@ -27,7 +27,8 @@ impl Render for Workspace {
         }
         self.sync_mobile(cx);
         let t = *theme(cx);
-        let sidebar = self.view.map(|_| {
+        let orchestrating = self.page == Page::Orchestrator;
+        let sidebar = self.sidebar_view().map(|_| {
             let width = px(self.sidebar_width);
             self.sidebar_region
                 .clone()
@@ -51,7 +52,9 @@ impl Render for Workspace {
             // composer" says; from any control it moves on.
             .on_action(cx.listener(|this, _: &crate::FocusNext, window, cx| {
                 let composer_shown = this.thread.as_ref().is_none_or(|t| t.parent.is_none());
-                if composer_shown && this.focus.is_focused(window) {
+                if this.page == Page::Orchestrator && this.focus.is_focused(window) {
+                    this.orchestrator.update(cx, |o, cx| o.focus(window, cx));
+                } else if composer_shown && this.focus.is_focused(window) {
                     let editor = this.composer.read(cx).editor.clone();
                     window.focus(&gpui::Focusable::focus_handle(editor.read(cx), cx), cx);
                 } else {
@@ -101,14 +104,17 @@ impl Render for Workspace {
             }))
             .on_action(cx.listener(|this, _: &crate::ShowTasks, _, cx| {
                 this.view = Some(View::Tasks);
+                this.page = Page::Chats;
                 cx.notify();
             }))
             .on_action(cx.listener(|this, _: &crate::ShowChanges, _, cx| {
                 this.view = Some(View::Changes);
+                this.page = Page::Chats;
                 cx.notify();
             }))
             .on_action(cx.listener(|this, _: &crate::ShowArchived, _, cx| {
                 this.view = Some(View::Archived);
+                this.page = Page::Chats;
                 cx.notify();
             }))
             .on_action(cx.listener(|this, _: &crate::ToggleTerminal, window, cx| {
@@ -163,7 +169,12 @@ impl Render for Workspace {
                     .min_h_0()
                     .child(self.activity_bar(cx))
                     .children(sidebar)
-                    .child(
+                    .children(orchestrating.then(|| {
+                        self.orchestrator
+                            .clone()
+                            .cached(StyleRefinement::default().flex_1().min_w_0().min_h_0())
+                    }))
+                    .children((!orchestrating).then(|| {
                         div()
                             .flex()
                             .flex_col()
@@ -180,8 +191,8 @@ impl Render for Workspace {
                                     ))
                                     .children(canvas),
                             )
-                            .children(panel),
-                    ),
+                            .children(panel)
+                    })),
             )
             .children(error)
             .children(self.update_card(&t, cx))

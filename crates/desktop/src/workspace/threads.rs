@@ -90,6 +90,8 @@ impl Workspace {
     fn show_thread(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
         let opened = match self.server.thread(id) {
             Ok(thread) => {
+                // A chat opened from the orchestrator page is shown in place of the page.
+                self.page = super::Page::Chats;
                 let changed_project =
                     self.thread.as_ref().map(|t| &t.project_id) != Some(&thread.project_id);
                 // Leaving a chat with its options still open counts as putting them away.

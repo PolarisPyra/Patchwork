@@ -23,6 +23,8 @@ pub use approvals::answer::ApprovalDecision;
 #[doc(inline)]
 pub use goal::{Upkeep, is_upkeep, upkeep};
 #[doc(inline)]
+pub use messages::dispatch::{Dispatched, Route};
+#[doc(inline)]
 pub use messages::queue::FollowUpInput;
 pub(crate) use output::log::log_event;
 pub(crate) use output::stream::publish;
