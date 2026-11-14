@@ -203,7 +203,7 @@ impl Element for Selectable {
         let layout = self.text.layout().clone();
         for (range, color) in &self.chips {
             let range = range.start.min(layout.len())..range.end.min(layout.len());
-            for quad in quads(&layout, &range, false) {
+            for quad in chip_quads(&layout, &range) {
                 let quad = Bounds::from_corners(
                     point(quad.left() - px(CHIP_PAD_X), quad.top() + px(CHIP_INSET_Y)),
                     point(
@@ -619,6 +619,39 @@ fn quads(layout: &TextLayout, range: &Range<usize>, to_edge: bool) -> Vec<Bounds
             point(bounds.left(), start.y + line),
             point(bounds.right(), end.y),
         ));
+    }
+    quads
+}
+
+/// The boxes behind a chip at `range` of a text: one for each line it is on, as wide as the part of
+/// it on that line.
+fn chip_quads(layout: &TextLayout, range: &Range<usize>) -> Vec<Bounds<Pixels>> {
+    let (text, line) = (layout.text(), layout.line_height());
+    let (Some(mut from), Some(part)) = (
+        layout.position_for_index(range.start),
+        text.get(range.clone()),
+    ) else {
+        return Vec::new();
+    };
+    let left = layout.bounds().left();
+    let mut quads = Vec::new();
+    let mut to = from;
+    for (at, letter) in part.char_indices() {
+        let Some(after) = layout.position_for_index(range.start + at + letter.len_utf8()) else {
+            break;
+        };
+        // The place where a line wraps counts as the end of the line before it, so a letter that
+        // ends on a lower line is the first of that line.
+        if after.y > to.y {
+            if to.x > from.x {
+                quads.push(Bounds::from_corners(from, point(to.x, to.y + line)));
+            }
+            from = point(left, after.y);
+        }
+        to = after;
+    }
+    if to.x > from.x {
+        quads.push(Bounds::from_corners(from, point(to.x, to.y + line)));
     }
     quads
 }
