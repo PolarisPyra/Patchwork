@@ -16,7 +16,7 @@ use gpui::{
 use super::look::density_cards;
 use super::reading::{motion_row, text_size_cards};
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{FieldKind, section_heading, select_box, token_row};
+use crate::settings::controls::{FieldKind, select_box, token_row};
 use crate::ui::text_area::Arrow;
 use crate::ui::theme::{FONT_UI, fs_md, radius_sm, theme};
 use crate::ui::{icon, popup, scrollbar};
@@ -330,7 +330,6 @@ pub(in crate::settings) fn interface_pane(
     window: &mut Window,
     cx: &mut Context<SettingsDialog>,
 ) -> AnyElement {
-    let t = *theme(cx);
     d.themes.fonts.load(cx);
     if d.themes.fonts.focus == Some(Focus::Dialog) {
         d.themes.fonts.focus = None;
@@ -341,10 +340,8 @@ pub(in crate::settings) fn interface_pane(
         .id("interface-pane")
         .flex()
         .flex_col()
-        .child(section_heading("Layout", true, &t))
         .child(density_cards(d, cx))
         .child(motion_row(d, cx))
-        .child(section_heading("Text", false, &t))
         .child(font)
         .child(text_size_cards(d, cx))
         .into_any_element()
