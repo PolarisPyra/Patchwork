@@ -162,6 +162,9 @@ impl Server {
             Some(server) if tool == threads::delegate::TOOL => server
                 .runner
                 .run_sub_agent(&server, thread_id, args, stopped),
+            Some(server) if tool == threads::delegate::RESULT => server
+                .runner
+                .sub_agent_result(&server, thread_id, args, stopped),
             Some(server) if threads::chat_tools::is_tool(tool) => server
                 .runner
                 .run_chat_tool(&server, thread_id, tool, args, stopped),
@@ -176,7 +179,7 @@ impl Server {
             weak.upgrade()
                 .map(|server| {
                     let mut tools = server.chat_tools(thread_id);
-                    tools.extend(server.delegate_tool(thread_id));
+                    tools.extend(server.delegate_tools(thread_id));
                     tools.extend(server.android_tools(thread_id));
                     tools
                 })

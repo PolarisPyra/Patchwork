@@ -18,6 +18,10 @@ use crate::{Error, Server};
 /// The tool a chat's agent starts a sub agent on another agent with.
 pub const TOOL: &str = "run_sub_agent";
 
+/// The tool Patchwork's own agent collects the answer of a sub agent it started in the background
+/// with.
+pub const RESULT: &str = "sub_agent_result";
+
 /// What Codex shows a call to [`TOOL`] as: it names every MCP call "MCP", and this is its summary.
 const CODEX_SUMMARY: &str = "patchwork.run_sub_agent";
 
@@ -57,7 +61,9 @@ fn description(caller: AgentKind, pick: &AgentPick) -> String {
              working in the same folder. It sees nothing of this conversation, so the prompt must \
              hold everything it needs, and only its last reply comes back. Use it for work whose \
              steps would crowd this conversation, such as searching a large codebase or \
-             researching a question."
+             researching a question. Your calls run one at a time, so to carry on with your own \
+             work while it runs, set run_in_background: the call then returns its id at once, and \
+             {RESULT} gives its answer when you need it."
         );
     }
     format!(
@@ -76,6 +82,8 @@ pub struct Ask {
     /// A few words for the sub agent's card.
     pub description: String,
     pub prompt: String,
+    /// The call returns once the sub agent has started, and [`RESULT`] gives its answer.
+    pub background: bool,
 }
 
 impl Ask {
@@ -93,23 +101,46 @@ impl Ask {
         Ok(Self {
             description: text("description").to_string(),
             prompt: prompt.to_string(),
+            background: args["run_in_background"] == true,
         })
     }
 }
 
 impl Server {
-    /// The tool as Patchwork's own server lists it for the thread's agent. None when the
-    /// thread's CLI runs its sub agents itself.
-    pub(crate) fn delegate_tool(&self, thread_id: &str) -> Option<Value> {
-        let thread = self.store.thread(thread_id)?;
-        let pick = sub_agent_of(&self.store, &self.store.settings(), &thread)?;
-        Some(json!({
+    /// The tools as Patchwork's own server lists them for the thread's agent: [`TOOL`], and for
+    /// Patchwork's own agent [`RESULT`] with it. Empty when the thread's CLI runs its sub agents
+    /// itself.
+    pub(crate) fn delegate_tools(&self, thread_id: &str) -> Vec<Value> {
+        let Some(thread) = self.store.thread(thread_id) else {
+            return Vec::new();
+        };
+        let Some(pick) = sub_agent_of(&self.store, &self.store.settings(), &thread) else {
+            return Vec::new();
+        };
+        let mut run = json!({
             "name": TOOL,
             "description": description(thread.agent, &pick),
             "inputSchema": {"type": "object", "properties": {
                 "description": {"type": "string", "description": "What the sub agent does, in a few words."},
                 "prompt": {"type": "string", "description": "The whole task, with everything the sub agent needs to know."}
             }, "required": ["description", "prompt"]},
-        }))
+        });
+        // A CLI runs the calls of one message side by side, so only Patchwork's own agent, whose
+        // calls run one at a time, needs a sub agent in the background.
+        if thread.agent != AgentKind::Api {
+            return vec![run];
+        }
+        run["inputSchema"]["properties"]["run_in_background"] = json!({
+            "type": "boolean",
+            "description": "Return at once with the sub agent's id, and carry on while it works.",
+        });
+        let result = json!({
+            "name": RESULT,
+            "description": "Wait for a sub agent started with run_in_background to finish, and return its answer. Call it once you need the answer, and before you finish your reply.",
+            "inputSchema": {"type": "object", "properties": {
+                "sub_agent_id": {"type": "string", "description": "The id run_sub_agent returned."}
+            }, "required": ["sub_agent_id"]},
+        });
+        vec![run, result]
     }
 }
