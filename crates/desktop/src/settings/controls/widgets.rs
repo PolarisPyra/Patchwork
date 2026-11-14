@@ -49,7 +49,7 @@ pub fn token_row(title: impl Into<SharedString>, desc: Option<&str>, t: &Theme) 
         .gap(px(12.))
         .border_b_1()
         .border_color(t.border)
-        .py(px(10.))
+        .py(px(crate::ui::theme::roomy(10.)))
         .child(
             div()
                 .min_w_0()

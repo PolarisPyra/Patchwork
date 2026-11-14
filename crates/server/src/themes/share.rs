@@ -6,7 +6,8 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use super::code::from_base16;
+use super::code::from_base16 as code_base16;
+use super::foreign::{from_base16, from_color_theme, from_zed_family, relaxed};
 use super::library::{CODE, SCENES, THEMES};
 use super::types::{SceneFile, ThemeFile};
 use crate::{Error, Server};
@@ -63,8 +64,8 @@ impl Server {
     }
 
     /// Adds the file at `path` to the folder it belongs in: an exported color scheme with its
-    /// background, a color scheme's, an animated background's or a code theme's own file, or a
-    /// base16 scheme, which becomes a code theme.
+    /// background, a color scheme's, an animated background's or a code theme's own file, or
+    /// another editor's theme: a base16 scheme, a JSON color theme or a Zed theme family.
     ///
     /// # Errors
     ///
@@ -82,10 +83,13 @@ impl Server {
         }
         let text =
             std::fs::read_to_string(path).map_err(|e| format!("couldn't read {name}: {e}"))?;
-        let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) else {
-            let code = from_base16(&text).ok_or_else(|| format!("{name} is not a theme"))?;
-            let id = CODE.add(&code.name, &code)?;
-            return Ok(imported(ImportedKind::Code, id, code.name));
+        let strict = serde_json::from_str::<serde_json::Value>(&text).ok();
+        let Some(json) = strict.or_else(|| relaxed(&text)) else {
+            let code = code_base16(&text).ok_or_else(|| format!("{name} is not a theme"))?;
+            CODE.add(&code.name, &code)?;
+            let theme =
+                from_base16(&text, &code).ok_or_else(|| format!("{name} is not a theme"))?;
+            return add_foreign(vec![theme], &name);
         };
         let unusable = |e: String| format!("{name} cannot be used: {e}");
         if json.get("theme").is_some() {
@@ -105,12 +109,36 @@ impl Server {
             let code = CODE.parse(&text).map_err(unusable)?;
             let id = CODE.add(&code.name, &code)?;
             Ok(imported(ImportedKind::Code, id, code.name))
+        } else if let Some(theme) = from_color_theme(&json, stem(path).as_str()) {
+            add_foreign(vec![theme], &name)
+        } else if json.get("themes").is_some() {
+            add_foreign(from_zed_family(&json), &name)
         } else {
             let scene = SCENES.parse(&text).map_err(unusable)?;
             let id = SCENES.add(&scene.name, &scene)?;
             Ok(imported(ImportedKind::Scene, id, scene.name))
         }
     }
+}
+
+/// Adds the color schemes read from another editor's file, and says which came first.
+fn add_foreign(themes: Vec<ThemeFile>, name: &str) -> Result<Imported, Error> {
+    let mut first = None;
+    for theme in themes {
+        THEMES
+            .check(&theme)
+            .map_err(|e| format!("{name} cannot be used: {e}"))?;
+        let id = THEMES.add(&theme.name, &theme)?;
+        first.get_or_insert(imported(ImportedKind::Scheme, id, theme.name));
+    }
+    first.ok_or_else(|| format!("{name} has no color scheme in it").into())
+}
+
+/// The name of the file at `path` without its extension.
+fn stem(path: &Path) -> String {
+    path.file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 fn imported(kind: ImportedKind, id: String, name: String) -> Imported {

@@ -140,7 +140,7 @@ pub fn render(
 
 pub(super) fn empty_row(text: &'static str, t: &Theme) -> Div {
     div()
-        .h(px(28.))
+        .h(px(crate::ui::theme::roomy(28.)))
         .flex_none()
         .flex()
         .items_center()

@@ -4,9 +4,11 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use super::applied::Density;
 use super::code::Syntax;
 use crate::settings::TextSize;
 
@@ -77,6 +79,12 @@ pub struct ThemeFile {
 }
 
 impl ThemeFile {
+    /// What is hard to read in it: each text whose contrast on the surface is too low.
+    #[must_use]
+    pub fn notes(&self) -> Vec<String> {
+        super::contrast::notes(self)
+    }
+
     /// The Orchestrator background it names.
     #[must_use]
     pub fn backdrop_choice(&self) -> Option<BackdropChoice> {
@@ -268,6 +276,8 @@ pub struct Entry<T> {
     /// It is a file a person or an agent added, which can be deleted. One Patchwork comes with
     /// is written to the folder anew when it is missing.
     pub custom: bool,
+    /// It is one Patchwork comes with whose file in the folder was changed, so it can be reset.
+    pub edited: bool,
     /// What is wrong with it that it can still be used with, such as text that is hard to read.
     pub notes: Vec<String>,
     pub file: T,
@@ -287,6 +297,25 @@ pub type Theme = Entry<ThemeFile>;
 /// An animated background that can be picked.
 pub type SavedScene = Entry<SceneFile>;
 
+/// The most a picture is blurred.
+pub const MAX_BLUR: u8 = 20;
+
+/// How far a picture is blurred: a level, or the on and off settings saved before there were
+/// levels.
+fn blur_level<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u8, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Saved {
+        Switch(bool),
+        Level(u8),
+    }
+    Ok(match Saved::deserialize(deserializer)? {
+        Saved::Switch(true) => 8,
+        Saved::Switch(false) => 0,
+        Saved::Level(level) => level.min(MAX_BLUR),
+    })
+}
+
 /// What the Orchestrator page shows behind it, as Settings keeps it.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -302,8 +331,9 @@ pub enum BackdropChoice {
         dim: Dim,
         #[serde(default)]
         fit: Fit,
-        #[serde(default)]
-        blur: bool,
+        /// How far it is blurred, from 0 for sharp to [`MAX_BLUR`].
+        #[serde(default, deserialize_with = "blur_level")]
+        blur: u8,
     },
     /// The animated background with this id.
     Scene {
@@ -320,7 +350,7 @@ impl BackdropChoice {
             file,
             dim: Dim::default(),
             fit: Fit::default(),
-            blur: false,
+            blur: 0,
         }
     }
 
@@ -369,6 +399,8 @@ pub enum Fit {
     Contain,
     /// It is stretched to the page's shape.
     Stretch,
+    /// It repeats at its own size, as a pattern does.
+    Tile,
 }
 
 /// The backdrop to draw.
@@ -377,13 +409,23 @@ pub enum Shown {
     None,
     #[default]
     Butterfly,
-    /// The picture at `path`, with `dim` of the window's color over it.
+    /// The picture at `path`, with `dim` of the window's color over it. `size` is the width
+    /// and height a tile of it is drawn at.
     Image {
         path: PathBuf,
         dim: f32,
         fit: Fit,
+        size: Option<(u32, u32)>,
     },
     Scene(Scene),
+}
+
+/// A backdrop, and the kind of text that reads over it.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Backdrop {
+    pub shown: Shown,
+    /// Whether it is made for light or dark text over it. None follows the app.
+    pub scheme: Option<Scheme>,
 }
 
 /// The colors a window is drawn in.
@@ -435,12 +477,22 @@ pub struct Applied {
     pub code_light: Option<Syntax>,
     /// The picked code theme's colors in a dark window. None uses the palette's own.
     pub code_dark: Option<Syntax>,
-    pub backdrop: Shown,
-    /// Whether the backdrop is made for light or dark text over it. None follows the app.
-    pub backdrop_scheme: Option<Scheme>,
+    pub backdrop: Backdrop,
+    /// The backdrops of a light window and of a dark one, when `paint` follows the system and
+    /// each has its own. `backdrop` is then the one of the window that is showing.
+    pub system_backdrops: Option<Box<[Backdrop; 2]>>,
+    /// The color buttons, links and what is selected are drawn in, in place of the palette's.
+    pub accent: Option<Color>,
+    /// The font family of the app's own text, in place of the palette's.
+    pub ui_font: Option<String>,
+    /// The font family of code and terminals, in place of the palette's.
+    pub code_font: Option<String>,
     /// The font family chats are set in. None is the app's own.
     pub chat_font: Option<String>,
     pub text_size: TextSize,
+    pub density: Density,
+    /// How long until the clock or the sun changes what this comes to. None when neither does.
+    pub switch_in: Option<Duration>,
     /// Nothing moves on its own: animations show their resting state.
     pub reduce_motion: bool,
 }

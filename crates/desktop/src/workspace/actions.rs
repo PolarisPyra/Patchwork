@@ -3,6 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use futures::StreamExt;
 use gpui::{Window, prelude::*};
@@ -207,8 +208,35 @@ impl Workspace {
                     this.transcript_list.remeasure();
                 }
                 cx.refresh_windows();
+                this.await_theme_switch(window, cx);
             });
         })
         .detach();
+    }
+
+    /// Draws the theme anew when the clock or the sun next changes it. The wait is cut into
+    /// short ones, so a computer that slept still switches soon after it wakes.
+    pub(super) fn await_theme_switch(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(wait) = crate::ui::theme::applied(cx).switch_in else {
+            self.theme_switch = None;
+            return;
+        };
+        let wait = wait.min(Duration::from_secs(300)) + Duration::from_secs(1);
+        self.theme_switch = Some(cx.spawn_in(window, async move |this, cx| {
+            cx.background_executor().timer(wait).await;
+            let _ = this.update_in(cx, Self::apply_theme);
+        }));
+    }
+
+    /// Draws the app in the open project's look once another project is the open one.
+    pub(super) fn follow_project_look(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.themed_project == self.settings.active_project_id {
+            return;
+        }
+        self.themed_project
+            .clone_from(&self.settings.active_project_id);
+        if !self.settings.project_looks.is_empty() {
+            self.apply_theme(window, cx);
+        }
     }
 }

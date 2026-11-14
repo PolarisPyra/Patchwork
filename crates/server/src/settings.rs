@@ -12,7 +12,7 @@ use crate::backgrounds::{BackgroundStrength, ChatBackground};
 use crate::permissions::PermissionSettings;
 use crate::projects::Project;
 use crate::provider::AgentKind;
-use crate::themes::BackdropChoice;
+use crate::themes::{BackdropChoice, Color, Density, Follow, ProjectLook};
 use crate::Server;
 use crate::{permissions, skills};
 
@@ -126,6 +126,22 @@ pub struct Settings {
     pub reduce_motion: bool,
     /// What the Orchestrator page shows behind it.
     pub orchestrator_backdrop: BackdropChoice,
+    /// What it shows in a light window while `theme` is System. None is `orchestrator_backdrop`.
+    pub system_light_backdrop: Option<BackdropChoice>,
+    /// What it shows in a dark window while `theme` is System. None is `orchestrator_backdrop`.
+    pub system_dark_backdrop: Option<BackdropChoice>,
+    /// What decides whether `theme` System is light or dark.
+    pub follow: Follow,
+    /// The color of buttons, links and what is selected, in place of the color scheme's.
+    pub accent: Option<Color>,
+    /// The font family of the app's own text. None is the color scheme's, else the app's.
+    pub ui_font: Option<String>,
+    /// The font family of code and terminals. None is the color scheme's, else the app's.
+    pub code_font: Option<String>,
+    /// How much room rows and their padding take.
+    pub density: Density,
+    /// The color scheme and accent of projects that have their own, by project id.
+    pub project_looks: HashMap<String, ProjectLook>,
     /// Legacy switch for the import log, migrated into `logging` on load.
     #[serde(skip_serializing)]
     pub import_log_disabled: bool,

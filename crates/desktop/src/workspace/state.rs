@@ -8,7 +8,7 @@ use std::time::Duration;
 use futures::StreamExt;
 use futures::channel::mpsc;
 use gpui::{
-    AnyElement, Entity, FocusHandle, Focusable, ListAlignment, ListState, ScrollHandle,
+    Task, AnyElement, Entity, FocusHandle, Focusable, ListAlignment, ListState, ScrollHandle,
     Subscription, WeakEntity, Window, div, prelude::*,
 };
 use patchwork_server::Server;
@@ -196,6 +196,10 @@ pub struct Workspace {
     pub streamed: HashSet<String>,
     /// The transcript, drawn a screenful at a time, and the chat and items it last held.
     pub transcript_list: ListState,
+    /// The wait for the clock or the sun to change the theme.
+    pub(super) theme_switch: Option<Task<()>>,
+    /// The project whose look the app is drawn in.
+    pub(super) themed_project: Option<String>,
     pub transcript_rows: (Option<String>, Vec<crate::chat::Row>),
     /// The pieces each shown message was last cut into, so a frame cuts only what changed.
     pub transcript_pieces: Vec<crate::chat::Pieces>,
@@ -280,6 +284,7 @@ impl Workspace {
             cx.new(|cx| Region::new(&entity, |w, _, cx| w.status_bar(cx).into_any_element(), cx));
         let (panel, panel_height) =
             panel_area::new_panel(Arc::clone(&server), &settings, window, cx);
+        let themed_project = settings.active_project_id.clone();
         let mut this = Self {
             server,
             settings,
@@ -358,6 +363,8 @@ impl Workspace {
             streamed: HashSet::new(),
             // Every row is measured up front, or the scrollbar thumb jumps as rows scroll in.
             transcript_list: ListState::new(0, ListAlignment::Top, gpui::px(800.)).measure_all(),
+            theme_switch: None,
+            themed_project,
             transcript_rows: (None, Vec::new()),
             transcript_pieces: Vec::new(),
             opened_at: std::time::Instant::now(),
@@ -394,6 +401,7 @@ impl Workspace {
         this.history_back.clear();
         this.watch_rail_focus(window, cx);
         this.watch_themes(window, cx);
+        this.await_theme_switch(window, cx);
         // A focused control that goes away, such as a shell's kill button, hands focus to the
         // nearest place around it still shown, so the app's keys keep working.
         cx.on_focus_lost(window, |this, window, cx| {

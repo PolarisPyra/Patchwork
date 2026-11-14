@@ -188,7 +188,7 @@ impl Render for Menu {
                 })
                 .aria_label(item.label.clone())
                 .flex()
-                .h(px(26.))
+                .h(px(crate::ui::theme::roomy(26.)))
                 .items_center()
                 .gap(px(6.))
                 .px(px(8.))

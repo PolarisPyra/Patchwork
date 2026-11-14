@@ -10,6 +10,7 @@ use patchwork_server::import::{ImportScan, ImportSource};
 use patchwork_server::provider::AgentKind;
 
 use crate::settings::controls::{alert, section_heading, switch, token_row};
+use crate::settings::themes::project_look;
 use crate::settings::{SettingsDialog, SettingsEvent};
 use crate::ui::theme::{font_mono, FS_SM, FS_XS, theme};
 use crate::ui::{AGENT_KINDS, BtnKind, agent_label, agent_logo, btn, icon_button, tooltip};
@@ -139,7 +140,17 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
     );
 
     let accent = t.accent_text;
-    let projects = d.settings.projects.iter().map(|p| {
+    let named: Vec<_> = d
+        .settings
+        .projects
+        .iter()
+        .map(|p| (p.id.clone(), p.name.clone()))
+        .collect();
+    let mut looks: Vec<_> = named
+        .iter()
+        .map(|(id, name)| Some(project_look(d, id, name, cx)))
+        .collect();
+    let projects = d.settings.projects.iter().zip(&mut looks).map(|(p, look)| {
         let own = checks.projects.get(&p.id).copied();
         let on = own.unwrap_or(after_every_task);
         let (follow, toggle, remove) = (p.id.clone(), p.id.clone(), p.id.clone());
@@ -193,6 +204,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                     })),
                 )
             })
+            .children(look.take().into_iter().flatten())
             .child(
                 div()
                     .text_size(px(FS_SM))

@@ -1,5 +1,6 @@
-//! Settings → Themes: the color scheme the app is drawn in, the animated background of the
-//! Orchestrator page, having an agent write a new one of either, and the background of chats.
+//! Settings → Themes: the color scheme the app is drawn in and the colors of code, and having an
+//! agent write a color scheme. It keeps what Settings → Backgrounds and Settings → Interface
+//! pick from as well.
 
 // Rust guideline compliant 2026-10-09
 
@@ -7,29 +8,36 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use gpui::{
-    AnyElement, Entity, ExternalPaths, FontWeight, Role, SharedString, Window, div, prelude::*, px,
-};
-use patchwork_server::backgrounds::{BackgroundImage, ChatBackground};
+use gpui::{AnyElement, Entity, ExternalPaths, Role, SharedString, Window, div, prelude::*, px};
+use patchwork_server::backgrounds::BackgroundImage;
 use patchwork_server::settings::Theme as ThemeSetting;
-use patchwork_server::themes::{BackdropChoice, CodeTheme, SavedScene, Scheme, Theme, Unreadable};
+use patchwork_server::themes::{CodeTheme, SavedScene, Scheme, Theme, Unreadable};
 
-use self::cards::{Slot, add_picture_card, backdrop_cards, grid, scheme_cards};
-use self::picture::picture_rows;
-use self::reading::{
-    code_theme_row, font_cards, installed_fonts, motion_row, strength_cards, text_size_cards,
-};
+pub(super) use self::backdrops::backgrounds_pane;
+use self::cards::{Slot, grid, scheme_cards};
+use self::editor::{Editing, editor};
+use self::interface::Fonts;
+pub(super) use self::interface::interface_pane;
+use self::look::{accent_row, schedule_rows};
+pub(super) use self::look::project_look;
+use self::reading::code_theme_cards;
 use super::{SettingsDialog, SettingsEvent};
 use crate::orchestrator::PreviewFlight;
 use crate::settings::controls::{alert, section_heading, switch, token_row};
-use crate::ui::background_picker::{BackgroundPicker, PickerEvent};
+use crate::ui::background_picker::BackgroundPicker;
 use crate::ui::theme::{FS_SM, theme};
 use crate::ui::{BtnKind, btn, icon_button, spinner};
 
+mod backdrops;
 mod cards;
+mod editor;
+mod files;
+mod interface;
+mod look;
 mod picture;
 mod reading;
 mod share;
+mod slider;
 
 /// How often a folder is looked at for the file a chat is writing, and how many times before
 /// giving up: ten minutes.
@@ -72,8 +80,9 @@ pub struct ThemesState {
     /// The butterfly on its backdrop's card.
     flight: PreviewFlight,
     pictures: Vec<BackgroundImage>,
-    /// The reading fonts this computer has, for the chat font.
-    fonts: Vec<SharedString>,
+    fonts: Fonts,
+    /// The color scheme open in the editor.
+    editing: Option<Editing>,
     /// The lists were asked for. Cleared to read them again.
     pub(super) loaded: bool,
     /// The id of the color scheme a chat is writing, and of the background.
@@ -83,9 +92,8 @@ pub struct ThemesState {
 
 impl SettingsDialog {
     /// Reads what can be picked, off the UI thread.
-    fn load_themes(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn load_themes(&mut self, cx: &mut Context<Self>) {
         self.themes.loaded = true;
-        self.themes.fonts = installed_fonts(cx);
         let server = Arc::clone(&self.server);
         self.run(
             move || {
@@ -108,90 +116,6 @@ impl SettingsDialog {
     pub fn themes_changed(&mut self, cx: &mut Context<Self>) {
         self.themes.loaded = false;
         cx.notify();
-    }
-
-    /// Deletes a file. A setting that picked it goes back to what it is without one.
-    fn remove_themed(&mut self, kind: Kind, id: String, cx: &mut Context<Self>) {
-        let server = Arc::clone(&self.server);
-        let removing = id.clone();
-        self.run(
-            move || {
-                match kind {
-                    Kind::Scheme => server.remove_theme(&removing),
-                    Kind::Scene => server.remove_scene(&removing),
-                }
-                .map_err(|e| e.to_string())
-            },
-            move |d, removed, cx| {
-                d.themes.error = removed.err();
-                let scene = BackdropChoice::Scene { id: id.clone() };
-                if kind == Kind::Scheme {
-                    let gone = Some(id.as_str());
-                    let s = &d.settings;
-                    let picked = [&s.theme_id, &s.system_light, &s.system_dark];
-                    if picked.iter().any(|picked| picked.as_deref() == gone) {
-                        d.update(
-                            |s| {
-                                for picked in
-                                    [&mut s.theme_id, &mut s.system_light, &mut s.system_dark]
-                                {
-                                    if picked.as_deref() == gone {
-                                        *picked = None;
-                                    }
-                                }
-                            },
-                            cx,
-                        );
-                    }
-                } else if kind == Kind::Scene && d.settings.orchestrator_backdrop == scene {
-                    d.update(|s| s.orchestrator_backdrop = BackdropChoice::default(), cx);
-                }
-                d.load_themes(cx);
-            },
-            cx,
-        );
-    }
-
-    /// Asks for a picture, copies it into Patchwork's folder, and puts it behind the
-    /// Orchestrator page.
-    fn add_backdrop_picture(&mut self, cx: &mut Context<Self>) {
-        let picked = cx.prompt_for_paths(gpui::PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: false,
-            prompt: Some("Add background".into()),
-        });
-        let server = Arc::clone(&self.server);
-        cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(paths))) = picked.await else {
-                return;
-            };
-            let Some(path) = paths.first().map(|p| p.to_string_lossy().into_owned()) else {
-                return;
-            };
-            let imported = cx
-                .background_spawn(async move {
-                    server
-                        .import_background_image(&path)
-                        .map_err(|e| e.to_string())
-                })
-                .await;
-            let _ = this.update(cx, |d, cx| {
-                match imported {
-                    Ok(file) => {
-                        d.themes.error = None;
-                        d.update(
-                            |s| s.orchestrator_backdrop = BackdropChoice::picture(file),
-                            cx,
-                        );
-                        d.load_themes(cx);
-                    }
-                    Err(e) => d.themes.error = Some(e),
-                }
-                cx.notify();
-            });
-        })
-        .detach();
     }
 
     /// Starts a chat whose agent writes what the field of `kind` describes.
@@ -296,42 +220,6 @@ impl SettingsDialog {
     }
 }
 
-/// The background picker, made on the first look at the pane, showing the saved background.
-fn picker(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> Entity<BackgroundPicker> {
-    let value = d.settings.chat_background.clone();
-    if let Some(picker) = &d.themes.picker {
-        picker.update(cx, |p, _| p.set_value(Some(value), None));
-        return picker.clone();
-    }
-    let server = Arc::clone(&d.server);
-    let picker = cx.new(|cx| {
-        BackgroundPicker::new(
-            server,
-            "Chat background",
-            Some(value),
-            Some(ChatBackground::None),
-            None,
-            cx,
-        )
-    });
-    cx.subscribe(&picker, |d, _, e: &PickerEvent, cx| match e {
-        PickerEvent::Picked(Some(background)) => {
-            let background = background.clone();
-            d.update(|s| s.chat_background = background, cx);
-        }
-        PickerEvent::Picked(None) => {}
-        PickerEvent::PicturesChanged => {
-            d.settings = d.server.store.settings();
-            d.themes.loaded = false;
-            cx.emit(SettingsEvent::Changed);
-            cx.notify();
-        }
-    })
-    .detach();
-    d.themes.picker = Some(picker.clone());
-    picker
-}
-
 /// The row an agent is asked from: a description, Generate, and the folder its file goes in.
 fn generator(
     d: &mut SettingsDialog,
@@ -421,7 +309,6 @@ pub fn render(
     if !d.themes.loaded {
         d.load_themes(cx);
     }
-    let chat_background = picker(d, cx);
     let follows = d.settings.theme == ThemeSetting::System && d.settings.theme_id.is_none();
     // Leaving the system's lead keeps the kind of window that is showing.
     let dark = t.is_dark();
@@ -463,9 +350,14 @@ pub fn render(
         let all = scheme_cards(d, Slot::Fixed, cx);
         vec![grid("color-schemes", "Color scheme", all, None)]
     };
-    let backdrops = backdrop_cards(d, cx);
-    let add_picture = add_picture_card(cx);
-    let (themes_dir, scenes_dir) = (d.server.themes_dir(), d.server.scenes_dir());
+    let schedule = if follows {
+        schedule_rows(d, window, cx)
+    } else {
+        Vec::new()
+    };
+    let editing = editor(d, window, cx);
+    let accent = accent_row(d, cx);
+    let themes_dir = d.server.themes_dir();
     let new_scheme = generator(
         d,
         Kind::Scheme,
@@ -474,17 +366,10 @@ pub fn render(
         window,
         cx,
     );
-    let new_scene = generator(d, Kind::Scene, "A koi pond at dusk", scenes_dir, window, cx);
     let code = [
-        code_theme_row(d, Scheme::Light, cx),
-        code_theme_row(d, Scheme::Dark, cx),
+        code_theme_cards(d, Scheme::Light, cx),
+        code_theme_cards(d, Scheme::Dark, cx),
     ];
-    let (strength, font, text_size) = (
-        strength_cards(d, cx),
-        font_cards(d, cx),
-        text_size_cards(d, cx),
-    );
-    let motion = motion_row(d, cx);
     let code_folder = d.server.code_themes_dir();
     let code_files = token_row("Code themes", None, &t).child(
         icon_button(
@@ -498,10 +383,6 @@ pub fn render(
             SettingsDialog::open_themed_folder(code_folder.clone(), cx);
         })),
     );
-    let picture = match d.settings.orchestrator_backdrop {
-        BackdropChoice::Image { dim, fit, blur, .. } => picture_rows(dim, fit, blur, cx),
-        _ => Vec::new(),
-    };
     let unreadable: Vec<_> = d
         .themes
         .unreadable
@@ -533,37 +414,13 @@ pub fn render(
         .children(unreadable)
         .child(section_heading("Color scheme", true, &t))
         .child(follow)
+        .children(schedule)
         .children(schemes)
+        .children(editing)
         .child(new_scheme)
+        .child(accent)
         .child(section_heading("Code", false, &t))
         .children(code)
         .child(code_files)
-        .child(section_heading("Orchestrator background", false, &t))
-        .child(grid(
-            "backdrops",
-            "Orchestrator background",
-            backdrops,
-            Some(add_picture),
-        ))
-        .children(picture)
-        .child(new_scene)
-        .child(motion)
-        .child(section_heading("Chats", false, &t))
-        .child(
-            div()
-                .border_b_1()
-                .border_color(t.border)
-                .py(px(10.))
-                .child(
-                    div()
-                        .pb(px(8.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child("Chat background"),
-                )
-                .child(chat_background),
-        )
-        .child(strength)
-        .child(font)
-        .child(text_size)
         .into_any_element()
 }
