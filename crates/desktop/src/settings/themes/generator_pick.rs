@@ -1,4 +1,4 @@
-//! The agent, model and effort of the chats that write backgrounds, picked beside Generate.
+//! The agent, model and effort of the chats that write themes and backgrounds, picked beside Generate.
 
 // Rust guideline compliant 2026-10-09
 
@@ -21,7 +21,7 @@ enum Part {
 }
 
 impl SettingsDialog {
-    /// What the chats that write backgrounds run on: the pick, else the agent of new chats.
+    /// What the chats that write themes and backgrounds run on: the pick, else the agent of new chats.
     fn generator_pick(&self) -> AgentPick {
         self.settings
             .generator_pick()

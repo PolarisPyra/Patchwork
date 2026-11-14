@@ -117,7 +117,7 @@ pub struct Settings {
     pub code_theme_light: Option<String>,
     /// The code theme of dark windows, by its id. None uses the color scheme's own colors.
     pub code_theme_dark: Option<String>,
-    /// What the chats that write a background run on. None is what a new chat runs on.
+    /// What the chats that write a theme or a background run on. None is what a new chat runs on.
     pub generator: Option<AgentPick>,
     /// How large the app's text is.
     pub text_size: TextSize,
@@ -187,7 +187,7 @@ impl Settings {
         self.agents.first().copied().unwrap_or(AgentKind::Claude)
     }
 
-    /// What the chats that write a background run on, while its agent is still connected.
+    /// What the chats that write a theme or a background run on, while its agent is still connected.
     #[must_use]
     pub fn generator_pick(&self) -> Option<&AgentPick> {
         self.generator
