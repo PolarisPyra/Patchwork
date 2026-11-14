@@ -318,6 +318,8 @@ pub fn transcript(
                 .flex_col()
                 // The rail's strips reach 44px in from the edge when they widen.
                 .when(rail.is_some(), |d| d.pr(px(28.)))
+                .font_family(crate::ui::theme::chat_font(cx))
+                .text_size(px(crate::ui::theme::FS_MD * t.scale))
                 .child(rows),
         )
         .child(crate::ui::selection::overlay(w.transcript_list.clone()))

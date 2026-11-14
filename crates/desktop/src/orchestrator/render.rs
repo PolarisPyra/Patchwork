@@ -1,19 +1,25 @@
-//! The orchestrator page drawn: a dark pill to write a request in, over the butterfly, and under
-//! it the requests sent, each with the chat that has it.
+//! The orchestrator page drawn: a dark pill to write a request in, over the backdrop, with the
+//! place the request would go at its end, and under it a card for each request sent.
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{
-    AnyElement, Bounds, BoxShadow, Div, Hsla, Pixels, Role, SharedString, Stateful, Window, div,
-    hsla, point, prelude::*, px, relative, size,
-};
-use patchwork_server::orchestration::Route;
+use std::path::PathBuf;
+use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use super::background;
-use super::state::{Orchestrator, Outcome};
-use crate::ui::theme::{FONT_UI, FS_LG, FS_SM, RADIUS_LG};
+use gpui::{
+    AnyElement, Bounds, BoxShadow, Hsla, KeyDownEvent, ObjectFit, Pixels, Role, SharedString,
+    Window, div, hsla, img, point, prelude::*, px, relative, size,
+};
+use patchwork_server::orchestration::Target;
+use patchwork_server::themes::{Applied, Scene, Scheme, Shown};
+use patchwork_server::threads::AskKind;
+
+use super::state::Orchestrator;
+use super::{background, scene};
+use crate::ui::theme::{FONT_UI, FS_LG, FS_SM, RADIUS_LG, applied, theme};
 use crate::ui::{button, display_title, icon, spinner};
-use crate::workspace::is_busy;
 
 /// The pill: its size, the room kept at its sides, and how far down the page its top is.
 const PILL_W: f32 = 640.;
@@ -21,14 +27,47 @@ const PILL_H: f32 = 52.;
 const GUTTER: f32 = 24.;
 const PILL_TOP: f32 = 0.4;
 
-/// The page's text color, at this strength.
-fn ink(alpha: f32) -> Hsla {
-    hsla(0.6, 0.25, 0.96, alpha)
+/// Whether the page is over a light backdrop, so its text is dark. The page's render sets it
+/// before anything on the page is drawn, and the one window draws on one thread.
+static LIGHT: AtomicBool = AtomicBool::new(false);
+
+fn light() -> bool {
+    LIGHT.load(Ordering::Relaxed)
 }
 
-/// The page's dark glass, this opaque.
-fn glass(alpha: f32) -> Hsla {
-    hsla(0.64, 0.30, 0.05, alpha)
+/// The page's text color, at this strength.
+pub(super) fn ink(alpha: f32) -> Hsla {
+    if light() {
+        hsla(0.6, 0.30, 0.12, alpha)
+    } else {
+        hsla(0.6, 0.25, 0.96, alpha)
+    }
+}
+
+/// The page's glass, this opaque: dark over a dark backdrop, pale over a light one.
+pub(super) fn glass(alpha: f32) -> Hsla {
+    if light() {
+        hsla(0.6, 0.30, 0.985, alpha)
+    } else {
+        hsla(0.64, 0.30, 0.05, alpha)
+    }
+}
+
+/// The color of something waiting on the person: the one warm color on the page.
+pub(super) fn warm() -> Hsla {
+    if light() {
+        hsla(0.07, 0.90, 0.40, 1.)
+    } else {
+        hsla(0.09, 0.95, 0.66, 1.)
+    }
+}
+
+/// The scene the settings picked for the backdrop, when it is one.
+fn shown_scene(look: &Arc<Applied>) -> Option<&Scene> {
+    match &look.backdrop {
+        Shown::Scene(scene) => Some(scene),
+        _ => None,
+    }
 }
 
 /// Where the pill is on a page with these bounds, which is where the layout below puts it. The
@@ -44,45 +83,245 @@ fn pill_bounds(page: Bounds<Pixels>) -> Bounds<Pixels> {
     )
 }
 
-/// What a request's row shows after its text.
-enum Shown {
-    Routing,
-    /// The chat that has it: its id and title, whether it is working, and how it got the request.
-    Chat(String, String, bool, Route),
-    /// Its chat has been deleted.
-    Gone,
-    Failed(SharedString),
+/// A small label inside the pill.
+fn chip(label: impl Into<SharedString>) -> gpui::Div {
+    div()
+        .h(px(26.))
+        .max_w(px(220.))
+        .flex_none()
+        .flex()
+        .items_center()
+        .gap(px(6.))
+        .px(px(10.))
+        .rounded_full()
+        .bg(ink(0.08))
+        .text_size(px(FS_SM))
+        .text_color(ink(0.8))
+        .child(div().min_w_0().truncate().child(label.into()))
+}
+
+impl Orchestrator {
+    /// What is drawn behind the page: what the theme settings came to.
+    fn backdrop(&self, cx: &Context<Self>) -> AnyElement {
+        let look = applied(cx);
+        let still = look.reduce_motion;
+        let t = theme(cx);
+        match &look.backdrop {
+            Shown::None => div().size_full().bg(t.bg_app).into_any_element(),
+            Shown::Butterfly => {
+                let flight = Rc::clone(&self.flight);
+                background::field(pill_bounds, still, flight, None).into_any_element()
+            }
+            // The picture is dimmed toward the window's color, so the page reads over it.
+            Shown::Image(path) => div()
+                .size_full()
+                .relative()
+                .bg(t.bg_app)
+                .child(
+                    img(PathBuf::from(path))
+                        .size_full()
+                        .object_fit(ObjectFit::Cover),
+                )
+                .child(div().absolute().inset_0().bg(t.bg_app.opacity(0.45)))
+                .into_any_element(),
+            Shown::Scene(_) => {
+                let fallback = scene::Fallback {
+                    surface: t.bg_app,
+                    faint: t.text_muted,
+                };
+                scene::field(look, shown_scene, fallback, pill_bounds, still, None)
+                    .into_any_element()
+            }
+        }
+    }
+
+    /// A place a request can go, as its chip names it: a chat of a project under the project's
+    /// name, and a new chat by whether it is in a project.
+    fn place_name(&self, target: &Target, cx: &Context<Self>) -> String {
+        let Some(workspace) = self.workspace.upgrade() else {
+            return String::new();
+        };
+        let workspace = workspace.read(cx);
+        let project = |id: &String| {
+            let found = workspace.settings.projects.iter().find(|p| &p.id == id);
+            found.map_or("Project", |p| p.name.as_str())
+        };
+        match target {
+            Target::Chat(id) => {
+                let Some(thread) = workspace.threads.iter().find(|t| &t.id == id) else {
+                    return "Chat".into();
+                };
+                let title = display_title(&thread.title);
+                match &thread.project_id {
+                    Some(id) => format!("{} › {title}", project(id)),
+                    None => title,
+                }
+            }
+            Target::New(Some(id)) => format!("New chat in {}", project(id)),
+            Target::New(None) => "New chat, no project".into(),
+            Target::Split(ids) => {
+                let names: Vec<&str> = ids.iter().map(project).collect();
+                format!("New chats in {}", names.join(", "))
+            }
+        }
+    }
+
+    /// What comes before the field: the chat whose question is shown, or how many are waiting.
+    fn before_field(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let count = self.waiting.len();
+        if let Some((index, waiting)) = self.asked() {
+            let place = if count > 1 {
+                format!("{} of {count}", index + 1)
+            } else {
+                String::new()
+            };
+            let label = format!("{} {place}", waiting.question());
+            let named = chip(waiting.chat.clone())
+                .id("orchestrator-asking")
+                .role(Role::Status)
+                .aria_label(label.trim().to_string())
+                .text_color(warm())
+                .children((count > 1).then(|| div().flex_none().text_color(ink(0.6)).child(place)));
+            return Some(named.into_any_element());
+        }
+        (count > 0).then(|| {
+            button("orchestrator-waiting", format!("{count} waiting. Answer"))
+                .child(chip(format!("{count} waiting")).text_color(warm()))
+                .rounded_full()
+                .on_click(cx.listener(|this, _, window, cx| this.tab(window, cx)))
+                .into_any_element()
+        })
+    }
+
+    /// What comes after the field: where the request would go.
+    fn after_field(&self, cx: &Context<Self>) -> Option<AnyElement> {
+        if self.answering.is_some() || self.field.read(cx).content.trim().is_empty() {
+            return None;
+        }
+        let status = |label: String| {
+            div()
+                .id("orchestrator-route")
+                .role(Role::Status)
+                .aria_label(label)
+                .flex_none()
+                .flex()
+                .items_center()
+                .gap(px(4.))
+        };
+        if let Some(pinned) = &self.pinned {
+            let name = self.place_name(pinned, cx);
+            let pin = div().flex_none().child(icon("push-pin", 12.));
+            let shown = chip(format!("→ {name}")).child(pin);
+            return Some(
+                status(format!("Goes to {name}, pinned"))
+                    .child(shown)
+                    .into_any_element(),
+            );
+        }
+        let routing = self.routing.as_ref().filter(|_| self.route_is_fresh(cx));
+        let Some(routing) = routing else {
+            return self.deciding.then(|| {
+                status("Finding where it goes".into())
+                    .px(px(6.))
+                    .child(spinner(14., ink(0.7)))
+                    .into_any_element()
+            });
+        };
+        // Both places show while the router cannot tell them apart; the arrows pick one.
+        let shown = if routing.unsure && self.pick < 2 {
+            0..2
+        } else {
+            self.pick..self.pick + 1
+        };
+        let picked = routing
+            .targets
+            .get(self.pick)
+            .map(|t| self.place_name(t, cx));
+        let chips = shown.clone().filter_map(|index| {
+            let name = self.place_name(routing.targets.get(index)?, cx);
+            let dim = shown.len() > 1 && index != self.pick;
+            Some(
+                chip(format!("→ {name}"))
+                    .max_w(px(if shown.len() > 1 { 130. } else { 220. }))
+                    .opacity(if dim { 0.45 } else { 1. }),
+            )
+        });
+        let label = format!("Goes to {}", picked.unwrap_or_default());
+        Some(status(label).children(chips).into_any_element())
+    }
+
+    /// The `@` list: the projects and chats a request can be pinned to.
+    fn picker_list(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let highlighted = self.picker.as_ref()?.highlighted;
+        let rows = self
+            .entries(cx)
+            .into_iter()
+            .enumerate()
+            .map(|(index, entry)| {
+                let on = index == highlighted;
+                div()
+                    .id(("orchestrator-pick", index))
+                    .role(Role::ListBoxOption)
+                    .aria_label(entry.label.clone())
+                    .aria_selected(on)
+                    .h(px(30.))
+                    .flex()
+                    .items_center()
+                    .px(px(12.))
+                    .rounded(px(6.))
+                    .when(on, |row| row.bg(ink(0.10)))
+                    .hover(|s| s.bg(ink(0.07)))
+                    .child(div().min_w_0().truncate().child(entry.label))
+                    .on_click(cx.listener(move |this, _, window, cx| this.pin(index, window, cx)))
+            });
+        let list = div()
+            .id("orchestrator-picker")
+            .role(Role::ListBox)
+            .aria_label("Projects and chats")
+            .occlude()
+            .w_full()
+            .max_w(px(PILL_W - 44.))
+            .flex()
+            .flex_col()
+            .p(px(4.))
+            .rounded(px(RADIUS_LG))
+            .border_1()
+            .border_color(ink(0.10))
+            .bg(glass(0.96))
+            .text_size(px(FS_SM))
+            .children(rows);
+        Some(list.into_any_element())
+    }
 }
 
 impl Render for Orchestrator {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let dark = applied(cx)
+            .backdrop_scheme
+            .map_or_else(|| theme(cx).is_dark(), |scheme| scheme == Scheme::Dark);
+        LIGHT.store(!dark, Ordering::Relaxed);
         let empty = self.field.read(cx).content.trim().is_empty();
+        let asked = self.asked().map(|(_, waiting)| waiting.ask.kind.clone());
+        // What Enter does, which is what the button does.
+        let (action, glyph, ready) = match &asked {
+            Some(AskKind::Permission) => ("Allow", "check-bold", true),
+            Some(AskKind::Question(_)) => ("Answer", "arrow-up-bold", !empty),
+            Some(AskKind::InChat) => ("Open the chat", "arrow-right-bold", true),
+            None => ("Send", "arrow-up-bold", !empty),
+        };
         let workspace = self.workspace.upgrade();
-        let threads = workspace
-            .as_ref()
-            .map_or(&[][..], |w| w.read(cx).threads.as_slice());
-        let rows: Vec<_> =
-            self.requests
-                .iter()
-                .map(|request| {
-                    let shown = match &request.outcome {
-                        Outcome::Routing => Shown::Routing,
-                        Outcome::Failed(error) => Shown::Failed(error.clone()),
-                        Outcome::Routed(to) => threads
-                            .iter()
-                            .find(|t| t.id == to.thread_id)
-                            .map_or(Shown::Gone, |t| {
-                                Shown::Chat(
-                                    t.id.clone(),
-                                    display_title(&t.title),
-                                    is_busy(t),
-                                    to.route,
-                                )
-                            }),
-                    };
-                    (request.id, request.text.clone(), shown)
-                })
-                .collect();
+        let (threads, projects) = workspace.as_ref().map_or_else(Default::default, |w| {
+            let workspace = w.read(cx);
+            (
+                workspace.threads.clone(),
+                workspace.settings.projects.clone(),
+            )
+        });
+        let cards: Vec<AnyElement> = self
+            .requests
+            .iter()
+            .map(|request| self.card(request, &threads, &projects, cx))
+            .collect();
         let pill = div()
             .id("orchestrator-pill")
             .w_full()
@@ -92,31 +331,42 @@ impl Render for Orchestrator {
             .flex()
             .items_center()
             .gap(px(8.))
-            .pl(px(22.))
+            .pl(px(if asked.is_some() || !self.waiting.is_empty() {
+                12.
+            } else {
+                22.
+            }))
             .pr(px(8.))
             .rounded_full()
             .border_1()
             .border_color(ink(0.10))
             .bg(glass(0.62))
             .shadow(vec![BoxShadow {
-                color: hsla(0., 0., 0., 0.55),
-                offset: point(px(0.), px(14.)),
-                blur_radius: px(44.),
+                color: hsla(0., 0., 0., if dark { 0.22 } else { 0.08 }),
+                offset: point(px(0.), px(6.)),
+                blur_radius: px(24.),
                 spread_radius: px(0.),
                 inset: false,
             }])
             .text_size(px(FS_LG))
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                if event.keystroke.key == "escape" && this.escape(window, cx) {
+                    cx.stop_propagation();
+                }
+            }))
+            .children(self.before_field(cx))
             .child(div().flex_1().min_w_0().child(self.field.clone()))
+            .children(self.after_field(cx))
             .child(
-                button("orchestrator-send", "Send")
+                button("orchestrator-send", action)
                     .size(px(36.))
                     .flex_none()
                     .justify_center()
                     .rounded_full()
-                    .bg(ink(if empty { 0.14 } else { 0.92 }))
-                    .text_color(if empty { ink(0.5) } else { glass(1.) })
-                    .child(icon("arrow-up-bold", 16.))
-                    .on_click(cx.listener(|this, _, window, cx| this.submit(window, cx))),
+                    .bg(ink(if ready { 0.92 } else { 0.14 }))
+                    .text_color(if ready { glass(1.) } else { ink(0.5) })
+                    .child(icon(glyph, 16.))
+                    .on_click(cx.listener(|this, _, window, cx| this.enter(window, cx))),
             );
         let requests = div()
             .id("orchestrator-requests")
@@ -128,10 +378,24 @@ impl Render for Orchestrator {
             .flex()
             .flex_col()
             .gap(px(4.))
-            .children(
-                rows.into_iter()
-                    .map(|(id, text, shown)| request_row(id, &text, shown, cx)),
-            );
+            .children(cards);
+        let column = || {
+            div()
+                .absolute()
+                .inset_0()
+                .flex()
+                .flex_col()
+                .items_center()
+                .px(px(GUTTER))
+                .child(div().flex_none().h(relative(PILL_TOP)))
+        };
+        // The list opens under the pill and over the cards, so it is laid out after them.
+        let picker = self.picker_list(cx).map(|list| {
+            column()
+                .child(div().flex_none().h(px(PILL_H + 6.)))
+                .child(list)
+        });
+        let backdrop = self.backdrop(cx);
         div()
             .id("orchestrator")
             .role(Role::Main)
@@ -141,108 +405,8 @@ impl Render for Orchestrator {
             .overflow_hidden()
             .font_family(FONT_UI)
             .text_color(ink(0.9))
-            .child(
-                div()
-                    .absolute()
-                    .inset_0()
-                    .child(background::field(pill_bounds)),
-            )
-            .child(
-                div()
-                    .absolute()
-                    .inset_0()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .px(px(GUTTER))
-                    .child(div().flex_none().h(relative(PILL_TOP)))
-                    .child(pill)
-                    .child(requests),
-            )
-    }
-}
-
-/// The look every request's row shares.
-fn plate(row: Stateful<Div>) -> Stateful<Div> {
-    row.h(px(34.))
-        .flex_none()
-        .flex()
-        .items_center()
-        .gap(px(10.))
-        .px(px(14.))
-        .rounded(px(RADIUS_LG))
-        .border_1()
-        .border_color(ink(0.06))
-        .bg(glass(0.5))
-        .text_size(px(FS_SM))
-}
-
-/// One request: how it stands, what was asked, and the chat it went to. A row with a chat opens it.
-fn request_row(
-    id: usize,
-    text: &SharedString,
-    shown: Shown,
-    cx: &mut Context<Orchestrator>,
-) -> AnyElement {
-    let row_id = ("orchestrator-request", id);
-    let asked = div().flex_1().min_w_0().truncate().child(text.clone());
-    let mark = |name: &str| {
-        div()
-            .flex_none()
-            .text_color(ink(0.5))
-            .child(icon(name, 14.))
-    };
-    let note = |text: SharedString, color: Hsla| {
-        div()
-            .flex_none()
-            .max_w(relative(0.45))
-            .truncate()
-            .text_color(color)
-            .child(text)
-    };
-    match shown {
-        Shown::Routing => plate(div().id(row_id))
-            .role(Role::Status)
-            .aria_label(format!("Finding a chat for: {text}"))
-            .child(spinner(14., ink(0.8)))
-            .child(asked)
-            .into_any_element(),
-        Shown::Failed(error) => plate(div().id(row_id))
-            .role(Role::Alert)
-            .aria_label(format!("{error}: {text}"))
-            .child(mark("warning"))
-            .child(asked)
-            .child(note(error, hsla(0.0, 0.85, 0.72, 1.)))
-            .into_any_element(),
-        Shown::Gone => plate(div().id(row_id))
-            .role(Role::ListItem)
-            .aria_label(format!("Chat deleted: {text}"))
-            .child(mark("trash"))
-            .child(asked)
-            .into_any_element(),
-        Shown::Chat(thread_id, title, busy, route) => {
-            let (verb, arrow) = match route {
-                Route::Started => ("Started", "plus"),
-                Route::Sent => ("Sent to", "arrow-right"),
-            };
-            let state = if busy { "working" } else { "done" };
-            let label = format!("{verb} {title}, {state}: {text}. Open the chat");
-            plate(button(row_id, label))
-                .hover(|s| s.bg(glass(0.72)).border_color(ink(0.14)))
-                .child(if busy {
-                    spinner(14., ink(0.8)).into_any_element()
-                } else {
-                    mark("check").into_any_element()
-                })
-                .child(asked)
-                .child(mark(arrow))
-                .child(note(title.into(), ink(0.6)))
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    if let Some(workspace) = this.workspace.upgrade() {
-                        workspace.update(cx, |w, cx| w.open_thread(&thread_id, cx));
-                    }
-                }))
-                .into_any_element()
-        }
+            .child(div().absolute().inset_0().child(backdrop))
+            .child(column().child(pill).child(requests))
+            .children(picker)
     }
 }

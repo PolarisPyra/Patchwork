@@ -1,0 +1,10 @@
+{
+  "name": "Terminal",
+  "scheme": "dark",
+  "colors": {
+    "surface": "#050a06",
+    "text": "#c8f7d0",
+    "muted": "#5f8f68",
+    "accent": "#35d46a"
+  }
+}

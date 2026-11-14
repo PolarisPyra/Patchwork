@@ -12,6 +12,7 @@ use crate::backgrounds::{BackgroundStrength, ChatBackground};
 use crate::permissions::PermissionSettings;
 use crate::projects::Project;
 use crate::provider::AgentKind;
+use crate::themes::BackdropChoice;
 use crate::Server;
 use crate::{permissions, skills};
 
@@ -24,6 +25,28 @@ pub enum Theme {
     /// Dark with true-black backgrounds, for OLED screens.
     Oled,
     System,
+}
+
+/// How large the text of chats is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum TextSize {
+    Small,
+    #[default]
+    Medium,
+    Large,
+}
+
+impl TextSize {
+    /// What the sizes of a chat's text are multiplied by.
+    #[must_use]
+    pub fn scale(self) -> f32 {
+        match self {
+            Self::Small => 0.92,
+            Self::Medium => 1.,
+            Self::Large => 1.15,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -83,6 +106,26 @@ pub struct Settings {
     pub chat_background: ChatBackground,
     /// How much of a chat's background shows through the window color.
     pub chat_background_strength: BackgroundStrength,
+    /// The theme whose colors the app is drawn in, by its id. None draws `theme`.
+    pub theme_id: Option<String>,
+    /// The color scheme `theme` System draws while the system is light, by its id. None is
+    /// Light.
+    pub system_light: Option<String>,
+    /// The color scheme `theme` System draws while the system is dark, by its id: `oled`, or a
+    /// file's. None is Dark.
+    pub system_dark: Option<String>,
+    /// The code theme of light windows, by its id. None uses the color scheme's own colors.
+    pub code_theme_light: Option<String>,
+    /// The code theme of dark windows, by its id. None uses the color scheme's own colors.
+    pub code_theme_dark: Option<String>,
+    /// The font family chats are set in. None is the app's own.
+    pub chat_font: Option<String>,
+    /// How large the text of chats is.
+    pub text_size: TextSize,
+    /// Nothing moves on its own: animations and the Orchestrator's backdrop hold still.
+    pub reduce_motion: bool,
+    /// What the Orchestrator page shows behind it.
+    pub orchestrator_backdrop: BackdropChoice,
     /// Legacy switch for the import log, migrated into `logging` on load.
     #[serde(skip_serializing)]
     pub import_log_disabled: bool,

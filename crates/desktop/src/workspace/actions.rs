@@ -67,13 +67,12 @@ impl Workspace {
                 // A picture added or removed in Settings changes the ones a chat can show.
                 this.backgrounds = crate::ui::backdrop::Backgrounds::default();
                 this.sync_panel(cx);
-                cx.set_global(crate::ui::theme::Theme::for_setting(
-                    this.settings.theme,
-                    window.appearance(),
-                ));
-                cx.refresh_windows();
+                this.apply_theme(window, cx);
             }
             crate::settings::SettingsEvent::ThreadsChanged => this.reload(cx),
+            crate::settings::SettingsEvent::GenerateTheme(prompt) => {
+                this.generate_theme(prompt.clone(), cx);
+            }
             crate::settings::SettingsEvent::RestartToUpdate => {
                 super::updates::restart_to_update(&this.server, window, cx);
             }
@@ -115,23 +114,69 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Light when the window shows a dark theme, else dark.
+    /// Light when the window is dark, else dark. A picked theme gives way to it.
     pub(super) fn toggle_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         use patchwork_server::settings::Theme as ThemeSetting;
-        let light = theme(cx).bg_app == crate::ui::theme::Theme::light().bg_app;
-        let setting = if light {
-            ThemeSetting::Dark
-        } else {
+        let setting = if theme(cx).is_dark() {
             ThemeSetting::Light
+        } else {
+            ThemeSetting::Dark
         };
         self.settings.theme = setting;
-        if let Err(e) = self.server.store.update_settings(|s| s.theme = setting) {
+        self.settings.theme_id = None;
+        let saved = self.server.store.update_settings(|s| {
+            s.theme = setting;
+            s.theme_id = None;
+        });
+        if let Err(e) = saved {
             log::warn!(error:% = e; "could not save the theme: {{error}}");
         }
-        cx.set_global(crate::ui::theme::Theme::for_setting(
-            setting,
-            window.appearance(),
-        ));
-        cx.refresh_windows();
+        self.apply_theme(window, cx);
+    }
+
+    /// Starts a chat with `prompt`, which has its agent write a theme. Settings stays open and
+    /// is told when the chat could not be started.
+    fn generate_theme(&mut self, prompt: String, cx: &mut Context<Self>) {
+        use patchwork_server::orchestration::Target;
+        let new = self.composer.read(cx).new_thread(None, &self.settings);
+        let server = Arc::clone(&self.server);
+        let sent = cx
+            .background_spawn(async move { server.dispatch_to(&prompt, &Target::New(None), &new) });
+        cx.spawn(async move |this, cx| {
+            let sent = sent.await;
+            let _ = this.update(cx, |this, cx| {
+                if let Err(e) = sent {
+                    log::warn!(error:% = e; "could not start the chat for a theme: {{error}}");
+                    if let Some(dialog) = &this.settings_dialog {
+                        dialog.update(cx, |d, cx| d.theme_failed(e.to_string(), cx));
+                    }
+                }
+                this.reload(cx);
+            });
+        })
+        .detach();
+    }
+
+    /// Draws the app in what the theme settings come to. The theme's file is read off the UI
+    /// thread.
+    pub(super) fn apply_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let server = Arc::clone(&self.server);
+        cx.spawn_in(window, async move |this, cx| {
+            let applied = cx
+                .background_spawn(async move { server.applied_theme() })
+                .await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                let was = crate::ui::theme::applied(cx);
+                let reset =
+                    was.text_size != applied.text_size || was.chat_font != applied.chat_font;
+                crate::ui::theme::apply(applied, window.appearance(), cx);
+                if reset {
+                    // Every row of the transcript is another height in another font or size.
+                    this.transcript_list.remeasure();
+                }
+                cx.refresh_windows();
+            });
+        })
+        .detach();
     }
 }

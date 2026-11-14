@@ -34,7 +34,6 @@ use gpui::{
 use patchwork_server::Server;
 use patchwork_server::system::Dirs;
 
-use crate::ui::theme::Theme;
 use crate::ui::{assets, prompt, sigils, theme};
 use crate::workspace::Workspace;
 
@@ -316,7 +315,7 @@ fn main() {
             .detach();
 
             let bounds = Bounds::centered(None, size(px(1600.), px(960.)), cx);
-            let setting = server.store.settings().theme;
+            let applied = server.applied_theme();
             let opened = cx.open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -328,7 +327,7 @@ fn main() {
                     ..Default::default()
                 },
                 |window, cx| {
-                    cx.set_global(Theme::for_setting(setting, window.appearance()));
+                    theme::apply(applied, window.appearance(), cx);
                     cx.new(|cx| Workspace::new(Arc::clone(&server), window, cx))
                 },
             );

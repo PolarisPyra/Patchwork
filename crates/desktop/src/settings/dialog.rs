@@ -21,6 +21,7 @@ use super::providers;
 use super::scheduled;
 use super::shortcuts;
 use super::ssh;
+use super::themes;
 use super::tokens;
 use super::updates;
 
@@ -32,6 +33,8 @@ pub enum SettingsEvent {
     ThreadsChanged,
     /// The user asked to restart into the installed update.
     RestartToUpdate,
+    /// Start a chat with this message, whose agent writes a theme.
+    GenerateTheme(String),
     Closed,
 }
 
@@ -51,6 +54,11 @@ pub(super) const GROUPS: &[(&str, &[Section])] = &[
                 id: "general",
                 label: "General",
                 icon: "gear-six",
+            },
+            Section {
+                id: "themes",
+                label: "Themes",
+                icon: "palette",
             },
             Section {
                 id: "chat",
@@ -155,6 +163,7 @@ pub struct SettingsDialog {
     pub(super) permissions: permissions::PermissionsState,
     pub(super) projects: projects::ProjectsState,
     pub(super) ssh: ssh::SshState,
+    pub(super) themes: themes::ThemesState,
     pub(super) scheduled: scheduled::ScheduledState,
     pub(super) tokens: tokens::TokensState,
     pub(super) updates: updates::UpdatesState,
@@ -198,6 +207,7 @@ impl SettingsDialog {
             permissions: permissions::PermissionsState::default(),
             projects: projects::ProjectsState::default(),
             ssh: ssh::SshState::default(),
+            themes: themes::ThemesState::default(),
             scheduled: scheduled::ScheduledState::default(),
             tokens: tokens::TokensState::default(),
             updates: updates::UpdatesState::default(),
@@ -240,6 +250,8 @@ impl SettingsDialog {
     pub(super) fn open_section(&mut self, id: &'static str, cx: &mut Context<Self>) {
         self.section = id;
         self.menu = None;
+        // A theme written since the last look shows up.
+        self.themes.loaded = false;
         self.shortcuts.recording = None;
         self.shortcuts.recording_sigil = None;
         self.scroll.set_offset(gpui::point(px(0.), px(0.)));

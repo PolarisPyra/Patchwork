@@ -183,7 +183,7 @@ pub(super) fn head(w: &Workspace, m: &Message, t: &Theme, cx: &mut Context<Works
                 .flex()
                 .items_center()
                 .gap(px(6.))
-                .text_size(px(FS_MD))
+                .text_size(px(FS_MD * t.scale))
                 .text_color(t.text_muted)
                 .child(format!(
                     "Working for {}",
@@ -208,7 +208,7 @@ pub(super) fn head(w: &Workspace, m: &Message, t: &Theme, cx: &mut Context<Works
             .aria_expanded(open)
             .h(px(24.))
             .gap(px(6.))
-            .text_size(px(FS_MD))
+            .text_size(px(FS_MD * t.scale))
             .text_color(t.text_muted)
             .hover(move |s| s.text_color(hover))
             .child(head.label)

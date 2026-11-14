@@ -12,7 +12,7 @@ use crate::settings::LogLevel;
 use crate::Server;
 
 /// The options for a new task or chat, as the desktop app sends them.
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NewThread {
     /// Chosen by the window that asked, so the row can be drawn before this call returns. A

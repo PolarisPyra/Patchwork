@@ -10,6 +10,7 @@ mod messages;
 mod lifecycle;
 mod list;
 mod options;
+mod standing;
 pub(crate) mod title;
 mod types;
 
@@ -25,6 +26,8 @@ pub use granular::{AgentPick, Granular, Reserves, delegates_sub_agents, runs_sub
 pub(crate) use granular::{fall_back, fallback_of, project_key, reviewer_of, sub_agent_of, sub_pick};
 #[doc(inline)]
 pub use lifecycle::NewThread;
+#[doc(inline)]
+pub use standing::{Ask, AskKind, Standing, asks};
 #[doc(inline)]
 pub use title::{title_from, without_leading_attachments};
 #[doc(inline)]

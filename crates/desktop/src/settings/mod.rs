@@ -21,6 +21,7 @@ pub mod shortcuts;
 mod sigils;
 mod ssh;
 mod terminal;
+mod themes;
 mod tokens;
 mod updates;
 

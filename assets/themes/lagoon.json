@@ -1,0 +1,10 @@
+{
+  "name": "Lagoon",
+  "scheme": "light",
+  "colors": {
+    "surface": "#eef9fa",
+    "text": "#12303a",
+    "muted": "#55737c",
+    "accent": "#0f8a8a"
+  }
+}
