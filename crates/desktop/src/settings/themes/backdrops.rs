@@ -23,6 +23,7 @@ use crate::settings::controls::{alert, section_heading};
 use crate::settings::{SettingsDialog, SettingsEvent};
 use crate::ui::backdrop::{PRESETS, preset_fill};
 use crate::ui::background_picker::{BackgroundPicker, PickerEvent};
+use crate::ui::icon;
 use crate::ui::theme::{fs_sm, theme};
 
 impl SettingsDialog {
@@ -95,7 +96,17 @@ pub(super) fn backdrop_cards(
     let still = d.settings.reduce_motion;
     let butterfly = div().child(butterfly_preview(&d.themes.flight, still));
     let fixed = [
-        ("None", div().bg(t.bg_app), BackdropChoice::None),
+        // The card the chat background grid draws for no background.
+        (
+            "No background",
+            div()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(t.bg_hover)
+                .child(icon("prohibit", 26.)),
+            BackdropChoice::None,
+        ),
         ("Butterfly", butterfly, BackdropChoice::Butterfly),
     ];
     let presets = PRESETS.iter().map(|&(id, name)| {
