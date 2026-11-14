@@ -93,6 +93,8 @@ impl Workspace {
                     .id("update-card")
                     .role(Role::Status)
                     .aria_label(label.clone())
+                    // It floats over the chat's own buttons, which a click on it must not reach.
+                    .occlude()
                     .absolute()
                     .top(px(48.))
                     .right(px(12.))
