@@ -3,6 +3,19 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.69] - 2026-11-14
+
+**26.11.69** · 1 change from 1 contributor
+
+<details>
+<summary>Full changelog</summary>
+
+### Fixed
+
+- Clicking Restart, Download or the close button on the update card at the top right of a chat also clicked "Open in editor" underneath it, so an editor opened. A click on the card now stays on the card. by [PolarisPyra in #81](https://github.com/PolarisPyra/Patchwork/pull/81)
+
+</details>
+
 ## [26.11.68] - 2026-11-14
 
 **26.11.68** · 1 change from 1 contributor
