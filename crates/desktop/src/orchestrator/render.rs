@@ -1,4 +1,4 @@
-//! The orchestrator page drawn: a dark pill to write a request in, over the butterfly, and under
+//! The orchestrator page drawn: a dark pill to write a request in, over the dust, and under
 //! it the requests sent, each with the chat that has it.
 
 // Rust guideline compliant 2026-10-09
@@ -9,7 +9,7 @@ use gpui::{
 };
 use patchwork_server::orchestration::Route;
 
-use super::butterfly;
+use super::background;
 use super::state::{Orchestrator, Outcome};
 use crate::ui::theme::{FONT_UI, FS_LG, FS_SM, RADIUS_LG};
 use crate::ui::{button, display_title, icon, spinner};
@@ -145,7 +145,7 @@ impl Render for Orchestrator {
                 div()
                     .absolute()
                     .inset_0()
-                    .child(butterfly::field(pill_bounds)),
+                    .child(background::field(pill_bounds)),
             )
             .child(
                 div()
