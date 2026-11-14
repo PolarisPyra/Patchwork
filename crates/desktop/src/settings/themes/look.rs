@@ -55,7 +55,7 @@ const BYS: [(By, &str); 3] = [
 pub(super) fn accent_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
     let t = *theme(cx);
     let current = d.settings.accent;
-    let own = std::iter::once(("From the color scheme", None));
+    let own = std::iter::once(("Default", None));
     let named = ACCENTS
         .iter()
         .map(|(name, code)| (*name, Some(Color(*code))));
@@ -74,7 +74,7 @@ pub(super) fn accent_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -
             .focus_visible(focus_ring)
             .cursor_pointer()
             .flex_none()
-            .size(px(22.))
+            .size(px(32.))
             .rounded_full()
             .border_2()
             .border_color(if checked {
@@ -82,7 +82,7 @@ pub(super) fn accent_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -
             } else {
                 gpui::transparent_black()
             })
-            .p(px(2.))
+            .p(px(3.))
             .child(match accent {
                 Some(Color(code)) => div().size_full().rounded_full().bg(rgb(code)),
                 None => div()
@@ -100,7 +100,7 @@ pub(super) fn accent_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -
         .aria_label("Accent")
         .flex()
         .flex_wrap()
-        .gap(px(4.))
+        .gap(px(6.))
         .children(swatches);
     token_row("Accent", None, &t)
         .child(group)

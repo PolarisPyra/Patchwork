@@ -16,6 +16,7 @@ use super::files::{Filed, file_tools};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{switch, token_row};
 use crate::ui::backdrop::{preset_fill, veil};
+use crate::ui::icon_button;
 use crate::ui::theme::{FS_MD, FS_XS, Theme as Colors, font_mono, theme};
 
 const STRENGTHS: [(BackgroundStrength, &str); 3] = [
@@ -53,7 +54,8 @@ fn code_swatch(colors: [Hsla; 4], t: &Colors) -> Div {
         .child(part("\"text\"", string))
 }
 
-/// The code themes of light windows or of dark ones: the color scheme's own, then each file.
+/// The code themes made for light windows or for dark ones: the color scheme's own, then each
+/// file. The pane shows the ones for the kind of window that is showing.
 pub(super) fn code_theme_cards(
     d: &SettingsDialog,
     scheme: Scheme,
@@ -63,13 +65,13 @@ pub(super) fn code_theme_cards(
     let (key, title, current, set): (_, _, _, fn(&mut Settings, Option<String>)) = match scheme {
         Scheme::Light => (
             "code-theme-light",
-            "Code in light windows",
+            "Code theme",
             d.settings.code_theme_light.clone(),
             |s, id| s.code_theme_light = id,
         ),
         Scheme::Dark => (
             "code-theme-dark",
-            "Code in dark windows",
+            "Code theme",
             d.settings.code_theme_dark.clone(),
             |s, id| s.code_theme_dark = id,
         ),
@@ -77,7 +79,7 @@ pub(super) fn code_theme_cards(
     let own = [t.syn_keyword, t.syn_function, t.syn_string, t.syn_comment];
     let mut cards = vec![card(
         format!("{key}-own"),
-        "From the color scheme",
+        "Default",
         code_swatch(own, &t),
         current.is_none(),
         Extras::default(),
@@ -110,16 +112,49 @@ pub(super) fn code_theme_cards(
             cx,
         ));
     }
-    titled(title, grid(key, title, cards, None), &t)
+    let folder = d.server.code_themes_dir();
+    let open = icon_button(
+        "folder-code-themes",
+        "Open the code themes folder",
+        "folder-open",
+        16.,
+        cx,
+    )
+    .on_click(cx.listener(move |_, _, _, cx| {
+        SettingsDialog::open_themed_folder(folder.clone(), cx);
+    }));
+    headed(
+        title,
+        Some(open.into_any_element()),
+        grid(key, title, cards, None),
+        &t,
+    )
 }
 
 /// A titled grid of cards, as the chat background has.
 pub(super) fn titled(title: &'static str, cards: AnyElement, t: &Colors) -> AnyElement {
+    headed(title, None, cards, t)
+}
+
+/// A grid of cards under its title, with `tool` at the end of the title's line.
+fn headed(
+    title: &'static str,
+    tool: Option<AnyElement>,
+    cards: AnyElement,
+    t: &Colors,
+) -> AnyElement {
     div()
         .border_b_1()
         .border_color(t.border)
         .pt(px(10.))
-        .child(div().font_weight(FontWeight::SEMIBOLD).child(title))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .child(div().font_weight(FontWeight::SEMIBOLD).child(title))
+                .children(tool),
+        )
         .child(cards)
         .into_any_element()
 }
