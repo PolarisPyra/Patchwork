@@ -70,18 +70,30 @@ impl Render for Workspace {
                     cx.notify();
                 }
             }))
-            // On the orchestrator page with nothing in particular focused, Space opens and closes
-            // its task list, and any other character starts a request in the pill.
+            // With nothing in particular focused, such as after a click on the chat, Space opens
+            // and closes the sidebar. On the orchestrator page any other character starts a
+            // request in the pill.
             .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, window, cx| {
-                if this.page != Page::Orchestrator || !this.focus.is_focused(window) {
+                if !this.focus.is_focused(window) || this.covered() {
                     return;
                 }
                 let keys = &e.keystroke;
                 let held = keys.modifiers;
                 if keys.key == "space" && !held.modified() {
-                    this.toggle_orchestrator(cx);
+                    match this.page {
+                        Page::Orchestrator => this.orchestrator_tasks = !this.orchestrator_tasks,
+                        Page::Chats => {
+                            this.view = if this.view.is_some() {
+                                None
+                            } else {
+                                Some(View::Tasks)
+                            };
+                        }
+                    }
                     cx.stop_propagation();
-                } else if let Some(typed) = keys.key_char.as_deref()
+                    cx.notify();
+                } else if this.page == Page::Orchestrator
+                    && let Some(typed) = keys.key_char.as_deref()
                     && !(held.control || held.alt || held.platform || held.function)
                     && !typed.is_empty()
                     && !typed.chars().any(char::is_control)
@@ -151,12 +163,7 @@ impl Render for Workspace {
                 this.toggle_output(window, cx);
             }))
             .on_action(cx.listener(|this, _: &crate::DeleteChat, window, cx| {
-                // A dialog over the window keeps the key to itself.
-                let covered = this.palette.is_some()
-                    || this.settings_dialog.is_some()
-                    || this.background_dialog.is_some()
-                    || this.granular_dialog.is_some();
-                if !covered {
+                if !this.covered() {
                     this.delete_selected(window, cx);
                 }
             }))
@@ -250,6 +257,16 @@ impl Render for Workspace {
 }
 
 impl Workspace {
+    /// Whether a dialog or a menu is over the window. It keeps the keys to itself.
+    fn covered(&self) -> bool {
+        self.palette.is_some()
+            || self.settings_dialog.is_some()
+            || self.background_dialog.is_some()
+            || self.granular_dialog.is_some()
+            || self.add_project.is_some()
+            || self.machine_menu.is_some()
+    }
+
     /// The last error an action hit, above the status bar until dismissed.
     pub(super) fn error_toast(
         &self,

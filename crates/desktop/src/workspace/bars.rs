@@ -216,7 +216,7 @@ impl Workspace {
 
     /// Shows the orchestrator page. On the page, opens or closes its task list, as a view's icon
     /// does for the chats. The focus stays on the icon, so Space does the same again.
-    pub(super) fn toggle_orchestrator(&mut self, cx: &mut Context<Self>) {
+    fn toggle_orchestrator(&mut self, cx: &mut Context<Self>) {
         if self.page == Page::Orchestrator {
             self.orchestrator_tasks = !self.orchestrator_tasks;
         } else {
@@ -271,7 +271,8 @@ impl Workspace {
                         cx.notify();
                     }))
             };
-        let orchestrating = self.page == Page::Orchestrator;
+        // Lit while its task list is open, as a view's icon is.
+        let orchestrating = self.page == Page::Orchestrator && self.orchestrator_tasks;
         div()
             .id("activity-bar")
             .role(Role::Navigation)

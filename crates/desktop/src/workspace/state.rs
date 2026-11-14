@@ -391,6 +391,17 @@ impl Workspace {
             window.focus(&target, cx);
         })
         .detach();
+        // A key hides the mouse pointer only while something has the focus to type in. With
+        // nothing focused, Space opens and closes the sidebar and the pointer stays.
+        let focus = this.focus.clone();
+        cx.on_focus(&focus, window, |_, _, cx| {
+            cx.set_cursor_hide_mode(gpui::CursorHideMode::Never);
+        })
+        .detach();
+        cx.on_blur(&focus, window, |_, _, cx| {
+            cx.set_cursor_hide_mode(gpui::CursorHideMode::default());
+        })
+        .detach();
         this.load_git(cx);
         // The composer starts focused, so typing and the app's keys work before any click.
         let composer = this.composer.read(cx).editor.focus_handle(cx);
