@@ -366,23 +366,8 @@ pub fn render(
         window,
         cx,
     );
-    let code = [
-        code_theme_cards(d, Scheme::Light, cx),
-        code_theme_cards(d, Scheme::Dark, cx),
-    ];
-    let code_folder = d.server.code_themes_dir();
-    let code_files = token_row("Code themes", None, &t).child(
-        icon_button(
-            "folder-code-themes",
-            "Open the code themes folder",
-            "folder-open",
-            16.,
-            cx,
-        )
-        .on_click(cx.listener(move |_, _, _, cx| {
-            SettingsDialog::open_themed_folder(code_folder.clone(), cx);
-        })),
-    );
+    // Code is colored for the kind of window that is showing.
+    let code = code_theme_cards(d, if dark { Scheme::Dark } else { Scheme::Light }, cx);
     let unreadable: Vec<_> = d
         .themes
         .unreadable
@@ -419,8 +404,6 @@ pub fn render(
         .children(editing)
         .child(new_scheme)
         .child(accent)
-        .child(section_heading("Code", false, &t))
-        .children(code)
-        .child(code_files)
+        .child(code)
         .into_any_element()
 }
