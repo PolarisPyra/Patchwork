@@ -14,6 +14,7 @@ mod logos;
 pub mod markdown;
 pub mod menu;
 pub mod prompt;
+mod scrollbar;
 pub mod selection;
 pub mod sigils;
 pub mod text_area;
@@ -21,9 +22,9 @@ pub mod theme;
 
 pub use controls::{
     BtnKind, above, badge, btn, button, checkbox, dropdown_chip, focus_ring, icon, icon_button,
-    kind_icon, input_box, list_scrollbar, menu_item, mix, overflows, popup, popup_shadow,
-    scrollbar, spinner, tooltip,
+    kind_icon, input_box, menu_item, mix, overflows, popup, popup_shadow, spinner, tooltip,
 };
+pub use scrollbar::{list_scrollbar, scrollbar};
 pub use format::{
     base_name, compact_elapsed, dir_name, display_title, format_clock, format_relative, resets_in,
     format_tokens, full_elapsed, now_ms, slug_file_name,
