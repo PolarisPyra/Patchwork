@@ -70,6 +70,27 @@ impl Render for Workspace {
                     cx.notify();
                 }
             }))
+            // On the orchestrator page with nothing in particular focused, Space opens and closes
+            // its task list, and any other character starts a request in the pill.
+            .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, window, cx| {
+                if this.page != Page::Orchestrator || !this.focus.is_focused(window) {
+                    return;
+                }
+                let keys = &e.keystroke;
+                let held = keys.modifiers;
+                if keys.key == "space" && !held.modified() {
+                    this.toggle_orchestrator(cx);
+                    cx.stop_propagation();
+                } else if let Some(typed) = keys.key_char.as_deref()
+                    && !(held.control || held.alt || held.platform || held.function)
+                    && !typed.is_empty()
+                    && !typed.chars().any(char::is_control)
+                {
+                    this.orchestrator
+                        .update(cx, |o, cx| o.type_text(typed, window, cx));
+                    cx.stop_propagation();
+                }
+            }))
             .on_action(|_: &crate::FocusPrev, window, cx| window.focus_prev(cx))
             .on_action(cx.listener(|this, _: &crate::GoBack, _, cx| this.go_back(cx)))
             .on_action(cx.listener(|this, _: &crate::GoForward, _, cx| this.go_forward(cx)))

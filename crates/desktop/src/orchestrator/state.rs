@@ -72,6 +72,15 @@ impl Orchestrator {
         window.focus(&self.field.read(cx).focus_handle(cx), cx);
     }
 
+    /// Puts the cursor in the field with `text` added at its end, for a key typed outside it.
+    pub fn type_text(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.field.update(cx, |field, cx| {
+            let end = field.content.len();
+            field.replace(end..end, text, window, cx);
+        });
+        self.focus(window, cx);
+    }
+
     /// Sends what the field holds to the chat it belongs in, and lists it while that is found.
     pub(super) fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.field.read(cx).content.trim().to_string();

@@ -216,7 +216,7 @@ impl Workspace {
 
     /// Shows the orchestrator page. On the page, opens or closes its task list, as a view's icon
     /// does for the chats. The focus stays on the icon, so Space does the same again.
-    fn toggle_orchestrator(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn toggle_orchestrator(&mut self, cx: &mut Context<Self>) {
         if self.page == Page::Orchestrator {
             self.orchestrator_tasks = !self.orchestrator_tasks;
         } else {
@@ -294,7 +294,14 @@ impl Workspace {
                         gpui::Toggled::False
                     })
                     .child(icon("butterfly", 20.))
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_orchestrator(cx))),
+                    .on_click(cx.listener(|this, e, window, cx| {
+                        // A click leaves the focus on nothing, so typing goes to the pill and
+                        // Space still opens and closes the list. A key press keeps it here.
+                        if matches!(e, gpui::ClickEvent::Mouse(_)) {
+                            window.focus(&this.focus, cx);
+                        }
+                        this.toggle_orchestrator(cx);
+                    })),
             )
             .child(entry(View::Tasks, "Tasks", "chats", cx))
             .child(entry(View::Changes, "Source Control", "git-diff", cx))
