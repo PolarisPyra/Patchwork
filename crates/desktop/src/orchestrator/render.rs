@@ -300,6 +300,11 @@ impl Render for Orchestrator {
             .backdrop_scheme
             .map_or_else(|| theme(cx).is_dark(), |scheme| scheme == Scheme::Dark);
         LIGHT.store(!dark, Ordering::Relaxed);
+        // The field keeps its own colors, so they follow the backdrop here.
+        self.field.update(cx, |field, _| {
+            field.text_color = ink(1.);
+            field.placeholder_color = ink(0.45);
+        });
         let empty = self.field.read(cx).content.trim().is_empty();
         let asked = self.asked().map(|(_, waiting)| waiting.ask.kind.clone());
         // What Enter does, which is what the button does.

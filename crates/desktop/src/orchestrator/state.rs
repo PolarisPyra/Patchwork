@@ -110,9 +110,7 @@ impl Orchestrator {
         let field = cx.new(|cx| {
             let mut field = TextArea::new(PLACEHOLDER, "Request", cx);
             field.single_line = true;
-            // The page is dark in every theme, so its field is too.
-            field.text_color = hsla(0.6, 0.25, 0.96, 1.);
-            field.placeholder_color = hsla(0.6, 0.2, 0.9, 0.38);
+            // The page's render sets the text's colors, which follow the backdrop.
             field.selection_color = hsla(0.55, 0.9, 0.65, 0.35);
             field
         });
