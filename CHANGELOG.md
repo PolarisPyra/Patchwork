@@ -3,6 +3,30 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.72] - 2026-11-14
+
+**26.11.72** · 4 changes from 1 contributor
+
+- **Clickable links in chat.** Web addresses in chat now open in your browser when clicked, with options to open or copy the link.
+- **Working scrollbars.** Scrollbars now respond to mouse dragging and clicking the track in chat, sidebar, settings, and command palette.
+- **Open subagent threads from Lineage card.** Clicking a subagent in the Lineage card now opens its thread.
+- **Back and forward between chats.** Navigate between chats with mouse side buttons or Alt+Left and Alt+Right, with a back button in subagent threads.
+
+<details>
+<summary>Full changelog</summary>
+
+### Added
+
+- Go back and forward between chats with your mouse's side buttons or Alt+Left and Alt+Right, as in a browser. A subagent's thread has a back button in the bar at its bottom, and the keys can be changed in Settings → Shortcuts. by [PolarisPyra in #88](https://github.com/PolarisPyra/Patchwork/pull/88)
+
+### Fixed
+
+- Clicking a link in a chat did nothing, and web addresses typed as plain text, in your messages or in replies, showed as ordinary text. Every web address in a chat now shows as a link that opens in your browser when clicked. Right-clicking a link offers Open link and Copy link. by [PolarisPyra in #85](https://github.com/PolarisPyra/Patchwork/pull/85)
+- Scrollbars showed how far you had scrolled but did not respond to the mouse. You can now drag the thumb, or press the track above or below it to jump there, in a chat, the sidebar, Settings and the command palette. by [PolarisPyra in #86](https://github.com/PolarisPyra/Patchwork/pull/86)
+- Subagents in the Lineage card at the top right of a chat couldn't be opened, unlike their cards in the chat. Clicking one now opens its thread. by [PolarisPyra in #87](https://github.com/PolarisPyra/Patchwork/pull/87)
+
+</details>
+
 ## [26.11.71] - 2026-11-14
 
 **26.11.71** · 1 change from 1 contributor
