@@ -94,7 +94,7 @@ impl Workspace {
                 .child(field)
                 .children(menu.map(|(_, menu)| below(menu.clone())))
         };
-        // A select of the sub agents under its title.
+        // A select under its title.
         let row = |title: &'static str, field: gpui::Div| {
             div()
                 .flex()
@@ -157,7 +157,6 @@ impl Workspace {
                 .child(mark)
                 .child(div().flex_1().min_w_0().truncate().child(name))
                 .child(icon("lock-simple", 14.).text_color(t.text_subtle))
-                .into_any_element()
         } else {
             let field = Field {
                 shown: name.into(),
@@ -165,8 +164,6 @@ impl Workspace {
                 mark: Some(mark),
             };
             dropdown(main, Part::Agent, main.name().to_string(), field)
-                .font_weight(FontWeight::MEDIUM)
-                .into_any_element()
         };
         let reset = icon_button(
             SharedString::from(format!("granular-reset-{}", main.name())),
@@ -246,7 +243,7 @@ impl Workspace {
                     .flex()
                     .flex_col()
                     .gap(px(6.))
-                    .child(picker)
+                    .child(row("Agent", picker))
                     .children(rows(main)),
             )
             .children(sub_agents)
