@@ -7,13 +7,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use gpui::{AppContext, Context, SharedString, Window};
+use gpui::{AppContext, Context, Window};
 use patchwork_server::Server;
 use patchwork_server::orchestration::Target;
 use patchwork_server::threads::{AskKind, NewThread};
 
+use super::render::Place;
 use super::state::{Orchestrator, Outcome, PLACEHOLDER, Picker, Waiting};
-use crate::ui::display_title;
 
 /// How long after the last key the router is asked where the request would go.
 const PAUSE: Duration = Duration::from_millis(350);
@@ -21,10 +21,10 @@ const PAUSE: Duration = Duration::from_millis(350);
 /// The most projects and chats the `@` list offers.
 const MAX_ENTRIES: usize = 7;
 
-/// An entry of the `@` list: the place it pins, and its name.
+/// An entry of the `@` list: the place it pins, as the list shows it.
 pub(super) struct Entry {
     pub(super) target: Target,
-    pub(super) label: SharedString,
+    pub(super) place: Place,
 }
 
 impl Orchestrator {
@@ -156,21 +156,21 @@ impl Orchestrator {
             .unwrap_or_default()
             .to_lowercase();
         let workspace = workspace.read(cx);
-        let projects = workspace.settings.projects.iter().map(|project| Entry {
-            target: Target::New(Some(project.id.clone())),
-            label: format!("New chat in {}", project.name).into(),
-        });
+        let projects = workspace.settings.projects.iter();
+        let projects = projects.map(|project| Target::New(Some(project.id.clone())));
         let chats = workspace
             .threads
             .iter()
             .filter(|t| t.parent.is_none() && t.archived_at.is_none())
-            .map(|thread| Entry {
-                target: Target::Chat(thread.id.clone()),
-                label: display_title(&thread.title).into(),
-            });
-        projects
+            .map(|thread| Target::Chat(thread.id.clone()));
+        std::iter::once(Target::New(None))
+            .chain(projects)
             .chain(chats)
-            .filter(|entry| entry.label.to_lowercase().contains(&wanted))
+            .map(|target| Entry {
+                place: self.place(&target, cx),
+                target,
+            })
+            .filter(|entry| entry.place.spoken.to_lowercase().contains(&wanted))
             .take(MAX_ENTRIES)
             .collect()
     }

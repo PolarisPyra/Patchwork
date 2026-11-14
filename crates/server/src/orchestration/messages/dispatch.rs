@@ -1,6 +1,6 @@
 //! Sending a request to the chat it belongs in, without the person choosing one: a request that
-//! names a chat goes to that chat, and any other starts a chat in the project it names, or one
-//! in each project when it names several.
+//! names a chat goes to that chat, and any other starts a chat: in the project it names, one in
+//! each project when it names several, and in no project when it names none.
 //!
 //! A small model reads the request beside the projects and the recent chats and picks. When none
 //! answers, a chat or project is taken from its name being in the request.
@@ -87,8 +87,8 @@ impl Server {
     /// Where `text` would go if sent now, without sending it: the chat it names, or a new chat
     /// like `new` in the project it names, and the other places it could go.
     ///
-    /// The project of `new` is used when the request names none. Asks a small model, so call it
-    /// off the UI thread.
+    /// A request that names no project starts a chat in none, and the project of `new` is the
+    /// next place offered. Asks a small model, so call it off the UI thread.
     ///
     /// # Errors
     ///
@@ -104,7 +104,12 @@ impl Server {
             .read_with_model(text, new, &projects, &chats)
             .unwrap_or_else(|| read_by_name(text, &projects, &chats));
         let named = reading.project_ids.first().cloned();
-        let fresh = Target::New(named.clone().or_else(|| new.project_id.clone()));
+        let fresh = Target::New(named.clone());
+        // The other kind of new chat: outside the named project, or in the one open.
+        let other_fresh = match &named {
+            Some(_) => Some(Target::New(None)),
+            None => new.project_id.clone().map(|id| Target::New(Some(id))),
+        };
         let mut targets = Vec::new();
         match (reading.chat_id, reading.project_ids.len()) {
             (Some(chat_id), _) => targets.push(Target::Chat(chat_id)),
@@ -113,9 +118,11 @@ impl Server {
         }
         let unsure = reading.other_chat.is_some() && matches!(targets[0], Target::Chat(_));
         targets.extend(reading.other_chat.filter(|_| unsure).map(Target::Chat));
-        // The other places: a new chat, then the newest chats, those of the named project first.
+        // The other places: the new chats, then the newest chats, those of the named project
+        // first.
         let in_project = |chat: &&Arc<Thread>| named.is_some() && chat.project_id == named;
         let others = std::iter::once(fresh)
+            .chain(other_fresh)
             .chain(
                 chats
                     .iter()

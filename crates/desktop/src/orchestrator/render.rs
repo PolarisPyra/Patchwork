@@ -83,8 +83,76 @@ fn pill_bounds(page: Bounds<Pixels>) -> Bounds<Pixels> {
     )
 }
 
+/// A place a request can go, as it is shown and as a screen reader says it.
+#[derive(Default)]
+pub(super) struct Place {
+    /// The project it is in. None for a chat in no project.
+    pub(super) project: Option<SharedString>,
+    /// The chat: its title, or that it is new.
+    pub(super) chat: SharedString,
+    /// The whole of it in words.
+    pub(super) spoken: SharedString,
+}
+
+impl Place {
+    /// A chat in `project`; `spoken` is what comes before the project's name when it is said.
+    fn inside(project: &str, chat: &str, spoken: &str) -> Self {
+        Self {
+            project: Some(project.to_string().into()),
+            chat: chat.to_string().into(),
+            spoken: format!("{spoken}{project}").into(),
+        }
+    }
+
+    /// A chat in no project.
+    fn outside(chat: String, spoken: String) -> Self {
+        Self {
+            project: None,
+            chat: chat.into(),
+            spoken: spoken.into(),
+        }
+    }
+
+    /// The place drawn: a folder and the project's name before a chat in a project, and a chat
+    /// bubble before one in none.
+    fn shown(&self) -> gpui::Div {
+        let row = div().min_w_0().flex().items_center().gap(px(6.));
+        let chat = div().min_w_0().truncate().child(self.chat.clone());
+        match &self.project {
+            Some(project) => row
+                .child(div().flex_none().child(icon("folder-fill", 13.)))
+                .child(
+                    div()
+                        .flex_none()
+                        .max_w(px(110.))
+                        .truncate()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .child(project.clone()),
+                )
+                .child(div().flex_none().opacity(0.5).child("›"))
+                .child(chat),
+            None => row
+                .child(div().flex_none().child(icon("chat-circle", 13.)))
+                .child(chat),
+        }
+    }
+}
+
 /// A small label inside the pill.
 fn chip(label: impl Into<SharedString>) -> gpui::Div {
+    chip_frame().child(div().min_w_0().truncate().child(label.into()))
+}
+
+/// The chip for the place a request goes.
+fn route_chip(place: &Place) -> gpui::Div {
+    chip_frame()
+        .max_w(px(260.))
+        .child(div().flex_none().opacity(0.5).child("→"))
+        .child(place.shown())
+}
+
+/// The shape the pill's chips share.
+fn chip_frame() -> gpui::Div {
     div()
         .h(px(26.))
         .max_w(px(220.))
@@ -97,7 +165,6 @@ fn chip(label: impl Into<SharedString>) -> gpui::Div {
         .bg(ink(0.08))
         .text_size(px(FS_SM))
         .text_color(ink(0.8))
-        .child(div().min_w_0().truncate().child(label.into()))
 }
 
 impl Orchestrator {
@@ -135,11 +202,11 @@ impl Orchestrator {
         }
     }
 
-    /// A place a request can go, as its chip names it: a chat of a project under the project's
-    /// name, and a new chat by whether it is in a project.
-    fn place_name(&self, target: &Target, cx: &Context<Self>) -> String {
+    /// A place a request can go, as its chip and the `@` list show it: a folder and the
+    /// project's name first for a chat in a project, and a chat bubble for one in none.
+    pub(super) fn place(&self, target: &Target, cx: &Context<Self>) -> Place {
         let Some(workspace) = self.workspace.upgrade() else {
-            return String::new();
+            return Place::default();
         };
         let workspace = workspace.read(cx);
         let project = |id: &String| {
@@ -149,19 +216,21 @@ impl Orchestrator {
         match target {
             Target::Chat(id) => {
                 let Some(thread) = workspace.threads.iter().find(|t| &t.id == id) else {
-                    return "Chat".into();
+                    return Place::outside("Chat".into(), "Chat".into());
                 };
                 let title = display_title(&thread.title);
                 match &thread.project_id {
-                    Some(id) => format!("{} › {title}", project(id)),
-                    None => title,
+                    Some(id) => Place::inside(project(id), &title, &format!("{title} in ")),
+                    None => Place::outside(title.clone(), format!("{title}, in no project")),
                 }
             }
-            Target::New(Some(id)) => format!("New chat in {}", project(id)),
-            Target::New(None) => "New chat, no project".into(),
+            Target::New(Some(id)) => Place::inside(project(id), "New chat", "New chat in "),
+            Target::New(None) => {
+                Place::outside("New chat".into(), "New chat, in no project".into())
+            }
             Target::Split(ids) => {
                 let names: Vec<&str> = ids.iter().map(project).collect();
-                format!("New chats in {}", names.join(", "))
+                Place::inside(&names.join(", "), "New chats", "New chats in ")
             }
         }
     }
@@ -209,11 +278,11 @@ impl Orchestrator {
                 .gap(px(4.))
         };
         if let Some(pinned) = &self.pinned {
-            let name = self.place_name(pinned, cx);
+            let place = self.place(pinned, cx);
             let pin = div().flex_none().child(icon("push-pin", 12.));
-            let shown = chip(format!("→ {name}")).child(pin);
+            let shown = route_chip(&place).child(pin);
             return Some(
-                status(format!("Goes to {name}, pinned"))
+                status(format!("Goes to {}, pinned", place.spoken))
                     .child(shown)
                     .into_any_element(),
             );
@@ -236,13 +305,13 @@ impl Orchestrator {
         let picked = routing
             .targets
             .get(self.pick)
-            .map(|t| self.place_name(t, cx));
+            .map(|t| self.place(t, cx).spoken);
         let chips = shown.clone().filter_map(|index| {
-            let name = self.place_name(routing.targets.get(index)?, cx);
+            let place = self.place(routing.targets.get(index)?, cx);
             let dim = shown.len() > 1 && index != self.pick;
             Some(
-                chip(format!("→ {name}"))
-                    .max_w(px(if shown.len() > 1 { 130. } else { 220. }))
+                route_chip(&place)
+                    .max_w(px(if shown.len() > 1 { 150. } else { 260. }))
                     .opacity(if dim { 0.45 } else { 1. }),
             )
         });
@@ -262,7 +331,7 @@ impl Orchestrator {
                 div()
                     .id(("orchestrator-pick", index))
                     .role(Role::ListBoxOption)
-                    .aria_label(entry.label.clone())
+                    .aria_label(entry.place.spoken.clone())
                     .aria_selected(on)
                     .h(px(30.))
                     .flex()
@@ -271,7 +340,7 @@ impl Orchestrator {
                     .rounded(px(6.))
                     .when(on, |row| row.bg(ink(0.10)))
                     .hover(|s| s.bg(ink(0.07)))
-                    .child(div().min_w_0().truncate().child(entry.label))
+                    .child(entry.place.shown())
                     .on_click(cx.listener(move |this, _, window, cx| this.pin(index, window, cx)))
             });
         let list = div()
