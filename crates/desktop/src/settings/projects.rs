@@ -134,7 +134,10 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         &t,
     )
     .child(
-        switch("checks-default", "Run checks after every task", after_every_task, &t).on_click(cx.listener(
+        switch("checks-default", "Run checks after every task", after_every_task, &t)
+            // In line with each project's switch, which has its remove button after it.
+            .when(!d.settings.projects.is_empty(), |s| s.mr(px(36.)))
+            .on_click(cx.listener(
             move |d, _, _, cx| d.update(|s| s.checks.after_every_task = !after_every_task, cx),
         )),
     );

@@ -159,43 +159,56 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .flex_col()
         .gap(px(4.))
         .children(logos.chunks(8).map(|row| {
-            div().flex().gap(px(4.)).children(row.iter().map(|l| {
-                let checked = l.id == logo;
-                let id = l.id.clone();
-                div()
-                    .id(SharedString::from(format!("logo-{}", l.id)))
-                    .role(Role::RadioButton)
-                    .aria_label(l.name.clone())
-                    .aria_toggled(if checked {
-                        Toggled::True
-                    } else {
-                        Toggled::False
+            div().flex().gap(px(4.)).children(
+                row.iter()
+                    .map(|l| {
+                        let checked = l.id == logo;
+                        let id = l.id.clone();
+                        div()
+                            .id(SharedString::from(format!("logo-{}", l.id)))
+                            .role(Role::RadioButton)
+                            .aria_label(l.name.clone())
+                            .aria_toggled(if checked {
+                                Toggled::True
+                            } else {
+                                Toggled::False
+                            })
+                            .tab_index(0)
+                            .focus_visible(crate::ui::focus_ring)
+                            .cursor_pointer()
+                            // Eight to a row share its width, so the row ends where the pane does.
+                            .flex_1()
+                            .min_w_0()
+                            .aspect_square()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(radius_sm()))
+                            .border_1()
+                            .map(|b| {
+                                if checked {
+                                    b.border_color(t.accent).bg(t.bg_accent_soft)
+                                } else {
+                                    b.border_color(gpui::transparent_black())
+                                        .hover(move |s| s.bg(t.bg_hover))
+                                }
+                            })
+                            .tooltip(tooltip(l.name.clone()))
+                            .child(
+                                img(SharedString::from(format!("app-icons/{}.svg", l.id)))
+                                    .size(px(64.)),
+                            )
+                            .on_click(cx.listener(move |d, _, _, cx| {
+                                let id = id.clone();
+                                d.update(|s| s.logo = Some(id), cx);
+                            }))
+                            .into_any_element()
                     })
-                    .tab_index(0)
-                    .focus_visible(crate::ui::focus_ring)
-                    .cursor_pointer()
-                    .size(px(82.))
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded(px(radius_sm()))
-                    .border_1()
-                    .map(|b| {
-                        if checked {
-                            b.border_color(t.accent).bg(t.bg_accent_soft)
-                        } else {
-                            b.border_color(gpui::transparent_black())
-                                .hover(move |s| s.bg(t.bg_hover))
-                        }
-                    })
-                    .tooltip(tooltip(l.name.clone()))
-                    .child(img(SharedString::from(format!("app-icons/{}.svg", l.id))).size(px(64.)))
-                    .on_click(cx.listener(move |d, _, _, cx| {
-                        let id = id.clone();
-                        d.update(|s| s.logo = Some(id), cx);
-                    }))
-            }))
+                    .chain(
+                        // A short last row keeps its icons the size of the others.
+                        (row.len()..8).map(|_| div().flex_1().into_any_element()),
+                    ),
+            )
         }));
 
     let log_rows = LOGS.iter().enumerate().map(|(i, &(title, desc, field))| {

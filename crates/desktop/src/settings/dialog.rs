@@ -1,8 +1,8 @@
-//! The Settings dialog's state and its sections.
+//! The Settings dialog's state, its list and the panes each entry holds.
 
 // Rust guideline compliant 2026-10-09
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use gpui::{
     App, Entity, EventEmitter, FocusHandle, Focusable, Pixels, Point, ScrollHandle, SharedString,
@@ -11,6 +11,7 @@ use gpui::{
 use patchwork_server::Server;
 use patchwork_server::settings::Settings;
 use crate::ui::menu::Menu;
+use crate::ui::text_area::TextArea;
 use super::controls::Field;
 use super::extensions;
 use super::general;
@@ -38,126 +39,158 @@ pub enum SettingsEvent {
     Closed,
 }
 
-/// One entry of the list: its id, its name, and its icon.
-pub(super) struct Section {
+/// One pane: its id and its name, which is its row under an entry that holds more than one.
+pub(super) struct Pane {
     pub(super) id: &'static str,
     pub(super) label: &'static str,
-    pub(super) icon: &'static str,
 }
 
-/// The panes, in groups under a heading, so the list reads in a few short runs.
-pub(super) const GROUPS: &[(&str, &[Section])] = &[
-    (
-        "General",
-        &[
-            Section {
+/// One entry of the list: its name, its icon and the panes it holds.
+pub(super) struct Entry {
+    pub(super) label: &'static str,
+    pub(super) icon: &'static str,
+    pub(super) panes: &'static [Pane],
+}
+
+/// The list. Panes on one subject share an entry, so the list stays short.
+pub(super) const ENTRIES: &[Entry] = &[
+    Entry {
+        label: "General",
+        icon: "gear-six",
+        panes: &[
+            Pane {
                 id: "general",
                 label: "General",
-                icon: "gear-six",
             },
-            Section {
-                id: "themes",
-                label: "Themes",
-                icon: "palette",
-            },
-            Section {
-                id: "backgrounds",
-                label: "Backgrounds",
-                icon: "image",
-            },
-            Section {
-                id: "interface",
-                label: "Interface",
-                icon: "text-align-left",
-            },
-            Section {
-                id: "chat",
-                label: "Chat",
-                icon: "chats",
-            },
-            Section {
-                id: "shortcuts",
-                label: "Shortcuts",
-                icon: "keyboard",
-            },
-            Section {
+            Pane {
                 id: "updates",
                 label: "Updates",
-                icon: "arrow-circle-up",
             },
         ],
-    ),
-    (
-        "Models",
-        &[
-            Section {
+    },
+    Entry {
+        label: "Appearance",
+        icon: "palette",
+        panes: &[
+            Pane {
+                id: "themes",
+                label: "Themes",
+            },
+            Pane {
+                id: "backgrounds",
+                label: "Backgrounds",
+            },
+            Pane {
+                id: "interface",
+                label: "Interface",
+            },
+        ],
+    },
+    Entry {
+        label: "Shortcuts",
+        icon: "keyboard",
+        panes: &[Pane {
+            id: "shortcuts",
+            label: "Shortcuts",
+        }],
+    },
+    Entry {
+        label: "Providers",
+        icon: "sparkle",
+        panes: &[
+            Pane {
                 id: "providers",
                 label: "Providers",
-                icon: "sparkle",
             },
-            Section {
+            Pane {
                 id: "tokens",
-                label: "AI Tokenomics",
-                icon: "gauge",
+                label: "Usage",
             },
         ],
-    ),
-    (
-        "Agents",
-        &[
-            Section {
+    },
+    Entry {
+        label: "Extensions",
+        icon: "puzzle-piece",
+        panes: &[
+            Pane {
                 id: "extensions",
                 label: "Extensions",
-                icon: "puzzle-piece",
             },
-            Section {
+            Pane {
                 id: "mcp",
                 label: "MCP Servers",
-                icon: "plug",
-            },
-            Section {
-                id: "permissions",
-                label: "Permissions",
-                icon: "shield-check",
             },
         ],
-    ),
-    (
-        "Workspace",
-        &[
-            Section {
+    },
+    Entry {
+        label: "Permissions",
+        icon: "shield-check",
+        panes: &[Pane {
+            id: "permissions",
+            label: "Permissions",
+        }],
+    },
+    Entry {
+        label: "Projects",
+        icon: "folder-simple",
+        panes: &[
+            Pane {
                 id: "projects",
                 label: "Projects",
-                icon: "folder-simple",
             },
-            Section {
+            Pane {
                 id: "scheduled",
                 label: "Scheduled",
-                icon: "clock",
-            },
-            Section {
-                id: "terminal",
-                label: "Terminal",
-                icon: "terminal-window",
-            },
-            Section {
-                id: "ssh",
-                label: "Devices",
-                icon: "devices",
             },
         ],
-    ),
+    },
+    Entry {
+        label: "Terminal",
+        icon: "terminal-window",
+        panes: &[Pane {
+            id: "terminal",
+            label: "Terminal",
+        }],
+    },
+    Entry {
+        label: "Devices",
+        icon: "devices",
+        panes: &[Pane {
+            id: "ssh",
+            label: "Devices",
+        }],
+    },
 ];
 
-pub(super) fn sections() -> impl Iterator<Item = &'static Section> {
-    GROUPS.iter().flat_map(|(_, sections)| sections.iter())
+/// The entry that holds the pane `id`, with its place in the list and the pane.
+pub(super) fn entry_of(id: &str) -> Option<(usize, &'static Entry, &'static Pane)> {
+    ENTRIES.iter().enumerate().find_map(|(at, entry)| {
+        let pane = entry.panes.iter().find(|p| p.id == id)?;
+        Some((at, entry, pane))
+    })
 }
 
 pub struct SettingsDialog {
     pub server: Arc<Server>,
     pub settings: Settings,
+    /// The pane showing, by id.
     pub(super) section: &'static str,
+    /// The pane each entry last showed, by the entry's name, so it opens there.
+    pub(super) last: HashMap<&'static str, &'static str>,
     pub(super) focus: FocusHandle,
+    /// The list's search field, made when the list is first drawn.
+    pub(super) search: Option<Entity<TextArea>>,
+    /// The search result the arrow keys have highlighted.
+    pub(super) search_at: usize,
+    /// The entries showing their panes, by their place in the list. One stays open until it is
+    /// clicked shut.
+    pub(super) expanded: HashSet<usize>,
+    /// The entry whose panes are sliding open.
+    pub(super) opening: Option<usize>,
+    /// The entry whose panes are sliding shut, by its place in the list.
+    pub(super) closing: Option<usize>,
+    /// The focus of each pane's row in the list, by the pane's id.
+    pub(super) rows: HashMap<&'static str, FocusHandle>,
     pub(super) scroll: ScrollHandle,
     /// The text fields drawn, by a name each pane gives them.
     pub(super) fields: HashMap<SharedString, Field>,
@@ -188,7 +221,7 @@ impl Focusable for SettingsDialog {
 }
 
 impl SettingsDialog {
-    /// Opens on the section `section`, by id; None opens on General.
+    /// Opens on the pane `section`, by id; None opens on General.
     pub fn new(
         server: Arc<Server>,
         section: Option<&str>,
@@ -198,13 +231,24 @@ impl SettingsDialog {
         let focus = cx.focus_handle();
         window.focus(&focus, cx);
         let section = section
-            .and_then(|id| sections().find(|s| s.id == id))
-            .map_or("general", |s| s.id);
+            .and_then(entry_of)
+            .map_or("general", |(_, _, pane)| pane.id);
         Self {
             settings: server.store.settings(),
             server,
             section,
+            last: HashMap::new(),
             focus,
+            search: None,
+            search_at: 0,
+            rows: HashMap::new(),
+            expanded: entry_of(section)
+                .filter(|(_, entry, _)| entry.panes.len() > 1)
+                .map(|(at, _, _)| at)
+                .into_iter()
+                .collect(),
+            opening: None,
+            closing: None,
             scroll: ScrollHandle::new(),
             fields: HashMap::new(),
             menu: None,
@@ -257,7 +301,22 @@ impl SettingsDialog {
         .detach();
     }
 
+    /// Opens the entry at `at` of the list, on the pane it last showed.
+    pub(super) fn open_entry(&mut self, at: usize, cx: &mut Context<Self>) {
+        let Some(entry) = ENTRIES.get(at) else {
+            return;
+        };
+        let pane = self.last.get(entry.label).copied();
+        if let Some(id) = pane.or_else(|| entry.panes.first().map(|p| p.id)) {
+            self.open_section(id, cx);
+        }
+    }
+
     pub(super) fn open_section(&mut self, id: &'static str, cx: &mut Context<Self>) {
+        if let Some((at, entry, _)) = entry_of(id) {
+            self.last.insert(entry.label, id);
+            self.expand(at);
+        }
         self.section = id;
         self.menu = None;
         // A theme written since the last look shows up.
