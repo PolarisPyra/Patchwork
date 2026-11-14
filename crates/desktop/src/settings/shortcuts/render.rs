@@ -10,7 +10,7 @@ use gpui::{
 use crate::ui::text_area::{Changed, TextArea};
 use crate::settings::SettingsDialog;
 use crate::settings::sigils::SIGILS_PAGE;
-use crate::ui::theme::{FS_MD, FS_SM, FS_XS, radius_sm, Theme, theme};
+use crate::ui::theme::{fs_md, fs_sm, fs_xs, radius_sm, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, tooltip};
 use super::keys::{
     COMMANDS, Command, DEFAULT_RULES, FIXED_KEYS, Overrides, PAGES, STATE_KEY, bind_keys,
@@ -104,7 +104,7 @@ pub fn kbd(parts: &[String], t: &Theme) -> gpui::Div {
                 .px(px(5.))
                 .rounded(px(radius_sm()))
                 .bg(t.bg_selected_muted)
-                .text_size(px(FS_XS))
+                .text_size(px(fs_xs()))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(t.text_muted)
                 .child(p.clone())
@@ -175,73 +175,75 @@ pub fn render(
         .into_iter()
         .enumerate()
         .map(|(i, (p, commands, keys))| {
-            let rows =
-                commands.into_iter().map(|c| {
-                    let key = key_for(&overrides, c.id);
-                    let changed = overrides.contains_key(c.id);
-                    let recording = d.shortcuts.recording == Some(c.id);
-                    let clash = conflicts(&overrides, c.id);
-                    let id = c.id;
-                    let group = SharedString::from(format!("shortcut-{id}"));
-                    let small = |name: &str, label: String, glyph: &str| {
-                        button(SharedString::from(format!("{name}-{id}")), label)
-                            .size(px(24.))
-                            .justify_center()
-                            .rounded(px(radius_sm()))
-                            .text_color(muted)
-                            .hover(move |s| s.bg(hover).text_color(fg))
-                            .child(icon(glyph, 12.))
-                    };
-                    div()
-                        .group(group.clone())
-                        .border_b_1()
-                        .border_color(t.border)
-                        .py(px(6.))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(8.))
-                                .child(
-                                    div()
-                                        .min_w_0()
-                                        .flex_1()
-                                        .child(div().text_color(t.text).child(c.title))
-                                        .children(c.desc.map(|desc| {
-                                            div().text_size(px(FS_SM)).text_color(muted).child(desc)
-                                        })),
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_none()
-                                        .items_center()
-                                        .justify_end()
-                                        .when(key.is_some() && !recording, |r| {
-                                            r.child(
-                                                small(
-                                                    "unbind",
-                                                    format!("Remove shortcut for {}", c.title),
-                                                    "x",
-                                                )
-                                                .opacity(0.)
-                                                .group_hover(group.clone(), |s| s.opacity(1.))
-                                                .focus(|s| s.opacity(1.))
-                                                .tooltip(tooltip("Remove shortcut"))
-                                                .on_click(cx.listener(move |d, _, _, cx| {
-                                                    d.set_key(id, None, cx);
-                                                })),
+            let rows = commands.into_iter().map(|c| {
+                let key = key_for(&overrides, c.id);
+                let changed = overrides.contains_key(c.id);
+                let recording = d.shortcuts.recording == Some(c.id);
+                let clash = conflicts(&overrides, c.id);
+                let id = c.id;
+                let group = SharedString::from(format!("shortcut-{id}"));
+                let small = |name: &str, label: String, glyph: &str| {
+                    button(SharedString::from(format!("{name}-{id}")), label)
+                        .size(px(24.))
+                        .justify_center()
+                        .rounded(px(radius_sm()))
+                        .text_color(muted)
+                        .hover(move |s| s.bg(hover).text_color(fg))
+                        .child(icon(glyph, 12.))
+                };
+                div()
+                    .group(group.clone())
+                    .border_b_1()
+                    .border_color(t.border)
+                    .py(px(6.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.))
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .flex_1()
+                                    .child(div().text_color(t.text).child(c.title))
+                                    .children(c.desc.map(|desc| {
+                                        div().text_size(px(fs_sm())).text_color(muted).child(desc)
+                                    })),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_none()
+                                    .items_center()
+                                    .justify_end()
+                                    .when(key.is_some() && !recording, |r| {
+                                        r.child(
+                                            small(
+                                                "unbind",
+                                                format!("Remove shortcut for {}", c.title),
+                                                "x",
                                             )
-                                        })
-                                        .when(changed && !recording, |r| {
-                                            r.child(
-                                                small(
-                                                    "reset",
-                                                    format!("Reset shortcut for {}", c.title),
-                                                    "arrow-counter-clockwise",
-                                                )
-                                                .tooltip(tooltip("Reset to default"))
-                                                .on_click(cx.listener(move |d, _, _, cx| {
+                                            .opacity(0.)
+                                            .group_hover(group.clone(), |s| s.opacity(1.))
+                                            .focus(|s| s.opacity(1.))
+                                            .tooltip(tooltip("Remove shortcut"))
+                                            .on_click(
+                                                cx.listener(move |d, _, _, cx| {
+                                                    d.set_key(id, None, cx);
+                                                }),
+                                            ),
+                                        )
+                                    })
+                                    .when(changed && !recording, |r| {
+                                        r.child(
+                                            small(
+                                                "reset",
+                                                format!("Reset shortcut for {}", c.title),
+                                                "arrow-counter-clockwise",
+                                            )
+                                            .tooltip(tooltip("Reset to default"))
+                                            .on_click(
+                                                cx.listener(move |d, _, _, cx| {
                                                     let mut overrides = d
                                                         .shortcuts
                                                         .overrides
@@ -249,86 +251,87 @@ pub fn render(
                                                         .unwrap_or_default();
                                                     overrides.remove(id);
                                                     d.save_keys(overrides, cx);
-                                                })),
-                                            )
-                                        }),
-                                )
-                                .child(
-                                    button(
-                                        SharedString::from(format!("change-{id}")),
-                                        format!("Change shortcut for {}", c.title),
-                                    )
-                                    .rounded(px(radius_sm()))
-                                    .border_1()
-                                    .px(px(8.))
-                                    .py(px(4.))
-                                    .map(|b| {
-                                        if recording {
-                                            b.border_color(t.accent).bg(t.bg_accent_soft)
-                                        } else {
-                                            b.border_color(gpui::transparent_black())
-                                                .hover(move |s| s.bg(hover))
-                                        }
-                                    })
-                                    .tooltip(tooltip("Change shortcut"))
-                                    .map(|b| match (&key, recording) {
-                                        (_, true) => b.child(
-                                            div()
-                                                .text_size(px(FS_SM))
-                                                .text_color(t.accent_text)
-                                                .child("Press keys…"),
-                                        ),
-                                        (Some(key), false) => b.child(kbd(&format_key(key), &t)),
-                                        (None, false) => b.child(
-                                            div()
-                                                .text_size(px(FS_SM))
-                                                .text_color(t.text_subtle)
-                                                .child("Unbound"),
-                                        ),
-                                    })
-                                    .on_click(cx.listener(
-                                        move |d, _, window, cx| {
-                                            d.shortcuts.refused = None;
-                                            d.shortcuts.recording_sigil = None;
-                                            d.shortcuts.recording =
-                                                if d.shortcuts.recording == Some(id) {
-                                                    None
-                                                } else {
-                                                    Some(id)
-                                                };
-                                            window.focus(&d.focus, cx);
-                                            cx.notify();
-                                        },
-                                    )),
-                                ),
-                        )
-                        .when(recording, |r| {
-                            r.children(d.shortcuts.refused.clone().map(|e| {
-                                div()
-                                    .id("shortcut-refused")
-                                    .role(Role::Alert)
-                                    .mt(px(2.))
-                                    .text_right()
-                                    .text_size(px(FS_SM))
-                                    .text_color(t.danger)
-                                    .child(e)
-                            }))
-                        })
-                        .when(!recording && !clash.is_empty(), |r| {
-                            let names: Vec<String> = clash
-                                .iter()
-                                .map(|x| format!("{}: {}", x.page, x.title))
-                                .collect();
-                            r.child(
-                                div()
-                                    .mt(px(2.))
-                                    .text_right()
-                                    .text_size(px(FS_SM))
-                                    .text_color(t.warning)
-                                    .child(format!("Also used by {}", names.join(", "))),
+                                                }),
+                                            ),
+                                        )
+                                    }),
                             )
-                        })
-                });
+                            .child(
+                                button(
+                                    SharedString::from(format!("change-{id}")),
+                                    format!("Change shortcut for {}", c.title),
+                                )
+                                .rounded(px(radius_sm()))
+                                .border_1()
+                                .px(px(8.))
+                                .py(px(4.))
+                                .map(|b| {
+                                    if recording {
+                                        b.border_color(t.accent).bg(t.bg_accent_soft)
+                                    } else {
+                                        b.border_color(gpui::transparent_black())
+                                            .hover(move |s| s.bg(hover))
+                                    }
+                                })
+                                .tooltip(tooltip("Change shortcut"))
+                                .map(|b| match (&key, recording) {
+                                    (_, true) => b.child(
+                                        div()
+                                            .text_size(px(fs_sm()))
+                                            .text_color(t.accent_text)
+                                            .child("Press keys…"),
+                                    ),
+                                    (Some(key), false) => b.child(kbd(&format_key(key), &t)),
+                                    (None, false) => b.child(
+                                        div()
+                                            .text_size(px(fs_sm()))
+                                            .text_color(t.text_subtle)
+                                            .child("Unbound"),
+                                    ),
+                                })
+                                .on_click(cx.listener(
+                                    move |d, _, window, cx| {
+                                        d.shortcuts.refused = None;
+                                        d.shortcuts.recording_sigil = None;
+                                        d.shortcuts.recording = if d.shortcuts.recording == Some(id)
+                                        {
+                                            None
+                                        } else {
+                                            Some(id)
+                                        };
+                                        window.focus(&d.focus, cx);
+                                        cx.notify();
+                                    },
+                                )),
+                            ),
+                    )
+                    .when(recording, |r| {
+                        r.children(d.shortcuts.refused.clone().map(|e| {
+                            div()
+                                .id("shortcut-refused")
+                                .role(Role::Alert)
+                                .mt(px(2.))
+                                .text_right()
+                                .text_size(px(fs_sm()))
+                                .text_color(t.danger)
+                                .child(e)
+                        }))
+                    })
+                    .when(!recording && !clash.is_empty(), |r| {
+                        let names: Vec<String> = clash
+                            .iter()
+                            .map(|x| format!("{}: {}", x.page, x.title))
+                            .collect();
+                        r.child(
+                            div()
+                                .mt(px(2.))
+                                .text_right()
+                                .text_size(px(fs_sm()))
+                                .text_color(t.warning)
+                                .child(format!("Also used by {}", names.join(", "))),
+                        )
+                    })
+            });
             let fixed_rows = keys.into_iter().map(|&(_, keys, action)| {
                 let noted = d.shortcuts.fixed_note == Some(action);
                 let parts: Vec<String> =
@@ -374,7 +377,7 @@ pub fn render(
                             div()
                                 .mt(px(2.))
                                 .text_right()
-                                .text_size(px(FS_SM))
+                                .text_size(px(fs_sm()))
                                 .text_color(t.text_subtle)
                                 .child("Fixed: this shortcut cannot be changed"),
                         )
@@ -387,7 +390,7 @@ pub fn render(
                         div()
                             .mt(px(if i == 0 { 4. } else { 0. }))
                             .mb(px(2.))
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(t.text_subtle)
                             .child(p),
@@ -419,7 +422,7 @@ pub fn render(
             .items_center()
             .rounded(px(radius_sm()))
             .px(px(10.))
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .map(|tab| {
                 if selected {
                     tab.bg(t.bg_selected).text_color(fg)
@@ -467,7 +470,7 @@ pub fn render(
                                 })
                                 .bg(t.bg_editor)
                                 .px(px(8.))
-                                .text_size(px(FS_MD))
+                                .text_size(px(fs_md()))
                                 .child(div().flex_1().min_w_0().child(search)),
                         )
                         .child(
@@ -505,7 +508,7 @@ pub fn render(
             s.child(
                 div()
                     .mb(px(4.))
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .text_color(muted)
                     .child("Click a shortcut, then press the new keys. Esc cancels."),
             )
@@ -514,7 +517,7 @@ pub fn render(
             s.child(
                 div()
                     .mb(px(4.))
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .text_color(muted)
                     .child("Click a sigil, then type the new one. Esc cancels."),
             )
@@ -537,7 +540,7 @@ pub fn render(
                             div()
                                 .mt(px(if sigils_first { 4. } else { 0. }))
                                 .mb(px(2.))
-                                .text_size(px(FS_SM))
+                                .text_size(px(fs_sm()))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(t.text_subtle)
                                 .child(SIGILS_PAGE),

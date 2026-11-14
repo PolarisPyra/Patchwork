@@ -13,7 +13,7 @@ use gpui::{
 
 use crate::settings::SettingsDialog;
 use crate::ui::focus_ring;
-use crate::ui::theme::{FS_SM, Theme as Colors};
+use crate::ui::theme::{fs_sm, Theme as Colors};
 
 const TRACK_W: f32 = 160.;
 const TRACK_H: f32 = 20.;
@@ -105,7 +105,7 @@ pub(super) fn slider(
         .child(
             div()
                 .w(px(28.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
                 .child(format!("{}", value.round())),
         )

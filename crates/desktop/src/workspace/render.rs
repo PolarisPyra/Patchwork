@@ -7,7 +7,7 @@ use gpui::{
     StyleRefinement, Window, deferred, div, prelude::*, px, relative,
 };
 use crate::ui::menu::Menu;
-use crate::ui::theme::{font_ui, FS_MD, radius, radius_sm, STATUSBAR_H, Theme, theme};
+use crate::ui::theme::{font_ui, fs_md, radius, radius_sm, STATUSBAR_H, Theme, theme};
 use crate::ui::{button, display_title, icon};
 use super::state::{Page, SIDEBAR_MAX, SIDEBAR_MIN, View, Workspace};
 use super::bars;
@@ -178,7 +178,7 @@ impl Render for Workspace {
             .flex_col()
             .bg(t.bg_app)
             .font_family(font_ui())
-            .text_size(px(FS_MD))
+            .text_size(px(fs_md()))
             .line_height(relative(1.5))
             .text_color(t.text)
             .on_mouse_move(cx.listener(Self::on_resize))
@@ -298,7 +298,7 @@ impl Workspace {
                     .py(px(8.))
                     .pr(px(8.))
                     .pl(px(12.))
-                    .text_size(px(crate::ui::theme::FS_SM))
+                    .text_size(px(crate::ui::theme::fs_sm()))
                     .shadow(crate::ui::popup_shadow(t))
                     .role(Role::Alert)
                     .child(div().min_w_0().child(error))

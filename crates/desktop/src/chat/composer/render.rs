@@ -8,7 +8,7 @@ use gpui::{
 };
 use crate::ui::text_area::Paste;
 use crate::chat::user::attachment_chip;
-use crate::ui::theme::{FS_MD, radius, radius_lg, theme};
+use crate::ui::theme::{fs_md, radius, radius_lg, theme};
 use crate::ui::{agent_logo, button, icon, tooltip};
 use crate::workspace::{Workspace, is_busy, is_working};
 use super::menus::{Menu, access_of, compact_label, effort_label, efforts};
@@ -403,7 +403,7 @@ impl Render for Composer {
                     .overflow_y_scroll()
                     .track_scroll(&editor_scroll)
                     .px(px(6.))
-                    .text_size(px(FS_MD))
+                    .text_size(px(fs_md()))
                     .line_height(px(20.))
                     // The field is only as tall as its text; a right-click on the box below it
                     // opens the field's Edit menu too.

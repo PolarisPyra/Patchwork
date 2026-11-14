@@ -1,8 +1,10 @@
-//! What an agent is told to write a color scheme or an animated background from a description.
+//! What an agent is told to write a color scheme, an animated background or a code theme from a
+//! description.
 
 // Rust guideline compliant 2026-10-09
 
-use super::library::{SCENES, THEMES};
+use super::library::{CODE, SCENES, THEMES};
+use super::types::Scheme;
 use crate::Server;
 
 /// A color scheme's file format, as the agent is told it.
@@ -87,6 +89,30 @@ Rules:
 - A "filled" sprite is pixel art: draw it with a character for each tile, 10 to 30 tiles across.
 - Colors of sprites and dust should sit well against the sky, and stay quiet enough to read text over."##;
 
+/// A code theme's file format, as the agent is told it.
+const CODE_FORMAT: &str = r##"A code theme is one JSON file, the colors code is highlighted in:
+
+{
+  "name": "GitHub Dark",
+  "scheme": "dark",            // "dark" or "light": which kind of window it is for
+  "colors": {                  // six-digit hex colors, all eight of them
+    "keyword": "#ff7b72",      // fn, let, if, return
+    "string": "#a5d6ff",
+    "property": "#79c0ff",     // fields and keys
+    "ty": "#ffa657",           // the names of types
+    "number": "#79c0ff",
+    "comment": "#8b949e",      // quieter than the rest, and still readable
+    "function": "#d2a8ff",     // the names of functions
+    "tag": "#7ee787"           // the tags of markup
+  }
+}
+
+Rules:
+- Real JSON: no comments, no trailing commas. The comments above only explain.
+- Only these keys, and every one of the eight colors.
+- Each color needs a contrast of 4.5:1 or more against the background code sits on, and
+  keywords, strings and functions should be told apart at a glance."##;
+
 impl Server {
     /// The message that has an agent write a color scheme of `description` into the themes
     /// folder, and the id the color scheme will have.
@@ -115,6 +141,29 @@ impl Server {
             "Write a Patchwork animated background: {description}\n\nSave it as {} and write \
              nothing else. Read the file back and check it is valid JSON before you finish.\n\n\
              {SCENE_FORMAT}",
+            path.display()
+        );
+        (prompt, id)
+    }
+}
+
+impl Server {
+    /// The message that has an agent write a code theme of `description` for the windows of
+    /// `scheme` into the code themes folder, and the id the code theme will have.
+    #[must_use]
+    pub fn code_theme_prompt(&self, description: &str, scheme: Scheme) -> (String, String) {
+        let id = CODE.free_id(description);
+        let path = CODE.path(&id);
+        make_dir(&CODE.dir());
+        let (kind, ground) = match scheme {
+            Scheme::Light => ("light", "a near-white background"),
+            Scheme::Dark => ("dark", "a near-black background"),
+        };
+        let prompt = format!(
+            "Write a Patchwork code theme: {description}\n\nIt is for {kind} windows, where code \
+             sits on {ground}, so its \"scheme\" is \"{kind}\". Save it as {} and write nothing \
+             else. Read the file back and check it is valid JSON before you finish.\n\n\
+             {CODE_FORMAT}",
             path.display()
         );
         (prompt, id)

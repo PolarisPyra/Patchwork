@@ -14,7 +14,7 @@ use gpui::{
 use patchwork_server::provider::AgentKind;
 use crate::chat::composer::Composer;
 use crate::chat::composer::menus::Pick;
-use crate::ui::theme::{FS_SM, Theme};
+use crate::ui::theme::{fs_sm, Theme};
 use crate::ui::{agent_label, agent_logo, button, icon, popup_shadow};
 
 impl Composer {
@@ -65,7 +65,7 @@ impl Composer {
                     .bg(t.text_tint_6)
                     .px(px(4.))
                     .py(px(2.))
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .line_height(px(16.))
                     .text_color(t.text_muted)
                     .child(format!("Ctrl+{}", i + 1))
@@ -111,7 +111,7 @@ impl Composer {
                         .flex_1()
                         .min_w_0()
                         .gap(px(4.))
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .line_height(px(16.5))
                         .child(
                             div()
@@ -257,7 +257,7 @@ impl Composer {
                         .flex_col()
                         .flex_1()
                         .gap(px(4.))
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .line_height(px(16.5))
                         .child(div().font_weight(FontWeight::MEDIUM).child("Legacy models"))
                         .child(
@@ -284,7 +284,7 @@ impl Composer {
             div()
                 .p(px(8.))
                 .text_center()
-                .text_size(px(14.))
+                .text_size(px(crate::ui::theme::fs(14.)))
                 .text_color(t.text_subtle)
                 .child("No models found")
         });
@@ -309,7 +309,7 @@ impl Composer {
                         .px(px(12.))
                         .pt(px(12.))
                         .pb(px(6.))
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(t.text_subtle)
                         .child("Legacy models"),
@@ -392,7 +392,7 @@ impl Composer {
                                         div()
                                             .flex_1()
                                             .min_w_0()
-                                            .text_size(px(14.))
+                                            .text_size(px(crate::ui::theme::fs(14.)))
                                             .line_height(px(20.))
                                             .child(search),
                                     ),

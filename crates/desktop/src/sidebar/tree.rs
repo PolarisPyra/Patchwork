@@ -8,7 +8,7 @@ use gpui::{
     div, prelude::*, px,
 };
 use patchwork_server::threads::{ApprovalStatus, Thread};
-use crate::ui::theme::{FS_SM, radius_sm, Theme, theme};
+use crate::ui::theme::{fs_sm, radius_sm, Theme, theme};
 use crate::ui::{agent_label, agent_logo, button, display_title, format_relative, icon, spinner};
 use crate::workspace::{Workspace, is_busy};
 
@@ -135,7 +135,7 @@ pub(super) fn thread_row(
         let at = last.map_or(th.created_at, |m| m.created_at);
         let color: Hsla = if picked { t.text_muted } else { t.text_subtle };
         div()
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .text_color(color)
             .child(format_relative(at))
             .into_any_element()

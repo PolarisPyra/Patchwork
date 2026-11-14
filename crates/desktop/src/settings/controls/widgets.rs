@@ -9,7 +9,7 @@ use gpui::{
 };
 use crate::ui::menu::MenuItem;
 use crate::settings::SettingsDialog;
-use crate::ui::theme::{FS_SM, radius_sm, Theme};
+use crate::ui::theme::{fs_sm, radius_sm, Theme};
 use crate::ui::{button, icon};
 
 /// A letter on a colour picked from the name, so each row is easy to spot.
@@ -57,7 +57,7 @@ pub fn token_row(title: impl Into<SharedString>, desc: Option<&str>, t: &Theme) 
                 .child(div().font_weight(FontWeight::SEMIBOLD).child(title))
                 .children(desc.map(|desc| {
                     div()
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .text_color(t.text_muted)
                         .child(desc.to_string())
                 })),
@@ -69,7 +69,7 @@ pub fn section_heading(text: impl Into<SharedString>, first: bool, t: &Theme) ->
     div()
         .when(!first, |d| d.mt(px(16.)))
         .mb(px(2.))
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .font_weight(FontWeight::MEDIUM)
         .text_color(t.text_subtle)
         .child(text.into())
@@ -163,7 +163,7 @@ pub fn segmented<T: Copy + PartialEq + 'static>(
                 .justify_center()
                 .px(px(16.))
                 .whitespace_nowrap()
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .map(|d| {
                     if checked {
                         d.bg(t.bg_selected).text_color(fg)
@@ -198,7 +198,7 @@ pub fn select_box(
         .bg(t.bg_editor)
         .pl(px(8.))
         .pr(px(6.))
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .text_color(t.text)
         .hover(move |s| s.bg(hover).text_color(fg))
         .child(div().min_w_0().truncate().child(current.into()))
@@ -269,7 +269,7 @@ pub fn minutes_stepper(
                 .border_x_1()
                 .border_color(t.border_strong)
                 .text_center()
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .child(shown),
         )
         .child(step(
@@ -290,7 +290,7 @@ pub fn alert(
         .id(id.into())
         .role(Role::Alert)
         .pt(px(8.))
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .text_color(color)
         .child(text.into())
 }
@@ -312,7 +312,7 @@ pub fn chip(
         .rounded_full()
         .border_1()
         .whitespace_nowrap()
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .text_color(t.text)
         .map(|b| {
             if on {

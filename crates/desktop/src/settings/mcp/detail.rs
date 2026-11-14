@@ -8,7 +8,7 @@ use patchwork_server::provider::mcp::{self, McpServer, clis};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, letter_badge, switch};
-use crate::ui::theme::{font_mono, FS_LG, FS_SM, FS_XS, radius, radius_sm, Theme, theme};
+use crate::ui::theme::{font_mono, fs_lg, fs_sm, fs_xs, radius, radius_sm, Theme, theme};
 use crate::ui::{BtnKind, btn, icon_button};
 
 use super::{Card, Client, Draft, Own};
@@ -42,7 +42,7 @@ fn use_row(
     let line = match &u.error {
         Some(e) => div()
             .truncate()
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .text_color(t.danger)
             .child(
                 div()
@@ -56,7 +56,7 @@ fn use_row(
             .min_w_0()
             .items_center()
             .gap(px(6.))
-            .text_size(px(FS_XS))
+            .text_size(px(fs_xs()))
             .text_color(muted)
             .child(
                 crate::ui::button(
@@ -125,7 +125,7 @@ fn use_row(
                 .rounded(px(radius_sm()))
                 .bg(t.bg_hover)
                 .px(px(6.))
-                .text_size(px(FS_XS))
+                .text_size(px(fs_xs()))
                 .text_color(muted)
                 .child(scope)
         }));
@@ -273,14 +273,14 @@ pub fn render(
                     div()
                         .id("mcp-detail-title")
                         .role(gpui::Role::Heading)
-                        .text_size(px(FS_LG))
+                        .text_size(px(fs_lg()))
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(card.name.clone()),
                 )
                 .child(
                     div()
                         .font_family(font_mono())
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .text_color(t.text_muted)
                         .child(card.target.clone()),
                 ),
@@ -347,7 +347,7 @@ pub fn render(
                     .bg(t.bg_hover)
                     .px(px(6.))
                     .font_family(font_mono())
-                    .text_size(px(FS_XS))
+                    .text_size(px(fs_xs()))
                     .text_color(t.text_muted)
                     .child(e.clone())
             }))
@@ -406,7 +406,7 @@ pub fn render(
                         div()
                             .truncate()
                             .font_family(font_mono())
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .child(tool.name.clone()),
                     )
                     .child(
@@ -414,7 +414,7 @@ pub fn render(
                             .w_full()
                             .line_clamp(2)
                             .text_ellipsis()
-                            .text_size(px(FS_XS))
+                            .text_size(px(fs_xs()))
                             .text_color(t.text_muted)
                             .child(tool.description.clone()),
                     )

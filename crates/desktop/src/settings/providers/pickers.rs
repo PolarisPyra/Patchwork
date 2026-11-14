@@ -7,7 +7,7 @@ use patchwork_server::provider::AgentKind;
 use patchwork_server::settings::VisionModel;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{choice, select_box};
-use crate::ui::theme::{FS_SM, radius, Theme, theme};
+use crate::ui::theme::{fs_sm, radius, Theme, theme};
 use crate::ui::{AGENT_KINDS, agent_label, icon, provider_logo};
 use super::state::VISION_AGENTS;
 use super::form;
@@ -42,7 +42,7 @@ pub(super) fn tile(
         .rounded(px(radius()))
         .border_1()
         .px(px(8.))
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .hover(move |s| s.border_color(strong).bg(hover).text_color(fg))
 }
 

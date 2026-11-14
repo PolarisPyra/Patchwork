@@ -17,7 +17,7 @@ use patchwork_server::threads::{Message, Role as MessageRole, Thread};
 use crate::ui::markdown::{FindIn, find_in};
 use crate::ui::text_area::{Changed, Submitted, SubmittedBack, TextArea};
 use crate::chat::timeline::{Step, steps_of};
-use crate::ui::theme::{FS_SM, FS_XS, radius, radius_sm, Theme, theme};
+use crate::ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme, theme};
 use crate::ui::{button, icon};
 use crate::workspace::Workspace;
 
@@ -327,7 +327,7 @@ pub fn find_field(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>) -> 
                 .items_center()
                 .gap(px(2.))
                 .pr(px(3.))
-                .child(div().flex_1().min_w_0().text_size(px(FS_SM)).child(field))
+                .child(div().flex_1().min_w_0().text_size(px(fs_sm())).child(field))
                 .child(
                     div()
                         .id("find-status")
@@ -335,7 +335,7 @@ pub fn find_field(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>) -> 
                         .aria_label(status.clone())
                         .flex_none()
                         .px(px(4.))
-                        .text_size(px(FS_XS))
+                        .text_size(px(fs_xs()))
                         .text_color(t.text_subtle)
                         .child(status),
                 )

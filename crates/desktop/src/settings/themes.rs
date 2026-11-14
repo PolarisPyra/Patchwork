@@ -14,7 +14,7 @@ use patchwork_server::settings::Theme as ThemeSetting;
 use patchwork_server::themes::{CodeTheme, SavedScene, Scheme, Theme, Unreadable};
 
 pub(super) use self::backdrops::backgrounds_pane;
-use self::cards::{Slot, grid, scheme_cards};
+use self::cards::{Slot, add_card, grid, scheme_cards};
 use self::editor::{Editing, editor};
 use self::interface::Fonts;
 pub(super) use self::interface::interface_pane;
@@ -25,7 +25,7 @@ use super::{SettingsDialog, SettingsEvent};
 use crate::orchestrator::PreviewFlight;
 use crate::settings::controls::{alert, section_heading, switch, token_row};
 use crate::ui::background_picker::BackgroundPicker;
-use crate::ui::theme::{FS_SM, theme};
+use crate::ui::theme::{fs_sm, theme};
 use crate::ui::{BtnKind, btn, icon_button, spinner};
 
 mod backdrops;
@@ -44,11 +44,15 @@ mod slider;
 const LOOK_EVERY: Duration = Duration::from_secs(2);
 const LOOKS: u32 = 300;
 
+/// The Themes pane, as the group its drop target answers to.
+const PANE: &str = "themes-pane";
+
 /// What an agent can be asked to write.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
     Scheme,
     Scene,
+    Code,
 }
 
 impl Kind {
@@ -57,6 +61,7 @@ impl Kind {
         match self {
             Self::Scheme => "describe-scheme",
             Self::Scene => "describe-scene",
+            Self::Code => "describe-code-theme",
         }
     }
 
@@ -64,6 +69,7 @@ impl Kind {
         match self {
             Self::Scheme => "color scheme",
             Self::Scene => "background",
+            Self::Code => "code theme",
         }
     }
 }
@@ -85,8 +91,8 @@ pub struct ThemesState {
     editing: Option<Editing>,
     /// The lists were asked for. Cleared to read them again.
     pub(super) loaded: bool,
-    /// The id of the color scheme a chat is writing, and of the background.
-    writing: [Option<String>; 2],
+    /// The id of the color scheme a chat is writing, of the background and of the code theme.
+    writing: [Option<String>; 3],
     error: Option<String>,
 }
 
@@ -129,11 +135,18 @@ impl SettingsDialog {
         }
         self.themes.error = None;
         area.update(cx, |area, cx| area.set_text("", cx));
+        // A code theme is written for the kind of window that is showing, whose cards show.
+        let scheme = if theme(cx).is_dark() {
+            Scheme::Dark
+        } else {
+            Scheme::Light
+        };
         let server = Arc::clone(&self.server);
         self.run(
             move || match kind {
                 Kind::Scheme => server.theme_prompt(&description),
                 Kind::Scene => server.scene_prompt(&description),
+                Kind::Code => server.code_theme_prompt(&description, scheme),
             },
             move |d, (prompt, id), cx| {
                 d.themes.writing[kind as usize] = Some(id.clone());
@@ -164,6 +177,7 @@ impl SettingsDialog {
                         match kind {
                             Kind::Scheme => server.theme_written(&id),
                             Kind::Scene => server.scene_written(&id),
+                            Kind::Code => server.code_theme_written(&id),
                         }
                     })
                     .await;
@@ -174,18 +188,23 @@ impl SettingsDialog {
             // The agent reads its file back and may correct it once more.
             cx.background_executor().timer(LOOK_EVERY).await;
             let listed = Arc::clone(&server);
-            let (themes, scenes) = cx
-                .background_spawn(async move { (listed.list_themes(), listed.list_scenes()) })
+            let (themes, scenes, codes) = cx
+                .background_spawn(async move {
+                    let codes = listed.list_code_themes();
+                    (listed.list_themes(), listed.list_scenes(), codes)
+                })
                 .await;
             let _ = this.update(cx, |d, cx| {
                 let readable = match kind {
                     Kind::Scheme => themes.iter().any(|t| t.custom && t.id == id),
                     Kind::Scene => scenes.iter().any(|s| s.custom && s.id == id),
+                    Kind::Code => codes.iter().any(|c| c.custom && c.id == id),
                 };
                 let noun = kind.noun();
                 d.themes.writing[kind as usize] = None;
                 d.themes.themes = themes;
                 d.themes.scenes = scenes.into_iter().map(Arc::new).collect();
+                d.themes.codes = codes;
                 d.themes.error = match (written, readable) {
                     (_, true) => None,
                     (true, false) => Some(format!("The {noun} the chat wrote cannot be read.")),
@@ -199,7 +218,7 @@ impl SettingsDialog {
 
     /// The chat that was to write a file could not be started.
     pub fn theme_failed(&mut self, error: String, cx: &mut Context<Self>) {
-        self.themes.writing = [None, None];
+        self.themes.writing = [None, None, None];
         self.themes.error = Some(error);
         cx.notify();
     }
@@ -263,10 +282,6 @@ fn generator(
                 b.on_click(cx.listener(move |d, _, _, cx| d.generate_themed(kind, cx)))
             }),
         )
-        .children((kind == Kind::Scheme).then(|| {
-            icon_button("import-theme", "Import a theme", "plus", 16., cx)
-                .on_click(cx.listener(|d, _, _, cx| d.pick_themes(cx)))
-        }))
         .child(
             icon_button(
                 SharedString::from(format!("folder-{}", kind.field())),
@@ -292,7 +307,7 @@ fn generator(
                 .flex()
                 .items_center()
                 .gap(px(8.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
                 .child(spinner(14., t.text_muted))
                 .child(format!("A chat is writing {id}"))
@@ -332,11 +347,18 @@ pub fn render(
     let part = |name: &'static str| {
         div()
             .pt(px(10.))
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .text_color(t.text_muted)
             .child(name)
             .into_any_element()
     };
+    // It lights up while a theme's file is held over the pane, which takes the drop.
+    let add_theme = add_card("import-theme", "Add theme", &t)
+        .group_drag_over::<ExternalPaths>(PANE, move |style| {
+            style.border_color(t.accent).text_color(t.text)
+        })
+        .on_click(cx.listener(|d, _, _, cx| d.pick_themes(cx)))
+        .into_any_element();
     let schemes: Vec<AnyElement> = if follows {
         let light = scheme_cards(d, Slot::Light, cx);
         let night = scheme_cards(d, Slot::Dark, cx);
@@ -344,11 +366,16 @@ pub fn render(
             part("While the system is light"),
             grid("schemes-light", "Color scheme in light", light, None),
             part("While the system is dark"),
-            grid("schemes-dark", "Color scheme in dark", night, None),
+            grid(
+                "schemes-dark",
+                "Color scheme in dark",
+                night,
+                Some(add_theme),
+            ),
         ]
     } else {
         let all = scheme_cards(d, Slot::Fixed, cx);
-        vec![grid("color-schemes", "Color scheme", all, None)]
+        vec![grid("color-schemes", "Color scheme", all, Some(add_theme))]
     };
     let schedule = if follows {
         schedule_rows(d, window, cx)
@@ -368,6 +395,15 @@ pub fn render(
     );
     // Code is colored for the kind of window that is showing.
     let code = code_theme_cards(d, if dark { Scheme::Dark } else { Scheme::Light }, cx);
+    let code_dir = d.server.code_themes_dir();
+    let new_code = generator(
+        d,
+        Kind::Code,
+        "Soft pastels, quiet comments",
+        code_dir,
+        window,
+        cx,
+    );
     let unreadable: Vec<_> = d
         .themes
         .unreadable
@@ -382,11 +418,11 @@ pub fn render(
         .collect();
 
     div()
-        .id("themes-pane")
+        .id(PANE)
+        .group(PANE)
         .flex()
         .flex_col()
         // A theme's file dropped anywhere on the pane is imported.
-        .drag_over::<ExternalPaths>(move |style, _, _, _| style.bg(t.bg_hover))
         .on_drop(cx.listener(|d, files: &ExternalPaths, _, cx| {
             d.import_themes(files.paths().to_vec(), cx);
         }))
@@ -405,5 +441,6 @@ pub fn render(
         .child(new_scheme)
         .child(accent)
         .child(code)
+        .child(new_code)
         .into_any_element()
 }

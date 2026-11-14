@@ -7,7 +7,7 @@ use gpui::{
     AnyElement, Div, ExternalPaths, FontWeight, MouseButton, MouseDownEvent, Role, div, prelude::*,
     px,
 };
-use crate::ui::theme::{FS_MD, FS_SM, radius_sm, Theme, theme};
+use crate::ui::theme::{fs_md, fs_sm, radius_sm, Theme, theme};
 use crate::ui::{button, icon};
 use crate::workspace::{SIDEBAR_MAX, SIDEBAR_MIN, View, Workspace};
 use super::tasks::tasks_view;
@@ -45,7 +45,7 @@ pub fn render(
         .border_r_1()
         .border_color(t.border)
         .bg(t.bg_panel)
-        .text_size(px(13.))
+        .text_size(px(crate::ui::theme::fs(13.)))
         // Folders held over the project list light it up; dropped, each becomes a project.
         .when(view == View::Tasks, |s| {
             s.drag_over::<ExternalPaths>(move |style, _, _, _| style.bg(t.bg_hover))
@@ -109,7 +109,7 @@ pub fn render(
                     .border_color(t.border)
                     .bg(t.bg_input)
                     .px(px(8.))
-                    .text_size(px(FS_MD))
+                    .text_size(px(fs_md()))
                     .text_color(t.text_muted)
                     .hover(move |s| s.border_color(border_strong).text_color(fg))
                     .child(icon("magnifying-glass", 18.))
@@ -126,7 +126,7 @@ pub fn render(
                             .rounded(px(4.))
                             .bg(t.bg_selected_muted)
                             .text_color(t.text_muted)
-                            .text_size(px(11.))
+                            .text_size(px(crate::ui::theme::fs(11.)))
                             .font_weight(FontWeight::MEDIUM)
                             .child("Ctrl K"),
                     )
@@ -145,7 +145,7 @@ pub(super) fn empty_row(text: &'static str, t: &Theme) -> Div {
         .flex()
         .items_center()
         .px(px(6.))
-        .text_size(px(FS_MD))
+        .text_size(px(fs_md()))
         .text_color(t.text_muted)
         .child(text)
 }
@@ -160,7 +160,7 @@ pub(super) fn section_label(text: &str, first: bool, action: Option<AnyElement>,
         .justify_between()
         .pt(px(if first { 4. } else { 10. }))
         .pl(px(6.))
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .text_color(t.text_muted)
         .child(div().child(text.to_uppercase()))
         .children(action)

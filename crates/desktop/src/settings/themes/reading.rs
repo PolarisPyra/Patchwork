@@ -11,13 +11,12 @@ use patchwork_server::backgrounds::{BackgroundStrength, ChatBackground};
 use patchwork_server::settings::{Settings, TextSize};
 use patchwork_server::themes::Scheme;
 
-use super::cards::{Extras, card, grid};
+use super::cards::{Extras, add_card, card, grid};
 use super::files::{Filed, file_tools};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{switch, token_row};
 use crate::ui::backdrop::{preset_fill, veil};
-use crate::ui::icon_button;
-use crate::ui::theme::{FS_MD, FS_XS, Theme as Colors, font_mono, theme};
+use crate::ui::theme::{fs_md, fs_xs, Theme as Colors, font_mono, theme};
 
 const STRENGTHS: [(BackgroundStrength, &str); 3] = [
     (BackgroundStrength::Subtle, "Subtle"),
@@ -42,7 +41,7 @@ fn code_swatch(colors: [Hsla; 4], t: &Colors) -> Div {
         .flex_col()
         .justify_center()
         .font_family(font_mono())
-        .text_size(px(FS_XS))
+        .text_size(px(fs_xs()))
         .child(part("// hello", comment))
         .child(
             div()
@@ -112,54 +111,29 @@ pub(super) fn code_theme_cards(
             cx,
         ));
     }
-    let folder = d.server.code_themes_dir();
-    let open = icon_button(
-        "folder-code-themes",
-        "Open the code themes folder",
-        "folder-open",
-        16.,
-        cx,
-    )
-    .on_click(cx.listener(move |_, _, _, cx| {
-        SettingsDialog::open_themed_folder(folder.clone(), cx);
-    }));
-    headed(
-        title,
-        Some(open.into_any_element()),
-        grid(key, title, cards, None),
-        &t,
-    )
+    let add = add_card("import-code-theme", "Add code theme", &t)
+        .on_click(cx.listener(|d, _, _, cx| d.pick_themes(cx)))
+        .into_any_element();
+    // The row that writes a code theme comes right under the cards, with no line between.
+    div()
+        .pt(px(10.))
+        .child(div().font_weight(FontWeight::SEMIBOLD).child(title))
+        .child(grid(key, title, cards, Some(add)))
+        .into_any_element()
 }
 
 /// A titled grid of cards, as the chat background has.
 pub(super) fn titled(title: &'static str, cards: AnyElement, t: &Colors) -> AnyElement {
-    headed(title, None, cards, t)
-}
-
-/// A grid of cards under its title, with `tool` at the end of the title's line.
-fn headed(
-    title: &'static str,
-    tool: Option<AnyElement>,
-    cards: AnyElement,
-    t: &Colors,
-) -> AnyElement {
     div()
         .border_b_1()
         .border_color(t.border)
         .pt(px(10.))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .child(div().font_weight(FontWeight::SEMIBOLD).child(title))
-                .children(tool),
-        )
+        .child(div().font_weight(FontWeight::SEMIBOLD).child(title))
         .child(cards)
         .into_any_element()
 }
 
-/// The picture on a card that shows text: `sample` in `font` at `scale`, as a chat sets it.
+/// The picture on a card that shows text: `sample` in `font` at `scale` of the medium size.
 fn text_swatch(font: SharedString, scale: f32, sample: &'static str, t: &Colors) -> Div {
     div()
         .bg(t.bg_editor)
@@ -178,7 +152,7 @@ fn text_swatch(font: SharedString, scale: f32, sample: &'static str, t: &Colors)
         .child(
             div()
                 .truncate()
-                .text_size(px(FS_MD * scale))
+                .text_size(px(13. * scale))
                 .text_color(t.text_muted)
                 .child(sample),
         )
@@ -217,7 +191,7 @@ pub(super) fn strength_cards(d: &SettingsDialog, cx: &mut Context<SettingsDialog
                 .px(px(10.))
                 .flex()
                 .items_center()
-                .text_size(px(FS_MD))
+                .text_size(px(fs_md()))
                 .text_color(t.text)
                 .child("Aa");
             card(
@@ -238,10 +212,10 @@ pub(super) fn strength_cards(d: &SettingsDialog, cx: &mut Context<SettingsDialog
     titled("Background strength", cards, &t)
 }
 
-/// How large the text of chats is.
+/// How large the app's text is.
 pub(super) fn text_size_cards(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
     let t = *theme(cx);
-    let font = crate::ui::theme::chat_font(cx);
+    let font = crate::ui::theme::font_ui();
     let cards = SIZES
         .into_iter()
         .map(|(size, name)| {
@@ -259,8 +233,8 @@ pub(super) fn text_size_cards(d: &SettingsDialog, cx: &mut Context<SettingsDialo
             )
         })
         .collect();
-    let cards = grid("text-size", "Chat text size", cards, None);
-    titled("Chat text size", cards, &t)
+    let cards = grid("text-size", "Text size", cards, None);
+    titled("Text size", cards, &t)
 }
 
 /// Whether animations and the Orchestrator's backdrop hold still.

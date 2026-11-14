@@ -16,7 +16,7 @@ use patchwork_server::themes::{Color, ThemeFile};
 use super::slider::{Range, slider};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{alert, token_row};
-use crate::ui::theme::{FS_SM, Theme as Colors, radius, radius_sm, theme};
+use crate::ui::theme::{fs_sm, Theme as Colors, radius, radius_sm, theme};
 use crate::ui::{BtnKind, btn, focus_ring};
 
 /// A color of a color scheme that the editor changes.
@@ -235,7 +235,7 @@ fn chips(
             .gap(px(6.))
             .rounded(px(radius_sm()))
             .border_1()
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .map(|chip| {
                 if checked {
                     chip.border_color(t.accent).bg(t.bg_accent_soft)

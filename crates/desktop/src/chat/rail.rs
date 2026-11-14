@@ -12,7 +12,7 @@ use gpui::{
 use patchwork_server::orchestration::{Upkeep, upkeep};
 use patchwork_server::threads::{Message, Role as MessageRole};
 
-use crate::ui::theme::{FS_LG, FS_MD, radius_lg, Theme};
+use crate::ui::theme::{fs_lg, fs_md, radius_lg, Theme};
 use crate::ui::{button, popup_shadow};
 use crate::workspace::Workspace;
 
@@ -286,7 +286,7 @@ pub fn turn_rail(
                     .child(
                         div()
                             .line_clamp(2)
-                            .text_size(px(FS_LG))
+                            .text_size(px(fs_lg()))
                             .font_weight(FontWeight::MEDIUM)
                             .line_height(gpui::relative(1.375))
                             .text_color(t.text)
@@ -296,7 +296,7 @@ pub fn turn_rail(
                         div()
                             .mt(px(6.))
                             .line_clamp(4)
-                            .text_size(px(FS_MD))
+                            .text_size(px(fs_md()))
                             .line_height(gpui::relative(1.625))
                             .text_color(t.text_muted)
                             .child(answer)

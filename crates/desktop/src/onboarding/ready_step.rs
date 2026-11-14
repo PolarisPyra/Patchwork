@@ -6,7 +6,7 @@ use gpui::{AnyElement, FontWeight, Role, SharedString, Toggled, div, prelude::*,
 
 use super::{ImportResult, Onboarding};
 use super::rows::{heading, picked};
-use crate::ui::theme::{FS_LG, radius, Theme};
+use crate::ui::theme::{fs_lg, radius, Theme};
 use crate::ui::{agent_label, icon};
 
 fn describe_import(imported: Option<ImportResult>) -> String {
@@ -135,7 +135,7 @@ fn runs_on(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) -> impl I
         div()
             .flex_1()
             .min_w_0()
-            .text_size(px(FS_LG))
+            .text_size(px(fs_lg()))
             .font_weight(FontWeight::SEMIBOLD)
             .child(text.to_string())
     };

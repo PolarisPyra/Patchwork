@@ -12,7 +12,7 @@ use patchwork_server::threads::Message;
 use patchwork_server::workspace::{FileChange, FileMedia, PreviewKind, file_media, missing_files};
 
 use crate::canvas::CanvasTab;
-use crate::ui::theme::{FS_SM, FS_XS, radius, radius_sm, Theme};
+use crate::ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
 use crate::ui::{BtnKind, base_name, btn, button, dir_name, icon, tooltip};
 use crate::workspace::{View, Workspace};
 
@@ -205,7 +205,7 @@ fn file_cards(
             .bg(t.bg_panel)
             .px(px(12.))
             .py(px(8.))
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .children(rows)
             .when(more > 0, |d| {
                 d.child(more_button(format!("cards-more-{}", m.id), more, m, t, cx))
@@ -278,7 +278,7 @@ fn produced_file(
                 .rounded(px(radius_sm()))
                 .bg(t.bg_hover)
                 .px(px(4.))
-                .text_size(px(FS_XS))
+                .text_size(px(fs_xs()))
                 .text_color(t.text_muted)
                 .child(kind),
         )
@@ -290,7 +290,7 @@ fn produced_file(
             .flex()
             .justify_end()
             .whitespace_nowrap()
-            .text_size(px(FS_XS))
+            .text_size(px(fs_xs()))
             .text_color(t.text_subtle)
             .child(if deleted {
                 "Deleted".to_string()
@@ -415,7 +415,7 @@ fn change_summary(
         .bg(t.bg_panel)
         .px(px(12.))
         .py(px(8.))
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .child(
             div()
                 .flex()
@@ -518,7 +518,7 @@ fn changed_file(
     .children(note.map(|note| {
         div()
             .flex_none()
-            .text_size(px(FS_XS))
+            .text_size(px(fs_xs()))
             .text_color(t.text_subtle)
             .child(note)
     }))
@@ -527,7 +527,7 @@ fn changed_file(
             .flex_none()
             .flex()
             .gap(px(8.))
-            .text_size(px(FS_XS))
+            .text_size(px(fs_xs()))
             .child(
                 div()
                     .min_w(px(28.))

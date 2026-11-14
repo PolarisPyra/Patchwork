@@ -10,7 +10,7 @@ use patchwork_server::provider::AgentKind;
 
 use super::{AGENT_KINDS, Onboarding, Probe};
 use super::rows::{choice_row, heading, key_id, picked, row_end, tick};
-use crate::ui::theme::{FS_SM, radius, Theme};
+use crate::ui::theme::{fs_sm, radius, Theme};
 use crate::ui::{BtnKind, agent_label, agent_logo, badge, btn, button, icon, spinner};
 
 impl Onboarding {
@@ -306,7 +306,7 @@ fn install_error(kind: AgentKind, error: &str, t: &Theme) -> impl IntoElement {
         .id(key_id("setup-download-error", kind))
         .role(Role::Alert)
         .px(px(16.))
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .text_color(t.danger)
         .child(SharedString::from(error.to_string()))
 }
@@ -348,7 +348,7 @@ fn default_agent(
             .px(px(12.))
             .pt(px(16.))
             .pb(px(12.))
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .cursor_pointer()
             .child(
                 div()

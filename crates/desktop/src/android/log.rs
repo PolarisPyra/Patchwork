@@ -15,7 +15,7 @@ use patchwork_server::android::{LogLevel, LogLine, Logcat};
 
 use super::state::AndroidPanel;
 use crate::ui::menu::MenuItem;
-use crate::ui::theme::{font_mono, FS_SM, FS_XS, Theme};
+use crate::ui::theme::{font_mono, fs_sm, fs_xs, Theme};
 use crate::ui::{dropdown_chip, icon_button, tooltip};
 
 /// How often the log is read again: often enough to look live, seldom enough to stay cheap
@@ -215,7 +215,7 @@ impl AndroidPanel {
                     .min_w_0()
                     .truncate()
                     .pl(px(4.))
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .text_color(t.text_muted)
                     .children(log.logcat.package().map(str::to_string)),
             )
@@ -277,7 +277,7 @@ impl AndroidPanel {
                         .px(px(20.))
                         .pb(px(8.))
                         .font_family(font_mono())
-                        .text_size(px(FS_XS))
+                        .text_size(px(fs_xs()))
                         .child(list),
                 )
                 .into_any_element(),

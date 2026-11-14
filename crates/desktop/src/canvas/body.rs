@@ -8,7 +8,7 @@ use gpui::{
     prelude::*, px, relative, uniform_list,
 };
 use patchwork_server::threads::{Message, StepStatus};
-use crate::ui::theme::{font_mono, FS_MD, FS_SM, Theme, theme};
+use crate::ui::theme::{font_mono, fs_md, fs_sm, Theme, theme};
 use crate::ui::{BtnKind, base_name, btn, icon, spinner, tooltip};
 use super::state::{Canvas, CanvasTab};
 
@@ -143,7 +143,7 @@ impl Canvas {
         .size_full()
         .py(px(12.))
         .font_family(font_mono())
-        .text_size(px(FS_MD))
+        .text_size(px(fs_md()))
         .line_height(relative(1.65))
         .text_color(t.text)
     }
@@ -186,7 +186,7 @@ impl Canvas {
                 .border_t_1()
                 .border_color(t.border)
                 .bg(t.bg_panel)
-                .child(div().min_w_0().text_size(px(FS_SM)).child(state))
+                .child(div().min_w_0().text_size(px(fs_sm())).child(state))
                 .child(
                     div()
                         .flex()
@@ -265,7 +265,7 @@ pub(super) fn plan_view(message: Option<&Message>, t: &Theme) -> gpui::Div {
                 div()
                     .mt(px(24.))
                     .mb(px(8.))
-                    .text_size(px(crate::ui::theme::FS_XS))
+                    .text_size(px(crate::ui::theme::fs_xs()))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(t.text_subtle)
                     .child("FILES CHANGED"),
@@ -281,7 +281,7 @@ pub(super) fn plan_view(message: Option<&Message>, t: &Theme) -> gpui::Div {
                             .py(px(4.))
                             .px(px(8.))
                             .font_family(font_mono())
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .truncate()
                             .tooltip(tooltip(file.clone()))
                             .child(file.clone())

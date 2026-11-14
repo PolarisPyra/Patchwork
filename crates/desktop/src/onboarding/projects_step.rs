@@ -14,7 +14,7 @@ use patchwork_server::Server;
 use super::{Onboarding, OnboardingEvent};
 use super::rows::picked;
 use crate::ui::input_box;
-use crate::ui::theme::{font_mono, FS_LG, FS_SM, radius, radius_lg, radius_sm, Theme};
+use crate::ui::theme::{font_mono, fs_lg, fs_sm, radius, radius_lg, radius_sm, Theme};
 use crate::ui::{BtnKind, btn, button, icon};
 
 impl Onboarding {
@@ -138,7 +138,7 @@ fn way_in(
         .rounded(px(radius_lg()))
         .px(px(24.))
         .py(px(28.))
-        .text_size(px(FS_LG))
+        .text_size(px(fs_lg()))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(t.text)
         .bg(t.bg_panel)
@@ -266,7 +266,7 @@ pub fn projects_step(
                 .truncate()
                 .text_right()
                 .font_family(font_mono())
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
                 .child(p.path.clone()),
         )
@@ -293,7 +293,7 @@ pub fn projects_step(
                 div()
                     .id("setup-project-error")
                     .role(Role::Alert)
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .text_color(t.danger)
                     .child(e),
             )

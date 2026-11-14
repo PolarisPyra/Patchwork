@@ -13,7 +13,7 @@ use patchwork_server::threads::AccessMode;
 
 use crate::settings::controls::choice;
 use crate::settings::SettingsDialog;
-use crate::ui::theme::{FS_XS, Theme};
+use crate::ui::theme::{fs_xs, Theme};
 use crate::ui::tooltip;
 
 pub(super) const MODES: [(AccessMode, &str); 4] = [
@@ -187,7 +187,7 @@ pub(super) fn labelled(label: &'static str, control: impl IntoElement, t: &Theme
         .gap(px(4.))
         .child(
             div()
-                .text_size(px(FS_XS))
+                .text_size(px(fs_xs()))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(t.text_muted)
                 .child(label),

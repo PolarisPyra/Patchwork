@@ -14,7 +14,7 @@ use patchwork_server::settings::{LogLevel, LoggingSettings};
 
 use super::Panel;
 use super::cells::ordered;
-use crate::ui::theme::{font_mono, FS_SM, Theme, theme};
+use crate::ui::theme::{font_mono, fs_sm, Theme, theme};
 use crate::ui::agent_label;
 
 /// How often a shown log is read for new lines.
@@ -23,8 +23,10 @@ const FOLLOW: Duration = Duration::from_millis(500);
 const LIST_EVERY: u32 = 4;
 /// Lines kept on screen; older ones are dropped as new ones come in.
 const MAX_LINES: usize = 20_000;
-/// A line's height, `leading-[1.5]`.
-const LINE_H: f32 = FS_SM * 1.5;
+/// The height of a line of output.
+fn line_h() -> f32 {
+    fs_sm() * 1.5
+}
 /// The list's padding, `px-3 py-1`.
 const PAD: (f32, f32) = (12., 4.);
 
@@ -213,7 +215,7 @@ impl Panel {
         let x = f32::from(position.x - bounds.origin.x - offset.x) - PAD.0;
         let y = f32::from(position.y - bounds.origin.y - offset.y) - PAD.1;
         let last = self.output.lines.len().saturating_sub(1);
-        let line = ((y / LINE_H).max(0.) as usize).min(last);
+        let line = ((y / line_h()).max(0.) as usize).min(last);
         let chars = self.output.lines.get(line).map_or(0, |l| l.chars().count());
         let col = ((x / self.output.char_w).round().max(0.) as usize).min(chars);
         (line, col)
@@ -258,8 +260,8 @@ impl Panel {
             .clone();
         let text = window.text_system();
         self.output.char_w = text
-            .advance(text.resolve_font(&font(font_mono())), px(FS_SM), 'm')
-            .map_or(FS_SM * 0.6, |a| f32::from(a.width));
+            .advance(text.resolve_font(&font(font_mono())), px(fs_sm()), 'm')
+            .map_or(fs_sm() * 0.6, |a| f32::from(a.width));
         let char_w = self.output.char_w;
         let selection = self.output.selection.map(ordered).filter(|(a, b)| a != b);
         let list = uniform_list(
@@ -332,8 +334,8 @@ impl Panel {
             )
             .child(list)
             .font_family(font_mono())
-            .text_size(px(FS_SM))
-            .line_height(px(FS_SM * 1.5))
+            .text_size(px(fs_sm()))
+            .line_height(px(line_h()))
             .into_any_element()
     }
 }

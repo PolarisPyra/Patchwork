@@ -56,8 +56,6 @@ pub struct Theme {
     /// Inline code and pills: `color-mix(in srgb, var(--text) 6% or 8%, transparent)`.
     pub text_tint_6: Hsla,
     pub text_tint_8: Hsla,
-    /// What the sizes of a chat's text are multiplied by.
-    pub scale: f32,
 }
 
 fn hex(value: u32) -> Hsla {
@@ -140,7 +138,6 @@ impl Theme {
             bubble: mix(0x00df_e1e5, 0x001e_1f22, 0.10),
             text_tint_6: tint(0x00df_e1e5, 0.06),
             text_tint_8: tint(0x00df_e1e5, 0.08),
-            scale: 1.,
         }
     }
 
@@ -203,7 +200,6 @@ impl Theme {
             bubble: mix(0x0000_0000, 0x00ff_ffff, 0.10),
             text_tint_6: tint(0x0000_0000, 0.06),
             text_tint_8: tint(0x0000_0000, 0.08),
-            scale: 1.,
         }
     }
 
@@ -397,13 +393,7 @@ pub fn apply(mut applied: Applied, appearance: WindowAppearance, cx: &mut App) {
                 .or(file.and_then(|f| f.fonts.ui.as_ref())),
             FONT_UI,
         ),
-        family(
-            applied
-                .code_font
-                .as_ref()
-                .or(file.and_then(|f| f.fonts.code.as_ref())),
-            FONT_MONO,
-        ),
+        family(file.and_then(|f| f.fonts.code.as_ref()), FONT_MONO),
     ];
     let roomy = applied.density.scale();
     DENSITY.store(roomy.to_bits(), Ordering::Relaxed);
@@ -420,7 +410,7 @@ pub fn apply(mut applied: Applied, appearance: WindowAppearance, cx: &mut App) {
     if let Some(accent) = applied.accent {
         theme.accented(accent);
     }
-    theme.scale = applied.text_size.scale();
+    TEXT_SCALE.store(applied.text_size.scale().to_bits(), Ordering::Relaxed);
     cx.set_reduce_motion(applied.reduce_motion);
     cx.set_global(theme);
     cx.set_global(Look(Arc::new(applied)));
@@ -433,14 +423,6 @@ pub fn follow(appearance: WindowAppearance, cx: &mut App) {
         apply(Applied::clone(&look), appearance, cx);
         cx.refresh_windows();
     }
-}
-
-/// The font family chats are set in.
-pub fn chat_font(cx: &App) -> SharedString {
-    applied(cx)
-        .chat_font
-        .clone()
-        .map_or_else(font_ui, SharedString::from)
 }
 
 /// What the theme settings came to.
@@ -459,6 +441,7 @@ static FONTS: RwLock<[SharedString; 2]> = RwLock::new([
 ]);
 static CORNER: AtomicU32 = AtomicU32::new(RADIUS.to_bits());
 static DENSITY: AtomicU32 = AtomicU32::new(1_f32.to_bits());
+static TEXT_SCALE: AtomicU32 = AtomicU32::new(1_f32.to_bits());
 
 /// A row's height or its padding at the density in Settings: `size` is the comfortable one.
 pub fn roomy(size: f32) -> f32 {
@@ -497,12 +480,6 @@ pub fn radius_lg() -> f32 {
 /// The font families the app comes with, and its sizes, from `theme.css`'s `:root`.
 pub const FONT_UI: &str = "Inter";
 pub const FONT_MONO: &str = "JetBrains Mono";
-pub const FS_XS: f32 = 11.;
-pub const FS_SM: f32 = 12.;
-pub const FS_MD: f32 = 13.;
-pub const FS_LG: f32 = 15.;
-pub const FS_XL: f32 = 20.;
-pub const FS_XXL: f32 = 28.;
 const RADIUS_SM: f32 = 4.;
 const RADIUS: f32 = 6.;
 const RADIUS_LG: f32 = 10.;
@@ -511,3 +488,38 @@ const MAX_RADIUS: f32 = 16.;
 pub const TOOLBAR_H: f32 = 40.;
 pub const STATUSBAR_H: f32 = 27.;
 pub const ACTIVITY_BAR_W: f32 = 40.;
+
+/// What the sizes of the app's text are multiplied by: the text size in Settings.
+pub fn text_scale() -> f32 {
+    f32::from_bits(TEXT_SCALE.load(Ordering::Relaxed))
+}
+
+/// A text size at the text size in Settings: `size` is the medium one.
+pub fn fs(size: f32) -> f32 {
+    size * text_scale()
+}
+
+/// The sizes of the app's text, from `theme.css`'s `:root`, at the text size in Settings.
+pub fn fs_xs() -> f32 {
+    fs(11.)
+}
+
+pub fn fs_sm() -> f32 {
+    fs(12.)
+}
+
+pub fn fs_md() -> f32 {
+    fs(13.)
+}
+
+pub fn fs_lg() -> f32 {
+    fs(15.)
+}
+
+pub fn fs_xl() -> f32 {
+    fs(20.)
+}
+
+pub fn fs_xxl() -> f32 {
+    fs(28.)
+}

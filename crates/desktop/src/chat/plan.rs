@@ -10,7 +10,7 @@ use patchwork_server::threads::{
     ApprovalStatus, MessageStatus, NewThread, Part, PlanStep, Role as MessageRole, StepStatus,
 };
 
-use crate::ui::theme::{FS_SM, radius, Theme};
+use crate::ui::theme::{fs_sm, radius, Theme};
 use crate::ui::{BtnKind, btn, button, icon, mix, spinner};
 use crate::workspace::{Workspace, is_working};
 
@@ -212,7 +212,7 @@ pub fn plan_panel(
         .border_1()
         .border_color(t.border)
         .bg(t.bg_panel)
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .child(
             button("plan-steps", "Tasks")
                 .aria_expanded(open)
@@ -301,7 +301,7 @@ pub fn ready_bar(plan: &str, t: &Theme, cx: &mut Context<Workspace>) -> Stateful
         .bg(t.bg_panel)
         .px(px(10.))
         .py(px(6.))
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .child(
             icon("list-checks", 14.)
                 .flex_none()

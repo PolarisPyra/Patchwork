@@ -16,7 +16,7 @@ use patchwork_server::android::{Device, NetworkSpeed, StateAction, WifiDevice};
 use super::state::AndroidPanel;
 use crate::ui::menu::MenuItem;
 use crate::ui::text_area::{Submitted, TextArea};
-use crate::ui::theme::{font_mono, FS_SM, radius, Theme, theme};
+use crate::ui::theme::{font_mono, fs_sm, radius, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, icon_button, input_box, spinner, tooltip};
 
 /// How often the network is asked which phones announce themselves while pairing is open.
@@ -463,7 +463,7 @@ impl AndroidPanel {
                 .flex()
                 .items_center()
                 .gap(px(8.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
                 .child(spinner(14., t.text_muted))
                 .child("Reading the saved states")
@@ -540,7 +540,7 @@ impl AndroidPanel {
     fn found_list(&self, found: &[WifiDevice], t: &Theme, cx: &mut Context<Self>) -> AnyElement {
         if found.is_empty() {
             return div()
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
                 .child(
                     "No phones found yet. On the phone, open Developer options → Wireless \
@@ -580,7 +580,7 @@ impl AndroidPanel {
                     div()
                         .flex_none()
                         .font_family(font_mono())
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .text_color(t.text_muted)
                         .child(SharedString::from(phone.address.clone())),
                 )

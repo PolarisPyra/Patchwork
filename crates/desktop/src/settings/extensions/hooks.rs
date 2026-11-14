@@ -9,7 +9,7 @@ use patchwork_server::hooks::{self, HookEvent, Bundle, Hook, HookHandler};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{switch, tildify, token_row};
-use crate::ui::theme::{font_mono, FS_SM, FS_XS, radius, radius_sm, Theme, theme};
+use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme, theme};
 use crate::ui::{AGENT_KINDS, BtnKind, agent_label, btn, icon};
 
 use super::{empty, example, list_box};
@@ -256,7 +256,7 @@ fn hook_row(
             })
     });
     div()
-        .text_size(px(FS_XS))
+        .text_size(px(fs_xs()))
         .child(summary)
         .children(details)
         .into_any_element()
@@ -314,7 +314,7 @@ fn bundle_card(
                                 )
                                 .children(bundle.version.clone().map(|v| {
                                     div()
-                                        .text_size(px(FS_XS))
+                                        .text_size(px(fs_xs()))
                                         .text_color(t.text_subtle)
                                         .child(v)
                                 })),
@@ -322,7 +322,7 @@ fn bundle_card(
                         .children(bundle.description.clone().map(|desc| {
                             div()
                                 .mt(px(2.))
-                                .text_size(px(FS_SM))
+                                .text_size(px(fs_sm()))
                                 .text_color(t.text_muted)
                                 .child(desc)
                         }))
@@ -344,7 +344,7 @@ fn bundle_card(
                                         .bg(t.bg_selected_muted)
                                         .px(px(6.))
                                         .py(px(2.))
-                                        .text_size(px(FS_XS))
+                                        .text_size(px(fs_xs()))
                                         .text_color(t.text_muted)
                                         .child(app.name.clone())
                                         .child(div().text_color(t.text_subtle).child(
@@ -393,7 +393,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .pb(px(12.))
         .child(
             div()
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
                 .child(count),
         )

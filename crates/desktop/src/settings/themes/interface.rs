@@ -1,6 +1,6 @@
-//! Settings → Interface: how much room rows take, whether anything moves, the fonts of the app,
-//! of code and of chats, and how large a chat's text is. A font is picked from a list of the
-//! ones the computer has, narrowed by what is typed.
+//! Settings → Interface: how much room rows take, whether anything moves, and the font and size
+//! of the app's text. The font is picked from a list of the ones the computer has, narrowed by
+//! what is typed, that opens under the font's select.
 
 // Rust guideline compliant 2026-10-09
 
@@ -8,18 +8,18 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, App, Focusable, KeyDownEvent, Role, ScrollStrategy, SharedString,
-    UniformListScrollHandle, Window, div, prelude::*, px, uniform_list,
+    Anchor, AnyElement, App, Focusable, KeyDownEvent, MouseDownEvent, Role, ScrollStrategy,
+    SharedString, UniformListScrollHandle, Window, anchored, deferred, div, point, prelude::*, px,
+    uniform_list,
 };
-use patchwork_server::settings::Settings;
 
 use super::look::density_cards;
 use super::reading::{motion_row, text_size_cards};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, section_heading, select_box, token_row};
 use crate::ui::text_area::Arrow;
-use crate::ui::theme::{FONT_MONO, FONT_UI, FS_MD, font_ui, radius_sm, theme};
-use crate::ui::{icon, scrollbar};
+use crate::ui::theme::{FONT_UI, fs_md, radius_sm, theme};
+use crate::ui::{icon, popup, scrollbar};
 
 /// The family name that stands for the system's own font.
 const SYSTEM_FONT: &str = ".SystemUIFont";
@@ -29,73 +29,31 @@ const FILTER: &str = "font-filter";
 
 const ROW_H: f32 = 28.;
 /// Eight fonts show at once.
-const LIST_H: f32 = ROW_H * 8. + 8.;
+const LIST_H: f32 = ROW_H * 8.;
+const MENU_W: f32 = 280.;
 
-/// The text a font is picked for.
+const TITLE: &str = "Font";
+
+/// What takes the keyboard: the list's filter once it opens, and the dialog once it closes.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Text {
-    App,
-    Code,
-    Chat,
+enum Focus {
+    Filter,
+    Dialog,
 }
 
-impl Text {
-    fn title(self) -> &'static str {
-        match self {
-            Self::App => "App font",
-            Self::Code => "Code font",
-            Self::Chat => "Chat font",
-        }
-    }
-
-    fn key(self) -> &'static str {
-        match self {
-            Self::App => "font-app",
-            Self::Code => "font-code",
-            Self::Chat => "font-chat",
-        }
-    }
-
-    /// The family the settings keep for it; None is the app's own.
-    fn of(self, settings: &Settings) -> Option<&String> {
-        match self {
-            Self::App => settings.ui_font.as_ref(),
-            Self::Code => settings.code_font.as_ref(),
-            Self::Chat => settings.chat_font.as_ref(),
-        }
-    }
-
-    fn set(self, settings: &mut Settings, font: Option<String>) {
-        match self {
-            Self::App => settings.ui_font = font,
-            Self::Code => settings.code_font = font,
-            Self::Chat => settings.chat_font = font,
-        }
-    }
-
-    /// The family it is drawn in while none is picked. Chats follow the app's font.
-    fn own(self) -> SharedString {
-        match self {
-            Self::App => SharedString::new_static(FONT_UI),
-            Self::Code => SharedString::new_static(FONT_MONO),
-            Self::Chat => font_ui(),
-        }
-    }
-}
-
-/// The font picker of the pane: the fonts the computer has, and the list that is open.
+/// The font picker of the pane: the fonts the computer has, and whether its list is open.
 #[derive(Default)]
 pub(super) struct Fonts {
     all: Vec<SharedString>,
-    open: Option<Text>,
+    open: bool,
     filter: String,
     /// The row of the open list the keyboard is on.
     active: usize,
     scroll: UniformListScrollHandle,
-    /// The list just opened: its filter takes the keyboard.
-    opened: bool,
-    /// The list just closed: the dialog takes the keyboard.
-    closed: bool,
+    /// What takes the keyboard when the pane is next drawn, after the list opened or closed.
+    focus: Option<Focus>,
+    /// The pointer is over the select, whose click opens and closes the list.
+    over: bool,
 }
 
 impl Fonts {
@@ -111,11 +69,15 @@ impl Fonts {
         self.all = names.into_iter().map(SharedString::from).collect();
     }
 
-    /// What the list for `text` offers: the family the settings keep, its name, and the family
-    /// the name is drawn in.
-    fn choices(&self, text: Text) -> Vec<Choice> {
+    /// What the list offers: the family the settings keep, its name, and the family the name
+    /// is drawn in.
+    fn choices(&self) -> Vec<Choice> {
         let wanted = self.filter.trim().to_lowercase();
-        let own = (None, SharedString::new_static("Default"), text.own());
+        let own = (
+            None,
+            SharedString::new_static("Default"),
+            SharedString::new_static(FONT_UI),
+        );
         let system = (
             Some(SYSTEM_FONT.to_string()),
             SharedString::new_static("System"),
@@ -125,9 +87,8 @@ impl Fonts {
             .all
             .iter()
             .map(|font| (Some(font.to_string()), font.clone(), font.clone()));
-        // The system's font has letters of many widths, which code is not set in.
-        std::iter::once(own)
-            .chain((text != Text::Code).then_some(system))
+        [own, system]
+            .into_iter()
             .chain(named)
             .filter(|(_, name, _)| name.to_lowercase().contains(&wanted))
             .collect()
@@ -138,18 +99,18 @@ impl Fonts {
 type Choice = (Option<String>, SharedString, SharedString);
 
 impl SettingsDialog {
-    /// Opens the list of fonts for `text` on the font it has, or closes it when it is open.
-    fn toggle_fonts(&mut self, text: Text, cx: &mut Context<Self>) {
-        if self.themes.fonts.open == Some(text) {
+    /// Opens the list of fonts on the font the app has, or closes it when it is open.
+    fn toggle_fonts(&mut self, cx: &mut Context<Self>) {
+        if self.themes.fonts.open {
             return self.close_fonts(cx);
         }
         if let Some(area) = self.field_area(FILTER) {
             area.update(cx, |area, cx| area.set_text("", cx));
         }
-        let current = text.of(&self.settings).cloned();
+        let current = self.settings.ui_font.clone();
         let fonts = &mut self.themes.fonts;
         fonts.filter.clear();
-        let choices = fonts.choices(text);
+        let choices = fonts.choices();
         fonts.active = choices
             .iter()
             .position(|(family, _, _)| *family == current)
@@ -157,24 +118,24 @@ impl SettingsDialog {
         fonts
             .scroll
             .scroll_to_item(fonts.active, ScrollStrategy::Center);
-        fonts.open = Some(text);
-        fonts.opened = true;
+        fonts.open = true;
+        fonts.focus = Some(Focus::Filter);
         cx.notify();
     }
 
     fn close_fonts(&mut self, cx: &mut Context<Self>) {
-        self.themes.fonts.open = None;
-        self.themes.fonts.closed = true;
+        self.themes.fonts.open = false;
+        self.themes.fonts.focus = Some(Focus::Dialog);
         cx.notify();
     }
 
     /// Moves the keyboard's row of the open list `by` rows, keeping it in view.
     fn step_fonts(&mut self, by: isize, cx: &mut Context<Self>) {
         let fonts = &mut self.themes.fonts;
-        let Some(text) = fonts.open else {
+        if !fonts.open {
             return;
-        };
-        let last = fonts.choices(text).len().saturating_sub(1);
+        }
+        let last = fonts.choices().len().saturating_sub(1);
         fonts.active = fonts.active.saturating_add_signed(by).min(last);
         fonts
             .scroll
@@ -184,42 +145,47 @@ impl SettingsDialog {
 
     /// Sets the font of the open list's row `index`, and closes the list.
     fn pick_font(&mut self, index: usize, cx: &mut Context<Self>) {
-        let Some(text) = self.themes.fonts.open else {
+        if !self.themes.fonts.open {
+            return;
+        }
+        let Some((family, _, _)) = self.themes.fonts.choices().into_iter().nth(index) else {
             return;
         };
-        let Some((family, _, _)) = self.themes.fonts.choices(text).into_iter().nth(index) else {
-            return;
-        };
-        self.update(|s| text.set(s, family), cx);
+        self.update(|s| s.ui_font = family, cx);
         self.close_fonts(cx);
     }
 }
 
-/// The row that shows the font of `text`, and opens the list to change it.
-fn font_row(d: &SettingsDialog, text: Text, cx: &mut Context<SettingsDialog>) -> AnyElement {
+/// The row that shows the app's font, and opens the list to change it.
+fn font_row(
+    d: &mut SettingsDialog,
+    window: &mut Window,
+    cx: &mut Context<SettingsDialog>,
+) -> AnyElement {
     let t = *theme(cx);
-    let current = text.of(&d.settings);
+    let current = d.settings.ui_font.as_ref();
     let name = match current.map(String::as_str) {
         None => SharedString::new_static("Default"),
         Some(SYSTEM_FONT) => SharedString::new_static("System"),
         Some(font) => SharedString::from(font.to_string()),
     };
-    let family = current.map_or_else(|| text.own(), SharedString::from);
-    let open = d.themes.fonts.open == Some(text);
-    let select = select_box(text.key(), text.title(), name, open, &t)
+    let family = current.map_or(SharedString::new_static(FONT_UI), SharedString::from);
+    let open = d.themes.fonts.open;
+    let select = select_box("font", TITLE, name, open, &t)
         .w(px(220.))
         .font_family(family)
-        .on_click(cx.listener(move |d, _, _, cx| d.toggle_fonts(text, cx)));
-    token_row(text.title(), None, &t)
-        .child(select)
+        .on_hover(cx.listener(|d, over: &bool, _, _| d.themes.fonts.over = *over))
+        .on_click(cx.listener(|d, _, _, cx| d.toggle_fonts(cx)));
+    let list = open.then(|| font_list(d, window, cx));
+    token_row(TITLE, None, &t)
+        .child(div().relative().child(select).children(list))
         .into_any_element()
 }
 
-/// The open list of fonts for `text`: the filter, then each font that matches in its own face.
-/// Up and Down move through them from the filter, Enter picks one, and Escape closes the list.
+/// The open list of fonts, under the select: the filter, then each font that matches in its
+/// own face. Up and Down move through them from the filter, Enter picks one, and Escape closes the list.
 fn font_list(
     d: &mut SettingsDialog,
-    text: Text,
     window: &mut Window,
     cx: &mut Context<SettingsDialog>,
 ) -> AnyElement {
@@ -252,12 +218,13 @@ fn font_list(
             cx.subscribe(&area, |d, _, step: &Arrow, cx| d.step_fonts(step.0, cx))
                 .detach();
         }
-        if std::mem::take(&mut d.themes.fonts.opened) {
+        if d.themes.fonts.focus == Some(Focus::Filter) {
+            d.themes.fonts.focus = None;
             window.focus(&area.read(cx).focus_handle(cx), cx);
         }
     }
-    let current = text.of(&d.settings).cloned();
-    let choices = Rc::new(d.themes.fonts.choices(text));
+    let current = d.settings.ui_font.clone();
+    let choices = Rc::new(d.themes.fonts.choices());
     let active = d.themes.fonts.active.min(choices.len().saturating_sub(1));
     let (count, rows) = (choices.len(), Rc::clone(&choices));
     let options = uniform_list(
@@ -273,6 +240,7 @@ fn font_list(
                         .role(Role::ListBoxOption)
                         .aria_label(name.clone())
                         .aria_selected(on)
+                        .w_full()
                         .h(px(ROW_H))
                         .px(px(8.))
                         .flex()
@@ -281,7 +249,7 @@ fn font_list(
                         .rounded(px(radius_sm()))
                         .cursor_pointer()
                         .font_family(face.clone())
-                        .text_size(px(FS_MD))
+                        .text_size(px(fs_md()))
                         .when(on, |row| row.bg(t.bg_selected))
                         .when(!on, |row| row.hover(move |s| s.bg(t.bg_hover)))
                         .on_click(cx.listener(move |d, _, _, cx| d.pick_font(i, cx)))
@@ -298,9 +266,8 @@ fn font_list(
     let list = div()
         .id("fonts")
         .role(Role::ListBox)
-        .aria_label(text.title())
+        .aria_label(TITLE)
         .size_full()
-        .p(px(4.))
         .map(|list| {
             if count == 0 {
                 list.child(
@@ -313,14 +280,18 @@ fn font_list(
                 list.child(options)
             }
         });
-    div()
+    let menu = popup(&t)
         .id("font-picker")
-        .border_b_1()
-        .border_color(t.border)
-        .pb(px(10.))
-        .flex()
-        .flex_col()
-        .gap(px(6.))
+        .occlude()
+        .w(px(MENU_W))
+        .gap(px(4.))
+        .text_color(t.text)
+        // A press on the select is left to its click, which closes this list.
+        .on_mouse_down_out(cx.listener(|d, _: &MouseDownEvent, _, cx| {
+            if !d.themes.fonts.over {
+                d.close_fonts(cx);
+            }
+        }))
         .on_key_down(cx.listener(|d, e: &KeyDownEvent, _, cx| {
             if e.keystroke.key == "escape" {
                 cx.stop_propagation();
@@ -332,12 +303,24 @@ fn font_list(
             div()
                 .relative()
                 .h(px(LIST_H))
-                .rounded(px(radius_sm()))
-                .border_1()
-                .border_color(t.border)
-                .bg(t.bg_editor)
                 .child(list)
                 .children(scrollbar(&bar, 10., 2., t.border_strong)),
+        );
+    // Over the dialog, which is itself drawn over the window: its top-right corner 4px under
+    // the bottom-right one of the select.
+    div()
+        .absolute()
+        .top_full()
+        .right_0()
+        .child(
+            deferred(
+                anchored()
+                    .anchor(Anchor::TopRight)
+                    .offset(point(px(0.), px(4.)))
+                    .snap_to_window_with_margin(px(8.))
+                    .child(menu),
+            )
+            .with_priority(3),
         )
         .into_any_element()
 }
@@ -349,16 +332,11 @@ pub(in crate::settings) fn interface_pane(
 ) -> AnyElement {
     let t = *theme(cx);
     d.themes.fonts.load(cx);
-    if std::mem::take(&mut d.themes.fonts.closed) {
+    if d.themes.fonts.focus == Some(Focus::Dialog) {
+        d.themes.fonts.focus = None;
         window.focus(&d.focus, cx);
     }
-    let mut fonts = Vec::new();
-    for text in [Text::App, Text::Code, Text::Chat] {
-        fonts.push(font_row(d, text, cx));
-        if d.themes.fonts.open == Some(text) {
-            fonts.push(font_list(d, text, window, cx));
-        }
-    }
+    let font = font_row(d, window, cx);
     div()
         .id("interface-pane")
         .flex()
@@ -367,7 +345,7 @@ pub(in crate::settings) fn interface_pane(
         .child(density_cards(d, cx))
         .child(motion_row(d, cx))
         .child(section_heading("Text", false, &t))
-        .children(fonts)
+        .child(font)
         .child(text_size_cards(d, cx))
         .into_any_element()
 }

@@ -4,7 +4,7 @@
 
 use gpui::{KeyDownEvent, Role, Window, div, prelude::*, px};
 use patchwork_server::threads::MessageStatus;
-use crate::ui::theme::{FS_SM, theme};
+use crate::ui::theme::{fs_sm, theme};
 use super::state::{Canvas, CanvasTab};
 
 impl Render for Canvas {
@@ -65,7 +65,7 @@ impl Render for Canvas {
                         .border_t_1()
                         .border_color(t.border)
                         .text_color(t.danger)
-                        .text_size(px(FS_SM))
+                        .text_size(px(fs_sm()))
                         .child(e),
                 )
             })

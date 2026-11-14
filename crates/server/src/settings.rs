@@ -27,7 +27,7 @@ pub enum Theme {
     System,
 }
 
-/// How large the text of chats is.
+/// How large the app's text is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum TextSize {
@@ -38,7 +38,7 @@ pub enum TextSize {
 }
 
 impl TextSize {
-    /// What the sizes of a chat's text are multiplied by.
+    /// What the sizes of the app's text are multiplied by.
     #[must_use]
     pub fn scale(self) -> f32 {
         match self {
@@ -118,9 +118,7 @@ pub struct Settings {
     pub code_theme_light: Option<String>,
     /// The code theme of dark windows, by its id. None uses the color scheme's own colors.
     pub code_theme_dark: Option<String>,
-    /// The font family chats are set in. None is the app's own.
-    pub chat_font: Option<String>,
-    /// How large the text of chats is.
+    /// How large the app's text is.
     pub text_size: TextSize,
     /// Nothing moves on its own: animations and the Orchestrator's backdrop hold still.
     pub reduce_motion: bool,
@@ -134,10 +132,9 @@ pub struct Settings {
     pub follow: Follow,
     /// The color of buttons, links and what is selected, in place of the color scheme's.
     pub accent: Option<Color>,
-    /// The font family of the app's own text. None is the color scheme's, else the app's.
+    /// The font family of the app's text, code aside. None is the color scheme's, else the
+    /// app's.
     pub ui_font: Option<String>,
-    /// The font family of code and terminals. None is the color scheme's, else the app's.
-    pub code_font: Option<String>,
     /// How much room rows and their padding take.
     pub density: Density,
     /// The color scheme and accent of projects that have their own, by project id.

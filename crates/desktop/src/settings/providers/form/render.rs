@@ -7,13 +7,13 @@ use patchwork_server::provider::api::config::KeyStore;
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
-use crate::ui::theme::{FS_SM, radius_sm, Theme, theme};
+use crate::ui::theme::{fs_sm, radius_sm, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, icon_button, provider_logo};
 
 /// A field's name over it.
 pub(super) fn label_text(text: &str, t: &Theme) -> Div {
     div()
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .font_weight(FontWeight::MEDIUM)
         .text_color(t.text_muted)
         .child(text.to_string())
@@ -269,7 +269,7 @@ pub fn render(
                                     "Use an environment variable"
                                 },
                             )
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .text_color(t.accent)
                             .hover(gpui::Styled::underline)
                             .child(if use_env {
@@ -341,7 +341,7 @@ pub fn render(
             button("headers-toggle", "Headers")
                 .aria_expanded(advanced)
                 .gap(px(4.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(muted)
                 .hover(move |s| s.text_color(fg))
                 .child(icon(

@@ -16,7 +16,7 @@ use patchwork_server::Server;
 use patchwork_server::backgrounds::{BackgroundImage, ChatBackground, RemovedBackground};
 
 use crate::ui::backdrop::{PRESETS, preset_fill};
-use crate::ui::theme::{FS_SM, radius_sm, Theme, theme};
+use crate::ui::theme::{fs_sm, radius_sm, Theme, theme};
 use crate::ui::{button, focus_ring, icon, spinner, tooltip};
 
 /// How long a deleted picture can be brought back from the picker.
@@ -571,7 +571,7 @@ impl Render for BackgroundPicker {
                     .items_center()
                     .gap(px(8.))
                     .pt(px(8.))
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .text_color(muted)
                     .child(div().min_w_0().truncate().child(format!("Removed {name}")))
                     .child(
@@ -588,7 +588,7 @@ impl Render for BackgroundPicker {
                     .id("picker-error")
                     .role(Role::Alert)
                     .pt(px(8.))
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .text_color(t.danger)
                     .child(e)
             }))

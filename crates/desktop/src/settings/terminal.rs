@@ -8,7 +8,7 @@ use patchwork_server::settings::{CursorStyle, DetectLocale, RightClickBehavior, 
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{section_heading, segmented, switch, token_row};
-use crate::ui::theme::{FS_SM, theme};
+use crate::ui::theme::{fs_sm, theme};
 use crate::ui::{BtnKind, btn, icon_button, tooltip};
 
 /// Width of the settings' text fields (`TextField`'s default).
@@ -165,7 +165,7 @@ fn env_editor(
                         )
                         .child(
                             div()
-                                .text_size(px(FS_SM))
+                                .text_size(px(fs_sm()))
                                 .text_color(t.text_muted)
                                 .child("Values can use ${env:NAME} and ${workspaceFolder}"),
                         ),

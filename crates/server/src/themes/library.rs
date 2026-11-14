@@ -459,6 +459,12 @@ impl Server {
         SCENES.written(id)
     }
 
+    /// Whether the code themes folder has a file for the code theme with this id.
+    #[must_use]
+    pub fn code_theme_written(&self, id: &str) -> bool {
+        CODE.written(id)
+    }
+
     /// Deletes a color scheme's file. A setting that picked it falls back to Light, Dark,
     /// OLED or System.
     ///

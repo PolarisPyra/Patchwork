@@ -9,7 +9,7 @@ use gpui::{
     prelude::*, px,
 };
 use crate::ui::dialog;
-use crate::ui::theme::{font_mono, FS_MD, FS_SM, FS_XS, radius, theme};
+use crate::ui::theme::{font_mono, fs_md, fs_sm, fs_xs, radius, theme};
 use crate::ui::{BtnKind, btn, icon, icon_button, spinner, tooltip};
 
 impl Focusable for AddProject {
@@ -51,7 +51,7 @@ impl Render for AddProject {
                 .gap(px(12.))
                 .px(px(12.))
                 .rounded(px(radius()))
-                .text_size(px(FS_MD))
+                .text_size(px(fs_md()))
                 .text_color(t.text)
         };
         let hover = t.bg_hover;
@@ -64,7 +64,7 @@ impl Render for AddProject {
                 .border_color(t.border)
                 .px(px(20.))
                 .py(px(8.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.danger)
                 .child(e)
         });
@@ -86,7 +86,7 @@ impl Render for AddProject {
                     .px(px(12.))
                     .py(px(24.))
                     .text_center()
-                    .text_size(px(FS_MD))
+                    .text_size(px(fs_md()))
                     .text_color(t.text_subtle)
                     .child(if query.as_deref().is_some_and(|q| !q.is_empty()) {
                         "No matches"
@@ -182,7 +182,7 @@ impl Render for AddProject {
                                 .max_w(px(160.))
                                 .truncate()
                                 .font_family(font_mono())
-                                .text_size(px(FS_MD))
+                                .text_size(px(fs_md()))
                                 .text_color(t.text_muted)
                                 .child(format!("{host}:"))
                         }))
@@ -192,7 +192,7 @@ impl Render for AddProject {
                                 .flex_1()
                                 .min_w_0()
                                 .font_family(font_mono())
-                                .text_size(px(FS_MD))
+                                .text_size(px(fs_md()))
                                 .child(self.field.clone()),
                         )
                         .when(self.loading, |bar| bar.child(spinner(14., t.text_subtle))),
@@ -224,7 +224,7 @@ impl Render for AddProject {
                         .pr(px(10.))
                         .border_t_1()
                         .border_color(t.border)
-                        .text_size(px(FS_XS))
+                        .text_size(px(fs_xs()))
                         .text_color(t.text_subtle)
                         .child("↑↓ navigate")
                         .child("↵ open")
@@ -254,7 +254,7 @@ impl Render for AddProject {
                         .px(px(20.))
                         .border_b_1()
                         .border_color(t.border)
-                        .text_size(px(crate::ui::theme::FS_LG))
+                        .text_size(px(crate::ui::theme::fs_lg()))
                         .font_weight(FontWeight::SEMIBOLD)
                         .child("Add a project"),
                 )
@@ -287,7 +287,7 @@ impl Render for AddProject {
                                 .child(
                                     div()
                                         .flex_none()
-                                        .text_size(px(FS_XS))
+                                        .text_size(px(fs_xs()))
                                         .text_color(t.text_subtle)
                                         .child("This computer"),
                                 )
@@ -306,7 +306,7 @@ impl Render for AddProject {
                                 .px(px(12.))
                                 .pt(px(12.))
                                 .pb(px(6.))
-                                .text_size(px(FS_XS))
+                                .text_size(px(fs_xs()))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(t.text_subtle)
                                 .child("SSH HOSTS"),
@@ -336,7 +336,7 @@ impl Render for AddProject {
                                         .max_w(px(220.))
                                         .truncate()
                                         .font_family(font_mono())
-                                        .text_size(px(FS_XS))
+                                        .text_size(px(fs_xs()))
                                         .text_color(t.text_subtle)
                                         .child(h)
                                 }))

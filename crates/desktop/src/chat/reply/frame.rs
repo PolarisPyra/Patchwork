@@ -6,7 +6,7 @@ use super::pieces::is_open;
 use super::pieces::action_button;
 use gpui::{AnyElement, ClipboardItem, Div, FontWeight, Role, SharedString, div, prelude::*, px};
 use patchwork_server::threads::{Message, MessageStatus, Part, Role as MessageRole, Thread};
-use crate::ui::theme::{FS_MD, FS_SM, FS_XS, radius, Theme};
+use crate::ui::theme::{fs_md, fs_sm, fs_xs, radius, Theme};
 use crate::ui::{button, format_clock, full_elapsed, icon, now_ms};
 use crate::workspace::{ReplyNotice, Workspace};
 use crate::chat::timeline::{fold_head_of, fold_layout_of, steps_of};
@@ -50,7 +50,7 @@ pub(super) fn foot(
                 .bg(t.warning_soft)
                 .px(px(12.))
                 .py(px(8.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .flex()
                 .flex_col()
                 .gap(px(4.))
@@ -84,7 +84,7 @@ pub(super) fn foot(
                 .bg(t.danger_soft)
                 .px(px(12.))
                 .py(px(8.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.danger)
                 .child(error.clone())
                 .into_any_element(),
@@ -135,7 +135,7 @@ pub(super) fn foot(
                         .h(px(24.))
                         .flex()
                         .items_center()
-                        .text_size(px(FS_XS))
+                        .text_size(px(fs_xs()))
                         .text_color(t.text_muted)
                         .child(format_clock(m.created_at)),
                 )
@@ -183,7 +183,7 @@ pub(super) fn head(w: &Workspace, m: &Message, t: &Theme, cx: &mut Context<Works
                 .flex()
                 .items_center()
                 .gap(px(6.))
-                .text_size(px(FS_MD * t.scale))
+                .text_size(px(fs_md()))
                 .text_color(t.text_muted)
                 .child(format!(
                     "Working for {}",
@@ -208,7 +208,7 @@ pub(super) fn head(w: &Workspace, m: &Message, t: &Theme, cx: &mut Context<Works
             .aria_expanded(open)
             .h(px(24.))
             .gap(px(6.))
-            .text_size(px(FS_MD * t.scale))
+            .text_size(px(fs_md()))
             .text_color(t.text_muted)
             .hover(move |s| s.text_color(hover))
             .child(head.label)

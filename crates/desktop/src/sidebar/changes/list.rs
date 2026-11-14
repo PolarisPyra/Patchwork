@@ -12,7 +12,7 @@ use patchwork_server::workspace::FileChange;
 
 use super::rows::{group_button, group_header, row_action};
 use super::state::ChangesView;
-use crate::ui::theme::{FS_MD, FS_SM, radius_sm, theme};
+use crate::ui::theme::{fs_md, fs_sm, radius_sm, theme};
 use crate::ui::{base_name, button, icon, spinner, tooltip};
 
 /// A group of changes, which decides the buttons on its header.
@@ -213,7 +213,7 @@ impl ChangesView {
         .rounded(px(radius_sm()))
         .pr(px(6.))
         .pl(px(20.))
-        .text_size(px(FS_MD))
+        .text_size(px(fs_md()))
         .text_color(t.text_muted)
         .hover(move |s| s.bg(hover))
         .tooltip(tooltip(path.to_string()))
@@ -228,7 +228,7 @@ impl ChangesView {
         .child(
             div()
                 .flex_none()
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.text_subtle)
                 .child(if missing { "Deleted" } else { "No changes" }),
         )

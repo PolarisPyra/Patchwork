@@ -10,7 +10,7 @@ use patchwork_server::provider::mcp::{self, McpServer};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
-use crate::ui::theme::{FS_SM, theme};
+use crate::ui::theme::{fs_sm, theme};
 use crate::ui::{BtnKind, btn};
 
 use super::{pairs_text, target};
@@ -288,7 +288,7 @@ fn labeled(label: &'static str, field: gpui::Div, muted: gpui::Hsla) -> gpui::Di
         .gap(px(4.))
         .child(
             div()
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(muted)
                 .child(label),

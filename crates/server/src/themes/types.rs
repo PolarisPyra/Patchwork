@@ -483,12 +483,8 @@ pub struct Applied {
     pub system_backdrops: Option<Box<[Backdrop; 2]>>,
     /// The color buttons, links and what is selected are drawn in, in place of the palette's.
     pub accent: Option<Color>,
-    /// The font family of the app's own text, in place of the palette's.
+    /// The font family of the app's text, code aside, in place of the palette's.
     pub ui_font: Option<String>,
-    /// The font family of code and terminals, in place of the palette's.
-    pub code_font: Option<String>,
-    /// The font family chats are set in. None is the app's own.
-    pub chat_font: Option<String>,
     pub text_size: TextSize,
     pub density: Density,
     /// How long until the clock or the sun changes what this comes to. None when neither does.

@@ -12,7 +12,7 @@ use patchwork_server::threads::{Standing, Thread};
 
 use super::render::{glass, ink, warm};
 use super::state::{Orchestrator, Outcome, Request};
-use crate::ui::theme::{FS_SM, FS_XS, radius_lg};
+use crate::ui::theme::{fs_sm, fs_xs, radius_lg};
 use crate::ui::{button, display_title, icon, spinner};
 
 /// A chat as a card shows it.
@@ -93,7 +93,7 @@ fn plate(card: Stateful<Div>) -> Stateful<Div> {
         .border_1()
         .border_color(ink(0.06))
         .bg(glass(0.5))
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
 }
 
 /// A card's first line: a mark, what was asked, and a note at its end.
@@ -124,7 +124,7 @@ fn latest(text: Option<String>) -> Option<Div> {
             .min_w_0()
             .pl(px(24.))
             .truncate()
-            .text_size(px(FS_XS))
+            .text_size(px(fs_xs()))
             .text_color(ink(0.5))
             .child(text)
     })
@@ -196,7 +196,7 @@ impl Orchestrator {
                         .pl(px(24.))
                         .py(px(2.))
                         .rounded(px(6.))
-                        .text_size(px(FS_XS))
+                        .text_size(px(fs_xs()))
                         .text_color(ink(0.75))
                         .hover(|s| s.bg(ink(0.06)))
                         .child(line(mark(chat.standing), chat.name.clone().into(), said))

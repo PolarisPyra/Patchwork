@@ -10,7 +10,7 @@ use gpui::{
     SharedString, Stateful, StyleRefinement, Toggled, Window, anchored, canvas, deferred, div,
     point, prelude::*, px,
 };
-use crate::ui::theme::{FS_MD, FS_SM, radius, radius_sm, Theme, theme};
+use crate::ui::theme::{fs_md, fs_sm, radius, radius_sm, Theme, theme};
 
 /// A Phosphor icon by its kebab-case name, as `@phosphor-icons/react` draws it at `size`.
 pub fn icon(name: &str, size: f32) -> Icon {
@@ -208,7 +208,7 @@ pub fn popup(t: &Theme) -> Div {
         .border_color(t.border_strong)
         .bg(t.bg_elevated)
         .p(px(4.))
-        .text_size(px(FS_MD))
+        .text_size(px(fs_md()))
         .shadow(popup_shadow(t))
 }
 
@@ -340,7 +340,7 @@ impl Render for Tooltip {
             .bg(t.bg_elevated)
             .px(px(6.))
             .py(px(2.))
-            .text_size(px(crate::ui::theme::FS_SM))
+            .text_size(px(crate::ui::theme::fs_sm()))
             .line_height(px(16.))
             .text_color(t.text)
             .shadow(popup_shadow(t))
@@ -394,7 +394,7 @@ pub fn btn(
         .border_color(border)
         .bg(bg)
         .text_color(fg)
-        .text_size(px(FS_MD))
+        .text_size(px(fs_md()))
         .whitespace_nowrap();
     if disabled {
         base.opacity(0.5).cursor_default()
@@ -418,7 +418,7 @@ pub fn badge(text: impl Into<SharedString>, t: &Theme) -> Div {
         .px(px(6.))
         .rounded(px(radius_sm()))
         .bg(t.bg_selected_muted)
-        .text_size(px(crate::ui::theme::FS_XS))
+        .text_size(px(crate::ui::theme::fs_xs()))
         .text_color(t.text_muted)
         .child(text.into())
 }
@@ -440,7 +440,7 @@ pub fn dropdown_chip(
         .gap(px(4.))
         .rounded(px(radius_sm()))
         .px(px(6.))
-        .text_size(px(FS_MD))
+        .text_size(px(fs_md()))
         .font_weight(FontWeight::MEDIUM)
         .text_color(t.text_muted)
         .hover(move |s| s.bg(hover).text_color(fg))
@@ -461,6 +461,6 @@ pub fn input_box(focused: bool, t: &Theme) -> Div {
         .border_color(if focused { t.accent } else { t.border_strong })
         .bg(t.bg_editor)
         .px(px(8.))
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .text_color(t.text)
 }

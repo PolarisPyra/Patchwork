@@ -7,7 +7,7 @@ use patchwork_server::provider::api::config::{ApiProvider, ProviderView};
 use patchwork_server::provider::AgentStatus;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::switch;
-use crate::ui::theme::{FS_SM, Theme, theme};
+use crate::ui::theme::{fs_sm, Theme, theme};
 use crate::ui::{BtnKind, agent_label, agent_logo, badge, btn, provider_logo, spinner};
 use super::state::{CLI_KINDS, PromptOf};
 use super::cli;
@@ -96,7 +96,7 @@ impl SettingsDialog {
                         .child(div().font_weight(FontWeight::SEMIBOLD).child(label))
                         .child(
                             div()
-                                .text_size(px(FS_SM))
+                                .text_size(px(fs_sm()))
                                 .text_color(t.text_muted)
                                 .child(describe_agent(status)),
                         ),
@@ -140,7 +140,7 @@ impl SettingsDialog {
                         div()
                             .id(SharedString::from(format!("install-error-{key}")))
                             .role(Role::Alert)
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .text_color(t.danger)
                             .child(e.clone())
                     }))
@@ -274,7 +274,7 @@ impl SettingsDialog {
                         div()
                             .w_full()
                             .truncate()
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .text_color(t.text_muted)
                             .child(form::describe(view)),
                     )

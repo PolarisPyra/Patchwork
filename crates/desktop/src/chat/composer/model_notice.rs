@@ -11,7 +11,7 @@ use patchwork_server::threads::AttachmentKind;
 
 use super::Composer;
 use super::menus::{Menu, Pick};
-use crate::ui::theme::{FS_SM, radius, Theme};
+use crate::ui::theme::{fs_sm, radius, Theme};
 use crate::ui::{BtnKind, btn, icon, spinner};
 
 /// The most other models offered when the server stopped serving the chat's.
@@ -172,7 +172,7 @@ impl Composer {
                 .bg(t.bg_panel)
                 .px(px(10.))
                 .py(px(6.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .child(icon("warning", 14.).flex_none().text_color(t.warning))
                 .child(
                     div()

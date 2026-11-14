@@ -12,7 +12,7 @@ use gpui::{
 };
 
 use super::Panel;
-use crate::ui::theme::{FS_SM, radius_sm, theme};
+use crate::ui::theme::{fs_sm, radius_sm, theme};
 use crate::ui::{BtnKind, btn, icon, spinner};
 
 /// How long Live waits after a capture finishes before taking the next. A capture itself takes
@@ -81,7 +81,7 @@ impl Panel {
                 .items_center()
                 .justify_center()
                 .px(px(12.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
                 .child("Computer use is off. Turn it on under Settings → Permissions.")
                 .into_any_element();
@@ -136,7 +136,7 @@ impl Panel {
                     .items_center()
                     .gap(px(6.))
                     .px(px(12.))
-                    .text_size(px(FS_SM))
+                    .text_size(px(fs_sm()))
                     .child(
                         btn("screen-capture", "Capture", BtnKind::Plain, busy, &t)
                             .child(if busy {

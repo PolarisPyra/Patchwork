@@ -13,7 +13,7 @@ use gpui::{
 use patchwork_server::provider::AgentKind;
 use patchwork_server::threads::{Role as MessageRole, StepStatus, Thread, ToolCall};
 
-use crate::ui::theme::{font_mono, FS_SM, FS_XS, radius, radius_lg, Theme};
+use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_lg, Theme};
 use crate::ui::{
     agent_logo, button, compact_elapsed, full_elapsed, icon, now_ms, popup, popup_shadow, spinner,
 };
@@ -165,7 +165,7 @@ fn details_card(tool: &ToolCall, tools: &[&ToolCall], elapsed: Option<u64>, t: &
         .border_color(t.border)
         .bg(t.bg_panel)
         .p(px(10.))
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .shadow(popup_shadow(t))
         .child(
             div()
@@ -199,7 +199,7 @@ fn details_card(tool: &ToolCall, tools: &[&ToolCall], elapsed: Option<u64>, t: &
                 .items_center()
                 .gap(px(6.))
                 .font_family(font_mono())
-                .text_size(px(FS_XS))
+                .text_size(px(fs_xs()))
                 .text_color(t.text_muted)
                 .child(icon("terminal", 12.).flex_none())
                 .child(
@@ -244,7 +244,7 @@ fn subagent_row(
     let group = SharedString::from(format!("subagent-{}", tool.id));
     let trailing = if tool.status == StepStatus::Error {
         div()
-            .text_size(px(FS_XS))
+            .text_size(px(fs_xs()))
             .text_color(t.danger)
             .child(status_label(StepStatus::Error))
             .into_any_element()
@@ -253,7 +253,7 @@ fn subagent_row(
             .when(stoppable, |d| {
                 d.group_hover(group.clone(), |s| s.opacity(0.))
             })
-            .text_size(px(FS_XS))
+            .text_size(px(fs_xs()))
             .text_color(t.text_subtle)
             .children(elapsed.map(compact_elapsed))
             .into_any_element()
@@ -498,7 +498,7 @@ pub fn lineage_card(
         .border_1()
         .border_color(t.border)
         .bg(t.bg_panel)
-        .text_size(px(FS_SM))
+        .text_size(px(fs_sm()))
         .shadow(popup_shadow(t))
         .child(
             div()
@@ -512,7 +512,7 @@ pub fn lineage_card(
                         .flex_1()
                         .truncate()
                         .font_weight(FontWeight::MEDIUM)
-                        .text_size(px(FS_XS))
+                        .text_size(px(fs_xs()))
                         .text_color(t.text_muted)
                         .child(if running > 0 {
                             format!("Lineage · {running} running")
@@ -554,7 +554,7 @@ pub fn lineage_card(
                             .gap(px(6.))
                             .px(px(12.))
                             .py(px(6.))
-                            .text_size(px(FS_XS))
+                            .text_size(px(fs_xs()))
                             .text_color(t.text_muted)
                             .hover(move |s| s.text_color(fg))
                             .child(

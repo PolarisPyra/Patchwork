@@ -11,7 +11,7 @@ use super::state::peak;
 use super::state::limited_until;
 use gpui::{AnyElement, FontWeight, Role, SharedString, deferred, div, prelude::*, px, relative};
 use patchwork_server::provider::AgentKind;
-use crate::ui::theme::{FS_SM, FS_XS, radius, radius_sm, Theme};
+use crate::ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
 use crate::ui::{
     agent_label, agent_logo, button, icon, now_ms, popup_shadow, resets_in, spinner, tooltip,
 };
@@ -37,7 +37,7 @@ pub fn footer(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>) -> AnyE
                 .gap(px(6.))
                 .px(px(8.))
                 .rounded(px(radius_sm()))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .aria_expanded(open)
                 .map(|b| {
                     if open {
@@ -105,7 +105,7 @@ pub(super) fn popover(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>)
         panel.child(
             div()
                 .p(px(12.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
                 .child(if !shown.is_empty() || connected_api {
                     "Unable to get usage stats"
@@ -274,7 +274,7 @@ pub(super) fn usage_header(
                 .rounded(px(radius_sm()))
                 .bg(t.danger_soft)
                 .text_color(t.danger)
-                .text_size(px(FS_XS))
+                .text_size(px(fs_xs()))
                 .child(format!("Rate limited · {}", wait_left(at, now)))
                 .into_any_element(),
         )
@@ -289,7 +289,7 @@ pub(super) fn usage_header(
                 .h(px(20.))
                 .flex()
                 .items_center()
-                .text_size(px(FS_XS))
+                .text_size(px(fs_xs()))
                 .text_color(t.text_subtle)
                 .child("Up to date")
                 .into_any_element(),
@@ -360,7 +360,7 @@ pub(super) fn agent_usage(
                 3.5,
                 t,
                 div()
-                    .text_size(px(11.))
+                    .text_size(px(crate::ui::theme::fs(11.)))
                     .font_weight(FontWeight::MEDIUM)
                     .child(format!("{}%", w.used_percent.round())),
             ))
@@ -371,11 +371,16 @@ pub(super) fn agent_usage(
                     .flex_1()
                     .min_w_0()
                     .gap(px(1.))
-                    .child(div().truncate().text_size(px(FS_SM)).child(w.label.clone()))
+                    .child(
+                        div()
+                            .truncate()
+                            .text_size(px(fs_sm()))
+                            .child(w.label.clone()),
+                    )
                     .children(w.resets_at.map(|at| {
                         div()
                             .truncate()
-                            .text_size(px(FS_XS))
+                            .text_size(px(fs_xs()))
                             .text_color(t.text_subtle)
                             .child(format!("Resets {}", resets_in(at, now)))
                     })),
@@ -397,7 +402,7 @@ pub(super) fn agent_usage(
                 .py(px(12.))
                 .border_t_1()
                 .border_color(t.border)
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
                 .child(note)
         }))

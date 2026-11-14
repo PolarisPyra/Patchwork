@@ -12,7 +12,7 @@ use patchwork_server::provider::{AgentKind, ModelOption};
 use patchwork_server::threads::AccessMode;
 
 use super::{Composer, Picks};
-use crate::ui::theme::{FS_SM, FS_XS, Theme};
+use crate::ui::theme::{fs_sm, fs_xs, Theme};
 use crate::ui::{button, format_tokens, icon, menu_item, popup};
 
 /// The chips that open a menu.
@@ -213,7 +213,7 @@ impl Composer {
                         .child(
                             div()
                                 .pl(px(20.))
-                                .text_size(px(FS_SM))
+                                .text_size(px(fs_sm()))
                                 .text_color(t.text_muted)
                                 .child(description),
                         )
@@ -236,7 +236,7 @@ impl Composer {
                         .child(label)
                         .child(
                             div()
-                                .text_size(px(FS_XS))
+                                .text_size(px(fs_xs()))
                                 .text_color(t.text_subtle)
                                 .child(description),
                         )
@@ -277,7 +277,7 @@ impl Composer {
                                 col.child(
                                     div()
                                         .truncate()
-                                        .text_size(px(FS_SM))
+                                        .text_size(px(fs_sm()))
                                         .text_color(t.text_muted)
                                         .child(description),
                                 )
@@ -371,7 +371,7 @@ impl Composer {
                 .role(Role::Status)
                 .px(px(8.))
                 .py(px(6.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
                 .child("Loading agents…")
         });

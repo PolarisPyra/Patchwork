@@ -200,8 +200,7 @@ impl Workspace {
                 .await;
             let _ = this.update_in(cx, |this, window, cx| {
                 let was = crate::ui::theme::applied(cx);
-                let reset =
-                    was.text_size != applied.text_size || was.chat_font != applied.chat_font;
+                let reset = was.text_size != applied.text_size || was.ui_font != applied.ui_font;
                 crate::ui::theme::apply(applied, window.appearance(), cx);
                 if reset {
                     // Every row of the transcript is another height in another font or size.

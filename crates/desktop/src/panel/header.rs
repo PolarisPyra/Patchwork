@@ -7,7 +7,7 @@ use gpui::{
     px,
 };
 use crate::ui::menu::MenuItem;
-use crate::ui::theme::{FS_SM, theme};
+use crate::ui::theme::{fs_sm, theme};
 use crate::ui::{button, icon, icon_button, tooltip};
 use super::state::{MenuFor, Panel, PanelTab};
 use super::terminal::Shell;
@@ -27,7 +27,7 @@ impl Panel {
             .aria_selected(on)
             .h(px(22.))
             .border_b_2()
-            .text_size(px(FS_SM))
+            .text_size(px(fs_sm()))
             .font_weight(FontWeight::MEDIUM)
             .map(|b| {
                 if on {
@@ -57,7 +57,7 @@ impl Panel {
                     tools.push(
                         div()
                             .px(px(4.))
-                            .text_size(px(FS_SM))
+                            .text_size(px(fs_sm()))
                             .text_color(t.text_muted)
                             .child(only.name.clone())
                             .into_any_element(),
@@ -188,7 +188,7 @@ impl Panel {
                 .gap(px(6.))
                 .pl(px(8.))
                 .pr(px(2.))
-                .text_size(px(FS_SM))
+                .text_size(px(fs_sm()))
                 .cursor_pointer()
                 .map(|row| {
                     if on {
