@@ -336,23 +336,6 @@ impl TextArea {
         cx.notify();
     }
 
-    /// How many rows the text took when last drawn, wrapped lines counted; 0 before it is drawn.
-    pub fn drawn_rows(&self) -> usize {
-        let Some(last) = self.lines.last() else {
-            return 0;
-        };
-        if self.line_height <= gpui::px(0.) {
-            return 0;
-        }
-        let height = last.top
-            + last
-                .layout
-                .size(self.line_height)
-                .height
-                .max(self.line_height);
-        (height / self.line_height).round() as usize
-    }
-
     /// Where the caret is, unless text is selected.
     pub fn caret(&self) -> Option<usize> {
         self.selected.is_empty().then_some(self.selected.end)

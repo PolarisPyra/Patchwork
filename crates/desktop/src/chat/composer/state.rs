@@ -47,10 +47,6 @@ pub enum LaunchProject {
     Picked(Option<String>),
 }
 
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "each flag is a separate piece of view state"
-)]
 pub struct Composer {
     pub(super) workspace: WeakEntity<Workspace>,
     pub editor: Entity<TextArea>,
@@ -77,10 +73,6 @@ pub struct Composer {
     /// send menu. Each send, and each turn starting or ending, puts it back to the default.
     pub(super) queue_next: Option<bool>,
     pub(super) was_working: bool,
-    /// Whether the draft was last drawn in the large text it starts in, while it is one line.
-    pub(super) large: bool,
-    /// How long the draft was when its large text wrapped: it stays small until it is shorter.
-    pub(super) wrapped_at: Option<usize>,
     /// What the next send while a turn runs does, as last drawn: queue, or steer.
     pub(super) queues: bool,
     pub(super) health: model_notice::ModelHealth,
@@ -196,8 +188,6 @@ impl Composer {
             picker: None,
             queue_next: None,
             was_working: false,
-            large: true,
-            wrapped_at: None,
             health: model_notice::ModelHealth::default(),
             queues: false,
             sigil: sigil_menu::SigilMenu::default(),
