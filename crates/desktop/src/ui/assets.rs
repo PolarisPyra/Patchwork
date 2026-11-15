@@ -16,6 +16,9 @@
 //!   `@phosphor-icons/react` with their path data in a 256×256 `viewBox`. `twistie.svg` is the
 //!   Codicons chevron the task tree draws, and
 //!   `twistie-closed.svg` is the same path with `rotate(-90 8 8)` put first in its `transform`.
+//! - `assets/logos/<id>.png` and `assets/logo.png`: 512×512 renders of the SVG beside each, made
+//!   with `rsvg-convert -w 512 -h 512 <id>.svg -o <id>.png`. `assets/logo.svg` is a copy of
+//!   `assets/logos/original.svg`; `assets/logo.ico` is made from `logo.png` (see `build.rs`).
 
 // Rust guideline compliant 2026-10-09
 
