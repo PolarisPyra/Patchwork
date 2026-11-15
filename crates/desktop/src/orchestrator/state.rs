@@ -8,7 +8,8 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use gpui::{
-    AppContext, Context, Entity, Focusable, SharedString, Subscription, WeakEntity, Window, hsla,
+    AppContext, Context, Entity, Focusable, Pixels, Point, SharedString, Subscription, WeakEntity,
+    Window, hsla,
 };
 use patchwork_server::orchestration::{Dispatched, Target};
 use patchwork_server::threads::{Ask, Attachment, asks};
@@ -16,6 +17,7 @@ use patchwork_server::threads::{Ask, Attachment, asks};
 use super::butterfly::Flight;
 use crate::chat::composer::Composer;
 use crate::ui::display_title;
+use crate::ui::menu::Menu;
 use crate::ui::text_area::{Arrow, BackspaceEmpty, Changed, Submitted, Tabbed, TextArea};
 use crate::workspace::Workspace;
 
@@ -99,6 +101,8 @@ pub struct Orchestrator {
     pub(super) picker: Option<Picker>,
     /// The files, folders and pictures dropped on the pill, sent with the next request.
     pub(super) attachments: Vec<Attachment>,
+    /// The plus button's Files and Folder menu, while it is open, and where it opened.
+    pub(super) attach_menu: Option<(Entity<Menu>, Point<Pixels>)>,
     /// Where the butterfly is, kept between frames.
     pub(super) flight: Rc<RefCell<Flight>>,
     /// The picture last drawn behind the page, under the one drawn now.
@@ -159,6 +163,7 @@ impl Orchestrator {
             pinned: None,
             picker: None,
             attachments: Vec::new(),
+            attach_menu: None,
             flight: Rc::default(),
             pictures: [None, None],
             _subscriptions: subscriptions,
