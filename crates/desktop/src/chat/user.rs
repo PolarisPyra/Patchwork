@@ -93,12 +93,21 @@ fn kind_name(kind: AttachmentKind) -> &'static str {
     }
 }
 
-/// A dropped file, folder, or image, shown as a badge with its full path on hover. An image shows
-/// its thumbnail, or its icon if it cannot be read.
+/// Whether the file at `path` is a picture the app can draw, though agents may not take it as one,
+/// such as an SVG, so its chip still shows a thumbnail.
+fn drawable(path: &str) -> bool {
+    path.rsplit_once('.').is_some_and(|(_, ext)| {
+        let ext = ext.to_ascii_lowercase();
+        gpui::Img::extensions().contains(&ext.as_str())
+    })
+}
+
+/// A dropped file, folder, or image, shown as a badge with its full path on hover. A picture
+/// shows its thumbnail, or its icon if it cannot be read.
 pub fn attachment_chip(id: impl Into<SharedString>, a: &Attachment, t: &Theme) -> Stateful<Div> {
     let name = kind_name(a.kind);
     let muted = t.text_muted;
-    let lead = if a.kind == AttachmentKind::Image {
+    let lead = if a.kind == AttachmentKind::Image || drawable(&a.path) {
         img(PathBuf::from(&a.path))
             .size(px(20.))
             .flex_none()
