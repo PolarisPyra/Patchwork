@@ -271,8 +271,9 @@ impl Workspace {
                         cx.notify();
                     }))
             };
-        // Lit while its task list is open, as a view's icon is.
-        let orchestrating = self.page == Page::Orchestrator && self.orchestrator_tasks;
+        // Lit while its page shows, with the task list open or closed. Toggled follows the list.
+        let on_page = self.page == Page::Orchestrator;
+        let orchestrating = on_page && self.orchestrator_tasks;
         div()
             .id("activity-bar")
             .role(Role::Navigation)
@@ -288,7 +289,7 @@ impl Workspace {
             .bg(t.bg_app)
             .py(px(6.))
             .child(
-                activity_button("Orchestrator", "Orchestrator".into(), &t, orchestrating)
+                activity_button("Orchestrator", "Orchestrator".into(), &t, on_page)
                     .aria_toggled(if orchestrating {
                         gpui::Toggled::True
                     } else {
