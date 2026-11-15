@@ -116,8 +116,12 @@ fn line(mark: AnyElement, text: SharedString, note: Option<(SharedString, Hsla)>
         }))
 }
 
-/// The line an agent last wrote, under what it was asked.
-fn latest(text: Option<String>) -> Option<Div> {
+/// The line an agent last wrote, under what it was asked. An agent at work has a line that comes
+/// and goes between its steps, so its room is `held` while there is none: the card keeps its
+/// height.
+fn latest(text: Option<String>, held: bool) -> Option<Div> {
+    // A no-break space is one line high, where an empty line would have no height.
+    let text = text.or_else(|| held.then(|| "\u{a0}".to_string()));
     text.map(|text| {
         div()
             .w_full()
@@ -177,7 +181,10 @@ impl Orchestrator {
                 plate(button(row_id, label))
                     .hover(|s| s.bg(glass(0.72)).border_color(ink(0.14)))
                     .child(line(mark(chat.standing), text, Some(note)))
-                    .children(latest(chat.line.clone()))
+                    .children(latest(
+                        chat.line.clone(),
+                        matches!(chat.standing, Standing::Working | Standing::Waiting),
+                    ))
                     .on_click(cx.listener({
                         let id = chat.id.clone();
                         move |this, _: &gpui::ClickEvent, _, cx| this.open(&id, cx)
