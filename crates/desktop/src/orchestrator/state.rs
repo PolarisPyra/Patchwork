@@ -10,7 +10,7 @@ use std::rc::Rc;
 use gpui::{
     AppContext, Context, Entity, Focusable, SharedString, Subscription, WeakEntity, Window, hsla,
 };
-use patchwork_server::orchestration::{Dispatched, Routing, Target};
+use patchwork_server::orchestration::{Dispatched, Target};
 use patchwork_server::threads::{Ask, Attachment, asks};
 
 use super::butterfly::Flight;
@@ -27,7 +27,7 @@ pub(super) const PLACEHOLDER: &str = "Do something in a project";
 
 /// What became of a request.
 pub(super) enum Outcome {
-    /// The server is finding its chat.
+    /// The server is starting its chat or sending it on.
     Routing,
     /// A chat has it, or one in each of several projects.
     Routed(Dispatched),
@@ -93,18 +93,9 @@ pub struct Orchestrator {
     pub(super) declined: bool,
     /// The request being written when the pill turned to a question.
     pub(super) draft: Option<String>,
-    /// Where the request would go, the text that was read to find out, and the place picked.
-    pub(super) routing: Option<Routing>,
-    pub(super) routed_text: String,
-    pub(super) pick: usize,
-    /// The place picked with `@`, which the router does not change.
+    /// The place picked with `@`. Without one a request starts a chat in the project picked under
+    /// the pill.
     pub(super) pinned: Option<Target>,
-    /// The project picked under the pill when the route was last read.
-    pub(super) project: Option<String>,
-    /// The router is reading the request.
-    pub(super) deciding: bool,
-    /// Counts the readings asked for, so a late answer to an old one is dropped.
-    pub(super) generation: u64,
     pub(super) picker: Option<Picker>,
     /// The files, folders and pictures dropped on the pill, sent with the next request.
     pub(super) attachments: Vec<Attachment>,
@@ -149,15 +140,11 @@ impl Orchestrator {
             // A chat's title and what it asks are read from the workspace.
             cx.observe_in(workspace, window, |this, _, window, cx| {
                 this.read_chats(cx);
-                this.follow_project(cx);
                 this.settle(window, cx);
                 cx.notify();
             }),
             // The model picker is the chat box's, drawn on this page, and so is the project menu.
-            cx.observe(&composer, |this, _, cx| {
-                this.follow_project(cx);
-                cx.notify();
-            }),
+            cx.observe(&composer, |_, _, cx| cx.notify()),
         ];
         Self {
             workspace: workspace.downgrade(),
@@ -169,13 +156,7 @@ impl Orchestrator {
             answering: None,
             declined: false,
             draft: None,
-            routing: None,
-            routed_text: String::new(),
-            pick: 0,
             pinned: None,
-            project: None,
-            deciding: false,
-            generation: 0,
             picker: None,
             attachments: Vec::new(),
             flight: Rc::default(),

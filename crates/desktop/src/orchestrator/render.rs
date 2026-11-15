@@ -23,7 +23,7 @@ use crate::chat::composer::Composer;
 use super::{background, scene};
 use crate::ui::backdrop::preset_fill;
 use crate::ui::theme::{font_ui, fs_lg, fs_sm, radius_lg, applied, theme};
-use crate::ui::{agent_logo, button, display_title, icon, spinner};
+use crate::ui::{agent_logo, button, display_title, icon};
 
 /// The pill: its size, the room kept at its sides, and how far down the page its top is.
 pub(super) const PILL_W: f32 = 640.;
@@ -299,46 +299,14 @@ impl Orchestrator {
                 .items_center()
                 .gap(px(4.))
         };
-        if let Some(pinned) = &self.pinned {
-            let place = self.place(pinned, cx);
-            let pin = div().flex_none().child(icon("push-pin", 12.));
-            let shown = route_chip(&place).child(pin);
-            return Some(
-                status(format!("Goes to {}, pinned", place.spoken))
-                    .child(shown)
-                    .into_any_element(),
-            );
-        }
-        let routing = self.routing.as_ref().filter(|_| self.route_is_fresh(cx));
-        let Some(routing) = routing else {
-            return self.deciding.then(|| {
-                status("Finding where it goes".into())
-                    .px(px(6.))
-                    .child(spinner(14., ink(0.7)))
-                    .into_any_element()
-            });
-        };
-        // Both places show while the router cannot tell them apart; the arrows pick one.
-        let shown = if routing.unsure && self.pick < 2 {
-            0..2
-        } else {
-            self.pick..self.pick + 1
-        };
-        let picked = routing
-            .targets
-            .get(self.pick)
-            .map(|t| self.place(t, cx).spoken);
-        let chips = shown.clone().filter_map(|index| {
-            let place = self.place(routing.targets.get(index)?, cx);
-            let dim = shown.len() > 1 && index != self.pick;
-            Some(
-                route_chip(&place)
-                    .max_w(px(if shown.len() > 1 { 150. } else { 260. }))
-                    .opacity(if dim { 0.45 } else { 1. }),
-            )
-        });
-        let label = format!("Goes to {}", picked.unwrap_or_default());
-        Some(status(label).children(chips).into_any_element())
+        let place = self.place(self.pinned.as_ref()?, cx);
+        let pin = div().flex_none().child(icon("push-pin", 12.));
+        let shown = route_chip(&place).child(pin);
+        Some(
+            status(format!("Goes to {}, pinned", place.spoken))
+                .child(shown)
+                .into_any_element(),
+        )
     }
 
     /// The `@` list: the projects and chats a request can be pinned to.
