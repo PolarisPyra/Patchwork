@@ -3,6 +3,21 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.76] - 2026-11-15
+
+**26.11.76** · 1 change from 1 contributor
+
+- **Night Sky background fixed.** The Night Sky background now shows only stars and occasional shooting stars instead of stray v letters.
+
+<details>
+<summary>Full changelog</summary>
+
+### Fixed
+
+- The Night Sky background drew rows of the letter "v" across the top of the window. It now shows only the stars and the occasional shooting star. by [PolarisPyra in #125](https://github.com/PolarisPyra/Patchwork/pull/125)
+
+</details>
+
 ## [26.11.75] - 2026-11-15
 
 **26.11.75** · 2 changes from 1 contributor
