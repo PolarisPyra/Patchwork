@@ -1,4 +1,5 @@
-//! The composer drawn: the draft, its attachments, and the chips under it.
+//! The composer drawn: the pill with the draft, its attachments and the send button, and the
+//! chips under it.
 
 // Rust guideline compliant 2026-10-09
 
@@ -8,13 +9,19 @@ use gpui::{
 };
 use crate::ui::text_area::Paste;
 use crate::chat::user::attachment_chip;
-use crate::ui::theme::{fs_md, radius, radius_lg, theme};
-use crate::ui::{agent_logo, button, icon, tooltip};
+use crate::ui::pill::{PILL_PAD, SEND, pill, send_button};
+use crate::ui::theme::{fs_lg, fs_md, theme};
+use crate::ui::{agent_logo, button, format_tokens, icon, tooltip};
 use crate::workspace::{Workspace, is_busy, is_working};
 use super::menus::{Menu, access_of, compact_label, effort_label, efforts};
-use super::chips::{chip, context_of, fill_ring, tool_button};
+use super::chips::{chip, context_of, fill_ring};
 use super::send::queue_by_default;
 use super::state::Composer;
+
+/// The height of a line of the draft in its usual text.
+const LINE: f32 = 20.;
+/// The height of a line of the draft in the large text a one-line draft is in.
+const LINE_LARGE: f32 = 24.;
 
 impl Render for Composer {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -72,13 +79,17 @@ impl Render for Composer {
             .and_then(|list| list.iter().find(|m| m.id == picks.model))
             .and_then(|m| m.context_window);
         let limit = if effective > 0 { Some(effective) } else { full };
-        let ring = match limit {
-            Some(limit) => fill_ring(
-                thread.and_then(context_of).unwrap_or(0) as f32 / limit as f32,
-                &t,
-            ),
-            None => icon("arrows-in-simple", 16.).into_any_element(),
-        };
+        // How full the context is against where it compacts, as the Compact chip's ring.
+        let context = limit.map(|limit| {
+            let tokens = thread.and_then(context_of).unwrap_or(0);
+            let used = tokens as f32 / limit as f32;
+            let detail = format!(
+                "Context: {} of {} tokens before it compacts",
+                format_tokens(tokens),
+                format_tokens(limit),
+            );
+            (fill_ring(used, &t), detail)
+        });
         let compact = compact_label(effective);
         let (access, access_icon) = access_of(picks.access);
         let working = thread.is_some_and(is_working);
@@ -101,23 +112,23 @@ impl Render for Composer {
         let focused = editor.focus_handle(cx).is_focused(window);
         let editor_focus = editor.focus_handle(cx);
         let editor_scroll = editor.scroll.clone();
-
-        let format_editor = self.editor.clone();
-        let format = |id: &'static str,
-                      label: &'static str,
-                      name: &'static str,
-                      before: &'static str,
-                      after: &'static str| {
-            let editor = format_editor.clone();
-            tool_button(id, label, name, &t).on_click(move |_, window, cx| {
-                editor.update(cx, |e, cx| {
-                    if after.is_empty() {
-                        e.prefix_line(before, window, cx);
-                    } else {
-                        e.surround(before, after, window, cx);
-                    }
-                });
-            })
+        // A one-line draft is in large text. Once its large text wraps it turns small, and stays
+        // small until it is shorter than when it wrapped, so it does not flick between the two.
+        let length = editor.content.len();
+        if editor.content.is_empty() {
+            self.wrapped_at = None;
+        } else if self.large && editor.drawn_rows() > 1 {
+            self.wrapped_at = Some(length);
+        }
+        let large = !editor.content.contains('\n') && self.wrapped_at.is_none_or(|at| length < at);
+        if large != self.large {
+            self.large = large;
+            cx.notify();
+        }
+        let (text_size, line) = if large {
+            (fs_lg(), LINE_LARGE)
+        } else {
+            (fs_md(), LINE)
         };
         let attachments: Vec<_> = self
             .attachments
@@ -148,7 +159,7 @@ impl Render for Composer {
             })
             .collect();
         let stop = busy.then(|| {
-            let hover = t.accent_hover;
+            let (bg, hover) = (t.text.opacity(0.14), t.text.opacity(0.22));
             button(
                 "stop",
                 if working {
@@ -157,11 +168,11 @@ impl Render for Composer {
                     "Stop background commands"
                 },
             )
-            .size(px(32.))
+            .size(px(SEND))
             .flex_none()
             .justify_center()
-            .rounded(px(radius()))
-            .bg(t.bg_selected_muted)
+            .rounded_full()
+            .bg(bg)
             .text_color(t.text)
             .hover(move |s| s.bg(hover))
             .child(icon("square-fill", 12.))
@@ -193,46 +204,37 @@ impl Render for Composer {
         };
         let split = working && !editing;
         let send = (!working || !empty || editing).then(|| {
-            let base = button("send", send_label)
+            // With a plan ready, an empty send implements it, as Enter does.
+            let blocked = folder_missing || (empty && !editing && !plan_ready);
+            let base = send_button("send", send_label, !blocked, t.text, t.bg_editor)
                 .tooltip(tooltip(send_tip))
-                .size(px(32.))
-                .flex_none()
-                .justify_center()
                 .map(|b| {
                     if split {
-                        b.rounded_l(px(radius()))
+                        b.rounded_l_full()
                     } else {
-                        b.rounded(px(radius()))
+                        b.rounded_full()
                     }
                 })
                 .child(icon(if editing { "check" } else { "arrow-up" }, 16.));
-            // With a plan ready, an empty send implements it, as Enter does.
-            let blocked = folder_missing || (empty && !editing && !plan_ready);
             if blocked {
-                base.bg(t.bg_selected_muted)
-                    .text_color(t.text_subtle)
-                    .cursor_default()
+                base
             } else {
-                let hover = t.accent_hover;
-                base.bg(t.accent)
-                    .text_color(t.text_on_accent)
-                    .hover(move |s| s.bg(hover))
-                    .on_click(cx.listener(|this, _, window, cx| this.send(false, true, window, cx)))
+                base.on_click(cx.listener(|this, _, window, cx| this.send(false, true, window, cx)))
             }
         });
         let send_mode = (split && !empty).then(|| {
-            let hover = t.accent_hover;
+            let hover = t.text.opacity(0.8);
             let caret = button("send-mode", "Choose queue or steer")
                 .tooltip(tooltip("Choose queue or steer"))
-                .h(px(32.))
-                .w(px(24.))
+                .h(px(SEND))
+                .w(px(28.))
                 .flex_none()
                 .justify_center()
-                .rounded_r(px(radius()))
+                .rounded_r_full()
                 .border_l_1()
-                .border_color(t.text_on_accent.opacity(0.2))
-                .bg(t.accent)
-                .text_color(t.text_on_accent)
+                .border_color(t.bg_editor.opacity(0.2))
+                .bg(t.text)
+                .text_color(t.bg_editor)
                 .hover(move |s| s.bg(hover))
                 .child(icon("caret-down", 12.));
             self.chip_with_menu(Menu::Send, caret, &picks, can_compact, &t, window, cx)
@@ -242,7 +244,7 @@ impl Render for Composer {
             chip(
                 "model",
                 format!("Choose model: {model_label}"),
-                agent_logo(agent, picks.model.as_deref(), 16.),
+                agent_logo(agent, picks.model.as_deref(), 14.),
                 model_label,
                 &t,
             ),
@@ -259,7 +261,7 @@ impl Render for Composer {
                 chip(
                     "effort",
                     format!("Effort: {effort}"),
-                    icon("lightbulb", 16.).into_any_element(),
+                    icon("lightbulb", 14.).into_any_element(),
                     effort,
                     &t,
                 ),
@@ -270,15 +272,26 @@ impl Render for Composer {
                 cx,
             )
         });
-        let compact_chip = self.chip_with_menu(
-            Menu::Compact,
-            chip(
+        let compact_chip = match context {
+            Some((ring, detail)) => chip(
+                "compact",
+                format!("{detail}. Compact at: {compact}"),
+                ring,
+                compact.clone(),
+                &t,
+            )
+            .tooltip(tooltip(detail)),
+            None => chip(
                 "compact",
                 format!("Compact at: {compact}"),
-                ring,
+                icon("arrows-in-simple", 14.).into_any_element(),
                 compact,
                 &t,
             ),
+        };
+        let compact_chip = self.chip_with_menu(
+            Menu::Compact,
+            compact_chip,
             &picks,
             can_compact,
             &t,
@@ -290,7 +303,7 @@ impl Render for Composer {
             chip(
                 "access",
                 format!("Access: {access}"),
-                icon(access_icon, 16.).into_any_element(),
+                icon(access_icon, 14.).into_any_element(),
                 access.into(),
                 &t,
             ),
@@ -309,7 +322,7 @@ impl Render for Composer {
                     Some(role) => format!("Agent: {role}"),
                     None => "Agent: none".into(),
                 },
-                icon("robot", 16.).into_any_element(),
+                icon("robot", 14.).into_any_element(),
                 role.unwrap_or_else(|| "Agent".into()),
                 &t,
             ),
@@ -319,179 +332,175 @@ impl Render for Composer {
             window,
             cx,
         );
+        let attach = {
+            let (shade, fg) = (t.text.opacity(0.08), t.text);
+            let plus = button("attach", "Attach")
+                .size(px(SEND))
+                .flex_none()
+                .justify_center()
+                .rounded_full()
+                .text_color(t.text.opacity(0.7))
+                .hover(move |s| s.bg(shade).text_color(fg))
+                .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
+                .child(icon("plus", 16.));
+            self.chip_with_menu(Menu::Attach, plus, &picks, can_compact, &t, window, cx)
+        };
+        let format_chip = self.chip_with_menu(
+            Menu::Format,
+            chip(
+                "format",
+                "Format".into(),
+                icon("text-b", 14.).into_any_element(),
+                "Format".into(),
+                &t,
+            ),
+            &picks,
+            can_compact,
+            &t,
+            window,
+            cx,
+        );
         let sigil_menu = self.sigil_menu(picks.agent, &provider_commands, &t, cx);
-        let frame = div()
+        let border = if focused {
+            t.accent.opacity(0.6)
+        } else {
+            t.text.opacity(0.10)
+        };
+        let pill = pill(
+            "composer-pill",
+            border,
+            t.bg_editor.opacity(0.82),
+            t.shadow.opacity(0.5),
+        )
+        .relative()
+        .flex()
+        .flex_col()
+        .gap(px(6.))
+        .p(px(PILL_PAD))
+        .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
+            if e.keystroke.key == "escape" && this.sigil_escape(cx) {
+                return cx.stop_propagation();
+            }
+            let m = &e.keystroke.modifiers;
+            if e.keystroke.key == "up" && m.alt && !m.control && !m.shift && !m.platform {
+                // Deferred: it reads this composer, which cannot be read from in here.
+                let workspace = this.workspace.clone();
+                cx.defer(move |cx| {
+                    let _ = workspace.update(cx, crate::workspace::Workspace::edit_latest_queued);
+                });
+                cx.stop_propagation();
+            }
+        }))
+        // A picture or a file on the clipboard is attached; text is the editor's to paste.
+        .capture_action(cx.listener(|this, _: &Paste, _, cx| {
+            if this.paste_attachments(cx) {
+                cx.stop_propagation();
+            }
+        }))
+        // Files, folders or pictures held over the chat box light it up; dropped, they are
+        // attached to the message.
+        .drag_over::<ExternalPaths>({
+            let (accent, glow) = (t.accent, t.bg_hover);
+            move |style, _, _, _| style.border_color(accent).bg(glow)
+        })
+        .on_drop(cx.listener(|this, files: &ExternalPaths, window, cx| {
+            // A drop is the start of a message: the usage popover goes, as a press outside
+            // it would close it, and the keys go to the chat box.
+            if let Some(workspace) = this.workspace.upgrade() {
+                workspace.update(cx, Workspace::dismiss_usage);
+            }
+            this.attach_paths(files.paths(), cx);
+            this.focus(window, cx);
+            cx.stop_propagation();
+        }))
+        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            // A chip, or the editor itself, has already answered the press.
+            if window.default_prevented() {
+                return;
+            }
+            if !editor_focus.is_focused(window) {
+                window.focus(&editor_focus, cx);
+            }
+            // Without this the workspace, which is focusable too, takes the focus back.
+            window.prevent_default();
+        })
+        .children(sigil_menu)
+        .when(!attachments.is_empty(), |c| {
+            c.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(6.))
+                    .px(px(6.))
+                    .children(attachments),
+            )
+        })
+        .child(
+            div()
+                .flex()
+                .items_end()
+                .gap(px(8.))
+                .child(attach)
+                .child(
+                    div()
+                        .id("composer-editor")
+                        .flex_1()
+                        .min_w_0()
+                        .min_h(px(SEND))
+                        .max_h(px(280.))
+                        .overflow_y_scroll()
+                        .track_scroll(&editor_scroll)
+                        .px(px(6.))
+                        .py(px((SEND - line) / 2.))
+                        .text_size(px(text_size))
+                        .line_height(px(line))
+                        // The field is only as tall as its text; a right-click on the box around
+                        // it opens the field's Edit menu too.
+                        .on_mouse_down(MouseButton::Right, {
+                            let editor = self.editor.clone();
+                            move |e, window, cx| {
+                                editor.update(cx, |ed, cx| ed.open_menu(e, window, cx));
+                            }
+                        })
+                        .child(self.editor.clone()),
+                )
+                .children(stop)
+                .child(
+                    div()
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .children(send)
+                        .children(send_mode),
+                ),
+        );
+        let controls = div()
+            .id("composer-controls")
+            .role(Role::Toolbar)
+            .aria_label("Composer controls")
+            .mt(px(6.))
+            .px(px(12.))
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap(px(6.))
+            .child(model_chip)
+            .children(effort_chip)
+            .child(compact_chip)
+            .child(access_chip)
+            .child(agent_chip)
+            .child(div().flex_1())
+            .child(format_chip);
+        div()
             .id("composer")
             .role(Role::Group)
             .aria_label("Composer")
-            .relative()
-            .flex()
-            .flex_col()
-            .gap(px(8.))
-            .rounded(px(radius_lg()))
-            .pt(px(14.))
-            .pr(px(12.))
-            .pb(px(10.))
-            .pl(px(12.))
-            .border_1()
-            .border_color(if focused { t.accent } else { t.border_strong })
-            .bg(t.bg_editor)
-            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
-                if e.keystroke.key == "escape" && this.sigil_escape(cx) {
-                    return cx.stop_propagation();
-                }
-                let m = &e.keystroke.modifiers;
-                if e.keystroke.key == "up" && m.alt && !m.control && !m.shift && !m.platform {
-                    // Deferred: it reads this composer, which cannot be read from in here.
-                    let workspace = this.workspace.clone();
-                    cx.defer(move |cx| {
-                        let _ =
-                            workspace.update(cx, crate::workspace::Workspace::edit_latest_queued);
-                    });
-                    cx.stop_propagation();
-                }
-            }))
-            // A picture or a file on the clipboard is attached; text is the editor's to paste.
-            .capture_action(cx.listener(|this, _: &Paste, _, cx| {
-                if this.paste_attachments(cx) {
-                    cx.stop_propagation();
-                }
-            }))
-            // Files, folders or pictures held over the chat box light it up; dropped, they are
-            // attached to the message.
-            .drag_over::<ExternalPaths>({
-                let (accent, glow) = (t.accent, t.bg_hover);
-                move |style, _, _, _| style.border_color(accent).bg(glow)
-            })
-            .on_drop(cx.listener(|this, files: &ExternalPaths, window, cx| {
-                // A drop is the start of a message: the usage popover goes, as a press outside
-                // it would close it, and the keys go to the chat box.
-                if let Some(workspace) = this.workspace.upgrade() {
-                    workspace.update(cx, Workspace::dismiss_usage);
-                }
-                this.attach_paths(files.paths(), cx);
-                this.focus(window, cx);
-                cx.stop_propagation();
-            }))
-            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                // A chip, or the editor itself, has already answered the press.
-                if window.default_prevented() {
-                    return;
-                }
-                if !editor_focus.is_focused(window) {
-                    window.focus(&editor_focus, cx);
-                }
-                // Without this the workspace, which is focusable too, takes the focus back.
-                window.prevent_default();
-            })
-            .children(sigil_menu)
-            .when(!attachments.is_empty(), |c| {
-                c.child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .gap(px(6.))
-                        .px(px(6.))
-                        .children(attachments),
-                )
-            })
-            .child(
-                div()
-                    .id("composer-editor")
-                    .min_h(px(64.))
-                    .max_h(px(280.))
-                    .overflow_y_scroll()
-                    .track_scroll(&editor_scroll)
-                    .px(px(6.))
-                    .text_size(px(fs_md()))
-                    .line_height(px(20.))
-                    // The field is only as tall as its text; a right-click on the box below it
-                    // opens the field's Edit menu too.
-                    .on_mouse_down(MouseButton::Right, {
-                        let editor = self.editor.clone();
-                        move |e, window, cx| editor.update(cx, |ed, cx| ed.open_menu(e, window, cx))
-                    })
-                    .child(self.editor.clone()),
-            )
-            .child(
-                div()
-                    .id("composer-controls")
-                    .role(Role::Toolbar)
-                    .aria_label("Composer controls")
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap(px(6.))
-                    .child(model_chip)
-                    .children(effort_chip)
-                    .child(compact_chip)
-                    .child(access_chip)
-                    .child(agent_chip)
-                    .child(div().flex_1())
-                    .child(
-                        div()
-                            .id("formatting")
-                            .role(Role::Toolbar)
-                            .aria_label("Formatting")
-                            .flex()
-                            .items_center()
-                            .gap(px(2.))
-                            .child(format("bold", "Bold", "text-b", "**", "**"))
-                            .child(format("italic", "Italic", "text-italic", "*", "*"))
-                            .child(format(
-                                "strike",
-                                "Strikethrough",
-                                "text-strikethrough",
-                                "~~",
-                                "~~",
-                            ))
-                            .child(format("inline-code", "Inline code", "code", "`", "`"))
-                            .child(format(
-                                "code-block",
-                                "Code block",
-                                "code-block",
-                                "```\n",
-                                "\n```",
-                            ))
-                            .child(format("bullets", "Bulleted list", "list-bullets", "- ", ""))
-                            .child(format(
-                                "numbers",
-                                "Numbered list",
-                                "list-numbers",
-                                "1. ",
-                                "",
-                            )),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(2.))
-                            .child(
-                                tool_button("attach-files", "Attach files", "paperclip", &t)
-                                    .on_click(cx.listener(|this, _, _, cx| this.attach(false, cx))),
-                            )
-                            .child(
-                                tool_button("attach-folder", "Attach folder", "folder", &t)
-                                    .on_click(cx.listener(|this, _, _, cx| this.attach(true, cx))),
-                            ),
-                    )
-                    .children(stop)
-                    .child(
-                        div()
-                            .flex()
-                            .flex_none()
-                            .items_center()
-                            .children(send)
-                            .children(send_mode),
-                    ),
-            );
-        div()
             .flex()
             .flex_col()
             .children(notice)
             .children(usage)
-            .child(frame)
+            .child(pill)
+            .child(controls)
             .into_any_element()
     }
 }

@@ -9,25 +9,26 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use gpui::{
-    AnyElement, Bounds, BoxShadow, ExternalPaths, Hsla, KeyDownEvent, ObjectFit, Pixels, Role,
-    SharedString, Window, div, hsla, img, point, prelude::*, px, relative, size,
+    AnyElement, Bounds, ExternalPaths, Hsla, KeyDownEvent, ObjectFit, Pixels, Role, SharedString,
+    Window, div, hsla, img, point, prelude::*, px, relative, size,
 };
 use patchwork_server::orchestration::Target;
 use patchwork_server::themes::{Applied, Scene, Scheme, Shown};
 use patchwork_server::threads::AskKind;
 
-use gpui::{Anchor, FontWeight, MouseButton, anchored, deferred};
+use gpui::{Anchor, anchored, deferred};
 
 use super::state::Orchestrator;
 use crate::chat::composer::Composer;
 use super::{background, scene};
 use crate::ui::backdrop::preset_fill;
 use crate::ui::theme::{font_ui, fs_lg, fs_sm, radius_lg, applied, theme};
+use crate::ui::pill::{PILL_PAD, SEND, pill, pill_chip, send_button};
 use crate::ui::{agent_logo, button, display_title, icon};
 
 /// The pill: its size, the room kept at its sides, and how far down the page its top is.
 pub(super) const PILL_W: f32 = 640.;
-const PILL_H: f32 = 52.;
+const PILL_H: f32 = SEND + PILL_PAD * 2.;
 const GUTTER: f32 = 24.;
 const PILL_TOP: f32 = 0.4;
 
@@ -355,19 +356,9 @@ impl Orchestrator {
 
 /// A chip under the pill that opens a menu.
 fn launch_chip(id: &'static str, label: String, open: bool) -> gpui::Stateful<gpui::Div> {
-    button(id, label)
+    pill_chip(id, label, ink(1.))
         .aria_expanded(open)
-        .h(px(28.))
-        .gap(px(6.))
-        .px(px(10.))
-        .rounded_full()
-        .text_size(px(fs_sm()))
-        .font_weight(FontWeight::MEDIUM)
-        .text_color(ink(0.7))
         .when(open, |chip| chip.bg(ink(0.08)))
-        .hover(|s| s.bg(ink(0.08)).text_color(ink(1.)))
-        // The press leaves the keys in the field, where they go back once a pick is made.
-        .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
 }
 
 /// A chip's open menu, placed under the chip: lined up with its left edge, or with its right
@@ -531,8 +522,8 @@ impl Render for Orchestrator {
             .iter()
             .map(|request| self.card(request, &threads, &projects, cx))
             .collect();
-        let pill = div()
-            .id("orchestrator-pill")
+        let shadow = hsla(0., 0., 0., if dark { 0.22 } else { 0.08 });
+        let pill = pill("orchestrator-pill", ink(0.10), glass(0.62), shadow)
             .w_full()
             .max_w(px(PILL_W))
             .h(px(PILL_H))
@@ -545,18 +536,7 @@ impl Render for Orchestrator {
             } else {
                 22.
             }))
-            .pr(px(8.))
-            .rounded_full()
-            .border_1()
-            .border_color(ink(0.10))
-            .bg(glass(0.62))
-            .shadow(vec![BoxShadow {
-                color: hsla(0., 0., 0., if dark { 0.22 } else { 0.08 }),
-                offset: point(px(0.), px(6.)),
-                blur_radius: px(24.),
-                spread_radius: px(0.),
-                inset: false,
-            }])
+            .pr(px(PILL_PAD))
             .text_size(px(fs_lg()))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 if event.keystroke.key == "escape" && this.escape(window, cx) {
@@ -577,13 +557,8 @@ impl Render for Orchestrator {
             .child(div().flex_1().min_w_0().child(self.field.clone()))
             .children(self.after_field(cx))
             .child(
-                button("orchestrator-send", action)
-                    .size(px(36.))
-                    .flex_none()
-                    .justify_center()
+                send_button("orchestrator-send", action, ready, ink(1.), glass(1.))
                     .rounded_full()
-                    .bg(ink(if ready { 0.92 } else { 0.14 }))
-                    .text_color(if ready { glass(1.) } else { ink(0.5) })
                     .child(icon(glyph, 16.))
                     .on_click(cx.listener(|this, _, window, cx| this.enter(window, cx))),
             );

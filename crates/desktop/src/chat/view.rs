@@ -390,7 +390,8 @@ pub(crate) fn usage_line(thread: &Thread, warn_above: u64, t: &Theme) -> Div {
         .flex_wrap()
         .justify_end()
         .gap_x(px(12.))
-        .pr(px(12.))
+        // In line with where the pill under it stops being round.
+        .pr(px(crate::ui::pill::PILL_RADIUS))
         .text_size(px(fs_xs()))
         .line_height(px(16.));
     let Some(last) = thread.messages.iter().rev().find_map(|m| m.usage.as_ref()) else {

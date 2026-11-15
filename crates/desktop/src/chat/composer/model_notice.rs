@@ -11,7 +11,8 @@ use patchwork_server::threads::AttachmentKind;
 
 use super::Composer;
 use super::menus::{Menu, Pick};
-use crate::ui::theme::{fs_sm, radius, Theme};
+use crate::ui::pill::pill;
+use crate::ui::theme::{fs_sm, Theme};
 use crate::ui::{BtnKind, btn, icon, spinner};
 
 /// The most other models offered when the server stopped serving the chat's.
@@ -158,46 +159,46 @@ impl Composer {
             return None;
         };
         Some(
-            div()
-                .id("model-notice")
-                .role(Role::Status)
-                .mb(px(6.))
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .gap(px(8.))
-                .rounded(px(radius()))
-                .border_1()
-                .border_color(t.border)
-                .bg(t.bg_panel)
-                .px(px(10.))
-                .py(px(6.))
-                .text_size(px(fs_sm()))
-                .child(icon("warning", 14.).flex_none().text_color(t.warning))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .text_color(t.text)
-                        .child(text),
-                )
-                .children(actions)
-                .child(
-                    btn("choose-model", "Choose model", BtnKind::Plain, false, t)
-                        .child("Choose model")
-                        .on_click(cx.listener(|this, e, window, cx| {
-                            this.toggle_menu(Menu::Model, e, window, cx);
-                        })),
-                )
-                .children(self.health.error.clone().map(|e| {
-                    div()
-                        .id("model-notice-error")
-                        .role(Role::Alert)
-                        .w_full()
-                        .text_color(t.danger)
-                        .child(e)
-                })),
+            pill(
+                "model-notice",
+                t.text.opacity(0.10),
+                t.bg_editor.opacity(0.82),
+                t.shadow.opacity(0.5),
+            )
+            .role(Role::Status)
+            .mb(px(8.))
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap(px(8.))
+            .px(px(14.))
+            .py(px(6.))
+            .text_size(px(fs_sm()))
+            .child(icon("warning", 14.).flex_none().text_color(t.warning))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_color(t.text)
+                    .child(text),
+            )
+            .children(actions)
+            .child(
+                btn("choose-model", "Choose model", BtnKind::Plain, false, t)
+                    .child("Choose model")
+                    .on_click(cx.listener(|this, e, window, cx| {
+                        this.toggle_menu(Menu::Model, e, window, cx);
+                    })),
+            )
+            .children(self.health.error.clone().map(|e| {
+                div()
+                    .id("model-notice-error")
+                    .role(Role::Alert)
+                    .w_full()
+                    .text_color(t.danger)
+                    .child(e)
+            })),
         )
     }
 }

@@ -5,12 +5,13 @@
 use std::sync::Arc;
 use std::f32::consts::TAU;
 use gpui::{
-    AnyElement, ClickEvent, Div, FontWeight, MouseButton, PathBuilder, Stateful, Window, canvas,
-    div, point, prelude::*, px,
+    AnyElement, ClickEvent, Div, Focusable, PathBuilder, Stateful, Window, canvas, div, point,
+    prelude::*, px,
 };
 use patchwork_server::threads::Thread;
-use crate::ui::theme::{fs_md, radius, radius_sm, Theme};
-use crate::ui::{above, button, icon};
+use crate::ui::pill::pill_chip;
+use crate::ui::theme::Theme;
+use crate::ui::{above, icon};
 use super::menus::{Menu, Pick};
 use super::state::{Composer, LaunchProject, Picks, offered};
 
@@ -89,6 +90,23 @@ impl Composer {
             self.close_menu(window, cx);
             return;
         }
+        if let Pick::Attach(folder) = pick {
+            self.close_menu(window, cx);
+            self.attach(folder, cx);
+            return;
+        }
+        if let Pick::Format(before, after) = pick {
+            self.close_menu(window, cx);
+            window.focus(&self.editor.focus_handle(cx), cx);
+            self.editor.update(cx, |e, cx| {
+                if after.is_empty() {
+                    e.prefix_line(before, window, cx);
+                } else {
+                    e.surround(before, after, window, cx);
+                }
+            });
+            return;
+        }
         let launching = self.launching;
         self.close_menu(window, cx);
         if launching {
@@ -114,7 +132,11 @@ impl Composer {
                 Pick::Compact(window) => self.draft.compact = window,
                 Pick::Access(mode) => self.draft.access = mode,
                 Pick::Role(role) => self.draft.role = role,
-                Pick::CompactNow | Pick::SendMode(_) | Pick::Project(_) => {}
+                Pick::CompactNow
+                | Pick::SendMode(_)
+                | Pick::Project(_)
+                | Pick::Attach(_)
+                | Pick::Format(..) => {}
             }
             return;
         };
@@ -137,7 +159,7 @@ impl Composer {
                     w.send_command("/compact", cx);
                     Ok(())
                 }
-                Pick::SendMode(_) | Pick::Project(_) => Ok(()),
+                Pick::SendMode(_) | Pick::Project(_) | Pick::Attach(_) | Pick::Format(..) => Ok(()),
             };
             if let Err(e) = done {
                 log::warn!(error:% = e; "could not change the chat: {{error}}");
@@ -163,9 +185,12 @@ impl Composer {
     ) -> Div {
         // The Orchestrator page's menus are drawn there.
         let open = self.menu == Some(menu) && !self.launching;
-        let chip = chip.aria_expanded(open).on_click(
-            cx.listener(move |this, e, window, cx| this.toggle_menu(menu, e, window, cx)),
-        );
+        let chip = chip
+            .aria_expanded(open)
+            .when(open, |chip| chip.bg(t.text.opacity(0.08)))
+            .on_click(
+                cx.listener(move |this, e, window, cx| this.toggle_menu(menu, e, window, cx)),
+            );
         let body = open.then(|| {
             if menu == Menu::Model {
                 let agents = self
@@ -205,40 +230,10 @@ pub(super) fn chip(
     label: String,
     t: &Theme,
 ) -> Stateful<Div> {
-    let (hover, fg) = (t.bg_hover, t.text);
-    button(id, aria)
-        .h(px(28.))
-        .gap(px(4.))
-        .rounded(px(radius_sm()))
-        .px(px(6.))
-        .text_size(px(fs_md()))
-        .font_weight(FontWeight::MEDIUM)
-        .text_color(t.text_muted)
-        .hover(move |s| s.bg(hover).text_color(fg))
-        // A press on a chip opens its menu and leaves the keys where they are; the composer
-        // around it would otherwise take them for its editor.
-        .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
+    pill_chip(id, aria, t.text)
         .child(lead)
         .child(div().max_w(px(180.)).truncate().child(label))
-        .child(icon("caret-down", 14.))
-}
-
-/// A 32px square tool button: formatting and attaching.
-pub(super) fn tool_button(
-    id: &'static str,
-    label: &'static str,
-    name: &'static str,
-    t: &Theme,
-) -> Stateful<Div> {
-    let (hover, fg) = (t.bg_hover, t.text);
-    button(id, label)
-        .size(px(32.))
-        .flex_none()
-        .justify_center()
-        .rounded(px(radius()))
-        .text_color(t.text_muted)
-        .hover(move |s| s.bg(hover).text_color(fg))
-        .child(icon(name, 16.))
+        .child(icon("caret-down", 12.))
 }
 
 /// How full the context is against where it compacts, as a ring that turns the warning colour
