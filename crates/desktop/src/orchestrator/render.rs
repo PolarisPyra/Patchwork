@@ -246,13 +246,13 @@ impl Orchestrator {
                     None => Place::outside(title.clone(), format!("{title}, in no project")),
                 }
             }
-            Target::New(Some(id)) => Place::inside(project(id), "New chat", "New chat in "),
+            Target::New(Some(id)) => Place::inside(project(id), "New task", "New task in "),
             Target::New(None) => {
                 Place::outside("New chat".into(), "New chat, in no project".into())
             }
             Target::Split(ids) => {
                 let names: Vec<&str> = ids.iter().map(project).collect();
-                Place::inside(&names.join(", "), "New chats", "New chats in ")
+                Place::inside(&names.join(", "), "New tasks", "New tasks in ")
             }
         }
     }
