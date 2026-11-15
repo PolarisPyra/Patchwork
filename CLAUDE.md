@@ -70,7 +70,7 @@ CI runs the check form of each of the last three on every push to `main`.
 
 - Cut taglines, helper text, and secondary labels. If a screen needs them, fix the layout.
 - Pick what improves UX, DX, and agent experience without breaking anything.
-- Every new feature ships full accessibility, so screen readers and the agent-desktop skill can read and use all of it:
+- Every new feature ships full accessibility, so screen readers can read and use all of it:
   - Every control has a name: icon buttons and inputs get `.aria_label(…)`.
   - Anything that acts gets a `.role(…)`, a `.tab_index(0)`, and Enter and Space handling.
   - Everything the mouse can do, the keyboard can too: menus, tabs, drag handles and resize separators (arrow keys, `.aria_numeric_value(…)` with its min and max).
