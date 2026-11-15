@@ -303,6 +303,7 @@ fn main() {
             cx.set_text_rendering_mode(TextRenderingMode::Grayscale);
             settings::shortcuts::bind_keys(&server, cx);
             cx.set_global(sigils::load(&server));
+            settings::show_app_icon(&server.store.settings(), cx);
             cx.set_prompt_builder(prompt::build);
             cx.on_action(|_: &Quit, cx| cx.quit());
             let quitting = Arc::clone(&server);
