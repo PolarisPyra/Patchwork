@@ -3,6 +3,25 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.79] - 2026-11-15
+
+**26.11.79** · 2 changes from 1 contributor
+
+- **Chat text selection.** Select text in chat reliably, including when dragging past the top or bottom, and copy with Ctrl+C
+
+<details>
+<summary>Full changelog</summary>
+
+### Changed
+
+- In the Orchestrator, a request aimed at a project now reads "New task in <project>" on its chip and in the @ list, instead of "New chat". A request split across several projects reads "New tasks". by [PolarisPyra in #133](https://github.com/PolarisPyra/Patchwork/pull/133)
+
+### Fixed
+
+- Dragging to select text in a chat sometimes stopped partway or froze once the chat scrolled past where the drag began, and letting go of the mouse outside the window could leave the chat scrolling up on its own. The selection now keeps up with the drag through the whole chat, scrolls up or down when you drag past the top or bottom, and ends when you let go. Ctrl+C copies the selected chat text even when the chat box has focus and nothing in it is selected. by [PolarisPyra in #134](https://github.com/PolarisPyra/Patchwork/pull/134)
+
+</details>
+
 ## [26.11.78] - 2026-11-15
 
 **26.11.78** · 5 changes from 1 contributor
