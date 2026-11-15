@@ -3,6 +3,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+mod attachments;
 mod background;
 mod butterfly;
 mod cards;

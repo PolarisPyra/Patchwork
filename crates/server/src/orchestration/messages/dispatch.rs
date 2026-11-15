@@ -12,7 +12,7 @@ use std::sync::Arc;
 use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::projects::Project;
 use crate::threads::title::{self, Request, Writer};
-use crate::threads::{NewThread, Thread};
+use crate::threads::{Attachment, NewThread, Thread};
 use crate::{Error, Server};
 
 /// The most chats the model picks among, newest first: enough for the day's work, and short
@@ -143,7 +143,8 @@ impl Server {
         })
     }
 
-    /// Sends `prompt` to `target`: to its chat, or to a chat like `new` started for it.
+    /// Sends `prompt` with `attachments` to `target`: to its chat, or to a chat like `new` started
+    /// for it. A request split across projects gives each chat the same attachments.
     ///
     /// A chat still replying gets the message queued behind its reply. A request split across
     /// projects is sent when at least one of its chats starts.
@@ -156,6 +157,7 @@ impl Server {
         prompt: &str,
         target: &Target,
         new: &NewThread,
+        attachments: &[Attachment],
     ) -> Result<Dispatched, Error> {
         let prompt = prompt.trim();
         if prompt.is_empty() {
@@ -163,7 +165,12 @@ impl Server {
         }
         let project_ids = match target {
             Target::Chat(thread_id) => {
-                self.send_message(thread_id.clone(), prompt.to_string(), Vec::new(), true)?;
+                self.send_message(
+                    thread_id.clone(),
+                    prompt.to_string(),
+                    attachments.to_vec(),
+                    true,
+                )?;
                 return Ok(Dispatched {
                     thread_ids: vec![thread_id.clone()],
                     route: Route::Sent,
@@ -180,7 +187,7 @@ impl Server {
                 project_id,
                 ..new.clone()
             };
-            match self.start_chat(new, prompt) {
+            match self.start_chat(new, prompt, attachments) {
                 Ok(thread_id) => thread_ids.push(thread_id),
                 Err(e) => failed = Some(e),
             }
@@ -194,8 +201,13 @@ impl Server {
         }
     }
 
-    /// Starts a chat with `prompt` as its first message, and gives its id.
-    fn start_chat(self: &Arc<Self>, new: NewThread, prompt: &str) -> Result<String, Error> {
+    /// Starts a chat with `prompt` and `attachments` as its first message, and gives its id.
+    fn start_chat(
+        self: &Arc<Self>,
+        new: NewThread,
+        prompt: &str,
+        attachments: &[Attachment],
+    ) -> Result<String, Error> {
         let thread = self.create_thread(new)?;
         let thread_id = thread.id.clone();
         self.emit(AgentEventEnvelope {
@@ -203,8 +215,12 @@ impl Server {
             event: AgentEvent::ThreadCreated { thread },
         });
         // A chat that cannot start leaves no empty chat behind.
-        if let Err(e) = self.send_message(thread_id.clone(), prompt.to_string(), Vec::new(), false)
-        {
+        if let Err(e) = self.send_message(
+            thread_id.clone(),
+            prompt.to_string(),
+            attachments.to_vec(),
+            false,
+        ) {
             self.delete_thread(&thread_id);
             self.emit(AgentEventEnvelope {
                 thread_id,
