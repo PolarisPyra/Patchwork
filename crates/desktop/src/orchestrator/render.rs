@@ -599,6 +599,24 @@ impl Render for Orchestrator {
             .flex()
             .flex_col()
             .gap(px(4.))
+            .when(!cards.is_empty(), |list| {
+                list.child(
+                    div().flex().child(
+                        button("orchestrator-clear", "Clear all")
+                            .px(px(8.))
+                            .py(px(2.))
+                            .rounded_full()
+                            .text_size(px(fs_sm()))
+                            .text_color(ink(0.6))
+                            .hover(|s| s.bg(ink(0.06)).text_color(ink(0.9)))
+                            .child("Clear all")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.requests.clear();
+                                cx.notify();
+                            })),
+                    ),
+                )
+            })
             .children(cards);
         let column = || {
             div()
