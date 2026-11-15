@@ -3,6 +3,26 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.84] - 2026-11-15
+
+**26.11.84** · 2 changes from 1 contributor
+
+- **Keyboard shortcut for Orchestrator.** Ctrl+1 now opens the Orchestrator page, with Tasks, Changes and Archived moved to Ctrl+2, Ctrl+3 and Ctrl+4.
+- **Readable chat with mixed themes.** Chat text and surfaces now use readable colors when a light theme combines with a dark chat background.
+
+<details>
+<summary>Full changelog</summary>
+
+### Changed
+
+- Ctrl+1 now opens the Orchestrator page. Tasks, Changes and Archived moved to Ctrl+2, Ctrl+3 and Ctrl+4. Settings → Shortcuts lists the new shortcut as "Show orchestrator". by [PolarisPyra in #146](https://github.com/PolarisPyra/Patchwork/pull/146)
+
+### Fixed
+
+- With a light theme such as Blossom and a dark chat background such as Night sky, the chat's text, the composer and the bars under it were dark on dark and hard to read. The chat now draws its text and surfaces in the colors the Orchestrator page uses for that background: light text over a dark background, dark text over a light one. Text fields such as the composer also kept the previous theme's text color after a theme switch; they now change with the theme. by [PolarisPyra in #147](https://github.com/PolarisPyra/Patchwork/pull/147)
+
+</details>
+
 ## [26.11.83] - 2026-11-15
 
 **26.11.83** · 2 changes from 1 contributor
