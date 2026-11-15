@@ -9,8 +9,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use gpui::{
-    AnyElement, Bounds, BoxShadow, Hsla, KeyDownEvent, ObjectFit, Pixels, Role, SharedString,
-    Window, div, hsla, img, point, prelude::*, px, relative, size,
+    AnyElement, Bounds, BoxShadow, ExternalPaths, Hsla, KeyDownEvent, ObjectFit, Pixels, Role,
+    SharedString, Window, div, hsla, img, point, prelude::*, px, relative, size,
 };
 use patchwork_server::orchestration::Target;
 use patchwork_server::themes::{Applied, Scene, Scheme, Shown};
@@ -25,7 +25,7 @@ use crate::ui::theme::{font_ui, fs_lg, fs_sm, radius_lg, applied, theme};
 use crate::ui::{agent_logo, button, display_title, icon, spinner};
 
 /// The pill: its size, the room kept at its sides, and how far down the page its top is.
-const PILL_W: f32 = 640.;
+pub(super) const PILL_W: f32 = 640.;
 const PILL_H: f32 = 52.;
 const GUTTER: f32 = 24.;
 const PILL_TOP: f32 = 0.4;
@@ -544,6 +544,16 @@ impl Render for Orchestrator {
                     cx.stop_propagation();
                 }
             }))
+            // Files, folders or pictures held over the pill light it up; dropped, they go with
+            // the request.
+            .drag_over::<ExternalPaths>(|style, _, _, _| {
+                style.border_color(ink(0.45)).bg(glass(0.8))
+            })
+            .on_drop(cx.listener(|this, files: &ExternalPaths, window, cx| {
+                this.attach(files.paths(), cx);
+                this.focus(window, cx);
+                cx.stop_propagation();
+            }))
             .children(self.before_field(cx))
             .child(div().flex_1().min_w_0().child(self.field.clone()))
             .children(self.after_field(cx))
@@ -558,6 +568,7 @@ impl Render for Orchestrator {
                     .child(icon(glyph, 16.))
                     .on_click(cx.listener(|this, _, window, cx| this.enter(window, cx))),
             );
+        let attachments = self.attachment_row(cx);
         let model = self.model_chip(window, cx);
         let requests = div()
             .id("orchestrator-requests")
@@ -597,7 +608,13 @@ impl Render for Orchestrator {
             .font_family(font_ui())
             .text_color(ink(0.9))
             .child(div().absolute().inset_0().child(backdrop))
-            .child(column().child(pill).children(model).child(requests))
+            .child(
+                column()
+                    .child(pill)
+                    .children(attachments)
+                    .children(model)
+                    .child(requests),
+            )
             .children(picker)
     }
 }

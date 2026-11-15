@@ -340,8 +340,8 @@ impl Orchestrator {
         }
     }
 
-    /// Sends what the field holds to the place the chip names, or to the place the router finds
-    /// when it has not answered yet, and lists it.
+    /// Sends what the field holds, with what is attached, to the place the chip names, or to the
+    /// place the router finds when it has not answered yet, and lists it.
     pub(super) fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.text(cx);
         let Some((server, new)) = self.launch(cx).filter(|_| !text.is_empty()) else {
@@ -358,17 +358,18 @@ impl Orchestrator {
         self.pinned = None;
         self.picker = None;
         self.pick = 0;
+        let attachments = std::mem::take(&mut self.attachments);
         let id = self.list(&text);
         self.field.update(cx, |field, cx| field.clear(window, cx));
         // Without a place picked the server asks a model which chat is meant, which takes a
         // moment.
         let task = cx.background_spawn(async move {
             if let Some(target) = target {
-                return server.dispatch_to(&prompt, &target, &new);
+                return server.dispatch_to(&prompt, &target, &new, &attachments);
             }
             let routing = server.route(&text, &new)?;
             let target = routing.targets.first().ok_or("No chat to send it to")?;
-            server.dispatch_to(&routing.prompt, target, &new)
+            server.dispatch_to(&routing.prompt, target, &new, &attachments)
         });
         cx.spawn(async move |this, cx| {
             let outcome = task.await;

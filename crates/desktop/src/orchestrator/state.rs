@@ -11,7 +11,7 @@ use gpui::{
     AppContext, Context, Entity, Focusable, SharedString, Subscription, WeakEntity, Window, hsla,
 };
 use patchwork_server::orchestration::{Dispatched, Routing, Target};
-use patchwork_server::threads::{Ask, asks};
+use patchwork_server::threads::{Ask, Attachment, asks};
 
 use super::butterfly::Flight;
 use crate::chat::composer::Composer;
@@ -104,6 +104,8 @@ pub struct Orchestrator {
     /// Counts the readings asked for, so a late answer to an old one is dropped.
     pub(super) generation: u64,
     pub(super) picker: Option<Picker>,
+    /// The files, folders and pictures dropped on the pill, sent with the next request.
+    pub(super) attachments: Vec<Attachment>,
     /// Where the butterfly is, kept between frames.
     pub(super) flight: Rc<RefCell<Flight>>,
     /// The picture last drawn behind the page, under the one drawn now.
@@ -168,6 +170,7 @@ impl Orchestrator {
             deciding: false,
             generation: 0,
             picker: None,
+            attachments: Vec::new(),
             flight: Rc::default(),
             pictures: [None, None],
             _subscriptions: subscriptions,

@@ -154,8 +154,9 @@ impl Workspace {
         // The effort is the one picked in Settings, never the one left in the composer.
         new.effort = pick.and_then(|pick| pick.effort.clone());
         let server = Arc::clone(&self.server);
-        let sent = cx
-            .background_spawn(async move { server.dispatch_to(&prompt, &Target::New(None), &new) });
+        let sent = cx.background_spawn(async move {
+            server.dispatch_to(&prompt, &Target::New(None), &new, &[])
+        });
         cx.spawn(async move |this, cx| {
             let sent = sent.await;
             let _ = this.update(cx, |this, cx| {
