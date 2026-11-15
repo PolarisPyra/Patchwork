@@ -3,6 +3,25 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.75] - 2026-11-15
+
+**26.11.75** · 2 changes from 1 contributor
+
+- **Orchestrator chat cards.** Each Orchestrator chat now appears on only one card, and cards with no chats are removed
+
+<details>
+<summary>Full changelog</summary>
+
+### Changed
+
+- The Orchestrator icon in the activity bar stays highlighted while the Orchestrator page is open, with its task list open or closed. Before, closing the task list turned the highlight off while you were still on the page. by [PolarisPyra in #123](https://github.com/PolarisPyra/Patchwork/pull/123)
+
+### Fixed
+
+- When several Orchestrator requests went to the same chat, that chat showed up on more than one card. It now shows only on the card of the newest request sent to it, whatever order the answers come back in, and a card left with no chats is removed from the page. by [PolarisPyra in #124](https://github.com/PolarisPyra/Patchwork/pull/124)
+
+</details>
+
 ## [26.11.74] - 2026-11-15
 
 **26.11.74** · 3 changes from 1 contributor
