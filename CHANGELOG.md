@@ -7,7 +7,7 @@ Each release adds its notes at the top; see docs/release.md.
 
 **26.11.73** · 17 changes from 1 contributor
 
-- **Orchestrator page.** Orchestrator page lets you write tasks, see cards for started chats, pin projects, and choose model and effort.
+- **Orchestrator page.** Describe a task and where it belongs, and the Orchestrator starts a chat in that project or sends it to the chat you named, while you stay on the page. Each chat it starts shows as a card, and you can pin a project with @ and pick the model and effort.
 - **Theme customization.** Customize app colors, fonts, code themes, and import or export schemes, with AI generation options.
 - **Custom backgrounds.** Set or generate backgrounds for chats and Orchestrator, with shared choices and model pickers.
 - **Settings search.** Search settings and open the matching pane directly, with a shorter, grouped list.
