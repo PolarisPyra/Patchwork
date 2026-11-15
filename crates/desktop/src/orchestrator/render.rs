@@ -19,6 +19,7 @@ use patchwork_server::threads::AskKind;
 use gpui::{Anchor, FontWeight, MouseButton, anchored, deferred};
 
 use super::state::Orchestrator;
+use crate::chat::composer::Composer;
 use super::{background, scene};
 use crate::ui::backdrop::preset_fill;
 use crate::ui::theme::{font_ui, fs_lg, fs_sm, radius_lg, applied, theme};
@@ -401,14 +402,21 @@ fn launch_chip(id: &'static str, label: String, open: bool) -> gpui::Stateful<gp
         .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
 }
 
-/// A chip's open menu, placed under the chip.
-fn under(menu: Option<AnyElement>) -> Option<gpui::Div> {
+/// A chip's open menu, placed under the chip: lined up with its left edge, or with its right
+/// edge for a chip at the row's end.
+fn under(menu: Option<AnyElement>, anchor: Anchor) -> Option<gpui::Div> {
     let menu = menu?;
+    let corner = div().absolute().bottom_0();
+    let corner = if anchor == Anchor::TopRight {
+        corner.right_0()
+    } else {
+        corner.left_0()
+    };
     Some(
-        div().absolute().bottom_0().left_0().child(
+        corner.child(
             deferred(
                 anchored()
-                    .anchor(Anchor::TopLeft)
+                    .anchor(anchor)
                     .offset(point(px(0.), px(4.)))
                     .snap_to_window_with_margin(px(8.))
                     .child(menu),
@@ -419,8 +427,8 @@ fn under(menu: Option<AnyElement>) -> Option<gpui::Div> {
 }
 
 impl Orchestrator {
-    /// The chips under the pill: the agent and model a request's new chat starts with, then its
-    /// effort, each with the menu that changes it open under it.
+    /// The chips under the pill: the agent and model a request's new chat starts with, its
+    /// effort, and at the end its project, each with the menu that changes it open under it.
     fn model_chip(&self, window: &mut Window, cx: &mut Context<Self>) -> Option<AnyElement> {
         let settings = &self.workspace.upgrade()?.read(cx).settings;
         let composer = self.composer.read(cx);
@@ -457,8 +465,13 @@ impl Orchestrator {
                     composer.toggle_launch_effort(event, window, cx);
                 });
             });
-            div().relative().flex().child(chip).children(under(levels))
+            div()
+                .relative()
+                .flex()
+                .child(chip)
+                .children(under(levels, Anchor::TopLeft))
         });
+        let project_chip = self.project_chip(cx);
         let row = div()
             .w_full()
             .max_w(px(PILL_W))
@@ -471,10 +484,48 @@ impl Orchestrator {
                     .relative()
                     .flex()
                     .child(model_chip)
-                    .children(under(picker)),
+                    .children(under(picker, Anchor::TopLeft)),
             )
-            .children(effort_chip);
+            .children(effort_chip)
+            .child(div().flex_1())
+            .children(project_chip);
         Some(row.into_any_element())
+    }
+
+    /// The chip at the end of the row under the pill: the project a request that names none
+    /// starts its chat in, with the menu that changes it.
+    fn project_chip(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let workspace = self.workspace.upgrade()?;
+        let settings = &workspace.read(cx).settings;
+        let composer = self.composer.read(cx);
+        let project = composer.launch_project(settings);
+        let name = project
+            .as_ref()
+            .and_then(|id| settings.projects.iter().find(|p| &p.id == id))
+            .map_or_else(|| "No project".to_string(), |p| p.name.clone());
+        let glyph = if project.is_some() {
+            "folder-fill"
+        } else {
+            "chat-circle"
+        };
+        let open = composer.launch_project_open();
+        let menu = self.composer.update(cx, Composer::launch_project_menu);
+        let composer = self.composer.clone();
+        let chip = launch_chip("orchestrator-project", format!("Project: {name}"), open)
+            .child(icon(glyph, 14.))
+            .child(div().max_w(px(180.)).truncate().child(name))
+            .child(icon("caret-down", 12.))
+            .on_click(move |event, window, cx| {
+                composer.update(cx, |composer, cx| {
+                    composer.toggle_launch_project(event, window, cx);
+                });
+            });
+        let chip = div()
+            .relative()
+            .flex()
+            .child(chip)
+            .children(under(menu, Anchor::TopRight));
+        Some(chip.into_any_element())
     }
 }
 

@@ -39,6 +39,14 @@ pub struct Picks {
     pub role: Option<String>,
 }
 
+/// The project the chats a request starts from the Orchestrator page go in.
+pub enum LaunchProject {
+    /// The project open in the sidebar, until one is picked.
+    Open,
+    /// The project picked on the page, or None for none.
+    Picked(Option<String>),
+}
+
 pub struct Composer {
     pub(super) workspace: WeakEntity<Workspace>,
     pub editor: Entity<TextArea>,
@@ -73,6 +81,8 @@ pub struct Composer {
     pub(super) favorites: Vec<String>,
     /// The agent and model picked on the Orchestrator page for the chats a request starts.
     pub(super) launch: Option<(AgentKind, Option<String>)>,
+    /// The project for the chats a request starts from the Orchestrator page.
+    pub(super) launch_project: LaunchProject,
     /// The open model picker is the Orchestrator page's, not the chat's.
     pub(super) launching: bool,
     /// Where Up has stepped to among the messages sent in this chat.
@@ -184,6 +194,7 @@ impl Composer {
             recalled: None,
             favorites: Vec::new(),
             launch: None,
+            launch_project: LaunchProject::Open,
             launching: false,
         }
     }

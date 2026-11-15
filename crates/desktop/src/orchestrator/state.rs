@@ -99,6 +99,8 @@ pub struct Orchestrator {
     pub(super) pick: usize,
     /// The place picked with `@`, which the router does not change.
     pub(super) pinned: Option<Target>,
+    /// The project picked under the pill when the route was last read.
+    pub(super) project: Option<String>,
     /// The router is reading the request.
     pub(super) deciding: bool,
     /// Counts the readings asked for, so a late answer to an old one is dropped.
@@ -147,11 +149,15 @@ impl Orchestrator {
             // A chat's title and what it asks are read from the workspace.
             cx.observe_in(workspace, window, |this, _, window, cx| {
                 this.read_chats(cx);
+                this.follow_project(cx);
                 this.settle(window, cx);
                 cx.notify();
             }),
-            // The model picker is the chat box's, drawn on this page.
-            cx.observe(&composer, |_, _, cx| cx.notify()),
+            // The model picker is the chat box's, drawn on this page, and so is the project menu.
+            cx.observe(&composer, |this, _, cx| {
+                this.follow_project(cx);
+                cx.notify();
+            }),
         ];
         Self {
             workspace: workspace.downgrade(),
@@ -167,6 +173,7 @@ impl Orchestrator {
             routed_text: String::new(),
             pick: 0,
             pinned: None,
+            project: None,
             deciding: false,
             generation: 0,
             picker: None,

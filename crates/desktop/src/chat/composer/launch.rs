@@ -1,16 +1,17 @@
-//! The agent, model and effort of the chats a request starts from the Orchestrator page, picked
-//! there with the chat's model picker and effort menu.
+//! The agent, model, effort and project of the chats a request starts from the Orchestrator page,
+//! picked there with the chat's model picker and menus.
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{AnyElement, ClickEvent, Window, div, prelude::*};
+use gpui::{AnyElement, ClickEvent, Window, div, prelude::*, px};
 use patchwork_server::provider::AgentKind;
 use patchwork_server::settings::Settings;
 use patchwork_server::threads::NewThread;
 
-use super::menus::{Menu, effort_label, efforts};
+use super::menus::{Menu, Pick, Row, effort_label, efforts};
 use super::model_picker::ordered;
-use super::state::Composer;
+use super::state::{Composer, LaunchProject};
+use crate::ui::icon;
 use crate::ui::theme::theme;
 
 impl Composer {
@@ -112,6 +113,85 @@ impl Composer {
         }
         let focus = self.menu_focus.clone();
         let menu = self.menu_box(Menu::Effort, rows, &focus, &t, cx);
+        // The page's text color is the backdrop's, not the theme's.
+        Some(div().text_color(t.text).child(menu).into_any_element())
+    }
+
+    /// The project a request's new chat starts in: the one picked on the Orchestrator page, or
+    /// else the open one. None for no project.
+    #[must_use]
+    pub fn launch_project(&self, settings: &Settings) -> Option<String> {
+        let picked = match &self.launch_project {
+            LaunchProject::Picked(project) => project,
+            LaunchProject::Open => &settings.active_project_id,
+        };
+        picked
+            .clone()
+            .filter(|id| settings.projects.iter().any(|p| &p.id == id))
+    }
+
+    /// The Orchestrator page's project menu is open.
+    #[must_use]
+    pub fn launch_project_open(&self) -> bool {
+        self.launching && self.menu == Some(Menu::Project)
+    }
+
+    /// The Orchestrator page's project chip was clicked: opens the project menu for it, or
+    /// closes it. The press that just closed it from outside does not open it again.
+    pub fn toggle_launch_project(
+        &mut self,
+        event: &ClickEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let ClickEvent::Mouse(click) = event
+            && self.dismissed.take() == Some((Menu::Project, click.down.position))
+        {
+            return;
+        }
+        if self.launch_project_open() {
+            return self.close_menu(window, cx);
+        }
+        self.open_menu(Menu::Project, window, cx);
+        self.launching = true;
+    }
+
+    /// The project menu the Orchestrator page shows under its chip, while it is open.
+    pub fn launch_project_menu(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.launch_project_open() {
+            return None;
+        }
+        let workspace = self.workspace.upgrade()?;
+        let settings = &workspace.read(cx).settings;
+        let current = self.launch_project(settings);
+        let row = |id: Option<String>, name: &str, glyph: &'static str| Row {
+            checked: current == id,
+            pick: Pick::Project(id),
+            body: div()
+                .min_w_0()
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .child(div().flex_none().child(icon(glyph, 14.)))
+                .child(div().max_w(px(240.)).truncate().child(name.to_string()))
+                .into_any_element(),
+            label: name.to_string().into(),
+            ruled: false,
+        };
+        let projects = settings
+            .projects
+            .iter()
+            .map(|p| row(Some(p.id.clone()), &p.name, "folder-fill"));
+        let rows: Vec<Row> = std::iter::once(row(None, "No project", "chat-circle"))
+            .chain(projects)
+            .collect();
+        self.menu_picks = rows.iter().map(|r| r.pick.clone()).collect();
+        if self.highlight >= rows.len() {
+            self.highlight = rows.iter().position(|r| r.checked).unwrap_or(0);
+        }
+        let t = *theme(cx);
+        let focus = self.menu_focus.clone();
+        let menu = self.menu_box(Menu::Project, rows, &focus, &t, cx);
         // The page's text color is the backdrop's, not the theme's.
         Some(div().text_color(t.text).child(menu).into_any_element())
     }

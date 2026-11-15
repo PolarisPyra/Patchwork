@@ -23,6 +23,8 @@ pub enum Menu {
     Compact,
     Access,
     Agent,
+    /// The project the chats a request starts on the Orchestrator page go in.
+    Project,
     /// Queue or steer, beside the send button while a turn runs.
     Send,
 }
@@ -38,6 +40,8 @@ pub enum Pick {
     Role(Option<String>),
     /// Whether the next send while a turn runs queues.
     SendMode(bool),
+    /// The project for the chats a request starts, or none.
+    Project(Option<String>),
 }
 
 /// Context sizes to compact at, each twice the one before; 0 leaves it to the agent.
@@ -153,7 +157,7 @@ impl Composer {
             ruled: false,
         };
         match menu {
-            Menu::Model => Vec::new(),
+            Menu::Model | Menu::Project => Vec::new(),
             Menu::Effort => {
                 let levels = efforts(
                     picks.agent,
@@ -312,6 +316,7 @@ impl Composer {
             Menu::Access => "Access",
             Menu::Agent => "Agent",
             Menu::Send => "Send mode",
+            Menu::Project => "Project",
         };
         let agents: Vec<Agent> = match &self.roles {
             Roles::Loaded(agents) if menu == Menu::Agent => agents.clone(),
