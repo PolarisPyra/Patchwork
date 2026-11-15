@@ -40,14 +40,30 @@ impl Workspace {
     fn place(&self) -> Option<Place> {
         match self.page {
             super::Page::Orchestrator => Some(Place::Orchestrator),
-            super::Page::Chats => self.thread.as_ref().map(|t| Place::Chat(t.id.clone())),
+            super::Page::Chats => self.thread.as_ref().map(|t| {
+                if self.peeking {
+                    Place::Peek(t.id.clone())
+                } else {
+                    Place::Chat(t.id.clone())
+                }
+            }),
         }
     }
 
     pub fn open_thread(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.go_to(&Place::Chat(id.to_string()), cx);
+    }
+
+    /// Opens chat `id` read-only with the sidebar closed, as a subagent shows, for looking in on
+    /// it from the orchestrator page.
+    pub fn peek_thread(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.go_to(&Place::Peek(id.to_string()), cx);
+    }
+
+    fn go_to(&mut self, to: &Place, cx: &mut Context<Self>) {
         let from = self.place();
-        if self.show_thread(id, cx)
-            && let Some(from) = from.filter(|from| *from != Place::Chat(id.to_string()))
+        if self.show(to, cx)
+            && let Some(from) = from.filter(|from| from != to)
         {
             self.history_back.push(from);
             self.history_forward.clear();
@@ -62,6 +78,15 @@ impl Workspace {
     /// Shows what was shown before this, as a browser's back button does.
     pub fn go_back(&mut self, cx: &mut Context<Self>) {
         self.step_history(true, cx);
+    }
+
+    /// Goes back, or to the orchestrator page when there is nothing to go back to.
+    pub fn back_to_orchestrator(&mut self, cx: &mut Context<Self>) {
+        if self.can_go_back() {
+            self.go_back(cx);
+        } else {
+            self.go_to(&Place::Orchestrator, cx);
+        }
     }
 
     /// Shows what was gone back from.
@@ -81,15 +106,7 @@ impl Workspace {
             let Some(next) = next else {
                 return;
             };
-            let shown = match &next {
-                Place::Orchestrator => {
-                    self.page = super::Page::Orchestrator;
-                    cx.notify();
-                    true
-                }
-                Place::Chat(id) => self.show_thread(id, cx),
-            };
-            if shown {
+            if self.show(&next, cx) {
                 if let Some(from) = from {
                     if back {
                         self.history_forward.push(from);
@@ -102,12 +119,30 @@ impl Workspace {
         }
     }
 
+    /// Shows `place`, and whether it could be shown.
+    fn show(&mut self, place: &Place, cx: &mut Context<Self>) -> bool {
+        match place {
+            Place::Orchestrator => {
+                self.page = super::Page::Orchestrator;
+                cx.notify();
+                true
+            }
+            Place::Chat(id) => self.show_thread(id, cx),
+            Place::Peek(id) => {
+                let shown = self.show_thread(id, cx);
+                self.peeking |= shown;
+                shown
+            }
+        }
+    }
+
     /// Shows chat `id`, and whether it could be opened.
     fn show_thread(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
         let opened = match self.server.thread(id) {
             Ok(thread) => {
                 // A chat opened from the orchestrator page is shown in place of the page.
                 self.page = super::Page::Chats;
+                self.peeking = false;
                 let changed_project =
                     self.thread.as_ref().map(|t| &t.project_id) != Some(&thread.project_id);
                 // Leaving a chat with its options still open counts as putting them away.

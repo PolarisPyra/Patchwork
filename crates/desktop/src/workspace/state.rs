@@ -50,6 +50,8 @@ pub(super) enum Place {
     Orchestrator,
     /// A chat, by its id.
     Chat(String),
+    /// A chat opened from an orchestrator card: read-only, with the sidebar closed.
+    Peek(String),
 }
 
 /// What fills the window beside the activity bar.
@@ -134,6 +136,8 @@ pub struct Workspace {
     /// forward.
     pub(super) history_back: Vec<Place>,
     pub(super) history_forward: Vec<Place>,
+    /// Whether the open chat was opened from an orchestrator card, and shows as [`Place::Peek`].
+    pub peeking: bool,
     pub(super) _prompt_keys: gpui::Subscription,
     pub changes_view: Entity<ChangesView>,
     /// The Devices view, made the first time it is shown.
@@ -322,6 +326,7 @@ impl Workspace {
             lineage: Lineage::default(),
             history_back: Vec::new(),
             history_forward: Vec::new(),
+            peeking: false,
             _prompt_keys: prompt_keys,
             changes_view,
             devices_view: None,
@@ -438,9 +443,15 @@ impl Workspace {
     /// the task list that page opens and closes for itself.
     pub(super) fn sidebar_view(&self) -> Option<View> {
         match self.page {
-            Page::Chats => self.view,
+            Page::Chats => self.view.filter(|_| !self.peeking),
             Page::Orchestrator => self.orchestrator_tasks.then_some(View::Tasks),
         }
+    }
+
+    /// Whether the chat has its composer: not on a subagent's transcript, nor on a chat looked in
+    /// on from the orchestrator page.
+    pub fn composer_shown(&self) -> bool {
+        !self.peeking && self.thread.as_ref().is_none_or(|t| t.parent.is_none())
     }
 
     /// The project the window is about: the open chat's, else the active one.

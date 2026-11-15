@@ -56,7 +56,7 @@ impl Render for Workspace {
             // Tab with nothing in particular focused jumps to the composer, as "Jump to the
             // composer" says; from any control it moves on.
             .on_action(cx.listener(|this, _: &crate::FocusNext, window, cx| {
-                let composer_shown = this.thread.as_ref().is_none_or(|t| t.parent.is_none());
+                let composer_shown = this.composer_shown();
                 if this.page == Page::Orchestrator && this.focus.is_focused(window) {
                     this.orchestrator.update(cx, |o, cx| o.focus(window, cx));
                 } else if composer_shown && this.focus.is_focused(window) {
@@ -88,11 +88,10 @@ impl Render for Workspace {
                     match this.page {
                         Page::Orchestrator => this.orchestrator_tasks = !this.orchestrator_tasks,
                         Page::Chats => {
-                            this.view = if this.view.is_some() {
-                                None
-                            } else {
-                                Some(View::Tasks)
-                            };
+                            let open = this.sidebar_view().is_some();
+                            // Looking in on a chat from the orchestrator ends here.
+                            this.peeking = false;
+                            this.view = if open { None } else { Some(View::Tasks) };
                         }
                     }
                     cx.stop_propagation();
@@ -143,16 +142,19 @@ impl Render for Workspace {
             .on_action(cx.listener(|this, _: &crate::ShowTasks, _, cx| {
                 this.view = Some(View::Tasks);
                 this.page = Page::Chats;
+                this.peeking = false;
                 cx.notify();
             }))
             .on_action(cx.listener(|this, _: &crate::ShowChanges, _, cx| {
                 this.view = Some(View::Changes);
                 this.page = Page::Chats;
+                this.peeking = false;
                 cx.notify();
             }))
             .on_action(cx.listener(|this, _: &crate::ShowArchived, _, cx| {
                 this.view = Some(View::Archived);
                 this.page = Page::Chats;
+                this.peeking = false;
                 cx.notify();
             }))
             .on_action(cx.listener(|this, _: &crate::ToggleTerminal, window, cx| {

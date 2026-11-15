@@ -229,7 +229,7 @@ impl Workspace {
         let t = *theme(cx);
         let entry =
             |view: View, label: &'static str, name: &'static str, cx: &mut Context<Self>| {
-                let active = self.page == Page::Chats && self.view == Some(view);
+                let active = self.page == Page::Chats && self.sidebar_view() == Some(view);
                 let count = self.changes.len();
                 let badge = (view == View::Changes && count > 0).then(|| {
                     div()
@@ -262,12 +262,14 @@ impl Workspace {
                     .children(badge)
                     .on_click(cx.listener(move |this, _, _, cx| {
                         // From the orchestrator page, a view's icon goes to that view.
-                        this.view = if this.page == Page::Chats && this.view == Some(view) {
+                        this.view = if this.page == Page::Chats && this.sidebar_view() == Some(view)
+                        {
                             None
                         } else {
                             Some(view)
                         };
                         this.page = Page::Chats;
+                        this.peeking = false;
                         cx.notify();
                     }))
             };

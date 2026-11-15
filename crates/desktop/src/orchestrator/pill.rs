@@ -318,17 +318,20 @@ impl Orchestrator {
                 }
             }
             AskKind::InChat => {
+                // The chat's own composer answers it, so the chat opens as usual.
                 let thread_id = waiting.ask.thread_id.clone();
-                self.open(&thread_id, cx);
+                if let Some(workspace) = self.workspace.upgrade() {
+                    workspace.update(cx, |w, cx| w.open_thread(&thread_id, cx));
+                }
             }
         }
         cx.notify();
     }
 
-    /// Opens a chat on the Chats page.
+    /// Opens a card's chat read-only, as a subagent shows: the pill sends it what comes next.
     pub(super) fn open(&self, thread_id: &str, cx: &mut Context<Self>) {
         if let Some(workspace) = self.workspace.upgrade() {
-            workspace.update(cx, |w, cx| w.open_thread(thread_id, cx));
+            workspace.update(cx, |w, cx| w.peek_thread(thread_id, cx));
         }
     }
 
