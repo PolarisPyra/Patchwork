@@ -9,7 +9,7 @@ use gpui::{
 use crate::ui::menu::Menu;
 use crate::ui::theme::{font_ui, fs_md, radius, radius_sm, STATUSBAR_H, Theme, theme};
 use crate::ui::{button, display_title, icon};
-use super::state::{Page, SIDEBAR_MAX, SIDEBAR_MIN, View, Workspace};
+use super::state::{Page, Place, SIDEBAR_MAX, SIDEBAR_MIN, View, Workspace};
 use super::bars;
 
 impl Render for Workspace {
@@ -139,6 +139,13 @@ impl Render for Workspace {
                     this.open_settings(None, window, cx);
                 }
             }))
+            .on_action(
+                cx.listener(|this, _: &crate::ShowOrchestrator, window, cx| {
+                    // Typing then goes to the pill, as after a click on its icon.
+                    window.focus(&this.focus, cx);
+                    this.go_to(&Place::Orchestrator, cx);
+                }),
+            )
             .on_action(cx.listener(|this, _: &crate::ShowTasks, _, cx| {
                 this.view = Some(View::Tasks);
                 this.page = Page::Chats;

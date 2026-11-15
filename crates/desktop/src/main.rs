@@ -51,6 +51,7 @@ actions!(
         NewChat,
         FindInChat,
         OpenSettings,
+        ShowOrchestrator,
         ShowTasks,
         ShowChanges,
         ShowArchived,
