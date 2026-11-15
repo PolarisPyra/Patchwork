@@ -16,34 +16,5 @@
     ]
   },
   "shootingStars": "#e6f2ff",
-  "sprites": [
-    {
-      "art": [
-        "                      V V     VV V   VV  V VV",
-        "              vv        VV   V        vv                                                                                       v v   V VV  V v",
-        "                 vv  vvvv                                                                                             vvv   VV   V VVV    V v  v",
-        "                                                                                                              v v     vv  V           V v  v",
-        "                                                                                                            vv     v     v     v      v",
-        "                                                                                                               v v    v   vv  v  v v  v",
-        "                                                                                                                      v   vv  vvv  vvvv v",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        ""
-      ],
-      "colors": {
-        "b": "#0e1723",
-        "B": "#121d2c",
-        "v": "#16111f",
-        "V": "#1b1527"
-      },
-      "at": [
-        0.5,
-        0.14
-      ]
-    }
-  ]
+  "sprites": []
 }
