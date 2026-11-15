@@ -5,7 +5,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use gpui::{AppContext, Context, Window};
 use patchwork_server::Server;
@@ -14,9 +13,6 @@ use patchwork_server::threads::{AskKind, NewThread};
 
 use super::render::Place;
 use super::state::{Orchestrator, Outcome, PLACEHOLDER, Picker, Waiting};
-
-/// How long after the last key the router is asked where the request would go.
-const PAUSE: Duration = Duration::from_millis(350);
 
 /// The most projects and chats the `@` list offers.
 const MAX_ENTRIES: usize = 7;
@@ -40,19 +36,6 @@ impl Orchestrator {
     /// The field's text without the space around it.
     fn text(&self, cx: &Context<Self>) -> String {
         self.field.read(cx).content.trim().to_string()
-    }
-
-    /// The route shown was read from the text the field holds now.
-    pub(super) fn route_is_fresh(&self, cx: &Context<Self>) -> bool {
-        self.routing.is_some() && self.routed_text == self.field.read(cx).content.trim()
-    }
-
-    /// The place Enter sends the request to, when one is known.
-    pub(super) fn target(&self, cx: &Context<Self>) -> Option<&Target> {
-        self.pinned.as_ref().or_else(|| {
-            let routing = self.routing.as_ref().filter(|_| self.route_is_fresh(cx))?;
-            routing.targets.get(self.pick)
-        })
     }
 
     /// The server, and the chat a request starts when it names none: in the project picked under
@@ -112,17 +95,14 @@ impl Orchestrator {
             self.answer(0, window, cx);
         }
         // Tab and the arrows belong to the pill only while it has something to do with them.
-        let keys = self.picker.is_some()
-            || !self.waiting.is_empty()
-            || !self.field.read(cx).content.is_empty();
+        let keys = self.picker.is_some() || !self.waiting.is_empty();
         self.field.update(cx, |field, _| field.menu_keys = keys);
     }
 
-    /// The field's text changed: the `@` list follows it, and the route is read again.
+    /// The field's text changed: the `@` list follows it.
     pub(super) fn changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.answering.is_none() {
             self.read_picker(cx);
-            self.preview(cx);
         }
         self.settle(window, cx);
         cx.notify();
@@ -190,58 +170,7 @@ impl Orchestrator {
         cx.notify();
     }
 
-    /// The project picked under the pill changed: the route is read again, since a request
-    /// that names no project goes there.
-    pub(super) fn follow_project(&mut self, cx: &mut Context<Self>) {
-        let project = self.launch(cx).and_then(|(_, new)| new.project_id);
-        if project == self.project {
-            return;
-        }
-        self.project = project;
-        if self.answering.is_none() {
-            self.routing = None;
-            self.preview(cx);
-        }
-    }
-
-    /// Asks the router where the request would go, once the typing has paused. A reading asked
-    /// for before the latest key is dropped when it comes back.
-    fn preview(&mut self, cx: &mut Context<Self>) {
-        self.generation += 1;
-        let generation = self.generation;
-        let text = self.text(cx);
-        let idle = text.is_empty() || self.pinned.is_some() || self.picker.is_some();
-        let Some((server, new)) = self.launch(cx).filter(|_| !idle) else {
-            self.deciding = false;
-            return;
-        };
-        self.deciding = true;
-        cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(PAUSE).await;
-            let current = this.read_with(cx, |this, _| this.generation == generation);
-            if !current.unwrap_or(false) {
-                return;
-            }
-            let asked = text.clone();
-            let routing = cx
-                .background_executor()
-                .spawn(async move { server.route(&asked, &new) })
-                .await;
-            let _ = this.update(cx, |this, cx| {
-                if this.generation != generation {
-                    return;
-                }
-                this.deciding = false;
-                this.routing = routing.ok();
-                this.routed_text = text;
-                this.pick = 0;
-                cx.notify();
-            });
-        })
-        .detach();
-    }
-
-    /// Up or Down: moves the `@` list's highlight, or the chip to the next place.
+    /// Up or Down: moves the `@` list's highlight.
     pub(super) fn arrow(&mut self, by: isize, cx: &mut Context<Self>) {
         let entries = self.entries(cx).len();
         if let Some(picker) = self.picker.as_mut().filter(|_| entries > 0) {
@@ -249,16 +178,11 @@ impl Orchestrator {
                 .highlighted
                 .wrapping_add_signed(by + entries.cast_signed())
                 % entries;
-        } else if self.answering.is_none() && self.route_is_fresh(cx) {
-            let places = self.routing.as_ref().map_or(0, |r| r.targets.len());
-            if places > 0 {
-                self.pick = self.pick.wrapping_add_signed(by + places.cast_signed()) % places;
-            }
         }
         cx.notify();
     }
 
-    /// Tab: picks from the `@` list, turns to the next question, or moves the chip on.
+    /// Tab: picks from the `@` list, or turns to the next question.
     pub(super) fn tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(picker) = &self.picker {
             self.pin(picker.highlighted, window, cx);
@@ -272,8 +196,6 @@ impl Orchestrator {
             }
         } else if !self.waiting.is_empty() {
             self.answer(0, window, cx);
-        } else {
-            self.arrow(1, cx);
         }
         self.settle(window, cx);
         cx.notify();
@@ -353,37 +275,25 @@ impl Orchestrator {
         }
     }
 
-    /// Sends what the field holds, with what is attached, to the place the chip names, or to the
-    /// place the router finds when it has not answered yet, and lists it.
+    /// Sends what the field holds, with what is attached, to the place pinned with `@`, or to a
+    /// new chat in the project picked under the pill, and lists it.
     pub(super) fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.text(cx);
         let Some((server, new)) = self.launch(cx).filter(|_| !text.is_empty()) else {
             return;
         };
-        let prompt = match (&self.pinned, &self.routing) {
-            (None, Some(routing)) if self.route_is_fresh(cx) => routing.prompt.clone(),
-            _ => text.clone(),
-        };
-        let target = self.target(cx).cloned();
-        self.generation += 1;
-        self.deciding = false;
-        self.routing = None;
-        self.pinned = None;
+        let target = self
+            .pinned
+            .take()
+            .unwrap_or_else(|| Target::New(new.project_id.clone()));
         self.picker = None;
-        self.pick = 0;
         let attachments = std::mem::take(&mut self.attachments);
         let id = self.list(&text);
         self.field.update(cx, |field, cx| field.clear(window, cx));
-        // Without a place picked the server asks a model which chat is meant, which takes a
-        // moment.
-        let task = cx.background_spawn(async move {
-            if let Some(target) = target {
-                return server.dispatch_to(&prompt, &target, &new, &attachments);
-            }
-            let routing = server.route(&text, &new)?;
-            let target = routing.targets.first().ok_or("No chat to send it to")?;
-            server.dispatch_to(&routing.prompt, target, &new, &attachments)
-        });
+        let task =
+            cx.background_spawn(
+                async move { server.dispatch_to(&text, &target, &new, &attachments) },
+            );
         cx.spawn(async move |this, cx| {
             let outcome = task.await;
             this.update(cx, |this, cx| {
