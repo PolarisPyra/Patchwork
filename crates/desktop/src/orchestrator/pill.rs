@@ -381,9 +381,7 @@ impl Orchestrator {
                         Outcome::Failed(e.to_string().into())
                     }
                 };
-                if let Some(request) = this.requests.iter_mut().find(|r| r.id == id) {
-                    request.outcome = outcome;
-                }
+                this.settle_request(id, outcome);
                 cx.notify();
             })
         })

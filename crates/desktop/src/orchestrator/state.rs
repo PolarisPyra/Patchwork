@@ -234,4 +234,38 @@ impl Orchestrator {
         self.requests.truncate(MAX_REQUESTS);
         id
     }
+
+    /// Records what became of request `id`, keeping one card per chat: a chat stays on the card
+    /// of the newest request sent to it, whatever order the answers come back in, and a card left
+    /// without chats leaves the page.
+    pub(super) fn settle_request(&mut self, id: usize, mut outcome: Outcome) {
+        if let Outcome::Routed(to) = &mut outcome {
+            let newer: Vec<String> = self
+                .requests
+                .iter()
+                .filter(|r| r.id > id)
+                .filter_map(|r| match &r.outcome {
+                    Outcome::Routed(d) => Some(d.thread_ids.iter().cloned()),
+                    _ => None,
+                })
+                .flatten()
+                .collect();
+            to.thread_ids.retain(|t| !newer.contains(t));
+            if to.thread_ids.is_empty() {
+                self.requests.retain(|r| r.id != id);
+                return;
+            }
+            self.requests
+                .retain_mut(|request| match &mut request.outcome {
+                    Outcome::Routed(older) if request.id < id => {
+                        older.thread_ids.retain(|t| !to.thread_ids.contains(t));
+                        !older.thread_ids.is_empty()
+                    }
+                    _ => true,
+                });
+        }
+        if let Some(request) = self.requests.iter_mut().find(|r| r.id == id) {
+            request.outcome = outcome;
+        }
+    }
 }
