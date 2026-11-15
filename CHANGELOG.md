@@ -3,6 +3,21 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.82] - 2026-11-15
+
+**26.11.82** · 1 change from 1 contributor
+
+- **Goal banner overflow.** The goal banner above the composer now scrolls after five lines and avoids oversized tooltips.
+
+<details>
+<summary>Full changelog</summary>
+
+### Fixed
+
+- A long goal filled the whole chat, and hovering it opened a tooltip taller than the window. The objective in the goal banner above the composer now stops at about five lines and scrolls, and the banner's tooltip shows only its first line. by [PolarisPyra in #143](https://github.com/PolarisPyra/Patchwork/pull/143)
+
+</details>
+
 ## [26.11.81] - 2026-11-15
 
 **26.11.81** · 6 changes from 1 contributor
