@@ -3,6 +3,21 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.85] - 2026-11-15
+
+**26.11.85** · 1 change from 1 contributor
+
+- **Independent window and code themes.** Set the window theme, code theme, orchestrator background, and chat background separately in Settings.
+
+<details>
+<summary>Full changelog</summary>
+
+### Changed
+
+- Settings → Appearance splits Themes into Window theme and Code theme, and Backgrounds into Orchestrator background and Chat background, each in its own pane. Window theme holds the color schemes and the accent color. The Settings list is wider so the longer names fit. by [PolarisPyra in #148](https://github.com/PolarisPyra/Patchwork/pull/148)
+
+</details>
+
 ## [26.11.84] - 2026-11-15
 
 **26.11.84** · 2 changes from 1 contributor
