@@ -20,6 +20,10 @@ pub struct GoalClear {
     ran: bool,
 }
 
+/// The tallest the objective grows before it scrolls: about five lines, so a long goal leaves the
+/// chat above it in view.
+const OBJECTIVE_MAX_HEIGHT: f32 = 100.;
+
 fn label(goal: &Goal, working: bool) -> &'static str {
     match goal.status {
         GoalStatus::Active if !working => "Goal set",
@@ -169,6 +173,8 @@ pub fn goal_banner(
     let (muted, fg) = (t.text_muted, t.text);
     let started = goal.started_at;
     let objective: SharedString = goal.objective.clone().into();
+    // A long objective scrolls in the banner, so the tooltip names it by its first line.
+    let first_line = goal.objective.lines().next().unwrap_or_default().to_owned();
     let toggle = button("goal-toggle", label.clone())
         .aria_expanded(open)
         .flex_1()
@@ -176,7 +182,7 @@ pub fn goal_banner(
         .gap(px(8.))
         .text_color(muted)
         .hover(move |s| s.text_color(fg))
-        .tooltip(tooltip(objective.clone()))
+        .tooltip(tooltip(first_line))
         .child(icon("target", 13.).flex_none().text_color(if active {
             t.accent_text
         } else {
@@ -286,9 +292,9 @@ pub fn goal_banner(
                 d.child(
                     div()
                         .id("goal-objective")
-                        .tooltip(tooltip(objective.clone()))
+                        .max_h(px(OBJECTIVE_MAX_HEIGHT))
+                        .overflow_y_scroll()
                         .min_w_0()
-                        .truncate()
                         .border_t_1()
                         .border_color(t.border)
                         .px(px(10.))
