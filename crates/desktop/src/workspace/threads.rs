@@ -60,7 +60,7 @@ impl Workspace {
         self.go_to(&Place::Peek(id.to_string()), cx);
     }
 
-    fn go_to(&mut self, to: &Place, cx: &mut Context<Self>) {
+    pub(super) fn go_to(&mut self, to: &Place, cx: &mut Context<Self>) {
         let from = self.place();
         if self.show(to, cx)
             && let Some(from) = from.filter(|from| from != to)
