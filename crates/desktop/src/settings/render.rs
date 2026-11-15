@@ -41,7 +41,9 @@ impl SettingsDialog {
                     .into_any_element()
             }
             "themes" => themes::render(self, window, cx),
-            "backgrounds" => themes::backgrounds_pane(self, window, cx),
+            "code-theme" => themes::code_theme_pane(self, window, cx),
+            "orchestrator-background" => themes::orchestrator_background_pane(self, window, cx),
+            "chat-background" => themes::chat_background_pane(self, window, cx),
             "interface" => themes::interface_pane(self, window, cx),
             "shortcuts" => shortcuts::render(self, window, cx),
             "providers" => providers::render(self, window, cx),
@@ -112,7 +114,7 @@ impl Render for SettingsDialog {
                             .flex()
                             .flex_col()
                             .flex_none()
-                            .w(px(216.))
+                            .w(px(236.))
                             .overflow_y_scroll()
                             .border_r_1()
                             .border_color(t.border)

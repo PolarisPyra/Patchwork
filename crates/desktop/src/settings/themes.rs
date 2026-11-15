@@ -1,5 +1,5 @@
 //! Settings → Themes: the color scheme the app is drawn in and the colors of code, and having an
-//! agent write a color scheme. It keeps what Settings → Backgrounds and Settings → Interface
+//! agent write a color scheme. It keeps what the background panes and Settings → Interface
 //! pick from as well.
 
 // Rust guideline compliant 2026-10-09
@@ -14,7 +14,7 @@ use patchwork_server::logging::THEME_LOG;
 use patchwork_server::settings::{LogLevel, Theme as ThemeSetting};
 use patchwork_server::themes::{CodeTheme, SavedScene, Scheme, Theme, Unreadable};
 
-pub(super) use self::backdrops::backgrounds_pane;
+pub(super) use self::backdrops::{chat_background_pane, orchestrator_background_pane};
 use self::cards::{Slot, add_card, grid, scheme_cards};
 use self::editor::{Editing, editor};
 use self::generator_pick::generator_row;
@@ -409,8 +409,35 @@ pub fn render(
         window,
         cx,
     );
-    // Code is colored for the kind of window that is showing.
-    let code = code_theme_cards(d, if dark { Scheme::Dark } else { Scheme::Light }, cx);
+    let generate_with = generator_row(d, &t, cx);
+    pane(d, cx)
+        .child(section_heading("Color scheme", true, &t))
+        .child(follow)
+        .children(schedule)
+        .children(schemes)
+        .children(editing)
+        .child(new_scheme)
+        .child(accent)
+        .child(generate_with)
+        .into_any_element()
+}
+
+/// The code themes, for the kind of window that is showing, and the row that writes one.
+pub fn code_theme_pane(
+    d: &mut SettingsDialog,
+    window: &mut Window,
+    cx: &mut Context<SettingsDialog>,
+) -> AnyElement {
+    let t = *theme(cx);
+    if !d.themes.loaded {
+        d.load_themes(cx);
+    }
+    let scheme = if t.is_dark() {
+        Scheme::Dark
+    } else {
+        Scheme::Light
+    };
+    let code = code_theme_cards(d, scheme, cx);
     let code_dir = d.server.code_themes_dir();
     let new_code = generator(
         d,
@@ -421,6 +448,17 @@ pub fn render(
         cx,
     );
     let generate_with = generator_row(d, &t, cx);
+    pane(d, cx)
+        .child(code)
+        .child(new_code)
+        .child(generate_with)
+        .into_any_element()
+}
+
+/// A pane of themes, which imports a theme's file dropped anywhere on it and shows the files
+/// that could not be read.
+fn pane(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> gpui::Stateful<gpui::Div> {
+    let t = *theme(cx);
     let unreadable: Vec<_> = d
         .themes
         .unreadable
@@ -433,13 +471,11 @@ pub fn render(
             )
         })
         .collect();
-
     div()
         .id(PANE)
         .group(PANE)
         .flex()
         .flex_col()
-        // A theme's file dropped anywhere on the pane is imported.
         .on_drop(cx.listener(|d, files: &ExternalPaths, _, cx| {
             d.import_themes(files.paths().to_vec(), cx);
         }))
@@ -450,15 +486,4 @@ pub fn render(
                 .map(|e| alert("themes-error", e, t.danger)),
         )
         .children(unreadable)
-        .child(section_heading("Color scheme", true, &t))
-        .child(follow)
-        .children(schedule)
-        .children(schemes)
-        .children(editing)
-        .child(new_scheme)
-        .child(accent)
-        .child(code)
-        .child(new_code)
-        .child(generate_with)
-        .into_any_element()
 }
