@@ -10,7 +10,7 @@ use gpui::{
 use crate::ui::text_area::Paste;
 use crate::chat::user::attachment_chip;
 use crate::ui::pill::{PILL_PAD, SEND, pill, send_button};
-use crate::ui::theme::{fs_lg, fs_md, theme};
+use crate::ui::theme::{fs_md, theme};
 use crate::ui::{agent_logo, button, format_tokens, icon, tooltip};
 use crate::workspace::{Workspace, is_busy, is_working};
 use super::menus::{Menu, access_of, compact_label, effort_label, efforts};
@@ -18,10 +18,8 @@ use super::chips::{chip, context_of, fill_ring};
 use super::send::queue_by_default;
 use super::state::Composer;
 
-/// The height of a line of the draft in its usual text.
+/// The height of a line of the draft.
 const LINE: f32 = 20.;
-/// The height of a line of the draft in the large text a one-line draft is in.
-const LINE_LARGE: f32 = 24.;
 
 impl Render for Composer {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -112,24 +110,6 @@ impl Render for Composer {
         let focused = editor.focus_handle(cx).is_focused(window);
         let editor_focus = editor.focus_handle(cx);
         let editor_scroll = editor.scroll.clone();
-        // A one-line draft is in large text. Once its large text wraps it turns small, and stays
-        // small until it is shorter than when it wrapped, so it does not flick between the two.
-        let length = editor.content.len();
-        if editor.content.is_empty() {
-            self.wrapped_at = None;
-        } else if self.large && editor.drawn_rows() > 1 {
-            self.wrapped_at = Some(length);
-        }
-        let large = !editor.content.contains('\n') && self.wrapped_at.is_none_or(|at| length < at);
-        if large != self.large {
-            self.large = large;
-            cx.notify();
-        }
-        let (text_size, line) = if large {
-            (fs_lg(), LINE_LARGE)
-        } else {
-            (fs_md(), LINE)
-        };
         let attachments: Vec<_> = self
             .attachments
             .iter()
@@ -451,9 +431,9 @@ impl Render for Composer {
                         .overflow_y_scroll()
                         .track_scroll(&editor_scroll)
                         .px(px(6.))
-                        .py(px((SEND - line) / 2.))
-                        .text_size(px(text_size))
-                        .line_height(px(line))
+                        .py(px((SEND - LINE) / 2.))
+                        .text_size(px(fs_md()))
+                        .line_height(px(LINE))
                         // The field is only as tall as its text; a right-click on the box around
                         // it opens the field's Edit menu too.
                         .on_mouse_down(MouseButton::Right, {
