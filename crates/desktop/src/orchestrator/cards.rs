@@ -96,15 +96,16 @@ fn plate(card: Stateful<Div>) -> Stateful<Div> {
         .text_size(px(fs_sm()))
 }
 
-/// A card's first line: a mark, what was asked, and a note at its end.
-fn line(mark: AnyElement, text: SharedString, note: Option<(SharedString, Hsla)>) -> Div {
+/// A card's first line: a mark (unless the card holds it beside its lines), what was asked, and a
+/// note at its end.
+fn line(mark: Option<AnyElement>, text: SharedString, note: Option<(SharedString, Hsla)>) -> Div {
     div()
         .w_full()
         .min_w_0()
         .flex()
         .items_center()
         .gap(px(10.))
-        .child(mark)
+        .children(mark)
         .child(div().flex_1().min_w_0().truncate().child(text))
         .children(note.map(|(note, color)| {
             div()
@@ -116,9 +117,9 @@ fn line(mark: AnyElement, text: SharedString, note: Option<(SharedString, Hsla)>
         }))
 }
 
-/// The line an agent last wrote, under what it was asked. An agent at work has a line that comes
-/// and goes between its steps, so its room is `held` while there is none: the card keeps its
-/// height.
+/// The line an agent last wrote, under what it was asked and beside the card's mark. An agent at
+/// work has a line that comes and goes between its steps, so its room is `held` while there is
+/// none: the card keeps its height.
 fn latest(text: Option<String>, held: bool) -> Option<Div> {
     // A no-break space is one line high, where an empty line would have no height.
     let text = text.or_else(|| held.then(|| "\u{a0}".to_string()));
@@ -126,7 +127,6 @@ fn latest(text: Option<String>, held: bool) -> Option<Div> {
         div()
             .w_full()
             .min_w_0()
-            .pl(px(24.))
             .truncate()
             .text_size(px(fs_xs()))
             .text_color(ink(0.5))
@@ -150,7 +150,11 @@ impl Orchestrator {
                 return plate(div().id(row_id))
                     .role(Role::Status)
                     .aria_label(format!("Routing: {text}"))
-                    .child(line(spinner(14., ink(0.8)).into_any_element(), text, None))
+                    .child(line(
+                        Some(spinner(14., ink(0.8)).into_any_element()),
+                        text,
+                        None,
+                    ))
                     .into_any_element();
             }
             Outcome::Failed(error) => {
@@ -158,7 +162,7 @@ impl Orchestrator {
                 return plate(div().id(row_id))
                     .role(Role::Alert)
                     .aria_label(format!("Failed, {error}: {text}"))
-                    .child(line(mark(Standing::Failed), text, Some(note)))
+                    .child(line(Some(mark(Standing::Failed)), text, Some(note)))
                     .into_any_element();
             }
             Outcome::Routed(to) => to
@@ -172,7 +176,7 @@ impl Orchestrator {
             [] => plate(div().id(row_id))
                 .role(Role::ListItem)
                 .aria_label(format!("Chat deleted: {text}"))
-                .child(line(mark(Standing::Done), text, None))
+                .child(line(Some(mark(Standing::Done)), text, None))
                 .into_any_element(),
             [chat] => {
                 let state = word(chat.standing);
@@ -180,11 +184,24 @@ impl Orchestrator {
                 let note = (SharedString::from(chat.name.clone()), ink(0.6));
                 plate(button(row_id, label))
                     .hover(|s| s.bg(glass(0.72)).border_color(ink(0.14)))
-                    .child(line(mark(chat.standing), text, Some(note)))
-                    .children(latest(
-                        chat.line.clone(),
-                        matches!(chat.standing, Standing::Working | Standing::Waiting),
-                    ))
+                    // The mark sits beside both lines, centered on the card.
+                    .flex_row()
+                    .items_center()
+                    .gap(px(10.))
+                    .child(mark(chat.standing))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.))
+                            .child(line(None, text, Some(note)))
+                            .children(latest(
+                                chat.line.clone(),
+                                matches!(chat.standing, Standing::Working | Standing::Waiting),
+                            )),
+                    )
                     .on_click(cx.listener({
                         let id = chat.id.clone();
                         move |this, _: &gpui::ClickEvent, _, cx| this.open(&id, cx)
@@ -206,7 +223,11 @@ impl Orchestrator {
                         .text_size(px(fs_xs()))
                         .text_color(ink(0.75))
                         .hover(|s| s.bg(ink(0.06)))
-                        .child(line(mark(chat.standing), chat.name.clone().into(), said))
+                        .child(line(
+                            Some(mark(chat.standing)),
+                            chat.name.clone().into(),
+                            said,
+                        ))
                         .on_click(cx.listener({
                             let id = chat.id.clone();
                             move |this, _: &gpui::ClickEvent, _, cx| this.open(&id, cx)
@@ -215,7 +236,7 @@ impl Orchestrator {
                 plate(div().id(row_id))
                     .role(Role::Group)
                     .aria_label(label)
-                    .child(line(mark(all), text, Some((count, ink(0.6)))))
+                    .child(line(Some(mark(all)), text, Some((count, ink(0.6)))))
                     .children(rows)
                     .into_any_element()
             }
