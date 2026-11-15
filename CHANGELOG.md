@@ -3,6 +3,21 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.86] - 2026-11-15
+
+**26.11.86** · 1 change from 1 contributor
+
+- **Renamed appearance settings.** Syntax theme, Orchestrator theme, and Chat theme replace Code theme, Orchestrator background, and Chat background.
+
+<details>
+<summary>Full changelog</summary>
+
+### Changed
+
+- In Settings → Appearance, Code theme is now called Syntax theme, Orchestrator background is Orchestrator theme, and Chat background is Chat theme. by [PolarisPyra in #149](https://github.com/PolarisPyra/Patchwork/pull/149)
+
+</details>
+
 ## [26.11.85] - 2026-11-15
 
 **26.11.85** · 1 change from 1 contributor
