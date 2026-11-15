@@ -75,11 +75,19 @@ pub(super) const ENTRIES: &[Entry] = &[
         panes: &[
             Pane {
                 id: "themes",
-                label: "Themes",
+                label: "Window theme",
             },
             Pane {
-                id: "backgrounds",
-                label: "Backgrounds",
+                id: "code-theme",
+                label: "Code theme",
+            },
+            Pane {
+                id: "orchestrator-background",
+                label: "Orchestrator background",
+            },
+            Pane {
+                id: "chat-background",
+                label: "Chat background",
             },
             Pane {
                 id: "interface",

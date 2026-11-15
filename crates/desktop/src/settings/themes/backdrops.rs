@@ -1,7 +1,7 @@
-//! Settings → Backgrounds: what is behind the Orchestrator page and behind chats. The
-//! Orchestrator has a card for none, the butterfly, each animated background, each of the
-//! backgrounds chats come with and each picture,
-//! and the card that adds a picture; an agent can be asked to write an animated one.
+//! Settings → Orchestrator background and Chat background: what is behind the Orchestrator page
+//! and behind chats. The Orchestrator has a card for none, the butterfly, each animated
+//! background, each of the backgrounds chats come with and each picture, and the card that adds a
+//! picture; an agent can be asked to write an animated one.
 //!
 //! Matching the system, light windows and dark ones each have their own background, and the
 //! cards pick for the kind of window that is showing.
@@ -10,7 +10,7 @@
 
 use std::sync::Arc;
 
-use gpui::{AnyElement, App, Entity, FontWeight, ObjectFit, Window, div, img, prelude::*, px};
+use gpui::{AnyElement, App, Entity, ObjectFit, Window, div, img, prelude::*, px};
 use patchwork_server::backgrounds::ChatBackground;
 use patchwork_server::settings::Theme as ThemeSetting;
 use patchwork_server::themes::{BackdropChoice, Scheme};
@@ -20,7 +20,7 @@ use super::files::{Filed, file_tools};
 use super::generator_pick::generator_row;
 use super::{Kind, generator};
 use crate::orchestrator::{butterfly_preview, scene_preview};
-use crate::settings::controls::{alert, anchored, section_heading};
+use crate::settings::controls::{alert, anchored};
 use crate::settings::{SettingsDialog, SettingsEvent};
 use crate::ui::backdrop::{PRESETS, preset_fill};
 use crate::ui::background_picker::{BackgroundPicker, PickerEvent};
@@ -263,7 +263,7 @@ fn picker(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> Entity<Ba
     picker
 }
 
-pub(in crate::settings) fn backgrounds_pane(
+pub(in crate::settings) fn orchestrator_background_pane(
     d: &mut SettingsDialog,
     window: &mut Window,
     cx: &mut Context<SettingsDialog>,
@@ -272,12 +272,11 @@ pub(in crate::settings) fn backgrounds_pane(
     if !d.themes.loaded {
         d.load_themes(cx);
     }
-    let chat_background = picker(d, cx);
     // Matching the system, light windows and dark ones each have their own background.
     let slot = d.backdrop_slot(cx);
     let windows = slot.map(|scheme| {
         div()
-            .pt(px(10.))
+            .pb(px(8.))
             .text_size(px(fs_sm()))
             .text_color(t.text_muted)
             .child(match scheme {
@@ -291,6 +290,45 @@ pub(in crate::settings) fn backgrounds_pane(
         .into_any_element();
     let scenes_dir = d.server.scenes_dir();
     let new_scene = generator(d, Kind::Scene, "A koi pond at dusk", scenes_dir, window, cx);
+    let generate_with = generator_row(d, &t, cx);
+    div()
+        .id("orchestrator-background-pane")
+        .flex()
+        .flex_col()
+        .children(
+            d.themes
+                .error
+                .clone()
+                .map(|e| alert("backgrounds-error", e, t.danger)),
+        )
+        .child(
+            anchored(
+                div().id("label-orchestrator-background"),
+                "Orchestrator background",
+            )
+            .children(windows)
+            .child(grid(
+                "backdrops",
+                "Orchestrator background",
+                backdrops,
+                Some(add_picture),
+            )),
+        )
+        .child(new_scene)
+        .child(generate_with)
+        .into_any_element()
+}
+
+pub(in crate::settings) fn chat_background_pane(
+    d: &mut SettingsDialog,
+    window: &mut Window,
+    cx: &mut Context<SettingsDialog>,
+) -> AnyElement {
+    let t = *theme(cx);
+    if !d.themes.loaded {
+        d.load_themes(cx);
+    }
+    let chat_background = picker(d, cx);
     let pictures_dir = d.server.backgrounds_dir();
     let new_picture = generator(
         d,
@@ -302,7 +340,7 @@ pub(in crate::settings) fn backgrounds_pane(
     );
     let generate_with = generator_row(d, &t, cx);
     div()
-        .id("backgrounds-pane")
+        .id("chat-background-pane")
         .flex()
         .flex_col()
         .children(
@@ -311,35 +349,9 @@ pub(in crate::settings) fn backgrounds_pane(
                 .clone()
                 .map(|e| alert("backgrounds-error", e, t.danger)),
         )
-        .child(section_heading("Orchestrator", true, &t))
-        .children(windows)
-        .child(
-            anchored(
-                div().id("label-orchestrator-background"),
-                "Orchestrator background",
-            )
-            .pt(px(10.))
-            .pb(px(8.))
-            .font_weight(FontWeight::SEMIBOLD)
-            .child("Orchestrator background"),
-        )
-        .child(grid(
-            "backdrops",
-            "Orchestrator background",
-            backdrops,
-            Some(add_picture),
-        ))
-        .child(new_scene)
-        .child(section_heading("Chats", false, &t))
         .child(
             anchored(div().id("label-chat-background"), "Chat background")
-                .py(px(10.))
-                .child(
-                    div()
-                        .pb(px(8.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child("Chat background"),
-                )
+                .pb(px(10.))
                 .child(chat_background),
         )
         // The row that draws a picture comes right under the pictures, with no line between.

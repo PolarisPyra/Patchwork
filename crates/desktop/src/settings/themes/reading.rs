@@ -106,7 +106,6 @@ pub(super) fn code_theme_cards(
     // The row that writes a code theme comes right under the cards, with no line between.
     div()
         .pt(px(10.))
-        .child(div().font_weight(FontWeight::SEMIBOLD).child(title))
         .child(grid(key, title, cards, Some(add)))
         .into_any_element()
 }
