@@ -47,8 +47,8 @@ fn preset(id: &str) -> Option<(Base, Pattern)> {
     })
 }
 
-/// How much of the window color is laid over a chat's background.
-const VEIL: f32 = 0.78;
+/// How much of the window color is laid over a chat's picture, as on the Orchestrator page.
+const PICTURE_DIM: f32 = 0.45;
 
 /// The pictures in Patchwork's backgrounds folder, read once.
 #[derive(Default)]
@@ -228,13 +228,22 @@ pub fn chat_backdrop(
                 .find(|i| &i.file == file)?
                 .path
                 .clone();
-            div().absolute().inset_0().child(
-                img(PathBuf::from(path))
-                    .absolute()
-                    .inset_0()
-                    .size_full()
-                    .object_fit(ObjectFit::Cover),
-            )
+            div()
+                .absolute()
+                .inset_0()
+                .child(
+                    img(PathBuf::from(path))
+                        .absolute()
+                        .inset_0()
+                        .size_full()
+                        .object_fit(ObjectFit::Cover),
+                )
+                .child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .bg(t.bg_editor.opacity(PICTURE_DIM)),
+                )
         }
     };
     Some(
@@ -243,7 +252,6 @@ pub fn chat_backdrop(
             .inset_0()
             .overflow_hidden()
             .child(under)
-            .child(div().absolute().inset_0().bg(t.bg_editor.opacity(VEIL)))
             .into_any_element(),
     )
 }
