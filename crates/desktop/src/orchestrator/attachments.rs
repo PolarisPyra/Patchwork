@@ -1,16 +1,17 @@
 //! The files, folders and pictures dropped on the pill, which go with the next request, and the
-//! row of chips under the pill that shows them.
+//! pill of chips above it that shows them.
 
 // Rust guideline compliant 2026-10-09
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use gpui::{AnyElement, Role, SharedString, div, prelude::*, px};
+use gpui::{AnyElement, Hsla, Role, SharedString, prelude::*, px, relative};
 
-use super::render::{PILL_W, ink};
+use super::render::{glass, ink};
 use super::state::Orchestrator;
 use crate::chat::user::attachment_chip;
+use crate::ui::pill::pill;
 use crate::ui::theme::theme;
 use crate::ui::{button, icon};
 
@@ -44,16 +45,22 @@ impl Orchestrator {
         .detach();
     }
 
-    /// The chips for what is attached, each with a button that takes it off.
-    pub(super) fn attachment_row(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+    /// The chips for what is attached, each with a button that takes it off, in a pill that sits
+    /// above the request pill without moving it.
+    pub(super) fn attachment_row(
+        &self,
+        shadow: Hsla,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
         if self.attachments.is_empty() {
             return None;
         }
         let t = theme(cx);
         let chips = self.attachments.iter().enumerate().map(|(i, a)| {
+            // The pill around them is their frame, so a chip has none of its own.
             attachment_chip(format!("orchestrator-attachment-{i}"), a, t)
-                .bg(ink(0.08))
-                .border_color(ink(0.14))
+                .bg(gpui::transparent_black())
+                .border_color(gpui::transparent_black())
                 .text_color(ink(0.85))
                 .child(
                     button(
@@ -76,17 +83,18 @@ impl Orchestrator {
                     })),
                 )
         });
-        let row = div()
-            .id("orchestrator-attachments")
+        let row = pill("orchestrator-attachments", ink(0.10), glass(0.62), shadow)
             .role(Role::List)
             .aria_label("Attachments")
-            .w_full()
-            .max_w(px(PILL_W))
-            .mt(px(6.))
-            .px(px(12.))
+            .absolute()
+            .left_0()
+            .bottom(relative(1.))
+            .max_w_full()
+            .mb(px(8.))
+            .p(px(6.))
             .flex()
             .flex_wrap()
-            .gap(px(4.))
+            .gap(px(6.))
             .children(chips);
         Some(row.into_any_element())
     }

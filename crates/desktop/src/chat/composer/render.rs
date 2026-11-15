@@ -1,5 +1,5 @@
-//! The composer drawn: the pill with the draft, its attachments and the send button, and the
-//! chips under it.
+//! The composer drawn: its attachments in a pill above, the pill with the draft and the send
+//! button, and the chips under it.
 
 // Rust guideline compliant 2026-10-09
 
@@ -116,26 +116,32 @@ impl Render for Composer {
             .enumerate()
             .map(|(i, a)| {
                 let (hover, fg) = (t.bg_hover, t.text);
-                attachment_chip(format!("attachment-{i}"), a, &t).child(
-                    button(
-                        SharedString::from(format!("remove-{i}")),
-                        format!("Remove {}", a.name),
+                // The pill around them is their frame, so a chip has none of its own.
+                attachment_chip(format!("attachment-{i}"), a, &t)
+                    .bg(gpui::transparent_black())
+                    .border_color(gpui::transparent_black())
+                    .child(
+                        button(
+                            SharedString::from(format!("remove-{i}")),
+                            format!("Remove {}", a.name),
+                        )
+                        .size(px(16.))
+                        .justify_center()
+                        .rounded_full()
+                        .text_color(t.text_muted)
+                        .hover(move |s| s.bg(hover).text_color(fg))
+                        .child(icon("x", 10.))
+                        .on_click(cx.listener(
+                            move |this, _, window, cx| {
+                                if i < this.attachments.len() {
+                                    this.attachments.remove(i);
+                                }
+                                // The button pressed is gone; the keyboard carries on in the editor.
+                                window.focus(&this.editor.focus_handle(cx), cx);
+                                cx.notify();
+                            },
+                        )),
                     )
-                    .size(px(16.))
-                    .justify_center()
-                    .rounded_full()
-                    .text_color(t.text_muted)
-                    .hover(move |s| s.bg(hover).text_color(fg))
-                    .child(icon("x", 10.))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        if i < this.attachments.len() {
-                            this.attachments.remove(i);
-                        }
-                        // The button pressed is gone; the keyboard carries on in the editor.
-                        window.focus(&this.editor.focus_handle(cx), cx);
-                        cx.notify();
-                    })),
-                )
             })
             .collect();
         let stop = busy.then(|| {
@@ -346,6 +352,24 @@ impl Render for Composer {
         } else {
             t.text.opacity(0.10)
         };
+        // What the message attaches, in its own pill above the composer's.
+        let attached = (!attachments.is_empty()).then(|| {
+            pill(
+                "composer-attachments",
+                t.text.opacity(0.10),
+                t.bg_editor.opacity(0.82),
+                t.shadow.opacity(0.5),
+            )
+            .role(Role::List)
+            .aria_label("Attachments")
+            .self_start()
+            .mb(px(8.))
+            .p(px(6.))
+            .flex()
+            .flex_wrap()
+            .gap(px(6.))
+            .children(attachments)
+        });
         let pill = pill(
             "composer-pill",
             border,
@@ -405,16 +429,6 @@ impl Render for Composer {
             window.prevent_default();
         })
         .children(sigil_menu)
-        .when(!attachments.is_empty(), |c| {
-            c.child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap(px(6.))
-                    .px(px(6.))
-                    .children(attachments),
-            )
-        })
         .child(
             div()
                 .flex()
@@ -479,6 +493,7 @@ impl Render for Composer {
             .flex_col()
             .children(notice)
             .children(usage)
+            .children(attached)
             .child(pill)
             .child(controls)
             .into_any_element()

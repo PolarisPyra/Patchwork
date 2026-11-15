@@ -562,7 +562,8 @@ impl Render for Orchestrator {
                     .child(icon(glyph, 16.))
                     .on_click(cx.listener(|this, _, window, cx| this.enter(window, cx))),
             );
-        let attachments = self.attachment_row(cx);
+        // What is attached sits above the pill, laid over the page so the pill does not move.
+        let attachments = self.attachment_row(shadow, cx);
         let model = self.model_chip(window, cx);
         let requests = div()
             .id("orchestrator-requests")
@@ -622,8 +623,15 @@ impl Render for Orchestrator {
             .child(div().absolute().inset_0().child(backdrop))
             .child(
                 column()
-                    .child(pill)
-                    .children(attachments)
+                    .child(
+                        div()
+                            .relative()
+                            .w_full()
+                            .max_w(px(PILL_W))
+                            .flex_none()
+                            .children(attachments)
+                            .child(pill),
+                    )
                     .children(model)
                     .child(requests),
             )
