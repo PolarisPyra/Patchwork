@@ -79,15 +79,15 @@ pub(super) const ENTRIES: &[Entry] = &[
             },
             Pane {
                 id: "code-theme",
-                label: "Code theme",
+                label: "Syntax theme",
             },
             Pane {
                 id: "orchestrator-background",
-                label: "Orchestrator background",
+                label: "Orchestrator theme",
             },
             Pane {
                 id: "chat-background",
-                label: "Chat background",
+                label: "Chat theme",
             },
             Pane {
                 id: "interface",
