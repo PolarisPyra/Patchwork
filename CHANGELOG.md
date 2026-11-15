@@ -3,6 +3,25 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.80] - 2026-11-15
+
+**26.11.80** · 2 changes from 1 contributor
+
+- **Paste as file.** Pasting more than 5,000 characters now attaches the text as a file instead of filling the message field
+
+<details>
+<summary>Full changelog</summary>
+
+### Added
+
+- Pasting more than 5,000 characters into the composer attaches the text as a file instead of filling the message field. Remove the attachment to drop it. by [PolarisPyra in #136](https://github.com/PolarisPyra/Patchwork/pull/136)
+
+### Changed
+
+- The chat composer now matches the Orchestrator page: a rounded pill with a + button for attaching files or a folder, and a round send button. The formatting buttons are now one Format menu under it, a one-line draft shows in larger text, and the field's border is stronger while it has focus. The Compact chip shows how full the context is as a ring; hover it to see how many tokens are used before the chat compacts. by [PolarisPyra in #135](https://github.com/PolarisPyra/Patchwork/pull/135)
+
+</details>
+
 ## [26.11.79] - 2026-11-15
 
 **26.11.79** · 2 changes from 1 contributor
