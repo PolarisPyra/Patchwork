@@ -3,6 +3,29 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.78] - 2026-11-15
+
+**26.11.78** · 5 changes from 1 contributor
+
+- **Control where requests go.** Pick a project for new requests or pin a project or chat with @.
+- **Clear all requests.** Clears all requests on the Orchestrator page with a single button.
+
+<details>
+<summary>Full changelog</summary>
+
+### Added
+
+- A Clear all button above the cards on the Orchestrator page removes every request listed there. by [PolarisPyra in #129](https://github.com/PolarisPyra/Patchwork/pull/129)
+
+### Changed
+
+- The Orchestrator page no longer guesses where a request should go while you type. A request now starts a new chat in the project picked under the request field, or goes to the project or chat you pin with @. by [PolarisPyra in #127](https://github.com/PolarisPyra/Patchwork/pull/127)
+- Clicking a card on the Orchestrator page opens its chat read-only, with the sidebar closed and a bar at the bottom that leads back to the Orchestrator. You reply from the Orchestrator's request field. A chat that asks you a question still opens with its chat box. by [PolarisPyra in #128](https://github.com/PolarisPyra/Patchwork/pull/128)
+- The status mark on an Orchestrator card sits centered beside both of the card's lines, where it used to sit beside the first line only. by [PolarisPyra in #130](https://github.com/PolarisPyra/Patchwork/pull/130)
+- Chat backgrounds are dimmed less. A picture is now dimmed as much as on the Orchestrator page, and ready-made, butterfly and animated backgrounds are not dimmed. by [PolarisPyra in #131](https://github.com/PolarisPyra/Patchwork/pull/131)
+
+</details>
+
 ## [26.11.77] - 2026-11-15
 
 **26.11.77** · 1 change from 1 contributor
