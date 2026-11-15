@@ -26,5 +26,5 @@ mod themes;
 mod tokens;
 mod updates;
 
-pub(crate) use general::LOG_LEVELS;
+pub(crate) use general::{LOG_LEVELS, show_app_icon};
 pub use dialog::{SettingsDialog, SettingsEvent};

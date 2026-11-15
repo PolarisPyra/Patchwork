@@ -3,7 +3,7 @@
 //! The programs Patchwork starts and the environment they run with, the
 //! environment the user's shell sets up, the shells commands and the terminal run in, opening
 //! files and links on the desktop, the systemd scope agents run in, the range a command runs in,
-//! the process table, Patchwork's own folders, and time.
+//! the process table, Patchwork's own folders, its icon on the desktop, and time.
 
 // Rust guideline compliant 2026-10-09
 
@@ -12,6 +12,7 @@ pub(crate) mod dirs;
 mod environment;
 mod host;
 pub mod instance;
+mod launcher;
 pub mod fs;
 pub(crate) mod contained;
 pub mod device;
@@ -29,6 +30,8 @@ pub(crate) use host::lossy_lines;
 pub(crate) use host::expand_windows_vars;
 #[doc(inline)]
 pub use dirs::{Dirs, dirs};
+#[doc(inline)]
+pub use launcher::set_launcher_icon;
 #[doc(inline)]
 pub use time::{new_id, now_ms};
 #[doc(inline)]

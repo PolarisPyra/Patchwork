@@ -73,6 +73,19 @@ pub(super) fn app_icon(s: &patchwork_server::settings::Settings) -> SharedString
     SharedString::from(format!("app-icons/{id}.svg"))
 }
 
+/// Puts the app icon picked in `s` in the desktop's launcher, title bar and taskbar, off the UI
+/// thread.
+pub(crate) fn show_app_icon(s: &patchwork_server::settings::Settings, cx: &gpui::App) {
+    use gpui::AssetSource;
+    match crate::ui::assets::Assets.load(&app_icon(s)) {
+        Ok(Some(svg)) => cx
+            .background_spawn(async move { patchwork_server::system::set_launcher_icon(&svg) })
+            .detach(),
+        Ok(None) => log::warn!("the picked app icon is missing"),
+        Err(e) => log::warn!(error:% = e; "the picked app icon cannot be read: {{error}}"),
+    }
+}
+
 /// The app icons, and the one used when none is picked.
 fn logos() -> &'static (Vec<Logo>, String) {
     static LOGOS: OnceLock<(Vec<Logo>, String)> = OnceLock::new();
@@ -201,6 +214,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                             .on_click(cx.listener(move |d, _, _, cx| {
                                 let id = id.clone();
                                 d.update(|s| s.logo = Some(id), cx);
+                                show_app_icon(&d.server.store.settings(), cx);
                             }))
                             .into_any_element()
                     })
