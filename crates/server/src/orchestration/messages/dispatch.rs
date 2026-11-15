@@ -1,6 +1,6 @@
 //! Sending a request to the chat it belongs in, without the person choosing one: a request that
 //! names a chat goes to that chat, and any other starts a chat: in the project it names, one in
-//! each project when it names several, and in no project when it names none.
+//! each project when it names several, and in the project picked for it when it names none.
 //!
 //! A small model reads the request beside the projects and the recent chats and picks. When none
 //! answers, a chat or project is taken from its name being in the request.
@@ -87,8 +87,8 @@ impl Server {
     /// Where `text` would go if sent now, without sending it: the chat it names, or a new chat
     /// like `new` in the project it names, and the other places it could go.
     ///
-    /// A request that names no project starts a chat in none, and the project of `new` is the
-    /// next place offered. Asks a small model, so call it off the UI thread.
+    /// A request that names no project starts a chat in the project of `new`, and a chat in no
+    /// project is the next place offered. Asks a small model, so call it off the UI thread.
     ///
     /// # Errors
     ///
@@ -103,13 +103,15 @@ impl Server {
         let reading = self
             .read_with_model(text, new, &projects, &chats)
             .unwrap_or_else(|| read_by_name(text, &projects, &chats));
-        let named = reading.project_ids.first().cloned();
+        // The project named, or else the one picked for the request.
+        let named = reading
+            .project_ids
+            .first()
+            .cloned()
+            .or_else(|| new.project_id.clone());
         let fresh = Target::New(named.clone());
-        // The other kind of new chat: outside the named project, or in the one open.
-        let other_fresh = match &named {
-            Some(_) => Some(Target::New(None)),
-            None => new.project_id.clone().map(|id| Target::New(Some(id))),
-        };
+        // The other kind of new chat: outside the project.
+        let other_fresh = named.is_some().then_some(Target::New(None));
         let mut targets = Vec::new();
         match (reading.chat_id, reading.project_ids.len()) {
             (Some(chat_id), _) => targets.push(Target::Chat(chat_id)),

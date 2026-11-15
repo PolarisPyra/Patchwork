@@ -12,7 +12,7 @@ use patchwork_server::threads::Thread;
 use crate::ui::theme::{fs_md, radius, radius_sm, Theme};
 use crate::ui::{above, button, icon};
 use super::menus::{Menu, Pick};
-use super::state::{Composer, Picks, offered};
+use super::state::{Composer, LaunchProject, Picks, offered};
 
 impl Composer {
     /// A chip was clicked: opens its menu, or closes it if it is open. The press that just
@@ -95,6 +95,7 @@ impl Composer {
             match pick {
                 Pick::Model(agent, model) => self.launch = Some((agent, model)),
                 Pick::Effort(effort) => self.draft.effort = effort,
+                Pick::Project(project) => self.launch_project = LaunchProject::Picked(project),
                 _ => {}
             }
             return;
@@ -113,7 +114,7 @@ impl Composer {
                 Pick::Compact(window) => self.draft.compact = window,
                 Pick::Access(mode) => self.draft.access = mode,
                 Pick::Role(role) => self.draft.role = role,
-                Pick::CompactNow | Pick::SendMode(_) => {}
+                Pick::CompactNow | Pick::SendMode(_) | Pick::Project(_) => {}
             }
             return;
         };
@@ -136,7 +137,7 @@ impl Composer {
                     w.send_command("/compact", cx);
                     Ok(())
                 }
-                Pick::SendMode(_) => Ok(()),
+                Pick::SendMode(_) | Pick::Project(_) => Ok(()),
             };
             if let Err(e) = done {
                 log::warn!(error:% = e; "could not change the chat: {{error}}");

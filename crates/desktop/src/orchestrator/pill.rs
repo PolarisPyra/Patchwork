@@ -55,15 +55,14 @@ impl Orchestrator {
         })
     }
 
-    /// The server, and the chat a request starts when it names none.
+    /// The server, and the chat a request starts when it names none: in the project picked under
+    /// the pill.
     fn launch(&self, cx: &Context<Self>) -> Option<(Arc<Server>, NewThread)> {
         let workspace = self.workspace.upgrade()?;
         let workspace = workspace.read(cx);
-        let project = workspace.settings.active_project_id.clone();
-        let new = self
-            .composer
-            .read(cx)
-            .launch_thread(project, &workspace.settings);
+        let composer = self.composer.read(cx);
+        let project = composer.launch_project(&workspace.settings);
+        let new = composer.launch_thread(project, &workspace.settings);
         Some((Arc::clone(&workspace.server), new))
     }
 
@@ -189,6 +188,20 @@ impl Orchestrator {
         });
         self.focus(window, cx);
         cx.notify();
+    }
+
+    /// The project picked under the pill changed: the route is read again, since a request
+    /// that names no project goes there.
+    pub(super) fn follow_project(&mut self, cx: &mut Context<Self>) {
+        let project = self.launch(cx).and_then(|(_, new)| new.project_id);
+        if project == self.project {
+            return;
+        }
+        self.project = project;
+        if self.answering.is_none() {
+            self.routing = None;
+            self.preview(cx);
+        }
     }
 
     /// Asks the router where the request would go, once the typing has paused. A reading asked
