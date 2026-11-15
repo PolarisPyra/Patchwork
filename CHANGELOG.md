@@ -3,6 +3,29 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.81] - 2026-11-15
+
+**26.11.81** · 6 changes from 1 contributor
+
+- **Attachment thumbnails for more formats.** Attachment chips now show thumbnails for SVG, BMP, TIFF, ICO, and other pictures the app can draw.
+
+<details>
+<summary>Full changelog</summary>
+
+### Changed
+
+- A one-line draft in the chat composer is now the same text size as a longer draft and the rest of the chat. It was larger before. by [PolarisPyra in #137](https://github.com/PolarisPyra/Patchwork/pull/137)
+- Every app icon in Settings → General is now a frosted glass tile with the Patchwork cube in that icon's colours. The icon on the app's own file uses the same style. by [PolarisPyra in #138](https://github.com/PolarisPyra/Patchwork/pull/138)
+- Files and pictures attached to a message now sit in their own pill above the composer, in a chat and on the Orchestrator page. They used to be inside the chat composer and under the Orchestrator's. The chips in that pill no longer have a box around each one. by [PolarisPyra in #140](https://github.com/PolarisPyra/Patchwork/pull/140)
+- Attachment chips now show a thumbnail for SVG, BMP, TIFF, ICO and other pictures the app can draw. Before, only PNG, JPEG, GIF and WEBP had one. by [PolarisPyra in #142](https://github.com/PolarisPyra/Patchwork/pull/142)
+
+### Fixed
+
+- On Linux, the title bar, taskbar and app menu kept showing the icon from when Patchwork was first added to the menu, even after an update or after picking another icon in Settings → General. Patchwork now replaces that icon with the picked one each time it starts, and again when you pick another. by [PolarisPyra in #139](https://github.com/PolarisPyra/Patchwork/pull/139)
+- While a chat was working and the composer was empty, the Stop button sat a little to the left of where Send is. It now takes Send's place exactly. by [PolarisPyra in #141](https://github.com/PolarisPyra/Patchwork/pull/141)
+
+</details>
+
 ## [26.11.80] - 2026-11-15
 
 **26.11.80** · 2 changes from 1 contributor
