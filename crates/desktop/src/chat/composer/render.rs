@@ -445,14 +445,17 @@ impl Render for Composer {
                         .child(self.editor.clone()),
                 )
                 .children(stop)
-                .child(
-                    div()
-                        .flex()
-                        .flex_none()
-                        .items_center()
-                        .children(send)
-                        .children(send_mode),
-                ),
+                // Only with a send button, so an empty box does not push Stop from the end.
+                .when(send.is_some(), |row| {
+                    row.child(
+                        div()
+                            .flex()
+                            .flex_none()
+                            .items_center()
+                            .children(send)
+                            .children(send_mode),
+                    )
+                }),
         );
         let controls = div()
             .id("composer-controls")
