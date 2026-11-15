@@ -3,6 +3,21 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.77] - 2026-11-15
+
+**26.11.77** · 1 change from 1 contributor
+
+- **Orchestrator default project.** Choose a default project for Orchestrator requests that don't specify one
+
+<details>
+<summary>Full changelog</summary>
+
+### Added
+
+- The Orchestrator page has a project menu at the right, under the request box, and a request that doesn't name a project starts its chat in the project picked there instead of in no project. Until you pick one, it uses the project open in the sidebar. by [PolarisPyra in #126](https://github.com/PolarisPyra/Patchwork/pull/126)
+
+</details>
+
 ## [26.11.76] - 2026-11-15
 
 **26.11.76** · 1 change from 1 contributor
