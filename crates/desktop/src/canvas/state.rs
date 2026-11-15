@@ -10,7 +10,6 @@ use patchwork_server::threads::{Message, MessageStatus, TurnTrees};
 use patchwork_server::workspace::{FileMedia, PreviewKind};
 use crate::ui::text_area::{Submitted, TextArea};
 use crate::ui::highlight::{MAX_HIGHLIGHT_LINES, Run, highlight_file, split_lines};
-use crate::ui::theme::theme;
 use crate::workspace::Workspace;
 use super::diff;
 
@@ -81,12 +80,8 @@ impl Canvas {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let t = *theme(cx);
         let note_input = cx.new(|cx| {
             let mut area = TextArea::new("", "Note", cx);
-            area.text_color = t.text;
-            area.placeholder_color = t.text_subtle;
-            area.selection_color = t.accent.opacity(0.3);
             area.enter_newline = true;
             area
         });

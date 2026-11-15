@@ -13,7 +13,7 @@ use gpui::{
 };
 use super::markdown;
 use super::state::{DrawnLine, TextArea};
-use crate::ui::theme::font_mono;
+use crate::ui::theme::{font_mono, theme};
 
 impl Render for TextArea {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -74,7 +74,10 @@ impl Render for TextArea {
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .on_mouse_down(MouseButton::Right, cx.listener(Self::open_menu))
             .w_full()
-            .child(TextElement { area: cx.entity() })
+            .child(TextElement {
+                area: cx.entity(),
+                theme: theme_colors(cx),
+            })
             .children(
                 self.menu
                     .as_ref()
@@ -86,6 +89,16 @@ impl Render for TextArea {
 /// Lays the text out at the field's width and draws it with its selection and caret.
 struct TextElement {
     area: Entity<TextArea>,
+    /// The theme's text, `text_subtle` and selection colors, read as the field is built: a
+    /// part of the window drawn in the other scheme builds it in that one's, and a menu's
+    /// field is laid out after that part is done.
+    theme: [Hsla; 3],
+}
+
+/// The colors a field takes from the theme when its owner sets none.
+fn theme_colors(cx: &App) -> [Hsla; 3] {
+    let t = theme(cx);
+    [t.text, t.text_subtle, t.accent.opacity(0.3)]
 }
 
 struct Prepainted {
@@ -262,13 +275,17 @@ impl Element for TextElement {
         window: &mut Window,
         cx: &mut App,
     ) -> Self::PrepaintState {
+        let [text, subtle, selection] = self.theme;
         let area = self.area.read(cx);
+        let text_color = area.text_color.unwrap_or(text);
+        let placeholder_color = area.placeholder_color.unwrap_or(subtle);
+        let selection_color = area.selection_color.unwrap_or(selection);
         let line_height = window.line_height();
         let empty = area.content.is_empty();
         let (text, color) = if empty {
-            (area.placeholder.to_string(), area.placeholder_color)
+            (area.placeholder.to_string(), placeholder_color)
         } else {
-            (area.shown(), area.text_color)
+            (area.shown(), text_color)
         };
         let marked = area
             .marked
@@ -278,7 +295,7 @@ impl Element for TextElement {
             &text,
             Look {
                 color,
-                mark_color: area.placeholder_color,
+                mark_color: placeholder_color,
                 styles: area.styles().as_deref(),
             },
             (!area.single_line).then_some(bounds.size.width),
@@ -286,8 +303,7 @@ impl Element for TextElement {
             marked.as_ref(),
             window,
         );
-        let selection_color = area.selection_color;
-        let caret_color = area.text_color;
+        let caret_color = text_color;
         let selected = if empty {
             0..0
         } else {

@@ -13,7 +13,7 @@ use gpui::{
 };
 use patchwork_server::backgrounds::{BackgroundImage, ChatBackground};
 
-use patchwork_server::themes::SavedScene;
+use patchwork_server::themes::{SavedScene, Scheme};
 
 use crate::orchestrator::{PreviewFlight, butterfly_backdrop, scene_backdrop};
 use crate::ui::theme::{Theme, applied};
@@ -187,16 +187,31 @@ pub fn preset_fill(id: &str, t: &Theme) -> Option<gpui::Div> {
     )
 }
 
+/// The chat's own background, else the one in Settings.
+fn chat_background(w: &Workspace) -> ChatBackground {
+    w.thread
+        .as_ref()
+        .and_then(|t| t.background.clone())
+        .unwrap_or_else(|| w.settings.chat_background.clone())
+}
+
+/// The scheme the chat's background is drawn for, when it is drawn for one: the chat is then
+/// drawn over it as the Orchestrator page is over its backdrop, so its text reads over it.
+pub fn chat_scheme(w: &Workspace) -> Option<Scheme> {
+    let background = chat_background(w);
+    let scene = match &background {
+        ChatBackground::Scene { id } => w.backgrounds.scenes.iter().find(|s| &s.id == id),
+        _ => None,
+    };
+    background.scheme(scene.map(|saved| &saved.file))
+}
+
 pub fn chat_backdrop(
     w: &mut Workspace,
     t: &Theme,
     cx: &mut Context<Workspace>,
 ) -> Option<AnyElement> {
-    let background = w
-        .thread
-        .as_ref()
-        .and_then(|t| t.background.clone())
-        .unwrap_or_else(|| w.settings.chat_background.clone());
+    let background = chat_background(w);
     let under = match &background {
         ChatBackground::None => return None,
         ChatBackground::Preset { id } => preset_fill(id, t)?,

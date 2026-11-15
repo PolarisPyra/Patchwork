@@ -30,13 +30,9 @@ impl Workspace {
         let Some(current) = current else {
             return;
         };
-        let t = *theme(cx);
         let field = cx.new(|cx| {
             let mut field = TextArea::new("", "Name", cx);
             field.single_line = true;
-            field.text_color = t.text;
-            field.placeholder_color = t.text_subtle;
-            field.selection_color = t.accent.opacity(0.3);
             field.set_text(&current, cx);
             field
         });

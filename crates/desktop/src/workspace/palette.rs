@@ -158,7 +158,6 @@ pub fn items(w: &Workspace) -> Vec<Item> {
 
 impl Palette {
     pub fn new(items: Vec<Item>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let t = *theme(cx);
         let search = cx.new(|cx| {
             let mut field = TextArea::new(
                 "Search actions, tasks and projects…",
@@ -166,9 +165,7 @@ impl Palette {
                 cx,
             );
             field.single_line = true;
-            field.text_color = t.text;
-            field.placeholder_color = crate::ui::theme::input_placeholder();
-            field.selection_color = t.accent.opacity(0.3);
+            field.placeholder_color = Some(crate::ui::theme::input_placeholder());
             field
         });
         cx.subscribe(&search, |this, _, _: &Changed, cx| {

@@ -13,7 +13,6 @@ use patchwork_server::android::{self, HardwareProfile, InstallEvent, SystemImage
 
 use crate::android::state::AndroidPanel;
 use crate::ui::text_area::{Submitted, TextArea};
-use crate::ui::theme::theme;
 
 /// The flow's two steps.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -60,13 +59,10 @@ impl AndroidPanel {
         let Some(sdk) = self.sdk().cloned() else {
             return;
         };
-        let t = *theme(cx);
         let name = cx.new(|cx| {
             let mut field = TextArea::new("", "Device name", cx);
             field.single_line = true;
-            field.text_color = t.text;
-            field.placeholder_color = crate::ui::theme::input_placeholder();
-            field.selection_color = t.accent.opacity(0.3);
+            field.placeholder_color = Some(crate::ui::theme::input_placeholder());
             field
         });
         cx.subscribe_in(&name, window, |this, _, _: &Submitted, _, cx| {

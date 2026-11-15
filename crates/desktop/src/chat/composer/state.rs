@@ -9,7 +9,6 @@ use patchwork_server::provider::{AgentKind, ModelOption};
 use patchwork_server::settings::Settings;
 use patchwork_server::threads::{AccessMode, Attachment, NewThread};
 use crate::ui::text_area::{Arrow, Changed, Edge, Submitted, Tabbed, TextArea};
-use crate::ui::theme::theme;
 use crate::workspace::Workspace;
 use super::menus::{Menu, Pick, Roles, efforts};
 use super::model_picker::{ModelPicker, ordered};
@@ -95,12 +94,8 @@ impl Composer {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let t = *theme(cx);
         let editor = cx.new(|cx| {
             let mut area = TextArea::new("Reply or describe the next change…", "Message", cx);
-            area.text_color = t.text;
-            area.placeholder_color = t.text_subtle;
-            area.selection_color = t.accent.opacity(0.3);
             area.markdown = true;
             area
         });

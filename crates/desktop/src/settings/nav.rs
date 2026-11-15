@@ -268,21 +268,14 @@ impl SettingsDialog {
         window.focus(&row, cx);
     }
 
-    fn nav_search(
-        &mut self,
-        t: &Theme,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Entity<TextArea> {
+    fn nav_search(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Entity<TextArea> {
         if let Some(search) = &self.search {
             return search.clone();
         }
         let search = cx.new(|cx| {
             let mut area = TextArea::new("Search", "Search settings", cx);
             area.single_line = true;
-            area.text_color = t.text;
-            area.placeholder_color = input_placeholder();
-            area.selection_color = t.accent.opacity(0.3);
+            area.placeholder_color = Some(input_placeholder());
             area
         });
         cx.subscribe(&search, |d, _, _: &Changed, cx| {
@@ -306,7 +299,7 @@ impl SettingsDialog {
     /// The list: the search, then its results, or the entries with the open one's panes.
     pub(super) fn nav(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let t = *theme(cx);
-        let search = self.nav_search(&t, window, cx);
+        let search = self.nav_search(window, cx);
         let focused = search.read(cx).focus_handle(cx).is_focused(window);
         let field = div()
             .flex()

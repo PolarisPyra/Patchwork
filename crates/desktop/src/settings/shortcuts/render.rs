@@ -126,9 +126,7 @@ pub fn render(
         let search = cx.new(|cx| {
             let mut area = TextArea::new("Search by name or key", "Search shortcuts", cx);
             area.single_line = true;
-            area.text_color = t.text;
-            area.placeholder_color = crate::ui::theme::input_placeholder();
-            area.selection_color = t.accent.opacity(0.3);
+            area.placeholder_color = Some(crate::ui::theme::input_placeholder());
             area
         });
         cx.subscribe(&search, |_, _, _: &Changed, cx| cx.notify())

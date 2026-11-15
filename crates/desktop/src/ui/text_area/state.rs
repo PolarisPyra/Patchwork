@@ -150,9 +150,12 @@ pub struct TextArea {
     pub(super) bounds: Option<Bounds<Pixels>>,
     pub(super) line_height: Pixels,
     pub(super) selecting: bool,
-    pub text_color: Hsla,
-    pub placeholder_color: Hsla,
-    pub selection_color: Hsla,
+    /// The colors its owner draws it in. Each one left unset is the theme's, read as it is
+    /// drawn, so the field follows the theme when it changes: the text color, `text_subtle`, and
+    /// the accent at 30%.
+    pub text_color: Option<Hsla>,
+    pub placeholder_color: Option<Hsla>,
+    pub selection_color: Option<Hsla>,
     /// One line, as a search field: Enter submits, and Up and Down are the owner's.
     pub single_line: bool,
     /// Enter starts a new line and Ctrl+Enter submits, as the commit message box does.
@@ -205,9 +208,9 @@ impl TextArea {
             bounds: None,
             line_height: px(20.),
             selecting: false,
-            text_color: gpui::white(),
-            placeholder_color: gpui::white(),
-            selection_color: gpui::white(),
+            text_color: None,
+            placeholder_color: None,
+            selection_color: None,
             single_line: false,
             enter_newline: false,
             masked: false,

@@ -2,10 +2,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::cell::Cell;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, PoisonError, RwLock};
 
-use gpui::{App, Global, Hsla, Rgba, SharedString, WindowAppearance};
+use gpui::{App, Global, Hsla, Rgba, SharedString, WindowAppearance, hsla};
 use patchwork_server::themes::{Applied, Color, Paint, Palette, Scheme, Syntax, ThemeFile};
 
 /// The colors one of `theme.css`'s three palettes gives each token.
@@ -288,16 +289,6 @@ impl Theme {
 
     /// Draws buttons, links and what is selected in `accent`, in place of the palette's own.
     fn accented(&mut self, Color(accent): Color) {
-        let code = |color: Hsla| {
-            let Rgba { r, g, b, .. } = color.into();
-            #[expect(
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                reason = "a channel is between zero and one"
-            )]
-            let [r, g, b] = [r, g, b].map(|c| (c.clamp(0., 1.) * 255.).round() as u32);
-            r << 16 | g << 8 | b
-        };
         let (surface, text) = (code(self.bg_app), code(self.text));
         let lit = gpui::rgb(accent);
         let bright = 0.299 * lit.r + 0.587 * lit.g + 0.114 * lit.b > 0.6;
@@ -336,13 +327,101 @@ impl Theme {
             Palette::File(file) => Self::from_file(file),
         }
     }
+
+    /// `base` drawn over a backdrop as the Orchestrator page is: its text in that page's ink and
+    /// its surfaces in its glass, light over a `dark` backdrop and dark over a light one. The
+    /// accent stays `base`'s; the status and code colors are those of the built-in palette of
+    /// that scheme, which read over it.
+    fn glazed(base: &Self, dark: bool) -> Self {
+        let mut t = if dark { Self::dark() } else { Self::light() };
+        let ink = |alpha| ink_over(dark, alpha);
+        let glass = |alpha| glass_over(dark, alpha);
+        t.text = ink(1.);
+        t.text_muted = ink(0.6);
+        t.text_subtle = ink(0.45);
+        t.bg_app = glass(1.);
+        t.bg_editor = glass(1.);
+        t.bg_panel = glass(0.8);
+        t.bg_elevated = glass(0.96);
+        t.bg_input = glass(0.62);
+        t.bg_hover = ink(0.08);
+        t.tree_hover = ink(0.06);
+        t.bg_selected_muted = ink(0.10);
+        t.bubble = ink(0.08);
+        t.border = ink(0.10);
+        t.border_strong = ink(0.14);
+        t.accented(Color(code(base.accent)));
+        t
+    }
+}
+
+/// A color as `0xRRGGBB`, its alpha dropped.
+fn code(color: Hsla) -> u32 {
+    let Rgba { r, g, b, .. } = color.into();
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a channel is between zero and one"
+    )]
+    let [r, g, b] = [r, g, b].map(|c| (c.clamp(0., 1.) * 255.).round() as u32);
+    r << 16 | g << 8 | b
+}
+
+/// Text over a backdrop, at this strength: light over a `dark` one, dark over a light one. The
+/// Orchestrator page and a chat over a background draw their text in it.
+pub fn ink_over(dark: bool, alpha: f32) -> Hsla {
+    if dark {
+        hsla(0.6, 0.25, 0.96, alpha)
+    } else {
+        hsla(0.6, 0.30, 0.12, alpha)
+    }
+}
+
+/// The glass over a backdrop, this opaque: dark over a `dark` one, pale over a light one.
+pub fn glass_over(dark: bool, alpha: f32) -> Hsla {
+    if dark {
+        hsla(0.64, 0.30, 0.05, alpha)
+    } else {
+        hsla(0.6, 0.30, 0.985, alpha)
+    }
 }
 
 impl Global for Theme {}
 
-/// The theme in use.
+/// The theme in use: the window's, or the one over a backdrop while a part drawn over one is.
 pub fn theme(cx: &App) -> &Theme {
-    cx.global::<Theme>()
+    let base = cx.global::<Theme>();
+    match (SCOPE.get(), cx.try_global::<Schemed>()) {
+        (Some(scheme), Some(schemed)) => &schemed.0[usize::from(scheme == Scheme::Dark)],
+        _ => base,
+    }
+}
+
+/// The window's theme over a light backdrop and over a dark one, as the Orchestrator page draws
+/// over its backdrop: for a part of the window drawn over one.
+struct Schemed(Box<[Theme; 2]>);
+
+impl Global for Schemed {}
+
+thread_local! {
+    /// The scheme of the backdrop a part of the window being drawn is over, when it is over one.
+    static SCOPE: Cell<Option<Scheme>> = const { Cell::new(None) };
+}
+
+/// While it lives, [`theme`] returns the theme over a backdrop of `scheme`; dropped, it returns what it did.
+#[must_use]
+pub struct InScheme(Option<Scheme>);
+
+impl InScheme {
+    pub fn enter(scheme: Scheme) -> Self {
+        Self(SCOPE.replace(Some(scheme)))
+    }
+}
+
+impl Drop for InScheme {
+    fn drop(&mut self) {
+        SCOPE.set(self.0);
+    }
 }
 
 /// What the theme settings came to, kept for the Orchestrator's backdrop.
@@ -399,20 +478,29 @@ pub fn apply(mut applied: Applied, appearance: WindowAppearance, cx: &mut App) {
     DENSITY.store(roomy.to_bits(), Ordering::Relaxed);
     let corner = file.and_then(|f| f.radius).unwrap_or(RADIUS);
     CORNER.store(corner.clamp(0., MAX_RADIUS).to_bits(), Ordering::Relaxed);
-    let code = if theme.is_dark() {
-        applied.code_dark
-    } else {
-        applied.code_light
+    let finish = |theme: &mut Theme| {
+        let code = if theme.is_dark() {
+            applied.code_dark
+        } else {
+            applied.code_light
+        };
+        if let Some(syntax) = code {
+            theme.highlight(syntax);
+        }
+        if let Some(accent) = applied.accent {
+            theme.accented(accent);
+        }
     };
-    if let Some(syntax) = code {
-        theme.highlight(syntax);
-    }
-    if let Some(accent) = applied.accent {
-        theme.accented(accent);
-    }
+    finish(&mut theme);
+    let schemed = [false, true].map(|dark| {
+        let mut glazed = Theme::glazed(&theme, dark);
+        finish(&mut glazed);
+        glazed
+    });
     TEXT_SCALE.store(applied.text_size.scale().to_bits(), Ordering::Relaxed);
     cx.set_reduce_motion(applied.reduce_motion);
     cx.set_global(theme);
+    cx.set_global(Schemed(Box::new(schemed)));
     cx.set_global(Look(Arc::new(applied)));
 }
 
