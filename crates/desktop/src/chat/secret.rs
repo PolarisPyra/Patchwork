@@ -12,7 +12,7 @@ use patchwork_server::secrets::SecretStatus;
 use patchwork_server::threads::{Approval, ApprovalStatus};
 
 use crate::ui::text_area::{Changed, Submitted, TextArea};
-use crate::ui::theme::{font_mono, fs_sm, radius, radius_sm, Theme, theme};
+use crate::ui::theme::{font_mono, fs_sm, radius, radius_sm, Theme};
 use crate::ui::{BtnKind, btn, icon};
 use crate::workspace::Workspace;
 
@@ -58,7 +58,6 @@ impl Workspace {
         self.secrets
             .fields
             .retain(|id, _| pending.iter().any(|(p, _, _)| p == id));
-        let t = *theme(cx);
         for (id, title, placeholder) in pending {
             if self.secrets.fields.contains_key(&id) {
                 continue;
@@ -67,9 +66,7 @@ impl Workspace {
                 let mut field = TextArea::new(placeholder.unwrap_or_default(), title, cx);
                 field.single_line = true;
                 field.masked = true;
-                field.text_color = t.text;
-                field.placeholder_color = crate::ui::theme::input_placeholder();
-                field.selection_color = t.accent.opacity(0.3);
+                field.placeholder_color = Some(crate::ui::theme::input_placeholder());
                 field
             });
             let key = id.clone();

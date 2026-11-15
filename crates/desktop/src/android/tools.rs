@@ -16,7 +16,7 @@ use patchwork_server::android::{Device, NetworkSpeed, StateAction, WifiDevice};
 use super::state::AndroidPanel;
 use crate::ui::menu::MenuItem;
 use crate::ui::text_area::{Submitted, TextArea};
-use crate::ui::theme::{font_mono, fs_sm, radius, Theme, theme};
+use crate::ui::theme::{font_mono, fs_sm, radius, Theme};
 use crate::ui::{BtnKind, btn, button, icon, icon_button, input_box, spinner, tooltip};
 
 /// How often the network is asked which phones announce themselves while pairing is open.
@@ -52,13 +52,10 @@ fn field(
     label: &'static str,
     cx: &mut Context<AndroidPanel>,
 ) -> Entity<TextArea> {
-    let t = *theme(cx);
     let field = cx.new(|cx| {
         let mut field = TextArea::new(placeholder, label, cx);
         field.single_line = true;
-        field.text_color = t.text;
-        field.placeholder_color = crate::ui::theme::input_placeholder();
-        field.selection_color = t.accent.opacity(0.3);
+        field.placeholder_color = Some(crate::ui::theme::input_placeholder());
         field
     });
     cx.subscribe(&field, |this, _, _: &Submitted, cx| this.submit_sheet(cx))

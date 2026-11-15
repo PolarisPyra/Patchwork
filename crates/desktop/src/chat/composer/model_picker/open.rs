@@ -85,13 +85,9 @@ impl Composer {
             .iter()
             .find(|m| m.id == model)
             .is_some_and(|m| m.is_legacy && !favorites.contains(&row_key(agent, m)));
-        let t = *crate::ui::theme::theme(cx);
         let search = cx.new(|cx| {
             let mut field = TextArea::new("Search models...", "Search models", cx);
             field.single_line = true;
-            field.text_color = t.text;
-            field.placeholder_color = t.text_subtle;
-            field.selection_color = t.accent.opacity(0.3);
             field
         });
         cx.subscribe_in(

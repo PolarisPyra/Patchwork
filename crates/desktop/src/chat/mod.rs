@@ -21,6 +21,7 @@ pub mod rail;
 mod reply;
 pub mod resume;
 pub mod review;
+mod scheme;
 pub mod secret;
 pub mod subagents;
 pub mod timeline;

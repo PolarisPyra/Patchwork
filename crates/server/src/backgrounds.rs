@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 
 use crate::logging::THEME_LOG;
 use crate::settings::LogLevel;
-use crate::themes::Scheme;
+use crate::themes::{SceneFile, Scheme};
 use crate::{Error, Server};
 
 /// What shows behind a chat's messages.
@@ -42,6 +42,22 @@ pub(crate) fn preset_scheme(id: &str) -> Option<Scheme> {
         "sky" | "peach" | "mint" | "lavender" => Some(Scheme::Light),
         "dusk" | "forest" => Some(Scheme::Dark),
         _ => None,
+    }
+}
+
+impl ChatBackground {
+    /// Whether the text over it is that of a light window or a dark one. `scene` is the animated
+    /// background it names, when it names one. None for one drawn on the window's own color, and
+    /// for a picture, which the window's color already dims.
+    #[must_use]
+    pub fn scheme(&self, scene: Option<&SceneFile>) -> Option<Scheme> {
+        match self {
+            Self::None | Self::Image { .. } => None,
+            Self::Preset { id } => preset_scheme(id),
+            // The butterfly is drawn on its own night sky, whatever the colors.
+            Self::Butterfly => Some(Scheme::Dark),
+            Self::Scene { .. } => scene.map(|scene| scene.scheme),
+        }
     }
 }
 

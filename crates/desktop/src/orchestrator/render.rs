@@ -22,7 +22,7 @@ use super::state::Orchestrator;
 use crate::chat::composer::Composer;
 use super::{background, scene};
 use crate::ui::backdrop::preset_fill;
-use crate::ui::theme::{font_ui, fs_lg, fs_sm, radius_lg, applied, theme};
+use crate::ui::theme::{applied, font_ui, fs_lg, fs_sm, glass_over, ink_over, radius_lg, theme};
 use crate::ui::pill::{PILL_PAD, SEND, pill, pill_chip, send_button};
 use crate::ui::{agent_logo, button, display_title, icon};
 
@@ -42,20 +42,12 @@ fn light() -> bool {
 
 /// The page's text color, at this strength.
 pub(super) fn ink(alpha: f32) -> Hsla {
-    if light() {
-        hsla(0.6, 0.30, 0.12, alpha)
-    } else {
-        hsla(0.6, 0.25, 0.96, alpha)
-    }
+    ink_over(!light(), alpha)
 }
 
 /// The page's glass, this opaque: dark over a dark backdrop, pale over a light one.
 pub(super) fn glass(alpha: f32) -> Hsla {
-    if light() {
-        hsla(0.6, 0.30, 0.985, alpha)
-    } else {
-        hsla(0.64, 0.30, 0.05, alpha)
-    }
+    glass_over(!light(), alpha)
 }
 
 /// The color of something waiting on the person: the one warm color on the page.
@@ -497,8 +489,8 @@ impl Render for Orchestrator {
         LIGHT.store(!dark, Ordering::Relaxed);
         // The field keeps its own colors, so they follow the backdrop here.
         self.field.update(cx, |field, _| {
-            field.text_color = ink(1.);
-            field.placeholder_color = ink(0.45);
+            field.text_color = Some(ink(1.));
+            field.placeholder_color = Some(ink(0.45));
         });
         let empty = self.field.read(cx).content.trim().is_empty();
         let asked = self.asked().map(|(_, waiting)| waiting.ask.kind.clone());

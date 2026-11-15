@@ -104,9 +104,7 @@ impl SettingsDialog {
                 let mut area = TextArea::new(placeholder, label, cx);
                 area.single_line = !kind.lines;
                 area.masked = kind.masked;
-                area.text_color = t.text;
-                area.placeholder_color = crate::ui::theme::input_placeholder();
-                area.selection_color = t.accent.opacity(0.3);
+                area.placeholder_color = Some(crate::ui::theme::input_placeholder());
                 area.set_text(value, cx);
                 area
             });

@@ -11,7 +11,6 @@ use patchwork_server::provider::{AgentKind, AgentStatus};
 use patchwork_server::settings::Settings;
 use patchwork_server::system::browse;
 use crate::ui::text_area::{Changed, Submitted, TextArea};
-use crate::ui::theme::theme;
 
 /// The agent CLIs setup offers, in the order it lists them (`CLI_KINDS`).
 pub(super) const AGENT_KINDS: [AgentKind; 4] = [
@@ -147,13 +146,10 @@ impl EventEmitter<OnboardingEvent> for Onboarding {}
 
 impl Onboarding {
     pub fn new(server: Arc<Server>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let t = *theme(cx);
         let name = cx.new(|cx| {
             let mut field = TextArea::new("my-project", "Project name", cx);
             field.single_line = true;
-            field.text_color = t.text;
-            field.placeholder_color = crate::ui::theme::input_placeholder();
-            field.selection_color = t.accent.opacity(0.3);
+            field.placeholder_color = Some(crate::ui::theme::input_placeholder());
             field
         });
         cx.subscribe(&name, |_, _, _: &Changed, cx| cx.notify())

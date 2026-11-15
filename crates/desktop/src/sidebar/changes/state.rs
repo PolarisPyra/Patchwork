@@ -11,7 +11,6 @@ use patchwork_server::workspace::{GitCommit, GitSyncState, PullRequest};
 
 use crate::ui::text_area::{Changed, Submitted, TextArea};
 use crate::ui::menu::Menu;
-use crate::ui::theme::theme;
 use crate::workspace::Workspace;
 use super::rows::reply_files;
 
@@ -153,12 +152,8 @@ impl ChangesView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let t = *theme(cx);
         let message = cx.new(|cx| {
             let mut area = TextArea::new("Message (Ctrl+Enter to commit)", "Commit message", cx);
-            area.text_color = t.text;
-            area.placeholder_color = t.text_subtle;
-            area.selection_color = t.accent.opacity(0.3);
             area.enter_newline = true;
             area
         });

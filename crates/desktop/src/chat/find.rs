@@ -17,7 +17,7 @@ use patchwork_server::threads::{Message, Role as MessageRole, Thread};
 use crate::ui::markdown::{FindIn, find_in};
 use crate::ui::text_area::{Changed, Submitted, SubmittedBack, TextArea};
 use crate::chat::timeline::{Step, steps_of};
-use crate::ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme, theme};
+use crate::ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
 use crate::ui::{button, icon};
 use crate::workspace::Workspace;
 
@@ -97,13 +97,10 @@ impl Workspace {
         let field = if let Some(field) = &self.find.field {
             field.clone()
         } else {
-            let t = *theme(cx);
             let field = cx.new(|cx| {
                 let mut field = TextArea::new("Find", "Find in chat", cx);
                 field.single_line = true;
-                field.text_color = t.text;
-                field.placeholder_color = crate::ui::theme::input_placeholder();
-                field.selection_color = t.accent.opacity(0.3);
+                field.placeholder_color = Some(crate::ui::theme::input_placeholder());
                 field
             });
             // The newest match first, since a chat is read from its end.

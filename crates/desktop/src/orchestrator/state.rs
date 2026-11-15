@@ -121,7 +121,7 @@ impl Orchestrator {
             let mut field = TextArea::new(PLACEHOLDER, "Request", cx);
             field.single_line = true;
             // The page's render sets the text's colors, which follow the backdrop.
-            field.selection_color = hsla(0.55, 0.9, 0.65, 0.35);
+            field.selection_color = Some(hsla(0.55, 0.9, 0.65, 0.35));
             field
         });
         let subscriptions = [

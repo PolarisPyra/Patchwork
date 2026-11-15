@@ -20,7 +20,6 @@ use super::screen::DeviceScreen;
 use super::tools::Sheet;
 use crate::ui::menu::Menu;
 use crate::ui::text_area::{Submitted, TextArea};
-use crate::ui::theme::theme;
 use crate::workspace::Workspace;
 
 /// How often the devices are read again while the panel is open: often enough that a phone
@@ -112,13 +111,10 @@ impl AndroidPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let t = *theme(cx);
         let sdk_field = cx.new(|cx| {
             let mut field = TextArea::new("Android SDK folder", "Android SDK folder", cx);
             field.single_line = true;
-            field.text_color = t.text;
-            field.placeholder_color = crate::ui::theme::input_placeholder();
-            field.selection_color = t.accent.opacity(0.3);
+            field.placeholder_color = Some(crate::ui::theme::input_placeholder());
             field
         });
         cx.subscribe(&sdk_field, |this, _, _: &Submitted, cx| this.save_sdk(cx))

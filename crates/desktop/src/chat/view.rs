@@ -4,7 +4,7 @@
 
 use gpui::{Div, FontWeight, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_server::threads::{MessageStatus, Thread};
-use crate::ui::theme::{fs_sm, fs_xl, fs_xs, radius, radius_sm, Theme, theme};
+use crate::ui::theme::{InScheme, Theme, fs_sm, fs_xl, fs_xs, radius, radius_sm, theme};
 use crate::ui::{agent_logo, button, display_title, format_tokens, icon, icon_button, tooltip};
 use crate::workspace::Workspace;
 use super::transcript::{sync_transcript, transcript};
@@ -18,6 +18,7 @@ use super::plan;
 use super::prompts;
 use super::queue;
 use super::resume;
+use super::scheme::in_scheme;
 
 /// How long a chat just chosen waits for the files under its last replies before it shows anyway.
 pub const OPEN_HOLD: std::time::Duration = std::time::Duration::from_millis(250);
@@ -36,6 +37,9 @@ pub fn render(
     w.load_checkpoints(cx);
     w.load_image_sizes(cx);
     w.sync_chat_draft(cx);
+    // Over a background drawn for a scheme, the chat is drawn as the Orchestrator page is.
+    let scheme = backdrop::chat_scheme(w);
+    let _scope = scheme.map(InScheme::enter);
     let t = *theme(cx);
     // A reply seen streaming keeps its steps open once it settles.
     if let Some(thread) = &w.thread {
@@ -82,7 +86,7 @@ pub fn render(
     let backdrop = backdrop::chat_backdrop(w, &t, cx);
     let parent = subagent_footer(w, &t, cx);
     w.reveal_find(window, cx);
-    div()
+    let chat = div()
         .id("chat")
         .role(Role::Main)
         .aria_label("Chat")
@@ -93,6 +97,7 @@ pub fn render(
         .min_w_0()
         .min_h_0()
         .bg(t.bg_editor)
+        .text_color(t.text)
         .children(backdrop)
         .when(is_new, gpui::Styled::justify_center)
         .child(body)
@@ -116,7 +121,11 @@ pub fn render(
                     .child(w.composer.clone()),
             )
         })
-        .when(!is_new, |c| c.child(floating(w, &t, window, cx)))
+        .when(!is_new, |c| c.child(floating(w, &t, window, cx)));
+    match scheme {
+        Some(scheme) => in_scheme(scheme, chat).into_any_element(),
+        None => chat.into_any_element(),
+    }
 }
 
 /// A subagent's thread is its transcript; it takes no messages. Nor does a chat looked in on from
