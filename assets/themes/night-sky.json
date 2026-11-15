@@ -1,0 +1,11 @@
+{
+  "name": "Night Sky",
+  "scheme": "dark",
+  "backdrop": "night-sky",
+  "colors": {
+    "surface": "#0b0e1a",
+    "text": "#e8ecfb",
+    "muted": "#8d96b8",
+    "accent": "#7f9cff"
+  }
+}

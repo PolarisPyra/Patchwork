@@ -40,6 +40,10 @@ pub(super) const THEMES: Shelf<ThemeFile> = Shelf {
             include_str!("../../../../assets/themes/butterfly-night.json"),
         ),
         (
+            "night-sky",
+            include_str!("../../../../assets/themes/night-sky.json"),
+        ),
+        (
             "night-reef",
             include_str!("../../../../assets/themes/night-reef.json"),
         ),
@@ -65,6 +69,10 @@ pub(super) const SCENES: Shelf<SceneFile> = Shelf {
     noun: "background",
     folder: "scenes",
     presets: &[
+        (
+            "night-sky",
+            include_str!("../../../../assets/scenes/night-sky.json"),
+        ),
         (
             "night-reef",
             include_str!("../../../../assets/scenes/night-reef.json"),
