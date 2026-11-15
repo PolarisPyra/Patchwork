@@ -378,8 +378,13 @@ impl TextArea {
     }
 
     pub(super) fn copy(&mut self, _: &Copy, _: &mut Window, cx: &mut Context<Self>) {
+        // With nothing selected here, Ctrl+C copies what is marked in the chat.
+        if self.selected.is_empty() {
+            cx.propagate();
+            return;
+        }
         // A masked field's text stays in it, as its menu says.
-        if !self.selected.is_empty() && !self.masked {
+        if !self.masked {
             cx.write_to_clipboard(ClipboardItem::new_string(
                 self.content[self.selected.clone()].to_string(),
             ));

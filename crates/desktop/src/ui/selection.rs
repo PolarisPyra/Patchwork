@@ -31,13 +31,30 @@ pub fn bindings() -> Vec<KeyBinding> {
     vec![KeyBinding::new("ctrl-c", CopySelection, Some("Workspace"))]
 }
 
-/// One text as it was last drawn.
+/// One text drawn this frame, where a pointer can reach it.
 struct Drawn {
     id: u64,
     layout: TextLayout,
-    prefix: Option<SharedString>,
     /// How far left of the text its prefix is drawn.
     gutter: Pixels,
+    /// The part of the text not clipped by the list it scrolls in.
+    visible: Bounds<Pixels>,
+}
+
+/// Where a text sits in reading order: the list row it is in, then how far down and across that
+/// row. A text outside a list uses row 0 and its place on screen.
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
+struct Place {
+    row: usize,
+    y: f32,
+    x: f32,
+}
+
+/// A text seen since the selection began, kept after it scrolls away so a mark can run past it.
+struct Known {
+    place: Place,
+    layout: TextLayout,
+    prefix: Option<SharedString>,
     after_tab: bool,
 }
 
@@ -46,6 +63,8 @@ struct Drawn {
 struct Selection {
     /// The texts drawn since the chat was last laid out, which is every one on screen.
     drawn: Vec<Drawn>,
+    /// Every text seen since the selection began, by id, on screen or not.
+    known: HashMap<u64, Known>,
     /// The marked part of each text, by the text's id.
     marked: HashMap<u64, Range<usize>>,
     /// The last text marked, top to bottom: the only one whose highlight stops where its mark does.
@@ -257,14 +276,28 @@ impl Element for Selectable {
         };
         window.set_cursor_style(cursor, prepaint);
         let selection = cx.default_global::<Selection>();
+        let text_bounds = layout.bounds();
         selection.drawn.retain(|drawn| drawn.id != self.id);
         selection.drawn.push(Drawn {
             id: self.id,
             layout: layout.clone(),
-            prefix: self.prefix.clone(),
             gutter: self.gutter,
-            after_tab: self.after_tab,
+            visible: text_bounds.intersect(&window.content_mask().bounds),
         });
+        // Its place on screen, until the list it is in, if any, gives its row.
+        selection.known.insert(
+            self.id,
+            Known {
+                place: Place {
+                    row: 0,
+                    y: text_bounds.top().into(),
+                    x: text_bounds.left().into(),
+                },
+                layout: layout.clone(),
+                prefix: self.prefix.clone(),
+                after_tab: self.after_tab,
+            },
+        );
 
         let (id, hitbox) = (self.id, prepaint.clone());
         let (move_layout, move_links, move_hitbox) =
@@ -290,6 +323,9 @@ impl Element for Selectable {
                     }
                     selection.anchor = None;
                     selection.dragging = false;
+                    // A new selection starts from the texts on screen.
+                    let Selection { drawn, known, .. } = &mut *selection;
+                    known.retain(|id, _| drawn.iter().any(|drawn| drawn.id == *id));
                     if !selection.marked.is_empty() {
                         selection.marked.clear();
                         selection.text.clear();
@@ -336,17 +372,24 @@ impl Element for Selectable {
             {
                 window.refresh();
             }
+            // The drag follows the pointer in the capture phase, so nothing drawn over the text
+            // can stop it.
             let selection = cx.default_global::<Selection>();
-            if phase != DispatchPhase::Bubble
+            if phase != DispatchPhase::Capture
                 || !selection.dragging
-                || event.pressed_button != Some(MouseButton::Left)
                 || selection.seen == Some(event.position)
             {
                 return;
             }
+            // The button was let go where the window did not hear it.
+            if event.pressed_button != Some(MouseButton::Left) {
+                selection.dragging = false;
+                return;
+            }
             selection.seen = Some(event.position);
-            selection.drag_to(event.position);
-            window.refresh();
+            if selection.drag_to(event.position) {
+                window.refresh();
+            }
         });
         window.on_mouse_event(move |event: &MouseUpEvent, phase, window, cx| {
             if event.button != MouseButton::Left {
@@ -520,77 +563,135 @@ impl Selection {
             .collect()
     }
 
-    /// Marks everything from where the drag began to `position`, text by text, top to bottom.
-    fn drag_to(&mut self, position: Point<Pixels>) {
-        let Some((anchor, anchor_at)) = self.anchor else {
-            return;
-        };
-        self.drawn.sort_by(|a, b| {
-            let (a, b) = (a.layout.bounds(), b.layout.bounds());
-            (a.top(), a.left())
-                .partial_cmp(&(b.top(), b.left()))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        let Some(from) = self.drawn.iter().position(|drawn| drawn.id == anchor) else {
-            return;
-        };
-        // The text under the pointer, or else the last one that starts above it.
-        let to = self
+    /// Gives each text drawn in `list` its row there, so its place holds as the list scrolls.
+    fn place_rows(&mut self, list: &ListState) {
+        let Some(lowest) = self
             .drawn
             .iter()
-            .position(|drawn| drawn.layout.bounds().contains(&position))
-            .or_else(|| {
-                self.drawn
-                    .iter()
-                    .rposition(|drawn| drawn.layout.bounds().top() <= position.y)
-            });
-        let (to, to_at) = match to {
-            Some(to) => {
-                let layout = &self.drawn[to].layout;
-                let bounds = layout.bounds();
-                let at = if position.y >= bounds.bottom() {
-                    layout.len()
-                } else {
-                    // Beside the text, the nearest place on the pointer's line.
-                    let x = position
-                        .x
-                        .max(bounds.left())
-                        .min(bounds.right() - gpui::px(1.));
-                    match layout.index_for_position(point(x, position.y)) {
-                        Ok(at) | Err(at) => at,
-                    }
-                };
-                (to, at)
+            .map(|drawn| drawn.layout.bounds().top())
+            .reduce(Pixels::max)
+        else {
+            return;
+        };
+        let mut rows = Vec::new();
+        for row in list.logical_scroll_top().item_ix..list.item_count() {
+            let Some(bounds) = list.bounds_for_item(row) else {
+                break;
+            };
+            if bounds.top() > lowest {
+                break;
             }
-            // Above every text.
-            None => (0, 0),
-        };
-        let ((first, first_at), (last, last_at)) = if (from, anchor_at) <= (to, to_at) {
-            ((from, anchor_at), (to, to_at))
+            rows.push((row, bounds));
+        }
+        for drawn in &self.drawn {
+            let text = drawn.layout.bounds();
+            if let Some(&(row, bounds)) = rows
+                .iter()
+                .find(|(_, bounds)| bounds.top() <= text.top() && text.top() < bounds.bottom())
+                && let Some(known) = self.known.get_mut(&drawn.id)
+            {
+                known.place = Place {
+                    row,
+                    y: (text.top() - bounds.top()).into(),
+                    x: text.left().into(),
+                };
+            }
+        }
+    }
+
+    /// The text at `position` and the place in it, among the texts in view: the one under the
+    /// pointer, or else the last one that starts above it, or else the first.
+    fn hit(&self, position: Point<Pixels>) -> Option<(u64, usize)> {
+        let mut shown: Vec<&Drawn> = self
+            .drawn
+            .iter()
+            .filter(|drawn| !drawn.visible.is_empty())
+            .collect();
+        shown.sort_by(|a, b| {
+            (a.visible.top(), a.visible.left())
+                .partial_cmp(&(b.visible.top(), b.visible.left()))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let drawn = shown
+            .iter()
+            .find(|drawn| drawn.visible.contains(&position))
+            .or_else(|| {
+                shown
+                    .iter()
+                    .rev()
+                    .find(|drawn| drawn.visible.top() <= position.y)
+            })
+            .or_else(|| shown.first())?;
+        let (layout, bounds, visible) = (&drawn.layout, drawn.layout.bounds(), drawn.visible);
+        // Past the end of a text shown whole, its end; before its start, its start. Past the part
+        // of a text the list cuts off, the nearest line still in view.
+        let at = if position.y >= visible.bottom() && visible.bottom() >= bounds.bottom() {
+            layout.len()
+        } else if position.y < visible.top() && visible.top() <= bounds.top() {
+            0
         } else {
-            ((to, to_at), (from, anchor_at))
+            let y = position.y.max(visible.top()).min(visible.bottom() - px(1.));
+            let x = position.x.max(bounds.left()).min(bounds.right() - px(1.));
+            match layout.index_for_position(point(x, y)) {
+                Ok(at) | Err(at) => at,
+            }
         };
-        self.marked.clear();
+        Some((drawn.id, at))
+    }
+
+    /// Marks everything from where the drag began to `position`, text by text in reading order,
+    /// including texts scrolled out of view. Returns whether what is marked changed.
+    fn drag_to(&mut self, position: Point<Pixels>) -> bool {
+        let Some((anchor, anchor_at)) = self.anchor else {
+            return false;
+        };
+        let Some((to, to_at)) = self.hit(position) else {
+            return false;
+        };
+        let (Some(from_place), Some(to_place)) = (
+            self.known.get(&anchor).map(|known| known.place),
+            self.known.get(&to).map(|known| known.place),
+        ) else {
+            return false;
+        };
+        let ((first, first_place, first_at), (last, last_place, last_at)) =
+            if (from_place, anchor_at) <= (to_place, to_at) {
+                ((anchor, from_place, anchor_at), (to, to_place, to_at))
+            } else {
+                ((to, to_place, to_at), (anchor, from_place, anchor_at))
+            };
+        let mut between: Vec<(Place, u64)> = self
+            .known
+            .iter()
+            .filter(|(_, known)| first_place <= known.place && known.place <= last_place)
+            .map(|(id, known)| (known.place, *id))
+            .collect();
+        between.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+        let before = std::mem::take(&mut self.marked);
         self.text.clear();
-        for (i, drawn) in self.drawn.iter().enumerate().take(last + 1).skip(first) {
-            let text = drawn.layout.text();
-            let start = if i == first { first_at } else { 0 };
-            let end = if i == last { last_at } else { text.len() };
+        for (_, id) in between {
+            let Some(known) = self.known.get(&id) else {
+                continue;
+            };
+            let text = known.layout.text();
+            let start = if id == first { first_at } else { 0 };
+            let end = if id == last { last_at } else { text.len() };
             let (start, end) = (start.min(text.len()), end.min(text.len()));
             if start < end && text.is_char_boundary(start) && text.is_char_boundary(end) {
                 if !self.marked.is_empty() {
-                    self.text.push(if drawn.after_tab { '\t' } else { '\n' });
+                    self.text.push(if known.after_tab { '\t' } else { '\n' });
                 }
                 if start == 0
-                    && let Some(prefix) = &drawn.prefix
+                    && let Some(prefix) = &known.prefix
                 {
                     self.text.push_str(prefix);
                 }
                 self.text.push_str(&text[start..end]);
-                self.marked.insert(drawn.id, start..end);
-                self.last = Some(drawn.id);
+                self.marked.insert(id, start..end);
+                self.last = Some(id);
             }
         }
+        self.marked != before
     }
 }
 
@@ -665,9 +766,19 @@ pub fn overlay(list: ListState) -> impl IntoElement {
         move |bounds, (), window, cx| {
             let color = theme(cx).accent.opacity(0.3);
             let selection = cx.default_global::<Selection>();
+            selection.place_rows(&list);
+            // A drag ends when the window loses focus, as its mouse-up may never arrive.
+            if !window.is_window_active() {
+                selection.dragging = false;
+            }
             if selection.dragging
                 && let Some(at) = selection.seen
             {
+                // The list scrolled under a still pointer, by the wheel or by the drag, marks on
+                // to where the pointer now is.
+                if selection.drag_to(at) {
+                    window.request_animation_frame();
+                }
                 let past = if at.y < bounds.top() {
                     at.y - bounds.top()
                 } else if at.y > bounds.bottom() {
@@ -678,7 +789,6 @@ pub fn overlay(list: ListState) -> impl IntoElement {
                 if past != Pixels::ZERO {
                     // The further out the pointer, the faster it goes.
                     list.scroll_by((past / 2.).clamp(px(-40.), px(40.)));
-                    selection.drag_to(at);
                     window.request_animation_frame();
                 }
             }
