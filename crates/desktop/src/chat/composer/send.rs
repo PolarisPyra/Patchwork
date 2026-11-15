@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use gpui::{App, AppContext as _, ClipboardEntry, Context, Focusable, PathPromptOptions, Window};
 use patchwork_server::Server;
-use patchwork_server::threads::{Attachment, GoalStatus, NewThread};
+use patchwork_server::threads::{Attachment, GoalStatus, NewThread, is_long_paste};
 use crate::workspace::{Workspace, is_working};
 use super::state::Composer;
 use super::sigil_menu;
@@ -232,10 +232,10 @@ impl Composer {
         .detach();
     }
 
-    /// Attaches the pictures and files on the clipboard. False when it holds text, which is the
-    /// editor's to paste.
+    /// Attaches the pictures and files on the clipboard, and text too long for the field as a
+    /// file. False when it holds shorter text, which is the editor's to paste.
     pub(super) fn paste_attachments(&mut self, cx: &mut Context<Self>) -> bool {
-        let (mut paths, mut pictures) = (Vec::new(), Vec::new());
+        let (mut paths, mut pictures, mut texts) = (Vec::new(), Vec::new(), Vec::new());
         // Text copied along with a picture is still pasted as text.
         let mut written = false;
         for entry in cx
@@ -249,12 +249,16 @@ impl Composer {
                 // A file copied in a file manager comes as its address.
                 ClipboardEntry::String(text) => {
                     let copied = copied_files(text.text());
-                    written |= copied.is_empty() && !text.text().trim().is_empty();
+                    if copied.is_empty() && is_long_paste(text.text()) {
+                        texts.push(text.text().to_owned());
+                    } else {
+                        written |= copied.is_empty() && !text.text().trim().is_empty();
+                    }
                     paths.extend(copied);
                 }
             }
         }
-        if paths.is_empty() && pictures.is_empty() {
+        if paths.is_empty() && pictures.is_empty() && texts.is_empty() {
             return false;
         }
         let paths: Vec<String> = paths
@@ -266,6 +270,9 @@ impl Composer {
                 let mut attachments = server.attach_paths(&paths);
                 for picture in &pictures {
                     attachments.push(server.attach_image(picture)?);
+                }
+                for text in &texts {
+                    attachments.push(server.attach_text(text)?);
                 }
                 Ok(attachments)
             },

@@ -29,6 +29,7 @@ pub use lifecycle::NewThread;
 #[doc(inline)]
 pub use standing::{Ask, AskKind, Standing, asks};
 #[doc(inline)]
+pub use attachments::is_long_paste;
 pub use title::{title_from, without_leading_attachments};
 #[doc(inline)]
 pub use types::{AccessMode, Goal, GoalStatus, ResumePoint, Thread, ThreadParent};
