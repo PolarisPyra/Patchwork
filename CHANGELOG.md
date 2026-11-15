@@ -3,6 +3,25 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.83] - 2026-11-15
+
+**26.11.83** · 2 changes from 1 contributor
+
+- **Attach files from Orchestrator.** You can now attach files or folders to a request on the Orchestrator page
+
+<details>
+<summary>Full changelog</summary>
+
+### Added
+
+- The request box on the Orchestrator page has a plus button, like the chat box, for attaching files or a folder to the next request. Its text now starts the same distance from the edge as in the chat box. by [PolarisPyra in #145](https://github.com/PolarisPyra/Patchwork/pull/145)
+
+### Changed
+
+- The text you type in the chat box now starts closer to the plus button. by [PolarisPyra in #144](https://github.com/PolarisPyra/Patchwork/pull/144)
+
+</details>
+
 ## [26.11.82] - 2026-11-15
 
 **26.11.82** · 1 change from 1 contributor
