@@ -3,6 +3,47 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.73] - 2026-11-14
+
+**26.11.73** · 17 changes from 1 contributor
+
+- **Orchestrator page.** Orchestrator page lets you write tasks, see cards for started chats, pin projects, and choose model and effort.
+- **Theme customization.** Customize app colors, fonts, code themes, and import or export schemes, with AI generation options.
+- **Custom backgrounds.** Set or generate backgrounds for chats and Orchestrator, with shared choices and model pickers.
+- **Settings search.** Search settings and open the matching pane directly, with a shorter, grouped list.
+- **Interface settings.** Set app-wide font, text size, and row spacing from searchable font lists.
+
+<details>
+<summary>Full changelog</summary>
+
+### Added
+
+- An Orchestrator page, opened with the butterfly icon at the top of the icon bar on the left and shown when the app starts. Write what you want done and where, such as "fix the login bug in patchwork", and it starts a chat in that project or sends the message to the chat you named, while you stay on the page. Your requests are listed under the box with the chat each one went to, and the task list sits beside the page. by [PolarisPyra in #91](https://github.com/PolarisPyra/Patchwork/pull/91)
+- Space now opens and closes the sidebar while nothing has the focus, for example after you click a chat's messages. The mouse pointer stays visible when you press it. by [PolarisPyra in #96](https://github.com/PolarisPyra/Patchwork/pull/96)
+- Settings → Themes picks the app's color scheme, with a separate one for light and for dark when matching the system, along with code colors, the chat font and text size, and an animated background for the Orchestrator page. The Orchestrator page now shows the chats it started as cards, says where a request will go before you send it, and lets you pin a project or chat with @. by [PolarisPyra in #98](https://github.com/PolarisPyra/Patchwork/pull/98)
+- Settings → Themes can now export a color scheme with its background as one file and import one with a button or by dropping it on the page, and a base16 scheme imports as a code theme. A picture behind the Orchestrator page can be dimmed, resized and blurred, a theme can set its own background, fonts and corner rounding, and a theme's card warns when its text is hard to read. A theme file now applies as soon as it is saved, and one that cannot be read is named at the top of the page with the reason. by [PolarisPyra in #101](https://github.com/PolarisPyra/Patchwork/pull/101)
+- The Orchestrator page has a model picker and an effort picker under the request field. The chats a request starts use the agent, model and effort picked there. by [PolarisPyra in #102](https://github.com/PolarisPyra/Patchwork/pull/102)
+- Settings has two new pages beside Themes: Interface and Backgrounds. Interface sets how much room rows take, the chat text size, and the fonts of the app, of code and of chats, each picked from a searchable list of the fonts installed on your computer, and Backgrounds holds the Orchestrator and chat backgrounds, where a picture can now be blurred or tiled. Themes gains an editor for a color scheme's colors, an accent that applies to every color scheme, switching between light and dark by the clock or the sun, and importing theme files made for other editors, and Settings → Projects can give each project its own color scheme and accent. by [PolarisPyra in #106](https://github.com/PolarisPyra/Patchwork/pull/106)
+- Settings → Backgrounds can make a chat background from a description. Type what you want under Chat background and press Generate: a chat draws it, and the picture joins the grid and shows behind every chat. by [PolarisPyra in #110](https://github.com/PolarisPyra/Patchwork/pull/110)
+- Chats and the Orchestrator now pick from the same backgrounds. A ready-made one, the butterfly, an animated background or your own picture can be set for either, in Settings → Backgrounds or in a chat's background picker. Right-click a theme or a background you added to delete it. Theme and background changes are written to themes.log, which has its own level under Logs in Settings → General. by [PolarisPyra in #111](https://github.com/PolarisPyra/Patchwork/pull/111)
+- The two generators in Settings → Backgrounds now have pickers for the model that writes a background and its effort, and for the agent when more than one is connected. Both generators share the choice, and it is kept between launches. by [PolarisPyra in #114](https://github.com/PolarisPyra/Patchwork/pull/114)
+- The color scheme and code theme generators in Settings → Themes now have the same pickers as the background generators: the model that writes the theme, its effort, and the agent when more than one is connected. All four generators share one choice. by [PolarisPyra in #115](https://github.com/PolarisPyra/Patchwork/pull/115)
+
+### Changed
+
+- A tall queued message keeps its Edit, Steer and Remove buttons at the top right, next to its first line, instead of lower down the message. The queued messages list also shows a scrollbar you can drag once it grows past about four rows. by [PolarisPyra in #90](https://github.com/PolarisPyra/Patchwork/pull/90)
+- Settings → Interface now has one Font and one Text size for the whole app, chats included, where it had separate app, code and chat fonts and a text size for chats only. Code keeps its fixed-width font. In Settings → Themes, a code theme can be written from a description, and each grid ends in a tile that adds a theme. by [PolarisPyra in #108](https://github.com/PolarisPyra/Patchwork/pull/108)
+- The Settings list is shorter and has a search at the top. Related panes share one entry that opens to show them, such as Updates under General and MCP Servers under Extensions, and it stays open until you click it shut. The Chat settings are now in General. Typing in the search lists the settings that match, the arrow keys move through them, and Enter opens the pane that holds the one highlighted. In Settings → Projects the Checks switches now line up, and the app icons in Settings → General fit the pane. by [PolarisPyra in #112](https://github.com/PolarisPyra/Patchwork/pull/112)
+- The chat background choices in Settings → Backgrounds now look like the Orchestrator's. Each is a card with its name under the picture, the two grids list them in the same order, and both end in an Add background card. A chat's own background picker shows the same cards. by [PolarisPyra in #113](https://github.com/PolarisPyra/Patchwork/pull/113)
+- Choosing a setting in the Settings search now scrolls its pane to that setting, instead of opening the pane at the top. by [PolarisPyra in #118](https://github.com/PolarisPyra/Patchwork/pull/118)
+- When a theme or background card's name is too long to fit, hovering it shows the whole name. by [PolarisPyra in #117](https://github.com/PolarisPyra/Patchwork/pull/117)
+
+### Fixed
+
+- In a chat message, inline code that wrapped onto a second line left an empty shaded box at the end of the first line, or shaded that line all the way to its edge. The shading now covers only the code on each line. by [PolarisPyra in #95](https://github.com/PolarisPyra/Patchwork/pull/95)
+
+</details>
+
 ## [26.11.72] - 2026-11-14
 
 **26.11.72** · 4 changes from 1 contributor
