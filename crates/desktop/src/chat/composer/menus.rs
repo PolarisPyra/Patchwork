@@ -27,6 +27,10 @@ pub enum Menu {
     Project,
     /// Queue or steer, beside the send button while a turn runs.
     Send,
+    /// Attaching files or a folder, from the button at the start of the pill.
+    Attach,
+    /// Markdown to put around the selection or at the start of the line.
+    Format,
 }
 
 /// What a menu row does when picked.
@@ -42,10 +46,29 @@ pub enum Pick {
     SendMode(bool),
     /// The project for the chats a request starts, or none.
     Project(Option<String>),
+    /// Opens the file picker for files, or for a folder when true.
+    Attach(bool),
+    /// The marks to put before and after the selection; with nothing after, the mark starts the
+    /// line.
+    Format(&'static str, &'static str),
 }
 
 /// Context sizes to compact at, each twice the one before; 0 leaves it to the agent.
 const WINDOWS: [u64; 5] = [128_000, 200_000, 256_000, 512_000, 0];
+
+/// The attach menu: whether it picks a folder, its label, and its icon.
+const ATTACH: [(bool, &str, &str); 2] = [(false, "Files", "paperclip"), (true, "Folder", "folder")];
+
+/// The format menu: its label, its icon, and the marks it puts before and after the selection.
+const FORMATS: [(&str, &str, &str, &str); 7] = [
+    ("Bold", "text-b", "**", "**"),
+    ("Italic", "text-italic", "*", "*"),
+    ("Strikethrough", "text-strikethrough", "~~", "~~"),
+    ("Inline code", "code", "`", "`"),
+    ("Code block", "code-block", "```\n", "\n```"),
+    ("Bulleted list", "list-bullets", "- ", ""),
+    ("Numbered list", "list-numbers", "1. ", ""),
+];
 
 const ACCESS_MODES: [(AccessMode, &str, &str, &str); 4] = [
     (
@@ -156,8 +179,31 @@ impl Composer {
             checked,
             ruled: false,
         };
+        let with_icon = |pick: Pick, label: &'static str, name: &'static str| Row {
+            pick,
+            body: div()
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .child(icon(name, 14.))
+                .child(label)
+                .into_any_element(),
+            label: label.into(),
+            checked: false,
+            ruled: false,
+        };
         match menu {
             Menu::Model | Menu::Project => Vec::new(),
+            Menu::Attach => ATTACH
+                .iter()
+                .map(|&(folder, label, name)| with_icon(Pick::Attach(folder), label, name))
+                .collect(),
+            Menu::Format => FORMATS
+                .iter()
+                .map(|&(label, name, before, after)| {
+                    with_icon(Pick::Format(before, after), label, name)
+                })
+                .collect(),
             Menu::Effort => {
                 let levels = efforts(
                     picks.agent,
@@ -317,6 +363,8 @@ impl Composer {
             Menu::Agent => "Agent",
             Menu::Send => "Send mode",
             Menu::Project => "Project",
+            Menu::Attach => "Attach",
+            Menu::Format => "Format",
         };
         let agents: Vec<Agent> = match &self.roles {
             Roles::Loaded(agents) if menu == Menu::Agent => agents.clone(),

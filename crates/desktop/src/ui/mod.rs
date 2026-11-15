@@ -13,6 +13,7 @@ pub mod highlight;
 mod logos;
 pub mod markdown;
 pub mod menu;
+pub mod pill;
 pub mod prompt;
 mod scrollbar;
 pub mod selection;
