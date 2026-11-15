@@ -523,6 +523,8 @@ impl Render for Orchestrator {
             .map(|request| self.card(request, &threads, &projects, cx))
             .collect();
         let shadow = hsla(0., 0., 0., if dark { 0.22 } else { 0.08 });
+        let before = self.before_field(cx);
+        let tight = before.is_none();
         let pill = pill("orchestrator-pill", ink(0.10), glass(0.62), shadow)
             .w_full()
             .max_w(px(PILL_W))
@@ -531,12 +533,7 @@ impl Render for Orchestrator {
             .flex()
             .items_center()
             .gap(px(8.))
-            .pl(px(if asked.is_some() || !self.waiting.is_empty() {
-                12.
-            } else {
-                22.
-            }))
-            .pr(px(PILL_PAD))
+            .px(px(PILL_PAD))
             .text_size(px(fs_lg()))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 if event.keystroke.key == "escape" && this.escape(window, cx) {
@@ -553,15 +550,24 @@ impl Render for Orchestrator {
                 this.focus(window, cx);
                 cx.stop_propagation();
             }))
-            .children(self.before_field(cx))
-            .child(div().flex_1().min_w_0().child(self.field.clone()))
+            .child(self.attach_button(cx))
+            .children(before)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    // Closer to the plus button than the row's gap, as in the chat box.
+                    .when(tight, |d| d.ml(px(-4.)))
+                    .child(self.field.clone()),
+            )
             .children(self.after_field(cx))
             .child(
                 send_button("orchestrator-send", action, ready, ink(1.), glass(1.))
                     .rounded_full()
                     .child(icon(glyph, 16.))
                     .on_click(cx.listener(|this, _, window, cx| this.enter(window, cx))),
-            );
+            )
+            .children(self.attach_menu_view());
         // What is attached sits above the pill, laid over the page so the pill does not move.
         let attachments = self.attachment_row(shadow, cx);
         let model = self.model_chip(window, cx);
