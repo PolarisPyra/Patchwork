@@ -97,7 +97,7 @@ pub fn render(
         .when(is_new, gpui::Styled::justify_center)
         .child(body)
         .when_some(parent, gpui::ParentElement::child)
-        .when(w.thread.as_ref().is_none_or(|t| t.parent.is_none()), |c| {
+        .when(w.composer_shown(), |c| {
             c.child(
                 div()
                     .w_full()
@@ -119,19 +119,42 @@ pub fn render(
         .when(!is_new, |c| c.child(floating(w, &t, window, cx)))
 }
 
-/// A subagent's thread is its transcript; it takes no messages.
+/// A subagent's thread is its transcript; it takes no messages. Nor does a chat looked in on from
+/// the orchestrator page, which takes its replies through the pill there.
 pub(super) fn subagent_footer(
     w: &Workspace,
     t: &Theme,
     cx: &mut Context<Workspace>,
 ) -> Option<Div> {
-    let parent = w.thread.as_ref()?.parent.as_ref()?;
+    let hover = t.bg_hover;
+    let thread = w.thread.as_ref()?;
+    if w.peeking && thread.parent.is_none() {
+        let back = icon_button(
+            "peek-back",
+            "Back to the orchestrator",
+            "arrow-left",
+            14.,
+            cx,
+        )
+        .flex_none()
+        .tooltip(tooltip("Back to the orchestrator"))
+        .on_click(cx.listener(|w, _, _, cx| w.back_to_orchestrator(cx)));
+        let link = button("peek-orchestrator", "Orchestrator")
+            .flex_none()
+            .rounded(px(radius_sm()))
+            .px(px(4.))
+            .text_color(t.text)
+            .hover(move |s| s.bg(hover))
+            .child("Orchestrator")
+            .on_click(cx.listener(|w, _, _, cx| w.back_to_orchestrator(cx)));
+        return Some(read_only_bar(t, Some(back), "Opened from", link));
+    }
+    let parent = thread.parent.as_ref()?;
     let found = w.threads.iter().find(|p| p.id == parent.thread_id);
     let title = found.map_or_else(
         || "a deleted thread".to_string(),
         |p| display_title(&p.title),
     );
-    let hover = t.bg_hover;
     let link = button("subagent-parent", title.clone())
         .min_w_0()
         .truncate()
@@ -159,30 +182,39 @@ pub(super) fn subagent_footer(
                 }
             }))
     });
-    Some(
-        div()
-            .flex()
-            .w_full()
-            .flex_none()
-            .items_center()
-            .gap(px(8.))
-            .border_t_1()
-            .border_color(t.border)
-            .px(px(24.))
-            .py(px(10.))
-            .text_size(px(fs_sm()))
-            .text_color(t.text_muted)
-            .children(back)
-            .child(div().flex_none().child("Subagent of"))
-            .child(link)
-            .child(
-                div()
-                    .ml_auto()
-                    .flex_none()
-                    .text_color(t.text_subtle)
-                    .child("Read-only"),
-            ),
-    )
+    Some(read_only_bar(t, back, "Subagent of", link))
+}
+
+/// The bar in place of the composer: a back button, where the chat was opened from, and that it
+/// takes no messages here.
+fn read_only_bar(
+    t: &Theme,
+    back: Option<impl IntoElement>,
+    from: &'static str,
+    link: impl IntoElement,
+) -> Div {
+    div()
+        .flex()
+        .w_full()
+        .flex_none()
+        .items_center()
+        .gap(px(8.))
+        .border_t_1()
+        .border_color(t.border)
+        .px(px(24.))
+        .py(px(10.))
+        .text_size(px(fs_sm()))
+        .text_color(t.text_muted)
+        .children(back)
+        .child(div().flex_none().child(from))
+        .child(link)
+        .child(
+            div()
+                .ml_auto()
+                .flex_none()
+                .text_color(t.text_subtle)
+                .child("Read-only"),
+        )
 }
 
 /// Search, Android devices and "Open in editor", over the transcript's top right.
