@@ -3,6 +3,27 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.74] - 2026-11-15
+
+**26.11.74** · 3 changes from 1 contributor
+
+- **Night Sky theme and background.** Choose a Night Sky theme and twinkling stars background from Settings.
+- **Attach files to Orchestrator requests.** Drop files, folders, and pictures on the Orchestrator request field to attach them to chats it starts or goes to.
+
+<details>
+<summary>Full changelog</summary>
+
+### Added
+
+- A Night Sky theme and background, with a dark blue sky and twinkling stars, in Settings → Themes and Settings → Backgrounds. by [PolarisPyra in #121](https://github.com/PolarisPyra/Patchwork/pull/121)
+- You can drop files, folders and pictures on the request field of the Orchestrator page. They are listed under the field, each with a button to remove it, and are sent with the request to every chat it starts or goes to. by [PolarisPyra in #119](https://github.com/PolarisPyra/Patchwork/pull/119)
+
+### Fixed
+
+- A card on the Orchestrator page grew and shrank while its chat was working, as the line under the request came and went between steps. The card now keeps the same height while the chat works. by [PolarisPyra in #120](https://github.com/PolarisPyra/Patchwork/pull/120)
+
+</details>
+
 ## [26.11.73] - 2026-11-14
 
 **26.11.73** · 17 changes from 1 contributor
