@@ -63,7 +63,21 @@ impl Server {
                 (converted.as_slice(), "png")
             }
         };
-        // Named by what it holds, so pasting a picture twice keeps one file.
+        self.save_pasted(bytes, extension)
+    }
+
+    /// Saves pasted text too long for the message field as a file, and attaches it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the file cannot be written.
+    pub fn attach_text(&self, text: &str) -> Result<Attachment, Error> {
+        self.save_pasted(text.as_bytes(), "txt")
+    }
+
+    /// Writes pasted `bytes` to the pasted folder and attaches the file.
+    fn save_pasted(&self, bytes: &[u8], extension: &str) -> Result<Attachment, Error> {
+        // Named by what it holds, so pasting the same thing twice keeps one file.
         let hash = Sha256::digest(bytes)[..8]
             .iter()
             .fold(String::new(), |mut hash, b| {
@@ -77,4 +91,13 @@ impl Server {
         }
         Attachment::from_path(&path.to_string_lossy())
     }
+}
+
+/// The most characters a paste puts in the message field; a longer one is attached as a file.
+const LONG_PASTE: usize = 5_000;
+
+/// Whether pasted `text` is long enough to attach as a file instead of filling the field.
+#[must_use]
+pub fn is_long_paste(text: &str) -> bool {
+    text.chars().count() > LONG_PASTE
 }
