@@ -68,12 +68,12 @@ const INDEX: &[(&str, &[&str])] = &[
             "Reduce motion",
         ],
     ),
-    ("code-theme", &["Code theme", "Generate with"]),
+    ("code-theme", &["Syntax theme", "Generate with"]),
     (
         "orchestrator-background",
-        &["Orchestrator background", "Generate with"],
+        &["Orchestrator theme", "Generate with"],
     ),
-    ("chat-background", &["Chat background", "Generate with"]),
+    ("chat-background", &["Chat theme", "Generate with"]),
     ("interface", &["Font"]),
     ("shortcuts", &["Keyboard shortcuts", "Reset all"]),
     (

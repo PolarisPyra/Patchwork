@@ -1,4 +1,4 @@
-//! The background picker, shared by Settings → Chat background and a chat's own background dialog:
+//! The background picker, shared by Settings → Chat theme and a chat's own background dialog:
 //! the default, the butterfly, the animated backgrounds, the presets, and the pictures picked
 //! from disk, each removable with a short while to take it back.
 

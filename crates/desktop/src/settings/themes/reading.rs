@@ -53,13 +53,13 @@ pub(super) fn code_theme_cards(
     let (key, title, current, set): (_, _, _, fn(&mut Settings, Option<String>)) = match scheme {
         Scheme::Light => (
             "code-theme-light",
-            "Code theme",
+            "Syntax theme",
             d.settings.code_theme_light.clone(),
             |s, id| s.code_theme_light = id,
         ),
         Scheme::Dark => (
             "code-theme-dark",
-            "Code theme",
+            "Syntax theme",
             d.settings.code_theme_dark.clone(),
             |s, id| s.code_theme_dark = id,
         ),

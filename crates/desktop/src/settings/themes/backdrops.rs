@@ -1,4 +1,4 @@
-//! Settings → Orchestrator background and Chat background: what is behind the Orchestrator page
+//! Settings → Orchestrator theme and Chat theme: what is behind the Orchestrator page
 //! and behind chats. The Orchestrator has a card for none, the butterfly, each animated
 //! background, each of the backgrounds chats come with and each picture, and the card that adds a
 //! picture; an agent can be asked to write an animated one.
@@ -238,7 +238,7 @@ fn picker(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> Entity<Ba
     let picker = cx.new(|cx| {
         BackgroundPicker::new(
             server,
-            "Chat background",
+            "Chat theme",
             Some(value),
             Some(ChatBackground::None),
             None,
@@ -304,12 +304,12 @@ pub(in crate::settings) fn orchestrator_background_pane(
         .child(
             anchored(
                 div().id("label-orchestrator-background"),
-                "Orchestrator background",
+                "Orchestrator theme",
             )
             .children(windows)
             .child(grid(
                 "backdrops",
-                "Orchestrator background",
+                "Orchestrator theme",
                 backdrops,
                 Some(add_picture),
             )),
@@ -350,7 +350,7 @@ pub(in crate::settings) fn chat_background_pane(
                 .map(|e| alert("backgrounds-error", e, t.danger)),
         )
         .child(
-            anchored(div().id("label-chat-background"), "Chat background")
+            anchored(div().id("label-chat-background"), "Chat theme")
                 .pb(px(10.))
                 .child(chat_background),
         )
