@@ -32,7 +32,8 @@ line in the PR body, or the commit message when the body has none. A commit push
 The app's update notes and Settings → Updates show the highlights and the first ten entries, with
 a "Read more" link to the release's page when there are more. Without the secret, or
 when the request fails, the notes are the full list alone and the run shows a warning. The prompt
-and its rules are in the workflow's "Write the highlights" step.
+and its rules are in the workflow's "Write the highlights" step. When every change since the
+previous tag has `Changelog: none`, the notes are one sentence saying so.
 
 ## Cutting one
 
