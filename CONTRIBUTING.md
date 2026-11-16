@@ -30,24 +30,6 @@ Changed, Fixed, Removed or Security), written as [the changelog style](docs/chan
 describes; the release notes are built from it. A change users can't notice says `Changelog: none`.
 A check on the PR enforces both.
 
-### Open PRs
-
-You can have 3 PRs open at once. A fourth is closed when you open it; reopen it once one of the
-others is merged or closed.
-
-### Conflicts
-
-A PR that conflicts with `main` is asked to rebase and labeled `needs-rebase`. If it still conflicts
-after 7 days with no activity, it is closed.
-
-### Closing
-
-A PR or issue that breaks these rules gets a comment saying which one, and the `closing` label. It
-closes 3 days later unless you reply or push. After it closes, fix the problem and comment, or open a
-new PR that links the old one.
-
-An issue labeled `needs-info` closes 7 days later unless its author answers.
-
 ## Setup
 
 [Development](docs/development.md) covers building and checking the code, and
