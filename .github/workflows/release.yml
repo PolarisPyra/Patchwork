@@ -145,6 +145,8 @@ jobs:
                   + (if .pr != "" then "[\(.author) in #\(.pr)](https://github.com/\($repo)/pull/\(.pr))"
                     else "[\(.author)](https://github.com/\(.author))" end)) | join("\n")))
             | join("\n\n")' "$entries")
+          # A release whose changes are all Changelog: none still says something.
+          [ -n "$full" ] || full="Behind-the-scenes improvements, with nothing new to see."
           if [ -s "$RUNNER_TEMP/highlights.json" ] \
             && summary=$(jq -r --slurpfile entries "$entries" '
               ($entries[0] | length) as $n

@@ -5,7 +5,7 @@ Each release adds its notes at the top; see docs/release.md.
 
 ## [26.11.88] - 2026-11-16
 
-
+Behind-the-scenes improvements, with nothing new to see.
 
 ## [26.11.87] - 2026-11-16
 
