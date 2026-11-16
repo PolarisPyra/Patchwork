@@ -95,6 +95,8 @@ struct Selection {
     last: Option<u64>,
     /// The marked text, top to bottom, as Ctrl+C copies it.
     text: String,
+    /// The marked text as it reads, with no Markdown, for the menu's Copy as raw text.
+    plain: String,
     /// The text the drag began in, and where in it.
     anchor: Option<(u64, usize)>,
     dragging: bool,
@@ -388,6 +390,7 @@ impl Element for Selectable {
                     if !selection.marked.is_empty() {
                         selection.marked.clear();
                         selection.text.clear();
+                        selection.plain.clear();
                         window.refresh();
                     }
                 }
@@ -496,7 +499,8 @@ fn link_at(
 
 /// Opens the menu for a text at `at`, with the link under the pointer, if any.
 fn open_menu(link: Option<SharedString>, at: Point<Pixels>, window: &mut Window, cx: &mut App) {
-    let marked = cx.default_global::<Selection>().text.clone();
+    let selection = cx.default_global::<Selection>();
+    let (marked, plain) = (selection.text.clone(), selection.plain.clone());
     let mut items = Vec::new();
     if let Some(link) = link {
         let copy = link.clone();
@@ -512,6 +516,12 @@ fn open_menu(link: Option<SharedString>, at: Point<Pixels>, window: &mut Window,
         items.push(
             MenuItem::new("Copy", move |_, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(marked.clone()));
+            })
+            .icon("copy"),
+        );
+        items.push(
+            MenuItem::new("Copy as raw text", move |_, cx| {
+                cx.write_to_clipboard(ClipboardItem::new_string(plain.clone()));
             })
             .icon("copy"),
         );
@@ -562,11 +572,13 @@ impl Selection {
     fn mark(&mut self, id: u64, range: Range<usize>, text: &str) {
         self.marked.clear();
         self.text.clear();
+        self.plain.clear();
         if range.start < range.end
             && range.end <= text.len()
             && text.is_char_boundary(range.start)
             && text.is_char_boundary(range.end)
         {
+            self.plain = text[range.clone()].to_string();
             self.text = match self.known.get(&id) {
                 Some(known) => markdown(&[(known, range.clone())]),
                 None => text[range.clone()].to_string(),
@@ -733,8 +745,34 @@ impl Selection {
             }
         }
         self.text = markdown(&pieces);
+        self.plain = plain(&pieces);
         self.marked != before
     }
+}
+
+/// The marked part of each text, top to bottom, as it reads: a blank line between blocks, list
+/// items and table rows on their own lines, and a tab between the cells of a row.
+fn plain(pieces: &[(&Known, Range<usize>)]) -> String {
+    let mut out = String::new();
+    let mut before: Option<&Known> = None;
+    for (known, range) in pieces {
+        let kind = &known.kind;
+        if let Some(b) = before {
+            out.push_str(match (&b.kind, kind) {
+                (Kind::Cell { .. }, Kind::Cell { column, .. }) if *column > 0 => "\t",
+                (Kind::Item, Kind::Item) | (Kind::Cell { .. }, Kind::Cell { .. }) => "\n",
+                _ => "\n\n",
+            });
+        }
+        if let (Kind::Item, Some(prefix)) = (kind, &known.prefix)
+            && range.start == 0
+        {
+            out.push_str(&prefix.replace("> ", ""));
+        }
+        out.push_str(&known.layout.text()[range.clone()]);
+        before = Some(known);
+    }
+    out
 }
 
 /// The marked part of each text, top to bottom, as Ctrl+C copies it, written back as Markdown so
