@@ -102,9 +102,9 @@ function start() {
 }
 
 // A carousel. A slide stays for as long as its pill takes to fill, and the fill only runs while the
-// carousel is on screen, the pointer is off it and nobody has paused it. The tabs beside the picture
-// and the pills under it both pick a slide. With reduced motion it starts paused, on the first
-// slide, and nothing plays until the visitor asks.
+// carousel is on screen and nobody has paused it, wherever the pointer is. The tabs beside the
+// picture and the pills under it both pick a slide. With reduced motion it starts paused, on the
+// first slide, and nothing plays until the visitor asks.
 function startCarousel(root) {
   const slides = [...root.querySelectorAll("[data-slide]")];
   const pills = [...root.querySelectorAll("[data-pill]")];
@@ -113,10 +113,9 @@ function startCarousel(root) {
   let current = 0;
   let stopped = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   let onScreen = !("IntersectionObserver" in window);
-  let hovered = false;
 
   const sync = () => {
-    const running = !stopped && onScreen && !hovered;
+    const running = !stopped && onScreen;
     root.classList.toggle("is-running", running);
     root.classList.toggle("is-stopped", stopped);
     toggle?.setAttribute("aria-label", stopped ? "Play the slides" : "Pause the slides");
@@ -149,16 +148,9 @@ function startCarousel(root) {
     });
   });
   tabs.forEach((tab, i) => tab.addEventListener("click", () => show(i)));
+  tabs.forEach(ringTab);
   toggle?.addEventListener("click", () => {
     stopped = !stopped;
-    sync();
-  });
-  root.addEventListener("pointerenter", () => {
-    hovered = true;
-    sync();
-  });
-  root.addEventListener("pointerleave", () => {
-    hovered = false;
     sync();
   });
 
@@ -181,4 +173,40 @@ function hostPlatform() {
   if (/win/i.test(platform)) return "windows";
   if (/linux|x11/i.test(platform) && !/android/i.test(agent)) return "linux";
   return null;
+}
+
+// The ring around the active tab: two strokes from the middle of the left edge, one up and over the
+// top, one down and under the bottom, each meeting the other in the middle of the right edge. Both
+// are the same length, so they draw at the same steady pace. They're redrawn whenever the tab
+// changes size. Their gradient spans the whole tab, so both halves match where they meet.
+let ringCount = 0;
+function ringTab(tab) {
+  const ns = "http://www.w3.org/2000/svg";
+  const id = `tab-ring-${ringCount++}`;
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("class", "tab-ring");
+  svg.setAttribute("aria-hidden", "true");
+  svg.innerHTML =
+    `<defs><linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100%" y2="0">` +
+    `<stop offset="0" /><stop offset="0.5" /><stop offset="1" /></linearGradient></defs>` +
+    `<path pathLength="1" stroke="url(#${id})" /><path pathLength="1" stroke="url(#${id})" />`;
+  const [up, down] = svg.querySelectorAll("path");
+  tab.append(svg);
+
+  const fit = () => {
+    const w = tab.clientWidth;
+    const h = tab.clientHeight;
+    const r = Math.min(parseFloat(getComputedStyle(tab).borderTopLeftRadius) || 0, h / 2) - 1;
+    const mid = h / 2;
+    up.setAttribute(
+      "d",
+      `M1 ${mid}V${1 + r}A${r} ${r} 0 0 1 ${1 + r} 1H${w - 1 - r}A${r} ${r} 0 0 1 ${w - 1} ${1 + r}V${mid}`,
+    );
+    down.setAttribute(
+      "d",
+      `M1 ${mid}V${h - 1 - r}A${r} ${r} 0 0 0 ${1 + r} ${h - 1}H${w - 1 - r}A${r} ${r} 0 0 0 ${w - 1} ${h - 1 - r}V${mid}`,
+    );
+  };
+  fit();
+  if ("ResizeObserver" in window) new ResizeObserver(fit).observe(tab);
 }
