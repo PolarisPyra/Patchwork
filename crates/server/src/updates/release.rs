@@ -191,7 +191,7 @@ pub(super) fn latest() -> Result<Release, Error> {
         agent
             .get(url)
             .call()
-            .map_err(|e| format!("Could not reach the update server: {e}"))?
+            .map_err(|e| crate::system::unreachable("the update server", &e))?
             .body_mut()
             .with_config()
             .limit(MAX_MANIFEST)

@@ -4,7 +4,10 @@
 // Rust guideline compliant 2026-10-09
 
 use crate::Error;
+use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 pub fn home_dir() -> Option<PathBuf> {
     std::env::var_os("HOME")
@@ -108,19 +111,58 @@ pub fn is_plain_file_name(name: &str) -> bool {
 }
 
 /// Writes `text` through a temporary file, readable only by the user.
+///
+/// On Windows an antivirus or the search indexer opens a file the moment it is written, and
+/// the move over the old file is then refused for a moment. The move is tried a few times, and a
+/// file that still cannot be replaced is written where it is instead.
 pub(crate) fn write_private(path: &Path, text: &str) -> Result<(), Error> {
-    use std::io::Write;
+    /// Counts the temporary files of this process, so two writers never share one.
+    static WRITES: AtomicU64 = AtomicU64::new(0);
     let dir = path.parent().ok_or("No config folder")?;
-    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    let tmp = path.with_extension("json.tmp");
+    std::fs::create_dir_all(dir).map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(format!(
+        ".{}-{}.tmp",
+        std::process::id(),
+        WRITES.fetch_add(1, Ordering::Relaxed)
+    ));
+    let tmp = PathBuf::from(tmp);
+    let moved = write_new(&tmp, text).and_then(|()| replace(&tmp, path));
+    let Err(error) = moved else { return Ok(()) };
+    let _ = std::fs::remove_file(&tmp);
+    // Only a refusal: after a full disk, writing in place would cut the old file short.
+    if error.kind() == ErrorKind::PermissionDenied && write_new(path, text).is_ok() {
+        return Ok(());
+    }
+    Err(format!("Could not write {}: {error}", path.display()).into())
+}
+
+/// Writes `text` to `path` and waits for it to reach the disk. A new file is the user's alone.
+fn write_new(path: &Path, text: &str) -> std::io::Result<()> {
+    use std::io::Write;
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-    let mut file = options.open(&tmp).map_err(|e| e.to_string())?;
-    file.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
-    file.sync_all().map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, path).map_err(|e| (e.to_string()).into())
+    let mut file = options.open(path)?;
+    file.write_all(text.as_bytes())?;
+    file.sync_all()
+}
+
+/// Moves `tmp` over `path`, trying again for a third of a second while Windows refuses it.
+fn replace(tmp: &Path, path: &Path) -> std::io::Result<()> {
+    let tries = if cfg!(windows) { 6 } else { 1 };
+    let mut wait = Duration::from_millis(10);
+    for _ in 1..tries {
+        match std::fs::rename(tmp, path) {
+            Err(e) if e.kind() == ErrorKind::PermissionDenied => {
+                std::thread::sleep(wait);
+                wait *= 2;
+            }
+            done => return done,
+        }
+    }
+    std::fs::rename(tmp, path)
 }
 
 /// The JSON file at `path`, or the default when there is none. A file that does not parse is kept

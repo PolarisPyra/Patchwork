@@ -232,10 +232,11 @@ impl Agent {
                         matches!(status, 408 | 409 | 425 | 429 | 500 | 502 | 503 | 504 | 529);
                     (message, retry)
                 }
-                Err(e) => (
-                    format!("Could not reach {}: {e}", self.request.provider),
-                    true,
-                ),
+                Err(e) => {
+                    let message = crate::system::unreachable(&self.request.provider, &e);
+                    let retry = !crate::system::blocked(&message);
+                    (message, retry)
+                }
             };
             let (message, retry) = failure;
             if !retry || attempt >= MAX_ATTEMPTS {

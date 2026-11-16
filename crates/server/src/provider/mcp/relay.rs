@@ -213,12 +213,17 @@ pub(super) fn serve_relay() -> Result<(), Error> {
     crate::system::instance::listens(&endpoint);
     let state = &crate::system::dirs().state;
     sweep_relay_files(state);
-    crate::system::fs::write_private(&state.join(RELAY_FILE), &endpoint.to_string())?;
-    crate::system::fs::write_private(
-        &state.join(format!("mcp-relay-{port}.json")),
-        &endpoint.to_string(),
-    )?;
-    RELAY_READY.store(true, Ordering::Relaxed);
+    // Without its files the relay still answers what is handed the endpoint outright: a second
+    // launch of the app, and the permission hooks.
+    let written = [RELAY_FILE.to_string(), format!("mcp-relay-{port}.json")]
+        .iter()
+        .try_for_each(|name| {
+            crate::system::fs::write_private(&state.join(name), &endpoint.to_string())
+        });
+    match written {
+        Ok(()) => RELAY_READY.store(true, Ordering::Relaxed),
+        Err(e) => log::warn!(error:% = e; "MCP servers are not shared with the CLIs: {{error}}"),
+    }
     let open = Arc::new(AtomicUsize::new(0));
     for stream in listener.incoming().flatten() {
         // Over the most that Patchwork's own agents, hooks and servers open at once, a

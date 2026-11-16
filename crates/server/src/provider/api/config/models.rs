@@ -106,7 +106,7 @@ pub fn fetch_models(query: ModelsQuery) -> Result<Vec<ApiModel>, Error> {
     }
     let mut response = request
         .call()
-        .map_err(|e| format!("Could not reach {base}: {e}"))?;
+        .map_err(|e| crate::system::unreachable(base, &e))?;
     let status = response.status();
     let text = response.body_mut().read_to_string().unwrap_or_default();
     let body: Value = serde_json::from_str(&text).unwrap_or(Value::Null);

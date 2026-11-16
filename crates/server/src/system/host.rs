@@ -5,6 +5,26 @@
 #[cfg(windows)]
 use std::path::PathBuf;
 
+/// What to say when `what` could not be reached. A connection Windows refused to open at all
+/// (error 10013) was stopped by a firewall or an antivirus, which only the person can change.
+pub(crate) fn unreachable(what: &str, error: &dyn std::fmt::Display) -> String {
+    let said = format!("Could not reach {what}: {error}");
+    if blocked(&said) {
+        format!(
+            "{said}\n\nWindows Firewall or an antivirus is blocking Patchwork's connections. \
+             Allow patchwork.exe in it, then try again."
+        )
+    } else {
+        said
+    }
+}
+
+/// Whether `error` says a firewall or an antivirus refused the connection, which trying again
+/// does not change.
+pub(crate) fn blocked(error: &str) -> bool {
+    error.contains("os error 10013")
+}
+
 /// The lines a program writes, with bytes that are not UTF-8 replaced. `BufRead::lines` ends at
 /// the first such line, and a pipe nobody reads then fills and blocks the program writing to it.
 pub(crate) fn lossy_lines(reader: impl std::io::BufRead) -> impl Iterator<Item = String> {
