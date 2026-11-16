@@ -12,6 +12,7 @@ use gpui::{
     Subscription, WeakEntity, Window, div, prelude::*,
 };
 use patchwork_server::Server;
+use patchwork_server::gateway::{ChatApps, ChatPlace};
 use patchwork_server::permissions::PermissionKind;
 use patchwork_server::projects::{Folder, Project};
 use patchwork_server::settings::Settings;
@@ -88,6 +89,10 @@ pub struct Workspace {
     /// Every thread, each with only the messages the task list reads.
     pub threads: Vec<Arc<Thread>>,
     pub folders: Vec<Folder>,
+    /// The chat apps each thread came from or is continued on, by thread id.
+    pub chat_apps: HashMap<String, ChatApps>,
+    /// The chat app conversations a thread can be continued in, read as the row menu opens.
+    pub chat_places: Vec<ChatPlace>,
     /// Projects and folders (`folder:<id>`) whose rows are closed.
     pub collapsed: HashSet<String>,
     /// The archive view's closed groups, its own so closing one leaves the task list as it was.
@@ -246,6 +251,7 @@ impl Workspace {
         let collapsed = server.collapsed_sections().into_iter().collect();
         let update_dismissed = server.dismissed_update();
         let threads = server.list_threads();
+        let chat_apps = server.thread_chat_apps();
         let folders = server.list_folders();
         let workspace = cx.entity().downgrade();
         let composer = cx.new(|cx| Composer::new(workspace.clone(), window, cx));
@@ -295,6 +301,8 @@ impl Workspace {
             threads,
             folders,
             collapsed,
+            chat_apps,
+            chat_places: Vec::new(),
             archived_collapsed: HashSet::new(),
             thread: None,
             view: Some(View::Tasks),

@@ -10,8 +10,17 @@ use gpui::{
 };
 use crate::ui::menu::MenuItem;
 use crate::settings::SettingsDialog;
-use crate::ui::theme::{fs_sm, radius_sm, Theme};
+use crate::ui::theme::{fs_sm, radius, radius_sm, Theme};
 use crate::ui::{button, icon};
+use patchwork_server::threads::AccessMode;
+
+/// The access modes a chat can start with, and their names.
+pub const ACCESS_MODES: [(AccessMode, &str); 4] = [
+    (AccessMode::Supervised, "Supervised"),
+    (AccessMode::AutoAcceptEdits, "Auto-accept edits"),
+    (AccessMode::Auto, "Auto"),
+    (AccessMode::FullAccess, "Full access"),
+];
 
 /// A letter on a colour picked from the name, so each row is easy to spot.
 pub fn letter_badge(name: &str, size: f32) -> Div {
@@ -198,6 +207,40 @@ pub fn segmented<T: Copy + PartialEq + 'static>(
                 .child(text)
                 .on_click(cx.listener(move |d, _, _, cx| pick(d, option, cx)))
         }))
+}
+
+/// A grid of tiles, such as the providers to add or the chat apps to answer on.
+pub fn tile_grid(label: &'static str) -> Stateful<Div> {
+    div()
+        .id(label)
+        .role(Role::Group)
+        .aria_label(label)
+        .grid()
+        .grid_cols(6)
+        .gap(px(8.))
+        .w_full()
+        .py(px(10.))
+}
+
+/// One tile of a grid: a mark over a name.
+pub fn tile(
+    id: impl Into<SharedString>,
+    label: impl Into<SharedString>,
+    t: &Theme,
+) -> Stateful<Div> {
+    let (hover, strong, fg) = (t.bg_hover, t.border_strong, t.text);
+    crate::ui::button(id.into(), label)
+        .relative()
+        .h(px(72.))
+        .min_w_0()
+        .flex_col()
+        .justify_center()
+        .gap(px(8.))
+        .rounded(px(radius()))
+        .border_1()
+        .px(px(8.))
+        .text_size(px(fs_sm()))
+        .hover(move |s| s.border_color(strong).bg(hover).text_color(fg))
 }
 
 /// A `<select>`: a bordered box with what is picked and a caret, which opens a menu of the choices.

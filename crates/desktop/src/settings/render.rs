@@ -14,6 +14,7 @@ use super::dialog::{SettingsDialog, SettingsEvent, entry_of};
 use super::chat;
 use super::controls;
 use super::extensions;
+use super::gateways;
 use super::general;
 use super::mcp;
 use super::permissions;
@@ -50,6 +51,7 @@ impl SettingsDialog {
             "tokens" => tokens::render(self, cx),
             "extensions" => extensions::render(self, window, cx),
             "mcp" => mcp::render(self, window, cx),
+            "gateways" => gateways::render(self, window, cx),
             "permissions" => permissions::render(self, window, cx),
             "projects" => projects::render(self, cx),
             "ssh" => ssh::render(self, window, cx),

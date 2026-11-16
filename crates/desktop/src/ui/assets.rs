@@ -16,6 +16,13 @@
 //!   `@phosphor-icons/react` with their path data in a 256×256 `viewBox`. `twistie.svg` is the
 //!   Codicons chevron the task tree draws, and
 //!   `twistie-closed.svg` is the same path with `rotate(-90 8 8)` put first in its `transform`.
+//! - The chat apps' logos in `assets/`: `telegram-color`, `discord-color`, `slack-color` and
+//!   `mattermost-color` are the `telegram`, `discord-icon`, `slack-icon` and `mattermost-icon`
+//!   bodies of `@iconify-json/logos`. `matrix` is `icons/matrix.svg` of `simple-icons` as it is;
+//!   `signal-color` and `qq-color` are the `signal` and `qq` ones with
+//!   `fill="#<hex>"` from its `data/simple-icons.json`. Each colour one has `width="24"
+//!   height="24"` put first in its `<svg>`: an image is drawn at twice the size its file gives,
+//!   and a 256px drawing shrunk to a 24px tile blurs.
 //! - `assets/logos/<id>.png` and `assets/logo.png`: 512×512 renders of the SVG beside each, made
 //!   with `rsvg-convert -w 512 -h 512 <id>.svg -o <id>.png`. `assets/logo.svg` is a copy of
 //!   `assets/logos/original.svg`; `assets/logo.ico` is made from `logo.png` (see `build.rs`).

@@ -8,7 +8,7 @@ use super::state::health_line;
 use super::state::trim_slash;
 use gpui::{AnyElement, SharedString, Window, div, prelude::*, px};
 use patchwork_server::provider::api::config::{DiscoveredServer, ProviderView};
-use crate::settings::providers::pickers::{tile, tile_grid};
+use crate::settings::controls::{tile, tile_grid};
 use crate::settings::SettingsDialog;
 use crate::ui::theme::theme;
 use crate::ui::provider_logo;

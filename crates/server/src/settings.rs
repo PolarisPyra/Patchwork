@@ -178,6 +178,8 @@ pub struct Settings {
     pub android_sdk: Option<String>,
     /// Whether an agent may run the app on Android devices, look at their screens and touch them.
     pub android_use: bool,
+    /// The chat apps Patchwork answers on.
+    pub gateway: crate::gateway::GatewaySettings,
 }
 
 impl Settings {
@@ -568,6 +570,8 @@ impl Server {
             || old.disabled_skills != settings.disabled_skills
             || old.hooks_dir != settings.hooks_dir
             || old.disabled_hooks != settings.disabled_hooks;
+        // Which chat apps are connected, and how, is what the gateway connects with.
+        let gateway_changed = old.gateway.platforms != settings.gateway.platforms;
         let changed = changed_sections(&old, &settings);
         self.store.update_settings(|s| *s = settings)?;
         if !changed.is_empty() {
@@ -579,6 +583,10 @@ impl Server {
         // prompt, skills or hooks, so the next message starts a new one.
         if guards_changed || prompt_changed || extensions_changed {
             self.runner.retire_all_idle();
+        }
+        if gateway_changed {
+            let server = Arc::clone(self);
+            std::thread::spawn(move || server.restart_gateway());
         }
         Ok(())
     }

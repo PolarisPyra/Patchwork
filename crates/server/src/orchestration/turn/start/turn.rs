@@ -201,5 +201,6 @@ pub(in crate::orchestration) fn assistant_message() -> Message {
         checks: None,
         review: None,
         cursor: None,
+        via: None,
     }
 }

@@ -1,4 +1,4 @@
-//! The agents' and providers' logos, and the API providers' names.
+//! The agents', providers' and chat apps' logos, and the API providers' names.
 
 // Rust guideline compliant 2026-10-09
 
@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use base64::Engine;
 use gpui::{AnyElement, Image, ImageFormat, IntoElement, SharedString, Styled, img, px};
+use patchwork_server::gateway::Platform;
 use patchwork_server::provider::AgentKind;
 use patchwork_server::provider::api::config::ApiProvider;
 use super::controls::{icon, mono_svg};
@@ -37,6 +38,23 @@ pub(super) fn logo_file(file: &str, mono: bool, size: f32) -> AnyElement {
     } else {
         img(path).size(px(size)).flex_none().into_any_element()
     }
+}
+
+/// A chat app's logo, or an icon for one without a logo of its own.
+pub fn platform_logo(platform: Platform, size: f32) -> AnyElement {
+    let (file, mono) = match platform {
+        Platform::Telegram => ("telegram-color.svg", false),
+        Platform::Discord => ("discord-color.svg", false),
+        Platform::Slack => ("slack-color.svg", false),
+        Platform::Matrix => ("matrix.svg", true),
+        Platform::Mattermost => ("mattermost-color.svg", false),
+        Platform::Signal => ("signal-color.svg", false),
+        Platform::Qq => ("qq-color.svg", false),
+        Platform::Irc => return icon("hash", size).into_any_element(),
+        Platform::Email => return icon("envelope", size).into_any_element(),
+        Platform::Sms => return icon("chat-text", size).into_any_element(),
+    };
+    logo_file(file, mono, size)
 }
 
 /// An API provider's mark: the picture it was given, else its preset's, else a plug.

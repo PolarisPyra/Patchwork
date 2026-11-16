@@ -3,6 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{Entity, FocusHandle, Pixels, Point, SharedString};
+use patchwork_server::gateway::Platform;
 use crate::ui::text_area::TextArea;
 
 /// A row the menu or the name field acts on.
@@ -33,7 +34,7 @@ pub struct Renaming {
     pub(super) current: String,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(super) enum Act {
     Rename,
     Favorite(bool),
@@ -47,6 +48,10 @@ pub(super) enum Act {
     OpenFolder,
     Remove,
     Restore,
+    /// Continue the chat in this conversation on a chat app.
+    ContinueOn(Platform, String),
+    /// Stop continuing the chat in this conversation on a chat app.
+    StopOn(Platform, String),
 }
 
 pub(super) struct Item {

@@ -16,7 +16,7 @@ use patchwork_server::threads::{Attachment, AttachmentKind, Message};
 
 use crate::ui::markdown::{FindIn, markdown_found};
 use crate::ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
-use crate::ui::{button, format_clock, icon, tooltip};
+use crate::ui::{button, format_clock, icon, platform_logo, tooltip};
 use crate::workspace::{Workspace, is_working};
 
 /// User messages longer than this show their first lines until expanded: laying out all of one
@@ -349,7 +349,16 @@ pub fn user_message(
     t: &Theme,
     cx: &mut Context<Workspace>,
 ) -> Div {
-    let mut header = format!("You · {}", format_clock(m.created_at));
+    let mut header = match m.via {
+        Some(platform) => format!(
+            "You on {} · {}",
+            platform.label(),
+            format_clock(m.created_at)
+        ),
+        None => format!("You · {}", format_clock(m.created_at)),
+    };
+    // The words already say where it came from, so the logo is left out of the accessibility tree.
+    let via = m.via.map(|platform| platform_logo(platform, 12.));
     if m.steer {
         header.push_str(" · Steer");
     }
@@ -451,6 +460,7 @@ pub fn user_message(
                     .text_size(px(fs_xs()))
                     .text_color(t.text_subtle)
                     .children(restore)
+                    .children(via)
                     .child(header),
             )
             .children(attachments)

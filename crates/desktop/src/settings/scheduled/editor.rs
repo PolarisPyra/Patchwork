@@ -9,7 +9,8 @@ use crate::settings::controls::{FieldKind, chip, select_box, switch};
 use crate::settings::SettingsDialog;
 use crate::ui::theme::{fs_sm, fs_xs, theme};
 use crate::ui::{AGENT_KINDS, BtnKind, agent_label, btn, icon, tooltip};
-use super::state::{DAYS, MODES, Pick, REPEATS, Repeats, labelled, repeats, time_of};
+use crate::settings::controls::ACCESS_MODES as MODES;
+use super::state::{DAYS, Pick, REPEATS, Repeats, labelled, repeats, time_of};
 
 /// The form for one task (`TaskEditor`).
 pub(super) fn editor(

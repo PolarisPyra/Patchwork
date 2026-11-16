@@ -39,7 +39,7 @@ impl Workspace {
                 .child(icon(item.icon, 14.))
                 .child(item.label)
                 .on_click(cx.listener(move |this, _, window, cx| {
-                    this.act(target.clone(), act, window, cx);
+                    this.act(target.clone(), act.clone(), window, cx);
                 }))
         });
         let body = div()

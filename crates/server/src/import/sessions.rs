@@ -199,6 +199,7 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
                 checks: None,
                 review: None,
                 cursor: None,
+                via: None,
             })
             .map(Arc::new)
             .collect(),

@@ -175,6 +175,7 @@ impl Server {
                     // of its own session.
                     turn: None,
                     cursor: None,
+                    via: None,
                     ..Message::clone(m)
                 })
             })

@@ -227,4 +227,6 @@ pub enum AgentEvent {
     TitleUpdated {
         title: String,
     },
+    /// The chat apps the thread is continued on changed.
+    ChatAppsChanged,
 }

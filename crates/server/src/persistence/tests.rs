@@ -40,6 +40,7 @@ fn message(text: &str, status: MessageStatus) -> Message {
         checks: None,
         review: None,
         cursor: None,
+        via: None,
     }
 }
 

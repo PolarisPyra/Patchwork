@@ -14,6 +14,7 @@ use crate::ui::menu::Menu;
 use crate::ui::text_area::TextArea;
 use super::controls::Field;
 use super::extensions;
+use super::gateways;
 use super::general;
 use super::mcp;
 use super::permissions;
@@ -132,6 +133,14 @@ pub(super) const ENTRIES: &[Entry] = &[
         ],
     },
     Entry {
+        label: "Gateways",
+        icon: "chats",
+        panes: &[Pane {
+            id: "gateways",
+            label: "Gateways",
+        }],
+    },
+    Entry {
         label: "Permissions",
         icon: "shield-check",
         panes: &[Pane {
@@ -211,6 +220,7 @@ pub struct SettingsDialog {
     pub(super) shortcuts: shortcuts::ShortcutsState,
     pub(super) providers: providers::ProvidersState,
     pub(super) extensions: extensions::ExtensionsState,
+    pub(super) gateways: gateways::GatewaysState,
     pub(super) mcp: mcp::McpState,
     pub(super) permissions: permissions::PermissionsState,
     pub(super) projects: projects::ProjectsState,
@@ -266,6 +276,7 @@ impl SettingsDialog {
             shortcuts: shortcuts::ShortcutsState::default(),
             providers: providers::ProvidersState::default(),
             extensions: extensions::ExtensionsState::default(),
+            gateways: gateways::GatewaysState::default(),
             mcp: mcp::McpState::default(),
             permissions: permissions::PermissionsState::default(),
             projects: projects::ProjectsState::default(),
