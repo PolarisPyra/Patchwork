@@ -10,7 +10,7 @@ use gpui::{
 };
 use patchwork_server::projects::Project;
 use patchwork_server::threads::Thread;
-use crate::ui::theme::{fs_md, radius_sm, theme};
+use crate::ui::theme::{fs_md, theme};
 use crate::ui::{button, icon, icon_button, scrollbar};
 use crate::workspace::Workspace;
 use super::render::{empty_row, section_label, twistie};
@@ -165,11 +165,10 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
         let undo_id = p.id.clone();
         let actions = div()
             .absolute()
-            .right(px(6.))
+            .right(px(2.))
             .flex()
             .items_center()
-            .rounded(px(radius_sm()))
-            .group_hover(group.clone(), |s| s.bg(t.tree_hover))
+            .gap(px(4.))
             .when(sorted, |row| {
                 row.child(reveal(
                     reveal_button(
@@ -191,6 +190,8 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
                     "magic-wand",
                     &t,
                 )
+                // The wand is drawn right of centre, so it needs 2px more to look evenly spaced.
+                .mr(px(2.))
                 .on_click(cx.listener(move |this, _, _, cx| {
                     cx.stop_propagation();
                     this.sort_by_agent(&sort_id, cx);
@@ -220,8 +221,13 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
                     this.new_thread_in(Some(task_id.clone()), None, window, cx);
                 })),
             ));
+        // On hover the name ends before the buttons: 24px each, 4px apart (6px after the wand),
+        // 2px from the edge.
+        let buttons = if sorted { 4. } else { 3. };
+        let clear = buttons * 28. + 6.;
         let row = tree_row(key, p.name.clone(), 1, open, picked, &t)
-            .group(group)
+            .group(group.clone())
+            .group_hover(group, move |s| s.pr(px(clear)))
             .relative()
             .pl(px(4.))
             .child(twistie(open))
