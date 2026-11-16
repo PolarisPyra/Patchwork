@@ -3,30 +3,152 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Patchwork — a desktop workspace for coding agents</title>
+    <title>Patchwork | Desktop App for Claude Code, Codex and Other Coding Agents</title>
     <meta
       name="description"
-      content="Patchwork runs Claude Code, Codex, Antigravity, OpenCode and your own API keys in one window, and lets you keep only the changes you like. Free on macOS, Windows and Linux."
+      content="Patchwork is a free, open-source desktop app for Claude Code, Codex, Antigravity and OpenCode, with API support, all in one window. No account, no telemetry. macOS, Windows and Linux."
     />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="theme-color" content="#15121c" />
     <link rel="canonical" href="https://patchworkeditor.com/" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Patchwork — a desktop workspace for coding agents" />
+    <meta property="og:site_name" content="Patchwork" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:title" content="Patchwork: all your coding agents in one window" />
     <meta
       property="og:description"
-      content="Claude Code, Codex, Antigravity, OpenCode and your own API keys in one window."
+      content="Run Claude Code, Codex, Antigravity and OpenCode, with API support, in one free desktop app."
     />
     <meta property="og:url" content="https://patchworkeditor.com/" />
     <meta property="og:image" content="https://patchworkeditor.com/img/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Patchwork, a desktop app for coding agents" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Patchwork: all your coding agents in one window" />
+    <meta
+      name="twitter:description"
+      content="Claude Code, Codex, Antigravity and OpenCode, with API support, in one free desktop app."
+    />
+    <meta name="twitter:image" content="https://patchworkeditor.com/img/og.png" />
+    <meta name="twitter:image:alt" content="Patchwork, a desktop app for coding agents" />
+    <!-- Search engines read this data block; it never runs, so the CSP's script-src does not apply.
+         Keep the FAQ and HowTo entries in step with the visible FAQ and setup steps. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://patchworkeditor.com/#app",
+            "name": "Patchwork",
+            "alternateName": "Patchwork ADE",
+            "description": "An agentic development environment (ADE) and agent orchestrator: a desktop app that runs Claude Code, Codex, Antigravity, OpenCode and API models in one window.",
+            "url": "https://patchworkeditor.com/",
+            "applicationCategory": "DeveloperApplication",
+            "operatingSystem": "Linux, Windows, macOS",
+            "downloadUrl": "https://github.com/PolarisPyra/Patchwork/releases/latest",
+            "license": "https://opensource.org/licenses/MIT",
+            "isAccessibleForFree": true,
+            "image": "https://patchworkeditor.com/img/og.png",
+            "screenshot": "https://patchworkeditor.com/img/shot-hero.webp",
+            "codeRepository": "https://github.com/PolarisPyra/Patchwork",
+            "featureList": [
+              "Claude Code, Codex, Antigravity and OpenCode in one window",
+              "API support for any OpenAI-compatible endpoint",
+              "Per-task permission modes, from supervised to full access",
+              "Orchestrator page that sends each request to the right project and agent",
+              "Parallel tasks in git worktrees",
+              "Goals with /goal and mid-turn steering",
+              "Import chats from Claude Code, Codex, the Gemini CLI and OpenCode",
+              "Scheduled tasks, skills, MCP servers and hooks",
+              "Usage view for subscription limits",
+              "No account, no proxy, no telemetry"
+            ],
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            },
+            "publisher": { "@id": "https://patchworkeditor.com/#organization" }
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://patchworkeditor.com/#organization",
+            "name": "Patchwork",
+            "url": "https://patchworkeditor.com/",
+            "logo": "https://patchworkeditor.com/apple-touch-icon.png",
+            "sameAs": ["https://github.com/PolarisPyra/Patchwork"]
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://patchworkeditor.com/#website",
+            "name": "Patchwork",
+            "url": "https://patchworkeditor.com/",
+            "inLanguage": "en",
+            "publisher": { "@id": "https://patchworkeditor.com/#organization" },
+            "about": { "@id": "https://patchworkeditor.com/#app" }
+          },
+          {
+            "@type": "HowTo",
+            "name": "Set up Patchwork",
+            "totalTime": "PT1M",
+            "step": [
+              { "@type": "HowToStep", "position": 1, "name": "Agents", "text": "Patchwork finds the agent CLIs you're signed in to." },
+              { "@type": "HowToStep", "position": 2, "name": "Imports", "text": "Bring your old conversations along." },
+              { "@type": "HowToStep", "position": 3, "name": "Projects", "text": "Point it at your code." },
+              { "@type": "HowToStep", "position": 4, "name": "Ready", "text": "Start your first task." }
+            ]
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Is Patchwork free?",
+                "acceptedAnswer": { "@type": "Answer", "text": "Yes. Patchwork is free and open source under the MIT License. You pay only for the agent subscriptions or API usage you already have." }
+              },
+              {
+                "@type": "Question",
+                "name": "Which coding agents does Patchwork support?",
+                "acceptedAnswer": { "@type": "Answer", "text": "Claude Code, Codex, Antigravity and OpenCode, through each CLI's own sign-in. Without a CLI, add an API key for DeepSeek or any OpenAI-compatible endpoint and use the built-in agent." }
+              },
+              {
+                "@type": "Question",
+                "name": "Do I need an account?",
+                "acceptedAnswer": { "@type": "Answer", "text": "No. There is no Patchwork account, no proxy and no telemetry. Requests go straight from your computer to your provider." }
+              },
+              {
+                "@type": "Question",
+                "name": "Can I control what an agent does without asking?",
+                "acceptedAnswer": { "@type": "Answer", "text": "Yes. Each task runs in one of four modes: supervised, auto-accept edits, auto, or full access. When an agent needs permission, it asks in the chat, and you can set rules for which commands it may run." }
+              },
+              {
+                "@type": "Question",
+                "name": "Can I bring my old conversations?",
+                "acceptedAnswer": { "@type": "Answer", "text": "Yes. Patchwork imports past chats from Claude Code, Codex, the Gemini CLI and OpenCode, so you can carry on where you left off." }
+              },
+              {
+                "@type": "Question",
+                "name": "Which systems does it run on?",
+                "acceptedAnswer": { "@type": "Answer", "text": "Linux (x86-64 AppImage), Windows (x64 exe, no installer) and macOS on Apple silicon (disk image). Settings → Updates says when a new version is out." }
+              },
+              {
+                "@type": "Question",
+                "name": "Why does my system warn me the first time I open it?",
+                "acceptedAnswer": { "@type": "Answer", "text": "The downloads are not signed with a developer certificate. On Windows, choose More info, then Run anyway. On macOS, drag Patchwork to Applications, Control-click it and choose Open." }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <!-- Browsers may keep these two for 4 hours (Cloudflare's browser cache), so bump ?v= whenever
          either changes, or a visitor gets the new page with the old styles. -->
-    <link rel="stylesheet" href="styles.css?v=3" />
+    <link rel="stylesheet" href="styles.css?v=7" />
     <script src="site.js?v=2"></script>
   </head>
   <body>
@@ -49,6 +171,8 @@
           <a href="#setup">Setup</a>
           <a href="#features">Features</a>
           <a href="#agents">Agents</a>
+          <a href="#compare">Compare</a>
+          <a href="#faq">FAQ</a>
           <a href="#download">Download</a>
           <a href="https://github.com/PolarisPyra/Patchwork">GitHub</a>
         </nav>
@@ -82,7 +206,7 @@
                 <svg class="sparkle sparkle-b" aria-hidden="true"><use href="#sparkle" /></svg>
               </h1>
               <p class="lede">
-                Claude Code, Codex, Antigravity, OpenCode, or your own API key. Give an agent a task,
+                Claude Code, Codex, Antigravity and OpenCode, with API support. Give an agent a task,
                 watch it work, and keep only the changes you like.
               </p>
               <div class="hero-actions">
@@ -97,6 +221,12 @@
                 </span>
                 <a class="btn btn-secondary" href="https://github.com/PolarisPyra/Patchwork">View on GitHub</a>
               </div>
+              <ul class="trust" aria-label="At a glance">
+                <li>Free and MIT licensed</li>
+                <li>No account</li>
+                <li>No telemetry</li>
+                <li>Linux, Windows and macOS</li>
+              </ul>
             </div>
 
             <figure class="shot shot-hero">
@@ -299,7 +429,7 @@
             <div class="split">
               <div class="split-copy reveal slide-in">
                 <span class="tag tag-sun" aria-hidden="true">Providers</span>
-                <h2>Use your own API key</h2>
+                <h2>API support</h2>
                 <p>
                   Add DeepSeek, OpenRouter or any OpenAI-compatible endpoint in Settings.
                 </p>
@@ -450,7 +580,7 @@
                 <svg class="agent-logo" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <path d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z" fill="#D97757" fill-rule="nonzero"></path>
                 </svg>
-                <span class="agent-name">Claude Code</span>
+                <a class="agent-name" href="claude-code/">Claude Code</a>
                 <span class="agent-vendor">Anthropic</span>
               </li>
               <li>
@@ -459,24 +589,202 @@
                     d="M9.205 8.658v-2.26c0-.19.072-.333.238-.428l4.543-2.616c.619-.357 1.356-.523 2.117-.523 2.854 0 4.662 2.212 4.662 4.566 0 .167 0 .357-.024.547l-4.71-2.759a.797.797 0 00-.856 0l-5.97 3.473zm10.609 8.8V12.06c0-.333-.143-.57-.429-.737l-5.97-3.473 1.95-1.118a.433.433 0 01.476 0l4.543 2.617c1.309.76 2.189 2.378 2.189 3.948 0 1.808-1.07 3.473-2.76 4.163zM7.802 12.703l-1.95-1.142c-.167-.095-.239-.238-.239-.428V5.899c0-2.545 1.95-4.472 4.591-4.472 1 0 1.927.333 2.712.928L8.23 5.067c-.285.166-.428.404-.428.737v6.898zM12 15.128l-2.795-1.57v-3.33L12 8.658l2.795 1.57v3.33L12 15.128zm1.796 7.23c-1 0-1.927-.332-2.712-.927l4.686-2.712c.285-.166.428-.404.428-.737v-6.898l1.974 1.142c.167.095.238.238.238.428v5.233c0 2.545-1.974 4.472-4.614 4.472zm-5.637-5.303l-4.544-2.617c-1.308-.761-2.188-2.378-2.188-3.948A4.482 4.482 0 014.21 6.327v5.423c0 .333.143.571.428.738l5.947 3.449-1.95 1.118a.432.432 0 01-.476 0zm-.262 3.9c-2.688 0-4.662-2.021-4.662-4.519 0-.19.024-.38.047-.57l4.686 2.71c.286.167.571.167.856 0l5.97-3.448v2.26c0 .19-.07.333-.237.428l-4.543 2.616c-.619.357-1.356.523-2.117.523zm5.899 2.83a5.947 5.947 0 005.827-4.756C22.287 18.339 24 15.84 24 13.296c0-1.665-.713-3.282-1.998-4.448.119-.5.19-.999.19-1.498 0-3.401-2.759-5.947-5.946-5.947-.642 0-1.26.095-1.88.31A5.962 5.962 0 0010.205 0a5.947 5.947 0 00-5.827 4.757C1.713 5.447 0 7.945 0 10.49c0 1.666.713 3.283 1.998 4.448-.119.5-.19 1-.19 1.499 0 3.401 2.759 5.946 5.946 5.946.642 0 1.26-.095 1.88-.309a5.96 5.96 0 004.162 1.713z"
                   />
                 </svg>
-                <span class="agent-name">Codex</span>
+                <a class="agent-name" href="codex/">Codex</a>
                 <span class="agent-vendor">OpenAI</span>
               </li>
               <li>
                 <svg class="agent-logo" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z" fill="#3186FF"></path><path d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z" fill="url(#lobe-icons-gemini-0-_R_0_)"></path><path d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z" fill="url(#lobe-icons-gemini-1-_R_0_)"></path><path d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z" fill="url(#lobe-icons-gemini-2-_R_0_)"></path><defs><linearGradient gradientUnits="userSpaceOnUse" id="lobe-icons-gemini-0-_R_0_" x1="7" x2="11" y1="15.5" y2="12"><stop stop-color="#08B962"></stop><stop offset="1" stop-color="#08B962" stop-opacity="0"></stop></linearGradient><linearGradient gradientUnits="userSpaceOnUse" id="lobe-icons-gemini-1-_R_0_" x1="8" x2="11.5" y1="5.5" y2="11"><stop stop-color="#F94543"></stop><stop offset="1" stop-color="#F94543" stop-opacity="0"></stop></linearGradient><linearGradient gradientUnits="userSpaceOnUse" id="lobe-icons-gemini-2-_R_0_" x1="3.5" x2="17.5" y1="13.5" y2="12"><stop stop-color="#FABC12"></stop><stop offset=".46" stop-color="#FABC12" stop-opacity="0"></stop></linearGradient></defs>
                 </svg>
-                <span class="agent-name">Antigravity</span>
+                <a class="agent-name" href="antigravity/">Antigravity</a>
                 <span class="agent-vendor">Google</span>
               </li>
               <li>
                 <svg class="agent-logo" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <path d="M16 6H8v12h8V6zm4 16H4V2h16v20z" />
                 </svg>
-                <span class="agent-name">OpenCode</span>
+                <a class="agent-name" href="opencode/">OpenCode</a>
                 <span class="agent-vendor">Open source</span>
               </li>
             </ul>
+          </div>
+        </section>
+
+        <!-- Compare: from each vendor's own docs and pricing pages, checked November 2026. Recheck
+             before a release that touches this section; these products change often. -->
+        <section class="section" id="compare">
+          <div class="wrap">
+            <header class="section-head reveal drop-in">
+              <h2>How Patchwork compares</h2>
+            </header>
+            <div class="compare reveal" role="region" aria-label="Comparison table" tabindex="0">
+              <table>
+                <thead>
+                  <tr>
+                    <td></td>
+                    <th scope="col" class="is-us">Patchwork</th>
+                    <th scope="col">Claude desktop app</th>
+                    <th scope="col">Codex app</th>
+                    <th scope="col">Cursor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="group">
+                    <th scope="colgroup" colspan="5">Agents and models</th>
+                  </tr>
+                  <tr>
+                    <th scope="row">Coding agents</th>
+                    <td>Claude Code, Codex, Antigravity, OpenCode</td>
+                    <td>Claude only</td>
+                    <td>Codex only</td>
+                    <td>Its own agent</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">API support</th>
+                    <td>DeepSeek, OpenRouter or any OpenAI-compatible endpoint</td>
+                    <td>Claude models only, through Anthropic or a cloud provider</td>
+                    <td>Not documented for the app</td>
+                    <td>OpenAI-compatible endpoints, not for every feature</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Imports chats from</th>
+                    <td>Claude Code, Codex, Gemini CLI, OpenCode</td>
+                    <td>Earlier Claude installs</td>
+                    <td>Claude Code, Claude Cowork, Cursor (last 30 days)</td>
+                    <td>Not documented</td>
+                  </tr>
+                  <tr class="group">
+                    <th scope="colgroup" colspan="5">Getting it</th>
+                  </tr>
+                  <tr>
+                    <th scope="row">Platforms</th>
+                    <td>Linux, Windows, macOS (Apple silicon)</td>
+                    <td>macOS, Windows, Linux (beta)</td>
+                    <td>macOS, Windows, Linux (preview)</td>
+                    <td>macOS, Windows, Linux</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Account</th>
+                    <td>None</td>
+                    <td>Claude account</td>
+                    <td>ChatGPT account</td>
+                    <td>Cursor account</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Price</th>
+                    <td>Free</td>
+                    <td>Paid Claude plan</td>
+                    <td>ChatGPT plan, free tier included</td>
+                    <td>Free tier, paid from $8 a month</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Open source</th>
+                    <td>Yes, MIT</td>
+                    <td>No</td>
+                    <td>The CLI is; the app is not stated</td>
+                    <td>No</td>
+                  </tr>
+                  <tr class="group">
+                    <th scope="colgroup" colspan="5">Working with agents</th>
+                  </tr>
+                  <tr>
+                    <th scope="row">Permission modes</th>
+                    <td>Supervised, Auto-accept edits, Auto, Full access</td>
+                    <td>Manual, Accept edits, Plan, Auto, Bypass permissions</td>
+                    <td>Ask for approval, Approve for me, Full access, Custom</td>
+                    <td>Auto-review, Allowlist, Run Everything</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Scheduled tasks</th>
+                    <td>On your machine</td>
+                    <td>On your machine or in the cloud</td>
+                    <td>On your machine or in the cloud</td>
+                    <td>In the cloud</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Parallel tasks in worktrees</th>
+                    <td>Yes</td>
+                    <td>Yes</td>
+                    <td>Yes</td>
+                    <td>Yes</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Diff review</th>
+                    <td>Yes</td>
+                    <td>Yes</td>
+                    <td>Yes</td>
+                    <td>Yes</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">MCP servers</th>
+                    <td>Yes</td>
+                    <td>Yes</td>
+                    <td>Yes</td>
+                    <td>Yes</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Skills</th>
+                    <td>Yes</td>
+                    <td>Yes</td>
+                    <td>Yes</td>
+                    <td>Yes</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Hooks</th>
+                    <td>Yes</td>
+                    <td>Not documented for the app</td>
+                    <td>Yes</td>
+                    <td>Yes</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">View plan usage</th>
+                    <td>Yes</td>
+                    <td>Yes</td>
+                    <td>On the web</td>
+                    <td>On the web</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- FAQ: keep in step with the FAQPage data in the head. -->
+        <section class="section" id="faq">
+          <div class="wrap">
+            <header class="section-head reveal drop-in">
+              <h2>Questions</h2>
+            </header>
+            <div class="faq reveal">
+              <details class="faq-item">
+                <summary><h3>Is Patchwork free?</h3></summary>
+                <p>Yes. Patchwork is free and open source under the MIT License. You pay only for the agent subscriptions or API usage you already have.</p>
+              </details>
+              <details class="faq-item">
+                <summary><h3>Which coding agents does Patchwork support?</h3></summary>
+                <p>Claude Code, Codex, Antigravity and OpenCode, through each CLI&#39;s own sign-in. Without a CLI, add an API key for DeepSeek or any OpenAI-compatible endpoint and use the built-in agent.</p>
+              </details>
+              <details class="faq-item">
+                <summary><h3>Do I need an account?</h3></summary>
+                <p>No. There is no Patchwork account, no proxy and no telemetry. Requests go straight from your computer to your provider.</p>
+              </details>
+              <details class="faq-item">
+                <summary><h3>Can I control what an agent does without asking?</h3></summary>
+                <p>Yes. Each task runs in one of four modes: supervised, auto-accept edits, auto, or full access. When an agent needs permission, it asks in the chat, and you can set rules for which commands it may run.</p>
+              </details>
+              <details class="faq-item">
+                <summary><h3>Can I bring my old conversations?</h3></summary>
+                <p>Yes. Patchwork imports past chats from Claude Code, Codex, the Gemini CLI and OpenCode, so you can carry on where you left off.</p>
+              </details>
+              <details class="faq-item">
+                <summary><h3>Which systems does it run on?</h3></summary>
+                <p>Linux (x86-64 AppImage), Windows (x64 exe, no installer) and macOS on Apple silicon (disk image). Settings → Updates says when a new version is out.</p>
+              </details>
+              <details class="faq-item">
+                <summary><h3>Why does my system warn me the first time I open it?</h3></summary>
+                <p>The downloads are not signed with a developer certificate. On Windows, choose More info, then Run anyway. On macOS, drag Patchwork to Applications, Control-click it and choose Open.</p>
+              </details>
+            </div>
           </div>
         </section>
 
@@ -536,6 +844,14 @@
             <img class="brand-mark" src="favicon.svg" alt="" width="20" height="20" />
             <span>Patchwork</span>
           </div>
+          <nav class="footer-links" aria-label="Pages">
+            <a href="claude-code/">Claude Code</a>
+            <a href="codex/">Codex</a>
+            <a href="antigravity/">Antigravity</a>
+            <a href="opencode/">OpenCode</a>
+            <a href="agent-orchestrator/">Agent orchestrator</a>
+            <a href="ade/">Agentic development environment</a>
+          </nav>
           <p class="footer-line">
             © <span data-year>2026</span> Patchwork · MIT License ·
             <a href="https://github.com/PolarisPyra/Patchwork">GitHub</a>

@@ -5,8 +5,8 @@
 <h1 align="center">Patchwork</h1>
 
 <p align="center">
-  One desktop app for all your coding agents.<br>
-  Run Claude Code, Codex, Antigravity, OpenCode, or your own API model, and check every change before it sticks.
+  All your coding agents, in one window.<br>
+  Claude Code, Codex, Antigravity and OpenCode, with API support. Free, with no account and no telemetry.
 </p>
 
 <p align="center">
@@ -36,26 +36,46 @@
 ## What it does
 
 You probably already have an agent CLI you like. Patchwork gives it a proper home: your projects
-and tasks in a sidebar, the agent's work laid out step by step, and a diff you review before
-anything lands.
+and tasks in a sidebar, and the agent's work laid out step by step as it goes.
 
 - **Every agent, one window.** Claude Code, Codex, Antigravity, OpenCode, and API models all get
   the same chat, plan, and code views. Switching agents is a dropdown, not a new app.
-- **You keep what you want.** Each task has Plan, Code, and Diff views. Stage the files you like
-  and reject the rest to put them back.
 - **You choose how much it does alone.** Supervised, auto-accept edits, auto, or full access, set
   per task. When it needs permission, it asks in the chat.
 - **Set a goal, steer as it goes.** Hand it a `/goal` and walk away, or send a message mid-turn to
   change course.
-- **Bring your own key.** DeepSeek or any OpenAI-compatible endpoint works from
+- **API support.** DeepSeek or any OpenAI-compatible endpoint works from
   **Settings → Providers**.
 - **Pick up old sessions.** Import past conversations from Claude Code, Codex, the Gemini CLI, or
   OpenCode and carry on where you left off.
 - **It all stays on your machine.** No account, no proxy, no telemetry. Requests go straight from
   your computer to your provider.
 
-There's more: scheduled tasks, skills, MCP servers, hooks, a Usage view for your
-subscription limits, and diagrams or HTML mocks that render right in the chat.
+There's more: scheduled tasks, skills, MCP servers, hooks, a Usage view for your subscription
+limits, a diff of each task's changes, and diagrams or HTML mocks that render right in the chat.
+
+## How it compares
+
+| | Patchwork | Claude desktop app | Codex app | Cursor |
+| --- | --- | --- | --- | --- |
+| **Agents and models** | | | | |
+| Coding agents | Claude Code, Codex, Antigravity, OpenCode | Claude only | Codex only | Its own agent |
+| API support | DeepSeek, OpenRouter or any OpenAI-compatible endpoint | Claude models only, through Anthropic or a cloud provider | Not documented for the app | OpenAI-compatible endpoints, not for every feature |
+| Imports chats from | Claude Code, Codex, Gemini CLI, OpenCode | Earlier Claude installs | Claude Code, Claude Cowork, Cursor (last 30 days) | Not documented |
+| **Getting it** | | | | |
+| Platforms | Linux, Windows, macOS (Apple silicon) | macOS, Windows, Linux (beta) | macOS, Windows, Linux (preview) | macOS, Windows, Linux |
+| Account | None | Claude account | ChatGPT account | Cursor account |
+| Price | Free | Paid Claude plan | ChatGPT plan, free tier included | Free tier, paid from $8 a month |
+| Open source | Yes, MIT | No | The CLI is; the app is not stated | No |
+| **Working with agents** | | | | |
+| Permission modes | Supervised, Auto-accept edits, Auto, Full access | Manual, Accept edits, Plan, Auto, Bypass permissions | Ask for approval, Approve for me, Full access, Custom | Auto-review, Allowlist, Run Everything |
+| Scheduled tasks | On your machine | On your machine or in the cloud | On your machine or in the cloud | In the cloud |
+| Parallel tasks in worktrees | Yes | Yes | Yes | Yes |
+| Diff review | Yes | Yes | Yes | Yes |
+| MCP servers | Yes | Yes | Yes | Yes |
+| Skills | Yes | Yes | Yes | Yes |
+| Hooks | Yes | Not documented for the app | Yes | Yes |
+| View plan usage | Yes | Yes | On the web | On the web |
 
 ## Download
 
@@ -77,7 +97,7 @@ choose Open. Settings → Updates says when a new version is out.
    [OpenCode](https://opencode.ai/). Patchwork finds it on its own. No CLI? Add an API provider
    under **Settings → Providers** and use the built-in agent.
 2. Add a project folder, click **+** to start a task, and pick an agent.
-3. When it's done, look over the diff and keep what you want.
+3. Watch it work, and send a message any time to steer it.
 
 Just want to try something? Start a chat from the top of the sidebar. It runs in a throwaway folder
 that goes away with the chat.

@@ -1,21 +1,37 @@
 # Website
 
-The product site: one static page, no build step, no dependencies. Everything it needs is in this
+The product site: static pages, no build step, no dependencies. Everything it needs is in this
 folder, so it can be dragged into Cloudflare Pages as it is.
 
 ```
 site/
-  index.html              the whole page
+  index.html              the home page
+  claude-code/ codex/ antigravity/ opencode/ agent-orchestrator/ ade/
+                          one landing page each (index.html), for people searching for that
   styles.css              one stylesheet
   site.js                 platform detection for the download button, mobile menu, pop-ins on scroll
   refresh-downloads.mjs   points the page at the newest release tag
   _headers                Cloudflare Pages headers (CSP, cache lifetimes)
   robots.txt
+  sitemap.xml             every page, for search engines
   fonts/                  Inter and JetBrains Mono, subset to Latin, self hosted
   img/                    screenshots of the app as WebP, plus the social card
   favicon.svg
   apple-touch-icon.png
 ```
+
+## Landing pages
+
+Each folder with an `index.html` is one page written by hand for one search, such as "Claude Code
+GUI". They share `styles.css` and `site.js`, link to them from the root (`/styles.css`), and send
+their download button to the home page's download section, so a release changes nothing in them.
+Because of the root links, look at them through a local server rather than by opening the file:
+`npx serve site`.
+
+The header, the footer and its list of pages are repeated in every page. When one changes, change
+it in all of them. A new page also goes in `sitemap.xml` and in each footer. Each page's FAQ is in
+its `<head>` as well, as data for search engines; keep the two the same. What a page says about an
+agent comes from `docs/agent-clis.md`.
 
 ## Deploy to Cloudflare Pages
 

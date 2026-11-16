@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Antigravity CLI GUI for Linux, Windows, macOS | Patchwork</title>
+    <meta name="description" content="Patchwork is a free, open-source desktop app for Google&#x27;s Antigravity CLI. It can install the CLI for you, imports your Gemini CLI chats and runs Antigravity beside Claude Code and Codex." />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="theme-color" content="#15121c" />
+    <link rel="canonical" href="https://patchworkeditor.com/antigravity/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Patchwork" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:title" content="Antigravity CLI GUI for Linux, Windows, macOS | Patchwork" />
+    <meta property="og:description" content="Patchwork is a free, open-source desktop app for Google&#x27;s Antigravity CLI. It can install the CLI for you, imports your Gemini CLI chats and runs Antigravity beside Claude Code and Codex." />
+    <meta property="og:url" content="https://patchworkeditor.com/antigravity/" />
+    <meta property="og:image" content="https://patchworkeditor.com/img/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Antigravity CLI GUI for Linux, Windows, macOS | Patchwork" />
+    <meta name="twitter:description" content="Patchwork is a free, open-source desktop app for Google&#x27;s Antigravity CLI. It can install the CLI for you, imports your Gemini CLI chats and runs Antigravity beside Claude Code and Codex." />
+    <meta name="twitter:image" content="https://patchworkeditor.com/img/og.png" />
+    <!-- Keep the FAQ entries here in step with the visible FAQ below. -->
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "@id": "https://patchworkeditor.com/antigravity/",
+      "url": "https://patchworkeditor.com/antigravity/",
+      "name": "Antigravity CLI GUI for Linux, Windows, macOS | Patchwork",
+      "description": "Patchwork is a free, open-source desktop app for Google's Antigravity CLI. It can install the CLI for you, imports your Gemini CLI chats and runs Antigravity beside Claude Code and Codex.",
+      "inLanguage": "en",
+      "isPartOf": {
+        "@id": "https://patchworkeditor.com/#website"
+      },
+      "about": {
+        "@id": "https://patchworkeditor.com/#app"
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Patchwork",
+          "item": "https://patchworkeditor.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Antigravity",
+          "item": "https://patchworkeditor.com/antigravity/"
+        }
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Is there an Antigravity GUI for Linux?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Patchwork runs the Antigravity CLI in a desktop app that ships as an AppImage for x86-64 Linux, as well as for Windows and Apple silicon Macs."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can Antigravity ask for approval in the chat?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Not yet. The CLI cannot ask questions in the mode Patchwork runs it in, so in Supervised mode it skips actions that would need approval."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I steer Antigravity mid-turn?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. A message sent while it is working waits for the next turn."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it replace the Gemini CLI?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Antigravity is Google's newer CLI. Patchwork imports the chats the Gemini CLI saved, so you keep that history."
+          }
+        }
+      ]
+    }
+  ]
+}
+    </script>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/styles.css?v=7" />
+    <script src="/site.js?v=2"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <svg class="defs" aria-hidden="true">
+      <symbol id="sparkle" viewBox="0 0 10 10">
+        <path d="M5 0Q5.6 4.4 10 5Q5.6 5.6 5 10Q4.4 5.6 0 5Q4.4 4.4 5 0Z" />
+      </symbol>
+    </svg>
+
+    <header class="nav">
+      <div class="wrap nav-inner">
+        <a class="brand" href="/" aria-label="Patchwork, home">
+          <img class="brand-mark" src="/favicon.svg" alt="" width="24" height="24" />
+          <span>Patchwork</span>
+        </a>
+        <nav class="nav-links" id="nav-links" aria-label="Main">
+          <a href="/#features">Features</a>
+          <a href="/#agents">Agents</a>
+          <a href="/#compare">Compare</a>
+          <a href="/#faq">FAQ</a>
+          <a href="/#download">Download</a>
+          <a href="https://github.com/PolarisPyra/Patchwork">GitHub</a>
+        </nav>
+        <button
+          class="nav-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="nav-links"
+          aria-label="Open menu"
+          data-nav-toggle
+        >
+          <svg class="i i-menu" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+          <svg class="i i-close" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="page" tabindex="-1" data-page>
+      <main id="main">
+        <section class="hero">
+          <div class="wrap wrap-wide">
+            <div class="hero-copy reveal">
+              <h1>
+                A desktop app for the Antigravity CLI
+                <svg class="sparkle sparkle-a" aria-hidden="true"><use href="#sparkle" /></svg>
+                <svg class="sparkle sparkle-b" aria-hidden="true"><use href="#sparkle" /></svg>
+              </h1>
+              <p class="lede">Patchwork runs Google&#x27;s Antigravity CLI on Linux, Windows and macOS, beside your other agents, and can install the CLI for you.</p>
+              <div class="hero-actions">
+                <span class="halo-btn">
+                  <a class="btn btn-primary" href="/#download">Download Patchwork</a>
+                </span>
+                <a class="btn btn-secondary" href="https://github.com/PolarisPyra/Patchwork">View on GitHub</a>
+              </div>
+              <ul class="trust" aria-label="At a glance">
+                <li>Free and MIT licensed</li>
+                <li>No account</li>
+                <li>No telemetry</li>
+                <li>Linux, Windows and macOS</li>
+              </ul>
+            </div>
+            <figure class="shot shot-hero">
+              <div class="window">
+                <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+                <img src="/img/shot-setup.webp" width="1371" height="823" alt="The first setup step, Connect your coding agents, listing Claude Code, Codex, Antigravity CLI and OpenCode CLI as ready, with Claude Code picked as the default agent" />
+              </div>
+            </figure>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="wrap">
+            <header class="section-head reveal drop-in">
+              <h2>Antigravity, with a window around it</h2>
+            </header>
+            <ul class="cards cards-plain">
+              <li class="card reveal flip-in">
+                <h3>Installed for you</h3>
+                <p>No CLI yet? Settings can download Google&#x27;s installer and keep the CLI in Patchwork&#x27;s own folder.</p>
+              </li>
+              <li class="card reveal flip-in">
+                <h3>Your Gemini CLI chats</h3>
+                <p>Chats saved by the earlier Gemini CLI are imported with their projects.</p>
+              </li>
+              <li class="card reveal flip-in">
+                <h3>Four access modes</h3>
+                <p>Supervised, Auto-accept edits, Auto and Full access, set for each task.</p>
+              </li>
+              <li class="card reveal flip-in">
+                <h3>Goals</h3>
+                <p>Set a goal with /goal and Antigravity works until it has checked that the goal is met.</p>
+              </li>
+              <li class="card reveal flip-in">
+                <h3>Rules for commands</h3>
+                <p>Allow, ask or deny rules are checked before every tool call Antigravity makes.</p>
+              </li>
+              <li class="card reveal flip-in">
+                <h3>Usage</h3>
+                <p>The Usage panel shows what Antigravity&#x27;s own /usage command reports.</p>
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="wrap wrap-narrow">
+            <h2 class="reveal drop-in">Get started</h2>
+            <ol class="steps reveal" aria-label="Steps">
+              <li>
+                <span class="step-dot" aria-hidden="true">1</span>
+                <span><b>Get the CLI.</b> Install it from Settings, or use the one already on your system, and sign in.</span>
+              </li>
+              <li>
+                <span class="step-dot" aria-hidden="true">2</span>
+                <span><b>Add a project.</b> Point Patchwork at a folder of your code.</span>
+              </li>
+              <li>
+                <span class="step-dot" aria-hidden="true">3</span>
+                <span><b>Start a task.</b> Pick Antigravity in the agent menu and say what you want done.</span>
+              </li>
+            </ol>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="wrap">
+            <header class="section-head reveal drop-in">
+              <h2>Questions</h2>
+            </header>
+            <div class="faq reveal">
+              <details class="faq-item">
+                <summary><h3>Is there an Antigravity GUI for Linux?</h3></summary>
+                <p>Yes. Patchwork runs the Antigravity CLI in a desktop app that ships as an AppImage for x86-64 Linux, as well as for Windows and Apple silicon Macs.</p>
+              </details>
+              <details class="faq-item">
+                <summary><h3>Can Antigravity ask for approval in the chat?</h3></summary>
+                <p>Not yet. The CLI cannot ask questions in the mode Patchwork runs it in, so in Supervised mode it skips actions that would need approval.</p>
+              </details>
+              <details class="faq-item">
+                <summary><h3>Can I steer Antigravity mid-turn?</h3></summary>
+                <p>No. A message sent while it is working waits for the next turn.</p>
+              </details>
+              <details class="faq-item">
+                <summary><h3>Does it replace the Gemini CLI?</h3></summary>
+                <p>Antigravity is Google&#x27;s newer CLI. Patchwork imports the chats the Gemini CLI saved, so you keep that history.</p>
+              </details>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="wrap">
+            <header class="section-head reveal drop-in">
+              <h2>More about Patchwork</h2>
+            </header>
+            <ul class="page-links">
+              <li><a class="btn btn-secondary" href="/claude-code/">Claude Code</a></li>
+              <li><a class="btn btn-secondary" href="/codex/">Codex</a></li>
+              <li><a class="btn btn-secondary" href="/opencode/">OpenCode</a></li>
+              <li><a class="btn btn-secondary" href="/agent-orchestrator/">Agent orchestrator</a></li>
+              <li><a class="btn btn-secondary" href="/ade/">Agentic development environment</a></li>
+            </ul>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <div class="wrap footer-inner">
+          <div class="footer-brand">
+            <img class="brand-mark" src="/favicon.svg" alt="" width="20" height="20" />
+            <span>Patchwork</span>
+          </div>
+          <nav class="footer-links" aria-label="Pages">
+            <a href="/claude-code/">Claude Code</a>
+            <a href="/codex/">Codex</a>
+            <a href="/antigravity/">Antigravity</a>
+            <a href="/opencode/">OpenCode</a>
+            <a href="/agent-orchestrator/">Agent orchestrator</a>
+            <a href="/ade/">Agentic development environment</a>
+          </nav>
+          <p class="footer-line">
+            © <span data-year>2026</span> Patchwork · MIT License ·
+            <a href="https://github.com/PolarisPyra/Patchwork">GitHub</a>
+          </p>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

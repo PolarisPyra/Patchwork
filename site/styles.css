@@ -410,6 +410,33 @@ code {
   margin-top: 36px;
 }
 
+/* The facts a visitor checks first, in a quiet row under the buttons. */
+.trust {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 24px;
+  margin-top: 28px;
+  padding: 0;
+  list-style: none;
+  color: var(--fg-3);
+  font-size: 14px;
+}
+
+.trust li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.trust li::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mint);
+}
+
 /* Screenshots: a little window with candy-coloured dots. */
 
 .shot {
@@ -670,6 +697,127 @@ code {
 
 .card p {
   margin-top: 8px;
+  color: var(--fg-2);
+}
+
+/* Comparison table: scrolls inside its own box on a phone, never the page. */
+.compare {
+  max-width: 1080px;
+  margin: 0 auto;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--panel);
+}
+
+.compare:focus-visible {
+  outline: 2px solid var(--pink);
+  outline-offset: 2px;
+}
+
+.compare table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.compare th,
+.compare td {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.compare tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.compare thead th {
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.compare tbody th {
+  color: var(--fg-3);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.compare td {
+  color: var(--fg-2);
+}
+
+.compare .group th {
+  padding-top: 24px;
+  background: var(--sunk);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.compare .is-us,
+.compare td:nth-child(2) {
+  background: var(--raised);
+  color: var(--fg);
+}
+
+/* FAQ: native disclosures, so they open with the keyboard and without JavaScript. */
+.faq {
+  display: grid;
+  gap: 12px;
+  max-width: 780px;
+  margin: 0 auto;
+}
+
+.faq-item {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  transition: border-color 200ms ease;
+}
+
+.faq-item[open],
+.faq-item:hover {
+  border-color: var(--line-strong);
+}
+
+.faq-item summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq-item summary::after {
+  content: "+";
+  flex: none;
+  color: var(--fg-3);
+  font-size: 22px;
+  line-height: 1;
+  transition: transform 300ms var(--pop);
+}
+
+.faq-item[open] summary::after {
+  transform: rotate(45deg);
+}
+
+.faq-item h3 {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.faq-item p {
+  padding: 0 24px 20px;
   color: var(--fg-2);
 }
 
@@ -1260,4 +1408,45 @@ code {
   .sparkle-b {
     display: none;
   }
+}
+
+/* The landing pages (claude-code/, codex/, …): cards without icons, a narrow column for the
+   steps, and the links between pages. */
+.wrap-narrow {
+  max-width: 720px;
+}
+
+.cards-plain .card h3 {
+  margin-top: 0;
+}
+
+.page-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-size: 14px;
+}
+
+.footer-links a,
+a.agent-name {
+  color: var(--fg-2);
+  text-decoration: none;
+}
+
+a.agent-name {
+  color: var(--fg);
+}
+
+.footer-links a:hover,
+a.agent-name:hover {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
