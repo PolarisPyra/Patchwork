@@ -1,4 +1,4 @@
-// Downloads, the mobile menu and the pop-ins as you scroll. Everything here is progressive: without
+// Downloads, the mobile menu, the carousels and the pop-ins as you scroll. Everything here is progressive: without
 // JavaScript the links are real anchors and the page is complete.
 //
 // It runs in the head, so the page knows it can hold blocks back for their pop-in before anything
@@ -97,6 +97,81 @@ function start() {
   } else {
     for (const block of blocks) block.classList.add("is-seen");
   }
+
+  for (const carousel of document.querySelectorAll("[data-carousel]")) startCarousel(carousel);
+}
+
+// A carousel. A slide stays for as long as its pill takes to fill, and the fill only runs while the
+// carousel is on screen, the pointer is off it and nobody has paused it. The tabs beside the picture
+// and the pills under it both pick a slide. With reduced motion it starts paused, on the first
+// slide, and nothing plays until the visitor asks.
+function startCarousel(root) {
+  const slides = [...root.querySelectorAll("[data-slide]")];
+  const pills = [...root.querySelectorAll("[data-pill]")];
+  const tabs = [...root.querySelectorAll("[data-tab]")];
+  const toggle = root.querySelector("[data-carousel-toggle]");
+  let current = 0;
+  let stopped = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let onScreen = !("IntersectionObserver" in window);
+  let hovered = false;
+
+  const sync = () => {
+    const running = !stopped && onScreen && !hovered;
+    root.classList.toggle("is-running", running);
+    root.classList.toggle("is-stopped", stopped);
+    toggle?.setAttribute("aria-label", stopped ? "Play the slides" : "Pause the slides");
+    const video = slides[current].querySelector("video");
+    if (!video) return;
+    if (running) video.play().catch(() => {});
+    else video.pause();
+  };
+
+  const show = (index) => {
+    slides[current].querySelector("video")?.pause();
+    current = (index + slides.length) % slides.length;
+    slides.forEach((slide, i) => slide.classList.toggle("is-active", i === current));
+    pills.forEach((pill, i) => pill.classList.toggle("is-active", i === current));
+    tabs.forEach((tab, i) => {
+      tab.classList.toggle("is-active", i === current);
+      if (i === current) tab.setAttribute("aria-current", "true");
+      else tab.removeAttribute("aria-current");
+    });
+    const video = slides[current].querySelector("video");
+    if (video) video.currentTime = 0;
+    sync();
+  };
+
+  pills.forEach((pill, i) => {
+    pill.addEventListener("click", () => show(i));
+    // The spark's animations end on the pill too; only the fill moves the carousel on.
+    pill.addEventListener("animationend", (event) => {
+      if (event.animationName === "pill-fill") show(current + 1);
+    });
+  });
+  tabs.forEach((tab, i) => tab.addEventListener("click", () => show(i)));
+  toggle?.addEventListener("click", () => {
+    stopped = !stopped;
+    sync();
+  });
+  root.addEventListener("pointerenter", () => {
+    hovered = true;
+    sync();
+  });
+  root.addEventListener("pointerleave", () => {
+    hovered = false;
+    sync();
+  });
+
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver(
+      ([entry]) => {
+        onScreen = entry.isIntersecting;
+        sync();
+      },
+      { threshold: 0.4 },
+    ).observe(root);
+  }
+  sync();
 }
 
 function hostPlatform() {
