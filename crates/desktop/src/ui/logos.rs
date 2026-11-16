@@ -50,9 +50,6 @@ pub fn platform_logo(platform: Platform, size: f32) -> AnyElement {
         Platform::Mattermost => ("mattermost-color.svg", false),
         Platform::Signal => ("signal-color.svg", false),
         Platform::Qq => ("qq-color.svg", false),
-        Platform::Irc => return icon("hash", size).into_any_element(),
-        Platform::Email => return icon("envelope", size).into_any_element(),
-        Platform::Sms => return icon("chat-text", size).into_any_element(),
     };
     logo_file(file, mono, size)
 }

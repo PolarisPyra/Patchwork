@@ -14,9 +14,6 @@ pub enum Platform {
     Matrix,
     Mattermost,
     Signal,
-    Irc,
-    Email,
-    Sms,
     Qq,
 }
 
@@ -24,7 +21,6 @@ pub enum Platform {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Need {
     Required,
-    Optional,
     /// Optional, and this value is used when it is empty.
     Default(&'static str),
 }
@@ -50,16 +46,6 @@ const fn required(key: &'static str, label: &'static str, placeholder: &'static 
     }
 }
 
-/// A field that may stay empty.
-const fn optional(key: &'static str, label: &'static str, placeholder: &'static str) -> Field {
-    Field {
-        key,
-        label,
-        placeholder,
-        need: Need::Optional,
-    }
-}
-
 /// A field that falls back to `default` when it is empty.
 const fn default(key: &'static str, label: &'static str, default: &'static str) -> Field {
     Field {
@@ -72,16 +58,13 @@ const fn default(key: &'static str, label: &'static str, default: &'static str) 
 
 impl Platform {
     /// Every platform, in the order Settings lists them.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 7] = [
         Self::Telegram,
         Self::Discord,
         Self::Slack,
         Self::Matrix,
         Self::Mattermost,
         Self::Signal,
-        Self::Irc,
-        Self::Email,
-        Self::Sms,
         Self::Qq,
     ];
 
@@ -95,9 +78,6 @@ impl Platform {
             Self::Matrix => "Matrix",
             Self::Mattermost => "Mattermost",
             Self::Signal => "Signal",
-            Self::Irc => "IRC",
-            Self::Email => "Email",
-            Self::Sms => "SMS (Twilio)",
             Self::Qq => "QQ",
         }
     }
@@ -112,9 +92,6 @@ impl Platform {
             Self::Matrix => "matrix",
             Self::Mattermost => "mattermost",
             Self::Signal => "signal",
-            Self::Irc => "irc",
-            Self::Email => "email",
-            Self::Sms => "sms",
             Self::Qq => "qq",
         }
     }
@@ -126,9 +103,7 @@ impl Platform {
             Self::Discord | Self::Signal => 2000,
             Self::Slack => 3000,
             Self::Telegram | Self::Qq => 4000,
-            Self::Sms => 1600,
-            Self::Irc | Self::Matrix | Self::Mattermost => 16_000,
-            Self::Email => 100_000,
+            Self::Matrix | Self::Mattermost => 16_000,
         }
     }
 
@@ -150,16 +125,6 @@ impl Platform {
                 const { &[required("token", "Access token", "Access token")] }
             }
             Self::Signal => &[],
-            Self::Irc => {
-                const {
-                    &[
-                        optional("password", "Server password", "Server password"),
-                        optional("nickserv", "NickServ password", "NickServ password"),
-                    ]
-                }
-            }
-            Self::Email => const { &[required("password", "Password", "Password")] },
-            Self::Sms => const { &[required("token", "Auth token", "Auth token")] },
             Self::Qq => const { &[required("secret", "Client secret", "Client secret")] },
         }
     }
@@ -178,32 +143,6 @@ impl Platform {
                     &[
                         default("server", "signal-cli daemon", "http://127.0.0.1:8080"),
                         required("account", "Phone number", "+15551234567"),
-                    ]
-                }
-            }
-            Self::Irc => {
-                const {
-                    &[
-                        required("server", "Server", "irc.libera.chat:6697"),
-                        default("nick", "Nickname", "patchwork"),
-                        optional("channels", "Channels", "#channel, #other"),
-                    ]
-                }
-            }
-            Self::Email => {
-                const {
-                    &[
-                        required("address", "Address", "you@example.com"),
-                        required("imap", "IMAP server", "imap.example.com:993"),
-                        required("smtp", "SMTP server", "smtp.example.com:465"),
-                    ]
-                }
-            }
-            Self::Sms => {
-                const {
-                    &[
-                        required("account", "Account SID", "AC…"),
-                        required("number", "Phone number", "+15551234567"),
                     ]
                 }
             }

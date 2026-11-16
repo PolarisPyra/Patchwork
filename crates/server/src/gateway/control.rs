@@ -6,9 +6,7 @@ use std::sync::Arc;
 use std::sync::mpsc::channel;
 
 use super::discord::Discord;
-use super::email::Email;
 use super::hub::spawn;
-use super::irc::{Irc, IrcSetup};
 use super::matrix::Matrix;
 use super::mattermost::Mattermost;
 use super::outbound::forward;
@@ -16,7 +14,6 @@ use super::platform::{Need, Platform};
 use super::qq::Qq;
 use super::signal::Signal;
 use super::slack::Slack;
-use super::sms::Sms;
 use super::telegram::Telegram;
 use super::types::{Connector, PlatformSettings, Status};
 use crate::provider::api::config::{delete_secret, read_secret, store_secret};
@@ -195,7 +192,6 @@ pub(super) fn field(
     }
     match field.need {
         Need::Required => Err(format!("Add the {}", field.label.to_lowercase()).into()),
-        Need::Optional => Ok(String::new()),
         Need::Default(value) => Ok(value.to_string()),
     }
 }
@@ -210,20 +206,6 @@ fn connector(platform: Platform, settings: &PlatformSettings) -> Result<Arc<dyn 
         Platform::Matrix => Arc::new(Matrix::new(get("server")?, get("token")?)),
         Platform::Mattermost => Arc::new(Mattermost::new(get("server")?, get("token")?)),
         Platform::Signal => Arc::new(Signal::new(get("server")?, get("account")?)),
-        Platform::Irc => Arc::new(Irc::new(IrcSetup {
-            server: get("server")?,
-            nick: get("nick")?,
-            channels: get("channels")?,
-            password: get("password")?,
-            nickserv: get("nickserv")?,
-        })?),
-        Platform::Email => Arc::new(Email::new(
-            get("address")?,
-            &get("imap")?,
-            &get("smtp")?,
-            get("password")?,
-        )?),
-        Platform::Sms => Arc::new(Sms::new(&get("account")?, get("number")?, &get("token")?)),
         Platform::Qq => Arc::new(Qq::new(get("app")?, get("secret")?)),
     })
 }
