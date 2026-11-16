@@ -72,6 +72,12 @@ zip = { version = "9", default-features = false }
 # frame, so resizing and scrolling stutter. The other workspace crates stay unoptimized.
 [profile.dev.package."*"]
 opt-level = 2
+debug = false
+
+# Full debug info made up nearly all of target/ (595 MB of the 598 MB app binary). Line tables
+# keep file:line in panics and backtraces.
+[profile.dev]
+debug = "line-tables-only"
 
 [profile.dev.package.patchwork]
 opt-level = 1
