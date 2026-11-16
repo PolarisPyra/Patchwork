@@ -63,7 +63,7 @@ limits, a diff of each task's changes, and diagrams or HTML mocks that render ri
 | Coding agents | Claude Code, Codex, Antigravity, OpenCode | Claude only | Codex only | Its own agent |
 | API support | DeepSeek, OpenRouter or any OpenAI-compatible endpoint | Claude models only, through Anthropic or a cloud provider | Not documented for the app | OpenAI-compatible endpoints, not for every feature |
 | Imports chats from | Claude Code, Codex, Gemini CLI, OpenCode | Earlier Claude installs | Claude Code, Claude Cowork, Cursor (last 30 days) | Not documented |
-| **Getting it** | | | | |
+| **Supported Platforms** | | | | |
 | Platforms | Linux, Windows, macOS (Apple silicon) | macOS, Windows, Linux (beta) | macOS, Windows, Linux (preview) | macOS, Windows, Linux |
 | Account | None | Claude account | ChatGPT account | Cursor account |
 | Price | Free | Paid Claude plan | ChatGPT plan, free tier included | Free tier, paid from $8 a month |
