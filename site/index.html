@@ -58,6 +58,7 @@
               "API support for any OpenAI-compatible endpoint",
               "Per-task permission modes, from supervised to full access",
               "Orchestrator page that sends each request to the right project and agent",
+              "Gateways that reach your chats from Telegram, Discord, Slack, Signal and 13 other chat apps",
               "Parallel tasks in git worktrees",
               "Goals with /goal and mid-turn steering",
               "Import chats from Claude Code, Codex, the Gemini CLI and OpenCode",
@@ -148,8 +149,8 @@
     <link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <!-- Browsers may keep these two for 4 hours (Cloudflare's browser cache), so bump ?v= whenever
          either changes, or a visitor gets the new page with the old styles. -->
-    <link rel="stylesheet" href="styles.css?v=11" />
-    <script src="site.js?v=4"></script>
+    <link rel="stylesheet" href="styles.css?v=16" />
+    <script src="site.js?v=8"></script>
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
@@ -174,8 +175,6 @@
           <a href="#compare">Compare</a>
           <a href="#faq">FAQ</a>
           <a href="#download">Download</a>
-          <a href="https://github.com/PolarisPyra/Patchwork">GitHub</a>
-          <a class="nav-donate" href="https://ko-fi.com/polarispyra">Donate</a>
         </nav>
         <button
           class="nav-toggle"
@@ -220,7 +219,6 @@
                     >Download for Linux</a
                   >
                 </span>
-                <a class="btn btn-secondary" href="https://github.com/PolarisPyra/Patchwork">View on GitHub</a>
               </div>
               <ul class="trust" aria-label="At a glance">
                 <li>Free and MIT licensed</li>
@@ -273,19 +271,13 @@
                       <span>The page has its own animated backgrounds. This one is Night Reef.</span>
                     </button>
                   </li>
-                  <li>
-                    <button class="tab" type="button" data-tab>
-                      <b>Light themes</b>
-                      <span>Lagoon does the same in a light window.</span>
-                    </button>
-                  </li>
                 </ul>
               </div>
               <figure class="shot" role="group" aria-roledescription="carousel" aria-label="The Orchestrator page">
                 <div class="window">
                   <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
                   <div class="slides">
-                    <div class="slide is-active" data-slide role="group" aria-roledescription="slide" aria-label="Requests, 1 of 4">
+                    <div class="slide is-active" data-slide role="group" aria-roledescription="slide" aria-label="Requests, 1 of 3">
                       <video
                         width="1280"
                         height="768"
@@ -299,7 +291,7 @@
                         <source src="img/orch-send.webm" type="video/webm" />
                       </video>
                     </div>
-                    <div class="slide" data-slide role="group" aria-roledescription="slide" aria-label="Cards, 2 of 4">
+                    <div class="slide" data-slide role="group" aria-roledescription="slide" aria-label="Cards, 2 of 3">
                       <img
                         src="img/shot-orchestrator.webp?v=2"
                         width="1255"
@@ -308,7 +300,7 @@
                         alt="The Orchestrator page with four request cards under the request box: two tasks still working and two done, each card naming the task and project it went to"
                       />
                     </div>
-                    <div class="slide" data-slide role="group" aria-roledescription="slide" aria-label="Themes, 3 of 4">
+                    <div class="slide" data-slide role="group" aria-roledescription="slide" aria-label="Themes, 3 of 3">
                       <video
                         width="1280"
                         height="768"
@@ -322,26 +314,11 @@
                         <source src="img/theme-orch-reef.webm" type="video/webm" />
                       </video>
                     </div>
-                    <div class="slide" data-slide role="group" aria-roledescription="slide" aria-label="Light themes, 4 of 4">
-                      <video
-                        width="1280"
-                        height="768"
-                        poster="img/theme-orch-lagoon.webp"
-                        preload="none"
-                        muted
-                        loop
-                        playsinline
-                        aria-label="The Orchestrator page in the light Lagoon theme: a green turtle and small fish drift across pale water behind the request box"
-                      >
-                        <source src="img/theme-orch-lagoon.webm" type="video/webm" />
-                      </video>
-                    </div>
                   </div>
                 </div>
                 <div class="pills">
                   <div class="pill-dots" aria-hidden="true">
                     <button class="pill is-active" type="button" data-pill tabindex="-1"><i></i></button>
-                    <button class="pill" type="button" data-pill tabindex="-1"><i></i></button>
                     <button class="pill" type="button" data-pill tabindex="-1"><i></i></button>
                     <button class="pill" type="button" data-pill tabindex="-1"><i></i></button>
                   </div>
@@ -351,6 +328,75 @@
                   </button>
                 </div>
               </figure>
+            </div>
+          </div>
+        </section>
+
+        <!-- Gateways: the chat apps in crates/server/src/gateway/platform.rs, with the logos the app
+             shows for them from the root assets/. -->
+        <section class="section" id="gateways">
+          <div class="wrap wrap-wide split split-flip">
+            <div class="split-copy reveal slide-in">
+              <span class="tag tag-sky" aria-hidden="true">Gateways</span>
+              <h2>Reach your agents from any chat app</h2>
+              <p>
+                Pair Telegram, Discord, Slack or another chat app in Settings, then message Patchwork from your
+                phone. Each conversation is a chat on your computer: send a task, allow or deny what the agent
+                asks, and get its reply when it finishes.
+              </p>
+            </div>
+            <div class="gateways-wrap reveal">
+              <ul class="gateways" aria-label="Chat apps">
+              <li>
+                <svg class="gateway-logo" aria-hidden="true" viewBox="0 0 256 256"><defs><linearGradient id="SVG6DaOZcwt" x1="50%" x2="50%" y1="0%" y2="100%"><stop offset="0%" stop-color="#2aabee"/><stop offset="100%" stop-color="#229ed9"/></linearGradient></defs><path fill="url(#SVG6DaOZcwt)" d="M128 0C94.06 0 61.48 13.494 37.5 37.49A128.04 128.04 0 0 0 0 128c0 33.934 13.5 66.514 37.5 90.51C61.48 242.506 94.06 256 128 256s66.52-13.494 90.5-37.49c24-23.996 37.5-56.576 37.5-90.51s-13.5-66.514-37.5-90.51C194.52 13.494 161.94 0 128 0"/><path fill="#fff" d="M57.94 126.648q55.98-24.384 74.64-32.152c35.56-14.786 42.94-17.354 47.76-17.441c1.06-.017 3.42.245 4.96 1.49c1.28 1.05 1.64 2.47 1.82 3.467c.16.996.38 3.266.2 5.038c-1.92 20.24-10.26 69.356-14.5 92.026c-1.78 9.592-5.32 12.808-8.74 13.122c-7.44.684-13.08-4.912-20.28-9.63c-11.26-7.386-17.62-11.982-28.56-19.188c-12.64-8.328-4.44-12.906 2.76-20.386c1.88-1.958 34.64-31.748 35.26-34.45c.08-.338.16-1.598-.6-2.262c-.74-.666-1.84-.438-2.64-.258c-1.14.256-19.12 12.152-54 35.686c-5.1 3.508-9.72 5.218-13.88 5.128c-4.56-.098-13.36-2.584-19.9-4.708c-8-2.606-14.38-3.984-13.82-8.41c.28-2.304 3.46-4.662 9.52-7.072"/></svg>
+                <span>Telegram</span>
+              </li>
+              <li>
+                <svg class="gateway-logo" aria-hidden="true" viewBox="0 0 256 199"><path fill="#5865f2" d="M216.856 16.597A208.5 208.5 0 0 0 164.042 0c-2.275 4.113-4.933 9.645-6.766 14.046q-29.538-4.442-58.533 0c-1.832-4.4-4.55-9.933-6.846-14.046a207.8 207.8 0 0 0-52.855 16.638C5.618 67.147-3.443 116.4 1.087 164.956c22.169 16.555 43.653 26.612 64.775 33.193A161 161 0 0 0 79.735 175.3a136.4 136.4 0 0 1-21.846-10.632a109 109 0 0 0 5.356-4.237c42.122 19.702 87.89 19.702 129.51 0a132 132 0 0 0 5.355 4.237a136 136 0 0 1-21.886 10.653c4.006 8.02 8.638 15.67 13.873 22.848c21.142-6.58 42.646-16.637 64.815-33.213c5.316-56.288-9.08-105.09-38.056-148.36M85.474 135.095c-12.645 0-23.015-11.805-23.015-26.18s10.149-26.2 23.015-26.2s23.236 11.804 23.015 26.2c.02 14.375-10.148 26.18-23.015 26.18m85.051 0c-12.645 0-23.014-11.805-23.014-26.18s10.148-26.2 23.014-26.2c12.867 0 23.236 11.804 23.015 26.2c0 14.375-10.148 26.18-23.015 26.18"/></svg>
+                <span>Discord</span>
+              </li>
+              <li>
+                <svg class="gateway-logo" aria-hidden="true" viewBox="0 0 256 256"><path fill="#e01e5a" d="M53.841 161.32c0 14.832-11.987 26.82-26.819 26.82S.203 176.152.203 161.32c0-14.831 11.987-26.818 26.82-26.818H53.84zm13.41 0c0-14.831 11.987-26.818 26.819-26.818s26.819 11.987 26.819 26.819v67.047c0 14.832-11.987 26.82-26.82 26.82c-14.83 0-26.818-11.988-26.818-26.82z"/><path fill="#36c5f0" d="M94.07 53.638c-14.832 0-26.82-11.987-26.82-26.819S79.239 0 94.07 0s26.819 11.987 26.819 26.819v26.82zm0 13.613c14.832 0 26.819 11.987 26.819 26.819s-11.987 26.819-26.82 26.819H26.82C11.987 120.889 0 108.902 0 94.069c0-14.83 11.987-26.818 26.819-26.818z"/><path fill="#2eb67d" d="M201.55 94.07c0-14.832 11.987-26.82 26.818-26.82s26.82 11.988 26.82 26.82s-11.988 26.819-26.82 26.819H201.55zm-13.41 0c0 14.832-11.988 26.819-26.82 26.819c-14.831 0-26.818-11.987-26.818-26.82V26.82C134.502 11.987 146.489 0 161.32 0s26.819 11.987 26.819 26.819z"/><path fill="#ecb22e" d="M161.32 201.55c14.832 0 26.82 11.987 26.82 26.818s-11.988 26.82-26.82 26.82c-14.831 0-26.818-11.988-26.818-26.82V201.55zm0-13.41c-14.831 0-26.818-11.988-26.818-26.82c0-14.831 11.987-26.818 26.819-26.818h67.25c14.832 0 26.82 11.987 26.82 26.819s-11.988 26.819-26.82 26.819z"/></svg>
+                <span>Slack</span>
+              </li>
+              <li>
+                <svg class="gateway-logo" aria-hidden="true" fill="#3B45FD" viewBox="0 0 24 24"><path d="M12 0q-.934 0-1.83.139l.17 1.111a11 11 0 0 1 3.32 0l.172-1.111A12 12 0 0 0 12 0M9.152.34A12 12 0 0 0 5.77 1.742l.584.961a10.8 10.8 0 0 1 3.066-1.27zm5.696 0-.268 1.094a10.8 10.8 0 0 1 3.066 1.27l.584-.962A12 12 0 0 0 14.848.34M12 2.25a9.75 9.75 0 0 0-8.539 14.459c.074.134.1.292.064.441l-1.013 4.338 4.338-1.013a.62.62 0 0 1 .441.064A9.7 9.7 0 0 0 12 21.75c5.385 0 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25m-7.092.068a12 12 0 0 0-2.59 2.59l.909.664a11 11 0 0 1 2.345-2.345zm14.184 0-.664.909a11 11 0 0 1 2.345 2.345l.909-.664a12 12 0 0 0-2.59-2.59M1.742 5.77A12 12 0 0 0 .34 9.152l1.094.268a10.8 10.8 0 0 1 1.269-3.066zm20.516 0-.961.584a10.8 10.8 0 0 1 1.27 3.066l1.093-.268a12 12 0 0 0-1.402-3.383M.138 10.168A12 12 0 0 0 0 12q0 .934.139 1.83l1.111-.17A11 11 0 0 1 1.125 12q0-.848.125-1.66zm23.723.002-1.111.17q.125.812.125 1.66c0 .848-.042 1.12-.125 1.66l1.111.172a12.1 12.1 0 0 0 0-3.662M1.434 14.58l-1.094.268a12 12 0 0 0 .96 2.591l-.265 1.14 1.096.255.36-1.539-.188-.365a10.8 10.8 0 0 1-.87-2.35m21.133 0a10.8 10.8 0 0 1-1.27 3.067l.962.584a12 12 0 0 0 1.402-3.383zm-1.793 3.848a11 11 0 0 1-2.345 2.345l.664.909a12 12 0 0 0 2.59-2.59zm-19.959 1.1L.357 21.48a1.8 1.8 0 0 0 2.162 2.161l1.954-.455-.256-1.095-1.953.455a.675.675 0 0 1-.81-.81l.454-1.954zm16.832 1.769a10.8 10.8 0 0 1-3.066 1.27l.268 1.093a12 12 0 0 0 3.382-1.402zm-10.94.213-1.54.36.256 1.095 1.139-.266c.814.415 1.683.74 2.591.961l.268-1.094a10.8 10.8 0 0 1-2.35-.869zm3.634 1.24-.172 1.111a12.1 12.1 0 0 0 3.662 0l-.17-1.111q-.812.125-1.66.125a11 11 0 0 1-1.66-.125"/></svg>
+                <span>Signal</span>
+              </li>
+              <li>
+                <svg class="gateway-logo" aria-hidden="true" fill="#34DA50" viewBox="0 0 24 24"><path d="M5.285 0A5.273 5.273 0 0 0 0 5.285v13.43A5.273 5.273 0 0 0 5.285 24h13.43A5.273 5.273 0 0 0 24 18.715V5.285A5.273 5.273 0 0 0 18.715 0ZM12 4.154a8.809 7.337 0 0 1 8.809 7.338A8.809 7.337 0 0 1 12 18.828a8.809 7.337 0 0 1-2.492-.303A8.656 7.337 0 0 1 5.93 19.93a9.929 7.337 0 0 0 1.54-2.155 8.809 7.337 0 0 1-4.279-6.283A8.809 7.337 0 0 1 12 4.154"/></svg>
+                <span>iMessage</span>
+              </li>
+              <li>
+                <svg class="gateway-logo" aria-hidden="true" fill="#07C160" viewBox="0 0 24 24"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.72-1.78 6.22.942 2.453 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-2.931-5.837-6.656-6.088V8.89c-.135-.01-.27-.027-.407-.03zm-2.53 3.274c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z"/></svg>
+                <span>WeChat</span>
+              </li>
+              <li>
+                <svg class="gateway-logo" aria-hidden="true" fill="currentColor" viewBox="0 0 24 24"><path d="M.632.55v22.9H2.28V24H0V0h2.28v.55zm7.043 7.26v1.157h.033c.309-.443.683-.784 1.117-1.024.433-.245.936-.365 1.5-.365.54 0 1.033.107 1.481.314.448.208.785.582 1.02 1.108.254-.374.6-.706 1.034-.992.434-.287.95-.43 1.546-.43.453 0 .872.056 1.26.167.388.11.716.286.993.53.276.245.489.559.646.951.152.392.23.863.23 1.417v5.728h-2.349V11.52c0-.286-.01-.559-.032-.812a1.755 1.755 0 0 0-.18-.66 1.106 1.106 0 0 0-.438-.448c-.194-.11-.457-.166-.785-.166-.332 0-.6.064-.803.189a1.38 1.38 0 0 0-.48.499 1.946 1.946 0 0 0-.231.696 5.56 5.56 0 0 0-.06.785v4.768h-2.35v-4.8c0-.254-.004-.503-.018-.752a2.074 2.074 0 0 0-.143-.688 1.052 1.052 0 0 0-.415-.503c-.194-.125-.476-.19-.854-.19-.111 0-.259.024-.439.074-.18.051-.36.143-.53.282-.171.138-.319.337-.439.595-.12.259-.18.6-.18 1.02v4.966H5.46V7.81zm15.693 15.64V.55H21.72V0H24v24h-2.28v-.55z"/></svg>
+                <span>Matrix</span>
+              </li>
+              <li>
+                <svg class="gateway-logo" aria-hidden="true" viewBox="0 0 256 256"><path fill="#0058cc" d="M6.791 86.965C25.235 32.482 76.783-1.432 131.421.046L113.91 20.74C81.496 26.6 53.507 48.735 42.507 81.23c-16.366 48.347 11.066 101.317 61.272 118.315c50.207 16.994 104.174-8.421 120.54-56.766c10.965-32.387 2.27-66.847-19.756-91.18l-1.346-27.169c44.154 32.048 64.406 90.205 45.991 144.6c-22.662 66.941-95.298 102.837-162.24 80.176c-66.94-22.662-102.837-95.299-80.177-162.24m158.394-75.041a2.96 2.96 0 0 1 2.137-.098a2.97 2.97 0 0 1 1.614 1.334l.072.116l.064.134c.168.321.311.69.378 1.141c.132.89.192 2.985.216 5.13l.005.585c.006.683.009 1.36.01 1.994v.532c-.002 1.735-.017 3.035-.017 3.035l.503 18.933l.744 21.855l.927 37.98v.083l.001.045v.121c-.007 2.17-.452 18.049-11.717 29.085c-12.112 11.866-26.99 10.78-36.67 7.504c-9.68-3.278-22.158-11.453-24.572-28.237c-2.052-14.266 5.533-26.257 7.854-29.533l.155-.217c.316-.438.5-.668.5-.668l23.808-29.606l13.868-16.91l11.9-14.734s1.75-2.345 3.551-4.653l.36-.46a111 111 0 0 1 1.718-2.141l.305-.366c.444-.527.82-.952 1.085-1.208c.308-.3.625-.494.935-.645l.227-.116Z"/></svg>
+                <span>Mattermost</span>
+              </li>
+              <li>
+                <svg class="gateway-logo" aria-hidden="true" fill="currentColor" viewBox="0 0 24 24"><path d="m16.1 0-4.026 4.025L8.125.076 6.113 2.09l3.95 3.947-3.975 3.977L2.14 6.066.109 8.096l3.948 3.947L0 16.1l1.975 1.972 4.056-4.056 3.95 3.947 2.029-2.027-3.95-3.95 3.975-3.972 3.951 3.949-4.025 4.023v.002L9.947 18l-4.023 4.025L7.896 24l4.026-4.025 3.95 3.949 2.013-2.014-3.951-3.95 4.027-4.024 3.95 3.949 2.013-2.012-3.95-3.95L24 7.899l-1.975-1.972L18 9.949 14.049 6l4.025-4.025z"/></svg>
+                <span>SimpleX</span>
+              </li>
+              <li>
+                <svg class="gateway-logo" aria-hidden="true" fill="#317F6F" viewBox="0 0 24 24"><path d="M12.597 13.693v2.156h6.205v-2.156ZM5.183 6.549v2.363l3.591 1.901.023.01-.023.009-3.591 1.901v2.35l.386-.211 5.456-2.969V9.729ZM3.659 2.037C1.915 2.037.42 3.41.42 5.154v.002L.438 18.73 0 21.963l5.956-1.583h14.806c1.744 0 3.238-1.374 3.238-3.118V5.154c0-1.744-1.493-3.116-3.237-3.117h-.001zm0 2.2h17.104c.613.001 1.037.447 1.037.917v12.108c0 .47-.424.916-1.038.916H5.633l-3.026.915.031-.179-.017-13.76c0-.47.424-.917 1.038-.917z"/></svg>
+                <span>ntfy</span>
+              </li>
+              <li>
+                <svg class="gateway-logo" aria-hidden="true" viewBox="0 0 24 24"><path fill="#0089FF" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10s10-4.477 10-10S17.523 2 12 2m4.49 9.04l-.006.014c-.42.898-1.516 2.66-1.516 2.66l-.005-.012l-.32.558h1.543l-2.948 3.919l.67-2.666h-1.215l.422-1.763a17 17 0 0 0-1.223.349s-.646.378-1.862-.729c0 0-.82-.722-.344-.902c.202-.077.981-.175 1.595-.257a80 80 0 0 1 1.338-.172s-2.555.039-3.161-.057c-.606-.095-1.375-1.107-1.539-1.996c0 0-.253-.488.545-.257s4.101.9 4.101.9S8.27 9.312 7.983 8.99c-.286-.32-.841-1.754-.769-2.634c0 0 .031-.22.257-.16c0 0 3.176 1.45 5.347 2.245s4.06 1.199 3.816 2.228c-.02.087-.072.216-.144.37"/></svg>
+                <span>DingTalk</span>
+              </li>
+              <li>
+                <svg class="gateway-logo" aria-hidden="true" fill="#1EBAFC" viewBox="0 0 24 24"><path d="M21.395 15.035a40 40 0 0 0-.803-2.264l-1.079-2.695c.001-.032.014-.562.014-.836C19.526 4.632 17.351 0 12 0S4.474 4.632 4.474 9.241c0 .274.013.804.014.836l-1.08 2.695a39 39 0 0 0-.802 2.264c-1.021 3.283-.69 4.643-.438 4.673.54.065 2.103-2.472 2.103-2.472 0 1.469.756 3.387 2.394 4.771-.612.188-1.363.479-1.845.835-.434.32-.379.646-.301.778.343.578 5.883.369 7.482.189 1.6.18 7.14.389 7.483-.189.078-.132.132-.458-.301-.778-.483-.356-1.233-.646-1.846-.836 1.637-1.384 2.393-3.302 2.393-4.771 0 0 1.563 2.537 2.103 2.472.251-.03.581-1.39-.438-4.673"/></svg>
+                <span>QQ</span>
+              </li>
+              </ul>
+              <p class="gateways-more">Also IRC, email, SMS through Twilio, Feishu / Lark and WeCom.</p>
             </div>
           </div>
         </section>
@@ -1011,9 +1057,6 @@
                 >
               </article>
             </div>
-            <p class="donate">
-              <a class="btn btn-secondary" href="https://ko-fi.com/polarispyra">Donate on Ko-fi</a>
-            </p>
           </div>
         </section>
       </main>
@@ -1025,17 +1068,19 @@
             <span>Patchwork</span>
           </div>
           <nav class="footer-links" aria-label="Pages">
-            <a href="claude-code/">Claude Code</a>
-            <a href="codex/">Codex</a>
-            <a href="antigravity/">Antigravity</a>
-            <a href="opencode/">OpenCode</a>
-            <a href="agent-orchestrator/">Agent orchestrator</a>
-            <a href="ade/">Agentic development environment</a>
+            <a href="claude-code/">Claude Code<sup>™</sup></a>
+            <a href="codex/">Codex<sup>™</sup></a>
+            <a href="antigravity/">Antigravity<sup>™</sup></a>
+            <a href="opencode/">OpenCode<sup>™</sup></a>
           </nav>
           <p class="footer-line">
             © <span data-year>2026</span> Patchwork · MIT License ·
             <a href="https://github.com/PolarisPyra/Patchwork">GitHub</a> ·
             <a href="https://ko-fi.com/polarispyra">Donate</a>
+          </p>
+          <p class="footer-legal">
+            Claude Code is a trademark of Anthropic, PBC. Codex is a trademark of OpenAI. Antigravity is a trademark of
+            Google LLC. OpenCode is a trademark of its owner. Patchwork is not affiliated with or endorsed by them.
           </p>
         </div>
       </footer>
