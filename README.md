@@ -55,6 +55,45 @@ and tasks in a sidebar, and the agent's work laid out step by step as it goes.
 There's more: scheduled tasks, skills, MCP servers, hooks, a Usage view for your subscription
 limits, a diff of each task's changes, and diagrams or HTML mocks that render right in the chat.
 
+## Orchestrator
+
+<p align="center">
+  <img src="docs/screenshots/orchestrator.png" alt="The Orchestrator page: a request box under an animated butterfly, and four request cards below it. Two tasks are still working and two are done, each card naming the task and project it went to and the last line its agent wrote" width="860">
+</p>
+
+Patchwork opens on the Orchestrator page, and **Ctrl+1** brings you to it from anywhere. Write
+what you want done, pin a project with `@`, and it starts a task there while you stay on the page.
+
+- Each request becomes a card with the task it started, whether that task is still working, and
+  the last line its agent wrote. Click a card to read the chat.
+- The agent, model and effort for the next request are picked under the request box, and the plus
+  button attaches files or a folder.
+- When an agent needs an answer or a permission, the question shows on this page.
+
+## Themes
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/theme-window.png" alt="Settings on Window theme with Night Reef picked: nine color schemes, a field that generates a scheme from a description, and the accent colors"></td>
+    <td><img src="docs/screenshots/theme-orchestrator.png" alt="Settings on Orchestrator theme: fourteen backgrounds, among them Butterfly, Night Sky, Night Reef, Lagoon and Terminal, and a field that generates one from a description"></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/orchestrator-night-reef.png" alt="The Orchestrator page in the Night Reef theme, with a turtle, fish and a jellyfish drawn in text characters behind four finished request cards" width="860">
+</p>
+
+**Settings → Appearance** sets each part of the look in its own pane: Window theme, Syntax theme,
+Orchestrator theme and Chat theme.
+
+- Pick a color scheme and an accent, or use one scheme for light and another for dark when
+  matching the system.
+- Describe a color scheme, a syntax theme or a background, and an agent writes it for you.
+- Export a scheme with its background as one file, and import one with a button or by dropping it
+  on the page. A base16 scheme imports as a syntax theme.
+- The Orchestrator page and chats pick from the same backgrounds: a ready-made one, an animated
+  one, or your own picture.
+
 ## How it compares
 
 | | Patchwork | Claude desktop app | Codex app | Cursor |
