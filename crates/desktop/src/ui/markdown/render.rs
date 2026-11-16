@@ -30,6 +30,9 @@ pub struct Markdown<'a> {
     pub(super) find: Option<&'a FindIn>,
     /// The bullet or number of the list item just opened, which its first text copies.
     pub(super) item_prefix: Option<String>,
+    /// What each copied line starts with for every quote and list item open: `> `, or the item's
+    /// marker as spaces.
+    pub(super) nest: Vec<String>,
 }
 
 /// Lays `source` out as blocks, inheriting the surrounding text size and colour.
@@ -134,6 +137,7 @@ pub(super) fn render(
         at_start: true,
         find,
         item_prefix: None,
+        nest: Vec::new(),
     };
     for event in TextMergeStream::new(Parser::new_ext(source, options())) {
         md.event(event);

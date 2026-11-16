@@ -18,27 +18,35 @@ use gpui::{
 };
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Tag, TagEnd};
 use crate::ui::theme::{font_mono, fs_lg, fs_md, fs_sm, fs_xs, radius, radius_sm, Theme};
-use crate::ui::selection::{Selectable, selectable, text_id};
+use crate::ui::selection::{Kind, Selectable, selectable, text_id};
 use crate::ui::{button, icon};
 
 impl Markdown<'_> {
     /// The open run as text, with find's matches marked: the current one solid, the rest faint.
     /// `text` as one a drag can mark.
-    fn selectable(&mut self, text: StyledText) -> Selectable {
+    fn selectable(&mut self, text: StyledText, kind: Kind) -> Selectable {
         self.texts += 1;
-        let text = selectable(text_id(&self.key, self.texts), text);
+        let text = selectable(text_id(&self.key, self.texts), text).lead(self.nest.concat());
         match self.item_prefix.take() {
-            Some(prefix) => text.prefix(prefix, px(LIST_INDENT)),
-            None => text,
+            Some(prefix) if kind == Kind::Paragraph => {
+                text.prefix(prefix, px(LIST_INDENT)).kind(Kind::Item)
+            }
+            Some(prefix) => text.prefix(prefix, px(LIST_INDENT)).kind(kind),
+            None => text.kind(kind),
         }
     }
 
-    fn take_inline(&mut self) -> Selectable {
+    fn take_inline(&mut self, kind: Kind) -> Selectable {
         let chips = std::mem::take(&mut self.inline.chips);
         let links = std::mem::take(&mut self.inline.links);
+        let marks = std::mem::take(&mut self.inline.marks);
         let Some(find) = self.find else {
             let text = self.inline.take();
-            return self.selectable(text).chips(chips).links(links);
+            return self
+                .selectable(text, kind)
+                .chips(chips)
+                .links(links)
+                .marks(marks);
         };
         let t = self.t;
         let len = self.inline.text.trim_end().len();
@@ -69,7 +77,10 @@ impl Markdown<'_> {
         if let Some(start) = current {
             *find.target.borrow_mut() = Some((text.layout().clone(), start));
         }
-        self.selectable(text).chips(chips).links(links)
+        self.selectable(text, kind)
+            .chips(chips)
+            .links(links)
+            .marks(marks)
     }
 
     /// Adds text to the open run, marking its chips when this message draws them.
@@ -148,7 +159,7 @@ impl Markdown<'_> {
         if self.inline.is_empty() {
             self.inline = Inline::default();
         } else {
-            let text = self.take_inline();
+            let text = self.take_inline(Kind::Paragraph);
             self.push(div().child(text), 0., 8.);
         }
     }
@@ -172,6 +183,7 @@ impl Markdown<'_> {
                 }
                 Tag::BlockQuote(_) => {
                     self.flush_paragraph();
+                    self.nest.push("> ".to_string());
                     self.stack.push((Frame::Quote, Vec::new()));
                 }
                 Tag::CodeBlock(kind) => {
@@ -195,20 +207,18 @@ impl Markdown<'_> {
                     ));
                 }
                 Tag::Item => {
-                    // Copied as it is drawn: `- ` or `3. `, indented two spaces per list it is in.
-                    let depth = self
-                        .stack
-                        .iter()
-                        .filter(|(frame, _)| matches!(frame, Frame::List { .. }))
-                        .count();
+                    // Copied as it is drawn: `- ` or `3. `, after what the lists and quotes it is in
+                    // put first. Its later lines line up under its text.
+                    let mut indent = String::new();
                     if let Some((Frame::List { start, items }, _)) = self.stack.last() {
                         let marker = match start {
                             Some(n) => format!("{}. ", n + items.len() as u64),
                             None => "- ".to_string(),
                         };
-                        self.item_prefix =
-                            Some("  ".repeat(depth.saturating_sub(1)) + marker.as_str());
+                        indent = " ".repeat(marker.len());
+                        self.item_prefix = Some(self.nest.concat() + marker.as_str());
                     }
+                    self.nest.push(indent);
                     self.stack.push((Frame::Item, Vec::new()));
                 }
                 Tag::Table(_) => {
@@ -219,23 +229,32 @@ impl Markdown<'_> {
                 Tag::TableHead => self.stack.push((Frame::Row { head: true }, Vec::new())),
                 Tag::TableRow => self.stack.push((Frame::Row { head: false }, Vec::new())),
                 Tag::TableCell => self.inline = Inline::default(),
-                Tag::Emphasis => self.inline.open(HighlightStyle {
-                    font_style: Some(FontStyle::Italic),
-                    ..Default::default()
-                }),
-                Tag::Strong => self.inline.open(HighlightStyle {
-                    font_weight: Some(FontWeight::SEMIBOLD),
-                    ..Default::default()
-                }),
-                Tag::Strikethrough => self.inline.open(HighlightStyle {
-                    strikethrough: Some(StrikethroughStyle {
-                        thickness: px(1.),
-                        color: None,
-                    }),
-                    ..Default::default()
-                }),
+                Tag::Emphasis => self.inline.open(
+                    HighlightStyle {
+                        font_style: Some(FontStyle::Italic),
+                        ..Default::default()
+                    },
+                    "*",
+                ),
+                Tag::Strong => self.inline.open(
+                    HighlightStyle {
+                        font_weight: Some(FontWeight::SEMIBOLD),
+                        ..Default::default()
+                    },
+                    "**",
+                ),
+                Tag::Strikethrough => self.inline.open(
+                    HighlightStyle {
+                        strikethrough: Some(StrikethroughStyle {
+                            thickness: px(1.),
+                            color: None,
+                        }),
+                        ..Default::default()
+                    },
+                    "~~",
+                ),
                 Tag::Link { dest_url, .. } => {
-                    self.inline.open(link_style(t));
+                    self.inline.open(link_style(t), "[");
                     self.inline.link = Some((self.inline.text.len(), dest_url.to_string()));
                 }
                 _ => {}
@@ -245,6 +264,7 @@ impl Markdown<'_> {
                 TagEnd::Heading(_) => self.end_heading(),
                 TagEnd::BlockQuote(_) => {
                     self.flush_paragraph();
+                    self.nest.pop();
                     if let Some((_, blocks)) = self.stack.pop() {
                         let quote = div()
                             // The 40px at each side a web page gives a quote of its own.
@@ -259,6 +279,7 @@ impl Markdown<'_> {
                 }
                 TagEnd::Item => {
                     self.flush_paragraph();
+                    self.nest.pop();
                     // An empty item's marker stays with it.
                     self.item_prefix = None;
                     if let Some((_, blocks)) = self.stack.pop()
@@ -273,12 +294,12 @@ impl Markdown<'_> {
                     }
                 }
                 TagEnd::TableCell => {
-                    let text = self.take_inline();
-                    let text = if self.cells.is_empty() {
-                        text
-                    } else {
-                        text.after_tab()
-                    };
+                    let head = matches!(self.stack.last(), Some((Frame::Row { head: true }, _)));
+                    let column = self.cells.len();
+                    // Its mark reaches over the padding to the border, meeting the next cell's.
+                    let text = self
+                        .take_inline(Kind::Cell { column, head })
+                        .pad(px(CELL_PAD_X + 1.));
                     self.cells.push(text.into_any_element());
                 }
                 TagEnd::TableHead | TagEnd::TableRow => {
@@ -292,7 +313,7 @@ impl Markdown<'_> {
                                     .min_w_0()
                                     .border_1()
                                     .border_color(t.border)
-                                    .px(px(8.))
+                                    .px(px(CELL_PAD_X))
                                     .py(px(4.))
                                     .when(head, |c| c.font_weight(FontWeight::SEMIBOLD))
                                     .child(cell)
@@ -312,11 +333,16 @@ impl Markdown<'_> {
                         .children(rows.into_iter().map(|cells| div().flex().children(cells)));
                     self.push(table, 8., 8.);
                 }
-                TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough => {
-                    self.inline.close();
-                }
+                TagEnd::Emphasis => self.inline.close("*"),
+                TagEnd::Strong => self.inline.close("**"),
+                TagEnd::Strikethrough => self.inline.close("~~"),
                 TagEnd::Link => {
-                    self.inline.close();
+                    let dest = self
+                        .inline
+                        .link
+                        .as_ref()
+                        .map_or(String::new(), |(_, url)| url.clone());
+                    self.inline.close(format!("]({dest})"));
                     if let Some((start, url)) = self.inline.link.take()
                         && start < self.inline.text.len()
                         && opens_outside(&url)
@@ -332,6 +358,10 @@ impl Markdown<'_> {
                 let start = self.inline.text.len();
                 self.inline.text.push_str(&code);
                 let range = start..self.inline.text.len();
+                let (open, close) = code_fence(&code);
+                self.inline
+                    .marks
+                    .push((range.clone(), open.into(), close.into()));
                 self.inline.mono.push(range.clone());
                 // Drawn behind the text like a chip, so a selection over it still shows.
                 self.inline.chips.push((range, t.bg_selected_muted));
@@ -352,7 +382,7 @@ impl Markdown<'_> {
 
     fn end_heading(&mut self) {
         let level = self.heading.take();
-        let text = self.take_inline();
+        let text = self.take_inline(Kind::Heading(level.map_or(1, |l| l as usize)));
         let size = if level == Some(HeadingLevel::H1) {
             fs_lg()
         } else {
@@ -411,7 +441,7 @@ impl Markdown<'_> {
         let (hover, fg) = (t.bg_hover, t.text);
         let copy = code.clone();
         let text = highlighted(code, &lang, t);
-        let text = self.selectable(text);
+        let text = self.selectable(text, Kind::Code(lang.clone().into()));
         let block = div()
             .rounded(px(radius()))
             .border_1()
@@ -461,6 +491,9 @@ impl Markdown<'_> {
     }
 }
 
+/// The space either side of a table cell's text, inside its border.
+const CELL_PAD_X: f32 = 8.;
+
 /// How a link is drawn: in the accent colour, underlined.
 fn link_style(t: &Theme) -> HighlightStyle {
     HighlightStyle {
@@ -471,5 +504,17 @@ fn link_style(t: &Theme) -> HighlightStyle {
             wavy: false,
         }),
         ..Default::default()
+    }
+}
+
+/// The backticks before and after a code span: one more than the longest run inside it, with a
+/// space inside them when the code starts or ends with a backtick.
+fn code_fence(code: &str) -> (String, String) {
+    let longest = code.split(|c| c != '`').map(str::len).max().unwrap_or(0);
+    let fence = "`".repeat(longest + 1);
+    if code.starts_with('`') || code.ends_with('`') {
+        (format!("{fence} "), format!(" {fence}"))
+    } else {
+        (fence.clone(), fence)
     }
 }

@@ -6,6 +6,7 @@ use std::cell::{Cell, RefCell};
 use std::ops::Range;
 use std::rc::Rc;
 use gpui::{AnyElement, Div, HighlightStyle, Hsla, SharedString, StyledText, TextLayout};
+use crate::ui::selection::Mark;
 use crate::ui::theme::font_mono;
 
 /// One block with the margins CSS gives it; adjacent margins collapse into the larger one.
@@ -27,8 +28,10 @@ pub(super) struct Inline {
     pub(super) links: Vec<(Range<usize>, SharedString)>,
     /// The open link: where it started and its address.
     pub(super) link: Option<(usize, String)>,
-    /// Open spans: where each started and how it looks.
-    open: Vec<(usize, HighlightStyle)>,
+    /// The Markdown each styled range was written with, for copying.
+    pub(super) marks: Vec<Mark>,
+    /// Open spans: where each started, how it looks, and the Markdown that opened it.
+    open: Vec<(usize, HighlightStyle, SharedString)>,
 }
 
 impl Inline {
@@ -36,15 +39,19 @@ impl Inline {
         self.text.trim().is_empty()
     }
 
-    pub(super) fn open(&mut self, style: HighlightStyle) {
-        self.open.push((self.text.len(), style));
+    /// Opens a span drawn in `style`, written in Markdown with `mark` before it.
+    pub(super) fn open(&mut self, style: HighlightStyle, mark: &'static str) {
+        self.open.push((self.text.len(), style, mark.into()));
     }
 
-    pub(super) fn close(&mut self) {
-        if let Some((start, style)) = self.open.pop()
+    /// Closes the last span opened, written in Markdown with `mark` after it.
+    pub(super) fn close(&mut self, mark: impl Into<SharedString>) {
+        if let Some((start, style, open)) = self.open.pop()
             && start < self.text.len()
         {
-            self.highlights.push((start..self.text.len(), style));
+            let range = start..self.text.len();
+            self.highlights.push((range.clone(), style));
+            self.marks.push((range, open, mark.into()));
         }
     }
 
