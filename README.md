@@ -98,7 +98,7 @@ Orchestrator theme and Chat theme.
 
 | | Patchwork | Claude desktop app | Codex app | Cursor |
 | --- | --- | --- | --- | --- |
-| **Agents and models** | | | | |
+| **Providers** | | | | |
 | Coding agents | Claude Code, Codex, Antigravity, OpenCode | Claude only | Codex only | Its own agent |
 | API support | DeepSeek, OpenRouter or any OpenAI-compatible endpoint | Claude models only, through Anthropic or a cloud provider | Not documented for the app | OpenAI-compatible endpoints, not for every feature |
 | Imports chats from | Claude Code, Codex, Gemini CLI, OpenCode | Earlier Claude installs | Claude Code, Claude Cowork, Cursor (last 30 days) | Not documented |
@@ -107,7 +107,7 @@ Orchestrator theme and Chat theme.
 | Account | None | Claude account | ChatGPT account | Cursor account |
 | Price | Free | Paid Claude plan | ChatGPT plan, free tier included | Free tier, paid from $8 a month |
 | Open source | Yes, MIT | No | The CLI is; the app is not stated | No |
-| **Working with agents** | | | | |
+| **Agent use** | | | | |
 | Permission modes | Supervised, Auto-accept edits, Auto, Full access | Manual, Accept edits, Plan, Auto, Bypass permissions | Ask for approval, Approve for me, Full access, Custom | Auto-review, Allowlist, Run Everything |
 | Scheduled tasks | On your machine | On your machine or in the cloud | On your machine or in the cloud | In the cloud |
 | Parallel tasks in worktrees | Yes | Yes | Yes | Yes |
