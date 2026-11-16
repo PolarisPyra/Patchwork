@@ -3,6 +3,23 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.90] - 2026-11-16
+
+**26.11.90** · 2 changes from 1 contributor
+
+- **Clear antivirus and firewall blocks.** Patchwork now retries when an antivirus holds files and asks you to allow blocked connections, so MCP servers stay on.
+- **OpenCode 1.x works alongside OpenCode 2.** OpenCode 1.x now gets its own database when OpenCode 2 exists, so chats work and imports still find them.
+
+<details>
+<summary>Full changelog</summary>
+
+### Fixed
+
+- On Windows, an antivirus such as Bitdefender could stop Patchwork from saving its own files, which turned off MCP servers for the agents, and a blocked connection only said "os error 10013". Patchwork now tries again while an antivirus holds one of its files, and when Windows Firewall or an antivirus blocks a connection it says so and asks you to allow Patchwork through it. The Windows app also shows its name and version in its file details now. by [PolarisPyra in #167](https://github.com/PolarisPyra/Patchwork/pull/167)
+- Chats with OpenCode 1.x stopped with "Database is not empty and has no session table" once OpenCode 2 or its desktop app had used the same database, and the update Patchwork suggested installed OpenCode 1.x again. Patchwork now gives OpenCode 1.x a database of its own in that case, so it keeps working without an update, and chats saved there still show up when you import from OpenCode. by [PolarisPyra in #168](https://github.com/PolarisPyra/Patchwork/pull/168)
+
+</details>
+
 ## [26.11.89] - 2026-11-16
 
 **26.11.89** · 2 changes from 1 contributor
