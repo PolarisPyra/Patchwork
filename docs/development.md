@@ -34,7 +34,7 @@ carries the helpers Patchwork copies to SSH hosts, which the script cross-compil
 rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl x86_64-pc-windows-gnu
 ```
 
-## Commit hook
+## Git hooks
 
 ```sh
 git config core.hooksPath scripts/hooks
@@ -42,6 +42,12 @@ git config core.hooksPath scripts/hooks
 
 The `commit-msg` hook checks each commit's `Changelog:` paragraph; see
 [Changelog style](changelog-style.md).
+
+The `pre-push` hook runs `cargo fmt --all -- --check`, clippy with `-D warnings` and
+`node --check` on the website's two scripts before each push, on the files in the working tree. It
+takes about 2 seconds when nothing has changed since the last build and about 5 after a change to
+`crates/server`. `git push --no-verify` skips it; CI runs the same checks and the tests either way
+([CI and deploys](ci.md)).
 
 ## Tests
 
