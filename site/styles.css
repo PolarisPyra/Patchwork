@@ -1450,3 +1450,20 @@ a.agent-name:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* Donate: the one nav link with an outline, and a button under the downloads. */
+
+.nav-links a.nav-donate {
+  box-shadow: inset 0 0 0 1px var(--pink);
+  color: var(--pink);
+}
+
+.nav-links a.nav-donate:hover {
+  background: var(--pink);
+  color: #2a0f1e;
+}
+
+.donate {
+  margin-top: 40px;
+  text-align: center;
+}

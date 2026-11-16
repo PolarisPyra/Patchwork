@@ -18,7 +18,8 @@
 <p align="center">
   <a href="https://patchworkeditor.com">Website</a> ·
   <a href="#download">Download</a> ·
-  <a href="docs/README.md">Docs</a>
+  <a href="docs/README.md">Docs</a> ·
+  <a href="https://ko-fi.com/polarispyra">Donate</a>
 </p>
 
 <p align="center">
