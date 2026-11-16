@@ -50,6 +50,8 @@ The Release workflow (`.github/workflows/release.yml`) then:
 2. Builds the three apps and the helpers at that version, signs them and publishes the release.
 3. Commits the version and the notes to `main` as "Release YY.M.N", points the website's
    download links at the release, and announces it on Discord. Pull before the next push.
+   The commit changes `site/index.html`, so the Site workflow deploys the website
+   ([CI and deploys](ci.md)).
 
 The entries are the PRs' own words, so they are right when the PR is written, by the rules in
 [Changelog style](changelog-style.md), which the PR Changelog check enforces, and the highlights use only what the entries say. To
@@ -65,9 +67,9 @@ with the release key. The publish job signs each file with the `TAURI_SIGNING_PR
 before publishing if it does not check out. Changing the key means changing both, and copies
 already installed keep trusting the old one.
 
-The signer and the website's deploy tool are each installed from a lockfile, `.github/signer` and
-`.github/deploy`, in a step of their own before the key or the deploy token is in any step's
-environment. `npm ci` takes only the packages a lockfile records, each checked against its hash.
+The signer, in the Release workflow, and the website's deploy tool, in the Site workflow, are each
+installed from a lockfile, `.github/signer` and `.github/deploy`, in a step of their own before
+the key or the deploy token is in any step's environment. `npm ci` takes only the packages a lockfile records, each checked against its hash.
 To move either to a new version, change it in that folder's `package.json` and run
 `npm install --package-lock-only --ignore-scripts` there. `scripts/build.sh` checks the
 `appimagetool` it downloads against a SHA-256 written in the script, and
