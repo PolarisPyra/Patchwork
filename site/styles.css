@@ -926,15 +926,19 @@ code {
   font-size: 14px;
 }
 
-/* Gateways: the chat apps as small tiles, four to a row beside the words. */
+/* Gateways: the chat apps as small tiles, four to a row beside the words, with a short last row
+   centred under the others. */
 
 .gateways {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  --per-row: 4;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 12px;
 }
 
 .gateways li {
+  flex: 0 0 calc((100% - (var(--per-row) - 1) * 12px) / var(--per-row));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -958,13 +962,6 @@ code {
   width: 32px;
   height: 32px;
   color: var(--fg);
-}
-
-.gateways-more {
-  margin-top: 16px;
-  color: var(--fg-3);
-  font-size: 14px;
-  text-align: center;
 }
 
 /* Downloads */
@@ -1808,7 +1805,7 @@ code {
   }
 
   .gateways {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    --per-row: 3;
   }
 
   .bubble,
