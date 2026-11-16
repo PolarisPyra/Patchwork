@@ -65,11 +65,11 @@ pub(super) fn tree_row(
         .hover(move |s| s.bg(hover))
 }
 
-/// A 20px icon button a row shows while hovered.
+/// A 24px icon button a row shows while hovered.
 pub(super) fn reveal_button(id: &str, label: String, name: &str, t: &Theme) -> Stateful<Div> {
     let (hover, fg) = (t.bg_hover, t.text);
     button(SharedString::from(format!("reveal:{id}")), label)
-        .size(px(20.))
+        .size(px(24.))
         .flex_none()
         .justify_center()
         .rounded(px(radius_sm()))
