@@ -1,4 +1,5 @@
-//! OpenCode sessions, from its SQLite database (`~/.local/share/opencode/opencode.db`): the 1.x
+//! OpenCode sessions, from its SQLite database (`~/.local/share/opencode/opencode.db`, and
+//! `opencode-v1.db` beside it when Patchwork runs 1.x on a database of its own): the 1.x
 //! `session`/`message`/`part` tables and the 2.x `session_v2`/`session_message` tables.
 //!
 //! OpenCode is not an agent Patchwork runs, so these conversations cannot be resumed. They are
@@ -11,16 +12,23 @@ use rusqlite::{Connection, OpenFlags, params};
 use serde_json::Value;
 
 use super::{Session, SessionMessage, ilog, push_merged};
-use crate::provider::AgentKind;
+use std::path::Path;
+use crate::provider::{AgentKind, opencode};
 use crate::threads::Role;
 
 pub fn sessions(agent: AgentKind) -> Vec<Session> {
-    let Some(path) =
-        crate::system::fs::home_dir().map(|h| h.join(".local/share/opencode/opencode.db"))
-    else {
+    let Some(dir) = opencode::data_dir() else {
         ilog!("OpenCode: no home folder");
         return vec![];
     };
+    // The shared database, then the one Patchwork gives OpenCode 1.x when 2.x has taken that.
+    [opencode::SHARED_DATABASE, opencode::V1_DATABASE]
+        .into_iter()
+        .flat_map(|name| sessions_in(&dir.join(name), agent))
+        .collect()
+}
+
+fn sessions_in(path: &Path, agent: AgentKind) -> Vec<Session> {
     ilog!(
         "OpenCode: reading {} (exists: {})",
         path.display(),

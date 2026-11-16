@@ -12,7 +12,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use crate::workspace::{signal_process_group, SIGKILL};
 use super::{antigravity, api, claude, codex, opencode, AgentKind, AgentStatus, ModelOption};
-use super::{agent_command, located};
+use super::{agent_command, command_at, located};
 
 /// Upper bound for any single agent CLI probe (`--version`, `auth status`, ...).
 pub(super) const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -39,6 +39,11 @@ pub fn probe(kind: AgentKind, args: &[&str]) -> Option<Probe> {
 pub fn probe_until(kind: AgentKind, args: &[&str], done: impl Fn(&str) -> bool) -> Option<Probe> {
     let cmd = agent_command(kind).ok()?;
     run_probe(cmd, args, PROBE_TIMEOUT, done)
+}
+
+/// Like `probe`, for the agent CLI at `bin` rather than the one in use.
+pub(super) fn probe_at(bin: &Path, args: &[&str]) -> Option<Probe> {
+    run_probe(command_at(bin), args, PROBE_TIMEOUT, |_| false)
 }
 
 /// Like `probe`, but runs in `dir` and allows `timeout`.

@@ -3,6 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use std::path::PathBuf;
+use rusqlite::{Connection, OpenFlags};
 use std::sync::{Mutex, PoisonError};
 use serde_json::{Value, json};
 use crate::provider::{AgentKind, AgentStatus, ModelOption};
@@ -12,6 +13,7 @@ use crate::provider::find_binary;
 use crate::system::fs::home_dir;
 use crate::provider::located_or;
 use crate::provider::probe;
+use crate::provider::probe_at;
 use super::action;
 
 /// `opencode` on PATH or in the usual install folders, else where its installer puts it.
@@ -27,6 +29,41 @@ pub fn opencode_bin() -> Option<PathBuf> {
                 .filter(|p| p.is_file())
         })
     })
+}
+
+/// The database OpenCode 1.x and 2.x share, in OpenCode's data folder.
+pub(crate) const SHARED_DATABASE: &str = "opencode.db";
+/// The database Patchwork gives OpenCode 1.x when it cannot open the shared one. A relative
+/// `OPENCODE_DB` is taken from OpenCode's data folder, so it sits beside the shared one.
+pub(crate) const V1_DATABASE: &str = "opencode-v1.db";
+
+/// OpenCode's data folder, where both databases live.
+pub(crate) fn data_dir() -> Option<PathBuf> {
+    home_dir().map(|h| h.join(".local/share/opencode"))
+}
+
+/// Whether the OpenCode in use is a 1.x that cannot open the shared database, so it runs on
+/// [`V1_DATABASE`] instead.
+///
+/// 1.x opens only a database with a `session` table. Once OpenCode 2 or its desktop app has used
+/// the shared one, it holds `session_v2` instead, and 1.x stops with "Database is not empty and
+/// has no session table". Giving 1.x its own database lets it run without being updated.
+pub(in crate::provider) fn needs_own_database() -> bool {
+    let Some(shared) = data_dir().map(|dir| dir.join(SHARED_DATABASE)) else {
+        return false;
+    };
+    if !shared.is_file() || major_version() != 1 {
+        return false;
+    }
+    let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
+    let tables: Vec<String> = Connection::open_with_flags(shared, flags)
+        .and_then(|conn| {
+            conn.prepare("SELECT name FROM sqlite_master WHERE type = 'table'")?
+                .query_map([], |row| row.get(0))?
+                .collect()
+        })
+        .unwrap_or_default();
+    !tables.is_empty() && !tables.iter().any(|name| name == "session")
 }
 
 /// OpenCode's free models need no account, so an installed CLI can run a turn; other
@@ -65,7 +102,8 @@ pub fn models() -> Vec<ModelOption> {
 /// or the same file is updated in place.
 pub(super) fn major_version() -> u32 {
     static MAJOR: Mutex<Option<(BinaryKey, u32)>> = Mutex::new(None);
-    let key = opencode_bin().map(|bin| {
+    let bin = opencode_bin();
+    let key = bin.clone().map(|bin| {
         let modified = std::fs::metadata(&bin).and_then(|m| m.modified()).ok();
         (bin, modified)
     });
@@ -73,7 +111,9 @@ pub(super) fn major_version() -> u32 {
     if let Some((_, major)) = cached.as_ref().filter(|(k, _)| *k == key) {
         return *major;
     }
-    let major = probe(AgentKind::OpenCode, &["--version"])
+    // Run directly rather than through `probe`, whose command asks this for the version.
+    let major = bin
+        .and_then(|bin| probe_at(&bin, &["--version"]))
         .and_then(|p| {
             p.stdout
                 .split_whitespace()

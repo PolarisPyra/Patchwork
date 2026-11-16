@@ -11,7 +11,7 @@ mod turn;
 #[doc(inline)]
 pub use locate::{agent_shell, set_agent_paths, user_command};
 pub(crate) use locate::{agent_command, remote_turn_command, turn_command};
-use locate::{located, located_or, find_binary};
+use locate::{command_at, located, located_or, find_binary};
 #[doc(inline)]
 pub use parsed::{TaskEvent, Parsed, GoalUpdate};
 pub(crate) use parsed::{one_line, step_status};
@@ -21,7 +21,7 @@ use parsed::{
 };
 #[doc(inline)]
 pub use probe::{Probe, probe, probe_until, probe_in, detect_agent, cli_version, list_models};
-use probe::stop;
+use probe::{probe_at, stop};
 #[doc(inline)]
 pub use turn::{
     GoalCommand, goal_argument, goal_command, TurnSpec, Image, load_images, prompt, Prompt,

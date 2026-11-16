@@ -116,11 +116,20 @@ pub(crate) fn agent_command(kind: AgentKind) -> Result<Command, Error> {
             std::env::current_exe().map_err(|e| format!("Failed to find Patchwork: {e}"))?
         }
     };
-    let mut cmd = program_command(&bin);
+    let mut cmd = command_at(&bin);
     // Turns, probes and one-off calls all start here; the in-app terminal does not.
     if kind == AgentKind::Claude {
         cmd.env("CLAUDE_CODE_ENTRYPOINT", super::claude::entrypoint());
     }
+    if kind == AgentKind::OpenCode && opencode::needs_own_database() {
+        cmd.env("OPENCODE_DB", opencode::V1_DATABASE);
+    }
+    Ok(cmd)
+}
+
+/// A command for the agent CLI at `bin`, with its directory prepended to PATH.
+pub(super) fn command_at(bin: &Path) -> Command {
+    let mut cmd = program_command(bin);
     if let Some(dir) = bin.parent() {
         let mut paths = vec![dir.to_path_buf()];
         paths.extend(
@@ -132,7 +141,7 @@ pub(crate) fn agent_command(kind: AgentKind) -> Result<Command, Error> {
             cmd.env("PATH", joined);
         }
     }
-    Ok(cmd)
+    cmd
 }
 
 /// A command for the program at `bin`, past the npm shim when it is one.

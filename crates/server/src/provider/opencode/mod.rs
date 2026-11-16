@@ -12,6 +12,8 @@ pub use config::{
     opencode_bin, auth, models, permission_config, skills_config, agents_config, config_content,
     instructions_config, todo_config,
 };
+pub(super) use config::needs_own_database;
+pub(crate) use config::{SHARED_DATABASE, V1_DATABASE, data_dir};
 use config::major_version;
 #[doc(inline)]
 pub use run::{turn_args, parse};
