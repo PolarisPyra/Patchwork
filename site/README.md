@@ -56,14 +56,15 @@ not touch the releases, which live on GitHub.
 ## After a release
 
 The page links into one GitHub release (`/releases/download/26.11.0/Patchwork_amd64.AppImage`,
-and so on), whose files never change once published. The Release workflow's `site` job points the page
-at the new tag, deploys it to the `patchwork-site` Pages project, and commits the new links to main,
-so nothing is done by hand. It needs two repository secrets, set once:
+and so on), whose files never change once published. The Release workflow points the page at the
+new tag and commits the new links to main. The Site workflow (`.github/workflows/site.yml`) deploys
+`site/` to the `patchwork-site` Pages project on every push to main that changes it, that commit
+included, so nothing is done by hand. It needs two repository secrets, set once:
 
 - `CLOUDFLARE_API_TOKEN`: a token with the **Account → Cloudflare Pages → Edit** permission.
 - `CLOUDFLARE_ACCOUNT_ID`: the account the Pages project is on (`npx wrangler whoami` shows it).
 
-Without the token the job still commits the links but does not deploy. To do it by hand:
+Without the token the Site workflow fails and the page stays as it was. To refresh the links by hand:
 
 ```sh
 node site/refresh-downloads.mjs          # rewrite index.html with the newest tag

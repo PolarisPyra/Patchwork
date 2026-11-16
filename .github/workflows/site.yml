@@ -1,0 +1,78 @@
+name: Site
+
+# Checks the website on a PR that changes it, and deploys it to Cloudflare Pages on every push to
+# main that does: a change to a page, or the release commit pointing the download links at a new
+# tag. It builds nothing and shares no job, cache or file with CI or the Release workflow.
+#
+# The deploy needs the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets.
+#
+# Actions are pinned to commits; the comment after each names the version it was.
+
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", ".github/deploy/**", ".github/workflows/site.yml"]
+  pull_request:
+    paths: ["site/**", ".github/deploy/**", ".github/workflows/site.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Deploys run one at a time and in order, so an older push never lands on top of a newer one.
+concurrency:
+  group: site-${{ github.event.pull_request.number || 'deploy' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  site:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # The scripts parse, and every page the sitemap names is there.
+      - name: Check the pages
+        run: |
+          node --check site/site.js
+          node --check site/refresh-downloads.mjs
+          for page in $(grep -o '<loc>[^<]*' site/sitemap.xml | sed 's|<loc>https://[^/]*/||'); do
+            [ -f "site/${page}index.html" ] \
+              || { echo "::error::sitemap.xml names /$page, which has no index.html"; exit 1; }
+          done
+
+      # Installed before the deploy token is in any step's environment, from the lockfile in
+      # .github/deploy: npm ci takes only the packages it records, each checked against the hash
+      # recorded for it, and runs none of their install scripts.
+      - name: Install the deploy tool
+        if: github.event_name != 'pull_request'
+        working-directory: .github/deploy
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Deploy to Cloudflare Pages
+        if: github.event_name != 'pull_request'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # Named so the step runs with pipefail, and a failed deploy is not hidden behind tee.
+        shell: bash
+        run: |
+          [ -n "$CLOUDFLARE_API_TOKEN" ] \
+            || { echo "::error::CLOUDFLARE_API_TOKEN is not set, so the website was not deployed"; exit 1; }
+          .github/deploy/node_modules/.bin/wrangler pages deploy site --project-name patchwork-site \
+            --branch main --commit-dirty=true | tee "$RUNNER_TEMP/deploy.log"
+
+      # The address wrangler printed for this deployment serves the home page with the download
+      # links that were just pushed.
+      - name: Check the deployed page
+        if: github.event_name != 'pull_request'
+        run: |
+          url=$(grep -o 'https://[a-z0-9.-]*\.pages\.dev' "$RUNNER_TEMP/deploy.log" | tail -n 1)
+          [ -n "$url" ] || { echo "::error::wrangler printed no deployment address"; exit 1; }
+          links=$(grep -o 'releases/download/[0-9.]*/' site/index.html | sort -u)
+          [ -n "$links" ] || { echo "::error::site/index.html has no download links"; exit 1; }
+          curl -fsS --max-time 30 "$url/" > "$RUNNER_TEMP/home.html"
+          for link in $links; do
+            grep -qF "$link" "$RUNNER_TEMP/home.html" \
+              || { echo "::error::$url does not serve the page with $link"; exit 1; }
+          done
