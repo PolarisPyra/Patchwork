@@ -221,7 +221,11 @@ jobs:
           # The helpers for Linux and Windows SSH hosts.
           targets: x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,x86_64-pc-windows-gnu
 
+      # Saved only from a run on main. A cache saved from a tag can be read by that tag alone, and
+      # each release's three filled the repository's 10 GB and pushed out the ones main had saved.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       # zig compiles the helpers' C (SQLite, ring) for both Linux architectures and Windows.
       - name: Install zig and cargo-zigbuild
@@ -258,7 +262,11 @@ jobs:
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
 
+      # Saved only from a run on main. A cache saved from a tag can be read by that tag alone, and
+      # each release's three filled the repository's 10 GB and pushed out the ones main had saved.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build the exe
         shell: bash
@@ -293,7 +301,11 @@ jobs:
           # The helpers for macOS SSH hosts on both architectures.
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
+      # Saved only from a run on main. A cache saved from a tag can be read by that tag alone, and
+      # each release's three filled the repository's 10 GB and pushed out the ones main had saved.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       # Patchwork.app holds the binary, its icon made from the logo, and the Info.plist naming
       # them. It is signed ad hoc, not with a developer certificate.
