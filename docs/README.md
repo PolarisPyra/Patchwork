@@ -9,6 +9,7 @@ for people using it.
 | [Architecture](architecture.md) | Repo layout, the SQLite data model, and where tasks and chats run |
 | [Agent CLIs](agent-clis.md) | How each agent is detected, run, approved, steered, and imported |
 | [Scheduled tasks, hooks, computer use](artifacts-and-automation.md) | The three features around the agents, and how each one decides what to do |
+| [CI and deploys](ci.md) | The workflows, what starts each, their caches and secrets, and how long they take |
 | [Releasing](release.md) | Versions, the changelog, the release workflow, and the GitHub releases |
 
 ## Adding a guide
