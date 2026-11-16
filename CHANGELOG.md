@@ -3,6 +3,26 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.89] - 2026-11-16
+
+**26.11.89** · 2 changes from 1 contributor
+
+- **Copy as raw text.** Copy selected chat text as raw text, removing Markdown formatting with plain spacing and tabs.
+- **Clear OpenCode update message.** When OpenCode is outdated, see a clear message with the update command instead of a cryptic database error.
+
+<details>
+<summary>Full changelog</summary>
+
+### Added
+
+- Right-clicking selected text in a chat now offers Copy as raw text, under Copy. It copies the text as shown, without Markdown: a blank line between paragraphs, each list item on its own line with its bullet or number, and a tab between table cells. by [PolarisPyra in #162](https://github.com/PolarisPyra/Patchwork/pull/162)
+
+### Fixed
+
+- OpenCode chats failed with only "Database is not empty and has no session table" when the OpenCode that Patchwork found was version 1.x and the OpenCode database had been made by version 2.x. The error now says that OpenCode is out of date and gives the command to update it. by [PolarisPyra in #166](https://github.com/PolarisPyra/Patchwork/pull/166)
+
+</details>
+
 ## [26.11.88] - 2026-11-16
 
 Behind-the-scenes improvements, with nothing new to see.
