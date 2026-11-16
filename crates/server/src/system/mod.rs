@@ -25,7 +25,7 @@ pub(crate) mod time;
 
 #[doc(inline)]
 pub use host::{hide_console, host_command, host_env, path_var};
-pub(crate) use host::lossy_lines;
+pub(crate) use host::{blocked, lossy_lines, unreachable};
 #[cfg(windows)]
 pub(crate) use host::expand_windows_vars;
 #[doc(inline)]

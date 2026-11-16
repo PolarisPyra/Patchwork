@@ -65,7 +65,7 @@ impl HttpServer {
         }
         let response = request.send(message.to_string()).map_err(|e| {
             self.alive.store(false, Ordering::Relaxed);
-            format!("Could not reach {}: {e}", self.url)
+            crate::system::unreachable(&self.url, &e)
         })?;
         if let Some(session) = response
             .headers()

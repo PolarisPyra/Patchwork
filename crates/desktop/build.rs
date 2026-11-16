@@ -1,5 +1,6 @@
 //! Embeds `assets/logo.ico` in the Windows exe as icon resource 1, which GPUI loads for the
-//! window and taskbar icon and Explorer shows for the exe. Other targets skip it.
+//! window and taskbar icon and Explorer shows for the exe, and the exe's version details. Other
+//! targets skip it.
 //!
 //! `assets/logo.ico` is made from `assets/logo.png`; after changing the logo, regenerate it from
 //! the repo root with:
@@ -23,7 +24,39 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed={}", icon.display());
     let icon = icon.display().to_string().replace('\\', "/");
     let rc = PathBuf::from(env::var("OUT_DIR")?).join("patchwork.rc");
-    fs::write(&rc, format!("1 ICON \"{icon}\"\n"))?;
+    // Explorer and security software read who made the exe and which version it is from here.
+    let version = env::var("CARGO_PKG_VERSION")?;
+    let numbers = version.replace('.', ",");
+    fs::write(
+        &rc,
+        format!(
+            r#"1 ICON "{icon}"
+1 VERSIONINFO
+FILEVERSION {numbers},0
+PRODUCTVERSION {numbers},0
+FILEOS 0x40004
+FILETYPE 0x1
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904b0"
+    BEGIN
+      VALUE "ProductName", "Patchwork"
+      VALUE "FileDescription", "Patchwork"
+      VALUE "InternalName", "patchwork"
+      VALUE "OriginalFilename", "patchwork.exe"
+      VALUE "FileVersion", "{version}"
+      VALUE "ProductVersion", "{version}"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END
+"#
+        ),
+    )?;
     embed_resource::compile(&rc, embed_resource::NONE)
         .manifest_required()
         .map_err(|err| err.to_string())?;
