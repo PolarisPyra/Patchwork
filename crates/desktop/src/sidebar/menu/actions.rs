@@ -64,6 +64,7 @@ impl Workspace {
                 if self.settings.granular_chats {
                     items.push(item("Granular settings…", "gauge", Act::Granular));
                 }
+                items.extend(self.chat_app_items(id));
                 items.push(item("Export to…", "export", Act::Export));
                 if self.settings.logging.thread_menu {
                     items.push(item("Open logs", "file-text", Act::OpenLogs));
@@ -97,6 +98,50 @@ impl Workspace {
                 danger: true,
                 ..item("Remove", "trash", Act::Remove)
             }),
+        }
+        items
+    }
+
+    /// The items that continue the chat `id` on a chat app, and stop continuing it there.
+    fn chat_app_items(&self, id: &str) -> Vec<Item> {
+        let bound = self
+            .chat_apps
+            .get(id)
+            .map_or(&[][..], |apps| apps.chats.as_slice());
+        let mut items: Vec<Item> = Vec::new();
+        for place in &self.chat_places {
+            if bound
+                .iter()
+                .any(|b| b.platform == place.platform && b.chat == place.chat)
+            {
+                continue;
+            }
+            let label = place.platform.label();
+            let shared = self
+                .chat_places
+                .iter()
+                .filter(|p| p.platform == place.platform)
+                .count()
+                > 1;
+            let label = if shared {
+                format!("Continue on {label} with {}", place.name)
+            } else {
+                format!("Continue on {label}")
+            };
+            items.push(Item {
+                label: label.into(),
+                icon: "device-mobile",
+                danger: false,
+                act: Act::ContinueOn(place.platform, place.chat.clone()),
+            });
+        }
+        for b in bound {
+            items.push(Item {
+                label: format!("Stop continuing on {}", b.platform.label()).into(),
+                icon: "x",
+                danger: false,
+                act: Act::StopOn(b.platform, b.chat.clone()),
+            });
         }
         items
     }
@@ -161,6 +206,9 @@ impl Workspace {
         // The press otherwise goes on to focus the window under the row, and the menu, without
         // the focus, hears none of its keys.
         window.prevent_default();
+        // Chat apps connect and drop without telling the window, so where a chat can be continued
+        // is read now.
+        self.chat_places = self.server.gateway_places();
         self.context_menu = Some(ContextMenu {
             at: event.position,
             target,
@@ -206,7 +254,7 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         self.close_context_menu(window, cx);
-        match (&target, act) {
+        match (&target, &act) {
             (_, Act::Rename) => return self.start_rename(target, window, cx),
             (Target::Thread(id), Act::Favorite(_) | Act::Pin(_) | Act::Restore) => {
                 let id = id.clone();
@@ -240,6 +288,21 @@ impl Workspace {
                 return self.open_granular_dialog(scope, None, window, cx);
             }
             (Target::Thread(id), Act::Export) => return self.export_thread(id, cx),
+            (Target::Thread(id), Act::ContinueOn(platform, chat)) => {
+                let (id, platform, chat) = (id.clone(), *platform, chat.clone());
+                let change = move |server: &patchwork_server::Server| {
+                    server.continue_on_chat(&id, platform, &chat)
+                };
+                return self.change("continue the chat on a chat app", change, cx);
+            }
+            (Target::Thread(_), Act::StopOn(platform, chat)) => {
+                let (platform, chat) = (*platform, chat.clone());
+                let change = move |server: &patchwork_server::Server| {
+                    server.stop_continuing_on_chat(platform, &chat);
+                    Ok(())
+                };
+                return self.change("stop continuing the chat on a chat app", change, cx);
+            }
             (Target::Thread(id), Act::OpenLogs) => {
                 let (server, id) = (Arc::clone(&self.server), id.clone());
                 let report = cx.background_spawn(async move { server.thread_report(&id) });

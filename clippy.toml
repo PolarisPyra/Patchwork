@@ -1,7 +1,7 @@
 # Product and platform names that read as code to `doc_markdown` but are prose in the docs.
 doc-valid-idents = [
-    "AppImage", "CachyOS", "DeepSeek", "FSEvents", "GStreamer", "GrowthBook", "KWin", "OpenAI",
-    "OpenCode", "OpenRouter", "RandR", "TextMate", "..",
+    "AppImage", "CachyOS", "DeepSeek", "FSEvents", "GStreamer", "GrowthBook", "KWin", "NickServ",
+    "OpenAI", "OpenCode", "OpenRouter", "RandR", "TextMate", "..",
 ]
 # Tests may unwrap and print; the app returns errors and writes to its log instead.
 allow-unwrap-in-tests = true

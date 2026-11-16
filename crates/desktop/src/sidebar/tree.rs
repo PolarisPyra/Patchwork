@@ -7,9 +7,12 @@ use gpui::{
     AnyElement, ClickEvent, Div, Hsla, MouseButton, MouseDownEvent, Role, SharedString, Stateful,
     div, prelude::*, px,
 };
+use patchwork_server::gateway::ChatApps;
 use patchwork_server::threads::{ApprovalStatus, Thread};
 use crate::ui::theme::{fs_sm, radius_sm, Theme, theme};
-use crate::ui::{agent_label, agent_logo, button, display_title, format_relative, icon, spinner};
+use crate::ui::{
+    agent_label, agent_logo, button, display_title, format_relative, icon, platform_logo, spinner,
+};
 use crate::workspace::{Workspace, is_busy};
 
 /// The scrollbar's gutter at the tree's right edge, which its thumb sits in.
@@ -210,6 +213,7 @@ pub(super) fn thread_row(
                     })),
                 ),
         )
+        .children(chat_app_mark(w.chat_apps.get(&th.id), &t))
         .child(
             div()
                 .id("agent")
@@ -234,4 +238,33 @@ pub(super) fn thread_row(
                 this.open_thread(&id, cx);
             }
         }))
+}
+
+/// The logo of the chat app a chat is continued on, or, dimmed, of the one it was started from.
+fn chat_app_mark(apps: Option<&ChatApps>, t: &Theme) -> Option<AnyElement> {
+    let apps = apps?;
+    let (platform, label, opacity) = if let Some(first) = apps.chats.first() {
+        let mut names: Vec<&str> = apps.chats.iter().map(|b| b.platform.label()).collect();
+        names.dedup();
+        let label = format!("Continued on {}", names.join(", "));
+        (first.platform, label, 1.)
+    } else {
+        let platform = apps.started_on?;
+        (platform, format!("Started on {}", platform.label()), 0.5)
+    };
+    Some(
+        div()
+            .id("chat-app")
+            .role(Role::Image)
+            .aria_label(label)
+            .size(px(16.))
+            .flex_none()
+            .flex()
+            .items_center()
+            .justify_center()
+            .opacity(opacity)
+            .text_color(t.text_muted)
+            .child(platform_logo(platform, 14.))
+            .into_any_element(),
+    )
 }

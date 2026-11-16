@@ -13,6 +13,7 @@ pub mod checks;
 pub mod computer;
 mod error;
 pub mod events;
+pub mod gateway;
 pub mod git;
 pub mod harness;
 pub mod import;
@@ -80,6 +81,8 @@ pub struct Server {
     updates: updates::Updates,
     /// The Android emulators Patchwork started.
     emulators: android::Emulators,
+    /// The chat apps connected to Patchwork's threads.
+    gateway: gateway::Hub,
 }
 
 impl std::fmt::Debug for Server {
@@ -149,6 +152,7 @@ impl Server {
             secrets: secrets::Waiters::default(),
             updates: updates::Updates::default(),
             emulators: android::Emulators::default(),
+            gateway: gateway::Hub::default(),
         });
         server.purge_removed_backgrounds();
         let weak = Arc::downgrade(&server);
@@ -189,11 +193,17 @@ impl Server {
                 })
                 .unwrap_or_default()
         }));
+        // Only the Patchwork that owns the data answers chat apps, so two never both reply.
+        if server.store.owns_data() {
+            let starting = Arc::clone(&server);
+            std::thread::spawn(move || starting.restart_gateway());
+        }
         Ok(server)
     }
 
     fn emit(&self, event: AgentEventEnvelope) {
         orchestration::log_event(&event);
+        self.gateway.observe(&event);
         (self.sink)(event);
     }
 }

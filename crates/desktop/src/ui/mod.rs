@@ -31,6 +31,6 @@ pub use format::{
     format_tokens, full_elapsed, now_ms, slug_file_name,
 };
 pub use logos::{
-    AGENT_KINDS, agent_label, agent_logo, api_model_place, api_provider_name, provider_logo,
-    reload_api_providers,
+    AGENT_KINDS, agent_label, agent_logo, api_model_place, api_provider_name, platform_logo,
+    provider_logo, reload_api_providers,
 };

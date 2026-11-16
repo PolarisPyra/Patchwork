@@ -16,13 +16,6 @@ use crate::settings::SettingsDialog;
 use crate::ui::theme::{fs_xs, Theme};
 use crate::ui::tooltip;
 
-pub(super) const MODES: [(AccessMode, &str); 4] = [
-    (AccessMode::Supervised, "Supervised"),
-    (AccessMode::AutoAcceptEdits, "Auto-accept edits"),
-    (AccessMode::Auto, "Auto"),
-    (AccessMode::FullAccess, "Full access"),
-];
-
 pub(super) const DAYS: [Weekday; 7] = [
     Weekday::Mon,
     Weekday::Tue,

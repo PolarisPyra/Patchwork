@@ -306,6 +306,7 @@ fn only_a_finished_reply_that_changed_files_is_checked() {
             checks: None,
             review: None,
             cursor: None,
+            via: None,
         })],
         goal: None,
         position: 0,

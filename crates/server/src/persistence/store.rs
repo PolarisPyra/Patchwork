@@ -612,9 +612,9 @@ const DB_FILE: &str = "patchwork.db";
 
 impl Store {
     /// Copies the database in the folder `from` to the folder `to`, as one snapshot even while
-    /// another Patchwork has it open. The copy's scheduled tasks are turned off, so they do not
-    /// also run from it. Does nothing when `to` has a database or `from` has none; true when it
-    /// copied.
+    /// another Patchwork has it open. The copy's scheduled tasks and chat apps are turned off, so
+    /// they do not also run from it. Does nothing when `to` has a database or `from` has none; true
+    /// when it copied.
     ///
     /// # Errors
     ///
@@ -628,8 +628,18 @@ impl Store {
         Connection::open_with_flags(&source, OpenFlags::SQLITE_OPEN_READ_ONLY)
             .and_then(|conn| conn.execute("VACUUM INTO ?1", [target.to_string_lossy()]))
             .map_err(err)?;
+        // The copy runs no scheduled tasks and answers no chat apps: the released app does both.
         Connection::open(&target)
-            .and_then(|conn| conn.execute("UPDATE scheduled_tasks SET enabled = 0", []))
+            .and_then(|conn| {
+                conn.execute("UPDATE scheduled_tasks SET enabled = 0", [])?;
+                conn.execute(
+                    "UPDATE settings SET json = json_set(json, '$.gateway.platforms', json((\
+                     SELECT json_group_object(key, json_set(value, '$.enabled', json('false'))) \
+                     FROM json_each(settings.json, '$.gateway.platforms')))) \
+                     WHERE json_type(json, '$.gateway.platforms') = 'object'",
+                    [],
+                )
+            })
             .map_err(err)?;
         Ok(true)
     }

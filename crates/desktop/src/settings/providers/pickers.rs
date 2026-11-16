@@ -2,49 +2,15 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{AnyElement, Div, Role, SharedString, Stateful, div, prelude::*, px};
+use gpui::{AnyElement, Div, Stateful, div, prelude::*, px};
 use patchwork_server::provider::AgentKind;
 use patchwork_server::settings::VisionModel;
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{choice, select_box};
-use crate::ui::theme::{fs_sm, radius, Theme, theme};
+use crate::settings::controls::{choice, select_box, tile, tile_grid};
+use crate::ui::theme::theme;
 use crate::ui::{AGENT_KINDS, agent_label, icon, provider_logo};
 use super::state::VISION_AGENTS;
 use super::form;
-
-/// A grid of provider tiles: the presets to add, and the servers on this computer.
-pub(super) fn tile_grid(label: &'static str) -> Stateful<Div> {
-    div()
-        .id(label)
-        .role(Role::Group)
-        .aria_label(label)
-        .grid()
-        .grid_cols(6)
-        .gap(px(8.))
-        .w_full()
-        .py(px(10.))
-}
-
-/// One tile of a grid: a mark over a name.
-pub(super) fn tile(
-    id: impl Into<SharedString>,
-    label: impl Into<SharedString>,
-    t: &Theme,
-) -> Stateful<Div> {
-    let (hover, strong, fg) = (t.bg_hover, t.border_strong, t.text);
-    crate::ui::button(id.into(), label)
-        .relative()
-        .h(px(72.))
-        .min_w_0()
-        .flex_col()
-        .justify_center()
-        .gap(px(8.))
-        .rounded(px(radius()))
-        .border_1()
-        .px(px(8.))
-        .text_size(px(fs_sm()))
-        .hover(move |s| s.border_color(strong).bg(hover).text_color(fg))
-}
 
 impl SettingsDialog {
     /// The model that reads a message's images for an API chat, from every connected agent that

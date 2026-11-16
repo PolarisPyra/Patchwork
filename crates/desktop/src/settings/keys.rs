@@ -24,6 +24,7 @@ impl SettingsDialog {
                         "mcp" => self.cancel_mcp_form(cx),
                         "ssh" => self.cancel_add_device(cx),
                         "scheduled" => self.cancel_task(cx),
+                        "gateways" => self.close_gateway(cx),
                         "providers" => {
                             self.cancel_prompt(cx)
                                 || self.cancel_address(cx)

@@ -435,6 +435,10 @@ pub struct Message {
     /// after it are undone, or a fork can branch it. None for other agents and older replies.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
+    /// The chat app the person sent it from. None when it was typed on the computer, and for
+    /// replies and older messages.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via: Option<crate::gateway::Platform>,
 }
 
 /// Snapshots of a project's files as git tree ids, kept alive by refs under `refs/patchwork`.

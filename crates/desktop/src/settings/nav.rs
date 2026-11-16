@@ -136,6 +136,23 @@ const INDEX: &[(&str, &[&str])] = &[
         ],
     ),
     ("ssh", &["SSH devices"]),
+    (
+        "gateways",
+        &[
+            "Access",
+            "Telegram",
+            "Discord",
+            "Slack",
+            "Matrix",
+            "Mattermost",
+            "Signal",
+            "IRC",
+            "Email",
+            "SMS",
+            "QQ",
+            "Paired apps",
+        ],
+    ),
 ];
 
 /// One search result: a setting's name and the pane that holds it.

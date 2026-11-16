@@ -341,6 +341,7 @@ impl Workspace {
     pub fn reload(&mut self, cx: &mut Context<Self>) {
         self.threads = self.server.list_threads();
         self.folders = self.server.list_folders();
+        self.chat_apps = self.server.thread_chat_apps();
         if let Some(id) = self.thread.as_ref().map(|t| t.id.clone()) {
             match self.server.thread(&id) {
                 Ok(thread) => self.thread = Some(thread),

@@ -19,6 +19,7 @@ use crate::{orchestration, provider, skills};
 use crate::threads::title;
 use crate::threads::{title_from, without_leading_attachments};
 use crate::Server;
+use crate::gateway::Platform;
 
 /// A message the user sent, complete from the start.
 fn user_message(text: &str, attachments: Vec<Attachment>) -> Message {
@@ -46,6 +47,7 @@ fn user_message(text: &str, attachments: Vec<Attachment>) -> Message {
         checks: None,
         review: None,
         cursor: None,
+        via: None,
     }
 }
 
@@ -130,8 +132,10 @@ impl Server {
         thread_id: &str,
         text: &str,
         attachments: Vec<Attachment>,
+        via: Option<Platform>,
     ) -> Result<Message, Error> {
         let mut msg = user_message(text, attachments);
+        msg.via = via;
         msg.queued = true;
         let held = msg.clone();
         self.store
@@ -166,6 +170,39 @@ impl Server {
         attachments: Vec<Attachment>,
         queue: bool,
     ) -> Result<Message, Error> {
+        self.send_message_from(thread_id, text, attachments, queue, None)
+    }
+
+    /// Sends the message as `send_message` does, from the chat app conversation `from` when it
+    /// came from one, and shows it in the other chat apps the thread is continued on.
+    pub(crate) fn send_message_from(
+        self: &Arc<Self>,
+        thread_id: String,
+        text: String,
+        attachments: Vec<Attachment>,
+        queue: bool,
+        from: Option<(Platform, &str)>,
+    ) -> Result<Message, Error> {
+        let msg = self.deliver(
+            thread_id.clone(),
+            text,
+            attachments,
+            queue,
+            from.map(|(platform, _)| platform),
+        )?;
+        self.gateway.mirror(thread_id, &msg, from);
+        Ok(msg)
+    }
+
+    /// Stores the user message and gives it to the agent; see `send_message`.
+    fn deliver(
+        self: &Arc<Self>,
+        thread_id: String,
+        text: String,
+        attachments: Vec<Attachment>,
+        queue: bool,
+        via: Option<Platform>,
+    ) -> Result<Message, Error> {
         let images = provider::load_images(&attachments)?;
         // Refused before anything is stored: a turn still starting has no agent to write to.
         if self.runner.is_starting(&thread_id) {
@@ -175,7 +212,7 @@ impl Server {
         // is waiting to resume. Sent now it would start a turn of its own, the chat would move
         // past that reply, and the wait would be dropped.
         if !provider::is_goal_command(&text) && self.waits_to_resume(&thread_id) {
-            return self.hold_for_resume(&thread_id, &text, attachments);
+            return self.hold_for_resume(&thread_id, &text, attachments, via);
         }
         if let Some(command) = provider::goal_command(&text) {
             if self.runner.is_running(&thread_id) {
@@ -229,13 +266,20 @@ impl Server {
         // Antigravity has no setting for when it compacts, so a chat over its compact window
         // compacts first, and the message waits for it in the queue.
         let queue = if self.compacts_first(&thread_id, &text) {
-            self.send_message(thread_id.clone(), "/compact".into(), Vec::new(), false)?;
+            self.deliver(
+                thread_id.clone(),
+                "/compact".into(),
+                Vec::new(),
+                false,
+                None,
+            )?;
             true
         } else {
             queue
         };
         // Checked before the message is stored, so a refused message leaves no trace.
         let mut msg = user_message(&text, attachments.clone());
+        msg.via = via;
         // Stored before the agent sees it, so its answer is stored after it.
         let m = msg.clone();
         let mut session_id = None;
