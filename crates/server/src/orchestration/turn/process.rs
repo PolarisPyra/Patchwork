@@ -174,13 +174,19 @@ pub(in crate::orchestration) fn exit_error(exit: Option<ExitStatus>) -> String {
 }
 
 /// `error` with the fix for it on a line of its own, when it is one the person makes outside the
-/// app: Claude Code signed out, or too old for the model it was asked to use. Claude's own words
-/// say to run `/login`, which `claude -p` cannot do, so the fix says where to do it.
+/// app: Claude Code signed out, or too old for the model it was asked to use, or an OpenCode 1.x
+/// on PATH meeting the database OpenCode 2.x wrote. Claude's own words say to run `/login`, which
+/// `claude -p` cannot do, so the fix says where to do it.
 pub(in crate::orchestration) fn with_remedy(agent: AgentKind, error: String) -> String {
+    let lower = error.to_lowercase();
+    // OpenCode 1.x opens only a database with a `session` table; 2.x keeps `session_v2` instead.
+    if agent == AgentKind::OpenCode && lower.contains("has no session table") {
+        let remedy = "This OpenCode is older than the one that made its database. Update it: run `npm i -g opencode-ai@latest` in a terminal, then try again.";
+        return format!("{error}\n\n{remedy}");
+    }
     if agent != AgentKind::Claude {
         return error;
     }
-    let lower = error.to_lowercase();
     let remedy = if lower.contains("does not support this model") {
         "Update Claude Code: run `claude update` in a terminal, then try again, or pick another model."
     } else if [
