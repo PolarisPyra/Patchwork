@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenCode GUI and Desktop App | Patchwork</title>
+    <meta name="description" content="Patchwork is a free, open-source desktop app for OpenCode. Pick any model OpenCode offers, approve actions in the chat, steer a running turn and import your old sessions." />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="theme-color" content="#15121c" />
+    <link rel="canonical" href="https://patchworkeditor.com/opencode/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Patchwork" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:title" content="OpenCode GUI and Desktop App | Patchwork" />
+    <meta property="og:description" content="Patchwork is a free, open-source desktop app for OpenCode. Pick any model OpenCode offers, approve actions in the chat, steer a running turn and import your old sessions." />
+    <meta property="og:url" content="https://patchworkeditor.com/opencode/" />
+    <meta property="og:image" content="https://patchworkeditor.com/img/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="OpenCode GUI and Desktop App | Patchwork" />
+    <meta name="twitter:description" content="Patchwork is a free, open-source desktop app for OpenCode. Pick any model OpenCode offers, approve actions in the chat, steer a running turn and import your old sessions." />
+    <meta name="twitter:image" content="https://patchworkeditor.com/img/og.png" />
+    <!-- Keep the FAQ entries here in step with the visible FAQ below. -->
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "@id": "https://patchworkeditor.com/opencode/",
+      "url": "https://patchworkeditor.com/opencode/",
+      "name": "OpenCode GUI and Desktop App | Patchwork",
+      "description": "Patchwork is a free, open-source desktop app for OpenCode. Pick any model OpenCode offers, approve actions in the chat, steer a running turn and import your old sessions.",
+      "inLanguage": "en",
+      "isPartOf": {
+        "@id": "https://patchworkeditor.com/#website"
+      },
+      "about": {
+        "@id": "https://patchworkeditor.com/#app"
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Patchwork",
+          "item": "https://patchworkeditor.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "OpenCode",
+          "item": "https://patchworkeditor.com/opencode/"
+        }
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Is there a GUI for OpenCode?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Patchwork is a desktop app that runs the opencode CLI, for x86-64 Linux, Windows and Apple silicon Macs."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Do I need an account?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. OpenCode's free models need none, and Patchwork has no account of its own."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Which OpenCode versions work?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Both 1.x and 2.x. Approvals, questions and steering in the chat need 2.x."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does /goal work with OpenCode?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. OpenCode has no slash commands in Patchwork, /goal included."
+          }
+        }
+      ]
+    }
+  ]
+}
+    </script>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/styles.css?v=7" />
+    <script src="/site.js?v=2"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <svg class="defs" aria-hidden="true">
+      <symbol id="sparkle" viewBox="0 0 10 10">
+        <path d="M5 0Q5.6 4.4 10 5Q5.6 5.6 5 10Q4.4 5.6 0 5Q4.4 4.4 5 0Z" />
+      </symbol>
+    </svg>
+
+    <header class="nav">
+      <div class="wrap nav-inner">
+        <a class="brand" href="/" aria-label="Patchwork, home">
+          <img class="brand-mark" src="/favicon.svg" alt="" width="24" height="24" />
+          <span>Patchwork</span>
+        </a>
+        <nav class="nav-links" id="nav-links" aria-label="Main">
+          <a href="/#features">Features</a>
+          <a href="/#agents">Agents</a>
+          <a href="/#compare">Compare</a>
+          <a href="/#faq">FAQ</a>
+          <a href="/#download">Download</a>
+          <a href="https://github.com/PolarisPyra/Patchwork">GitHub</a>
+        </nav>
+        <button
+          class="nav-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="nav-links"
+          aria-label="Open menu"
+          data-nav-toggle
+        >
+          <svg class="i i-menu" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+          <svg class="i i-close" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="page" tabindex="-1" data-page>
+      <main id="main">
+        <section class="hero">
+          <div class="wrap wrap-wide">
+            <div class="hero-copy reveal">
+              <h1>
+                A desktop app for OpenCode
+                <svg class="sparkle sparkle-a" aria-hidden="true"><use href="#sparkle" /></svg>
+                <svg class="sparkle sparkle-b" aria-hidden="true"><use href="#sparkle" /></svg>
+              </h1>
+              <p class="lede">Patchwork runs the opencode CLI on Linux, Windows and macOS, beside your other agents, with every model OpenCode can reach.</p>
+              <div class="hero-actions">
+                <span class="halo-btn">
+                  <a class="btn btn-primary" href="/#download">Download Patchwork</a>
+                </span>
+                <a class="btn btn-secondary" href="https://github.com/PolarisPyra/Patchwork">View on GitHub</a>
+              </div>
+              <ul class="trust" aria-label="At a glance">
+                <li>Free and MIT licensed</li>
+                <li>No account</li>
+                <li>No telemetry</li>
+                <li>Linux, Windows and macOS</li>
+              </ul>
+            </div>
+            <figure class="shot shot-hero">
+              <div class="window">
+                <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+                <img src="/img/shot-setup.webp" width="1371" height="823" alt="The first setup step, Connect your coding agents, listing Claude Code, Codex, Antigravity CLI and OpenCode CLI as ready, with Claude Code picked as the default agent" />
+              </div>
+            </figure>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="wrap">
+            <header class="section-head reveal drop-in">
+              <h2>OpenCode, with a window around it</h2>
+            </header>
+            <ul class="cards cards-plain">
+              <li class="card reveal flip-in">
+                <h3>Every OpenCode model</h3>
+                <p>The model menu lists what opencode models reports, the free ones included. Those need no account.</p>
+              </li>
+              <li class="card reveal flip-in">
+                <h3>Approve in the chat</h3>
+                <p>With OpenCode 2, permission requests and questions show in the chat.</p>
+              </li>
+              <li class="card reveal flip-in">
+                <h3>Steer mid-turn</h3>
+                <p>With OpenCode 2, a message sent while it is working is delivered to the running turn.</p>
+              </li>
+              <li class="card reveal flip-in">
+                <h3>Local only</h3>
+                <p>Each turn starts a private OpenCode server on your own machine with a generated password, and stops it when the turn ends.</p>
+              </li>
+              <li class="card reveal flip-in">
+                <h3>Your old sessions</h3>
+                <p>Sessions are imported from OpenCode&#x27;s own database.</p>
+              </li>
+              <li class="card reveal flip-in">
+                <h3>Rules for commands</h3>
+                <p>Allow, ask or deny rules decide each shell command, edit and web fetch as it happens.</p>
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="wrap wrap-narrow">
+            <h2 class="reveal drop-in">Get started</h2>
+            <ol class="steps reveal" aria-label="Steps">
+              <li>
+                <span class="step-dot" aria-hidden="true">1</span>
+                <span><b>Install OpenCode.</b> Install the opencode CLI. Add providers with opencode auth login, or use its free models.</span>
+              </li>
+              <li>
+                <span class="step-dot" aria-hidden="true">2</span>
+                <span><b>Open Patchwork.</b> It finds the CLI on its own.</span>
+              </li>
+              <li>
+                <span class="step-dot" aria-hidden="true">3</span>
+                <span><b>Start a task.</b> Pick OpenCode and a model, and say what you want done.</span>
+              </li>
+            </ol>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="wrap">
+            <header class="section-head reveal drop-in">
+              <h2>Questions</h2>
+            </header>
+            <div class="faq reveal">
+              <details class="faq-item">
+                <summary><h3>Is there a GUI for OpenCode?</h3></summary>
+                <p>Yes. Patchwork is a desktop app that runs the opencode CLI, for x86-64 Linux, Windows and Apple silicon Macs.</p>
+              </details>
+              <details class="faq-item">
+                <summary><h3>Do I need an account?</h3></summary>
+                <p>No. OpenCode&#x27;s free models need none, and Patchwork has no account of its own.</p>
+              </details>
+              <details class="faq-item">
+                <summary><h3>Which OpenCode versions work?</h3></summary>
+                <p>Both 1.x and 2.x. Approvals, questions and steering in the chat need 2.x.</p>
+              </details>
+              <details class="faq-item">
+                <summary><h3>Does /goal work with OpenCode?</h3></summary>
+                <p>No. OpenCode has no slash commands in Patchwork, /goal included.</p>
+              </details>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="wrap">
+            <header class="section-head reveal drop-in">
+              <h2>More about Patchwork</h2>
+            </header>
+            <ul class="page-links">
+              <li><a class="btn btn-secondary" href="/claude-code/">Claude Code</a></li>
+              <li><a class="btn btn-secondary" href="/codex/">Codex</a></li>
+              <li><a class="btn btn-secondary" href="/antigravity/">Antigravity</a></li>
+              <li><a class="btn btn-secondary" href="/agent-orchestrator/">Agent orchestrator</a></li>
+              <li><a class="btn btn-secondary" href="/ade/">Agentic development environment</a></li>
+            </ul>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <div class="wrap footer-inner">
+          <div class="footer-brand">
+            <img class="brand-mark" src="/favicon.svg" alt="" width="20" height="20" />
+            <span>Patchwork</span>
+          </div>
+          <nav class="footer-links" aria-label="Pages">
+            <a href="/claude-code/">Claude Code</a>
+            <a href="/codex/">Codex</a>
+            <a href="/antigravity/">Antigravity</a>
+            <a href="/opencode/">OpenCode</a>
+            <a href="/agent-orchestrator/">Agent orchestrator</a>
+            <a href="/ade/">Agentic development environment</a>
+          </nav>
+          <p class="footer-line">
+            © <span data-year>2026</span> Patchwork · MIT License ·
+            <a href="https://github.com/PolarisPyra/Patchwork">GitHub</a>
+          </p>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>
