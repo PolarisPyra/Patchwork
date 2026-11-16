@@ -148,8 +148,8 @@
     <link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <!-- Browsers may keep these two for 4 hours (Cloudflare's browser cache), so bump ?v= whenever
          either changes, or a visitor gets the new page with the old styles. -->
-    <link rel="stylesheet" href="styles.css?v=8" />
-    <script src="site.js?v=2"></script>
+    <link rel="stylesheet" href="styles.css?v=11" />
+    <script src="site.js?v=4"></script>
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
@@ -237,19 +237,127 @@
               <div class="window">
                 <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
                 <img
-                  src="img/shot-hero.webp"
-                  width="2400"
-                  height="1440"
-                  alt="Patchwork with a finished task in the router-firmware project: projects and tasks in the sidebar, the agent's steps, its explanation of the checksum it found, and the three files it changed"
+                  src="img/shot-hero.webp?v=2"
+                  width="1600"
+                  height="960"
+                  alt="Patchwork with a finished task in the storefront project: projects and tasks in the sidebar, the agent's explanation of the SAVE10 promo code it added, the code, and the file it changed"
                 />
               </div>
             </figure>
           </div>
         </section>
 
+        <!-- Orchestrator -->
+        <section class="section" id="orchestrator">
+          <div class="wrap wrap-wide">
+            <div class="split" data-carousel>
+              <div class="split-copy reveal slide-in">
+                <span class="tag tag-violet" aria-hidden="true">Orchestrator</span>
+                <h2>Start every task from one page</h2>
+                <ul class="tabs" aria-label="The Orchestrator page">
+                  <li>
+                    <button class="tab is-active" type="button" data-tab aria-current="true">
+                      <b>Requests</b>
+                      <span>Write what you want done and it starts a task in the project you pick.</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button class="tab" type="button" data-tab>
+                      <b>Cards</b>
+                      <span>Each request becomes a card with its task, whether it is still working and the last line its agent wrote.</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button class="tab" type="button" data-tab>
+                      <b>Themes</b>
+                      <span>The page has its own animated backgrounds. This one is Night Reef.</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button class="tab" type="button" data-tab>
+                      <b>Light themes</b>
+                      <span>Lagoon does the same in a light window.</span>
+                    </button>
+                  </li>
+                </ul>
+              </div>
+              <figure class="shot" role="group" aria-roledescription="carousel" aria-label="The Orchestrator page">
+                <div class="window">
+                  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+                  <div class="slides">
+                    <div class="slide is-active" data-slide role="group" aria-roledescription="slide" aria-label="Requests, 1 of 4">
+                      <video
+                        width="1280"
+                        height="768"
+                        poster="img/orch-send.webp"
+                        preload="none"
+                        muted
+                        loop
+                        playsinline
+                        aria-label="A request typed into the box on the Orchestrator page under the animated butterfly. Once sent, a card for it appears below and its task shows in the sidebar, working"
+                      >
+                        <source src="img/orch-send.webm" type="video/webm" />
+                      </video>
+                    </div>
+                    <div class="slide" data-slide role="group" aria-roledescription="slide" aria-label="Cards, 2 of 4">
+                      <img
+                        src="img/shot-orchestrator.webp?v=2"
+                        width="1255"
+                        height="753"
+                        loading="lazy"
+                        alt="The Orchestrator page with four request cards under the request box: two tasks still working and two done, each card naming the task and project it went to"
+                      />
+                    </div>
+                    <div class="slide" data-slide role="group" aria-roledescription="slide" aria-label="Themes, 3 of 4">
+                      <video
+                        width="1280"
+                        height="768"
+                        poster="img/theme-orch-reef.webp"
+                        preload="none"
+                        muted
+                        loop
+                        playsinline
+                        aria-label="The Orchestrator page in the Night Reef theme: a turtle, fish and a jellyfish drawn in text characters drift behind the request box"
+                      >
+                        <source src="img/theme-orch-reef.webm" type="video/webm" />
+                      </video>
+                    </div>
+                    <div class="slide" data-slide role="group" aria-roledescription="slide" aria-label="Light themes, 4 of 4">
+                      <video
+                        width="1280"
+                        height="768"
+                        poster="img/theme-orch-lagoon.webp"
+                        preload="none"
+                        muted
+                        loop
+                        playsinline
+                        aria-label="The Orchestrator page in the light Lagoon theme: a green turtle and small fish drift across pale water behind the request box"
+                      >
+                        <source src="img/theme-orch-lagoon.webm" type="video/webm" />
+                      </video>
+                    </div>
+                  </div>
+                </div>
+                <div class="pills">
+                  <div class="pill-dots" aria-hidden="true">
+                    <button class="pill is-active" type="button" data-pill tabindex="-1"><i></i></button>
+                    <button class="pill" type="button" data-pill tabindex="-1"><i></i></button>
+                    <button class="pill" type="button" data-pill tabindex="-1"><i></i></button>
+                    <button class="pill" type="button" data-pill tabindex="-1"><i></i></button>
+                  </div>
+                  <button class="pill-toggle" type="button" data-carousel-toggle aria-label="Pause the slides">
+                    <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12M15 6v12" /></svg>
+                    <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>
+                  </button>
+                </div>
+              </figure>
+            </div>
+          </div>
+        </section>
+
         <!-- Setup -->
         <section class="section" id="setup">
-          <div class="wrap wrap-wide split">
+          <div class="wrap wrap-wide split split-flip">
             <div class="split-copy reveal slide-in">
               <h2>Set up in about a minute</h2>
               <ol class="steps" aria-label="Setup steps">
@@ -281,9 +389,9 @@
               <div class="window">
                 <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
                 <img
-                  src="img/shot-setup.webp"
-                  width="1371"
-                  height="823"
+                  src="img/shot-setup.webp?v=2"
+                  width="1600"
+                  height="960"
                   loading="lazy"
                   alt="The first setup step, Connect your coding agents, listing Claude Code, Codex, Antigravity CLI and OpenCode CLI as ready, with Claude Code picked as the default agent"
                 />
@@ -295,229 +403,283 @@
         <!-- Features -->
         <section class="section" id="features">
           <div class="wrap wrap-wide">
-            <div class="split">
+            <div class="split" data-carousel>
               <div class="split-copy reveal slide-in">
-                <span class="tag tag-violet" aria-hidden="true">Tasks</span>
-                <h2>Give an agent a task and watch it work</h2>
-                <p>
-                  The chat lists each file it reads, each edit it makes and each command it runs.
-                </p>
+                <span class="tag tag-mint" aria-hidden="true">Chat</span>
+                <h2>Watch the work and keep what you like</h2>
+                <ul class="tabs" aria-label="Working in a chat">
+                  <li>
+                    <button class="tab is-active" type="button" data-tab aria-current="true">
+                      <b>Tasks</b>
+                      <span>The chat lists each file an agent reads, each edit it makes and each command it runs.</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button class="tab" type="button" data-tab>
+                      <b>Review</b>
+                      <span>Open the diff, stage the files you want and reject the rest.</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button class="tab" type="button" data-tab>
+                      <b>Search</b>
+                      <span>Type a word and step through every place it appears.</span>
+                    </button>
+                  </li>
+                </ul>
               </div>
-              <figure class="shot">
+              <figure class="shot" role="group" aria-roledescription="carousel" aria-label="Working in a chat">
                 <div class="window">
                   <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
-                  <img
-                    src="img/shot-tasks.webp"
-                    width="1263"
-                    height="758"
-                    loading="lazy"
-                    alt="A finished task in the chat: the steps list shows the agent read src/header.rs, searched for crc, changed three files and ran cargo test, above its explanation and a table of checksums"
-                  />
+                  <div class="slides">
+                    <div class="slide is-active" data-slide role="group" aria-roledescription="slide" aria-label="Tasks, 1 of 3">
+                      <img
+                        src="img/shot-tasks.webp?v=2"
+                        width="1200"
+                        height="720"
+                        loading="lazy"
+                        alt="A finished task in the chat: the agent&#x27;s explanation of the SAVE10 promo code it added, the code, the checks it ran and the one file it changed"
+                      />
+                    </div>
+                    <div class="slide" data-slide role="group" aria-roledescription="slide" aria-label="Review, 2 of 3">
+                      <img
+                        src="img/shot-review.webp?v=2"
+                        width="1600"
+                        height="960"
+                        loading="lazy"
+                        alt="Source Control on the left, the chat in the middle and the diff of cart.js on the right, with removed lines in red, added lines in green and Reject and Stage file buttons"
+                      />
+                    </div>
+                    <div class="slide" data-slide role="group" aria-roledescription="slide" aria-label="Search, 3 of 3">
+                      <img
+                        src="img/shot-search.webp?v=2"
+                        width="1250"
+                        height="750"
+                        loading="lazy"
+                        alt="The search field over a chat with the word total typed in, 8 of 8 matches, and every match in the conversation highlighted"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div class="pills">
+                  <div class="pill-dots" aria-hidden="true">
+                    <button class="pill is-active" type="button" data-pill tabindex="-1"><i></i></button>
+                    <button class="pill" type="button" data-pill tabindex="-1"><i></i></button>
+                    <button class="pill" type="button" data-pill tabindex="-1"><i></i></button>
+                  </div>
+                  <button class="pill-toggle" type="button" data-carousel-toggle aria-label="Pause the slides">
+                    <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12M15 6v12" /></svg>
+                    <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>
+                  </button>
                 </div>
               </figure>
             </div>
 
-            <div class="split split-flip">
+            <div class="split split-flip" data-carousel>
               <div class="split-copy reveal slide-in">
-                <span class="tag tag-mint" aria-hidden="true">Review</span>
-                <h2>Review every change before you keep it</h2>
-                <p>
-                  Open the diff, stage the files you want and reject the rest.
-                </p>
+                <span class="tag tag-sky" aria-hidden="true">Control</span>
+                <h2>Choose the model and how far it can go</h2>
+                <ul class="tabs" aria-label="Models, access and limits">
+                  <li>
+                    <button class="tab is-active" type="button" data-tab aria-current="true">
+                      <b>Models</b>
+                      <span>The model list is in the message box, with a shortcut for each one.</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button class="tab" type="button" data-tab>
+                      <b>Access</b>
+                      <span>Each task has its own setting, from asking before every command to full access.</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button class="tab" type="button" data-tab>
+                      <b>Permissions</b>
+                      <span>Each command can be allowed, denied or set to ask first.</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button class="tab" type="button" data-tab>
+                      <b>API support</b>
+                      <span>Add DeepSeek, OpenRouter or any OpenAI-compatible endpoint in Settings.</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button class="tab" type="button" data-tab>
+                      <b>Usage</b>
+                      <span>The sidebar shows your session and weekly limits and when each one resets.</span>
+                    </button>
+                  </li>
+                </ul>
               </div>
-              <figure class="shot">
+              <figure class="shot" role="group" aria-roledescription="carousel" aria-label="Models, access and limits">
                 <div class="window">
                   <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
-                  <img
-                    src="img/shot-review.webp"
-                    width="1371"
-                    height="823"
-                    loading="lazy"
-                    alt="The diff of header.rs beside the chat, with removed lines in red, added lines in green, and Note, Discard and Stage buttons on each block"
-                  />
+                  <div class="slides">
+                    <div class="slide is-active" data-slide role="group" aria-roledescription="slide" aria-label="Models, 1 of 5">
+                      <img
+                        src="img/shot-models.webp?v=2"
+                        width="1000"
+                        height="600"
+                        loading="lazy"
+                        alt="The model list open over the message box, showing Default, Opus 5.5, Fable 5.2, Sonnet 5.5, Haiku 5.5 and Mythos 5.2 with shortcuts Ctrl+1 to Ctrl+6"
+                      />
+                    </div>
+                    <div class="slide" data-slide role="group" aria-roledescription="slide" aria-label="Access, 2 of 5">
+                      <img
+                        src="img/shot-access.webp?v=2"
+                        width="1000"
+                        height="600"
+                        loading="lazy"
+                        alt="The access menu open over the message box, with Supervised, Auto-accept edits, Auto and Full access and a line describing each"
+                      />
+                    </div>
+                    <div class="slide" data-slide role="group" aria-roledescription="slide" aria-label="Permissions, 3 of 5">
+                      <img
+                        src="img/shot-permissions.webp?v=2"
+                        width="1150"
+                        height="690"
+                        loading="lazy"
+                        alt="Settings on Permissions: a list of commands such as cd, ls and grep, each with Allow, Ask and Deny buttons"
+                      />
+                    </div>
+                    <div class="slide" data-slide role="group" aria-roledescription="slide" aria-label="API support, 4 of 5">
+                      <img
+                        src="img/shot-providers.webp?v=2"
+                        width="1150"
+                        height="690"
+                        loading="lazy"
+                        alt="Settings on Providers: the four agent CLIs marked installed, and a grid of API providers to add, from DeepSeek and OpenAI to OpenRouter and your own server"
+                      />
+                    </div>
+                    <div class="slide" data-slide role="group" aria-roledescription="slide" aria-label="Usage, 5 of 5">
+                      <img
+                        src="img/shot-usage.webp?v=2"
+                        width="1091"
+                        height="655"
+                        loading="lazy"
+                        alt="The Usage panel in the sidebar, showing a Claude Code 5-hour session at 35 percent and two weekly limits, with when each resets"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div class="pills">
+                  <div class="pill-dots" aria-hidden="true">
+                    <button class="pill is-active" type="button" data-pill tabindex="-1"><i></i></button>
+                    <button class="pill" type="button" data-pill tabindex="-1"><i></i></button>
+                    <button class="pill" type="button" data-pill tabindex="-1"><i></i></button>
+                    <button class="pill" type="button" data-pill tabindex="-1"><i></i></button>
+                    <button class="pill" type="button" data-pill tabindex="-1"><i></i></button>
+                  </div>
+                  <button class="pill-toggle" type="button" data-carousel-toggle aria-label="Pause the slides">
+                    <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12M15 6v12" /></svg>
+                    <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>
+                  </button>
                 </div>
               </figure>
             </div>
 
-            <div class="split">
+            <div class="split" data-carousel>
               <div class="split-copy reveal slide-in">
-                <span class="tag tag-sky" aria-hidden="true">Search</span>
-                <h2>Search inside a chat</h2>
-                <p>
-                  Type a word and step through every place it appears.
-                </p>
-              </div>
-              <figure class="shot">
-                <div class="window">
-                  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
-                  <img
-                    src="img/shot-search.webp"
-                    width="1600"
-                    height="960"
-                    loading="lazy"
-                    alt="The search field over a chat with the word checksum typed in, and every match in the conversation highlighted"
-                  />
-                </div>
-              </figure>
-            </div>
-
-            <div class="split split-flip">
-              <div class="split-copy reveal slide-in">
-                <span class="tag tag-pink" aria-hidden="true">Models</span>
-                <h2>Pick a model for each task</h2>
-                <p>
-                  The model list is in the message box, with a shortcut for each one.
-                </p>
-              </div>
-              <figure class="shot">
-                <div class="window">
-                  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
-                  <img
-                    src="img/shot-models.webp"
-                    width="1143"
-                    height="686"
-                    loading="lazy"
-                    alt="The model list open over the message box, showing Default, Opus 5.5, Fable 5.2, Sonnet 5.5 and Haiku 5.5 with shortcuts Ctrl+1 to Ctrl+5"
-                  />
-                </div>
-              </figure>
-            </div>
-
-            <div class="split">
-              <div class="split-copy reveal slide-in">
-                <span class="tag tag-violet" aria-hidden="true">Access</span>
-                <h2>Decide how much an agent can do alone</h2>
-                <p>
-                  Each task has its own setting, from asking before every command to full access.
-                </p>
-              </div>
-              <figure class="shot">
-                <div class="window">
-                  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
-                  <img
-                    src="img/shot-access.webp"
-                    width="1143"
-                    height="686"
-                    loading="lazy"
-                    alt="The access menu open over the message box, with Supervised, Auto-accept edits, Auto and Full access and a line describing each"
-                  />
-                </div>
-              </figure>
-            </div>
-
-            <div class="split split-flip">
-              <div class="split-copy reveal slide-in">
-                <span class="tag tag-sky" aria-hidden="true">Usage</span>
-                <h2>See how much of your plan is left</h2>
-                <p>
-                  The sidebar shows your session and weekly limits and when each one resets.
-                </p>
-              </div>
-              <figure class="shot">
-                <div class="window">
-                  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
-                  <img
-                    src="img/shot-usage.webp"
-                    width="1091"
-                    height="655"
-                    loading="lazy"
-                    alt="The Usage panel in the sidebar, showing a Claude Code 5-hour session at 35 percent and two weekly limits, with when each resets"
-                  />
-                </div>
-              </figure>
-            </div>
-
-            <div class="split">
-              <div class="split-copy reveal slide-in">
-                <span class="tag tag-sun" aria-hidden="true">Providers</span>
-                <h2>API support</h2>
-                <p>
-                  Add DeepSeek, OpenRouter or any OpenAI-compatible endpoint in Settings.
-                </p>
-              </div>
-              <figure class="shot">
-                <div class="window">
-                  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
-                  <img
-                    src="img/shot-providers.webp"
-                    width="1067"
-                    height="640"
-                    loading="lazy"
-                    alt="Settings on Providers: the four agent CLIs marked installed, and a grid of API providers to add, from DeepSeek and OpenAI to OpenRouter and your own server"
-                  />
-                </div>
-              </figure>
-            </div>
-
-            <div class="split split-flip">
-              <div class="split-copy reveal slide-in">
-                <span class="tag tag-mint" aria-hidden="true">Permissions</span>
-                <h2>Set rules for commands</h2>
-                <p>
-                  Each command can be allowed, denied or set to ask first.
-                </p>
-              </div>
-              <figure class="shot">
-                <div class="window">
-                  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
-                  <img
-                    src="img/shot-permissions.webp"
-                    width="1067"
-                    height="640"
-                    loading="lazy"
-                    alt="Settings on Permissions: a list of commands such as cd, ls and grep, each with Allow, Ask and Deny buttons"
-                  />
-                </div>
-              </figure>
-            </div>
-
-            <div class="split">
-              <div class="split-copy reveal slide-in">
-                <span class="tag tag-pink" aria-hidden="true">Android</span>
-                <h2>Run your Android app beside the chat</h2>
-                <p>
-                  Start an emulator from the panel and see its screen there.
-                </p>
-              </div>
-              <figure class="shot">
-                <div class="window">
-                  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
-                  <img
-                    src="img/shot-android.webp"
-                    width="2182"
-                    height="1309"
-                    loading="lazy"
-                    alt="The Android devices panel beside a chat, listing a running virtual device and showing its screen"
-                  />
-                </div>
-              </figure>
-            </div>
-
-            <div class="split split-flip">
-              <div class="split-copy reveal slide-in">
-                <span class="tag tag-violet" aria-hidden="true">Appearance</span>
+                <span class="tag tag-pink" aria-hidden="true">Appearance</span>
                 <h2>Change how it looks</h2>
-                <p>
-                  Choose a light or dark theme, an app icon and a background for your chats.
-                </p>
+                <ul class="tabs" aria-label="Themes in the app">
+                  <li>
+                    <button class="tab is-active" type="button" data-tab aria-current="true">
+                      <b>Chat backgrounds</b>
+                      <span>Chats take animated backgrounds too. This one is Night Sky.</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button class="tab" type="button" data-tab>
+                      <b>Terminal</b>
+                      <span>Terminal drops green digits behind the answer.</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button class="tab" type="button" data-tab>
+                      <b>Colour schemes</b>
+                      <span>Pick a colour scheme and an accent, or describe one and an agent writes it.</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button class="tab" type="button" data-tab>
+                      <b>Backgrounds</b>
+                      <span>The Orchestrator page and chats pick from the same backgrounds, or use your own picture.</span>
+                    </button>
+                  </li>
+                </ul>
               </div>
-              <figure class="shot">
+              <figure class="shot" role="group" aria-roledescription="carousel" aria-label="Themes in the app">
                 <div class="window">
                   <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
-                  <img
-                    src="img/shot-appearance.webp"
-                    width="1091"
-                    height="655"
-                    loading="lazy"
-                    alt="Settings on General, with the Light, Dark, OLED and System theme switch, a grid of colourful cube app icons, and a row of chat backgrounds"
-                  />
+                  <div class="slides">
+                    <div class="slide is-active" data-slide role="group" aria-roledescription="slide" aria-label="Chat backgrounds, 1 of 4">
+                      <video
+                        width="1280"
+                        height="768"
+                        poster="img/theme-chat-sky.webp"
+                        preload="none"
+                        muted
+                        loop
+                        playsinline
+                        aria-label="A finished chat in the Night Sky theme, with stars twinkling behind the agent&#x27;s answer and its code"
+                      >
+                        <source src="img/theme-chat-sky.webm" type="video/webm" />
+                      </video>
+                    </div>
+                    <div class="slide" data-slide role="group" aria-roledescription="slide" aria-label="Terminal, 2 of 4">
+                      <video
+                        width="1280"
+                        height="768"
+                        poster="img/theme-chat-terminal.webp"
+                        preload="none"
+                        muted
+                        loop
+                        playsinline
+                        aria-label="A finished chat in the Terminal theme, with green digits falling behind the agent&#x27;s answer and its code"
+                      >
+                        <source src="img/theme-chat-terminal.webm" type="video/webm" />
+                      </video>
+                    </div>
+                    <div class="slide" data-slide role="group" aria-roledescription="slide" aria-label="Colour schemes, 3 of 4">
+                      <img
+                        src="img/shot-appearance.webp?v=2"
+                        width="1150"
+                        height="690"
+                        loading="lazy"
+                        alt="Settings on Window theme with Night Reef picked: nine colour schemes, a field that generates a scheme from a description, and a row of accent colours"
+                      />
+                    </div>
+                    <div class="slide" data-slide role="group" aria-roledescription="slide" aria-label="Backgrounds, 4 of 4">
+                      <img
+                        src="img/shot-theme-orchestrator.webp?v=2"
+                        width="1150"
+                        height="690"
+                        loading="lazy"
+                        alt="Settings on Orchestrator theme: fourteen backgrounds, among them Butterfly, Night Sky, Night Reef, Lagoon and Terminal, and a field that generates one from a description"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div class="pills">
+                  <div class="pill-dots" aria-hidden="true">
+                    <button class="pill is-active" type="button" data-pill tabindex="-1"><i></i></button>
+                    <button class="pill" type="button" data-pill tabindex="-1"><i></i></button>
+                    <button class="pill" type="button" data-pill tabindex="-1"><i></i></button>
+                    <button class="pill" type="button" data-pill tabindex="-1"><i></i></button>
+                  </div>
+                  <button class="pill-toggle" type="button" data-carousel-toggle aria-label="Pause the slides">
+                    <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12M15 6v12" /></svg>
+                    <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>
+                  </button>
                 </div>
               </figure>
             </div>
           </div>
 
           <div class="wrap">
-            <h2 class="more-head reveal drop-in">There is more</h2>
+            <h2 class="more-head reveal drop-in">But wait, there's more!</h2>
             <ul class="cards">
               <li class="card reveal flip-in">
                 <span class="card-icon icon-sun" aria-hidden="true">
@@ -560,6 +722,20 @@
                 </span>
                 <h3>Private</h3>
                 <p>There is no account, no proxy and no telemetry.</p>
+              </li>
+              <li class="card reveal flip-in">
+                <span class="card-icon icon-pink" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2.5" /><path d="M11 17.5h2" /></svg>
+                </span>
+                <h3>Android</h3>
+                <p>Start an emulator from the panel and see its screen beside the chat.</p>
+              </li>
+              <li class="card reveal flip-in">
+                <span class="card-icon icon-mint" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="7" height="6" rx="1.5" /><rect x="13.5" y="14" width="7" height="6" rx="1.5" /><path d="M7 10v4a3 3 0 003 3h3.5" /></svg>
+                </span>
+                <h3>Diagrams and mocks</h3>
+                <p>Diagrams and HTML mocks render right in the chat.</p>
               </li>
             </ul>
           </div>

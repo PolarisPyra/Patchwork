@@ -676,6 +676,13 @@ code {
   gap: 20px;
 }
 
+/* The home page's eight cards sit four across. */
+@media (min-width: 1001px) {
+  .cards:not(.cards-plain) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 .card {
   padding: 28px;
   border: 1px solid var(--line);
@@ -1315,6 +1322,276 @@ code {
       transform: scale(1) rotate(45deg);
     }
   }
+}
+
+/* A carousel: tabs beside the picture name each slide, the slides are stacked in one cell, and under
+   them a pill for each fills while its slide shows. The next slide comes when the fill's animation
+   ends, so pausing one pauses both. Without JavaScript the slides are simply listed. */
+.tabs {
+  display: grid;
+  gap: 4px;
+  margin: 24px 0 0 -16px;
+  list-style: none;
+}
+
+.tab {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  color: var(--fg-3);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.3s ease,
+    color 0.3s ease;
+}
+
+.tab b {
+  color: var(--fg-2);
+  font-size: 17px;
+  font-weight: 700;
+  transition: color 0.3s ease;
+}
+
+.tab span {
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.tab:hover b {
+  color: var(--fg);
+}
+
+.tab.is-active {
+  background: var(--panel);
+  color: var(--fg-2);
+}
+
+.tab.is-active b {
+  color: var(--fg);
+}
+
+/* The active tab's candy stripe grows from its middle. */
+.tab::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--candy);
+  transform: scaleY(0);
+  transition: transform 0.45s var(--pop);
+}
+
+.tab.is-active::before {
+  transform: scaleY(1);
+}
+
+.slide img,
+.slide video {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.js .slides {
+  display: grid;
+  aspect-ratio: 5 / 3;
+}
+
+.js .slide {
+  grid-area: 1 / 1;
+  visibility: hidden;
+  opacity: 0;
+  transform: scale(1.02);
+  transition:
+    opacity 0.5s var(--settle),
+    transform 0.7s var(--settle),
+    visibility 0s 0.5s;
+}
+
+.js .slide.is-active {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  transition-delay: 0s;
+}
+
+.js .slide img,
+.js .slide video {
+  height: 100%;
+  object-fit: cover;
+}
+
+.pills {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 16px;
+}
+
+.js .pills {
+  display: flex;
+}
+
+.pill-dots {
+  display: flex;
+  align-items: center;
+}
+
+/* A pill is an 8px dot inside a 24px target; the one showing stretches into a short bar. */
+.pill {
+  width: 20px;
+  height: 24px;
+  padding: 8px 6px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  transition: width 0.55s var(--pop);
+}
+
+.pill.is-active {
+  width: 48px;
+}
+
+.pill i {
+  position: relative;
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line-strong);
+  transition:
+    background 0.2s ease,
+    transform 0.35s var(--pop);
+}
+
+.pill:not(.is-active):hover i {
+  background: var(--pink);
+  transform: scale(1.4);
+}
+
+/* The fill starts as a dot, so its round ends keep their shape as it grows. */
+.pill i::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 8px;
+  border-radius: 4px;
+  background: var(--candy);
+  opacity: 0;
+}
+
+.pill.is-active i::after {
+  opacity: 1;
+  animation: pill-fill 7s linear forwards paused;
+}
+
+/* A spark rides the front of the fill and twinkles as it goes. */
+.pill i::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 4px;
+  width: 12px;
+  height: 12px;
+  background: var(--sun);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.6);
+}
+
+.pill.is-active i::before {
+  opacity: 1;
+  animation:
+    pill-ride 7s linear forwards paused,
+    pill-twinkle 1.4s ease-in-out infinite paused;
+}
+
+.is-running .pill.is-active i::after,
+.is-running .pill.is-active i::before {
+  animation-play-state: running;
+}
+
+/* Stopped with the button, or never started under reduced motion: the pill is simply full. */
+.is-stopped .pill.is-active i::after {
+  width: 100%;
+  animation: none;
+}
+
+.is-stopped .pill.is-active i::before {
+  opacity: 0;
+  animation: none;
+}
+
+@keyframes pill-fill {
+  to {
+    width: 100%;
+  }
+}
+
+@keyframes pill-ride {
+  to {
+    left: calc(100% - 4px);
+  }
+}
+
+@keyframes pill-twinkle {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.15);
+  }
+}
+
+.pill-toggle {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--fg-3);
+  cursor: pointer;
+  transition: transform 0.35s var(--pop);
+}
+
+.pill-toggle:hover {
+  color: var(--fg);
+  transform: scale(1.2);
+}
+
+.pill-toggle svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pill-toggle .icon-play,
+.is-stopped .pill-toggle .icon-pause {
+  display: none;
+}
+
+.is-stopped .pill-toggle .icon-play {
+  display: block;
+  fill: currentColor;
 }
 
 @media (prefers-reduced-motion: reduce) {
