@@ -4,11 +4,9 @@
 mod commands;
 mod control;
 mod discord;
-mod email;
 mod handoff;
 mod hub;
 mod inbound;
-mod irc;
 mod matrix;
 mod mattermost;
 mod net;
@@ -18,8 +16,6 @@ mod qq;
 mod records;
 mod signal;
 mod slack;
-mod sms;
-mod stream;
 mod telegram;
 mod types;
 

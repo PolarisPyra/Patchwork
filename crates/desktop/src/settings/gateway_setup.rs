@@ -164,52 +164,6 @@ fn steps(platform: Platform) -> &'static [Step] {
                 ]
             }
         }
-        Platform::Irc => {
-            const {
-                &[
-                    step("Enter the server with its TLS port, such as irc.libera.chat:6697."),
-                    step("Pick a nickname and the channels to join."),
-                    linked(
-                        "To keep the nickname, register it with NickServ and enter its password.",
-                        "Read Libera's guide",
-                        "https://libera.chat/guides/registration",
-                    ),
-                    step("In a channel, start a message with the nickname: patchwork: hello."),
-                    PAIR,
-                ]
-            }
-        }
-        Platform::Email => {
-            const {
-                &[
-                    step("Use a mailbox of its own for the bot."),
-                    linked(
-                        "Make an app password for it. With Gmail, that is on your Google account page.",
-                        "Open Gmail app passwords",
-                        "https://myaccount.google.com/apppasswords",
-                    ),
-                    step(
-                        "Enter the address, the password, and the IMAP and SMTP servers with their \
-                 ports, such as imap.gmail.com:993 and smtp.gmail.com:465.",
-                    ),
-                    PAIR,
-                ]
-            }
-        }
-        Platform::Sms => {
-            const {
-                &[
-                    linked(
-                        "Sign in to the Twilio Console and buy a phone number that can send texts.",
-                        "Open the Twilio Console",
-                        "https://console.twilio.com/",
-                    ),
-                    step("Copy the Account SID and Auth Token from the Console's home page."),
-                    step("Enter them and the number below."),
-                    PAIR,
-                ]
-            }
-        }
         Platform::Qq => {
             const {
                 &[

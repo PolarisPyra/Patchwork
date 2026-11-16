@@ -26,10 +26,6 @@ rusqlite = { workspace = true, features = ["bundled", "fallible_uint"] }
 ureq = { workspace = true, default-features = true, features = ["json"] }
 # Chat app gateways: the websockets Discord, Slack and Mattermost send messages over.
 tungstenite = { workspace = true, features = ["handshake", "rustls-tls-webpki-roots"] }
-# Chat app gateways: the TLS that IRC and email talk over, and the email they read.
-rustls = { workspace = true, features = ["ring", "std", "tls12"] }
-webpki-roots.workspace = true
-mail-parser.workspace = true
 # API providers: keys in the system credential store, and the agent's file search tools.
 keyring = { workspace = true, default-features = true }
 ignore = { workspace = true, default-features = true }
