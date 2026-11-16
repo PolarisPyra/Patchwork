@@ -79,6 +79,21 @@ is written into the page at release time instead.
 `site.js` only picks which of the three files the download button points at, from the visitor's
 platform, and falls back to the download section on a phone or an unknown system.
 
+## The social card
+
+`img/og.png` is the preview chat apps and search results show for every page: the top of the home
+page's hero at 1200 × 630. When the hero changes, take it again with any Chromium, with reduced
+motion forced so nothing is still waiting to pop in, and cut off the header:
+
+```sh
+chromium --headless=new --hide-scrollbars --force-device-scale-factor=1 --force-prefers-reduced-motion \
+  --window-size=1200,800 --virtual-time-budget=4000 --screenshot=hero.png "file://$PWD/site/index.html"
+magick hero.png -crop 1200x630+0+100 +repage -strip site/img/og.png
+```
+
+Then raise the `?v=` on every page's `og:image` and `twitter:image`, and on the home page's
+`"image"`, so chat apps that cache the card by its address fetch the new one.
+
 ## Before the domain changes
 
 `index.html` names `https://patchworkeditor.com/` as its canonical URL and its social card base. If
