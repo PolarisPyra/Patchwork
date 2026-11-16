@@ -37,6 +37,8 @@ struct Drawn {
     layout: TextLayout,
     /// How far left of the text its prefix is drawn.
     gutter: Pixels,
+    /// How far right of the text a mark that runs on past its end reaches.
+    reach: Pixels,
     /// The part of the text not clipped by the list it scrolls in.
     visible: Bounds<Pixels>,
 }
@@ -50,12 +52,34 @@ struct Place {
     x: f32,
 }
 
+/// What block a text is. A drag over more than one text copies them as Markdown, so pasting
+/// into a message keeps the paragraphs, lists, headings, code and tables apart.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum Kind {
+    #[default]
+    Paragraph,
+    /// A list item's text, whose prefix is its `- ` or `3. `.
+    Item,
+    /// A heading, by level from 1.
+    Heading(usize),
+    /// A code block, by its language.
+    Code(SharedString),
+    /// A table cell, by its column from 0, and whether its row is the header.
+    Cell { column: usize, head: bool },
+}
+
+/// A styled range of a text, with the Markdown that opened and closed it, such as `**` and `**`
+/// or `[` and `](https://…)`.
+pub type Mark = (Range<usize>, SharedString, SharedString);
+
 /// A text seen since the selection began, kept after it scrolls away so a mark can run past it.
 struct Known {
     place: Place,
     layout: TextLayout,
     prefix: Option<SharedString>,
-    after_tab: bool,
+    kind: Kind,
+    lead: SharedString,
+    marks: Vec<Mark>,
 }
 
 /// What is marked, and the texts a drag can reach.
@@ -112,7 +136,13 @@ pub struct Selectable {
     prefix: Option<SharedString>,
     /// How far left of the text its prefix is drawn: a press there starts a drag too.
     gutter: Pixels,
-    after_tab: bool,
+    /// How far right of the text a mark that runs on past its end reaches, and a press counts.
+    reach: Pixels,
+    kind: Kind,
+    /// What each copied line of the text starts with, for the quotes and list items it is in.
+    lead: SharedString,
+    /// The Markdown that was around each styled range, put back when the range is copied.
+    marks: Vec<Mark>,
     /// Ranges drawn as rounded chips behind the text, each with its colour.
     chips: Vec<(Range<usize>, Hsla)>,
     /// Ranges a click opens, each with its address.
@@ -126,7 +156,10 @@ pub fn selectable(id: u64, text: StyledText) -> Selectable {
         text,
         prefix: None,
         gutter: Pixels::ZERO,
-        after_tab: false,
+        reach: Pixels::ZERO,
+        kind: Kind::Paragraph,
+        lead: SharedString::default(),
+        marks: Vec::new(),
         chips: Vec::new(),
         links: Vec::new(),
     }
@@ -142,10 +175,29 @@ impl Selectable {
         self
     }
 
-    /// Copies a tab rather than a line break between the text before this one and it, as a
-    /// table's cells after the first in their row.
-    pub fn after_tab(mut self) -> Self {
-        self.after_tab = true;
+    /// Lets a mark reach `pad` past both sides of the text, as across a table cell's padding
+    /// to its border, so the marks of cells side by side meet.
+    pub fn pad(mut self, pad: Pixels) -> Self {
+        self.gutter = pad;
+        self.reach = pad;
+        self
+    }
+
+    /// What block the text is, which sets the Markdown around it when it is copied with others.
+    pub fn kind(mut self, kind: Kind) -> Self {
+        self.kind = kind;
+        self
+    }
+
+    /// Starts each line copied from the text with `lead`, as `> ` does in a quote.
+    pub fn lead(mut self, lead: impl Into<SharedString>) -> Self {
+        self.lead = lead.into();
+        self
+    }
+
+    /// Puts back the Markdown each range was written with when it is copied.
+    pub fn marks(mut self, marks: Vec<Mark>) -> Self {
+        self.marks = marks;
         self
     }
 
@@ -205,7 +257,7 @@ impl Element for Selectable {
             .prepaint(id, inspector_id, bounds, request_layout, window, cx);
         let mut bounds = bounds;
         bounds.origin.x -= self.gutter;
-        bounds.size.width += self.gutter;
+        bounds.size.width += self.gutter + self.reach;
         window.insert_hitbox(bounds, HitboxBehavior::Normal)
     }
 
@@ -241,7 +293,11 @@ impl Element for Selectable {
             // Marked on to its end with more marked below, the last row runs to the edge, as
             // the line end is marked too.
             let to_edge = continues && range.end >= layout.len();
-            for quad in quads(&layout, &range, to_edge) {
+            let right = layout.bounds().right();
+            for mut quad in quads(&layout, &range, to_edge) {
+                if quad.right() >= right {
+                    quad.size.width += self.reach;
+                }
                 window.paint_quad(fill(quad, color));
             }
             // Marked from its start, its bullet or number is marked with it, as it is copied.
@@ -282,6 +338,7 @@ impl Element for Selectable {
             id: self.id,
             layout: layout.clone(),
             gutter: self.gutter,
+            reach: self.reach,
             visible: text_bounds.intersect(&window.content_mask().bounds),
         });
         // Its place on screen, until the list it is in, if any, gives its row.
@@ -295,7 +352,9 @@ impl Element for Selectable {
                 },
                 layout: layout.clone(),
                 prefix: self.prefix.clone(),
-                after_tab: self.after_tab,
+                kind: self.kind.clone(),
+                lead: self.lead.clone(),
+                marks: self.marks.clone(),
             },
         );
 
@@ -359,7 +418,7 @@ impl Element for Selectable {
                     }
                     let link =
                         link_at(&layout, &links, event.position).map(|link| links[link].1.clone());
-                    open_menu(id, text, link, event.position, window, cx);
+                    open_menu(link, event.position, window, cx);
                 }
                 _ => {}
             }
@@ -435,16 +494,8 @@ fn link_at(
     links.iter().position(|(range, _)| range.contains(&at))
 }
 
-/// Opens the menu for the text `id`, whose words are `text`, at `at`, with the link under the
-/// pointer, if any.
-fn open_menu(
-    id: u64,
-    text: String,
-    link: Option<SharedString>,
-    at: Point<Pixels>,
-    window: &mut Window,
-    cx: &mut App,
-) {
+/// Opens the menu for a text at `at`, with the link under the pointer, if any.
+fn open_menu(link: Option<SharedString>, at: Point<Pixels>, window: &mut Window, cx: &mut App) {
     let marked = cx.default_global::<Selection>().text.clone();
     let mut items = Vec::new();
     if let Some(link) = link {
@@ -465,11 +516,6 @@ fn open_menu(
             .icon("copy"),
         );
     }
-    items.push(MenuItem::new("Select paragraph", move |window, cx| {
-        cx.default_global::<Selection>()
-            .mark(id, 0..text.len(), &text);
-        window.refresh();
-    }));
     let back = window.focused(cx);
     let menu = Menu::open("Text", items, window, cx);
     window
@@ -521,7 +567,10 @@ impl Selection {
             && text.is_char_boundary(range.start)
             && text.is_char_boundary(range.end)
         {
-            self.text = text[range.clone()].to_string();
+            self.text = match self.known.get(&id) {
+                Some(known) => markdown(&[(known, range.clone())]),
+                None => text[range.clone()].to_string(),
+            };
             self.marked.insert(id, range);
             self.last = Some(id);
         }
@@ -556,7 +605,7 @@ impl Selection {
                             (ab.left() - a.gutter).min(bb.left() - b.gutter),
                             ab.bottom(),
                         ),
-                        point(ab.right().max(bb.right()), bb.top()),
+                        point((ab.right() + a.reach).max(bb.right() + b.reach), bb.top()),
                     )
                 })
             })
@@ -668,7 +717,7 @@ impl Selection {
             .collect();
         between.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
         let before = std::mem::take(&mut self.marked);
-        self.text.clear();
+        let mut pieces = Vec::new();
         for (_, id) in between {
             let Some(known) = self.known.get(&id) else {
                 continue;
@@ -678,20 +727,163 @@ impl Selection {
             let end = if id == last { last_at } else { text.len() };
             let (start, end) = (start.min(text.len()), end.min(text.len()));
             if start < end && text.is_char_boundary(start) && text.is_char_boundary(end) {
-                if !self.marked.is_empty() {
-                    self.text.push(if known.after_tab { '\t' } else { '\n' });
-                }
-                if start == 0
-                    && let Some(prefix) = &known.prefix
-                {
-                    self.text.push_str(prefix);
-                }
-                self.text.push_str(&text[start..end]);
+                pieces.push((known, start..end));
                 self.marked.insert(id, start..end);
                 self.last = Some(id);
             }
         }
+        self.text = markdown(&pieces);
         self.marked != before
+    }
+}
+
+/// The marked part of each text, top to bottom, as Ctrl+C copies it, written back as Markdown so
+/// a paste into a message draws it as it was drawn here. Part of one text keeps only its inline
+/// marks, and none that wraps all of it, so a bold word or a line of code copies as it reads.
+fn markdown(pieces: &[(&Known, Range<usize>)]) -> String {
+    if let [(known, range)] = pieces {
+        let text = known.layout.text();
+        if matches!(known.kind, Kind::Code(_)) {
+            return text[range.clone()].to_string();
+        }
+        return marked(&text, range, &known.marks, true);
+    }
+    let mut out = String::new();
+    let mut before: Option<&Known> = None;
+    // The cells copied in the open table row, for the line under a header row.
+    let mut cells = 0;
+    for (known, range) in pieces {
+        let text = known.layout.text();
+        let (kind, lead) = (&known.kind, known.lead.as_ref());
+        let next_cell = matches!(kind, Kind::Cell { column, .. } if *column > 0)
+            && matches!(before.map(|b| &b.kind), Some(Kind::Cell { .. }));
+        if !next_cell {
+            end_row(&mut out, before, cells);
+            let line = match &known.prefix {
+                Some(prefix) if range.start == 0 => prefix.as_ref(),
+                _ => lead,
+            };
+            match before {
+                // The first line keeps no indent, which would read as code.
+                None => out.push_str(line.trim_start()),
+                Some(b) => {
+                    let tight = matches!(
+                        (&b.kind, kind),
+                        (Kind::Item, Kind::Item) | (Kind::Cell { .. }, Kind::Cell { .. })
+                    );
+                    if !tight {
+                        out.push('\n');
+                        out.push_str(shared(&b.lead, lead).trim_end());
+                    }
+                    out.push('\n');
+                    out.push_str(line);
+                }
+            }
+        }
+        match kind {
+            Kind::Cell { .. } => {
+                if next_cell {
+                    out.push_str(" | ");
+                } else {
+                    out.push_str("| ");
+                    cells = 0;
+                }
+                cells += 1;
+                let cell = marked(&text, range, &known.marks, false);
+                out.push_str(&cell.replace('|', "\\|").replace('\n', " "));
+            }
+            Kind::Code(lang) => {
+                let code = &text[range.clone()];
+                let mut fence = "```".to_string();
+                while code.contains(fence.as_str()) {
+                    fence.push('`');
+                }
+                out.push_str(&fence);
+                out.push_str(lang);
+                for line in code.split('\n') {
+                    out.push('\n');
+                    out.push_str(lead);
+                    out.push_str(line);
+                }
+                out.push('\n');
+                out.push_str(lead);
+                out.push_str(&fence);
+            }
+            Kind::Heading(level) => {
+                if range.start == 0 {
+                    out.push_str(&"#".repeat(*level));
+                    out.push(' ');
+                }
+                out.push_str(&marked(&text, range, &known.marks, false).replace('\n', " "));
+            }
+            Kind::Paragraph | Kind::Item => {
+                // Two spaces keep a line break inside a paragraph, which a bare newline joins up.
+                let lines = marked(&text, range, &known.marks, false);
+                out.push_str(&lines.replace('\n', &format!("  \n{lead}")));
+            }
+        }
+        before = Some(known);
+    }
+    end_row(&mut out, before, cells);
+    out
+}
+
+/// `range` of `text` with each mark's Markdown put back around the part of it inside the range.
+/// With `inside`, a mark that wraps the whole range is left out.
+fn marked(text: &str, range: &Range<usize>, marks: &[Mark], inside: bool) -> String {
+    // Where each opener and closer goes: closers before openers at one place, and of several
+    // openers the one reaching furthest first, so the marks nest as they did.
+    let mut edits: Vec<(usize, bool, usize, usize, &str)> = Vec::new();
+    for (i, (span, open, close)) in marks.iter().enumerate() {
+        let (mut start, mut end) = (span.start.max(range.start), span.end.min(range.end));
+        // `**` beside a space does not open or close, so the marker moves in past it.
+        while let Some(c) = text.get(start..end).and_then(|s| s.chars().next())
+            && c.is_whitespace()
+        {
+            start += c.len_utf8();
+        }
+        while let Some(c) = text.get(start..end).and_then(|s| s.chars().next_back())
+            && c.is_whitespace()
+        {
+            end -= c.len_utf8();
+        }
+        if start >= end || (inside && start == range.start && end == range.end) {
+            continue;
+        }
+        edits.push((start, true, usize::MAX - end, i, open));
+        edits.push((end, false, usize::MAX - start, usize::MAX - i, close));
+    }
+    edits.sort_by_key(|&(at, opens, reach, order, _)| (at, opens, reach, order));
+    let mut out = String::new();
+    let mut from = range.start;
+    for (at, _, _, _, piece) in edits {
+        out.push_str(text.get(from..at).unwrap_or(""));
+        out.push_str(piece);
+        from = at;
+    }
+    out.push_str(text.get(from..range.end).unwrap_or(""));
+    out
+}
+
+/// The start two leads share, such as the `> ` of two paragraphs in one quote.
+fn shared<'a>(a: &'a str, b: &str) -> &'a str {
+    let n = a.bytes().zip(b.bytes()).take_while(|(x, y)| x == y).count();
+    a.get(..n).unwrap_or("")
+}
+
+/// Closes a table row when `before`, the last text copied, is a cell, and puts the line that
+/// marks a header under a header row of `cells` cells.
+fn end_row(out: &mut String, before: Option<&Known>, cells: usize) {
+    if let Some(known) = before
+        && let Kind::Cell { head, .. } = known.kind
+    {
+        out.push_str(" |");
+        if head {
+            out.push('\n');
+            out.push_str(&known.lead);
+            out.push('|');
+            out.push_str(&" --- |".repeat(cells));
+        }
     }
 }
 
