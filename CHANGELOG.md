@@ -3,6 +3,25 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.87] - 2026-11-16
+
+**26.11.87** · 2 changes from 1 contributor
+
+- **Copy with formatting.** Copying text from chat now preserves paragraphs, lists, headings, code blocks, tables, and inline formatting when pasted.
+
+<details>
+<summary>Full changelog</summary>
+
+### Changed
+
+- The buttons that show when you hover a project in the sidebar (sort, new folder, new task) are larger and spaced apart, so they are easier to click. They sit at the right end of the row, on the same highlight as the row instead of a brighter patch, and a long project name now ends before them. by [PolarisPyra in #152](https://github.com/PolarisPyra/Patchwork/pull/152)
+
+### Fixed
+
+- Copying text that ran across several paragraphs, lists, tables or code blocks in a chat lost its formatting and put each block on a plain line, so a paste into a message ran together into one paragraph or one long bullet. The copy now keeps the formatting, so paragraphs, lists, headings, quotes, code blocks, tables, bold, italic, inline code and links paste as they appear in the chat. A selected table is also highlighted across its full width, without dark bars between the columns. by [PolarisPyra in #150](https://github.com/PolarisPyra/Patchwork/pull/150)
+
+</details>
+
 ## [26.11.86] - 2026-11-15
 
 **26.11.86** · 1 change from 1 contributor
