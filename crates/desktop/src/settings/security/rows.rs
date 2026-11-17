@@ -273,6 +273,29 @@ fn secret_field(
                 .text_color(t.text_muted)
                 .child(text),
         )
+        // A value can be copied only while it is shown, so the password is asked for first.
+        .when(shown, |b| {
+            let name = name.clone();
+            b.child(
+                icon_button(
+                    SharedString::from(format!("security-copy-{name}")),
+                    format!("Copy {label}"),
+                    "copy",
+                    14.,
+                    cx,
+                )
+                .size(px(22.))
+                .flex_none()
+                .tooltip(tooltip("Copy"))
+                .on_click(cx.listener(move |d, _, _, cx| {
+                    if let Some(value) = d.security.revealed.get(&name) {
+                        cx.write_to_clipboard(ClipboardItem::new_string(
+                            value.as_str().to_string(),
+                        ));
+                    }
+                })),
+            )
+        })
         .child(
             icon_button(
                 SharedString::from(format!("security-show-{name}")),
