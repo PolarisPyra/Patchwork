@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 
 use crate::orchestration::turn::start::PendingApproval;
 use crate::orchestration::{Runner, publish, unasked};
-use crate::Core;
+use crate::{Core, Error};
 use crate::permissions::{self, Target, Unasked};
 use crate::events::AgentEvent;
 use crate::system::new_id;
@@ -86,11 +86,77 @@ impl Runner {
         }
 
         // An ask rule: the call waits for the user's answer.
+        match self.hold(core, thread_id, message_id, root, approval, Some(target)) {
+            Ok(()) => json!({"deny": null}),
+            Err(reason) => refused(reason),
+        }
+    }
+
+    /// Asks the person, in the latest reply of the chat `thread_id`, to allow what `title` and
+    /// `detail` say, and waits for their answer while the chat's turn runs. Patchwork's own
+    /// operations ask this way before they change something.
+    ///
+    /// # Errors
+    ///
+    /// Returns why not when the person declines or the turn ends first.
+    pub(in crate::orchestration) fn confirm(
+        &self,
+        core: &Core,
+        thread_id: &str,
+        title: &str,
+        detail: &str,
+    ) -> Result<(), Error> {
+        let message_id = core
+            .store
+            .thread(thread_id)
+            .and_then(|t| {
+                t.messages
+                    .iter()
+                    .rev()
+                    .find(|m| m.role == Role::Assistant)
+                    .map(|m| m.id.clone())
+            })
+            .ok_or("This turn is no longer running")?;
+        let approval = Approval {
+            id: new_id(),
+            title: title.to_string(),
+            detail: crate::provider::one_line(detail),
+            status: ApprovalStatus::Pending,
+            questions: Vec::new(),
+            answers: HashMap::new(),
+            kind: None,
+            suggestions: Vec::new(),
+            rule: None,
+            auto: false,
+            secret: None,
+        };
+        self.hold(
+            core,
+            thread_id.to_string(),
+            message_id,
+            String::new(),
+            approval,
+            None,
+        )
+        .map_err(Error::from)
+    }
+
+    /// Shows `approval` in the message `message_id` and waits until the person answers it or the
+    /// turn of `thread_id` stops.
+    fn hold(
+        &self,
+        core: &Core,
+        thread_id: String,
+        message_id: String,
+        root: String,
+        approval: Approval,
+        target: Option<Target>,
+    ) -> Result<(), &'static str> {
         let (tx, rx) = mpsc::channel();
         let stopped = {
             let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
             let Some(turn) = turns.get(&thread_id) else {
-                return refused("This turn is no longer running");
+                return Err("This turn is no longer running");
             };
             self.hooks
                 .lock()
@@ -104,7 +170,7 @@ impl Runner {
                     PendingApproval {
                         message_id: message_id.clone(),
                         reply: json!({"hook": approval.id}),
-                        target: Some(target.clone()),
+                        target: target.clone(),
                         root,
                     },
                 );
@@ -124,15 +190,17 @@ impl Runner {
             match rx.recv_timeout(Duration::from_secs(1)) {
                 Ok(true) => {
                     // The agent may still ask about the call itself; it was answered here.
-                    self.grants
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .entry(thread_id)
-                        .or_default()
-                        .push(target);
-                    return json!({"deny": null});
+                    if let Some(target) = target {
+                        self.grants
+                            .lock()
+                            .unwrap_or_else(PoisonError::into_inner)
+                            .entry(thread_id)
+                            .or_default()
+                            .push(target);
+                    }
+                    return Ok(());
                 }
-                Ok(false) => return refused("The user declined this call. Do not try it again."),
+                Ok(false) => return Err("The user declined this call. Do not try it again."),
                 Err(RecvTimeoutError::Timeout)
                     if !stopped.iter().any(|s| s.load(Ordering::SeqCst)) => {}
                 Err(_) => {
@@ -140,7 +208,7 @@ impl Runner {
                         .lock()
                         .unwrap_or_else(PoisonError::into_inner)
                         .remove(&id);
-                    return refused("This turn is no longer running");
+                    return Err("This turn is no longer running");
                 }
             }
         }

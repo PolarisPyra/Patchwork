@@ -418,6 +418,11 @@ pub fn init() {
     }
 }
 
+/// An id no color scheme has yet, made from `name`.
+pub(crate) fn free_theme_id(name: &str) -> String {
+    THEMES.free_id(name)
+}
+
 impl Core {
     /// The color schemes that can be picked: the ones Patchwork comes with, then the files in
     /// the themes folder by name. Reads files, so call it off the UI thread.

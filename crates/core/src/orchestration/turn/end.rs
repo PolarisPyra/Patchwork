@@ -378,7 +378,8 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
     }
 }
 
-/// Runs the enabled hooks for `event` and logs the ones that failed.
+/// Runs the enabled hooks for `event` and logs the ones that failed. A chat app's dispatcher
+/// runs none.
 pub(in crate::orchestration) fn turn_hooks(
     core: &Core,
     event: HookEvent,
@@ -387,6 +388,10 @@ pub(in crate::orchestration) fn turn_hooks(
     agent: AgentKind,
     status: Option<MessageStatus>,
 ) {
+    // A dispatcher runs nothing on the computer, the user's hooks included.
+    if core.is_dispatcher(thread_id) {
+        return;
+    }
     let name = |value: serde_json::Result<Value>| {
         value
             .ok()

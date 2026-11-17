@@ -172,6 +172,10 @@ impl Core {
         provider::mcp::set_tool_handler(Box::new(move |thread_id, tool, args, stopped| match weak
             .upgrade()
         {
+            // A chat app's dispatcher has Patchwork's capabilities and nothing else.
+            Some(core) if core.is_dispatcher(thread_id) => {
+                core.run_capability(thread_id, tool, args, stopped)
+            }
             Some(core) if tool == secrets::TOOL => {
                 core.runner.request_secret(&core, thread_id, args, stopped)
             }
@@ -194,7 +198,16 @@ impl Core {
         provider::mcp::set_tool_lister(Box::new(move |thread_id| {
             weak.upgrade()
                 .map(|core| {
-                    let mut tools = core.chat_tools(thread_id);
+                    // A chat app's dispatcher has Patchwork's capabilities and nothing else.
+                    if core.is_dispatcher(thread_id) {
+                        return orchestration::capabilities::tools();
+                    }
+                    let mut tools = vec![serde_json::json!({
+                        "name": secrets::TOOL,
+                        "description": secrets::DESCRIPTION,
+                        "inputSchema": secrets::input_schema(),
+                    })];
+                    tools.extend(core.chat_tools(thread_id));
                     tools.extend(core.delegate_tools(thread_id));
                     tools.extend(core.android_tools(thread_id));
                     tools

@@ -45,7 +45,7 @@ pub(super) fn restart_to_update(core: &Arc<Core>, window: &mut Window, cx: &mut 
 }
 
 /// Quits and starts the copy the update installed.
-fn restart(cx: &mut App) {
+pub(super) fn restart(cx: &mut App) {
     if let Some(path) = restart_path() {
         cx.set_restart_path(path);
     }

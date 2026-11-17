@@ -8,7 +8,7 @@ use std::sync::{Mutex, PoisonError};
 
 use serde_json::{Value, json};
 
-use super::net::{client, download, encode, failed, json};
+use super::net::{client, download, encode, failed, json, mime};
 use super::platform::Platform;
 use super::types::{Button, Connector, Incoming, Listener};
 use crate::Error;
@@ -128,6 +128,7 @@ impl Matrix {
                 };
                 out.push(Incoming {
                     platform: Platform::Matrix,
+                    id: event["event_id"].as_str().map(str::to_string),
                     chat: room.clone(),
                     user: sender.to_string(),
                     name: sender.to_string(),
@@ -210,7 +211,7 @@ impl Connector for Matrix {
             .http
             .post(&url)
             .header("Authorization", &self.auth())
-            .header("Content-Type", "text/plain; charset=utf-8")
+            .header("Content-Type", mime(name))
             .send(bytes)
             .map_err(|e| failed("The homeserver could not be reached", e, &self.token))?;
         let uploaded = json("The homeserver", response)?;
@@ -220,14 +221,15 @@ impl Connector for Matrix {
         if !caption.is_empty() {
             self.put_message(chat, &json!({"msgtype": "m.text", "body": caption}))?;
         }
+        let picture = mime(name) == "image/png";
         self.put_message(
             chat,
             &json!({
-                "msgtype": "m.file",
+                "msgtype": if picture { "m.image" } else { "m.file" },
                 "body": name,
                 "filename": name,
                 "url": uri,
-                "info": {"mimetype": "text/plain", "size": bytes.len()},
+                "info": {"mimetype": if picture { "image/png" } else { "text/plain" }, "size": bytes.len()},
             }),
         )
         .map(drop)

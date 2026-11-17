@@ -14,6 +14,10 @@ pub(super) fn system_prompt(request: &Request, root_dir: &Path) -> String {
     let git = root_dir.join(".git").exists();
     let today = crate::system::time::format_rfc3339_ms(crate::system::now_ms()).unwrap_or_default();
     let today = today.get(..10).unwrap_or(&today);
+    if request.dispatcher {
+        let instructions = request.instructions.as_deref().unwrap_or_default();
+        return format!("{instructions}\n\nToday is {today}.");
+    }
     let mut prompt = format!(
         "You are a coding agent working in Patchwork, a desktop workspace, on the user's own machine.\n\
          You are working in {root}{}. Today is {today}. The platform is {}.\n\n{GUIDANCE}",

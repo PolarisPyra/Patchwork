@@ -77,6 +77,7 @@ pub(in crate::orchestration) fn live_turn(agent: AgentKind, mode: AccessMode) {
         guarded: &[],
         agents: &[],
         hooks: &[],
+        dispatcher: false,
     };
     let baseline = workspace::git_changes(root_str).unwrap();
     let input = provider::turn_input(agent, &spec);

@@ -58,6 +58,9 @@ pub struct Runner {
     /// its reply shows one until the sub agent it starts takes it up.
     pub(in crate::orchestration) delegated:
         Mutex<HashMap<String, Vec<crate::orchestration::tasks::delegate::Called>>>,
+    /// What each chat app's dispatcher had Patchwork do in its turn, by its chat.
+    pub(in crate::orchestration) ran:
+        Mutex<HashMap<String, crate::orchestration::capabilities::Ran>>,
     /// Set once the app is quitting. A turn stopped from then on was cut off by the quit, not
     /// stopped by the user, so it ends interrupted and resumes at the next launch.
     quitting: AtomicBool,

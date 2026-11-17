@@ -310,6 +310,10 @@ fn describe(event: &AgentEvent) -> Option<(LogLevel, &'static str, Option<&str>,
         AgentEvent::ChatAppsChanged => (Debug, "chat apps changed", None, String::new()),
         AgentEvent::Notice { notice } => (Debug, "desktop notice", None, notice.title.clone()),
         AgentEvent::OptionsChanged => (Debug, "options changed", None, String::new()),
+        AgentEvent::SettingsChanged => (Debug, "settings changed", None, String::new()),
+        AgentEvent::OpenChat => (Debug, "chat opened from a chat app", None, String::new()),
+        AgentEvent::RestartToUpdate => (Info, "restart into the update", None, String::new()),
+        AgentEvent::Show { .. } => (Debug, "shown from a chat app", None, String::new()),
         AgentEvent::ThreadDeleted => (Info, "chat deleted", None, String::new()),
     })
 }

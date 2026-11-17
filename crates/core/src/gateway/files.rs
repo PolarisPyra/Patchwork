@@ -6,7 +6,7 @@
 use super::net::chunks;
 use super::outbound::clip;
 use super::platform::Platform;
-use crate::Core;
+use crate::{Core, Error};
 use crate::orchestration::changes::turn_files::turn_file_diff;
 use crate::threads::Role;
 
@@ -36,7 +36,7 @@ impl Core {
 
     /// Sends the diff of the files the latest reply of `thread_id` changed, as `changes.patch`,
     /// and returns what to tell the chat when there is none to send.
-    pub(super) fn send_diff(
+    pub(crate) fn send_diff(
         &self,
         platform: Platform,
         chat: &str,
@@ -87,6 +87,40 @@ impl Core {
             );
         }
         None
+    }
+
+    /// Sends the file `name` to every conversation that talks to `thread_id`, with `caption`
+    /// beside it, and returns how many took it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no conversation talks to the thread, or none of their chat apps
+    /// took the file; the error is the last chat app's.
+    pub(crate) fn send_file_to_chats(
+        &self,
+        thread_id: &str,
+        name: &str,
+        bytes: &[u8],
+        caption: &str,
+    ) -> Result<usize, Error> {
+        let mut took = 0;
+        let mut refused: Option<Error> = None;
+        for bound in self.bound_chats(thread_id) {
+            let sent = self
+                .gateway
+                .connector(bound.platform)
+                .ok_or_else(|| Error::from("That chat app is not connected"))
+                .and_then(|c| c.send_file(&bound.chat, name, bytes, caption));
+            match sent {
+                Ok(()) => took += 1,
+                Err(error) => refused = Some(error),
+            }
+        }
+        match (took, refused) {
+            (0, Some(error)) => Err(error),
+            (0, None) => Err("No chat app conversation talks to this chat".into()),
+            (took, _) => Ok(took),
+        }
     }
 
     /// Sends `text` to `chat` as the file `name` with `caption` beside it, and says whether the

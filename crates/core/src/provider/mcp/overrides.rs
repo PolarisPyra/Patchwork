@@ -111,6 +111,33 @@ pub fn overrides(agent: AgentKind, root: &str, thread_id: &str) -> Vec<String> {
     }
 }
 
+/// Builds the arguments that give a dispatcher's Claude turn Patchwork's server and no other.
+///
+/// Every tool the server lists for the thread is allowed up front: they act inside Patchwork,
+/// which asks the person itself where a tool needs their word.
+#[must_use]
+pub fn dispatcher_overrides(thread_id: &str) -> Vec<String> {
+    let Some((exe, args)) = own_server(thread_id) else {
+        return Vec::new();
+    };
+    let server = serde_json::json!({
+        "command": exe, "args": args, "timeout": OWN_TIMEOUT_SECS * 1000,
+    });
+    let tools: Vec<String> = mcp::own_turn_tools(thread_id)
+        .into_iter()
+        .map(|tool| tool.tool)
+        .chain([crate::secrets::TOOL.to_string()])
+        .map(|tool| format!("mcp__{}__{tool}", mcp::OWN_SERVER))
+        .collect();
+    vec![
+        "--mcp-config".into(),
+        serde_json::json!({"mcpServers": {mcp::OWN_SERVER: server}}).to_string(),
+        "--strict-mcp-config".into(),
+        "--allowedTools".into(),
+        tools.join(","),
+    ]
+}
+
 /// The relay arguments for each server the CLI shares with Patchwork, by the CLI's name for it.
 fn shared_relays(agent: AgentKind, root: &str) -> BTreeMap<String, Vec<String>> {
     let Some(relay) = mcp::own_relay_file() else {

@@ -61,9 +61,14 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         .iter()
         .map(|i| json!({"mediaType": i.media_type, "data": i.data}))
         .collect();
-    let mut tools = mcp::turn_tools(spec.plan);
+    // A dispatcher has Patchwork's chat tools only, and no other server's.
+    let mut tools = if spec.dispatcher {
+        Vec::new()
+    } else {
+        mcp::turn_tools(spec.plan)
+    };
     // A sub agent can change files, which planning must not.
-    if !spec.plan {
+    if !spec.plan || spec.dispatcher {
         tools.extend(mcp::own_turn_tools(spec.thread_id));
     }
     let command =
@@ -82,7 +87,8 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         "compactWindow": spec.compact_window,
         "unlimitedSteps": spec.unlimited_steps,
         "tokenLimit": spec.token_limit,
-        "computerUse": crate::computer::enabled(),
+        "computerUse": !spec.dispatcher && crate::computer::enabled(),
+        "dispatcher": spec.dispatcher,
         "instructions": spec.instructions,
         "command": command,
         "mcpTools": tools,

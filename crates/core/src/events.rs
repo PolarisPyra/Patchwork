@@ -236,4 +236,29 @@ pub enum AgentEvent {
     /// The thread's agent, model, access or plan mode was changed from a chat app, or it was set
     /// there to resume once its usage limit resets.
     OptionsChanged,
+    /// The settings were changed from outside the window, as a chat app does: the window reads
+    /// them anew and applies the theme. Not about a thread.
+    SettingsChanged,
+    /// A chat app asked for the thread to be opened in the window.
+    OpenChat,
+    /// A chat app had the downloaded update installed: the window restarts into it. Not about a
+    /// thread.
+    RestartToUpdate,
+    /// A chat app asked the window to show something other than a chat. Not about a thread.
+    Show {
+        place: Place,
+    },
+}
+
+/// What a chat app asked the window to show.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Place {
+    /// The project, on its newest chat.
+    Project { id: String },
+    /// A file of the project, in the file panel.
+    #[serde(rename_all = "camelCase")]
+    File { project_id: String, path: String },
+    /// Settings, on the section with this id, or where it last was.
+    Settings { section: Option<String> },
 }

@@ -95,7 +95,11 @@ impl Core {
         }
         let chats = self.bound_chats(&thread_id);
         if chats.is_empty() {
-            self.notify(&thread_id, &envelope.event);
+            // A chat a dispatcher's conversation watches is told there; the rest go by the
+            // notification settings.
+            if !self.tell_watchers(&thread_id, &envelope.event) {
+                self.notify(&thread_id, &envelope.event);
+            }
             return;
         }
         match envelope.event {
@@ -159,6 +163,8 @@ impl Core {
                 status,
                 error,
             } => {
+                // Its own conversations get the reply, so no other is still owed word of it.
+                self.unwatch(&thread_id);
                 if let Some(progress) = working.remove(&thread_id) {
                     let text = format!("Finished after {} steps.", progress.steps);
                     for ((platform, chat), id) in &progress.notes {

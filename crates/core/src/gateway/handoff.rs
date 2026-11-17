@@ -109,7 +109,7 @@ impl Core {
                 platform,
                 chat,
                 &format!(
-                    "Stopped continuing \u{201c}{title}\u{201d} here. Send a message to start a new chat, or /threads to pick one."
+                    "Stopped continuing \u{201c}{title}\u{201d} here. Send a message to start a new chat."
                 ),
             );
         }

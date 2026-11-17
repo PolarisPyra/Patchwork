@@ -29,6 +29,7 @@ fn spec(mode: AccessMode, plan: bool) -> TurnSpec<'static> {
         guarded: &[],
         agents: &[],
         hooks: &[],
+        dispatcher: false,
     }
 }
 
@@ -123,6 +124,7 @@ mod dump_rules {
                 guarded: &[],
                 agents: &[],
                 hooks: &[],
+                dispatcher: false,
             };
             println!(
                 "RULES {mode:?} plan={plan} {}",

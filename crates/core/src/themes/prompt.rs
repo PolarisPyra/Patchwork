@@ -12,7 +12,7 @@ use crate::logging::THEME_LOG;
 use crate::settings::LogLevel;
 
 /// A color scheme's file format, as the agent is told it.
-const THEME_FORMAT: &str = r##"A color scheme is one JSON file:
+pub(crate) const THEME_FORMAT: &str = r##"A color scheme is one JSON file:
 
 {
   "name": "Night Reef",

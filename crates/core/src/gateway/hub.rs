@@ -3,11 +3,11 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::notify::Notice;
 use super::platform::Platform;
@@ -64,6 +64,19 @@ pub(super) struct State {
     pub answered: HashMap<String, (Platform, String)>,
     /// The requests sent to chat apps from chats no conversation continues, oldest first.
     pub notices: Vec<Notice>,
+    /// The messages taken lately, oldest first, so one a chat app delivers twice is taken once.
+    pub seen: VecDeque<Seen>,
+}
+
+/// A message the gateway took.
+pub(super) struct Seen {
+    pub platform: Platform,
+    pub chat: String,
+    /// The platform's id of the message, or its sender and text when the platform gives none.
+    pub key: String,
+    /// Whether `key` is the platform's id.
+    pub by_id: bool,
+    pub at: Instant,
 }
 
 /// What the forwarding thread sends out to chat apps.
@@ -84,8 +97,6 @@ pub(super) enum Out {
 pub(super) struct Chat {
     /// Where its next new thread opens, chosen with `/new`; none opens it where the settings say.
     pub project: Option<Place>,
-    /// The thread ids `/threads` listed, which `/use` picks from by number.
-    pub listed: Vec<String>,
 }
 
 /// Where a new thread opens.

@@ -175,6 +175,7 @@ fn claude_args_include_resume_model_and_mode() {
         guarded: &[],
         agents: &[],
         hooks: &[],
+        dispatcher: false,
     };
     assert_eq!(
         turn_args(&spec),

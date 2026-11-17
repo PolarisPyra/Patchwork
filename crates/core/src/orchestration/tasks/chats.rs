@@ -1,5 +1,6 @@
 //! Running the tools a chat's agent drives other chats with (see `crate::threads::chat_tools`):
-//! each acts on a chat in the caller's project as a person would from the chat list.
+//! each acts on a chat in the caller's project as a person would from the chat list. A chat
+//! app's dispatcher reaches the chats of every project, and has the tools in `dispatch` too.
 
 // Rust guideline compliant 2026-10-09
 
@@ -9,12 +10,15 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 
+use super::dispatch;
 use super::wait::Unanswered;
 use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::orchestration::Runner;
 use crate::provider::AgentKind;
 use crate::system::now_ms;
-use crate::threads::chat_tools::{self, LIST, READ, SEND, START, WAIT};
+use crate::threads::chat_tools::{
+    self, ANSWER, LIST, NOTIFY, PROJECTS, READ, SEND, START, STOP, WAIT, fit, named,
+};
 use crate::threads::{MessageStatus, NewThread, Role, Standing, StepStatus, Thread};
 use crate::{Error, Core};
 
@@ -22,42 +26,14 @@ use crate::{Error, Core};
 /// tools, so the caller hears that it ran out rather than a dropped call.
 const MAX_WAIT: Duration = Duration::from_secs(60 * 60);
 
-/// The words of a name that say nothing about which chat it is, as in 'what's going on in X'.
-const IGNORED: &[&str] = &[
-    "a",
-    "about",
-    "an",
-    "and",
-    "at",
-    "chat",
-    "doing",
-    "for",
-    "going",
-    "happening",
-    "how",
-    "in",
-    "is",
-    "it",
-    "my",
-    "of",
-    "on",
-    "progress",
-    "project",
-    "s",
-    "status",
-    "task",
-    "the",
-    "update",
-    "what",
-    "whats",
-    "with",
-];
-
 /// The most chats `read_chat` offers when a name matches several equally.
 const CANDIDATES: usize = 8;
 
 /// The most characters of one message `read_chat` shows.
 const MESSAGE_LIMIT: usize = 1500;
+
+/// The most characters of a chat's latest reply `list_chats` shows.
+const LATEST_LIMIT: usize = 300;
 
 /// How many of a chat's latest messages `read_chat` shows.
 const MESSAGES: usize = 6;
@@ -66,12 +42,12 @@ const MESSAGES: usize = 6;
 const STEPS: usize = 12;
 
 /// A text argument, trimmed, or empty when it is missing.
-fn text<'a>(args: &'a Value, key: &str) -> &'a str {
+pub(super) fn text<'a>(args: &'a Value, key: &str) -> &'a str {
     args[key].as_str().map(str::trim).unwrap_or_default()
 }
 
 /// A text argument that must be given.
-fn required<'a>(args: &'a Value, key: &str) -> Result<&'a str, Error> {
+pub(super) fn required<'a>(args: &'a Value, key: &str) -> Result<&'a str, Error> {
     let value = text(args, key);
     if value.is_empty() {
         return Err(format!("Give the {key}").into());
@@ -80,7 +56,7 @@ fn required<'a>(args: &'a Value, key: &str) -> Result<&'a str, Error> {
 }
 
 /// Whether the chat is replying or about to.
-fn busy(runner: &Runner, thread_id: &str) -> bool {
+pub(super) fn busy(runner: &Runner, thread_id: &str) -> bool {
     runner.is_starting(thread_id) || runner.is_running(thread_id)
 }
 
@@ -107,7 +83,7 @@ impl Runner {
             return Err("This chat cannot drive other chats".into());
         }
         match tool {
-            LIST => Ok(self.list_chats(core, &caller)),
+            LIST => self.list_chats(core, &caller, args),
             READ => self.read_chat(core, &caller, args),
             START => start_chat(core, &caller, args),
             SEND => {
@@ -116,56 +92,135 @@ impl Runner {
                     return Err("That chat is still replying; wait for it first".into());
                 }
                 core.send_message(
-                    target.id,
+                    target.id.clone(),
                     required(args, "prompt")?.to_string(),
                     Vec::new(),
                     false,
                 )?;
-                Ok("Sent. Call wait_for_chat for the reply.".into())
+                Ok(if dispatch::watch(core, &caller, &target.id) {
+                    "Sent. The person is told when it finishes or asks something.".into()
+                } else {
+                    "Sent. Call wait_for_chat for the reply.".into()
+                })
             }
             WAIT => self.wait_for_chat(core, &caller, args, stopped),
+            PROJECTS | STOP | ANSWER | NOTIFY if !core.is_dispatcher(&caller.id) => {
+                Err(format!("Patchwork has no tool {tool}").into())
+            }
+            PROJECTS => Ok(dispatch::list_projects(self, core)),
+            STOP => {
+                let target = target(core, &caller, args)?;
+                if !busy(self, &target.id) {
+                    return Err("That chat is not replying".into());
+                }
+                core.cancel_turn(&target.id);
+                Ok("Stopped.".into())
+            }
+            ANSWER => {
+                let target = target(core, &caller, args)?;
+                core.answer_for_dispatcher(&caller.id, &target.id, text(args, "answer"))
+            }
+            NOTIFY => {
+                let target = target(core, &caller, args)?;
+                if !busy(self, &target.id) {
+                    return Err("That chat is not replying; read_chat shows where it stands".into());
+                }
+                if !dispatch::watch(core, &caller, &target.id) {
+                    return Err("No chat app conversation is open on this chat".into());
+                }
+                Ok("The person is told when it finishes or asks something. Do not wait.".into())
+            }
             _ => Err(format!("Patchwork has no tool {tool}").into()),
         }
     }
 
     /// The other chats in the caller's project, newest first. A chat run from a chat app sees
     /// every project's chats, each with its project.
-    fn list_chats(&self, core: &Core, caller: &Thread) -> String {
+    fn list_chats(&self, core: &Core, caller: &Thread, args: &Value) -> Result<String, Error> {
         let everywhere = chat_tools::sees_every_project(core, caller);
         let projects = core.store.settings().projects;
-        let chats: Vec<Value> = readable(core, caller)
-            .into_iter()
+        let project = |t: &Thread| {
+            t.project_id
+                .as_ref()
+                .and_then(|id| projects.iter().find(|p| &p.id == id))
+                .map(|p| p.name.clone())
+        };
+        let mut chats = readable(core, caller);
+        let wanted = named(text(args, "project"));
+        if everywhere && !wanted.is_empty() {
+            let score = |t: &Thread| fit(&wanted, &project(t).unwrap_or_default());
+            let best = chats.iter().map(score).max().unwrap_or(0);
+            if best == 0 {
+                let names: Vec<&str> = projects.iter().map(|p| p.name.as_str()).collect();
+                return Err(format!(
+                    "No project with chats is called that. The projects are: {}",
+                    names.join(", ")
+                )
+                .into());
+            }
+            chats.retain(|t| score(t) == best);
+        }
+        // The chats replying now come first.
+        chats.sort_by_key(|t| !busy(self, &t.id));
+        let chats: Vec<Value> = chats
+            .iter()
             .map(|t| {
-                let replying = busy(self, &t.id);
-                let mut chat = json!({
-                    "chat_id": t.id,
-                    "title": t.title,
-                    "agent": t.agent,
-                    "model": t.model,
-                    "replying": replying,
-                });
+                let mut chat = self.overview(t);
                 if everywhere {
-                    let project = t
-                        .project_id
-                        .as_ref()
-                        .and_then(|id| projects.iter().find(|p| &p.id == id))
-                        .map(|p| p.name.clone());
-                    chat["project"] = json!(project);
-                }
-                if replying {
-                    chat["doing"] = json!(t.doing());
+                    chat["project"] = json!(project(t));
                 }
                 chat
             })
             .collect();
         if chats.is_empty() {
-            return if everywhere {
+            return Ok(if everywhere {
                 "There are no other chats.".into()
             } else {
                 "There are no other chats in this project.".into()
-            };
+            });
         }
-        Value::Array(chats).to_string()
+        Ok(Value::Array(chats).to_string())
+    }
+
+    /// What `list_chats` tells of `chat`: where it stands, what it is doing, and the end of its
+    /// latest reply.
+    fn overview(&self, chat: &Thread) -> Value {
+        let replying = busy(self, &chat.id);
+        let mut overview = json!({
+            "chat_id": chat.id,
+            "title": chat.title,
+            "agent": chat.agent,
+            "model": chat.model,
+            "replying": replying,
+            "state": self.state(chat),
+        });
+        if replying {
+            overview["doing"] = json!(chat.doing());
+        }
+        let reply = chat
+            .messages
+            .iter()
+            .rfind(|m| m.role == Role::Assistant && !m.queued && !m.text.trim().is_empty());
+        if let Some(reply) = reply {
+            // A reply still being written shows its newest part.
+            overview["latest"] = json!(if reply.status == MessageStatus::Streaming {
+                clip_start(&reply.text, LATEST_LIMIT)
+            } else {
+                clip(&reply.text, LATEST_LIMIT)
+            });
+        }
+        overview
+    }
+
+    /// Where `chat` stands, in a word or two.
+    fn state(&self, chat: &Thread) -> &'static str {
+        match chat.standing() {
+            Standing::Waiting => "waiting for an answer",
+            _ if busy(self, &chat.id) => "replying",
+            Standing::Working => "replying",
+            Standing::Failed => "failed",
+            Standing::Done => "done",
+        }
     }
 
     /// How far the chat `args` names has got, or the chats its name fits equally well.
@@ -180,30 +235,11 @@ impl Runner {
         let chats = readable(core, caller);
         let id = text(args, "chat_id");
         let chat = if id.is_empty() {
-            let wanted: Vec<String> = words(required(args, "name")?)
-                .into_iter()
-                .filter(|w| !IGNORED.contains(&w.as_str()))
-                .collect();
-            if wanted.is_empty() {
+            let name = required(args, "name")?;
+            if named(name).is_empty() {
                 return Err("Give the chat's title or project as the name".into());
             }
-            let mut fits: Vec<(usize, bool, u64, &Thread)> = chats
-                .iter()
-                .filter_map(|t| {
-                    let have = words(&format!("{} {}", t.title, project(t).unwrap_or_default()));
-                    let score = wanted
-                        .iter()
-                        .filter(|w| have.iter().any(|h| alike(w, h)))
-                        .count();
-                    (score > 0).then(|| (score, busy(self, &t.id), last_active(t), t))
-                })
-                .collect();
-            fits.sort_by_key(|f| std::cmp::Reverse((f.0, f.1, f.2)));
-            let best: Vec<&Thread> = fits
-                .iter()
-                .take_while(|f| f.0 == fits[0].0)
-                .map(|f| f.3)
-                .collect();
+            let best = chat_tools::matching(core, &chats, name);
             match best.as_slice() {
                 [] => {
                     return Err(
@@ -216,17 +252,14 @@ impl Runner {
                         .iter()
                         .take(CANDIDATES)
                         .map(|t| {
-                            json!({
-                                "chat_id": t.id,
-                                "title": t.title,
-                                "project": project(t),
-                                "replying": busy(self, &t.id),
-                            })
+                            let mut chat = self.overview(t);
+                            chat["project"] = json!(project(t));
+                            chat
                         })
                         .collect();
                     return Ok(json!({
                         "several_chats_match": candidates,
-                        "next": "Call read_chat with the chat_id of the one meant, or ask which.",
+                        "next": "When the person asked about all of these, such as a whole project, report on each from what is here. Otherwise call read_chat with the chat_id of the one meant, or ask which.",
                     })
                     .to_string());
                 }
@@ -243,14 +276,6 @@ impl Runner {
     /// What `read_chat` tells of `chat`: its task, where it stands, and what it has done.
     fn progress(&self, chat: &Thread, project: Option<&str>) -> Value {
         let replying = busy(self, &chat.id);
-        let standing = chat.standing();
-        let state = match standing {
-            Standing::Waiting => "waiting for an answer",
-            _ if replying => "replying",
-            Standing::Working => "replying",
-            Standing::Failed => "failed",
-            Standing::Done => "done",
-        };
         let sent: Vec<_> = chat.messages.iter().filter(|m| !m.queued).collect();
         let task = sent
             .iter()
@@ -263,7 +288,7 @@ impl Runner {
             "project": project,
             "agent": chat.agent,
             "model": chat.model,
-            "state": state,
+            "state": self.state(chat),
             "task": task,
         });
         if replying {
@@ -403,28 +428,6 @@ fn readable(core: &Core, caller: &Thread) -> Vec<Thread> {
         .collect()
 }
 
-/// The lowercase words of `text`, split at anything that is not a letter or digit.
-fn words(text: &str) -> Vec<String> {
-    text.split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .map(str::to_lowercase)
-        .collect()
-}
-
-/// Whether two words name the same thing: equal, or one starts the other and the shorter has at
-/// least four letters, so "margretes" fits "margrete" and "engineering" fits "engineer".
-fn alike(a: &str, b: &str) -> bool {
-    a == b
-        || (a.chars().count().min(b.chars().count()) >= 4 && (a.starts_with(b) || b.starts_with(a)))
-}
-
-/// When anything last happened in `chat`.
-fn last_active(chat: &Thread) -> u64 {
-    chat.messages
-        .last()
-        .map_or(chat.created_at, |m| m.finished_at.unwrap_or(m.created_at))
-}
-
 /// A step's status as `read_chat` words it.
 fn step_word(status: StepStatus) -> &'static str {
     match status {
@@ -454,32 +457,52 @@ fn clip_start(text: &str, limit: usize) -> String {
     }
 }
 
-/// The chat `args` names, which must be another chat a person started in the caller's project.
+/// The chat `args` names, which must be another chat a person started: in the caller's project,
+/// or in any for a dispatcher.
 fn target(core: &Core, caller: &Thread, args: &Value) -> Result<Thread, Error> {
     let id = required(args, "chat_id")?;
     if id == caller.id {
         return Err("That is this chat".into());
     }
+    let everywhere = core.is_dispatcher(&caller.id);
     core.store
         .thread(id)
-        .filter(|t| t.parent.is_none() && t.project_id == caller.project_id)
-        .ok_or_else(|| "No chat with that id in this project".into())
+        .filter(|t| t.parent.is_none() && (everywhere || t.project_id == caller.project_id))
+        .ok_or_else(|| {
+            if everywhere {
+                "No chat with that id; list_chats lists them".into()
+            } else {
+                "No chat with that id in this project".into()
+            }
+        })
 }
 
-/// Starts a chat in the caller's project with the caller's access, and sends it the prompt.
+/// Starts a chat with the caller's access and sends it the prompt: in the caller's project on
+/// the caller's agent, or for a dispatcher in the project named, on the person's usual agent.
 fn start_chat(core: &Arc<Core>, caller: &Thread, args: &Value) -> Result<String, Error> {
     let prompt = required(args, "prompt")?.to_string();
+    let dispatcher = core.is_dispatcher(&caller.id);
+    let settings = core.store.settings();
     let agent = match text(args, "agent") {
+        "" if dispatcher => settings.default_agent(),
         "" => caller.agent,
         name => serde_json::from_value::<AgentKind>(json!(name.to_lowercase()))
             .map_err(|e| format!("Patchwork has no agent {name}: {e}"))?,
     };
     let given = |key: &str| Some(text(args, key).to_string()).filter(|s| !s.is_empty());
+    let (project_id, model) = if dispatcher {
+        (
+            dispatch::project(&settings, text(args, "project"))?,
+            given("model").or_else(|| settings.tokens.default_models.get(&agent).cloned()),
+        )
+    } else {
+        (caller.project_id.clone(), given("model"))
+    };
     let thread = core.create_thread(NewThread {
         id: None,
-        project_id: caller.project_id.clone(),
+        project_id,
         agent,
-        model: given("model"),
+        model,
         access_mode: caller.access_mode,
         effort: given("effort"),
         compact_window: None,
@@ -499,6 +522,13 @@ fn start_chat(core: &Arc<Core>, caller: &Thread, args: &Value) -> Result<String,
             event: AgentEvent::ThreadDeleted,
         });
         return Err(e);
+    }
+    if dispatch::watch(core, caller, &id) {
+        return Ok(json!({
+            "chat_id": id,
+            "note": "Started. The person is told here when it finishes or asks something.",
+        })
+        .to_string());
     }
     Ok(json!({"chat_id": id}).to_string())
 }

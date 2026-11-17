@@ -3,6 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use crate::Error;
+use std::collections::HashSet;
 use std::path::Path;
 
 use crate::import::ilog;
@@ -75,6 +76,34 @@ impl Core {
             subagents,
             new,
         }
+    }
+
+    /// The sources Patchwork offers to import from: each connected agent's own files, then
+    /// OpenCode's.
+    pub(crate) fn import_sources(&self) -> Vec<ImportSource> {
+        let agents = self.store.settings().agents;
+        [
+            (AgentKind::Claude, ImportSource::Claude),
+            (AgentKind::Codex, ImportSource::Codex),
+            (AgentKind::Antigravity, ImportSource::Antigravity),
+        ]
+        .into_iter()
+        .filter(|(agent, _)| agents.contains(agent))
+        .map(|(_, source)| source)
+        .chain([ImportSource::OpenCode])
+        .collect()
+    }
+
+    /// The conversations those sources saved that Patchwork neither ran nor imported, each once.
+    pub(crate) fn outside_sessions(&self) -> Vec<import::Session> {
+        let known = self.store.session_keys();
+        let imported = self.store.imported_sources();
+        let mut seen = HashSet::new();
+        self.import_sources()
+            .into_iter()
+            .flat_map(|source| self.importable(source, &known, &imported).new)
+            .filter(|s| seen.insert((s.agent, s.session_id.clone())))
+            .collect()
     }
 
     pub fn scan_imports(&self, source: ImportSource) -> ImportScan {

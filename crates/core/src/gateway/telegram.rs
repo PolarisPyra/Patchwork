@@ -83,6 +83,7 @@ impl Telegram {
             );
             return Some(Incoming {
                 platform: Platform::Telegram,
+                id: press["id"].as_str().map(|id| format!("press:{id}")),
                 chat: id_text(&message["chat"]["id"])?,
                 user: id_text(&press["from"]["id"])?,
                 name: name(&press["from"]),
@@ -102,6 +103,7 @@ impl Telegram {
             .replace(&format!("@{me}"), "");
         Some(Incoming {
             platform: Platform::Telegram,
+            id: id_text(&message["message_id"]),
             chat: id_text(&message["chat"]["id"])?,
             user: id_text(&from["id"])?,
             name: name(from),

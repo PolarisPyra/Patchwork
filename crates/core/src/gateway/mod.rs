@@ -12,7 +12,7 @@ mod matrix;
 mod mattermost;
 mod net;
 mod notify;
-mod options;
+pub(crate) mod options;
 mod outbound;
 mod personalities;
 mod platform;
@@ -22,6 +22,7 @@ mod signal;
 mod slack;
 mod telegram;
 mod types;
+mod watch;
 
 pub use hub::Hub;
 pub use personalities::Personality;
