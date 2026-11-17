@@ -108,7 +108,7 @@ process's stdin, or through the hook waiter, and the turn carries on.
 
 | Holds | Linux | macOS | Windows |
 |---|---|---|---|
-| Config: what the user edits, `skills/`, `agents/`, `hooks/`, `mcp/` (one `<name>.json` per MCP server), `providers.json` | `~/.config/patchwork` | `~/Library/Application Support/patchwork` | `%APPDATA%\patchwork` |
+| Config: what the user edits, `skills/`, `agents/`, `hooks/`, `personalities/`, `mcp/` (one `<name>.json` per MCP server), `providers.json` | `~/.config/patchwork` | `~/Library/Application Support/patchwork` | `%APPDATA%\patchwork` |
 | Data: what Patchwork keeps, `patchwork.db` and `api-sessions/` | `~/.local/share/patchwork` | `~/Library/Application Support/patchwork/data` | `%LOCALAPPDATA%\patchwork` |
 | Cache: what Patchwork rebuilds, `launch/<cli>/` (the skills, agents and hooks each CLI is launched with), `mcp-cli-tools.json`, `screenshots/` | `~/.cache/patchwork` | `~/Library/Caches/patchwork` | `%LOCALAPPDATA%\patchwork\cache` |
 | State: `mcp-relay.json` | `~/.local/state/patchwork` | the data folder | the data folder |
