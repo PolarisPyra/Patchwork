@@ -197,7 +197,7 @@ pub(super) fn saved_rows(
         rows.push(section_heading("Saved secrets", false, &t).into_any_element());
     }
     for secret in &secrets {
-        let row = token_row(secret.label.clone(), None, &t).flex_wrap();
+        let row = token_row(secret.label.clone(), None, &t);
         let field = if d.security.asking.as_deref() == Some(secret.name.as_str()) {
             ask_field(d, window, cx)
         } else {
@@ -254,14 +254,10 @@ fn secret_field(
     let name = name.to_string();
     input_box(false, &t)
         .pr(px(3.))
-        // A value is longer than the field, so it takes the row's width and wraps.
-        .map(|b| {
-            if shown {
-                b.w_full().h_auto().py(px(4.))
-            } else {
-                b.w(px(FIELD_WIDTH)).flex_none()
-            }
-        })
+        .w(px(FIELD_WIDTH))
+        .flex_none()
+        // A value is longer than the field, so it wraps inside it and the field grows down.
+        .when(shown, |b| b.h_auto().items_start().py(px(3.)))
         .child(
             div()
                 .id(SharedString::from(format!("security-value-{name}")))
