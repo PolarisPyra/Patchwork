@@ -3,6 +3,23 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.96] - 2026-11-17
+
+**26.11.96** · 2 changes from 1 contributor
+
+- **Encrypted secret vault.** Set a password to encrypt saved secrets, migrate old keys, and lock when idle
+- **Agent environment isolation.** Agents only see the provider keys they sign in with, not other environment variables
+
+<details>
+<summary>Full changelog</summary>
+
+### Security
+
+- Patchwork no longer keeps a secret, or the key that opens them, in a plain file. On a system without a keychain it asks you to set a password in Settings, under Security, before it saves anything. Keys an older version left in a file are moved into the vault and the file is deleted. On Linux the vault also locks when the screen locks or the computer goes to sleep, with a switch for it under "Lock when idle". The app turns off its own crash dumps and keeps the vault's key out of the swap file. by [PolarisPyra in #188](https://github.com/PolarisPyra/Patchwork/pull/188)
+- An agent no longer sees the API keys of other providers that you keep in environment variables. Each agent keeps only the variables it signs in with itself, and the commands it runs do not see the others either. OpenCode keeps them all, because it reads its own providers' keys from them. by [PolarisPyra in #189](https://github.com/PolarisPyra/Patchwork/pull/189)
+
+</details>
+
 ## [26.11.95] - 2026-11-17
 
 **26.11.95** · 3 changes from 1 contributor
