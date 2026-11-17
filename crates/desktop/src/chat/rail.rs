@@ -6,8 +6,8 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{
-    App, Div, FocusHandle, FontWeight, KeyDownEvent, ListOffset, Pixels, Window, div, prelude::*,
-    px,
+    App, Div, FocusHandle, FontWeight, KeyDownEvent, ListOffset, Pixels, Role, Window, div,
+    prelude::*, px,
 };
 use patchwork_core::orchestration::{Upkeep, upkeep};
 use patchwork_core::threads::{Message, Role as MessageRole};
@@ -26,10 +26,10 @@ const ROOM: f32 = 128.;
 const VIEW_OFFSET: f32 = 24.;
 
 /// A message the person sent, at its row, and the last reply text after it.
-pub struct Turn {
+pub struct Turn<'a> {
     index: usize,
-    ask: String,
-    answer: Option<String>,
+    ask: &'a str,
+    answer: Option<&'a str>,
 }
 
 /// The turn under the pointer, and the one chosen with the keys while the rail has focus.
@@ -47,6 +47,12 @@ impl RailState {
             focus: cx.focus_handle(),
         }
     }
+
+    /// Forgets the turn under the pointer and the one chosen, which belong to the chat just left.
+    pub fn clear(&mut self) {
+        self.hover = None;
+        self.key = None;
+    }
 }
 
 /// A `/compact` is a divider and a goal clear is not shown, so neither starts a turn.
@@ -59,20 +65,38 @@ pub fn is_goal_clear(text: &str) -> bool {
     upkeep(text) == Some(Upkeep::GoalClear)
 }
 
-pub fn turns_of(rows: &[&Message]) -> Vec<Turn> {
+/// Whether the chat has a rail: turns enough, and a transcript tall enough to hold one. The
+/// transcript leaves room for it from this. A list just handed over has no height yet, which
+/// counts as tall enough, so the room stays while the rail skips that frame.
+pub fn has_rail(w: &Workspace, rows: &[&Message]) -> bool {
+    let view = f32::from(w.transcript_list.viewport_bounds().size.height);
+    (view == 0. || view > ROOM)
+        && rows
+            .iter()
+            .filter(|m| starts_turn(m))
+            .nth(MIN_TURNS - 1)
+            .is_some()
+}
+
+pub fn turns_of<'a>(rows: &[&'a Message]) -> Vec<Turn<'a>> {
     let mut turns: Vec<Turn> = Vec::new();
+    // A reply to a `/compact` or a goal clear answers that, not the turn before it.
+    let mut answering = false;
     for (index, m) in rows.iter().enumerate() {
-        if starts_turn(m) {
-            turns.push(Turn {
-                index,
-                ask: m.text.clone(),
-                answer: None,
-            });
-        } else if m.role != MessageRole::User
+        if m.role == MessageRole::User {
+            answering = starts_turn(m);
+            if answering {
+                turns.push(Turn {
+                    index,
+                    ask: &m.text,
+                    answer: None,
+                });
+            }
+        } else if answering
             && !m.text.is_empty()
             && let Some(turn) = turns.last_mut()
         {
-            turn.answer = Some(m.text.clone());
+            turn.answer = Some(&m.text);
         }
     }
     turns
@@ -112,9 +136,12 @@ fn preview_text(text: &str) -> Option<String> {
         }
     }
     unlinked.push_str(rest);
+    // Emphasis and code marks come off a word's ends, and a word of only heading, quote or table
+    // marks goes, so `follow_width` and #12 stay as written.
     let words: Vec<&str> = unlinked
-        .split(|c: char| c.is_whitespace() || "`*_~#>|".contains(c))
-        .filter(|w| !w.is_empty())
+        .split_whitespace()
+        .map(|w| w.trim_matches(|c| "`*_~".contains(c)))
+        .filter(|w| !w.chars().all(|c| "#>|-".contains(c)))
         .collect();
     (!words.is_empty()).then(|| words.join(" "))
 }
@@ -191,9 +218,9 @@ pub fn turn_rail(
 ) -> Option<Div> {
     let turns = turns_of(rows);
     let count = turns.len();
-    let view: Pixels = w.transcript_list.viewport_bounds().size.height;
-    let view = f32::from(view);
-    if count < MIN_TURNS || view <= ROOM {
+    let view = f32::from(w.transcript_list.viewport_bounds().size.height);
+    // A list just handed over has no height until it is laid out.
+    if !has_rail(w, rows) || view == 0. {
         return None;
     }
     let height = ((count - 1) as f32 * SPACING).min(view - ROOM);
@@ -224,7 +251,7 @@ pub fn turn_rail(
     let label = format!(
         "Jump to turn {} of {count}: {}",
         named + 1,
-        preview_text(&turns[named].ask).unwrap_or_else(|| "message".into())
+        preview_text(turns[named].ask).unwrap_or_else(|| "message".into())
     );
 
     let strips = turns.iter().enumerate().map(|(index, turn)| {
@@ -290,9 +317,9 @@ pub fn turn_rail(
                             .font_weight(FontWeight::MEDIUM)
                             .line_height(gpui::relative(1.375))
                             .text_color(t.text)
-                            .child(preview_text(&turn.ask).unwrap_or_else(|| "Message".into())),
+                            .child(preview_text(turn.ask).unwrap_or_else(|| "Message".into())),
                     )
-                    .children(turn.answer.as_deref().and_then(preview_text).map(|answer| {
+                    .children(turn.answer.and_then(preview_text).map(|answer| {
                         div()
                             .mt(px(6.))
                             .line_clamp(4)
@@ -321,6 +348,12 @@ pub fn turn_rail(
                 button("turn-rail", label)
                     .absolute()
                     .inset_0()
+                    // The arrow keys move through the turns, as a slider's do through its values.
+                    .role(Role::Slider)
+                    .aria_orientation(gpui::Orientation::Vertical)
+                    .aria_numeric_value((named + 1) as f64)
+                    .aria_min_numeric_value(1.)
+                    .aria_max_numeric_value(count as f64)
                     .track_focus(&w.rail.focus)
                     .on_mouse_move(cx.listener(move |w, e: &gpui::MouseMoveEvent, _, cx| {
                         let index = Some(index_at(e.position.y));

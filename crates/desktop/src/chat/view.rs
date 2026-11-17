@@ -64,7 +64,7 @@ pub fn render(
     if !held {
         sync_transcript(w);
     }
-    follow_width(w, cx);
+    follow_width(w, window, cx);
     let body = match &w.thread {
         Some(thread) if held && !thread.messages.is_empty() => div().flex_1().into_any_element(),
         Some(thread) if !thread.messages.is_empty() => {
