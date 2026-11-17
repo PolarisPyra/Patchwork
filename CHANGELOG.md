@@ -3,6 +3,27 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.95] - 2026-11-17
+
+**26.11.95** · 3 changes from 1 contributor
+
+- **Natural language Patchwork control.** Ask the agent to manage chats, settings, theme, or open projects; file work starts a supervised chat.
+- **Encrypted secret vault and redaction.** Saved secrets are encrypted, lockable, and auditable; logs and replies redact them.
+
+<details>
+<summary>Full changelog</summary>
+
+### Changed
+
+- The agent a chat app talks to now controls Patchwork and has no access to your computer's files or commands. Ask it in your own words what is running, or to start, stop or answer a chat, change a setting or the theme, or open a project in the window; for work on files it starts a chat in the project. Under Supervised it asks before it changes anything, it always asks before something that cannot be undone, and of the slash commands only /new and /stop remain. by [PolarisPyra in #186](https://github.com/PolarisPyra/Patchwork/pull/186)
+
+### Security
+
+- API keys, chat app tokens, MCP server values and terminal variables are now encrypted in Patchwork's database, with the key that opens them in the system keychain, or in a file only you can read where there is no keychain. In the new Settings → Security you can set a password that Patchwork asks for after each start, lock the saved secrets, show a saved one with its eye button, and remove the copies earlier versions left behind. A chat app's page and a provider's form no longer show a token or key once it is saved. by [PolarisPyra in #185](https://github.com/PolarisPyra/Patchwork/pull/185)
+- Settings → Security now gives a vault with a password a recovery key, can lock the secrets by itself when Patchwork is left alone, asks for the password before showing a saved secret, and lists what chat apps had Patchwork do. Saved secrets are also replaced with [REDACTED] in the logs and in the replies Patchwork saves. The chat app settings are now under Settings → Gateway, and the people who may message the bot are listed there as Pairings. by [PolarisPyra in #187](https://github.com/PolarisPyra/Patchwork/pull/187)
+
+</details>
+
 ## [26.11.94] - 2026-11-17
 
 **26.11.94** · 3 changes from 1 contributor
