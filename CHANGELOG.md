@@ -3,6 +3,37 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.100] - 2026-11-17
+
+**26.11.100** · 5 changes from 1 contributor
+
+- **Select turns in long chats.** Long chats now spread out turns near your pointer so you can pick individual turns.
+- **Copy saved secrets.** You can now copy a saved secret directly from Security settings while viewing it.
+- **Chat apps wait for vault unlock.** Chat apps now wait for you to unlock the vault instead of connecting or showing errors.
+- **Recovery key download fixed.** The recovery key download now saves the key file and tells you where it went.
+
+<details>
+<summary>Full changelog</summary>
+
+### Added
+
+- A saved secret in Settings → Security has a Copy button while its value is shown. by [PolarisPyra in #198](https://github.com/PolarisPyra/Patchwork/pull/198)
+
+### Changed
+
+- In a chat with many turns, the turn timeline beside the chat spreads apart the turns near the pointer, so each one can be picked. The first turn of each day and the first after a compact are drawn longer, and turns that edited files slightly longer. A long chat used to draw its turns as one solid bar. by [PolarisPyra in #196](https://github.com/PolarisPyra/Patchwork/pull/196)
+
+### Fixed
+
+- In Settings → Security, showing a saved secret moved its field to a new line under the name. The field now stays where it is and grows downward to fit the value. by [PolarisPyra in #197](https://github.com/PolarisPyra/Patchwork/pull/197)
+- The Download button for a new recovery key in Settings → Security saved nothing. It now saves the key as a text file in your Downloads folder and says where it went. by [PolarisPyra in #200](https://github.com/PolarisPyra/Patchwork/pull/200)
+
+### Security
+
+- No chat app connects while the vault is locked. Settings → Gateway shows each one as waiting for the vault, and they connect once it is unlocked. Before, a chat app with a saved token showed an error asking for the token, and one that needs no token connected anyway. by [PolarisPyra in #199](https://github.com/PolarisPyra/Patchwork/pull/199)
+
+</details>
+
 ## [26.11.99] - 2026-11-17
 
 **26.11.99** · 2 changes from 1 contributor
