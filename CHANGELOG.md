@@ -3,6 +3,21 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.102] - 2026-11-17
+
+**26.11.102** · 1 change from 1 contributor
+
+- **Readable chat timeline.** The chat timeline stays still under your pointer with an even ladder and highlights the current turn.
+
+<details>
+<summary>Full changelog</summary>
+
+### Fixed
+
+- In a long chat, the turn timeline beside the chat drew uneven strips and spread them around the pointer, which made it hard to read and slow to follow the mouse. It is now an even ladder that stays still under the pointer, and the turn you are reading has the widest lit strip. by [PolarisPyra in #202](https://github.com/PolarisPyra/Patchwork/pull/202)
+
+</details>
+
 ## [26.11.101] - 2026-11-17
 
 Behind-the-scenes improvements, with nothing new to see.
