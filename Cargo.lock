@@ -4463,7 +4463,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-core"
-version = "26.11.90"
+version = "26.11.92"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -4519,7 +4519,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-system"
-version = "26.11.90"
+version = "26.11.92"
 dependencies = [
  "base64 0.22.1",
  "libc",
