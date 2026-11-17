@@ -3,6 +3,30 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.93] - 2026-11-17
+
+**26.11.93** · 3 changes from 1 contributor
+
+- **Unblocked chat messages.** Search field, Open in editor, and subagents card no longer block clicks on messages and turn rail.
+- **Custom notifications.** Settings → Notifications now lets you choose which events notify on desktop and gateway service.
+- **Desktop notification opens chat.** Clicking a desktop notification opens its chat.
+- **Gateway chat management.** From the gateway service, continue a chat after usage resets or change its agent, model, access, or plan mode.
+- **Gateway status and files.** Gateway service shows running chats and delivers long replies and diffs as files.
+
+<details>
+<summary>Full changelog</summary>
+
+### Added
+
+- Settings → Notifications chooses which events notify on the desktop and on the gateway service: questions, finished or failed replies, met goals and used-up usage. Clicking a desktop notification opens its chat, and from the gateway service you can continue a chat once its usage resets, change its agent, model, access or plan mode, see which chats are running, and get long replies and diffs as files. by [PolarisPyra in #179](https://github.com/PolarisPyra/Patchwork/pull/179)
+
+### Fixed
+
+- Closing the Usage popover by clicking elsewhere left the Usage button's label and icon bright until you moved the mouse. They now dim as soon as the popover closes. by [PolarisPyra in #176](https://github.com/PolarisPyra/Patchwork/pull/176)
+- The search field, "Open in editor" and the subagents card sat over the top right of a chat, so the messages and turn rail under them couldn't be clicked. They now sit in a row above the chat's messages. by [PolarisPyra in #178](https://github.com/PolarisPyra/Patchwork/pull/178)
+
+</details>
+
 ## [26.11.92] - 2026-11-17
 
 **26.11.92** · 1 change from 1 contributor
