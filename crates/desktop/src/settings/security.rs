@@ -4,10 +4,10 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use gpui::{AnyElement, Div, Focusable, Role, Toggled, Window, div, prelude::*, px};
+use gpui::{AnyElement, Div, Focusable, Role, SharedString, Toggled, Window, div, prelude::*, px};
 use patchwork_core::gateway::ChatAppCall;
 use patchwork_core::vault::{Method, Saved, Status, status};
 use zeroize::{Zeroize, Zeroizing};
@@ -80,8 +80,8 @@ pub struct SecurityState {
     /// The password typed before a secret is shown.
     ask: Zeroizing<String>,
     entry: Entry,
-    /// Whether the fields show what is typed.
-    shown: bool,
+    /// The fields that show what is typed.
+    shown: HashSet<&'static str>,
     busy: bool,
     /// Whether the password field of a vault that waits has been given the focus.
     focused: bool,
@@ -99,17 +99,17 @@ pub struct SecurityState {
 }
 
 impl SettingsDialog {
-    /// Shows or hides what is typed in the pane's fields.
-    fn toggle_passwords(&mut self, cx: &mut Context<Self>) {
-        self.security.shown = !self.security.shown;
-        let masked = !self.security.shown;
-        for key in ALL {
-            if let Some(area) = self.field_area(key) {
-                area.update(cx, |a, cx| {
-                    a.masked = masked;
-                    cx.notify();
-                });
-            }
+    /// Shows or hides what is typed in the field named `key`.
+    fn toggle_password(&mut self, key: &'static str, cx: &mut Context<Self>) {
+        let masked = !self.security.shown.insert(key);
+        if masked {
+            self.security.shown.remove(key);
+        }
+        if let Some(area) = self.field_area(key) {
+            area.update(cx, |a, cx| {
+                a.masked = masked;
+                cx.notify();
+            });
         }
         cx.notify();
     }
@@ -305,8 +305,9 @@ fn password_field(
     window: &mut Window,
     cx: &mut Context<SettingsDialog>,
 ) -> Div {
+    let shown = d.security.shown.contains(key);
     let kind = FieldKind {
-        masked: !d.security.shown,
+        masked: !shown,
         live: true,
         mono: true,
         ..Default::default()
@@ -339,6 +340,21 @@ fn password_field(
     )
     .w(px(FIELD_WIDTH))
     .flex_none()
+    .pr(px(3.))
+    .child(
+        icon_button(
+            SharedString::from(format!("{key}-show")),
+            format!("Show {}", title.to_lowercase()),
+            if shown { "eye-slash" } else { "eye" },
+            14.,
+            cx,
+        )
+        .size(px(22.))
+        .flex_none()
+        .aria_toggled(if shown { Toggled::True } else { Toggled::False })
+        .tooltip(crate::ui::tooltip(if shown { "Hide" } else { "Show" }))
+        .on_click(cx.listener(move |d, _, _, cx| d.toggle_password(key, cx))),
+    )
 }
 
 /// One password field in its row. Enter in it does `submit`.
@@ -386,7 +402,6 @@ fn actions(
 ) -> impl IntoElement {
     let t = *theme(cx);
     let busy = d.security.busy;
-    let shown = d.security.shown;
     let working = busy.then(|| {
         div()
             .id("security-working")
@@ -415,22 +430,6 @@ fn actions(
         .pt(px(10.))
         .children(working)
         .children(done)
-        .child(
-            icon_button(
-                "security-show",
-                "Show passwords",
-                if shown { "eye-slash" } else { "eye" },
-                14.,
-                cx,
-            )
-            .aria_toggled(if shown { Toggled::True } else { Toggled::False })
-            .tooltip(crate::ui::tooltip(if shown {
-                "Hide passwords"
-            } else {
-                "Show passwords"
-            }))
-            .on_click(cx.listener(|d, _, _, cx| d.toggle_passwords(cx))),
-        )
         .children(others)
         .child(
             btn("security-save", label, BtnKind::Primary, busy, &t)
