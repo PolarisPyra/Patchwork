@@ -11,7 +11,7 @@ use crate::orchestration::changes::turn_files::turn_file_diff;
 use crate::threads::Role;
 
 /// The most messages a reply is split into before it is sent as a file instead.
-const MESSAGES: usize = 2;
+pub(super) const MESSAGES: usize = 2;
 
 /// The most characters of a reply's opening shown beside its file.
 const CAPTION_LIMIT: usize = 300;

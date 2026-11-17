@@ -116,13 +116,25 @@ pub struct Binding {
 /// Where a thread stands with the chat apps, for the task list and the thread's menu.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ChatApps {
-    /// The chat app its first message was sent from.
-    pub started_on: Option<Platform>,
-    /// The conversations that continue it now.
+    /// The conversations on it now: those that talk to it, and those whose agent works with it.
     pub chats: Vec<Binding>,
+    /// When one of them last asked for a reply or got one, in epoch milliseconds.
+    pub used_at: Option<u64>,
 }
 
-/// A conversation on a chat app a thread can be continued in: a pairing's latest one.
+impl ChatApps {
+    /// How long after its last use a conversation still counts as in use, in milliseconds.
+    const IN_USE_MS: u64 = 10 * 60 * 1000;
+
+    /// Whether one of the conversations was used lately, as of `now` in epoch milliseconds.
+    #[must_use]
+    pub fn in_use(&self, now: u64) -> bool {
+        self.used_at
+            .is_some_and(|at| now.saturating_sub(at) < Self::IN_USE_MS)
+    }
+}
+
+/// A conversation on a chat app that notices go to: a pairing's latest one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChatPlace {
     pub platform: Platform,
@@ -218,8 +230,8 @@ pub(crate) trait Connector: Send + Sync {
     /// Shows that Patchwork is writing in `chat`, where the platform can.
     fn typing(&self, _chat: &str) {}
 
-    /// Whether a turn's progress is worth a message of its own here; where it is not, as where
-    /// each message is mail or a paid text, the chat only shows typing.
+    /// Whether a reply is shown here while it is written, in a message of its own; where it is
+    /// not, as where each message is mail or a paid text, the chat only shows typing.
     fn notes(&self) -> bool {
         true
     }

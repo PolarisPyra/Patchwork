@@ -12,7 +12,7 @@ use gpui::{
     Subscription, WeakEntity, Window, div, prelude::*,
 };
 use patchwork_core::Core;
-use patchwork_core::gateway::{ChatApps, ChatPlace};
+use patchwork_core::gateway::ChatApps;
 use patchwork_core::permissions::PermissionKind;
 use patchwork_core::projects::{Folder, Project};
 use patchwork_core::settings::Settings;
@@ -90,10 +90,8 @@ pub struct Workspace {
     /// Every thread, each with only the messages the task list reads.
     pub threads: Vec<Arc<Thread>>,
     pub folders: Vec<Folder>,
-    /// The chat apps each thread came from or is continued on, by thread id.
+    /// The chat apps each thread came from or has on it now, by thread id.
     pub chat_apps: HashMap<String, ChatApps>,
-    /// The chat app conversations a thread can be continued in, read as the row menu opens.
-    pub chat_places: Vec<ChatPlace>,
     /// Projects and folders (`folder:<id>`) whose rows are closed.
     pub collapsed: HashSet<String>,
     /// The archive view's closed groups, its own so closing one leaves the task list as it was.
@@ -305,7 +303,6 @@ impl Workspace {
             folders,
             collapsed,
             chat_apps,
-            chat_places: Vec::new(),
             archived_collapsed: HashSet::new(),
             thread: None,
             view: Some(View::Tasks),

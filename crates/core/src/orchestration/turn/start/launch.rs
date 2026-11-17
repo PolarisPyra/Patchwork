@@ -191,6 +191,7 @@ impl Runner {
             text
         };
         let text = core.chat_app_voice(&thread_id, text, session_id.is_none());
+        let text = core.chat_app_context(&thread_id, text);
         let text = match context {
             Some(context) => format!("{context}{text}"),
             None => text,

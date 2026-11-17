@@ -16,7 +16,7 @@ use crate::threads::{Approval, ApprovalStatus, MessageStatus, Thread};
 use crate::{Core, Error};
 
 /// The most characters of a watched chat's reply a conversation is sent.
-const REPLY_LIMIT: usize = 1500;
+const REPLY_LIMIT: usize = 300;
 
 impl Core {
     /// Tells the conversations watching `thread_id` about `event`, and says whether any watch it,
@@ -71,12 +71,8 @@ impl Core {
                     self.heading(&thread),
                     clip(&reply, REPLY_LIMIT)
                 );
-                let open = Button {
-                    label: "Continue here".to_string(),
-                    reply: format!("/open {thread_id}"),
-                };
                 for w in &watchers {
-                    self.say_with(w.platform, &w.chat, &text, std::slice::from_ref(&open));
+                    self.say(w.platform, &w.chat, &text);
                 }
             }
             _ => {}
