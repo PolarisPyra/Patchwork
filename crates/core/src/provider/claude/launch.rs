@@ -183,10 +183,13 @@ const NOT_IN_ENV_FILE: [&str; 5] = ["PATH", "SHELL", "BASH_ENV", "ENV", crate::s
 /// shell adds nothing or the file can't be written.
 #[must_use]
 pub fn shell_env_file() -> Option<PathBuf> {
+    // The keys of other providers, which the turn leaves out of Claude's environment too.
+    let withheld = crate::provider::withheld_env(AgentKind::Claude, None);
     let text: String = crate::system::login_env()
         .iter()
         .filter(|(key, value)| {
             !NOT_IN_ENV_FILE.contains(&key.as_str())
+                && !withheld.contains(key)
                 && std::env::var(key).ok().as_deref() != Some(value.as_str())
         })
         .fold(String::new(), |mut text, (key, value)| {

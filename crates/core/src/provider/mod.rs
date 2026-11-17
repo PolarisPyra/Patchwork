@@ -26,7 +26,7 @@ use probe::{probe_at, stop};
 pub use turn::{
     GoalCommand, goal_argument, goal_command, TurnSpec, Image, load_images, prompt, Prompt,
     steer_input, goal_pause, interrupt, stop_subagent, is_goal_command, turn_args, turn_env,
-    turn_input, parse_line, approval_reply,
+    withheld_env, turn_input, parse_line, approval_reply,
 };
 pub(crate) use turn::{without_attachments};
 use turn::prompt_text;
