@@ -3,6 +3,10 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.101] - 2026-11-17
+
+Behind-the-scenes improvements, with nothing new to see.
+
 ## [26.11.100] - 2026-11-17
 
 **26.11.100** · 5 changes from 1 contributor
