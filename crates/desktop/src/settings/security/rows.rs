@@ -134,6 +134,17 @@ pub(super) fn recovery_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>)
             })),
     )
     .child(
+        btn(
+            "security-download-key",
+            "Download recovery key",
+            BtnKind::Plain,
+            false,
+            &t,
+        )
+        .child("Download")
+        .on_click(cx.listener(|d, _, _, cx| d.download_key(cx))),
+    )
+    .child(
         btn("security-key-done", "Done", BtnKind::Plain, false, &t)
             .child("Done")
             .on_click(cx.listener(|d, _, _, cx| {
