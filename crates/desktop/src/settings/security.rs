@@ -202,6 +202,32 @@ impl SettingsDialog {
         cx.notify();
     }
 
+    /// Asks where to save the recovery key just made, and writes it there.
+    fn download_key(&mut self, cx: &mut Context<Self>) {
+        let Some(key) = self.security.new_key.clone() else {
+            return;
+        };
+        let home = patchwork_core::system::fs::home_dir().unwrap_or_default();
+        let picked = cx.prompt_for_new_path(&home, Some("patchwork-recovery-key.txt"));
+        let core = Arc::clone(&self.core);
+        cx.spawn(async move |this, cx| {
+            let Ok(Ok(Some(path))) = picked.await else {
+                return;
+            };
+            let saved = cx
+                .background_spawn(async move { core.save_recovery_key(&path, &key) })
+                .await;
+            let _ = this.update(cx, |d, cx| {
+                match saved {
+                    Ok(()) => d.security.done = Some("Recovery key saved"),
+                    Err(e) => d.security.error = Some(e.to_string()),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
     /// Opens or locks the vault, sets, changes or removes its password with what is typed,
     /// replaces its recovery key, or removes the old copies.
     fn change_password(&mut self, change: Change, cx: &mut Context<Self>) {

@@ -3,6 +3,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::path::Path;
 use std::sync::Arc;
 
 use chacha20poly1305::aead::OsRng;
@@ -13,6 +14,7 @@ use zeroize::Zeroizing;
 
 use super::crypt::{DATA_KEY, KEY_LEN, cipher, data_key, seal};
 use super::password::{change_password, data_key_with, long_enough, open_with, with_conn};
+use crate::system::fs::write_private;
 use crate::{Core, Error};
 
 /// The letters of a recovery key: none that reads as another, so it can be copied by hand.
@@ -62,6 +64,16 @@ impl Core {
         })?;
         log::info!("the vault has a new recovery key");
         Ok(shown)
+    }
+
+    /// Saves the recovery key `key` to `path`, in a file only the user can read.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the file cannot be written.
+    pub fn save_recovery_key(&self, path: &Path, key: &str) -> Result<(), Error> {
+        let text = Zeroizing::new(format!("Patchwork recovery key\n\n{key}\n"));
+        write_private(path, &text)
     }
 
     /// Whether the vault has a password and a recovery key for it.
