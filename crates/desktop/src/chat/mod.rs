@@ -1,5 +1,5 @@
-//! The open chat: its transcript, the usage line and the composer, with
-//! search and "Open in editor" floating over the transcript's top right.
+//! The open chat: its transcript, the usage line and the composer, with search and "Open in
+//! editor" in the row above the transcript.
 
 // Rust guideline compliant 2026-10-09
 
@@ -12,6 +12,7 @@ pub mod files;
 pub mod find;
 pub mod folder;
 pub mod goal;
+mod header;
 mod interrupted;
 pub mod lineage;
 pub mod plan;
