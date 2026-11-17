@@ -16,6 +16,7 @@ use super::controls;
 use super::extensions;
 use super::gateways;
 use super::general;
+use super::notifications;
 use super::mcp;
 use super::permissions;
 use super::projects;
@@ -57,6 +58,7 @@ impl SettingsDialog {
             "ssh" => ssh::render(self, window, cx),
             "scheduled" => scheduled::render(self, window, cx),
             "terminal" => terminal::render(self, window, cx),
+            "notifications" => notifications::render(self, cx),
             "updates" => updates::render(self, cx),
             _ => div().into_any_element(),
         }

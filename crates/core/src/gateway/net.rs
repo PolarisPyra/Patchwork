@@ -157,6 +157,35 @@ pub(crate) fn write(what: &str, socket: &mut Socket, value: &Value) -> Result<()
         .map_err(|e| failed(what, e, ""))
 }
 
+/// A `multipart/form-data` body of the text `fields` and the text file `name` holding `bytes`
+/// under `field`, and the content type to send it with.
+pub(crate) fn multipart(
+    fields: &[(&str, &str)],
+    field: &str,
+    name: &str,
+    bytes: &[u8],
+) -> (String, Vec<u8>) {
+    let boundary = format!("patchwork-{}", uuid::Uuid::new_v4().simple());
+    let mut body = Vec::with_capacity(bytes.len() + 512);
+    for (key, value) in fields {
+        body.extend_from_slice(
+            format!(
+                "--{boundary}\r\nContent-Disposition: form-data; name=\"{key}\"\r\n\r\n{value}\r\n"
+            )
+            .as_bytes(),
+        );
+    }
+    body.extend_from_slice(
+        format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"{field}\"; filename=\"{name}\"\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n"
+        )
+        .as_bytes(),
+    );
+    body.extend_from_slice(bytes);
+    body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+    (format!("multipart/form-data; boundary={boundary}"), body)
+}
+
 /// Splits `text` into pieces of at most `limit` characters, at line breaks where it can.
 pub(crate) fn chunks(text: &str, limit: usize) -> Vec<String> {
     let mut out = Vec::new();

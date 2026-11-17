@@ -166,6 +166,21 @@ pub(crate) trait Connector: Send + Sync {
     /// Returns an error when the platform does not take the change.
     fn edit(&self, chat: &str, id: &str, text: &str) -> Result<(), Error>;
 
+    /// Sends the text file `name` holding `bytes` to `chat`, with `caption` beside it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the platform takes no files or does not take this one.
+    fn send_file(
+        &self,
+        _chat: &str,
+        _name: &str,
+        _bytes: &[u8],
+        _caption: &str,
+    ) -> Result<(), Error> {
+        Err("This chat app takes no files from Patchwork".into())
+    }
+
     /// Shows that Patchwork is writing in `chat`, where the platform can.
     fn typing(&self, _chat: &str) {}
 

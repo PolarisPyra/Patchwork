@@ -4,12 +4,15 @@
 mod commands;
 mod control;
 mod discord;
+mod files;
 mod handoff;
 mod hub;
 mod inbound;
 mod matrix;
 mod mattermost;
 mod net;
+mod notify;
+mod options;
 mod outbound;
 mod platform;
 mod qq;

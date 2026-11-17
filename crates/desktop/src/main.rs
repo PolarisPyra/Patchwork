@@ -359,6 +359,28 @@ fn main() {
                 }
             })
             .detach();
+            // Patchwork notifies while its window is out of focus, and a click on a notification
+            // opens its chat.
+            let _ = window.update(cx, |_, window, cx| {
+                let focused = Arc::clone(&core);
+                focused.set_window_focused(window.is_window_active());
+                cx.observe_window_activation(window, move |_, window, _| {
+                    focused.set_window_focused(window.is_window_active());
+                })
+                .detach();
+            });
+            cx.on_system_notification_response(move |response, cx| {
+                let thread_id = response
+                    .tag
+                    .split_once('|')
+                    .map_or(response.tag.as_ref(), |(id, _)| id)
+                    .to_string();
+                let _ = window.update(cx, |workspace, window, cx| {
+                    cx.activate(true);
+                    window.activate_window();
+                    workspace.open_thread(&thread_id, cx);
+                });
+            });
             cx.spawn(async move |cx| {
                 while raised.next().await.is_some() {
                     log::info!("a second launch asked for this window");

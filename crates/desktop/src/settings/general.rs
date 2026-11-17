@@ -147,7 +147,6 @@ impl SettingsDialog {
 pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
     let t = *theme(cx);
     let s = &d.settings;
-    let notifications = s.notifications.clone();
     let (logos, default_logo) = logos();
     let logo = s.logo.clone().unwrap_or_else(|| default_logo.clone());
 
@@ -280,23 +279,6 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 .child(div().font_weight(FontWeight::SEMIBOLD).child("App icon"))
                 .child(icons),
         )
-        .child(section_heading("Notifications", false, &t))
-        .child(toggle_row(
-            "goal-complete",
-            "Goal completed",
-            Some("When a task meets its goal, while Patchwork is not the focused window"),
-            notifications.goal_complete,
-            |s, on| s.notifications.goal_complete = on,
-            cx,
-        ))
-        .child(toggle_row(
-            "task-complete",
-            "Task completed",
-            Some("When an agent finishes replying in a task without a running goal"),
-            notifications.task_complete,
-            |s, on| s.notifications.task_complete = on,
-            cx,
-        ))
         .child(section_heading("Logs", false, &t))
         .children(log_rows)
         .child(toggle_row(

@@ -252,6 +252,22 @@ impl Workspace {
     /// Applies one event from an agent. Text streams in place; anything else reloads what the
     /// window shows from the store, which saved it before sending it.
     pub fn on_event(&mut self, envelope: AgentEventEnvelope, cx: &mut Context<Self>) {
+        // The system notification's tag starts with its thread, so a click on it opens that chat.
+        match &envelope.event {
+            AgentEvent::Notice { notice } => {
+                cx.show_system_notification(gpui::SystemNotification {
+                    tag: format!("{}|{}", envelope.thread_id, notice.tag).into(),
+                    title: notice.title.clone().into(),
+                    body: notice.body.clone().into(),
+                    actions: Vec::new(),
+                });
+                return;
+            }
+            AgentEvent::ApprovalResolved { approval_id, .. } => {
+                cx.dismiss_system_notification(&format!("{}|{approval_id}", envelope.thread_id));
+            }
+            _ => {}
+        }
         // A notice lasts until the agent's next output in that thread.
         let notice = match &envelope.event {
             AgentEvent::Retrying {

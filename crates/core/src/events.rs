@@ -92,6 +92,10 @@ pub enum AgentEvent {
         approval_id: String,
         status: crate::secrets::SecretStatus,
     },
+    /// A notification for the desktop to show while Patchwork is not the focused window.
+    Notice {
+        notice: crate::notifications::DesktopNotice,
+    },
     /// The thread's goal changed; None once it is cleared.
     GoalUpdated {
         goal: Option<Goal>,
@@ -229,4 +233,7 @@ pub enum AgentEvent {
     },
     /// The chat apps the thread is continued on changed.
     ChatAppsChanged,
+    /// The thread's agent, model, access or plan mode was changed from a chat app, or it was set
+    /// there to resume once its usage limit resets.
+    OptionsChanged,
 }

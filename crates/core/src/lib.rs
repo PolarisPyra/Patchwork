@@ -16,6 +16,7 @@ pub mod gateway;
 pub mod harness;
 pub mod import;
 pub mod logging;
+pub mod notifications;
 pub mod orchestration;
 pub mod permissions;
 pub mod persistence;
@@ -81,6 +82,8 @@ pub struct Core {
     emulators: android::Emulators,
     /// The chat apps connected to Patchwork's threads.
     gateway: gateway::Hub,
+    /// Whether the person is at Patchwork, for routing notifications.
+    presence: notifications::Presence,
 }
 
 impl std::fmt::Debug for Core {
@@ -153,6 +156,7 @@ impl Core {
             updates: updates::Updates::default(),
             emulators: android::Emulators::default(),
             gateway: gateway::Hub::default(),
+            presence: notifications::Presence::default(),
         });
         core.purge_removed_backgrounds();
         let weak = Arc::downgrade(&core);
@@ -204,6 +208,7 @@ impl Core {
     fn emit(&self, event: AgentEventEnvelope) {
         orchestration::log_event(&event);
         self.gateway.observe(&event);
+        self.notify_desktop(&event.thread_id, &event.event);
         (self.sink)(event);
     }
 }

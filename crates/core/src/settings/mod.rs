@@ -7,8 +7,10 @@ mod types;
 
 pub(crate) use save::follow;
 #[doc(inline)]
+pub use crate::notifications::NotificationSettings;
+#[doc(inline)]
 pub use types::{
     CheckSettings, CursorStyle, DetectLocale, Integrations, LoggingSettings, LogLevel,
-    NotificationSettings, ResumeAtLaunch, RightClickBehavior, Settings, TerminalSettings, TextSize,
-    Theme, TokenSettings, UpdateSettings, VisionModel,
+    ResumeAtLaunch, RightClickBehavior, Settings, TerminalSettings, TextSize, Theme, TokenSettings,
+    UpdateSettings, VisionModel,
 };

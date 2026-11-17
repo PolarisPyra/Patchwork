@@ -31,9 +31,6 @@ const INDEX: &[(&str, &[&str])] = &[
         "general",
         &[
             "App icon",
-            "Notifications",
-            "Goal completed",
-            "Task completed",
             "Logs",
             "Open logs in chat menus",
             "Log folder",
@@ -45,6 +42,19 @@ const INDEX: &[(&str, &[&str])] = &[
             "Resume interrupted replies at launch",
             "Stop agent after 200 tool steps",
             "Token limit per turn",
+        ],
+    ),
+    (
+        "notifications",
+        &[
+            "Asks something",
+            "Finished",
+            "Goal met",
+            "Failed",
+            "Usage runs out",
+            "Send to gateway service",
+            "Away after",
+            "Muted",
         ],
     ),
     (

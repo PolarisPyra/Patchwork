@@ -65,6 +65,10 @@ pub(super) const ENTRIES: &[Entry] = &[
                 label: "General",
             },
             Pane {
+                id: "notifications",
+                label: "Notifications",
+            },
+            Pane {
                 id: "updates",
                 label: "Updates",
             },

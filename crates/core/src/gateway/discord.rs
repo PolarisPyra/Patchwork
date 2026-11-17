@@ -1,4 +1,5 @@
-//! Discord: the gateway websocket for messages and button presses, and the REST API to answer.
+//! Discord: the gateway websocket for messages, slash commands and button presses, and the
+//! REST API to answer.
 
 // Rust guideline compliant 2026-10-09
 
@@ -8,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
-use super::net::{Socket, client, connect, download, failed, json, read, write};
+use super::net::{Socket, client, connect, download, failed, json, multipart, read, write};
 use super::platform::Platform;
 use super::types::{Button, Connector, Incoming, Listener};
 use crate::Error;
@@ -27,6 +28,68 @@ const ROW: usize = 5;
 
 /// The interaction answer that replaces the message the button was on.
 const UPDATE_MESSAGE: u64 = 7;
+
+/// The interaction answer that posts a message in the channel.
+const CHANNEL_MESSAGE: u64 = 4;
+
+/// The interaction a slash command makes; a button press is a component interaction.
+const COMMAND: u64 = 2;
+
+/// A command's one text option: its name, what it is, whether it is required, and the values to
+/// pick from, if it is a choice.
+type CommandOption = (&'static str, &'static str, bool, &'static [&'static str]);
+
+/// The commands Discord offers in its `/` menu, with what each does.
+const COMMANDS: [(&str, &str, Option<CommandOption>); 15] = [
+    ("help", "Show what Patchwork can do here", None),
+    (
+        "pair",
+        "Pair with Patchwork",
+        Some(("code", "The pairing code from Settings", true, &[])),
+    ),
+    (
+        "new",
+        "Start a new chat with the next message",
+        Some(("project", "The project to start it in", false, &[])),
+    ),
+    ("projects", "List the projects", None),
+    ("threads", "List recent chats", None),
+    (
+        "use",
+        "Switch to a chat from /threads",
+        Some(("number", "Its number in /threads", true, &[])),
+    ),
+    ("stop", "Stop the agent", None),
+    ("status", "Show the chat and what it is doing", None),
+    ("running", "List every chat that is working", None),
+    ("diff", "Get what the last reply changed as a file", None),
+    (
+        "model",
+        "Show or change this chat's model",
+        Some(("model", "The model id, or default", false, &[])),
+    ),
+    (
+        "agent",
+        "Show or change this chat's agent",
+        Some(("agent", "The agent, and a model after it", false, &[])),
+    ),
+    (
+        "access",
+        "Show or change what this chat may do",
+        Some((
+            "mode",
+            "The access mode",
+            false,
+            &["supervised", "auto-edits", "auto", "full"],
+        )),
+    ),
+    (
+        "plan",
+        "Show plan mode, or turn it on or off",
+        Some(("mode", "On or off", false, &["on", "off"])),
+    ),
+    ("unmute", "Hear from every muted chat again", None),
+];
 
 pub(crate) struct Discord {
     token: String,
@@ -59,6 +122,12 @@ impl Discord {
                 .header("Authorization", &auth)
                 .header("User-Agent", USER_AGENT)
                 .call(),
+            ("PUT", Some(body)) => self
+                .http
+                .put(&url)
+                .header("Authorization", &auth)
+                .header("User-Agent", USER_AGENT)
+                .send_json(body),
             ("PATCH", Some(body)) => self
                 .http
                 .patch(&url)
@@ -98,6 +167,9 @@ impl Discord {
                 *self.me.lock().unwrap_or_else(PoisonError::into_inner) =
                     user["id"].as_str().unwrap_or_default().to_string();
                 (to.connected)(user["username"].as_str().unwrap_or("bot").to_string());
+                if let Some(app) = data["application"]["id"].as_str() {
+                    self.register_commands(app);
+                }
             }
             Some("MESSAGE_CREATE") => {
                 if let Some(message) = self.message(data) {
@@ -158,15 +230,65 @@ impl Discord {
         })
     }
 
-    /// A button press, answered by taking the buttons off its message.
+    /// Lists the commands in Discord's `/` menu for the application `app`.
+    fn register_commands(&self, app: &str) {
+        let commands: Vec<Value> = COMMANDS
+            .iter()
+            .map(|(name, about, option)| {
+                let mut command = json!({
+                    "name": name,
+                    "description": about,
+                    "type": 1,
+                    "contexts": [0, 1],
+                    "integration_types": [0],
+                });
+                if let Some((option, about, required, choices)) = option {
+                    let mut option = json!({
+                        "type": 3,
+                        "name": option,
+                        "description": about,
+                        "required": required,
+                    });
+                    if !choices.is_empty() {
+                        option["choices"] = choices
+                            .iter()
+                            .map(|c| json!({"name": c, "value": c}))
+                            .collect();
+                    }
+                    command["options"] = json!([option]);
+                }
+                command
+            })
+            .collect();
+        let path = format!("/applications/{app}/commands");
+        if let Err(error) = self.call("PUT", &path, Some(&Value::Array(commands))) {
+            log::warn!(error:% = error; "could not list Patchwork's commands in Discord: {{error}}");
+        }
+    }
+
+    /// A slash command or a button press, read as the text it stands for. A command is answered
+    /// with itself, so the channel shows what was asked; a press takes the buttons off its
+    /// message.
     fn press(&self, data: &Value) -> Option<Incoming> {
-        let reply = data["data"]["custom_id"].as_str()?;
+        let text = if data["type"].as_u64() == Some(COMMAND) {
+            let command = &data["data"];
+            let value = command["options"][0]["value"].as_str().unwrap_or_default();
+            format!("/{} {value}", command["name"].as_str()?)
+                .trim()
+                .to_string()
+        } else {
+            data["data"]["custom_id"].as_str()?.to_string()
+        };
+        let answer = if data["type"].as_u64() == Some(COMMAND) {
+            json!({"type": CHANNEL_MESSAGE, "data": {"content": text}})
+        } else {
+            json!({"type": UPDATE_MESSAGE, "data": {"components": []}})
+        };
         let path = format!(
             "/interactions/{}/{}/callback",
             data["id"].as_str()?,
             data["token"].as_str()?
         );
-        let answer = json!({"type": UPDATE_MESSAGE, "data": {"components": []}});
         let _ = self.call("POST", &path, Some(&answer));
         let user = data["member"]["user"]
             .as_object()
@@ -180,7 +302,7 @@ impl Discord {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_string(),
-            text: reply.to_string(),
+            text,
             files: Vec::new(),
         })
     }
@@ -245,6 +367,20 @@ impl Connector for Discord {
         }
         let sent = self.call("POST", &format!("/channels/{chat}/messages"), Some(&body))?;
         Ok(sent["id"].as_str().map(str::to_string))
+    }
+
+    fn send_file(&self, chat: &str, name: &str, bytes: &[u8], caption: &str) -> Result<(), Error> {
+        let payload = json!({"content": caption}).to_string();
+        let (kind, body) = multipart(&[("payload_json", &payload)], "files[0]", name, bytes);
+        let response = self
+            .http
+            .post(&format!("{API}/channels/{chat}/messages"))
+            .header("Authorization", &self.auth())
+            .header("User-Agent", USER_AGENT)
+            .header("Content-Type", &kind)
+            .send(body.as_slice())
+            .map_err(|e| failed("Discord could not be reached", e, &self.token))?;
+        json("Discord", response).map(drop)
     }
 
     fn edit(&self, chat: &str, id: &str, text: &str) -> Result<(), Error> {

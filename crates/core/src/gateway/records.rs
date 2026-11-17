@@ -99,7 +99,7 @@ impl Core {
     }
 
     /// The chats that talk to `thread_id`.
-    pub(super) fn bound_chats(&self, thread_id: &str) -> Vec<Binding> {
+    pub(crate) fn bound_chats(&self, thread_id: &str) -> Vec<Binding> {
         self.read_list::<Binding>(BINDINGS)
             .into_iter()
             .filter(|b| b.thread_id == thread_id)

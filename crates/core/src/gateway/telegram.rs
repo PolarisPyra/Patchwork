@@ -6,7 +6,7 @@ use std::sync::atomic::Ordering;
 
 use serde_json::{Value, json};
 
-use super::net::{client, download, failed, json};
+use super::net::{client, download, failed, json, multipart};
 use super::platform::Platform;
 use super::types::{Button, Connector, Incoming, Listener};
 use crate::Error;
@@ -40,13 +40,7 @@ impl Telegram {
             .post(&url)
             .send_json(body)
             .map_err(|e| failed("Telegram could not be reached", e, &self.token))?;
-        let body = json("Telegram", response)?;
-        if body["ok"].as_bool() == Some(true) {
-            Ok(body["result"].clone())
-        } else {
-            let reason = body["description"].as_str().unwrap_or("no reason given");
-            Err(format!("Telegram refused the request: {reason}").into())
-        }
+        result(response)
     }
 
     /// The pictures sent with a message, the largest size of each.
@@ -164,6 +158,23 @@ impl Connector for Telegram {
         Ok(sent["message_id"].as_i64().map(|id| id.to_string()))
     }
 
+    fn send_file(&self, chat: &str, name: &str, bytes: &[u8], caption: &str) -> Result<(), Error> {
+        let (kind, body) = multipart(
+            &[("chat_id", chat), ("caption", caption)],
+            "document",
+            name,
+            bytes,
+        );
+        let url = format!("{API}/bot{}/sendDocument", self.token);
+        let response = self
+            .http
+            .post(&url)
+            .header("Content-Type", &kind)
+            .send(body.as_slice())
+            .map_err(|e| failed("Telegram could not be reached", e, &self.token))?;
+        result(response).map(drop)
+    }
+
     fn edit(&self, chat: &str, id: &str, text: &str) -> Result<(), Error> {
         let id: i64 = id.parse().map_err(|_bad| "Not a Telegram message id")?;
         self.call(
@@ -198,4 +209,15 @@ fn name(user: &Value) -> String {
         .map(|u| format!("@{u}"))
         .or_else(|| user["first_name"].as_str().map(str::to_string))
         .unwrap_or_default()
+}
+
+/// The result of a Bot API call, or the reason Telegram gave for refusing it.
+fn result(response: ureq::http::Response<ureq::Body>) -> Result<Value, Error> {
+    let body = json("Telegram", response)?;
+    if body["ok"].as_bool() == Some(true) {
+        Ok(body["result"].clone())
+    } else {
+        let reason = body["description"].as_str().unwrap_or("no reason given");
+        Err(format!("Telegram refused the request: {reason}").into())
+    }
 }

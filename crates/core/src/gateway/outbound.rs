@@ -62,7 +62,7 @@ impl Core {
 
     /// Sends `text` to `chat` with `buttons` under its last piece, and returns the id of that
     /// piece when it can be edited.
-    fn say_with(
+    pub(super) fn say_with(
         &self,
         platform: Platform,
         chat: &str,
@@ -95,6 +95,7 @@ impl Core {
         }
         let chats = self.bound_chats(&thread_id);
         if chats.is_empty() {
+            self.notify(&thread_id, &envelope.event);
             return;
         }
         match envelope.event {
@@ -142,21 +143,14 @@ impl Core {
                 ..
             } => {
                 let from = self.gateway.lock().answered.remove(&approval_id);
-                let what = if !answers.is_empty() {
-                    "Answered"
-                } else if allowed {
-                    "Allowed"
-                } else {
-                    "Denied"
-                };
                 for b in &chats {
-                    let text = match &from {
-                        Some((platform, chat)) if *platform == b.platform && *chat == b.chat => {
-                            format!("{what}.")
-                        }
-                        Some((platform, _)) => format!("{what} on {}.", platform.label()),
-                        None => format!("{what} on your computer."),
-                    };
+                    let text = outcome(
+                        allowed,
+                        !answers.is_empty(),
+                        from.as_ref(),
+                        b.platform,
+                        &b.chat,
+                    );
                     self.say(b.platform, &b.chat, &text);
                 }
             }
@@ -179,7 +173,7 @@ impl Core {
                     return;
                 };
                 for b in &chats {
-                    self.say(b.platform, &b.chat, &reply);
+                    self.say_long(b.platform, &b.chat, &reply);
                 }
             }
             _ => {}
@@ -229,7 +223,7 @@ impl Core {
 
     /// What a chat app is told when a turn ends: the reply, what went wrong, and the files it
     /// changed.
-    fn reply(
+    pub(super) fn reply(
         &self,
         thread_id: &str,
         message_id: &str,
@@ -268,7 +262,7 @@ impl Core {
 }
 
 /// What a chat app is shown of the agent's request, and the buttons that answer it.
-fn request(approval: &Approval) -> (String, Vec<Button>) {
+pub(super) fn request(approval: &Approval) -> (String, Vec<Button>) {
     if approval.secret.is_some() {
         let text = format!(
             "The agent asks for a secret: {}. Enter it in Patchwork on your computer.",
@@ -282,13 +276,20 @@ fn request(approval: &Approval) -> (String, Vec<Button>) {
             text.push_str("\n\n");
             text.push_str(&clip(&approval.detail, DETAIL_LIMIT));
         }
-        text.push_str("\n\nReply allow or deny.");
-        let buttons = [("Allow", "allow"), ("Deny", "deny")]
+        let mut answers = vec![("Allow", "allow"), ("Deny", "deny")];
+        if savable(approval) {
+            text.push_str("\n\nReply allow, always or deny.");
+            answers.insert(1, ("Always allow", "always"));
+        } else {
+            text.push_str("\n\nReply allow or deny.");
+        }
+        let buttons = answers
+            .into_iter()
             .map(|(label, reply)| Button {
                 label: label.to_string(),
                 reply: reply.to_string(),
             })
-            .to_vec();
+            .collect();
         return (text, buttons);
     }
     let mut blocks = Vec::new();
@@ -327,6 +328,34 @@ fn request(approval: &Approval) -> (String, Vec<Button>) {
         _ => Vec::new(),
     };
     (blocks.join("\n\n"), buttons)
+}
+
+/// Whether "Always allow" can save rules that answer requests like `approval` from now on.
+pub(super) fn savable(approval: &Approval) -> bool {
+    approval.questions.is_empty() && approval.kind.is_some() && !approval.suggestions.is_empty()
+}
+
+/// What `chat` on `platform` is told once a request was answered: just that when it was
+/// answered there, else also where it was answered.
+pub(super) fn outcome(
+    allowed: bool,
+    answered: bool,
+    from: Option<&(Platform, String)>,
+    platform: Platform,
+    chat: &str,
+) -> String {
+    let what = if answered {
+        "Answered"
+    } else if allowed {
+        "Allowed"
+    } else {
+        "Denied"
+    };
+    match from {
+        Some((p, c)) if *p == platform && c == chat => format!("{what}."),
+        Some((p, _)) => format!("{what} on {}.", p.label()),
+        None => format!("{what} on your computer."),
+    }
 }
 
 /// What the chats that continue a thread are shown of a message the person sent it: where it was

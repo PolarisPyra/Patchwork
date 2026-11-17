@@ -7,6 +7,8 @@ use std::io::{BufRead, BufReader};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use serde_json::{Value, json};
 
 use super::net::{client, failed, json, stream_client};
@@ -116,6 +118,16 @@ impl Connector for Signal {
         params["message"] = json!(text);
         self.call("send", params)?;
         Ok(None)
+    }
+
+    fn send_file(&self, chat: &str, name: &str, bytes: &[u8], caption: &str) -> Result<(), Error> {
+        let mut params = Self::to(chat);
+        params["message"] = json!(caption);
+        params["attachments"] = json!([format!(
+            "data:text/plain;filename={name};base64,{}",
+            STANDARD.encode(bytes)
+        )]);
+        self.call("send", params).map(drop)
     }
 
     fn edit(&self, _chat: &str, _id: &str, _text: &str) -> Result<(), Error> {

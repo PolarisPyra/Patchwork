@@ -83,8 +83,11 @@ impl Runner {
         }
     }
 
-    /// The other chats in the caller's project, newest first.
+    /// The other chats in the caller's project, newest first. A chat run from a chat app sees
+    /// every project's chats, each with its project.
     fn list_chats(&self, core: &Core, caller: &Thread) -> String {
+        let everywhere = chat_tools::sees_every_project(core, caller);
+        let projects = core.store.settings().projects;
         let chats: Vec<Value> = core
             .store
             .threads()
@@ -93,20 +96,37 @@ impl Runner {
                 t.id != caller.id
                     && t.parent.is_none()
                     && t.archived_at.is_none()
-                    && t.project_id == caller.project_id
+                    && (everywhere || t.project_id == caller.project_id)
             })
             .map(|t| {
-                json!({
+                let replying = busy(self, &t.id);
+                let mut chat = json!({
                     "chat_id": t.id,
                     "title": t.title,
                     "agent": t.agent,
                     "model": t.model,
-                    "replying": busy(self, &t.id),
-                })
+                    "replying": replying,
+                });
+                if everywhere {
+                    let project = t
+                        .project_id
+                        .as_ref()
+                        .and_then(|id| projects.iter().find(|p| &p.id == id))
+                        .map(|p| p.name.clone());
+                    chat["project"] = json!(project);
+                }
+                if replying {
+                    chat["doing"] = json!(t.doing());
+                }
+                chat
             })
             .collect();
         if chats.is_empty() {
-            return "There are no other chats in this project.".into();
+            return if everywhere {
+                "There are no other chats.".into()
+            } else {
+                "There are no other chats in this project.".into()
+            };
         }
         Value::Array(chats).to_string()
     }

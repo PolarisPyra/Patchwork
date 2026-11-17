@@ -7,7 +7,7 @@ use std::sync::atomic::Ordering;
 
 use serde_json::{Value, json};
 
-use super::net::{client, connect, download, failed, json, read, write};
+use super::net::{client, connect, download, failed, json, multipart, read, write};
 use super::platform::Platform;
 use super::types::{Button, Connector, Incoming, Listener};
 use crate::Error;
@@ -136,6 +136,27 @@ impl Connector for Mattermost {
             Some(&json!({"channel_id": chat, "message": text})),
         )?;
         Ok(sent["id"].as_str().map(str::to_string))
+    }
+
+    fn send_file(&self, chat: &str, name: &str, bytes: &[u8], caption: &str) -> Result<(), Error> {
+        let (kind, body) = multipart(&[("channel_id", chat)], "files", name, bytes);
+        let response = self
+            .http
+            .post(&format!("{}/api/v4/files", self.server))
+            .header("Authorization", &self.auth())
+            .header("Content-Type", &kind)
+            .send(body.as_slice())
+            .map_err(|e| failed("Mattermost could not be reached", e, &self.token))?;
+        let uploaded = json("Mattermost", response)?;
+        let id = uploaded["file_infos"][0]["id"]
+            .as_str()
+            .ok_or("Mattermost did not keep the file")?;
+        self.call(
+            "POST",
+            "/posts",
+            Some(&json!({"channel_id": chat, "message": caption, "file_ids": [id]})),
+        )
+        .map(drop)
     }
 
     fn edit(&self, _chat: &str, id: &str, text: &str) -> Result<(), Error> {
