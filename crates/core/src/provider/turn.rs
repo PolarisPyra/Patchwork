@@ -291,6 +291,39 @@ pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)
     }
 }
 
+/// The variables an agent's own CLI reads its account's key from, which it keeps.
+fn own_key_vars(agent: AgentKind) -> &'static [&'static str] {
+    match agent {
+        AgentKind::Claude => &["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"],
+        AgentKind::Codex => &["OPENAI_API_KEY", "CODEX_API_KEY"],
+        AgentKind::Antigravity => &["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+        AgentKind::OpenCode | AgentKind::Api => &[],
+    }
+}
+
+/// The environment variables kept from the agent's process: the ones the API providers read
+/// their keys from, which are other providers' keys to this agent.
+///
+/// Patchwork's own agent is handed its key with the turn and needs none of them. A CLI keeps
+/// the variables it signs in with, and so does the CLI that reads images for Patchwork's
+/// agent. `OpenCode` keeps them all, as it reads the keys of its own providers from them.
+#[must_use]
+pub fn withheld_env(agent: AgentKind, vision: Option<AgentKind>) -> Vec<String> {
+    if agent == AgentKind::OpenCode {
+        return Vec::new();
+    }
+    let kept = |var: &str| {
+        own_key_vars(agent).contains(&var)
+            || vision.is_some_and(|vision| own_key_vars(vision).contains(&var))
+    };
+    api::config::providers()
+        .into_iter()
+        .filter_map(|provider| provider.key_env)
+        .map(|var| var.trim().to_string())
+        .filter(|var| !var.is_empty() && !kept(var))
+        .collect()
+}
+
 /// Lines written to the agent's stdin when the turn starts. Empty means the
 /// agent takes no input, and stdin is closed.
 #[must_use]

@@ -355,6 +355,11 @@ impl Runner {
                 crate::system::ssh::here(&root),
             ))
             .current_dir(&root);
+        // Another provider's key is not this agent's to read, nor its commands'.
+        let vision = spec.vision_model.map(|vision| vision.agent);
+        for var in provider::withheld_env(agent, vision) {
+            cmd.env_remove(var);
+        }
         let mut cmd = crate::system::ssh::supervised(cmd)?;
         cmd.stdin(if input.is_empty() {
             Stdio::null()
