@@ -8,6 +8,7 @@
 use std::sync::Arc;
 
 use super::hub::Place;
+use super::platform::Platform;
 use super::types::Incoming;
 use crate::Core;
 
@@ -17,6 +18,7 @@ const HELP: &str = "Say what you want in your own words: ask what is running, st
 /new: start this conversation over with the next message
 /new <project>: talk straight to a new chat in a project
 /stop: stop the reply being written
+/clear: delete the messages here and start this conversation over
 
 When the agent asks before acting, reply allow, always or deny, or press a button. When it asks a question, reply with the numbers of the answers, one line per question.";
 
@@ -96,6 +98,15 @@ impl Core {
                 }
                 _ => "Nothing is running.".to_string(),
             },
+            "clear" => {
+                if let Some(id) = thread
+                    && self.runner.is_running(id)
+                {
+                    self.cancel_turn(id);
+                }
+                self.clear_chat(platform, chat);
+                return true;
+            }
             "mute" => self.mute_notices(rest),
             "resume" => self.resume_at_reset(rest),
             "answer" => {
@@ -111,5 +122,36 @@ impl Core {
         };
         self.say(platform, chat, &reply);
         true
+    }
+
+    /// Starts the conversation `chat` over and deletes the messages in it that its chat app lets
+    /// Patchwork delete. A long conversation takes a while, so it is done off the caller's
+    /// thread.
+    fn clear_chat(self: &Arc<Self>, platform: Platform, chat: &str) {
+        let Some(connector) = self.gateway.connector(platform) else {
+            return;
+        };
+        self.bind_chat(platform, chat, None);
+        let (weak, chat) = (Arc::downgrade(self), chat.to_string());
+        let spawned = std::thread::Builder::new()
+            .name("gateway-clear".to_string())
+            .spawn(move || {
+                let reply = match connector.clear(&chat) {
+                    Ok(true) => "Cleared. Your next message starts a new chat.".to_string(),
+                    Ok(false) => format!(
+                        "Cleared Patchwork's messages. {} does not let it delete yours here. Your next message starts a new chat.",
+                        platform.label()
+                    ),
+                    Err(error) => format!(
+                        "Patchwork could not delete the messages here: {error}. Your next message starts a new chat."
+                    ),
+                };
+                if let Some(core) = weak.upgrade() {
+                    core.say(platform, &chat, &reply);
+                }
+            });
+        if let Err(error) = spawned {
+            log::error!(error:% = error; "could not start clearing a conversation: {{error}}");
+        }
     }
 }

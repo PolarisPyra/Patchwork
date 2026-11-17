@@ -306,9 +306,10 @@ connected after the restart, the conversation is told Patchwork is back and on w
 
 ### Slash commands
 
-Three are left, for what acts on the conversation itself and needs no model: `/help`, `/new`
-(start the conversation over, or `/new <project>` to talk straight to a new chat in a project) and
-`/stop`. The buttons under notices send their own (`/open`, `/answer`, `/mute`, `/resume`). The
+Four are left, for what acts on the conversation itself and needs no model: `/help`, `/new`
+(start the conversation over, or `/new <project>` to talk straight to a new chat in a project),
+`/stop` and `/clear` (start the conversation over and delete its messages in the chat app; only
+Discord deletes them, and in a direct message only Patchwork's own). The buttons under notices send their own (`/open`, `/answer`, `/mute`, `/resume`). The
 others (`/status`, `/running`, `/threads`, `/use`, `/projects`, `/diff`, `/model`, `/agent`,
 `/plan`, `/access`, `/unmute`) are gone: sent now, they reach the dispatcher as words, which does
 the same through the capabilities. `pass_on` takes the leading slash off a dispatcher's message,

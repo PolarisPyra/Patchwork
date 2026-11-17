@@ -8,6 +8,7 @@ use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
+use ureq::http::StatusCode;
 
 use super::net::{Socket, client, connect, download, failed, json, multipart, read, write};
 use super::platform::Platform;
@@ -35,12 +36,21 @@ const CHANNEL_MESSAGE: u64 = 4;
 /// The interaction a slash command makes; a button press is a component interaction.
 const COMMAND: u64 = 2;
 
+/// The channel type of a direct message, where a bot may delete only what it sent.
+const DIRECT: u64 = 1;
+
+/// How many times a delete waits out Discord's rate limit before it gives up.
+const DELETE_TRIES: usize = 5;
+
+/// The longest one of those waits is.
+const DELETE_WAIT: Duration = Duration::from_secs(30);
+
 /// A command's one text option: its name, what it is, whether it is required, and the values to
 /// pick from, if it is a choice.
 type CommandOption = (&'static str, &'static str, bool, &'static [&'static str]);
 
 /// The commands Discord offers in its `/` menu, with what each does.
-const COMMANDS: [(&str, &str, Option<CommandOption>); 4] = [
+const COMMANDS: [(&str, &str, Option<CommandOption>); 5] = [
     ("help", "Show what Patchwork can do here", None),
     (
         "pair",
@@ -53,6 +63,7 @@ const COMMANDS: [(&str, &str, Option<CommandOption>); 4] = [
         Some(("project", "The project to start it in", false, &[])),
     ),
     ("stop", "Stop the reply being written", None),
+    ("clear", "Delete the messages here and start over", None),
 ];
 
 pub(crate) struct Discord {
@@ -114,6 +125,29 @@ impl Discord {
         let response =
             response.map_err(|e| failed("Discord could not be reached", e, &self.token))?;
         json("Discord", response)
+    }
+
+    /// Deletes the message `id` in `chat`, waiting out the rate limit, and returns the status
+    /// Discord answered with.
+    fn delete(&self, chat: &str, id: &str) -> Result<StatusCode, Error> {
+        let url = format!("{API}/channels/{chat}/messages/{id}");
+        for _ in 0..DELETE_TRIES {
+            let mut response = self
+                .http
+                .delete(&url)
+                .header("Authorization", &self.auth())
+                .header("User-Agent", USER_AGENT)
+                .call()
+                .map_err(|e| failed("Discord could not be reached", e, &self.token))?;
+            if response.status() != StatusCode::TOO_MANY_REQUESTS {
+                return Ok(response.status());
+            }
+            let body: Value = response.body_mut().read_json().unwrap_or(Value::Null);
+            let wait = Duration::try_from_secs_f64(body["retry_after"].as_f64().unwrap_or(1.0))
+                .unwrap_or(DELETE_WAIT);
+            std::thread::sleep(wait.min(DELETE_WAIT));
+        }
+        Err("Discord kept asking Patchwork to slow down".into())
     }
 
     /// Handles one gateway payload, returning an error when Discord asks for a new connection.
@@ -353,6 +387,56 @@ impl Connector for Discord {
         let path = format!("/channels/{chat}/messages/{id}");
         self.call("PATCH", &path, Some(&json!({"content": text})))
             .map(drop)
+    }
+
+    fn clear(&self, chat: &str) -> Result<bool, Error> {
+        let channel = self.call("GET", &format!("/channels/{chat}"), None)?;
+        let me = self
+            .me
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        // Elsewhere the bot may delete other people's messages only with Manage Messages, which
+        // the first refusal shows it lacks.
+        let mut own_only = channel["type"].as_u64() == Some(DIRECT);
+        let mut all = true;
+        let mut before = String::new();
+        loop {
+            let mut path = format!("/channels/{chat}/messages?limit=100");
+            if !before.is_empty() {
+                path.push_str("&before=");
+                path.push_str(&before);
+            }
+            let page = self.call("GET", &path, None)?;
+            let ids: Vec<(&str, bool)> = page
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|m| Some((m["id"].as_str()?, m["author"]["id"].as_str() == Some(&me))))
+                .collect();
+            // The newest comes first, so the last is where the next page starts.
+            let Some((oldest, _)) = ids.last() else {
+                return Ok(all);
+            };
+            before = (*oldest).to_string();
+            for (id, mine) in ids {
+                if own_only && !mine {
+                    all = false;
+                    continue;
+                }
+                match self.delete(chat, id)? {
+                    status if status.is_success() => {}
+                    StatusCode::NOT_FOUND => {}
+                    StatusCode::FORBIDDEN => {
+                        own_only = true;
+                        all = false;
+                    }
+                    status => {
+                        return Err(format!("Discord refused the request: {status}").into());
+                    }
+                }
+            }
+        }
     }
 
     fn typing(&self, chat: &str) {
