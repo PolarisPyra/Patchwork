@@ -24,8 +24,6 @@ pub struct GatewayState {
     pub(super) selected: Option<Platform>,
     /// The credentials that are saved, by platform and key, once they have been read.
     pub(super) saved: Option<HashSet<(Platform, &'static str)>>,
-    /// The credential fields that show what is typed in them, by platform and key.
-    pub(super) unmasked: HashSet<(Platform, &'static str)>,
     /// The credentials saved since the pane opened, by platform and key.
     pub(super) just_saved: HashSet<(Platform, &'static str)>,
     pub(super) pairings: Vec<Pairing>,
@@ -80,7 +78,6 @@ impl SettingsDialog {
         cx: &mut Context<Self>,
     ) {
         let removed = value.trim().is_empty();
-        self.hide_credential(platform, key, cx);
         self.gateway.just_saved.remove(&(platform, key));
         let core = Arc::clone(&self.core);
         self.run(
@@ -98,47 +95,6 @@ impl SettingsDialog {
             },
             cx,
         );
-    }
-
-    /// Shows what is typed in a credential's field, or masks it again.
-    pub(super) fn toggle_credential(
-        &mut self,
-        platform: Platform,
-        key: &'static str,
-        cx: &mut Context<Self>,
-    ) {
-        if self.gateway.unmasked.insert((platform, key)) {
-            self.mask_credential(platform, key, false, cx);
-        } else {
-            self.hide_credential(platform, key, cx);
-        }
-        cx.notify();
-    }
-
-    /// Masks a credential's field.
-    pub(super) fn hide_credential(
-        &mut self,
-        platform: Platform,
-        key: &'static str,
-        cx: &mut Context<Self>,
-    ) {
-        self.gateway.unmasked.remove(&(platform, key));
-        self.mask_credential(platform, key, true, cx);
-    }
-
-    pub(super) fn mask_credential(
-        &self,
-        platform: Platform,
-        key: &str,
-        masked: bool,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(area) = self.field_area(&format!("gw-{}-{key}", platform.id())) {
-            area.update(cx, |a, cx| {
-                a.masked = masked;
-                cx.notify();
-            });
-        }
     }
 
     pub(super) fn remove_paired(&mut self, platform: Platform, id: String, cx: &mut Context<Self>) {

@@ -2,7 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{AnyElement, FontWeight, Role, SharedString, Toggled, Window, div, prelude::*, px};
+use gpui::{AnyElement, FontWeight, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_core::gateway::{Platform, Status};
 
 use super::paired::pairing_row;
@@ -83,7 +83,6 @@ fn platform(
             .as_ref()
             .is_some_and(|s| s.contains(&(platform, key)));
         let name = format!("{label} {}", credential.label.to_lowercase());
-        let revealed = d.gateway.unmasked.contains(&(platform, key));
         let field = d
             .field(
                 format!("gw-{id}-{key}"),
@@ -108,33 +107,6 @@ fn platform(
         rows.push(
             token_row(credential.label, None, &t)
                 .flex_wrap()
-                .child({
-                    // Shows what is being typed. A saved credential is never read back.
-                    let (icon, action) = if revealed {
-                        ("eye-slash", "Hide")
-                    } else {
-                        ("eye", "Show")
-                    };
-                    icon_button(
-                        SharedString::from(format!("gw-{id}-{key}-show")),
-                        format!("Show {name}"),
-                        icon,
-                        14.,
-                        cx,
-                    )
-                    .aria_toggled(if revealed {
-                        Toggled::True
-                    } else {
-                        Toggled::False
-                    })
-                    .tooltip(crate::ui::tooltip(format!(
-                        "{action} {}",
-                        credential.label.to_lowercase()
-                    )))
-                    .on_click(cx.listener(move |d, _, _, cx| {
-                        d.toggle_credential(platform, key, cx);
-                    }))
-                })
                 .child(field)
                 .child(credential_actions(d, platform, key, &name, saved, cx))
                 .into_any_element(),
