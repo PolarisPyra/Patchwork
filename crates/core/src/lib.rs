@@ -219,6 +219,8 @@ impl Core {
             let starting = Arc::clone(&core);
             std::thread::spawn(move || starting.restart_gateway());
         }
+        std::thread::spawn(vault::take_old);
+        core.lock_when_idle();
         Ok(core)
     }
 

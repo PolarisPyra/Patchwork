@@ -78,7 +78,7 @@ pub(super) const CONTROL: &[Capability] = &[
         about: "Open Settings in Patchwork's window on the computer, at a section when one is named.",
         args: &[text(
             "section",
-            "The section, such as general, themes, providers, extensions, permissions, scheduled or gateways. Leave it out for the first.",
+            "The section, such as general, themes, providers, extensions, permissions, scheduled or gateway. Leave it out for the first.",
         )],
         returns: "That the window was asked to open Settings.",
         resources: &["setting"],
@@ -176,7 +176,7 @@ pub(super) const CONTROL: &[Capability] = &[
     },
     Capability {
         id: "set_chat_app_enabled",
-        area: "chat-apps",
+        area: "gateway",
         about: "Turn a chat app's connection on or off. One can be turned on only when its tokens are already saved in Settings on the computer; tokens cannot be read or entered from here.",
         args: &[
             needed(
@@ -195,7 +195,7 @@ pub(super) const CONTROL: &[Capability] = &[
     },
     Capability {
         id: "make_pairing_code",
-        area: "chat-apps",
+        area: "gateway",
         about: "Make a code that pairs one more account with Patchwork. Whoever sends the code to the bot can use Patchwork from then on, so only make one when the person asks for it.",
         args: &[],
         returns: "The code and how long it works.",

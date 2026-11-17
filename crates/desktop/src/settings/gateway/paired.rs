@@ -1,4 +1,4 @@
-//! The pairing code a new person sends a bot, and the people already paired.
+//! The pairing code sent to a bot, and the pairings it has made.
 
 // Rust guideline compliant 2026-10-09
 
@@ -14,7 +14,7 @@ use crate::ui::{BtnKind, btn, icon, icon_button};
 /// The milliseconds in a minute, for the pairing code's time left.
 const MINUTE_MS: u64 = 60_000;
 
-/// The one-time code a new person sends a bot to pair, the button that makes one, and who has
+/// The one-time code sent to a bot to make a pairing, the button that makes one, and who has
 /// paired on `platform`.
 pub(super) fn pairing_row(
     d: &SettingsDialog,
@@ -23,7 +23,7 @@ pub(super) fn pairing_row(
 ) -> AnyElement {
     let t = *theme(cx);
     let code = d
-        .gateways
+        .gateway
         .code
         .clone()
         .filter(|(_, until)| *until > now_ms());
@@ -53,13 +53,13 @@ pub(super) fn pairing_row(
         btn("gw-new-code", "New code", BtnKind::Plain, false, &t)
             .child("New code")
             .on_click(cx.listener(|d, _, _, cx| {
-                d.gateways.code = Some(d.core.new_gateway_code());
+                d.gateway.code = Some(d.core.new_pairing_code());
                 cx.notify();
             })),
     );
     let names: Vec<&str> = d
-        .gateways
-        .users
+        .gateway
+        .pairings
         .iter()
         .filter(|u| u.platform == platform)
         .map(|u| u.name.as_str())
@@ -86,23 +86,23 @@ pub(super) fn pairing_row(
         .into_any_element()
 }
 
-/// The people who can use Patchwork from a chat app.
+/// The pairings, each with the button that unpairs it.
 pub(super) fn paired(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
     let t = *theme(cx);
-    if d.gateways.users.is_empty() {
+    if d.gateway.pairings.is_empty() {
         return div()
             .py(px(10.))
             .text_color(t.text_muted)
-            .child("No apps are paired")
+            .child("No pairings")
             .into_any_element();
     }
     let rows = d
-        .gateways
-        .users
+        .gateway
+        .pairings
         .iter()
-        .map(|user| {
-            let (platform, id) = (user.platform, user.id.clone());
-            let name = format!("{} on {}", user.name, platform.label());
+        .map(|paired| {
+            let (platform, id) = (paired.platform, paired.id.clone());
+            let name = format!("{} on {}", paired.name, platform.label());
             div()
                 .flex()
                 .items_center()
@@ -112,7 +112,7 @@ pub(super) fn paired(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> An
                 .child(div().min_w_0().flex_1().truncate().child(name.clone()))
                 .child(
                     icon_button(
-                        SharedString::from(format!("gw-unpair-{}-{}", platform.id(), user.id)),
+                        SharedString::from(format!("gw-unpair-{}-{}", platform.id(), paired.id)),
                         format!("Remove {name}"),
                         "x",
                         14.,
@@ -128,7 +128,7 @@ pub(super) fn paired(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> An
     div()
         .id("gw-paired")
         .role(Role::List)
-        .aria_label("Paired apps")
+        .aria_label("Pairings")
         .mt(px(6.))
         .child(list_box(rows, &t))
         .into_any_element()

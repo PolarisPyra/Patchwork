@@ -32,6 +32,7 @@ syntect.workspace = true
 two-face = { workspace = true, features = ["syntect-onig"] }
 unicode-segmentation = { workspace = true, default-features = true }
 vt100 = { workspace = true, default-features = true }
+zeroize = { workspace = true, default-features = true }
 
 [build-dependencies]
 # Embeds the Windows icon in the exe.

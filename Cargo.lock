@@ -4553,6 +4553,7 @@ dependencies = [
  "two-face",
  "unicode-segmentation",
  "vt100",
+ "zeroize",
 ]
 
 [[package]]

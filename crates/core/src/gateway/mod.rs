@@ -1,4 +1,4 @@
-//! The gateway: chat apps that reach Patchwork's threads. A paired user's messages go to the
+//! The gateway: chat apps that reach Patchwork's threads. A pairing's messages go to the
 //! thread their conversation is bound to, and the agent's requests and replies come back.
 
 mod commands;
@@ -27,4 +27,6 @@ mod watch;
 pub use hub::Hub;
 pub use personalities::Personality;
 pub use platform::{Field, Need, Platform};
-pub use types::{Binding, ChatApps, ChatPlace, GatewaySettings, PairedUser, PlatformSettings, Status};
+pub use types::{
+    Binding, ChatAppCall, ChatApps, ChatPlace, GatewaySettings, Pairing, PlatformSettings, Status,
+};

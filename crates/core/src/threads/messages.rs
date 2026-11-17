@@ -537,3 +537,40 @@ pub struct CheckFailure {
     #[serde(default)]
     pub detail: String,
 }
+
+/// `text` with the saved secrets in it replaced, left as it is when it holds none.
+fn hide(text: &mut String) {
+    if let std::borrow::Cow::Owned(hidden) = crate::logging::hide(text) {
+        *text = hidden;
+    }
+}
+
+impl Message {
+    /// Replaces every value of a secret Patchwork holds in what the reply says and what its
+    /// tools printed, before the finished reply is saved: an agent that printed a key does
+    /// not leave it in the database.
+    pub(crate) fn hide_secrets(&mut self) {
+        hide(&mut self.text);
+        self.error.iter_mut().for_each(hide);
+        for tool in &mut self.tools {
+            hide(&mut tool.summary);
+            tool.output.iter_mut().for_each(hide);
+        }
+        for task in &mut self.background {
+            task.summary.iter_mut().for_each(hide);
+            task.output.iter_mut().for_each(hide);
+        }
+        for approval in &mut self.approvals {
+            hide(&mut approval.detail);
+        }
+        for part in &mut self.parts {
+            match part {
+                Part::Text { text } | Part::Thinking { text, .. } | Part::Plan { text } => {
+                    hide(text);
+                }
+                Part::Compaction { summary, .. } => summary.iter_mut().for_each(hide),
+                Part::Tool { .. } | Part::Approval { .. } => {}
+            }
+        }
+    }
+}

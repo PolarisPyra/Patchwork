@@ -38,7 +38,7 @@ fn platform(
     let label = platform.label();
     let enabled = settings.enabled;
     let status = if enabled {
-        d.gateways
+        d.gateway
             .statuses
             .get(&platform)
             .cloned()
@@ -57,9 +57,9 @@ fn platform(
         .text_size(px(fs_sm()))
         .text_color(if failed { t.danger } else { t.text_muted })
         .child(line);
-    let switch_label = format!("Enable {label} gateway");
+    let switch_label = format!("Enable {label}");
     let mut rows = vec![
-        token_row("Enable gateway", None, &t)
+        token_row("Enable", None, &t)
             .child(line)
             .child(
                 switch(format!("gw-{id}-enabled"), switch_label, enabled, &t).on_click(
@@ -78,12 +78,12 @@ fn platform(
     for credential in platform.credentials() {
         let key = credential.key;
         let saved = d
-            .gateways
+            .gateway
             .saved
             .as_ref()
             .is_some_and(|s| s.contains(&(platform, key)));
         let name = format!("{label} {}", credential.label.to_lowercase());
-        let revealed = d.gateways.unmasked.contains(&(platform, key));
+        let revealed = d.gateway.unmasked.contains(&(platform, key));
         let field = d
             .field(
                 format!("gw-{id}-{key}"),
@@ -187,7 +187,7 @@ fn credential_actions(
     let t = *theme(cx);
     let id = platform.id();
     let field = SharedString::from(format!("gw-{id}-{key}"));
-    let done = d.gateways.just_saved.contains(&(platform, key)).then(|| {
+    let done = d.gateway.just_saved.contains(&(platform, key)).then(|| {
         div()
             .id(SharedString::from(format!("gw-{id}-{key}-saved")))
             .role(Role::Status)
@@ -222,7 +222,7 @@ fn credential_actions(
                 if let Some(area) = d.field_area(&cleared) {
                     area.update(cx, |a, cx| a.set_text("", cx));
                 }
-                d.gateways.just_saved.remove(&(platform, key));
+                d.gateway.just_saved.remove(&(platform, key));
                 if saved {
                     d.save_credential(platform, key, String::new(), cx);
                 }
@@ -287,7 +287,7 @@ pub(super) fn page(
         .child(pairing)
         .children(vault_notice("gw-vault", &t))
         .children(
-            d.gateways
+            d.gateway
                 .error
                 .clone()
                 .map(|e| alert("gw-error", e, t.danger)),

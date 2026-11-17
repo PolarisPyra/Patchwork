@@ -20,7 +20,7 @@ const REPLY_LIMIT: usize = 1500;
 
 impl Core {
     /// Tells the conversations watching `thread_id` about `event`, and says whether any watch it,
-    /// so the paired people are not told a second time.
+    /// so the pairings are not told a second time.
     pub(super) fn tell_watchers(&self, thread_id: &str, event: &AgentEvent) -> bool {
         if !matches!(
             event,

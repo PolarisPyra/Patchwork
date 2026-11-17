@@ -62,7 +62,7 @@ pub(super) fn general(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) 
             d.toggle_menu("gw-project", "Project", items, e.position(), window, cx);
         })),
     );
-    let personalities = d.gateways.personalities.clone();
+    let personalities = d.gateway.personalities.clone();
     let chosen = gateway.personality.clone();
     let current = chosen.clone().unwrap_or_else(|| "Patchwork".to_string());
     let personality = token_row("Personality", None, &t).child(

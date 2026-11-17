@@ -16,6 +16,9 @@ pub(crate) struct Presence {
     focused: AtomicBool,
     /// When the window last lost focus, in Unix milliseconds; 0 until the desktop reports.
     since: AtomicU64,
+    /// When a key or the mouse was last used in the window, in Unix milliseconds; 0 until the
+    /// desktop reports.
+    active: AtomicU64,
     /// The start of the goal each chat was last told as met, by place and thread id, so a goal
     /// reported again as met is told once.
     goals: Mutex<HashMap<(Place, String), u64>>,
@@ -37,6 +40,19 @@ impl Core {
         let presence = &self.presence;
         if presence.focused.swap(focused, Ordering::SeqCst) != focused && !focused {
             presence.since.store(now_ms(), Ordering::SeqCst);
+        }
+    }
+
+    /// Records that a key or the mouse was used in Patchwork's window just now.
+    pub fn note_activity(&self) {
+        self.presence.active.store(now_ms(), Ordering::Relaxed);
+    }
+
+    /// How long ago the window was last used, in milliseconds: 0 until the desktop reports.
+    pub(crate) fn idle_ms(&self) -> u64 {
+        match self.presence.active.load(Ordering::Relaxed) {
+            0 => 0,
+            at => now_ms().saturating_sub(at),
         }
     }
 

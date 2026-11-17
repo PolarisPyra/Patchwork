@@ -67,7 +67,7 @@ impl Core {
     /// The platform credentials that are saved, by platform and key. This reads the vault, and
     /// the system credential store for one an earlier version saved, which can block.
     #[must_use]
-    pub fn gateway_credentials(&self) -> Vec<(Platform, &'static str)> {
+    pub fn chat_app_credentials(&self) -> Vec<(Platform, &'static str)> {
         Platform::ALL
             .iter()
             .flat_map(|p| p.credentials().iter().map(move |c| (*p, c.key)))
@@ -81,7 +81,7 @@ impl Core {
     /// # Errors
     ///
     /// Returns an error when the credential cannot be saved or removed.
-    pub fn set_gateway_credential(
+    pub fn set_chat_app_credential(
         self: &Arc<Self>,
         platform: Platform,
         key: &str,
@@ -101,7 +101,7 @@ impl Core {
     /// A new one-time code that pairs whoever sends it to a connected bot, and when it stops
     /// working, in epoch milliseconds.
     #[must_use]
-    pub fn new_gateway_code(&self) -> (String, u64) {
+    pub fn new_pairing_code(&self) -> (String, u64) {
         let random = uuid::Uuid::new_v4();
         let code: String = random
             .as_bytes()
@@ -119,7 +119,7 @@ impl Core {
 
     /// The pairing code that still works, and when it stops.
     #[must_use]
-    pub fn gateway_code(&self) -> Option<(String, u64)> {
+    pub fn pairing_code(&self) -> Option<(String, u64)> {
         let mut state = self.gateway.lock();
         if state.code.as_ref().is_some_and(|(_, at)| *at <= now_ms()) {
             state.code = None;

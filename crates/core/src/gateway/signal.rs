@@ -191,7 +191,7 @@ fn incoming(event: &Value) -> Option<Incoming> {
             .as_u64()
             .map(|at| format!("{user}:{at}")),
         chat,
-        user: user.to_string(),
+        sender: user.to_string(),
         name: envelope["sourceName"].as_str().unwrap_or(user).to_string(),
         text,
         files,

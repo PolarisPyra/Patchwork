@@ -35,7 +35,7 @@ pub struct Hub {
     /// Feeds the thread that sends bound threads' events to their chats, once the gateway has
     /// started.
     events: Mutex<Option<Sender<Out>>>,
-    /// Held while the paired users or bindings are read and written back.
+    /// Held while the pairings or bindings are read and written back.
     pub(super) records: Mutex<()>,
     /// Held while the connections are stopped and opened, so two restarts cannot overlap.
     pub(super) restarting: Mutex<()>,

@@ -1,4 +1,4 @@
-//! The pane itself: the general rows, a tile per chat app, and the paired people, or the page of
+//! The pane itself: the general rows, a tile per chat app, and the pairings, or the page of
 //! the chat app that is open.
 
 // Rust guideline compliant 2026-10-09
@@ -36,7 +36,7 @@ fn tiles(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
         let (id, label) = (platform.id(), platform.label());
         let enabled = gateway.platform(platform).enabled;
         let status = d
-            .gateways
+            .gateway
             .statuses
             .get(&platform)
             .cloned()
@@ -48,7 +48,7 @@ fn tiles(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
             Status::Connected(_) => ("connected", Some(t.success)),
             Status::Error(_) => ("failed", Some(t.danger)),
         };
-        let open = d.gateways.selected == Some(platform);
+        let open = d.gateway.selected == Some(platform);
         tile(format!("gw-tile-{id}"), format!("{label}, {state}"), &t)
             .aria_expanded(open)
             .border_color(if open { t.accent } else { t.border })
@@ -66,7 +66,7 @@ fn tiles(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
             .child(platform_logo(platform, 22.))
             .child(div().max_w_full().truncate().child(label))
             .on_click(cx.listener(move |d, _, _, cx| {
-                d.gateways.selected = Some(platform);
+                d.gateway.selected = Some(platform);
                 cx.notify();
             }))
     });
@@ -79,14 +79,14 @@ pub fn render(
     cx: &mut Context<SettingsDialog>,
 ) -> AnyElement {
     let t = *theme(cx);
-    if d.gateways.saved.is_none() {
-        d.gateways.saved = Some(HashSet::new());
+    if d.gateway.saved.is_none() {
+        d.gateway.saved = Some(HashSet::new());
         d.read_credentials(cx);
     }
-    if !d.gateways.polling {
-        d.poll_gateways(cx);
+    if !d.gateway.polling {
+        d.poll_gateway(cx);
     }
-    if let Some(each) = d.gateways.selected {
+    if let Some(each) = d.gateway.selected {
         return page(d, each, window, cx);
     }
     let rows = general(d, cx);
@@ -98,16 +98,16 @@ pub fn render(
         .children(rows)
         .child(section_heading("Chat apps", false, &t))
         .child(apps)
-        .child(section_heading("Paired apps", false, &t))
+        .child(section_heading("Pairings", false, &t))
         .child(people)
         .children(
-            d.gateways
+            d.gateway
                 .error
                 .clone()
                 .map(|e| alert("gw-error", e, t.danger)),
         )
         .child(section_heading("Personalities", false, &t))
-        .child(token_row("Folder", Some(&d.gateways.personalities_dir), &t))
+        .child(token_row("Folder", Some(&d.gateway.personalities_dir), &t))
         .child(example(PERSONALITIES_EXAMPLE, &t))
         .into_any_element()
 }

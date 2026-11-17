@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 pub struct NotificationSettings {
     /// What the desktop shows while Patchwork is not the focused window.
     pub desktop: Events,
-    /// What the paired people on the chat apps are sent.
+    /// What the pairings on the chat apps are sent.
     pub chat_apps: Events,
     /// When the chat apps are sent anything.
     pub chat_apps_when: ChatAppsWhen,
