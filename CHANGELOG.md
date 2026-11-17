@@ -3,6 +3,22 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.99] - 2026-11-17
+
+**26.11.99** · 2 changes from 1 contributor
+
+- **Chat replies and naming.** You can see chat replies as they are written and refer to chats by loose name or 'it'
+
+<details>
+<summary>Full changelog</summary>
+
+### Changed
+
+- In Settings → Security, each saved secret now sits in a field of dots with the show button inside it, like the password fields above it. Showing one asks for your password in that same field, where it used to add a row with its own Show button. by [PolarisPyra in #194](https://github.com/PolarisPyra/Patchwork/pull/194)
+- A chat app now gets the reply as it is written instead of a note for every step, and replies run to about 250 characters unless more is needed. Notices about other chats are shorter too. The chat app's logo in the task list moves to the chat its conversation is working with and dims after ten minutes without use. Messages typed on the computer are no longer copied to the chat app. You can name a chat loosely or with a typo, or say "it" for the one you last talked about. The Continue here button and the open command are gone. by [PolarisPyra in #195](https://github.com/PolarisPyra/Patchwork/pull/195)
+
+</details>
+
 ## [26.11.97] - 2026-11-17
 
 **26.11.97** · 3 changes from 1 contributor
