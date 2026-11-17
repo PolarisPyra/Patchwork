@@ -2,8 +2,15 @@
 //! strips of the turns on screen are lit, the ones near the pointer widen, and the turn under it
 //! shows a preview of its message and reply. Clicking a strip, or choosing one with the arrow keys
 //! and Enter, scrolls to that turn.
+//!
+//! A chat with more turns than the rail has room for packs its strips thin and spreads out only
+//! the few around the pointer, or around the turn being read. A day's first turn and the first
+//! turn after a `/compact` have a long strip, and a turn that edited files a longer one than the
+//! rest, so a long rail has a shape to find a place by.
 
 // Rust guideline compliant 2026-10-09
+
+use std::rc::Rc;
 
 use gpui::{
     App, Div, FocusHandle, FontWeight, KeyDownEvent, ListOffset, Pixels, Role, Window, div,
@@ -24,17 +31,28 @@ const MIN_TURNS: usize = 2;
 const ROOM: f32 = 128.;
 /// How far below the transcript's top a chosen turn lands.
 const VIEW_OFFSET: f32 = 24.;
+/// How many turns on each side of the one in the middle a crowded rail spreads out.
+const LENS: usize = 4;
+/// The least room a strip outside that span keeps.
+const MIN_PITCH: f32 = 1.;
 
 /// A message the person sent, at its row, and the last reply text after it.
 pub struct Turn<'a> {
     index: usize,
     ask: &'a str,
     answer: Option<&'a str>,
+    /// The first turn of a day, or the first after a `/compact`.
+    mark: bool,
+    /// The agent edited files in it.
+    edited: bool,
 }
 
 /// The turn under the pointer, and the one chosen with the keys while the rail has focus.
 pub struct RailState {
     hover: Option<usize>,
+    /// On a crowded rail, the turn the pointer spread the strips around and where it sits. It
+    /// stays put while the pointer is among those strips, so each is a full step apart.
+    lens: Option<(usize, f32)>,
     key: Option<usize>,
     focus: FocusHandle,
 }
@@ -43,6 +61,7 @@ impl RailState {
     pub fn new(cx: &mut App) -> Self {
         Self {
             hover: None,
+            lens: None,
             key: None,
             focus: cx.focus_handle(),
         }
@@ -51,6 +70,7 @@ impl RailState {
     /// Forgets the turn under the pointer and the one chosen, which belong to the chat just left.
     pub fn clear(&mut self) {
         self.hover = None;
+        self.lens = None;
         self.key = None;
     }
 }
@@ -82,24 +102,42 @@ pub fn turns_of<'a>(rows: &[&'a Message]) -> Vec<Turn<'a>> {
     let mut turns: Vec<Turn> = Vec::new();
     // A reply to a `/compact` or a goal clear answers that, not the turn before it.
     let mut answering = false;
+    let mut compacted = false;
+    let mut day = None;
     for (index, m) in rows.iter().enumerate() {
         if m.role == MessageRole::User {
             answering = starts_turn(m);
             if answering {
+                let today = day_of(m.created_at);
                 turns.push(Turn {
                     index,
                     ask: &m.text,
                     answer: None,
+                    mark: compacted || day.is_some_and(|day| Some(day) != today),
+                    edited: false,
                 });
+                compacted = false;
+                day = today.or(day);
+            } else if upkeep(&m.text) == Some(Upkeep::Compact) {
+                compacted = true;
             }
-        } else if answering
-            && !m.text.is_empty()
-            && let Some(turn) = turns.last_mut()
-        {
-            turn.answer = Some(&m.text);
+        } else if answering && let Some(turn) = turns.last_mut() {
+            turn.edited |= !m.files.is_empty();
+            if !m.text.is_empty() {
+                turn.answer = Some(&m.text);
+            }
         }
     }
     turns
+}
+
+/// The local day a time falls on, counted in days.
+fn day_of(ms: u64) -> Option<i32> {
+    use chrono::{Datelike, Local, TimeZone};
+    let time = Local
+        .timestamp_millis_opt(i64::try_from(ms).ok()?)
+        .single()?;
+    Some(time.num_days_from_ce())
 }
 
 /// One line of text for a preview, with Markdown's marks taken out.
@@ -152,6 +190,49 @@ fn top_of(index: usize, count: usize, height: f32) -> f32 {
         0.
     } else {
         index as f32 / (count - 1) as f32 * height
+    }
+}
+
+/// Where each strip sits down a rail of `height`, and the span that is spread out. `lens` names
+/// the turn in the middle of that span and where it sits; a rail with room for every turn, or
+/// none for the span, spaces them evenly and has no span.
+fn layout(count: usize, height: f32, lens: Option<(usize, f32)>) -> (Vec<f32>, Option<(f32, f32)>) {
+    let last = count.saturating_sub(1);
+    let even = || (0..count).map(|i| top_of(i, count, height)).collect();
+    let Some((mid, at)) = lens.filter(|&(mid, _)| mid <= last && height < last as f32 * SPACING)
+    else {
+        return (even(), None);
+    };
+    let (above, below) = (mid.min(LENS), (last - mid).min(LENS));
+    let (first, end_turn) = (mid - above, mid + below);
+    let low = above as f32 * SPACING + first as f32 * MIN_PITCH;
+    let high = height - below as f32 * SPACING - (last - end_turn) as f32 * MIN_PITCH;
+    if low > high {
+        return (even(), None);
+    }
+    let at = at.clamp(low, high);
+    let (start, end) = (at - above as f32 * SPACING, at + below as f32 * SPACING);
+    let tops = (0..count)
+        .map(|i| {
+            if i < first {
+                i as f32 / first as f32 * start
+            } else if i <= end_turn {
+                start + (i - first) as f32 * SPACING
+            } else {
+                end + (i - end_turn) as f32 / (last - end_turn) as f32 * (height - end)
+            }
+        })
+        .collect();
+    (tops, Some((start, end)))
+}
+
+/// The strip closest to `y`, of strips listed from the top down.
+fn nearest(tops: &[f32], y: f32) -> usize {
+    let after = tops.partition_point(|&top| top < y);
+    match (after.checked_sub(1), tops.get(after)) {
+        (Some(before), Some(&next)) if y - tops[before] <= next - y => before,
+        (Some(before), None) => before,
+        _ => after,
     }
 }
 
@@ -241,6 +322,14 @@ pub fn turn_rail(
         }
     }
     let focused = w.rail.focus.is_focused(window);
+    // The strips spread around the pointer, or else around the turn chosen or being read.
+    let held = w.rail.hover.is_some() && w.rail.lens.is_some();
+    let lens = w.rail.lens.filter(|_| held).or_else(|| {
+        let turn = w.rail.key.filter(|_| focused).or(current)?;
+        Some((turn, top_of(turn, count, height)))
+    });
+    let (tops, zone) = layout(count, height, lens);
+    let tops: Rc<[f32]> = tops.into();
     let shown = w
         .rail
         .hover
@@ -256,21 +345,36 @@ pub fn turn_rail(
 
     let strips = turns.iter().enumerate().map(|(index, turn)| {
         let distance = shown.map(|s| s.abs_diff(index));
-        let scale = match distance {
+        let near: f32 = match distance {
             Some(0) => 1.,
             Some(1) => 0.667,
             Some(2) => 0.417,
             _ => 0.333,
         };
+        let scale = near.max(if turn.mark {
+            0.6
+        } else if turn.edited {
+            0.45
+        } else {
+            0.
+        });
+        // A strip is no thicker than half the room it has, so packed strips stay apart.
+        let room = [index.checked_sub(1), Some(index + 1)]
+            .into_iter()
+            .flatten()
+            .filter_map(|other| tops.get(other))
+            .map(|other| (other - tops[index]).abs())
+            .fold(SPACING, f32::min);
+        let thick = (room / 2.).clamp(1., 3.);
         let lit = seen.is_some_and(|(first, last)| turn.index >= first && turn.index <= last);
         div()
             .absolute()
             .right_0()
-            .top(px(top_of(index, count, height) - 1.5))
+            .top(px(tops[index] - thick / 2.))
             .w(px(32. * scale))
-            .h(px(3.))
+            .h(px(thick))
             .rounded_full()
-            .bg(if distance == Some(0) {
+            .bg(if distance == Some(0) || turn.mark {
                 t.text_muted
             } else {
                 t.text_subtle
@@ -282,7 +386,7 @@ pub fn turn_rail(
 
     let preview = shown.map(|index| {
         let turn = &turns[index];
-        let y = top_of(index, count, height);
+        let y = tops[index];
         div()
             .absolute()
             .right(px(40.))
@@ -332,10 +436,8 @@ pub fn turn_rail(
     });
 
     let rail_top = w.transcript_list.viewport_bounds().top() + px(top);
-    let index_at = move |y: Pixels| {
-        let progress = (f32::from(y - rail_top) / height.max(1.)).clamp(0., 1.);
-        (progress * (count - 1) as f32).round() as usize
-    };
+    let down = move |y: Pixels| f32::from(y - rail_top);
+    let (tops_move, tops_click) = (Rc::clone(&tops), Rc::clone(&tops));
     let rows_click: Vec<usize> = turns.iter().map(|turn| turn.index).collect();
     Some(
         div()
@@ -356,15 +458,29 @@ pub fn turn_rail(
                     .aria_max_numeric_value(count as f64)
                     .track_focus(&w.rail.focus)
                     .on_mouse_move(cx.listener(move |w, e: &gpui::MouseMoveEvent, _, cx| {
-                        let index = Some(index_at(e.position.y));
-                        if w.rail.hover != index {
-                            w.rail.hover = index;
+                        let y = down(e.position.y);
+                        let among = zone.is_none_or(|(start, end)| {
+                            held && y >= start - SPACING / 2. && y <= end + SPACING / 2.
+                        });
+                        // Among the strips spread out, the pointer takes the closest. Past them
+                        // it takes the turn that far down the chat, and they spread around it.
+                        let (index, lens) = if among {
+                            (nearest(&tops_move, y), w.rail.lens)
+                        } else {
+                            let progress = (y / height.max(1.)).clamp(0., 1.);
+                            let index = (progress * (count - 1) as f32).round() as usize;
+                            (index, Some((index, y)))
+                        };
+                        if w.rail.hover != Some(index) || w.rail.lens != lens {
+                            w.rail.hover = Some(index);
+                            w.rail.lens = lens;
                             cx.notify();
                         }
                     }))
                     .on_hover(cx.listener(|w, hovered: &bool, _, cx| {
                         if !hovered {
                             w.rail.hover = None;
+                            w.rail.lens = None;
                             cx.notify();
                         }
                     }))
@@ -374,7 +490,9 @@ pub fn turn_rail(
                         let index = if e.is_keyboard() {
                             w.rail.key.or(current)
                         } else {
-                            Some(index_at(e.position().y))
+                            w.rail
+                                .hover
+                                .or_else(|| Some(nearest(&tops_click, down(e.position().y))))
                         };
                         if let Some(&row) = index.and_then(|i| rows_click.get(i)) {
                             w.jump_to_row(row, window, cx);
