@@ -114,10 +114,6 @@ impl Core {
                 self.answer_by_id(platform, chat, id, reply.trim());
                 return true;
             }
-            "open" => match self.continue_on_chat(rest, platform, chat) {
-                Ok(()) => return true,
-                Err(error) => format!("Patchwork could not open that chat: {error}"),
-            },
             _ => return false,
         };
         self.say(platform, chat, &reply);

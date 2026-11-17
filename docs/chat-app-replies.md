@@ -88,11 +88,23 @@ The chosen personality's text, or Patchwork's own (VOICE)
 </personality>
 ```
 
-`<chat-app>` never changes. It tells the agent to lead with the answer, report progress as a
-standup update with real names and numbers, and keep formatting light. It also says that
+`<chat-app>` never changes. It tells the agent to lead with the answer, keep a reply to about
+250 characters unless leaving something out would mislead, report progress with real names and
+numbers, and keep formatting light. It also says that
 "tasks" and "what is running" mean Patchwork's chats, to be answered from `list_chats` and
 `read_chat` and never from shell commands, processes, git or logs. `<personality>` sets the
 tone.
+
+Every message to a thread a chat app talks to also ends with `<patchwork-now>`
+(`Core::chat_app_context` in `crates/core/src/gateway/handoff.rs`), whether it starts a turn,
+steers a running one or wakes an idle agent. It repeats the length rule and lists up to 8 other
+chats that are replying, waiting or were active in the last day, each with its title, project,
+state, last activity and `chat_id`. It also names the chat the agent last worked with, for 30
+minutes, so "it" and "that" find it; after that a request has to name its chat. That chat is
+kept in memory, so it is forgotten when Patchwork restarts.
+
+A name given to `read_chat` or `list_chats` also fits a mistyped word: one slip in a word of
+five letters or more, two in one of eight or more.
 
 The blocks go in the user's message, not the system prompt. They carry the same weight as
 anything the user types, so they cannot replace the agent's own instructions or Patchwork's
@@ -309,7 +321,7 @@ connected after the restart, the conversation is told Patchwork is back and on w
 Four are left, for what acts on the conversation itself and needs no model: `/help`, `/new`
 (start the conversation over, or `/new <project>` to talk straight to a new chat in a project),
 `/stop` and `/clear` (start the conversation over and delete its messages in the chat app; only
-Discord deletes them, and in a direct message only Patchwork's own). The buttons under notices send their own (`/open`, `/answer`, `/mute`, `/resume`). The
+Discord deletes them, and in a direct message only Patchwork's own). The buttons under notices send their own (`/answer`, `/mute`, `/resume`). The
 others (`/status`, `/running`, `/threads`, `/use`, `/projects`, `/diff`, `/model`, `/agent`,
 `/plan`, `/access`, `/unmute`) are gone: sent now, they reach the dispatcher as words, which does
 the same through the capabilities. `pass_on` takes the leading slash off a dispatcher's message,

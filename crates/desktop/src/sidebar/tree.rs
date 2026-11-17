@@ -11,7 +11,8 @@ use patchwork_core::gateway::ChatApps;
 use patchwork_core::threads::{ApprovalStatus, Thread};
 use crate::ui::theme::{fs_sm, radius_sm, Theme, theme};
 use crate::ui::{
-    agent_label, agent_logo, button, display_title, format_relative, icon, platform_logo, spinner,
+    agent_label, agent_logo, button, display_title, format_relative, icon, now_ms, platform_logo,
+    spinner,
 };
 use crate::workspace::{Workspace, is_busy};
 
@@ -240,18 +241,14 @@ pub(super) fn thread_row(
         }))
 }
 
-/// The logo of the chat app a chat is continued on, or, dimmed, of the one it was started from.
+/// The logo of the chat app that is on a chat now, dimmed once it has gone unused a while.
 fn chat_app_mark(apps: Option<&ChatApps>, t: &Theme) -> Option<AnyElement> {
     let apps = apps?;
-    let (platform, label, opacity) = if let Some(first) = apps.chats.first() {
-        let mut names: Vec<&str> = apps.chats.iter().map(|b| b.platform.label()).collect();
-        names.dedup();
-        let label = format!("Continued on {}", names.join(", "));
-        (first.platform, label, 1.)
-    } else {
-        let platform = apps.started_on?;
-        (platform, format!("Started on {}", platform.label()), 0.5)
-    };
+    let platform = apps.chats.first()?.platform;
+    let mut names: Vec<&str> = apps.chats.iter().map(|b| b.platform.label()).collect();
+    names.dedup();
+    let label = format!("{} is on this chat", names.join(", "));
+    let opacity = if apps.in_use(now_ms()) { 1. } else { 0.5 };
     Some(
         div()
             .id("chat-app")

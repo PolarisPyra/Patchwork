@@ -48,8 +48,6 @@ pub(super) enum Act {
     OpenFolder,
     Remove,
     Restore,
-    /// Continue the chat in this conversation on a chat app.
-    ContinueOn(Platform, String),
     /// Stop continuing the chat in this conversation on a chat app.
     StopOn(Platform, String),
 }

@@ -103,48 +103,23 @@ impl Workspace {
         items
     }
 
-    /// The items that continue the chat `id` on a chat app, and stop continuing it there.
+    /// The items that stop a chat app's conversation talking to the chat `id`.
     fn chat_app_items(&self, id: &str) -> Vec<Item> {
         let bound = self
             .chat_apps
             .get(id)
             .map_or(&[][..], |apps| apps.chats.as_slice());
-        let mut items: Vec<Item> = Vec::new();
-        for place in &self.chat_places {
-            if bound
-                .iter()
-                .any(|b| b.platform == place.platform && b.chat == place.chat)
-            {
-                continue;
-            }
-            let label = place.platform.label();
-            let shared = self
-                .chat_places
-                .iter()
-                .filter(|p| p.platform == place.platform)
-                .count()
-                > 1;
-            let label = if shared {
-                format!("Continue on {label} with {}", place.name)
-            } else {
-                format!("Continue on {label}")
-            };
-            items.push(Item {
-                label: label.into(),
-                icon: "device-mobile",
-                danger: false,
-                act: Act::ContinueOn(place.platform, place.chat.clone()),
-            });
-        }
-        for b in bound {
-            items.push(Item {
+        bound
+            .iter()
+            // A conversation whose agent only works with this chat talks to another.
+            .filter(|b| b.thread_id == id)
+            .map(|b| Item {
                 label: format!("Stop continuing on {}", b.platform.label()).into(),
                 icon: "x",
                 danger: false,
                 act: Act::StopOn(b.platform, b.chat.clone()),
-            });
-        }
-        items
+            })
+            .collect()
     }
 
     /// The items for rows picked together: favorites and pins when they are all chats or tasks,
@@ -207,9 +182,6 @@ impl Workspace {
         // The press otherwise goes on to focus the window under the row, and the menu, without
         // the focus, hears none of its keys.
         window.prevent_default();
-        // Chat apps connect and drop without telling the window, so where a chat can be continued
-        // is read now.
-        self.chat_places = self.core.chat_places();
         self.context_menu = Some(ContextMenu {
             at: event.position,
             target,
@@ -289,12 +261,6 @@ impl Workspace {
                 return self.open_granular_dialog(scope, None, window, cx);
             }
             (Target::Thread(id), Act::Export) => return self.export_thread(id, cx),
-            (Target::Thread(id), Act::ContinueOn(platform, chat)) => {
-                let (id, platform, chat) = (id.clone(), *platform, chat.clone());
-                let change =
-                    move |core: &patchwork_core::Core| core.continue_on_chat(&id, platform, &chat);
-                return self.change("continue the chat on a chat app", change, cx);
-            }
             (Target::Thread(_), Act::StopOn(platform, chat)) => {
                 let (platform, chat) = (*platform, chat.clone());
                 let change = move |core: &patchwork_core::Core| {

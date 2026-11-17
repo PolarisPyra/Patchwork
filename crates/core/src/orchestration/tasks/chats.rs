@@ -270,6 +270,7 @@ impl Runner {
                 .find(|t| t.id == id)
                 .ok_or("No chat with that id that this chat can read")?
         };
+        core.chat_app_visits(&caller.id, &chat.id);
         Ok(self.progress(chat, project(chat).as_deref()).to_string())
     }
 
@@ -465,16 +466,17 @@ fn target(core: &Core, caller: &Thread, args: &Value) -> Result<Thread, Error> {
         return Err("That is this chat".into());
     }
     let everywhere = core.is_dispatcher(&caller.id);
-    core.store
+    let chat = core
+        .store
         .thread(id)
         .filter(|t| t.parent.is_none() && (everywhere || t.project_id == caller.project_id))
-        .ok_or_else(|| {
-            if everywhere {
-                "No chat with that id; list_chats lists them".into()
-            } else {
-                "No chat with that id in this project".into()
-            }
-        })
+        .ok_or(if everywhere {
+            "No chat with that id; list_chats lists them"
+        } else {
+            "No chat with that id in this project"
+        })?;
+    core.chat_app_visits(&caller.id, &chat.id);
+    Ok(chat)
 }
 
 /// Starts a chat with the caller's access and sends it the prompt: in the caller's project on
@@ -523,6 +525,7 @@ fn start_chat(core: &Arc<Core>, caller: &Thread, args: &Value) -> Result<String,
         });
         return Err(e);
     }
+    core.chat_app_visits(&caller.id, &id);
     if dispatch::watch(core, caller, &id) {
         return Ok(json!({
             "chat_id": id,

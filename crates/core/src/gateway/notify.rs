@@ -16,7 +16,7 @@ use crate::system::now_ms;
 use crate::threads::{Approval, ApprovalStatus, Thread};
 
 /// The most characters of a finished chat's reply a notice shows.
-const REPLY_LIMIT: usize = 1500;
+const REPLY_LIMIT: usize = 300;
 
 /// A request sent to a conversation on a chat app, which it can answer until it is resolved.
 pub(super) struct Notice {
@@ -114,18 +114,12 @@ impl Core {
         }
     }
 
-    /// Sends `text` to the pairings, with buttons to continue the chat or mute it.
+    /// Sends `text` to the pairings, with buttons to mute the chat.
     fn tell_finished(&self, thread: &Thread, text: &str) {
-        let mut buttons = vec![
-            Button {
-                label: "Continue here".to_string(),
-                reply: format!("/open {}", thread.id),
-            },
-            Button {
-                label: "Mute this chat".to_string(),
-                reply: format!("/mute {}", thread.id),
-            },
-        ];
+        let mut buttons = vec![Button {
+            label: "Mute this chat".to_string(),
+            reply: format!("/mute {}", thread.id),
+        }];
         if let Some(project) = &thread.project_id {
             buttons.push(Button {
                 label: "Mute project".to_string(),

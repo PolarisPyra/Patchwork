@@ -140,6 +140,7 @@ impl Core {
             .map(|m| m.text.as_str())
             .collect::<Vec<_>>()
             .join("\n\n");
+        let text = self.chat_app_context(thread_id, text);
         let attachments: Vec<_> = queued.iter().flat_map(|m| m.attachments.clone()).collect();
         let images = provider::load_images(&attachments)?;
         self.store.update_thread(thread_id, |t| {
@@ -242,9 +243,10 @@ impl Core {
         let steered = promoted
             || (message.queued && !self.runner.is_handed_over(message_id) && {
                 let images = provider::load_images(&message.attachments)?;
+                let text = self.chat_app_context(thread_id, message.text.clone());
                 let input = FollowUpInput {
                     message_id,
-                    text: &message.text,
+                    text: &text,
                     attachments: &message.attachments,
                     images: &images,
                     merged: &[],

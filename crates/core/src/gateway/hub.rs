@@ -66,6 +66,15 @@ pub(super) struct State {
     pub notices: Vec<Notice>,
     /// The messages taken lately, oldest first, so one a chat app delivers twice is taken once.
     pub seen: VecDeque<Seen>,
+    /// The chat each thread's agent is working with this turn, by the thread's id, for the
+    /// threads a conversation talks to.
+    pub visiting: HashMap<String, String>,
+    /// When the conversations of each thread last asked for a reply or got one, by the
+    /// thread's id, in epoch milliseconds.
+    pub used: HashMap<String, u64>,
+    /// The chat each thread's agent last worked with and when, in epoch milliseconds, by the
+    /// thread's id. The next turn is told it so that "it" and "that" find it.
+    pub subject: HashMap<String, (String, u64)>,
 }
 
 /// A message the gateway took.
@@ -160,6 +169,7 @@ impl Hub {
         let wanted = matches!(
             event.event,
             AgentEvent::MessageStarted { .. }
+                | AgentEvent::TextDelta { .. }
                 | AgentEvent::ToolStarted { .. }
                 | AgentEvent::ApprovalRequested { .. }
                 | AgentEvent::ApprovalResolved { .. }

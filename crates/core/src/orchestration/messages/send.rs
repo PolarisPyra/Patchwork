@@ -359,7 +359,7 @@ impl Core {
             };
             let (text, role) = self.summon_agents(&thread_id, text, false);
             switched = Some(role);
-            text
+            self.chat_app_context(&thread_id, text)
         };
         // An idle agent this message resumes counts the files its reply changes from now.
         self.runner.rebase_idle(&thread_id);
