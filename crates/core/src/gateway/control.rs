@@ -2,8 +2,11 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::sync::{Arc, PoisonError};
 use std::sync::mpsc::channel;
+use std::sync::{Arc, PoisonError};
+use std::time::{Duration, Instant};
+
+use serde::{Deserialize, Serialize};
 
 use super::discord::Discord;
 use super::hub::spawn;
@@ -15,7 +18,7 @@ use super::qq::Qq;
 use super::signal::Signal;
 use super::slack::Slack;
 use super::telegram::Telegram;
-use super::types::{Connector, PlatformSettings, Status};
+use super::types::{Binding, Connector, PlatformSettings, Status};
 use crate::provider::api::config::{delete_secret, read_secret, store_secret};
 use crate::system::now_ms;
 use crate::{Error, Core};
@@ -31,6 +34,21 @@ const CODE_LENGTH: usize = 6;
 
 /// How many wrong guesses end a pairing code, so it cannot be found by trying them all.
 const MAX_WRONG_CODES: u32 = 5;
+
+/// The app state key of the conversations to tell once Patchwork is back from an update.
+const AFTER_UPDATE: &str = "gateway.afterUpdate";
+
+/// How long the conversations' chat apps are given to connect after an update.
+const BACK_WAIT: Duration = Duration::from_secs(90);
+
+/// Who asked for an update from a chat app, kept across the restart into it.
+#[derive(Debug, Serialize, Deserialize)]
+struct AfterUpdate {
+    /// The version that was running.
+    from: String,
+    /// The conversations to tell.
+    chats: Vec<Binding>,
+}
 
 impl Core {
     /// Where each platform's connection stands; platforms not listed are off.
@@ -190,6 +208,77 @@ impl Core {
                         .insert(platform, Status::Error(error.to_string()));
                 }
             }
+        }
+        self.tell_back_from_update();
+    }
+
+    /// Notes the conversations of the chat `thread_id` to tell once Patchwork is back from the
+    /// update it is about to restart into.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the note cannot be saved.
+    pub(crate) fn note_update_asked(&self, thread_id: &str) -> Result<(), Error> {
+        let note = AfterUpdate {
+            from: env!("CARGO_PKG_VERSION").to_string(),
+            chats: self.bound_chats(thread_id),
+        };
+        let json = serde_json::to_string(&note).map_err(|e| e.to_string())?;
+        self.store.set_state(AFTER_UPDATE, &json)
+    }
+
+    /// Tells the conversations that asked for an update that Patchwork is back, once, when
+    /// their chat apps are connected.
+    fn tell_back_from_update(self: &Arc<Self>) {
+        let Some(note) = self
+            .store
+            .state(AFTER_UPDATE)
+            .and_then(|json| serde_json::from_str::<AfterUpdate>(&json).ok())
+        else {
+            return;
+        };
+        // Cleared first, so a restart of the connections does not tell them twice.
+        if let Err(error) = self.store.set_state(AFTER_UPDATE, "") {
+            log::warn!(error:% = error; "could not clear the update note: {{error}}");
+            return;
+        }
+        let now = env!("CARGO_PKG_VERSION");
+        let text = if note.from == now {
+            format!("Patchwork is back. It is still on {now}; the update did not install.")
+        } else {
+            format!("Patchwork is back, updated from {} to {now}.", note.from)
+        };
+        let core = Arc::clone(self);
+        let spawned = std::thread::Builder::new()
+            .name("gateway-back".into())
+            .spawn(move || {
+                let until = Instant::now() + BACK_WAIT;
+                let mut waiting = note.chats;
+                while !waiting.is_empty() && Instant::now() < until {
+                    let connected: Vec<Platform> = core
+                        .gateway_status()
+                        .into_iter()
+                        .filter(|(_, status)| matches!(status, Status::Connected(_)))
+                        .map(|(platform, _)| platform)
+                        .collect();
+                    waiting.retain(|chat| {
+                        let ready = connected.contains(&chat.platform);
+                        if ready {
+                            core.say(chat.platform, &chat.chat, &text);
+                        }
+                        !ready
+                    });
+                    std::thread::sleep(Duration::from_millis(500));
+                }
+                for chat in waiting {
+                    log::warn!(
+                        platform = chat.platform.id();
+                        "{{platform}} did not connect in time to say Patchwork is back"
+                    );
+                }
+            });
+        if let Err(error) = spawned {
+            log::warn!(error:% = error; "could not say Patchwork is back: {{error}}");
         }
     }
 }

@@ -118,6 +118,9 @@ pub struct ChatPlace {
 #[derive(Debug, Clone)]
 pub struct Incoming {
     pub platform: Platform,
+    /// The platform's own id of the message or button press, when it gives one. A message that
+    /// arrives again under the same id is taken once.
+    pub id: Option<String>,
     /// The conversation it came in, which replies go to.
     pub chat: String,
     /// The sender's id on the platform.
@@ -170,7 +173,7 @@ pub(crate) trait Connector: Send + Sync {
     /// Returns an error when the platform does not take the change.
     fn edit(&self, chat: &str, id: &str, text: &str) -> Result<(), Error>;
 
-    /// Sends the text file `name` holding `bytes` to `chat`, with `caption` beside it.
+    /// Sends the file `name` holding `bytes` to `chat`, with `caption` beside it.
     ///
     /// # Errors
     ///

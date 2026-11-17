@@ -7,6 +7,7 @@
 pub(in crate::orchestration) mod background;
 pub(in crate::orchestration) mod chats;
 pub(in crate::orchestration) mod delegate;
+pub(in crate::orchestration) mod dispatch;
 pub(in crate::orchestration) mod jobs;
 pub(in crate::orchestration) mod review;
 pub(in crate::orchestration) mod subagents;

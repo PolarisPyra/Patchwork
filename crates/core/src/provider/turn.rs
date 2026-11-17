@@ -50,6 +50,9 @@ pub struct TurnSpec<'a> {
     pub agents: &'a [crate::extensions::agents::Agent],
     /// The enabled hooks the agent runs on its own events.
     pub hooks: &'a [crate::extensions::hooks::AgentHook],
+    /// The thread is a chat app's dispatcher: its agent gets Patchwork's chat tools and nothing
+    /// of the computer, so no built-in tools, other servers, skills or hooks.
+    pub dispatcher: bool,
 }
 
 /// An attached image, base64-encoded for the agent's input.
@@ -233,6 +236,11 @@ pub fn goal_command(text: &str) -> Option<GoalCommand<'_>> {
 #[must_use]
 pub fn turn_args(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
     match agent {
+        AgentKind::Claude if spec.dispatcher => [
+            claude::turn_args(spec),
+            crate::provider::mcp::overrides::dispatcher_overrides(spec.thread_id),
+        ]
+        .concat(),
         AgentKind::Claude => [
             claude::turn_args(spec),
             crate::provider::mcp::overrides::overrides(agent, spec.root, spec.thread_id),

@@ -11,7 +11,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use serde_json::{Value, json};
 
-use super::net::{client, failed, json, stream_client};
+use super::net::{client, failed, json, mime, stream_client};
 use super::platform::Platform;
 use super::types::{Button, Connector, Incoming, Listener};
 use crate::Error;
@@ -124,7 +124,12 @@ impl Connector for Signal {
         let mut params = Self::to(chat);
         params["message"] = json!(caption);
         params["attachments"] = json!([format!(
-            "data:text/plain;filename={name};base64,{}",
+            "data:{};filename={name};base64,{}",
+            if mime(name) == "image/png" {
+                "image/png"
+            } else {
+                "text/plain"
+            },
             STANDARD.encode(bytes)
         )]);
         self.call("send", params).map(drop)
@@ -181,6 +186,10 @@ fn incoming(event: &Value) -> Option<Incoming> {
     }
     Some(Incoming {
         platform: Platform::Signal,
+        // Signal names a message by when its sender sent it.
+        id: envelope["timestamp"]
+            .as_u64()
+            .map(|at| format!("{user}:{at}")),
         chat,
         user: user.to_string(),
         name: envelope["sourceName"].as_str().unwrap_or(user).to_string(),

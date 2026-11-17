@@ -397,8 +397,9 @@ fn main() {
             // Agent events arrive on the core's threads and are applied here, in order.
             cx.spawn(async move |cx| {
                 while let Some(envelope) = received.next().await {
-                    let applied =
-                        window.update(cx, |workspace, _, cx| workspace.on_event(envelope, cx));
+                    let applied = window.update(cx, |workspace, window, cx| {
+                        workspace.on_event(envelope, window, cx);
+                    });
                     if applied.is_err() {
                         break;
                     }

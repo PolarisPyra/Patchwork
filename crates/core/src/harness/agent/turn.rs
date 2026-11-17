@@ -92,6 +92,10 @@ pub(super) struct Request {
     /// The system prompt the user gave the provider in Settings.
     #[serde(default)]
     pub(super) system_prompt: String,
+    /// The turn is a chat app's dispatcher: `instructions` is its whole system prompt, and its
+    /// only tools are `mcp_tools`.
+    #[serde(default)]
+    pub(super) dispatcher: bool,
     /// `compact` summarizes the conversation instead of sending a message.
     #[serde(default)]
     pub(super) command: Option<String>,
@@ -264,7 +268,11 @@ impl Agent {
             .build()
             .into();
         crate::computer::set_enabled(request.computer_use);
-        let mut tools = crate::harness::tools::definitions(request.plan);
+        let mut tools = if request.dispatcher {
+            json!([])
+        } else {
+            crate::harness::tools::definitions(request.plan)
+        };
         if let Some(list) = tools.as_array_mut() {
             list.extend(request.mcp_tools.iter().map(|t| {
                 json!({"type": "function", "function": {"name": t.name, "description": t.description, "parameters": t.parameters}})

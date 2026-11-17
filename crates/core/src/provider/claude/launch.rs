@@ -37,6 +37,28 @@ pub fn launch_args(settings: &Settings, hooks: &[AgentHook], instructions: Strin
     args
 }
 
+/// Builds the arguments that launch a chat app's dispatcher.
+///
+/// `prompt` replaces Claude's own system prompt, and Claude gets none of its built-in tools,
+/// slash commands or skills, and none of the user's settings, plugins or hooks, so the only tools
+/// left are the ones on Patchwork's server.
+#[must_use]
+pub fn dispatcher_args(prompt: &str) -> Vec<String> {
+    [
+        "--system-prompt-snapshot",
+        "off",
+        "--system-prompt",
+        prompt,
+        "--tools",
+        "",
+        "--disable-slash-commands",
+        "--setting-sources",
+        "",
+    ]
+    .map(String::from)
+    .into()
+}
+
 /// Arguments that pick a resumed session up from `point` rather than from its newest message,
 /// branching it into a new session for a fork.
 #[must_use]

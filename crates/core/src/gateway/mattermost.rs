@@ -82,6 +82,7 @@ impl Mattermost {
             .collect();
         Some(Incoming {
             platform: Platform::Mattermost,
+            id: post["id"].as_str().map(str::to_string),
             chat: post["channel_id"].as_str()?.to_string(),
             user: user.to_string(),
             name: data["sender_name"].as_str().unwrap_or(user).to_string(),

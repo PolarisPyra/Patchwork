@@ -5,16 +5,25 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
-use super::hub::Place;
+use super::hub::{Place, Seen};
 use super::outbound::savable;
 use super::platform::Platform;
 use super::types::Incoming;
 use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::permissions::{Effect, PermissionRule, PermissionScope, RuleRef};
+use crate::provider::AgentKind;
 use crate::system::new_id;
 use crate::threads::{Approval, ApprovalStatus, NewThread, Part, Question, Role, Thread};
 use crate::{Error, Core};
+
+/// How many taken messages the gateway remembers, to know one that arrives again.
+const REMEMBERED: usize = 512;
+
+/// How long the same words from the same sender count as one message, on a platform that gives
+/// its messages no id.
+const SAME_WORDS: Duration = Duration::from_secs(3);
 
 /// Words that allow what the agent asks.
 const ALLOW: &[&str] = &["allow", "yes", "y", "ok", "approve"];
@@ -23,11 +32,15 @@ const ALLOW: &[&str] = &["allow", "yes", "y", "ok", "approve"];
 const ALWAYS: &str = "always";
 
 /// Words that turn down what the agent asks.
-const DENY: &[&str] = &["deny", "no", "n", "reject", "cancel"];
+pub(super) const DENY: &[&str] = &["deny", "no", "n", "reject", "cancel"];
 
 /// What the agent of a chat run from a chat app is told about talking over one.
 const CHAT_APP: &str = "You are talking with the person over a chat app while they are away from \
 Patchwork. Lead with the answer.
+When they ask what is running, what the tasks are or what is going on in a project, they mean \
+Patchwork's chats, the tasks its agents are working on. Answer from the list_chats and read_chat \
+tools, with each chat's name and what it is doing. Do not look with shell commands, processes, \
+git or log files, and do not ask them to approve any.
 When they ask how something is going, report it the way a coworker gives a standup update: what \
 it is working on, what is done, what is left, and anything stuck or waiting on them, in a few \
 short lines with real names, numbers and file names. Say it plainly when something is broken or \
@@ -68,6 +81,13 @@ impl Core {
 
     /// Handles a message from a chat app, on the thread of its connection.
     pub(super) fn gateway_incoming(self: &Arc<Self>, message: &Incoming) {
+        if self.repeated(message) {
+            log::info!(
+                platform:? = message.platform, id:? = message.id;
+                "dropped a chat app message that arrived twice"
+            );
+            return;
+        }
         if !self.is_paired(message.platform, &message.user) {
             self.pair(message);
             return;
@@ -93,6 +113,39 @@ impl Core {
             return;
         }
         self.pass_on(message, thread);
+    }
+
+    /// Whether the gateway took this message already, and notes it when it did not.
+    ///
+    /// A chat app sends a message again when its connection drops before Patchwork's answer
+    /// reaches it, and acting on both would run what the person asked for twice.
+    fn repeated(&self, message: &Incoming) -> bool {
+        let now = Instant::now();
+        let (key, by_id) = match &message.id {
+            Some(id) => (id.clone(), true),
+            None => (format!("{}\n{}", message.user, message.text), false),
+        };
+        let mut state = self.gateway.lock();
+        let again = state.seen.iter().any(|seen| {
+            seen.platform == message.platform
+                && seen.chat == message.chat
+                && seen.by_id == by_id
+                && seen.key == key
+                && (by_id || now.duration_since(seen.at) < SAME_WORDS)
+        });
+        if !again {
+            if state.seen.len() >= REMEMBERED {
+                state.seen.pop_front();
+            }
+            state.seen.push_back(Seen {
+                platform: message.platform,
+                chat: message.chat.clone(),
+                key,
+                by_id,
+                at: now,
+            });
+        }
+        again
     }
 
     /// Pairs the sender when the message is the pairing code, and otherwise tells them once how
@@ -127,7 +180,7 @@ impl Core {
     }
 
     /// The request the agent in `thread_id` is waiting on the user to answer.
-    fn waiting_approval(&self, thread_id: &str) -> Option<Approval> {
+    pub(super) fn waiting_approval(&self, thread_id: &str) -> Option<Approval> {
         if !self.runner.is_running(thread_id) {
             return None;
         }
@@ -278,6 +331,34 @@ impl Core {
                 }
             },
         };
+        // A dispatcher's access is the one in Settings, so changing it there or from a chat
+        // app reaches the conversations that already have one.
+        let access = self.store.settings().gateway.access;
+        if !new
+            && self.is_dispatcher(&id)
+            && self
+                .store
+                .thread(&id)
+                .is_some_and(|t| t.access_mode != access)
+        {
+            match self.set_thread_access_mode(&id, access) {
+                Ok(()) => self.emit(AgentEventEnvelope {
+                    thread_id: id.clone(),
+                    event: AgentEvent::OptionsChanged,
+                }),
+                Err(error) => {
+                    log::warn!(error:% = error; "could not set a chat's access: {{error}}");
+                }
+            }
+        }
+        // A dispatcher takes words, not commands: its agent would answer a leading slash itself,
+        // as a command it does not have.
+        let words = text.trim_start_matches('/');
+        let text = if self.is_dispatcher(&id) && !words.is_empty() {
+            words.to_string()
+        } else {
+            text
+        };
         let queue = self.runner.is_running(&id) && !self.store.settings().steer_while_working;
         match self.send_message_from(id.clone(), text, attachments, queue, Some((platform, chat))) {
             Ok(_) => {
@@ -304,8 +385,12 @@ impl Core {
         }
     }
 
-    /// Starts a thread for a chat app conversation, with the gateway's project and access, and
-    /// binds the conversation to it.
+    /// Starts a thread for a chat app conversation and binds the conversation to it.
+    ///
+    /// Without a place picked by `/new`, the thread is a dispatcher: it has no project and its
+    /// agent drives Patchwork's chats without reaching the computer. Only Claude and Patchwork's
+    /// own agent can be launched that way; with neither set up, and after `/new <project>` or
+    /// `/new chat`, the thread is a working chat with the gateway's access.
     fn open_gateway_thread(
         self: &Arc<Self>,
         platform: Platform,
@@ -318,13 +403,23 @@ impl Core {
             .chats
             .get_mut(&(platform, chat.to_string()))
             .and_then(|c| c.project.take());
+        let default = settings.default_agent();
+        let dispatcher = if chosen.is_some() {
+            None
+        } else {
+            [default, AgentKind::Claude, AgentKind::Api]
+                .into_iter()
+                .filter(|agent| matches!(agent, AgentKind::Claude | AgentKind::Api))
+                .find(|agent| *agent == default || settings.agents.contains(agent))
+        };
         let project_id = match chosen {
             Some(Place::Chat) => None,
             Some(Place::Project(id)) => Some(id),
+            None if dispatcher.is_some() => None,
             None => settings.gateway.project_id.clone(),
         }
         .filter(|id| settings.projects.iter().any(|p| &p.id == id));
-        let agent = settings.default_agent();
+        let agent = dispatcher.unwrap_or(default);
         let thread = self.create_thread(NewThread {
             id: None,
             project_id,
@@ -337,6 +432,12 @@ impl Core {
         })?;
         let thread = self.store.thread(&thread.id).unwrap_or(thread);
         let id = thread.id.clone();
+        if dispatcher.is_some()
+            && let Err(error) = self.mark_dispatcher(&id)
+        {
+            self.delete_thread(&id);
+            return Err(error);
+        }
         self.emit(AgentEventEnvelope {
             thread_id: id.clone(),
             event: AgentEvent::ThreadCreated { thread },
@@ -348,7 +449,7 @@ impl Core {
 
 /// The answers in `text` to `questions`: one line per question, each the numbers of the options
 /// picked or the answer in words.
-fn answers(questions: &[Question], text: &str) -> HashMap<String, Vec<String>> {
+pub(super) fn answers(questions: &[Question], text: &str) -> HashMap<String, Vec<String>> {
     let parts: Vec<&str> = if questions.len() == 1 {
         vec![text.trim()]
     } else {

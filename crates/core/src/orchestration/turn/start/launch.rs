@@ -165,15 +165,31 @@ impl Runner {
         };
         let sends_context = context.is_some();
         let settings = core.store.settings();
-        let skills = crate::extensions::skills::enabled(&settings);
+        // A chat app's dispatcher has Patchwork's chat tools and nothing of the computer, which
+        // only the agents that can be launched without their own tools can promise.
+        let dispatcher = core.is_dispatcher(&thread_id);
+        if dispatcher && !matches!(agent, AgentKind::Claude | AgentKind::Api) {
+            return Err("A chat app's own chat runs on Claude or Patchwork's agent only,                         since the others cannot be kept from the computer.                         Switch it with /agent claude, or start a chat in a project with /new <project>"
+                .into());
+        }
+        let skills = if dispatcher {
+            Vec::new()
+        } else {
+            crate::extensions::skills::enabled(&settings)
+        };
         // A message that names a skill as "$name" anywhere reaches the agent in the form it runs.
         let text = match crate::extensions::skills::invoked(&text, &skills) {
             Some((skill, rest)) => crate::extensions::skills::invocation(agent, &skill, rest),
             None => text,
         };
         // And with the roles of the custom agents it summons as "&name", and the chat's own.
-        let (text, switched) = core.summon_agents(&thread_id, text, session_id.is_none());
-        core.told_role(&thread_id, switched);
+        let text = if dispatcher {
+            text
+        } else {
+            let (text, switched) = core.summon_agents(&thread_id, text, session_id.is_none());
+            core.told_role(&thread_id, switched);
+            text
+        };
         let text = core.chat_app_voice(&thread_id, text, session_id.is_none());
         let text = match context {
             Some(context) => format!("{context}{text}"),
@@ -182,6 +198,7 @@ impl Runner {
         // Codex takes its instructions as the thread's developer instructions; Claude takes them as
         // launch arguments. OpenCode and Antigravity get only the user's system prompt.
         let instructions = match agent {
+            _ if dispatcher => Some(crate::threads::chat_tools::DISPATCHER.to_string()),
             AgentKind::Codex => Some(crate::orchestration::agent_instructions(
                 &settings,
                 AgentKind::Codex,
@@ -202,15 +219,24 @@ impl Runner {
         };
         // Codex and OpenCode load skills from a folder of their own; Claude's comes with its launch.
         let skills_dir = match agent {
+            _ if dispatcher => None,
             AgentKind::Codex => crate::extensions::skills::sync(&settings, "codex"),
             AgentKind::OpenCode => crate::extensions::skills::sync(&settings, "opencode"),
             AgentKind::Claude | AgentKind::Antigravity | AgentKind::Api => None,
         }
         .map(|cli| cli.join("skills").to_string_lossy().into_owned());
-        let guarded = crate::permissions::guarded(&settings.permissions, project_id.as_deref());
-        let hooks = crate::extensions::hooks::agent_hooks(&settings);
+        // A dispatcher runs none of the user's hooks or custom agents, which could run commands.
+        let (guarded, hooks) = if dispatcher {
+            (Vec::new(), Vec::new())
+        } else {
+            (
+                crate::permissions::guarded(&settings.permissions, project_id.as_deref()),
+                crate::extensions::hooks::agent_hooks(&settings),
+            )
+        };
         // The custom agents, for the CLIs that can start them as subagents.
         let agents = match agent {
+            _ if dispatcher => Vec::new(),
             AgentKind::Claude | AgentKind::Codex | AgentKind::OpenCode => {
                 core.thread_agents(&thread_id)
             }
@@ -240,6 +266,7 @@ impl Runner {
             guarded: &guarded,
             agents: &agents,
             hooks: &hooks,
+            dispatcher,
         };
 
         // Agents often edit files through the shell, so changes are also found by
@@ -259,7 +286,11 @@ impl Runner {
             }
         }
         let mut args = provider::turn_args(agent, &spec);
-        if agent == AgentKind::Claude {
+        if agent == AgentKind::Claude && dispatcher {
+            args.extend(crate::provider::claude::launch::dispatcher_args(
+                crate::threads::chat_tools::DISPATCHER,
+            ));
+        } else if agent == AgentKind::Claude {
             args.extend(crate::provider::claude::launch::launch_args(
                 &settings,
                 &hooks,
@@ -267,11 +298,11 @@ impl Runner {
             ));
             args.extend(crate::provider::claude::launch::permission_args());
             args.extend(crate::provider::claude::launch::agents_args(&agents, &root));
-            // After an undo or a fork the session goes on from the reply they left last. The
-            // point is forgotten once the session reports in, as it then goes on from there.
-            if let Some(point) = &point {
-                args.extend(crate::provider::claude::launch::resume_point_args(point));
-            }
+        }
+        // After an undo or a fork the session goes on from the reply they left last. The
+        // point is forgotten once the session reports in, as it then goes on from there.
+        if let Some(point) = &point {
+            args.extend(crate::provider::claude::launch::resume_point_args(point));
         }
         // The chat's own pick for the subagents its CLI starts, where the CLI takes one.
         let sub = crate::threads::sub_pick(&core.store, &settings, &thread_id, agent);
@@ -446,6 +477,7 @@ impl Runner {
             guarded,
             agents,
             hooks,
+            dispatcher,
         };
         self.turns
             .lock()

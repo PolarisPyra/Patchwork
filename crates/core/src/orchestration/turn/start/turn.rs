@@ -89,6 +89,8 @@ pub(in crate::orchestration) struct Turn {
     pub(in crate::orchestration) agents: Vec<crate::extensions::agents::Agent>,
     /// What `spec` passes as `TurnSpec::hooks`.
     pub(in crate::orchestration) hooks: Vec<crate::extensions::hooks::AgentHook>,
+    /// What `spec` passes as `TurnSpec::dispatcher`.
+    pub(in crate::orchestration) dispatcher: bool,
 }
 
 impl Turn {
@@ -171,6 +173,7 @@ impl Turn {
             guarded: &self.guarded,
             agents: &self.agents,
             hooks: &self.hooks,
+            dispatcher: self.dispatcher,
         }
     }
 }

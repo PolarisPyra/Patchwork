@@ -12,6 +12,7 @@ mod code;
 mod contrast;
 mod foreign;
 mod library;
+mod preview;
 mod prompt;
 mod schedule;
 mod share;
@@ -20,7 +21,9 @@ mod watch;
 
 pub use applied::{Density, Follow, ProjectLook};
 pub use code::{CodeTheme, CodeThemeFile, Syntax};
+pub(crate) use library::free_theme_id;
 pub use library::init;
+pub(crate) use prompt::THEME_FORMAT;
 pub use schedule::{clock_minutes, clock_text};
 pub use share::{Imported, ImportedKind};
 pub use types::{

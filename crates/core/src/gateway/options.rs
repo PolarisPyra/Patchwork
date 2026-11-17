@@ -1,5 +1,5 @@
-//! The commands that change what the chat a conversation talks to runs with: its agent, model,
-//! access and plan mode.
+//! What a chat runs with, as it is changed from a chat app: its agent, model, access and plan
+//! mode.
 
 // Rust guideline compliant 2026-10-09
 
@@ -11,7 +11,7 @@ use crate::threads::{AccessMode, Thread};
 use crate::{Core, Error};
 
 /// The access modes, by the names a chat app gives them.
-const ACCESS: [(&str, AccessMode); 4] = [
+pub(crate) const ACCESS: [(&str, AccessMode); 4] = [
     ("supervised", AccessMode::Supervised),
     ("auto-edits", AccessMode::AutoAcceptEdits),
     ("auto", AccessMode::Auto),
@@ -19,47 +19,44 @@ const ACCESS: [(&str, AccessMode); 4] = [
 ];
 
 impl Core {
-    /// Runs the option command `word` with `rest` on the chat `thread_id`, and returns what to
-    /// tell the conversation. With nothing after the command, it shows the current options.
-    pub(super) fn thread_option(&self, word: &str, rest: &str, thread_id: Option<&str>) -> String {
-        let Some(thread) = thread_id.and_then(|id| self.store.thread(id)) else {
-            return "No chat yet. Your next message starts one.".to_string();
-        };
-        if rest.is_empty() {
-            return options(&thread);
-        }
-        let changed = match word {
+    /// Sets what `thread` runs with: its `model`, `agent` (with a model after its name), `plan`
+    /// mode (on or off) or `access`, as `word` says.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `value` is not one the option takes, or the change cannot be saved.
+    pub(crate) fn set_chat_option(
+        &self,
+        thread: &Thread,
+        word: &str,
+        value: &str,
+    ) -> Result<(), Error> {
+        match word {
             "model" => {
-                let model = Some(rest.to_string()).filter(|m| !m.eq_ignore_ascii_case("default"));
-                self.set_thread_model(&thread.id, thread.agent, model)
+                let model = Some(value.to_string()).filter(|m| !m.eq_ignore_ascii_case("default"));
+                self.set_thread_model(&thread.id, thread.agent, model)?;
             }
-            "agent" => self.switch_agent_named(&thread, rest),
-            "plan" => match rest.to_lowercase().as_str() {
-                "on" => self.set_thread_plan_mode(&thread.id, true),
-                "off" => self.set_thread_plan_mode(&thread.id, false),
-                _ => return "Send /plan on or /plan off.".to_string(),
+            "agent" => self.switch_agent_named(thread, value)?,
+            "plan" => match value.to_lowercase().as_str() {
+                "on" => self.set_thread_plan_mode(&thread.id, true)?,
+                "off" => self.set_thread_plan_mode(&thread.id, false)?,
+                _ => return Err("Plan mode is on or off".into()),
             },
             "access" => {
-                let lower = rest.to_lowercase();
+                let lower = value.to_lowercase();
                 let Some((_, mode)) = ACCESS.iter().find(|(name, _)| *name == lower) else {
                     let names: Vec<&str> = ACCESS.iter().map(|(name, _)| *name).collect();
-                    return format!("Send /access with one of: {}.", names.join(", "));
+                    return Err(format!("Access is one of: {}", names.join(", ")).into());
                 };
-                self.set_thread_access_mode(&thread.id, *mode)
+                self.set_thread_access_mode(&thread.id, *mode)?;
             }
-            _ => return String::new(),
-        };
-        if let Err(error) = changed {
-            return format!("Patchwork could not change that: {error}");
+            _ => return Err(format!("A chat has no option {word}").into()),
         }
         self.emit(AgentEventEnvelope {
             thread_id: thread.id.clone(),
             event: AgentEvent::OptionsChanged,
         });
-        match self.store.thread(&thread.id) {
-            Some(thread) => options(&thread),
-            None => "Changed.".to_string(),
-        }
+        Ok(())
     }
 
     /// Moves `thread` to the agent `rest` names, with the model after its name or the agent's
@@ -83,7 +80,7 @@ impl Core {
 }
 
 /// What `thread` runs with, as a chat app is shown it.
-fn options(thread: &Thread) -> String {
+pub(crate) fn options(thread: &Thread) -> String {
     let access = ACCESS
         .iter()
         .find(|(_, mode)| *mode == thread.access_mode)

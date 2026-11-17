@@ -177,13 +177,27 @@ pub(crate) fn multipart(
     }
     body.extend_from_slice(
         format!(
-            "--{boundary}\r\nContent-Disposition: form-data; name=\"{field}\"; filename=\"{name}\"\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n"
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"{field}\"; filename=\"{name}\"\r\nContent-Type: {}\r\n\r\n",
+            mime(name)
         )
         .as_bytes(),
     );
     body.extend_from_slice(bytes);
     body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
     (format!("multipart/form-data; boundary={boundary}"), body)
+}
+
+/// The media type of the file `name` Patchwork sends: a picture when it ends in `.png`, and text
+/// otherwise.
+pub(super) fn mime(name: &str) -> &'static str {
+    let picture = std::path::Path::new(name)
+        .extension()
+        .is_some_and(|end| end.eq_ignore_ascii_case("png"));
+    if picture {
+        "image/png"
+    } else {
+        "text/plain; charset=utf-8"
+    }
 }
 
 /// Splits `text` into pieces of at most `limit` characters, at line breaks where it can.

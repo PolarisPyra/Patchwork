@@ -20,6 +20,12 @@ const USERS: &str = "gateway.users";
 /// The app state key of the chats bound to threads.
 const BINDINGS: &str = "gateway.bindings";
 
+/// The app state key of the ids of the dispatcher threads.
+const DISPATCHERS: &str = "gateway.dispatchers";
+
+/// The app state key of the threads a conversation is told about without talking to them.
+const WATCHES: &str = "gateway.watches";
+
 impl Core {
     /// The people allowed to use Patchwork from a chat app.
     #[must_use]
@@ -138,13 +144,75 @@ impl Core {
         }
     }
 
-    /// Forgets the chats bound to a thread that was deleted.
+    /// Forgets the chats bound to a thread that was deleted, and what else was kept about it.
     pub(super) fn unbind_thread(&self, thread_id: &str) {
         let saved = self.change_list(BINDINGS, |list: &mut Vec<Binding>| {
             list.retain(|b| b.thread_id != thread_id);
         });
         if let Err(error) = saved {
             log::warn!(error:% = error; "could not save a gateway chat's thread: {{error}}");
+        }
+        self.unwatch(thread_id);
+        if self.is_dispatcher(thread_id) {
+            let saved = self.change_list(DISPATCHERS, |list: &mut Vec<String>| {
+                list.retain(|id| id != thread_id);
+            });
+            if let Err(error) = saved {
+                log::warn!(error:% = error; "could not forget a dispatcher: {{error}}");
+            }
+        }
+    }
+
+    /// Whether `thread_id` is a dispatcher: a chat app's chat whose agent has Patchwork's tools
+    /// and nothing of the computer.
+    pub(crate) fn is_dispatcher(&self, thread_id: &str) -> bool {
+        self.read_list::<String>(DISPATCHERS)
+            .iter()
+            .any(|id| id == thread_id)
+    }
+
+    /// Makes `thread_id` a dispatcher.
+    pub(super) fn mark_dispatcher(&self, thread_id: &str) -> Result<(), Error> {
+        self.change_list(DISPATCHERS, |list: &mut Vec<String>| {
+            list.push(thread_id.to_string());
+        })
+    }
+
+    /// Has `chat` told when `thread_id` asks something or finishes its reply.
+    pub(crate) fn watch_chat(&self, thread_id: &str, platform: Platform, chat: &str) {
+        let saved = self.change_list(WATCHES, |list: &mut Vec<Binding>| {
+            let watch = Binding {
+                platform,
+                chat: chat.to_string(),
+                thread_id: thread_id.to_string(),
+            };
+            if !list.contains(&watch) {
+                list.push(watch);
+            }
+        });
+        if let Err(error) = saved {
+            log::warn!(error:% = error; "could not save a watched chat: {{error}}");
+        }
+    }
+
+    /// The conversations told about `thread_id`.
+    pub(super) fn watchers(&self, thread_id: &str) -> Vec<Binding> {
+        self.read_list::<Binding>(WATCHES)
+            .into_iter()
+            .filter(|b| b.thread_id == thread_id)
+            .collect()
+    }
+
+    /// Stops telling anyone about `thread_id`.
+    pub(super) fn unwatch(&self, thread_id: &str) {
+        if self.watchers(thread_id).is_empty() {
+            return;
+        }
+        let saved = self.change_list(WATCHES, |list: &mut Vec<Binding>| {
+            list.retain(|b| b.thread_id != thread_id);
+        });
+        if let Err(error) = saved {
+            log::warn!(error:% = error; "could not forget a watched chat: {{error}}");
         }
     }
 

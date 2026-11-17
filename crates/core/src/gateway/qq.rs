@@ -177,6 +177,7 @@ impl Qq {
         }
         Some(Incoming {
             platform: Platform::Qq,
+            id: data["id"].as_str().map(str::to_string),
             chat,
             user: user.to_string(),
             name: author["username"].as_str().unwrap_or(user).to_string(),

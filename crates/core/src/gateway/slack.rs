@@ -8,7 +8,7 @@ use std::sync::{Mutex, PoisonError};
 
 use serde_json::{Value, json};
 
-use super::net::{Socket, client, connect, download, failed, json, read, write};
+use super::net::{Socket, client, connect, download, failed, json, mime, read, write};
 use super::platform::Platform;
 use super::types::{Button, Connector, Incoming, Listener};
 use crate::Error;
@@ -117,6 +117,10 @@ impl Slack {
         let user = event["user"].as_str()?.to_string();
         Some(Incoming {
             platform: Platform::Slack,
+            id: event["client_msg_id"]
+                .as_str()
+                .or_else(|| event["ts"].as_str())
+                .map(str::to_string),
             chat: event["channel"].as_str()?.to_string(),
             name: user.clone(),
             user,
@@ -141,6 +145,9 @@ impl Slack {
         let user = &payload["user"];
         Some(Incoming {
             platform: Platform::Slack,
+            id: payload["actions"][0]["action_ts"]
+                .as_str()
+                .map(str::to_string),
             chat,
             user: user["id"].as_str()?.to_string(),
             name: user["username"].as_str().unwrap_or_default().to_string(),
@@ -214,7 +221,7 @@ impl Connector for Slack {
         let response = self
             .http
             .post(url)
-            .header("Content-Type", "text/plain; charset=utf-8")
+            .header("Content-Type", mime(name))
             .send(bytes)
             .map_err(|e| failed("Slack could not be reached", e, &self.bot))?;
         if !response.status().is_success() {

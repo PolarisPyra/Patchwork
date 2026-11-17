@@ -251,6 +251,7 @@ fn a_codex_command_open_at_turn_end_is_listed_and_holds_no_stdin() {
         guarded: &[],
         agents: &[],
         hooks: &[],
+        dispatcher: false,
     };
     let mut background = Background::default();
     let mut events = Vec::new();

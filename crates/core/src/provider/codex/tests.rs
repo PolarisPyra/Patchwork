@@ -41,6 +41,7 @@ fn spec(session_id: Option<&'static str>, mode: AccessMode) -> TurnSpec<'static>
         guarded: &[],
         agents: &[],
         hooks: &[],
+        dispatcher: false,
     }
 }
 

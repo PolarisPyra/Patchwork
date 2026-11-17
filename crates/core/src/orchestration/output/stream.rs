@@ -170,6 +170,10 @@ pub(in crate::orchestration) fn event_message(event: &AgentEvent) -> Option<&str
         | AgentEvent::ChatAppsChanged
         | AgentEvent::Notice { .. }
         | AgentEvent::OptionsChanged
+        | AgentEvent::SettingsChanged
+        | AgentEvent::OpenChat
+        | AgentEvent::RestartToUpdate
+        | AgentEvent::Show { .. }
         | AgentEvent::MessageRemoved { .. } => None,
         AgentEvent::MessageEdited { message } => Some(&message.id),
         AgentEvent::TextDelta { message_id, .. }
@@ -482,6 +486,10 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
         | AgentEvent::ChatAppsChanged
         | AgentEvent::Notice { .. }
         | AgentEvent::OptionsChanged
+        | AgentEvent::SettingsChanged
+        | AgentEvent::OpenChat
+        | AgentEvent::RestartToUpdate
+        | AgentEvent::Show { .. }
         | AgentEvent::MessageRemoved { .. }
         | AgentEvent::MessageEdited { .. } => {}
     }

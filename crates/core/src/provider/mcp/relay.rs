@@ -57,12 +57,11 @@ pub fn set_tool_handler(handler: ToolHandler) {
     let _ = TOOL_HANDLER.set(handler);
 }
 
-/// The tools of Patchwork's own that a thread's agent has beside the one every agent has, as
-/// `tools/list` entries.
+/// The tools of Patchwork's own that a thread's agent has, as `tools/list` entries.
 type ToolLister = Box<dyn Fn(&str) -> Vec<Value> + Send + Sync>;
 static TOOL_LISTER: OnceLock<ToolLister> = OnceLock::new();
 
-/// Sets what lists a thread's further tools; called once when the server opens.
+/// Sets what lists a thread's tools; called once when the server opens.
 pub fn set_tool_lister(lister: ToolLister) {
     let _ = TOOL_LISTER.set(lister);
 }
@@ -78,6 +77,10 @@ pub(crate) fn own_turn_tools(thread_id: &str) -> Vec<TurnTool> {
         .into_iter()
         .filter_map(|tool| {
             let name = tool["name"].as_str()?.to_string();
+            // An API turn asks for a secret through its own harness.
+            if name == crate::secrets::TOOL {
+                return None;
+            }
             Some(TurnTool {
                 tool: name.clone(),
                 name,
@@ -118,14 +121,10 @@ fn own_request(
         })),
         "ping" => Ok(json!({})),
         "tools/list" => {
-            let mut tools = vec![json!({
-                "name": crate::secrets::TOOL,
-                "description": crate::secrets::DESCRIPTION,
-                "inputSchema": crate::secrets::input_schema(),
-            })];
-            if let Some(list) = TOOL_LISTER.get() {
-                tools.extend(list(thread_id));
-            }
+            let tools = TOOL_LISTER
+                .get()
+                .map(|list| list(thread_id))
+                .unwrap_or_default();
             Ok(json!({"tools": tools}))
         }
         "tools/call" => {

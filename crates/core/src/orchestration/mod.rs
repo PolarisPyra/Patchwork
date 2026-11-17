@@ -10,6 +10,7 @@
 // Rust guideline compliant 2026-10-09
 
 mod approvals;
+pub(crate) mod capabilities;
 pub mod changes;
 pub(crate) mod goal;
 mod messages;

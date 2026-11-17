@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use super::outbound::{clip, outcome, request};
+use super::outbound::{clip, outcome};
 use super::platform::Platform;
 use super::types::Button;
 use crate::Core;
@@ -59,25 +59,8 @@ impl Core {
         };
         match event {
             AgentEvent::ApprovalRequested { approval, .. } => {
-                let (text, buttons) = request(approval);
-                let text = format!("{} asks:\n\n{text}", self.heading(&thread));
-                let buttons: Vec<Button> = buttons
-                    .into_iter()
-                    .map(|b| Button {
-                        label: b.label,
-                        reply: format!("/answer {} {}", approval.id, b.reply),
-                    })
-                    .collect();
                 for place in self.gateway_places() {
-                    self.say_with(place.platform, &place.chat, &text, &buttons);
-                    if approval.secret.is_none() {
-                        self.gateway.lock().notices.push(Notice {
-                            platform: place.platform,
-                            chat: place.chat,
-                            thread_id: thread_id.to_string(),
-                            approval_id: approval.id.clone(),
-                        });
-                    }
+                    self.show_request(&thread, approval, place.platform, &place.chat);
                 }
             }
             AgentEvent::GoalUpdated { goal: Some(goal) } => {
@@ -227,7 +210,7 @@ impl Core {
     }
 
     /// Forgets the notices of a request that was answered, and tells their conversations how.
-    fn close_notices(&self, approval_id: &str, allowed: bool, answered: bool) {
+    pub(super) fn close_notices(&self, approval_id: &str, allowed: bool, answered: bool) {
         let (closed, from) = {
             let mut state = self.gateway.lock();
             let (closed, kept) = std::mem::take(&mut state.notices)
@@ -276,7 +259,9 @@ impl Core {
             self.set_thread_notices(id, Some(Notices::Off))
         };
         match saved {
-            Ok(()) => format!("No more notices from {named}. /unmute turns them all back on."),
+            Ok(()) => {
+                format!("No more notices from {named}. Ask to hear from it again to undo this.")
+            }
             Err(error) => format!("Patchwork could not mute that: {error}"),
         }
     }
@@ -303,17 +288,8 @@ impl Core {
         }
     }
 
-    /// Turns the notices of every muted chat and project back on, and returns what to tell the
-    /// conversation.
-    pub(super) fn unmute_notices(&self) -> String {
-        match self.unmute_all() {
-            Ok(_) => "Every chat sends notices again.".to_string(),
-            Err(error) => format!("Patchwork could not unmute: {error}"),
-        }
-    }
-
     /// The thread's title in quotes, and its project when it has one.
-    fn heading(&self, thread: &Thread) -> String {
+    pub(super) fn heading(&self, thread: &Thread) -> String {
         let project = thread.project_id.as_ref().and_then(|id| {
             self.store
                 .settings()

@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 use gpui::{Focusable, FollowMode, Window, prelude::*};
-use patchwork_core::events::{AgentEvent, AgentEventEnvelope};
+use patchwork_core::events::{AgentEvent, AgentEventEnvelope, Place as Shown};
 use patchwork_core::threads::{Attachment, NewThread, Part};
 use super::state::{Place, ReplyNotice, Workspace, end_thinking, message_mut};
 
@@ -251,7 +251,12 @@ impl Workspace {
 
     /// Applies one event from an agent. Text streams in place; anything else reloads what the
     /// window shows from the store, which saved it before sending it.
-    pub fn on_event(&mut self, envelope: AgentEventEnvelope, cx: &mut Context<Self>) {
+    pub fn on_event(
+        &mut self,
+        envelope: AgentEventEnvelope,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         // The system notification's tag starts with its thread, so a click on it opens that chat.
         match &envelope.event {
             AgentEvent::Notice { notice } => {
@@ -265,6 +270,45 @@ impl Workspace {
             }
             AgentEvent::ApprovalResolved { approval_id, .. } => {
                 cx.dismiss_system_notification(&format!("{}|{approval_id}", envelope.thread_id));
+            }
+            // Changed from a chat app: what Settings does when it changes them.
+            AgentEvent::SettingsChanged => {
+                self.settings = self.core.settings();
+                self.backgrounds.reload();
+                self.sync_panel(cx);
+                self.apply_theme(window, cx);
+                self.reload(cx);
+                return;
+            }
+            // The core checked that nothing is lost by it.
+            AgentEvent::RestartToUpdate => {
+                super::updates::restart(cx);
+                return;
+            }
+            AgentEvent::OpenChat => {
+                self.reload(cx);
+                self.reveal_thread(&envelope.thread_id, cx);
+                window.activate_window();
+                return;
+            }
+            AgentEvent::Show { place } => {
+                self.reload(cx);
+                match place {
+                    Shown::Project { id } => self.select_project(id, cx),
+                    Shown::File { project_id, path } => {
+                        if self.settings.active_project_id.as_deref() != Some(project_id) {
+                            self.select_project(project_id, cx);
+                        }
+                        self.open_change(path, window, cx);
+                    }
+                    Shown::Settings { section } => {
+                        // Settings that is open already moves to the section asked for.
+                        self.settings_dialog = None;
+                        self.open_settings(section.as_deref(), window, cx);
+                    }
+                }
+                window.activate_window();
+                return;
             }
             _ => {}
         }

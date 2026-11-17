@@ -40,7 +40,7 @@ const COMMAND: u64 = 2;
 type CommandOption = (&'static str, &'static str, bool, &'static [&'static str]);
 
 /// The commands Discord offers in its `/` menu, with what each does.
-const COMMANDS: [(&str, &str, Option<CommandOption>); 15] = [
+const COMMANDS: [(&str, &str, Option<CommandOption>); 4] = [
     ("help", "Show what Patchwork can do here", None),
     (
         "pair",
@@ -52,43 +52,7 @@ const COMMANDS: [(&str, &str, Option<CommandOption>); 15] = [
         "Start a new chat with the next message",
         Some(("project", "The project to start it in", false, &[])),
     ),
-    ("projects", "List the projects", None),
-    ("threads", "List recent chats", None),
-    (
-        "use",
-        "Switch to a chat from /threads",
-        Some(("number", "Its number in /threads", true, &[])),
-    ),
-    ("stop", "Stop the agent", None),
-    ("status", "Show the chat and what it is doing", None),
-    ("running", "List every chat that is working", None),
-    ("diff", "Get what the last reply changed as a file", None),
-    (
-        "model",
-        "Show or change this chat's model",
-        Some(("model", "The model id, or default", false, &[])),
-    ),
-    (
-        "agent",
-        "Show or change this chat's agent",
-        Some(("agent", "The agent, and a model after it", false, &[])),
-    ),
-    (
-        "access",
-        "Show or change what this chat may do",
-        Some((
-            "mode",
-            "The access mode",
-            false,
-            &["supervised", "auto-edits", "auto", "full"],
-        )),
-    ),
-    (
-        "plan",
-        "Show plan mode, or turn it on or off",
-        Some(("mode", "On or off", false, &["on", "off"])),
-    ),
-    ("unmute", "Hear from every muted chat again", None),
+    ("stop", "Stop the reply being written", None),
 ];
 
 pub(crate) struct Discord {
@@ -222,6 +186,7 @@ impl Discord {
             .collect();
         Some(Incoming {
             platform: Platform::Discord,
+            id: data["id"].as_str().map(str::to_string),
             chat: data["channel_id"].as_str()?.to_string(),
             user: author["id"].as_str()?.to_string(),
             name: author["username"].as_str().unwrap_or_default().to_string(),
@@ -295,6 +260,7 @@ impl Discord {
             .or_else(|| data["user"].as_object())?;
         Some(Incoming {
             platform: Platform::Discord,
+            id: data["id"].as_str().map(str::to_string),
             chat: data["channel_id"].as_str()?.to_string(),
             user: user.get("id")?.as_str()?.to_string(),
             name: user
