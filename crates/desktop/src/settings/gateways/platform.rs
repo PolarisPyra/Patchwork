@@ -8,7 +8,7 @@ use patchwork_core::gateway::{Platform, Status};
 use super::paired::pairing_row;
 use super::setup::setup;
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{FieldKind, alert, switch, token_row};
+use crate::settings::controls::{FieldKind, alert, switch, token_row, vault_notice};
 use crate::ui::theme::{fs_lg, fs_sm, theme};
 use crate::ui::{BtnKind, btn, icon, icon_button, platform_logo};
 
@@ -83,13 +83,12 @@ fn platform(
             .as_ref()
             .is_some_and(|s| s.contains(&(platform, key)));
         let name = format!("{label} {}", credential.label.to_lowercase());
-        let shown = d.gateways.revealed.get(&(platform, key)).cloned();
-        let revealed = shown.is_some();
+        let revealed = d.gateways.unmasked.contains(&(platform, key));
         let field = d
             .field(
                 format!("gw-{id}-{key}"),
                 name.clone(),
-                shown.as_deref().unwrap_or_default(),
+                "",
                 if saved {
                     "Saved"
                 } else {
@@ -109,33 +108,32 @@ fn platform(
         rows.push(
             token_row(credential.label, None, &t)
                 .flex_wrap()
-                .when(saved, |row| {
+                .child({
+                    // Shows what is being typed. A saved credential is never read back.
                     let (icon, action) = if revealed {
                         ("eye-slash", "Hide")
                     } else {
                         ("eye", "Show")
                     };
-                    row.child(
-                        icon_button(
-                            SharedString::from(format!("gw-{id}-{key}-show")),
-                            format!("Show {name}"),
-                            icon,
-                            14.,
-                            cx,
-                        )
-                        .aria_toggled(if revealed {
-                            Toggled::True
-                        } else {
-                            Toggled::False
-                        })
-                        .tooltip(crate::ui::tooltip(format!(
-                            "{action} {}",
-                            credential.label.to_lowercase()
-                        )))
-                        .on_click(cx.listener(move |d, _, _, cx| {
-                            d.toggle_credential(platform, key, cx);
-                        })),
+                    icon_button(
+                        SharedString::from(format!("gw-{id}-{key}-show")),
+                        format!("Show {name}"),
+                        icon,
+                        14.,
+                        cx,
                     )
+                    .aria_toggled(if revealed {
+                        Toggled::True
+                    } else {
+                        Toggled::False
+                    })
+                    .tooltip(crate::ui::tooltip(format!(
+                        "{action} {}",
+                        credential.label.to_lowercase()
+                    )))
+                    .on_click(cx.listener(move |d, _, _, cx| {
+                        d.toggle_credential(platform, key, cx);
+                    }))
                 })
                 .child(field)
                 .child(credential_actions(d, platform, key, &name, saved, cx))
@@ -287,6 +285,7 @@ pub(super) fn page(
         .child(steps)
         .children(rows)
         .child(pairing)
+        .children(vault_notice("gw-vault", &t))
         .children(
             d.gateways
                 .error

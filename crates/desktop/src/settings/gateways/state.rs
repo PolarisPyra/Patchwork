@@ -24,8 +24,8 @@ pub struct GatewaysState {
     pub(super) selected: Option<Platform>,
     /// The credentials that are saved, by platform and key, once they have been read.
     pub(super) saved: Option<HashSet<(Platform, &'static str)>>,
-    /// The saved credentials shown in the clear, by platform and key.
-    pub(super) revealed: HashMap<(Platform, &'static str), String>,
+    /// The credential fields that show what is typed in them, by platform and key.
+    pub(super) unmasked: HashSet<(Platform, &'static str)>,
     /// The credentials saved since the pane opened, by platform and key.
     pub(super) just_saved: HashSet<(Platform, &'static str)>,
     pub(super) users: Vec<PairedUser>,
@@ -79,13 +79,8 @@ impl SettingsDialog {
         value: String,
         cx: &mut Context<Self>,
     ) {
-        let shown = value.trim();
-        let removed = shown.is_empty();
-        if removed {
-            self.hide_credential(platform, key, cx);
-        } else if let Some(text) = self.gateways.revealed.get_mut(&(platform, key)) {
-            *text = shown.to_string();
-        }
+        let removed = value.trim().is_empty();
+        self.hide_credential(platform, key, cx);
         self.gateways.just_saved.remove(&(platform, key));
         let core = Arc::clone(&self.core);
         self.run(
@@ -93,6 +88,10 @@ impl SettingsDialog {
             move |d, out, cx| {
                 if out.is_ok() && !removed {
                     d.gateways.just_saved.insert((platform, key));
+                    // A saved credential is not kept in the window, or read into it.
+                    if let Some(area) = d.field_area(&format!("gw-{}-{key}", platform.id())) {
+                        area.update(cx, |a, cx| a.set_text("", cx));
+                    }
                 }
                 d.gateways.error = out.err().map(|e| e.to_string());
                 d.read_credentials(cx);
@@ -101,40 +100,29 @@ impl SettingsDialog {
         );
     }
 
-    /// Shows a saved credential in the clear, read off the main thread, or masks it again.
+    /// Shows what is typed in a credential's field, or masks it again.
     pub(super) fn toggle_credential(
         &mut self,
         platform: Platform,
         key: &'static str,
         cx: &mut Context<Self>,
     ) {
-        if self.gateways.revealed.contains_key(&(platform, key)) {
+        if self.gateways.unmasked.insert((platform, key)) {
+            self.mask_credential(platform, key, false, cx);
+        } else {
             self.hide_credential(platform, key, cx);
-            cx.notify();
-            return;
         }
-        let core = Arc::clone(&self.core);
-        self.run(
-            move || core.gateway_credential(platform, key),
-            move |d, text, cx| {
-                let Some(text) = text else {
-                    return;
-                };
-                d.gateways.revealed.insert((platform, key), text);
-                d.mask_credential(platform, key, false, cx);
-            },
-            cx,
-        );
+        cx.notify();
     }
 
-    /// Masks a credential and forgets its shown text.
+    /// Masks a credential's field.
     pub(super) fn hide_credential(
         &mut self,
         platform: Platform,
         key: &'static str,
         cx: &mut Context<Self>,
     ) {
-        self.gateways.revealed.remove(&(platform, key));
+        self.gateways.unmasked.remove(&(platform, key));
         self.mask_credential(platform, key, true, cx);
     }
 

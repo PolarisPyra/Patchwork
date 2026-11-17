@@ -10,4 +10,5 @@ pub use fields::{Field, FieldKind};
 pub use widgets::{
     ACCESS_MODES, letter_badge, token_row, section_heading, switch, segmented, select_box, choice,
     minutes_stepper, alert, chip, list_box, tildify, anchored, seek, tile, tile_grid, example,
+    vault_notice,
 };

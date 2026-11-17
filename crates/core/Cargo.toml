@@ -12,6 +12,7 @@ categories.workspace = true
 
 [dependencies]
 patchwork-system.workspace = true
+argon2 = { workspace = true, features = ["alloc", "zeroize"] }
 base64 = { workspace = true, default-features = true }
 serde_json = { workspace = true, default-features = true }
 toml = { workspace = true, default-features = true }
@@ -27,6 +28,9 @@ ureq = { workspace = true, default-features = true, features = ["json"] }
 tungstenite = { workspace = true, features = ["handshake", "rustls-tls-webpki-roots"] }
 # API providers: keys in the system credential store, and the agent's file search tools.
 keyring = { workspace = true, default-features = true }
+# The vault: the cipher saved secrets are sealed with, and wiping keys from memory after use.
+chacha20poly1305 = { workspace = true, default-features = true }
+zeroize = { workspace = true, default-features = true }
 ignore = { workspace = true, default-features = true }
 # The integrated terminal's pseudo-terminals, and the screen and modes a window gets back.
 portable-pty = { workspace = true, default-features = true }

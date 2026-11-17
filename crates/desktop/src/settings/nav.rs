@@ -147,6 +147,15 @@ const INDEX: &[(&str, &[&str])] = &[
     ),
     ("ssh", &["SSH devices"]),
     (
+        "security",
+        &[
+            "Protected by",
+            "New password",
+            "Saved secrets",
+            "Old copies",
+        ],
+    ),
+    (
         "gateways",
         &[
             "Access",

@@ -31,6 +31,7 @@ pub mod themes;
 pub mod threads;
 pub mod updates;
 pub mod usage;
+pub mod vault;
 pub mod workspace;
 
 use std::path::{Path, PathBuf};
@@ -114,7 +115,6 @@ impl Core {
             }
         }
         crate::provider::api::config::init(&dirs.config);
-        provider::mcp::init(&dirs.config);
         skills::init(&dirs.config);
         hooks::init(&dirs.config);
         themes::init();
@@ -130,6 +130,10 @@ impl Core {
         settings::follow(&store.settings());
         logging::start(&logs, &store.settings().logging);
         logging::system::record(&logs);
+        vault::open(&dirs.data, &dirs.config);
+        settings::unseal(&store)?;
+        // Starts the MCP servers, which read their saved values: after the vault is open.
+        provider::mcp::init(&dirs.config);
         for what in not_copied {
             log::warn!(what:% = what; "could not copy the released app's data: {{what}}");
         }

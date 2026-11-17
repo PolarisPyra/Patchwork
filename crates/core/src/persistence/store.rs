@@ -175,11 +175,28 @@ impl Store {
     /// Returns an error when the database cannot save the settings; the settings in memory stay as
     /// they were.
     pub fn update_settings<R>(&self, f: impl FnOnce(&mut Settings) -> R) -> Result<R, Error> {
+        self.update_settings_as(f, Settings::clone)
+    }
+
+    /// Changes the settings with `f` and saves what `stored` makes of them, returning what `f`
+    /// returns. The settings in memory are the ones `f` left.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the database cannot save the settings; the settings in memory stay as
+    /// they were.
+    pub fn update_settings_as<R>(
+        &self,
+        f: impl FnOnce(&mut Settings) -> R,
+        stored: impl FnOnce(&Settings) -> Settings,
+    ) -> Result<R, Error> {
         let mut inner = self.lock();
         let mut next = inner.settings.clone();
         let r = f(&mut next);
+        // Made before the transaction: `stored` may write the database through the vault.
+        let kept = stored(&next);
         let tx = inner.conn.transaction().map_err(err)?;
-        save_settings(&tx, &next).map_err(err)?;
+        save_settings(&tx, &kept).map_err(err)?;
         tx.commit().map_err(err)?;
         inner.settings = next;
         Ok(r)
@@ -481,7 +498,7 @@ impl Store {
     }
 }
 
-const DB_FILE: &str = "patchwork.db";
+pub(crate) const DB_FILE: &str = "patchwork.db";
 
 impl Store {
     /// Copies the database in the folder `from` to the folder `to`, as one snapshot even while
@@ -505,6 +522,25 @@ impl Store {
         Connection::open(&target)
             .and_then(|conn| {
                 conn.execute("UPDATE scheduled_tasks SET enabled = 0", [])?;
+                // The released app's secrets stay its own: the copy gets a vault of its own,
+                // without the chat app tokens. A database from before the vault has no tables.
+                let sealed: bool = conn.query_row(
+                    "SELECT count(*) = 2 FROM sqlite_master \
+                     WHERE type = 'table' AND name IN ('secrets', 'vault')",
+                    [],
+                    |r| r.get(0),
+                )?;
+                if sealed {
+                    conn.execute_batch("DELETE FROM secrets; DELETE FROM vault;")?;
+                    // A terminal variable's value was in the vault, so only the removals stay.
+                    conn.execute(
+                        "UPDATE settings SET json = json_set(json, '$.terminal.env', json((\
+                         SELECT json_group_object(key, json('null')) \
+                         FROM json_each(settings.json, '$.terminal.env') WHERE type = 'null'))) \
+                         WHERE json_type(json, '$.terminal.env') = 'object'",
+                        [],
+                    )?;
+                }
                 conn.execute(
                     "UPDATE settings SET json = json_set(json, '$.gateway.platforms', json((\
                      SELECT json_group_object(key, json_set(value, '$.enabled', json('false'))) \

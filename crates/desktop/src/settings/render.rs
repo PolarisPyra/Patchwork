@@ -22,6 +22,7 @@ use super::permissions;
 use super::projects;
 use super::providers;
 use super::scheduled;
+use super::security;
 use super::shortcuts;
 use super::ssh;
 use super::terminal;
@@ -54,6 +55,7 @@ impl SettingsDialog {
             "mcp" => mcp::render(self, window, cx),
             "gateways" => gateways::render(self, window, cx),
             "permissions" => permissions::render(self, window, cx),
+            "security" => security::render(self, window, cx),
             "projects" => projects::render(self, cx),
             "ssh" => ssh::render(self, window, cx),
             "scheduled" => scheduled::render(self, window, cx),
