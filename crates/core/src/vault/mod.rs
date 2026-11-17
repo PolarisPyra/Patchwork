@@ -2,9 +2,11 @@
 //!
 //! Each secret is sealed with XChaCha20-Poly1305 under one random data key, with the secret's
 //! name bound in, so a row cannot be moved to another name. The data key is in the database
-//! too, sealed under a wrapping key that is kept outside it: in the system credential store, or
-//! in a file of the config folder on a system without one. A debug build has its own database
-//! and its own wrapping key, so it shares no secret with the released app.
+//! too, sealed under a wrapping key that is kept outside it, in the system credential store. A
+//! system without one makes no vault until a password is set, and saves nothing before that.
+//! An earlier version kept the key in a file of the config folder there: that vault still
+//! opens, and loses the file when its password is set. A debug build has its own database and
+//! its own wrapping key, so it shares no secret with the released app.
 //!
 //! With a password set, the wrapping key is derived from the password with Argon2id and kept
 //! nowhere: the vault waits, each run, until the password is entered. Setting, changing or

@@ -20,7 +20,7 @@ const CONFIG_FILE: &str = "providers.json";
 const SESSIONS_DIR: &str = "api-sessions";
 
 static DIR: OnceLock<PathBuf> = OnceLock::new();
-/// Serializes changes to the config and keys files.
+/// Serializes changes to the config file.
 static WRITE: Mutex<()> = Mutex::new(());
 
 /// Sets the config folder; called once when the server opens.

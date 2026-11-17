@@ -47,9 +47,8 @@ impl Core {
         get(name)
     }
 
-    /// How many saved secrets an earlier version's stores still hold a copy of: the system
-    /// keychain's own entries and `api-keys.json`. A debug build shares those stores with the
-    /// released app, and counts none.
+    /// How many saved secrets the system keychain still holds a copy of, from an earlier
+    /// version. A debug build shares the keychain with the released app, and counts none.
     #[must_use]
     pub fn old_secret_copies(&self) -> usize {
         if cfg!(debug_assertions) {
@@ -58,8 +57,7 @@ impl Core {
         provider::api::config::old_copies(&names())
     }
 
-    /// Removes those copies, and says how many. A secret only `api-keys.json` holds is moved
-    /// into the vault first.
+    /// Removes those copies, and says how many.
     ///
     /// # Errors
     ///
@@ -96,12 +94,17 @@ fn label(name: &str) -> String {
     let (id, what) = name
         .strip_suffix(":headers")
         .map_or((name, "API key"), |id| (id, "headers"));
-    let provider = provider::api::config::provider(id).map_or_else(|| id.to_string(), |p| p.name);
-    format!("{provider} {what}")
+    // A secret whose provider is gone has only an id, which says nothing to the user.
+    match provider::api::config::provider(id) {
+        Some(provider) => format!("{} {what}", provider.name),
+        None if what == "headers" => "API headers".into(),
+        None => what.into(),
+    }
 }
 
 /// Copies every secret an earlier version left in its stores into the vault, so the vault
-/// holds them all, and not only the ones read so far. The copies stay where they were
+/// holds them all, and not only the ones read so far. The keys file of an early version is
+/// deleted once the vault has its keys; the credential store's copies stay where they were
 /// until `remove_old_secret_copies`.
 pub(crate) fn take_old() {
     if !matches!(status(), Status::Open(_)) {
@@ -120,6 +123,13 @@ pub(crate) fn take_old() {
                 .iter()
                 .map(|field| format!("gateway:{id}:{}", field.key)),
         );
+    }
+    match provider::api::config::take_keys_file() {
+        Ok(0) => {}
+        Ok(moved) => {
+            log::info!(moved; "moved {{moved}} secrets from the old keys file into the vault");
+        }
+        Err(e) => log::warn!(error:% = e; "the old keys file was left in place: {{error}}"),
     }
     let before = names().len();
     for name in &old {
@@ -201,6 +211,13 @@ pub(crate) fn put(name: &str, value: &str) -> Result<(), Error> {
         }
         State::Waiting(_) => {
             return Err("Enter the vault's password in Settings, under Security, first".into());
+        }
+        State::Unset(_) => {
+            return Err(
+                "Set a password in Settings, under Security, first: this system has \
+                        no keychain to lock saved secrets"
+                    .into(),
+            );
         }
         State::Closed => return Err("Patchwork's vault is not open".into()),
     };

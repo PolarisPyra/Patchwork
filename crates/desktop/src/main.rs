@@ -237,6 +237,8 @@ fn prewarm_fonts(cx: &App) {
 }
 
 fn main() {
+    // Before anything holds a key: the app, and the helpers that are handed one.
+    let dumps = patchwork_core::system::memory::deny_dumps();
     // Agents start this binary as a helper, without the window: a hook, a relay or a bridge.
     if let Some(code) = run_helper() {
         std::process::exit(code);
@@ -257,6 +259,9 @@ fn main() {
         return;
     }
     start_logging(&dirs);
+    if let Err(e) = dumps {
+        log::warn!(error:% = e; "a crash could write Patchwork's memory to a core file: {{error}}");
+    }
     let (events, mut received) = mpsc::unbounded();
     let core = match Core::open(
         &dirs,

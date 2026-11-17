@@ -14,6 +14,7 @@ mod environment;
 mod host;
 pub mod instance;
 mod launcher;
+pub mod memory;
 pub mod fs;
 pub mod contained;
 pub mod device;

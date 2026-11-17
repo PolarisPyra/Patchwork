@@ -362,7 +362,7 @@ pub fn alert(
 }
 
 /// What a pane that saves secrets says when neither the system keychain nor a password locks
-/// them: they are locked by a key file, wait for the password, or cannot be unlocked this run.
+/// them: they need a password set, wait for the password, or cannot be unlocked this run.
 pub fn vault_notice(id: impl Into<SharedString>, t: &Theme) -> Option<Stateful<Div>> {
     use patchwork_core::vault::{Method, Status, status};
     match status() {
@@ -373,8 +373,13 @@ pub fn vault_notice(id: impl Into<SharedString>, t: &Theme) -> Option<Stateful<D
         )),
         Status::Open(Method::File) => Some(alert(
             id,
-            "No system keychain: secrets are locked by a key file in Patchwork's config folder",
+            "No system keychain: set a password in Settings, under Security, to lock saved secrets",
             t.warning,
+        )),
+        Status::Unset => Some(alert(
+            id,
+            "No system keychain: set a password in Settings, under Security, to save secrets",
+            t.danger,
         )),
         Status::Waiting => Some(alert(
             id,

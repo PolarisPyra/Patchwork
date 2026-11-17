@@ -1,11 +1,11 @@
 //! API providers: OpenAI-compatible endpoints the user adds with their own key.
 //!
 //! The providers live in `providers.json` in the config folder, which holds no secrets. Each key
-//! goes to the system credential store (Keychain, Credential Manager, or the Secret Service), or,
-//! where none is available, to `api-keys.json` beside it, readable only by the user. A provider can
-//! instead name an environment variable that holds its key. Header values are stored the same way,
-//! since one may carry a secret (an `Authorization` or `X-Api-Key` header), and the config keeps
-//! only their names.
+//! goes to the vault, and is never written to a file as it is: the `api-keys.json` an early
+//! version wrote beside the config is moved into the vault and deleted. A provider can instead name
+//! an environment variable that holds its key. Header values are stored the same way, since one
+//! may carry a secret (an `Authorization` or `X-Api-Key` header), and the config keeps only their
+//! names.
 
 // Rust guideline compliant 2026-10-09
 
@@ -23,6 +23,7 @@ pub use models::{ModelsQuery, default_model, fetch_models, models, resolve};
 pub(super) use secrets::with_headers;
 pub(crate) use secrets::{
     delete_secret, forget_secrets, old_copies, read_secret, remove_old_copies, store_secret,
+    take_keys_file,
 };
 #[doc(inline)]
 pub use secrets::key;
