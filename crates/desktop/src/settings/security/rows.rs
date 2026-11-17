@@ -3,15 +3,17 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{AnyElement, ClipboardItem, Role, SharedString, Toggled, Window, div, prelude::*, px};
+use gpui::{
+    AnyElement, ClipboardItem, Focusable, Role, SharedString, Toggled, Window, div, prelude::*, px,
+};
 use patchwork_core::gateway::ChatAppCall;
 use patchwork_core::vault::Method;
 
-use super::{ASK, Change, password_field};
+use super::{ASK, Change, FIELD_WIDTH, password_field};
 use crate::settings::controls::{list_box, section_heading, segmented, switch, token_row};
 use crate::settings::dialog::SettingsDialog;
 use crate::ui::theme::{Theme, font_mono, fs_sm, radius_sm, theme};
-use crate::ui::{BtnKind, btn, format_relative, icon_button, platform_logo, tooltip};
+use crate::ui::{BtnKind, btn, format_relative, icon_button, input_box, platform_logo, tooltip};
 
 /// When a vault with a password locks by itself, in minutes: 0 is never.
 const IDLE: [(u32, &str); 4] = [(0, "Never"), (5, "5 min"), (15, "15 min"), (60, "1 hour")];
@@ -156,7 +158,7 @@ pub(super) fn recovery_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>)
     .into_any_element()
 }
 
-/// A saved secret's value or a recovery key, as the pane shows it.
+/// The recovery key just made, as the pane shows it.
 fn value_box(label: &str, value: &str, t: &Theme) -> impl IntoElement {
     div()
         .id(SharedString::from(format!("security-value-{label}")))
@@ -177,7 +179,8 @@ fn value_box(label: &str, value: &str, t: &Theme) -> impl IntoElement {
         .child(value.to_string())
 }
 
-/// The saved secrets, each with the button that shows it, and the old copies under them.
+/// The saved secrets, each in a field with the button that shows it, and the old copies under
+/// them. A vault with a password asks for it in that field first.
 pub(super) fn saved_rows(
     d: &mut SettingsDialog,
     window: &mut Window,
@@ -194,38 +197,13 @@ pub(super) fn saved_rows(
         rows.push(section_heading("Saved secrets", false, &t).into_any_element());
     }
     for secret in &secrets {
-        let shown = d.security.revealed.contains_key(&secret.name);
-        let name = secret.name.clone();
-        let (glyph, action) = if shown {
-            ("eye-slash", "Hide")
+        let row = token_row(secret.label.clone(), None, &t).flex_wrap();
+        let field = if d.security.asking.as_deref() == Some(secret.name.as_str()) {
+            ask_field(d, window, cx)
         } else {
-            ("eye", "Show")
+            secret_field(d, &secret.name, &secret.label, cx)
         };
-        let row = token_row(secret.label.clone(), None, &t)
-            .flex_wrap()
-            .child(
-                icon_button(
-                    SharedString::from(format!("security-show-{}", secret.name)),
-                    format!("Show {}", secret.label),
-                    glyph,
-                    14.,
-                    cx,
-                )
-                .aria_toggled(if shown { Toggled::True } else { Toggled::False })
-                .tooltip(tooltip(action))
-                .on_click(cx.listener(move |d, _, _, cx| d.toggle_secret(name.clone(), cx))),
-            )
-            .children(
-                d.security
-                    .revealed
-                    .get(&secret.name)
-                    .map(|value| value_box(&secret.label, value, &t)),
-            );
-        rows.push(row.into_any_element());
-        // The password is asked for under the secret it is for.
-        if d.security.asking.as_deref() == Some(secret.name.as_str()) {
-            rows.push(ask_row(d, window, cx));
-        }
+        rows.push(row.child(field).into_any_element());
     }
     if old > 0 {
         let busy = d.security.busy;
@@ -255,26 +233,80 @@ pub(super) fn saved_rows(
     rows
 }
 
-/// The field that asks for the password before a secret is shown. Enter in it shows the secret.
-fn ask_row(
+/// A saved secret in a field like the password ones: dots until its button shows the value.
+fn secret_field(
+    d: &SettingsDialog,
+    name: &str,
+    label: &str,
+    cx: &mut Context<SettingsDialog>,
+) -> AnyElement {
+    let t = *theme(cx);
+    let value = d.security.revealed.get(name);
+    let shown = value.is_some();
+    let spoken = match value {
+        Some(value) => format!("{label}: {}", value.as_str()),
+        None => format!("{label}, hidden"),
+    };
+    let text = match value {
+        Some(value) => value.as_str().to_string(),
+        None => "\u{2022}".repeat(16),
+    };
+    let name = name.to_string();
+    input_box(false, &t)
+        .pr(px(3.))
+        // A value is longer than the field, so it takes the row's width and wraps.
+        .map(|b| {
+            if shown {
+                b.w_full().h_auto().py(px(4.))
+            } else {
+                b.w(px(FIELD_WIDTH)).flex_none()
+            }
+        })
+        .child(
+            div()
+                .id(SharedString::from(format!("security-value-{name}")))
+                .role(Role::Status)
+                .aria_label(spoken)
+                .flex_1()
+                .min_w_0()
+                .font_family(font_mono())
+                .text_color(t.text_muted)
+                .child(text),
+        )
+        .child(
+            icon_button(
+                SharedString::from(format!("security-show-{name}")),
+                format!("Show {label}"),
+                if shown { "eye-slash" } else { "eye" },
+                14.,
+                cx,
+            )
+            .size(px(22.))
+            .flex_none()
+            .aria_toggled(if shown { Toggled::True } else { Toggled::False })
+            .tooltip(tooltip(if shown { "Hide" } else { "Show" }))
+            .on_click(cx.listener(move |d, _, _, cx| d.toggle_secret(name.clone(), cx))),
+        )
+        .into_any_element()
+}
+
+/// The field that asks for the password in place of the secret it shows. Enter in it shows the
+/// secret.
+fn ask_field(
     d: &mut SettingsDialog,
     window: &mut Window,
     cx: &mut Context<SettingsDialog>,
 ) -> AnyElement {
-    let t = *theme(cx);
-    let busy = d.security.busy;
     let field = password_field(d, ASK, "Your password", window, cx);
     d.on_submit(ASK, |d, _, cx| d.confirm_secret(cx));
-    token_row("Your password", None, &t)
-        .child(field)
-        .child(
-            btn("security-ask-show", "Show", BtnKind::Plain, busy, &t)
-                .child("Show")
-                .when(!busy, |b| {
-                    b.on_click(cx.listener(|d, _, _, cx| d.confirm_secret(cx)))
-                }),
-        )
-        .into_any_element()
+    if !d.security.focused {
+        d.security.focused = true;
+        if let Some(area) = d.field_area(ASK) {
+            let focus = area.read(cx).focus_handle(cx);
+            window.focus(&focus, cx);
+        }
+    }
+    field.into_any_element()
 }
 
 /// What the chat apps had Patchwork do, the latest first. Empty when they did nothing.
