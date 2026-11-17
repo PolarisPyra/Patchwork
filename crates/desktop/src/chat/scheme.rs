@@ -8,7 +8,7 @@ use gpui::{
     AnyElement, App, Bounds, ElementId, GlobalElementId, InspectorElementId, LayoutId, Pixels,
     Window, prelude::*,
 };
-use patchwork_server::themes::Scheme;
+use patchwork_core::themes::Scheme;
 
 use crate::ui::theme::InScheme;
 

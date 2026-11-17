@@ -1,4 +1,4 @@
-//! Patchwork's window, drawn with GPUI over the server, its folders and its database.
+//! Patchwork's window, drawn with GPUI over the core, its folders and its database.
 
 // A release build on Windows opens no console window beside the app.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -31,8 +31,8 @@ use gpui::{
     App, Bounds, Font, FontStyle, FontWeight, TextRenderingMode, TitlebarOptions, WindowBounds,
     WindowOptions, actions, font, prelude::*, px, size,
 };
-use patchwork_server::Server;
-use patchwork_server::system::Dirs;
+use patchwork_core::Core;
+use patchwork_core::system::Dirs;
 
 use crate::ui::{assets, prompt, sigils, theme};
 use crate::workspace::Workspace;
@@ -80,7 +80,7 @@ struct FileLog(Mutex<File>);
 
 impl log::Log for FileLog {
     fn enabled(&self, metadata: &log::Metadata) -> bool {
-        patchwork_server::logging::app_logs(metadata.level())
+        patchwork_core::logging::app_logs(metadata.level())
     }
 
     fn log(&self, record: &log::Record) {
@@ -91,11 +91,10 @@ impl log::Log for FileLog {
             log::Level::Warn => "warning".to_string(),
             level => level.as_str().to_lowercase(),
         };
-        let time = patchwork_server::logging::now_text();
+        let time = patchwork_core::logging::now_text();
         let mut properties = Properties(Vec::new());
         let _ = record.key_values().visit(&mut properties);
-        let message =
-            patchwork_server::logging::redact(&properties.fill(&record.args().to_string()));
+        let message = patchwork_core::logging::redact(&properties.fill(&record.args().to_string()));
         if let Ok(mut file) = self.0.lock() {
             let _ = writeln!(file, "{time} [{level}] {message}");
         }
@@ -150,7 +149,7 @@ impl<'kvs> log::kv::VisitSource<'kvs> for Properties {
 /// Runs the helper the first argument names and returns its exit code, or None to open the app.
 /// Without this, every hook or relay an agent starts would open another Patchwork window.
 fn run_helper() -> Option<i32> {
-    use patchwork_server::{harness, permissions, provider};
+    use patchwork_core::{harness, permissions, provider};
     let arg = std::env::args().nth(1)?;
     let run: fn() -> i32 = match arg.as_str() {
         // An OpenCode turn's bridge to `opencode serve`.
@@ -169,7 +168,7 @@ fn run_helper() -> Option<i32> {
 }
 
 fn start_logging(dirs: &Dirs) {
-    let folder = patchwork_server::logging::session_dir(&dirs.logs);
+    let folder = patchwork_core::logging::session_dir(&dirs.logs);
     let opened = std::fs::create_dir_all(&folder).and_then(|()| {
         OpenOptions::new()
             .create(true)
@@ -189,12 +188,12 @@ fn start_logging(dirs: &Dirs) {
 }
 
 /// Starts the tasks whose time has come, on a timer of its own, for the life of the app.
-fn start_scheduled_tasks(server: Arc<Server>) {
+fn start_scheduled_tasks(core: Arc<Core>) {
     std::thread::Builder::new()
         .name("scheduled-tasks".into())
         .spawn(move || {
             loop {
-                for name in server.run_due_scheduled_tasks() {
+                for name in core.run_due_scheduled_tasks() {
                     log::info!(name:%; "scheduled task started: {{name}}");
                 }
                 std::thread::sleep(SCHEDULED_TICK);
@@ -254,12 +253,12 @@ fn main() {
     };
     let dirs = Dirs::new(&config, &data, &cache);
     // Opened a second time, the app shows the window it already has instead of another.
-    if patchwork_server::system::instance::raise_running(&dirs.data) {
+    if patchwork_core::system::instance::raise_running(&dirs.data) {
         return;
     }
     start_logging(&dirs);
     let (events, mut received) = mpsc::unbounded();
-    let server = match Server::open(
+    let core = match Core::open(
         &dirs,
         // A debug build keeps its chat folders apart from the released app's, as it does its data.
         &data.join(if cfg!(debug_assertions) {
@@ -271,25 +270,25 @@ fn main() {
             let _ = events.unbounded_send(event);
         }),
     ) {
-        Ok(server) => server,
+        Ok(core) => core,
         Err(e) => {
             log::error!(error:% = e; "could not open Patchwork's data: {{error}}");
             return;
         }
     };
-    start_scheduled_tasks(Arc::clone(&server));
+    start_scheduled_tasks(Arc::clone(&core));
     // A second launch asks on the relay's thread; the window is shown on the app's.
     let (raise, mut raised) = mpsc::unbounded::<()>();
-    patchwork_server::provider::mcp::set_raise_handler(Box::new(move || {
+    patchwork_core::provider::mcp::set_raise_handler(Box::new(move || {
         let _ = raise.unbounded_send(());
     }));
     // A change in where updating stands is drawn by the window, like an agent's events.
     let (update_sender, mut update_events) = mpsc::unbounded();
-    server.on_update_change(Box::new(move || {
+    core.on_update_change(Box::new(move || {
         let _ = update_sender.unbounded_send(());
     }));
-    server.start_update_checks();
-    server.start_limit_resumes();
+    core.start_update_checks();
+    core.start_limit_resumes();
 
     gpui_platform::application()
         .with_assets(assets::Assets)
@@ -302,22 +301,22 @@ fn main() {
                 .detach();
             // Grayscale text, which reads lighter than subpixel on the dark theme.
             cx.set_text_rendering_mode(TextRenderingMode::Grayscale);
-            settings::shortcuts::bind_keys(&server, cx);
-            cx.set_global(sigils::load(&server));
-            settings::show_app_icon(&server.store.settings(), cx);
+            settings::shortcuts::bind_keys(&core, cx);
+            cx.set_global(sigils::load(&core));
+            settings::show_app_icon(&core.settings(), cx);
             cx.set_prompt_builder(prompt::build);
             cx.on_action(|_: &Quit, cx| cx.quit());
-            let quitting = Arc::clone(&server);
+            let quitting = Arc::clone(&core);
             cx.on_app_quit(move |_| {
                 quitting.stop_agents();
                 quitting.terminals.kill_all();
-                patchwork_server::system::remote::close_all();
+                patchwork_core::system::ssh::close_all();
                 async {}
             })
             .detach();
 
             let bounds = Bounds::centered(None, size(px(1600.), px(960.)), cx);
-            let applied = server.applied_theme();
+            let applied = core.applied_theme();
             let opened = cx.open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -330,7 +329,7 @@ fn main() {
                 },
                 |window, cx| {
                     theme::apply(applied, window.appearance(), cx);
-                    cx.new(|cx| Workspace::new(Arc::clone(&server), window, cx))
+                    cx.new(|cx| Workspace::new(Arc::clone(&core), window, cx))
                 },
             );
             let window = match opened {
@@ -349,7 +348,7 @@ fn main() {
             .detach();
             // Turns the last session's closing cut off carry on, now there is a window to show them.
             // Resumed, or with Settings set to ask, counted for the card that asks.
-            let resuming = Arc::clone(&server);
+            let resuming = Arc::clone(&core);
             let waiting = cx.background_spawn(async move { resuming.resume_at_launch() });
             cx.spawn(async move |cx| {
                 let waiting = waiting.await;
@@ -373,7 +372,7 @@ fn main() {
                 }
             })
             .detach();
-            // Agent events arrive on the server's threads and are applied here, in order.
+            // Agent events arrive on the core's threads and are applied here, in order.
             cx.spawn(async move |cx| {
                 while let Some(envelope) = received.next().await {
                     let applied =

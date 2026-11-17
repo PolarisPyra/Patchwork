@@ -5,9 +5,9 @@
 use std::sync::Arc;
 use std::collections::HashMap;
 use gpui::{Entity, FocusHandle, Pixels, Point, WeakEntity, Window, prelude::*};
-use patchwork_server::provider::{AgentKind, ModelOption};
-use patchwork_server::settings::Settings;
-use patchwork_server::threads::{AccessMode, Attachment, NewThread};
+use patchwork_core::provider::{AgentKind, ModelOption};
+use patchwork_core::settings::Settings;
+use patchwork_core::threads::{AccessMode, Attachment, NewThread};
 use crate::ui::text_area::{Arrow, Changed, Edge, Submitted, Tabbed, TextArea};
 use crate::workspace::Workspace;
 use super::menus::{Menu, Pick, Roles, efforts};
@@ -126,16 +126,16 @@ impl Composer {
         .detach();
         // The saved favourites, read off the UI thread once the workspace this belongs to is made.
         cx.spawn(async move |this, cx| {
-            let server = this.update(cx, |this, cx| {
+            let core = this.update(cx, |this, cx| {
                 this.workspace
                     .upgrade()
-                    .map(|w| std::sync::Arc::clone(&w.read(cx).server))
+                    .map(|w| std::sync::Arc::clone(&w.read(cx).core))
             });
-            let Ok(Some(server)) = server else {
+            let Ok(Some(core)) = core else {
                 return;
             };
             let favorites = cx
-                .background_spawn(async move { super::model_picker::read_favorites(&server) })
+                .background_spawn(async move { super::model_picker::read_favorites(&core) })
                 .await;
             let _ = this.update(cx, |this, cx| {
                 this.favorites = favorites;
@@ -148,7 +148,7 @@ impl Composer {
         // Each agent's list arrives on its own, so a slow CLI holds up only its own label.
         for kind in crate::ui::AGENT_KINDS {
             let task =
-                cx.background_spawn(async move { patchwork_server::provider::list_models(kind) });
+                cx.background_spawn(async move { patchwork_core::provider::list_models(kind) });
             cx.spawn(async move |this, cx| {
                 let models = task.await;
                 this.update(cx, |this, cx| {
@@ -256,7 +256,7 @@ impl Composer {
             return;
         };
         let w = workspace.read(cx);
-        let server = Arc::clone(&w.server);
+        let core = Arc::clone(&w.core);
         let project = w.project().map(|p| p.id.clone());
         // The same project's agents stay listed while they refresh, rather than flashing a
         // loading line each time a menu opens.
@@ -264,7 +264,7 @@ impl Composer {
             self.roles = Roles::Loading;
             self.roles_project.clone_from(&project);
         }
-        let task = cx.background_spawn(async move { server.project_agents(project.as_deref()) });
+        let task = cx.background_spawn(async move { core.project_agents(project.as_deref()) });
         cx.spawn(async move |this, cx| {
             let agents = task.await;
             this.update(cx, |this, cx| {

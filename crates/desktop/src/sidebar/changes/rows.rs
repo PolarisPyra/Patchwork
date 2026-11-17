@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
-use patchwork_server::workspace::FileChange;
+use patchwork_core::workspace::FileChange;
 
 use crate::ui::theme::{fs_md, fs_sm, radius_sm, Theme};
 use crate::ui::{base_name, button, dir_name, icon, tooltip};

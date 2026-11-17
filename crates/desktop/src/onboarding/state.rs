@@ -5,11 +5,11 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use gpui::{EventEmitter, FocusHandle, ScrollHandle, Window, prelude::*};
-use patchwork_server::Server;
-use patchwork_server::import::{ImportScan, ImportSource};
-use patchwork_server::provider::{AgentKind, AgentStatus};
-use patchwork_server::settings::Settings;
-use patchwork_server::system::browse;
+use patchwork_core::Core;
+use patchwork_core::import::{ImportScan, ImportSource};
+use patchwork_core::provider::{AgentKind, AgentStatus};
+use patchwork_core::settings::Settings;
+use patchwork_core::system::browse;
 use crate::ui::text_area::{Changed, Submitted, TextArea};
 
 /// The agent CLIs setup offers, in the order it lists them (`CLI_KINDS`).
@@ -100,7 +100,7 @@ pub(super) struct ImportResult {
 }
 
 pub struct Onboarding {
-    pub(super) server: Arc<Server>,
+    pub(super) core: Arc<Core>,
     pub(super) settings: Settings,
     pub(super) step: usize,
     /// The furthest step reached; later ones can't be picked in the stepper.
@@ -145,7 +145,7 @@ pub struct Onboarding {
 impl EventEmitter<OnboardingEvent> for Onboarding {}
 
 impl Onboarding {
-    pub fn new(server: Arc<Server>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(core: Arc<Core>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let name = cx.new(|cx| {
             let mut field = TextArea::new("my-project", "Project name", cx);
             field.single_line = true;
@@ -156,11 +156,11 @@ impl Onboarding {
             .detach();
         cx.subscribe(&name, |this, _, _: &Submitted, cx| this.create_in(cx))
             .detach();
-        let settings = server.store.settings();
+        let settings = core.settings();
         let heading = cx.focus_handle();
         window.focus(&heading, cx);
         let mut this = Self {
-            server,
+            core,
             default_kind: settings.agents.first().copied(),
             settings,
             step: 0,
@@ -214,10 +214,10 @@ impl Onboarding {
 
     /// Saves a change to the settings, and tells the window.
     pub(super) fn save(&mut self, change: impl FnOnce(&mut Settings), cx: &mut Context<Self>) {
-        if let Err(e) = self.server.store.update_settings(change) {
+        if let Err(e) = self.core.update_settings(change) {
             log::warn!(error:% = e; "could not save the setup's settings: {{error}}");
         }
-        self.settings = self.server.store.settings();
+        self.settings = self.core.settings();
         cx.emit(OnboardingEvent::Changed);
         cx.notify();
     }

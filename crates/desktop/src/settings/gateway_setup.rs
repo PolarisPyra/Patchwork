@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, ClickEvent, ClipboardItem, Role, SharedString, Window, div, prelude::*, px};
-use patchwork_server::gateway::Platform;
+use patchwork_core::gateway::Platform;
 
 use crate::settings::SettingsDialog;
 use crate::ui::theme::{font_mono, fs_sm, radius_sm, theme};

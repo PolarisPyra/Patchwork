@@ -7,7 +7,7 @@ use super::read::SEARCH_FIELD;
 use super::read::Rows;
 use super::read::cli;
 use gpui::{AnyElement, FontWeight, Role, SharedString, Window, div, prelude::*, px};
-use patchwork_server::provider::cli_info::InfoCommand;
+use patchwork_core::provider::cli_info::InfoCommand;
 use crate::settings::controls::tildify;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};

@@ -8,7 +8,7 @@ use super::types::Item;
 use super::types::Target;
 use std::sync::Arc;
 use gpui::{MouseDownEvent, SharedString, Window, prelude::*};
-use patchwork_server::threads::Thread;
+use patchwork_core::threads::Thread;
 use crate::workspace::{GranularScope, Workspace};
 
 impl Workspace {
@@ -73,10 +73,11 @@ impl Workspace {
             }
             Target::Project(id) => {
                 // A project on an SSH host has no folder here to show.
-                let remote =
-                    self.settings.projects.iter().any(|p| {
-                        &p.id == id && patchwork_server::system::remote::is_remote(&p.path)
-                    });
+                let remote = self
+                    .settings
+                    .projects
+                    .iter()
+                    .any(|p| &p.id == id && patchwork_core::system::ssh::is_remote(&p.path));
                 items.push(item(
                     "New task in a worktree",
                     "git-branch",
@@ -208,7 +209,7 @@ impl Workspace {
         window.prevent_default();
         // Chat apps connect and drop without telling the window, so where a chat can be continued
         // is read now.
-        self.chat_places = self.server.gateway_places();
+        self.chat_places = self.core.gateway_places();
         self.context_menu = Some(ContextMenu {
             at: event.position,
             target,
@@ -258,10 +259,10 @@ impl Workspace {
             (_, Act::Rename) => return self.start_rename(target, window, cx),
             (Target::Thread(id), Act::Favorite(_) | Act::Pin(_) | Act::Restore) => {
                 let id = id.clone();
-                let change = move |server: &patchwork_server::Server| match act {
-                    Act::Favorite(on) => server.set_thread_favorite(&id, on),
-                    Act::Pin(on) => server.set_thread_pinned(&id, on),
-                    _ => server.set_thread_archived(&id, false),
+                let change = move |core: &patchwork_core::Core| match act {
+                    Act::Favorite(on) => core.set_thread_favorite(&id, on),
+                    Act::Pin(on) => core.set_thread_pinned(&id, on),
+                    _ => core.set_thread_archived(&id, false),
                 };
                 return self.change("change the task list", change, cx);
             }
@@ -290,22 +291,21 @@ impl Workspace {
             (Target::Thread(id), Act::Export) => return self.export_thread(id, cx),
             (Target::Thread(id), Act::ContinueOn(platform, chat)) => {
                 let (id, platform, chat) = (id.clone(), *platform, chat.clone());
-                let change = move |server: &patchwork_server::Server| {
-                    server.continue_on_chat(&id, platform, &chat)
-                };
+                let change =
+                    move |core: &patchwork_core::Core| core.continue_on_chat(&id, platform, &chat);
                 return self.change("continue the chat on a chat app", change, cx);
             }
             (Target::Thread(_), Act::StopOn(platform, chat)) => {
                 let (platform, chat) = (*platform, chat.clone());
-                let change = move |server: &patchwork_server::Server| {
-                    server.stop_continuing_on_chat(platform, &chat);
+                let change = move |core: &patchwork_core::Core| {
+                    core.stop_continuing_on_chat(platform, &chat);
                     Ok(())
                 };
                 return self.change("stop continuing the chat on a chat app", change, cx);
             }
             (Target::Thread(id), Act::OpenLogs) => {
-                let (server, id) = (Arc::clone(&self.server), id.clone());
-                let report = cx.background_spawn(async move { server.thread_report(&id) });
+                let (core, id) = (Arc::clone(&self.core), id.clone());
+                let report = cx.background_spawn(async move { core.thread_report(&id) });
                 cx.spawn(async move |_, cx| match report.await {
                     Ok(path) => cx.update(|cx| cx.reveal_path(&path)),
                     Err(e) => {
@@ -341,10 +341,10 @@ impl Workspace {
                         _ => None,
                     })
                     .collect();
-                let change = move |server: &patchwork_server::Server| {
+                let change = move |core: &patchwork_core::Core| {
                     ids.iter().try_for_each(|id| match act {
-                        Act::Favorite(on) => server.set_thread_favorite(id, on),
-                        _ => server.set_thread_pinned(id, matches!(act, Act::Pin(true))),
+                        Act::Favorite(on) => core.set_thread_favorite(id, on),
+                        _ => core.set_thread_pinned(id, matches!(act, Act::Pin(true))),
                     })
                 };
                 return self.change("change the task list", change, cx);

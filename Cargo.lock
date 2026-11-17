@@ -4451,7 +4451,7 @@ dependencies = [
  "image",
  "log",
  "mimalloc",
- "patchwork-server",
+ "patchwork-core",
  "pulldown-cmark",
  "rust-embed",
  "serde_json",
@@ -4462,14 +4462,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "patchwork-remote"
-version = "26.11.90"
-dependencies = [
- "patchwork-server",
-]
-
-[[package]]
-name = "patchwork-server"
+name = "patchwork-core"
 version = "26.11.90"
 dependencies = [
  "base64 0.22.1",
@@ -4485,6 +4478,7 @@ dependencies = [
  "log",
  "minisign-verify",
  "notify",
+ "patchwork-system",
  "portable-pty",
  "prost",
  "regex",
@@ -4493,7 +4487,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "thiserror 2.0.21",
  "tokio",
  "toml 1.1.8+spec-1.1.0",
  "tonic",
@@ -4503,13 +4496,44 @@ dependencies = [
  "url",
  "uuid",
  "vt100",
- "which 7.0.3",
  "windows-sys 0.60.2",
  "winreg 0.56.0",
  "x11rb",
  "xcap",
  "zbus 5.19.0",
  "zip",
+]
+
+[[package]]
+name = "patchwork-remote"
+version = "26.11.90"
+dependencies = [
+ "base64 0.22.1",
+ "libc",
+ "patchwork-core",
+ "patchwork-system",
+ "serde",
+ "serde_json",
+ "windows-sys 0.60.2",
+]
+
+[[package]]
+name = "patchwork-system"
+version = "26.11.90"
+dependencies = [
+ "base64 0.22.1",
+ "libc",
+ "log",
+ "resvg",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "time",
+ "uuid",
+ "which 7.0.3",
+ "windows-sys 0.60.2",
+ "winreg 0.56.0",
 ]
 
 [[package]]

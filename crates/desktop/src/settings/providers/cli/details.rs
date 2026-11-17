@@ -7,8 +7,8 @@ use super::read::read;
 use super::read::SEARCH_FIELD;
 use super::read::Details;
 use gpui::{prelude::*, px};
-use patchwork_server::provider::cli_info::InfoCommand;
-use patchwork_server::provider::AgentKind;
+use patchwork_core::provider::cli_info::InfoCommand;
+use patchwork_core::provider::AgentKind;
 use crate::settings::SettingsDialog;
 
 impl SettingsDialog {

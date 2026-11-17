@@ -12,12 +12,12 @@ use crate::settings::SettingsDialog;
 impl SettingsDialog {
     /// Adds each file to the folder it belongs in, and lists what can be picked again.
     pub(super) fn import_themes(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         self.run(
             move || {
                 let failed: Vec<String> = paths
                     .iter()
-                    .filter_map(|path| server.import_theme(path).err())
+                    .filter_map(|path| core.import_theme(path).err())
                     .map(|e| e.to_string())
                     .collect();
                 (!failed.is_empty()).then(|| failed.join(". "))
@@ -48,15 +48,15 @@ impl SettingsDialog {
 
     /// Asks where to save a color scheme, and writes it there with its background.
     pub(super) fn export_theme(&mut self, id: String, cx: &mut Context<Self>) {
-        let home = patchwork_server::system::fs::home_dir().unwrap_or_default();
+        let home = patchwork_core::system::fs::home_dir().unwrap_or_default();
         let picked = cx.prompt_for_new_path(&home, Some(&format!("{id}.json")));
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         cx.spawn(async move |this, cx| {
             let Ok(Ok(Some(path))) = picked.await else {
                 return;
             };
             let exported = cx
-                .background_spawn(async move { server.export_theme(&id, &path) })
+                .background_spawn(async move { core.export_theme(&id, &path) })
                 .await;
             let _ = this.update(cx, |d, cx| {
                 d.themes.error = exported.err().map(|e| e.to_string());

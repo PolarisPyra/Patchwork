@@ -8,8 +8,8 @@ use gpui::{
     AnyElement, Div, FontWeight, Hsla, MouseButton, MouseDownEvent, Role, SharedString, Stateful,
     Toggled, WeakEntity, div, prelude::*, px, rgb,
 };
-use patchwork_server::settings::{Settings, Theme as ThemeSetting};
-use patchwork_server::themes::{Palette, Scheme};
+use patchwork_core::settings::{Settings, Theme as ThemeSetting};
+use patchwork_core::themes::{Palette, Scheme};
 
 use super::files::{Filed, file_tools};
 use crate::settings::SettingsDialog;

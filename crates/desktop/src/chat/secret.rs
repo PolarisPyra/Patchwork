@@ -1,5 +1,5 @@
 //! The agent's request for a secret. While it waits, a
-//! field drawn as dots takes the value, which goes straight to the server and is never shown, kept
+//! field drawn as dots takes the value, which goes straight to the core and is never shown, kept
 //! in the chat, or seen by the agent; once answered, a line with its outcome.
 
 // Rust guideline compliant 2026-10-09
@@ -8,8 +8,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use gpui::{AnyElement, Entity, FontWeight, Role, SharedString, div, prelude::*, px};
-use patchwork_server::secrets::SecretStatus;
-use patchwork_server::threads::{Approval, ApprovalStatus};
+use patchwork_core::secrets::SecretStatus;
+use patchwork_core::threads::{Approval, ApprovalStatus};
 
 use crate::ui::text_area::{Changed, Submitted, TextArea};
 use crate::ui::theme::{font_mono, fs_sm, radius, radius_sm, Theme};
@@ -92,10 +92,10 @@ impl Workspace {
             return;
         }
         self.secrets.errors.remove(&id);
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         let request = id.clone();
         let task =
-            cx.background_spawn(async move { server.answer_secret(&thread_id, &request, value) });
+            cx.background_spawn(async move { core.answer_secret(&thread_id, &request, value) });
         cx.spawn(async move |this, cx| {
             let answered = task.await;
             let _ = this.update(cx, |this, cx| {

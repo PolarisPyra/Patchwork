@@ -5,7 +5,7 @@
 use super::rows::ModelPicker;
 use super::rows::row_key;
 use gpui::{Focusable, KeyDownEvent, Window, prelude::*};
-use patchwork_server::provider::AgentKind;
+use patchwork_core::provider::AgentKind;
 use crate::chat::composer::Composer;
 use crate::ui::text_area::TextArea;
 

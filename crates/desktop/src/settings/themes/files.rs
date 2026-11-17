@@ -21,14 +21,14 @@ pub(super) enum Filed {
 impl SettingsDialog {
     /// Deletes a file. A setting that picked it goes back to what it is without one.
     fn remove_themed(&mut self, kind: Filed, id: String, cx: &mut Context<Self>) {
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         let removing = id.clone();
         self.run(
             move || {
                 match kind {
-                    Filed::Scheme => server.remove_theme(&removing),
-                    Filed::Scene => server.remove_scene(&removing),
-                    Filed::Code => server.remove_code_theme(&removing),
+                    Filed::Scheme => core.remove_theme(&removing),
+                    Filed::Scene => core.remove_scene(&removing),
+                    Filed::Code => core.remove_code_theme(&removing),
                 }
                 .map_err(|e| e.to_string())
             },
@@ -51,14 +51,14 @@ impl SettingsDialog {
 
     /// Writes a file Patchwork comes with as it came, over the changes made to it.
     fn reset_themed(&mut self, kind: Filed, id: String, cx: &mut Context<Self>) {
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         self.close_editor(&id);
         self.run(
             move || {
                 match kind {
-                    Filed::Scheme => server.reset_theme(&id),
-                    Filed::Scene => server.reset_scene(&id),
-                    Filed::Code => server.reset_code_theme(&id),
+                    Filed::Scheme => core.reset_theme(&id),
+                    Filed::Scene => core.reset_scene(&id),
+                    Filed::Code => core.reset_code_theme(&id),
                 }
                 .map_err(|e| e.to_string())
             },

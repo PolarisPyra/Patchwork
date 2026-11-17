@@ -6,7 +6,7 @@ use super::frame::foot;
 use super::steps::reply_step;
 use super::frame::head;
 use gpui::{Div, SharedString, div, prelude::*, px};
-use patchwork_server::threads::{Message, MessageStatus, Thread};
+use patchwork_core::threads::{Message, MessageStatus, Thread};
 use crate::ui::theme::{fs_md, fs_xs, radius_sm, Theme};
 use crate::ui::{button, icon};
 use crate::workspace::Workspace;

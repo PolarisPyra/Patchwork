@@ -45,11 +45,11 @@ impl Default for ShortcutsState {
 impl SettingsDialog {
     fn save_keys(&mut self, overrides: Overrides, cx: &mut Context<Self>) {
         let json = serde_json::to_string(&overrides).unwrap_or_default();
-        if let Err(e) = self.server.store.set_state(STATE_KEY, &json) {
+        if let Err(e) = self.core.set_state(STATE_KEY, &json) {
             self.error = Some(e.to_string());
         }
         self.shortcuts.overrides = Some(overrides);
-        bind_keys(&self.server, cx);
+        bind_keys(&self.core, cx);
         cx.notify();
     }
 
@@ -118,7 +118,7 @@ pub fn render(
 ) -> AnyElement {
     let t = *theme(cx);
     if d.shortcuts.overrides.is_none() {
-        d.shortcuts.overrides = Some(load(&d.server));
+        d.shortcuts.overrides = Some(load(&d.core));
     }
     let search = if let Some(search) = &d.shortcuts.search {
         search.clone()

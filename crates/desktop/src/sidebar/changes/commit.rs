@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{ClickEvent, Div, Focusable, Role, SharedString, Stateful, Window, div, prelude::*, px};
-use patchwork_server::workspace::PullRequest;
+use patchwork_core::workspace::PullRequest;
 
 use crate::ui::menu::MenuItem;
 use crate::ui::theme::{fs_md, fs_sm, radius_sm, Theme};

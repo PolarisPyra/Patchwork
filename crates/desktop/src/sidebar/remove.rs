@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use gpui::{AppContext as _, Context, PromptButton, PromptLevel, Window};
-use patchwork_server::threads::Thread;
+use patchwork_core::threads::Thread;
 
 use super::menu::Target;
 use crate::ui::display_title;
@@ -90,7 +90,7 @@ impl Workspace {
             &["Remove", "Cancel"],
             cx,
         );
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         cx.spawn(async move |this, cx| {
             if answer.await != Ok(0) {
                 return;
@@ -100,9 +100,9 @@ impl Workspace {
                 .background_spawn(async move {
                     let mut removed = Vec::new();
                     let mut failed = None;
-                    // Projects go first: the server deletes their tasks with them.
+                    // Projects go first: the core deletes their tasks with them.
                     for id in projects {
-                        match server.remove_project(&id) {
+                        match core.remove_project(&id) {
                             Ok(()) => removed.push(id),
                             Err(e) => {
                                 log::warn!(error:% = e; "could not remove the project: {{error}}");
@@ -111,7 +111,7 @@ impl Workspace {
                         }
                     }
                     for id in &folders {
-                        if let Err(e) = server.remove_folder(id) {
+                        if let Err(e) = core.remove_folder(id) {
                             log::warn!(error:% = e; "could not remove the folder: {{error}}");
                             failed.get_or_insert_with(|| e.to_string());
                         }
@@ -124,7 +124,7 @@ impl Workspace {
                 if open.is_some_and(|id| removed.contains(id)) {
                     this.thread = None;
                 }
-                this.settings = this.server.store.settings();
+                this.settings = this.core.settings();
                 if failed.is_some() {
                     this.error = failed;
                 }
@@ -187,7 +187,7 @@ impl Workspace {
             &[PromptButton::ok("Delete"), PromptButton::cancel("Keep")],
             cx,
         );
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         cx.spawn(async move |this, cx| {
             if answer.await != Ok(0) {
                 return;
@@ -196,7 +196,7 @@ impl Workspace {
             let ids = cx
                 .background_spawn(async move {
                     for id in &ids {
-                        server.delete_thread(id);
+                        core.delete_thread(id);
                     }
                     ids
                 })

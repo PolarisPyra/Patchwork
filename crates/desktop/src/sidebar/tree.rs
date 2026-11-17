@@ -7,8 +7,8 @@ use gpui::{
     AnyElement, ClickEvent, Div, Hsla, MouseButton, MouseDownEvent, Role, SharedString, Stateful,
     div, prelude::*, px,
 };
-use patchwork_server::gateway::ChatApps;
-use patchwork_server::threads::{ApprovalStatus, Thread};
+use patchwork_core::gateway::ChatApps;
+use patchwork_core::threads::{ApprovalStatus, Thread};
 use crate::ui::theme::{fs_sm, radius_sm, Theme, theme};
 use crate::ui::{
     agent_label, agent_logo, button, display_title, format_relative, icon, platform_logo, spinner,

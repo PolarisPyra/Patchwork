@@ -1,0 +1,499 @@
+//! Projects, the folders that group their threads, and what the sidebar remembers about them.
+
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
+use crate::provider::AgentKind;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use serde::{Deserialize, Serialize};
+
+use crate::system::{new_id, ssh};
+use crate::threads::title::clean_name;
+use crate::Core;
+use crate::workspace::{self, watch};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Project {
+    pub id: String,
+    pub name: String,
+    pub path: String,
+}
+
+impl Project {
+    /// The SSH host the project is on, by its `Host` alias; none for this computer.
+    #[must_use]
+    pub fn host(&self) -> Option<&str> {
+        ssh::split(&self.path).map(|l| l.host)
+    }
+}
+
+/// Whether the project folder at `root` is there, on this computer or on its SSH host.
+///
+/// This blocks on the host for a remote root. It is `None` when the host cannot be reached
+/// to ask, so an offline host does not read as a deleted folder.
+#[must_use]
+pub fn folder_found(root: &str) -> Option<bool> {
+    let Some(at) = ssh::split(root) else {
+        return Some(Path::new(root).is_dir());
+    };
+    if ssh::fs::canonical_dir(at.host, at.path).is_ok() {
+        return Some(true);
+    }
+    ssh::home(at.host).ok().map(|_| false)
+}
+
+/// A folder inside a project. Its threads are those whose `folder_id` names it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Folder {
+    pub id: String,
+    pub project_id: String,
+    pub name: String,
+    /// The agent whose tasks it holds, when sorting tasks by provider made it.
+    #[serde(default)]
+    pub sorted_by: Option<AgentKind>,
+}
+
+/// `app_state` key for the projects and folders the sidebar has collapsed (JSON array).
+const COLLAPSED_KEY: &str = "collapsed_sections";
+
+impl Core {
+    /// Watches the project for changes, in place of any project watched before. After each
+    /// settled burst it runs one `git status`, adds what replies under way there changed to
+    /// them, and passes the result to `on_change`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the project is unknown or its folder cannot be watched.
+    pub fn watch_project(
+        self: &Arc<Self>,
+        project_id: &str,
+        on_change: impl Fn(crate::workspace::ProjectChanged) + Send + 'static,
+    ) -> Result<(), Error> {
+        let mut current = self
+            .project_watch
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if current.as_ref().is_some_and(|(id, _)| id == project_id) {
+            return Ok(());
+        }
+        let root = self.project_root(project_id)?;
+        let folder = root.clone();
+        // The watcher lives in the core, so it holds the core weakly.
+        let core = Arc::downgrade(self);
+        let id = project_id.to_string();
+        let on_burst = move |burst: Vec<watch::Change>| {
+            let Some(core) = core.upgrade() else {
+                return;
+            };
+            let changes = workspace::git_changes(&root).ok();
+            if let Some(changes) = &changes {
+                core.note_project_changes(&id, changes, &burst);
+            }
+            on_change(crate::workspace::ProjectChanged {
+                project_id: id.clone(),
+                paths: burst.into_iter().map(|c| c.path).collect(),
+                branch: workspace::git_branch(&root),
+                changes,
+            });
+        };
+        let watcher = if ssh::is_remote(&folder) {
+            watch::ProjectWatcher::poll(&folder, on_burst)?
+        } else {
+            watch::ProjectWatcher::start(&PathBuf::from(&folder), on_burst)?
+        };
+        *current = Some((project_id.to_string(), watcher));
+        Ok(())
+    }
+
+    /// The folder of the project `project_id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the project is unknown.
+    pub fn project_root(&self, project_id: &str) -> Result<String, Error> {
+        self.store
+            .settings()
+            .projects
+            .into_iter()
+            .find(|p| p.id == project_id)
+            .map(|p| p.path)
+            .ok_or_else(|| format!("unknown project {project_id}").into())
+    }
+
+    /// Adds `project` unless its path is already registered; returns the stored one.
+    pub(crate) fn register_project(
+        &self,
+        project: Project,
+        activate: bool,
+    ) -> Result<Project, Error> {
+        self.update_settings(|s| {
+            let p = if let Some(existing) = s.projects.iter().find(|p| p.path == project.path) {
+                existing.clone()
+            } else {
+                s.projects.push(project.clone());
+                project
+            };
+            if activate {
+                s.active_project_id = Some(p.id.clone());
+            }
+            p
+        })
+    }
+
+    /// Adds the folder at `path` as a project.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `path` cannot be opened or is not a folder, or when the settings
+    /// cannot be saved.
+    pub fn add_project(&self, path: &str) -> Result<Project, Error> {
+        self.register_project(workspace::make_project(path)?, true)
+    }
+
+    /// Makes the folder `name` in `parent` and adds it as a project.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `name` is not a single folder name, when the folder cannot be created
+    /// in `parent`, or when the settings cannot be saved.
+    pub fn create_project(&self, parent: &str, name: &str) -> Result<Project, Error> {
+        self.register_project(workspace::create_project_dir(parent, name)?, true)
+    }
+
+    /// Renames the project `id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `name` is empty or invalid, when the project is unknown, or when the
+    /// settings cannot be saved.
+    pub fn rename_project(&self, id: &str, name: &str) -> Result<(), Error> {
+        let name = clean_name(name)?;
+        self.update_settings(|s| {
+            let project = s.projects.iter_mut().find(|p| p.id == id);
+            project.ok_or_else(|| format!("unknown project {id}"))?.name = name;
+            Ok::<_, Error>(())
+        })?
+    }
+
+    /// Points a project at another folder, such as after it was moved or renamed. Agents keep
+    /// their sessions by folder, so the project's tasks start new ones, sent their transcript.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `path` is not a folder, when one of the project's tasks is running,
+    /// when the project is unknown or another project already uses the folder, or when the settings
+    /// or a chat cannot be saved.
+    pub fn relocate_project(&self, id: &str, path: &str) -> Result<(), Error> {
+        let path = workspace::make_project(path)?.path;
+        let threads: Vec<String> = self
+            .store
+            .threads()
+            .into_iter()
+            .filter(|t| t.project_id.as_deref() == Some(id))
+            .map(|t| t.id)
+            .collect();
+        if threads.iter().any(|t| self.runner.is_running(t)) {
+            return Err("Stop this project's running tasks before changing its folder".into());
+        }
+        let moved = self.update_settings(|s| {
+            if let Some(other) = s.projects.iter().find(|p| p.path == path && p.id != id) {
+                return Err(format!("{path} is already the folder of {}", other.name));
+            }
+            let project = s.projects.iter_mut().find(|p| p.id == id);
+            let project = project.ok_or_else(|| format!("unknown project {id}"))?;
+            let moved = project.path != path;
+            project.path = path;
+            Ok(moved)
+        })??;
+        if moved {
+            // A watch on the old folder ends, so the next `watch_project` starts one on the new.
+            let mut watch = self
+                .project_watch
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if watch.as_ref().is_some_and(|(watched, _)| watched == id) {
+                *watch = None;
+            }
+            drop(watch);
+            for thread_id in &threads {
+                // An idle agent still runs in the old folder.
+                self.runner.retire_idle(thread_id);
+                self.store.update_thread(thread_id, |t| {
+                    t.session_id = None;
+                    t.context_pending = !t.messages.is_empty();
+                })?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Makes a git worktree of the project's repository, on a new branch from its HEAD, and adds
+    /// it as a project of its own, so that its tasks work apart from the project's. Ignored
+    /// files, such as installed packages, are not in it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the project is unknown, when it is not in a git repository or the
+    /// repository has no commit, or when `git` or the file system fails to create the worktree.
+    pub fn create_worktree(&self, project_id: &str) -> Result<Project, Error> {
+        let source = self
+            .store
+            .settings()
+            .projects
+            .into_iter()
+            .find(|p| p.id == project_id)
+            .ok_or_else(|| format!("unknown project {project_id}"))?;
+        let top = workspace::run_git(&source.path, &["rev-parse", "--show-toplevel"])
+            .map_err(|_discarded| format!("{} isn't a git repository", source.name))?;
+        let top = ssh::same_host(&source.path, top.trim());
+        if workspace::run_git(&top, &["rev-parse", "--verify", "-q", "HEAD"]).is_err() {
+            return Err("Make a first commit before starting a task in a worktree".into());
+        }
+        // A project in a folder of its repository opens the same folder of the worktree.
+        let prefix = workspace::run_git(&source.path, &["rev-parse", "--show-prefix"])?;
+        let short = &new_id()[..8];
+        let folder = Path::new(ssh::here(&top))
+            .file_name()
+            .map_or_else(|| "worktree".into(), |n| n.to_string_lossy().into_owned());
+        let dir = self.worktrees_for(&top)?;
+        let root = ssh::join(&dir, &format!("{folder}-{short}"));
+        let branch = format!("patchwork/{short}");
+        workspace::run_git(
+            &top,
+            &["worktree", "add", "-b", &branch, ssh::here(&root), "HEAD"],
+        )?;
+        let mut project = workspace::make_project(&ssh::join(&root, prefix.trim()))?;
+        project.name = format!("{} · {short}", source.name);
+        self.register_project(project, true)
+    }
+
+    /// The folder of the worktree `create_worktree` made for the project at `path`, when it is
+    /// one and may be removed: refused while a task runs in it or it has changes that aren't
+    /// committed. None for any other project.
+    fn removable_worktree(&self, id: &str, path: &str) -> Result<Option<String>, Error> {
+        let root = if let Some(at) = ssh::split(path) {
+            // Only asked of the host when the path could be one of its worktrees, so removing a
+            // project on a host that is down still works.
+            if !at.path.contains("/patchwork/worktrees/") {
+                return Ok(None);
+            }
+            let Ok(dir) = self.worktrees_for(path) else {
+                return Ok(None);
+            };
+            let Some(first) = path
+                .strip_prefix(&format!("{dir}/"))
+                .and_then(|rel| rel.split('/').next())
+            else {
+                return Ok(None);
+            };
+            let root = ssh::join(&dir, first);
+            // Gone already: git drops its record of the worktree by itself.
+            if ssh::fs::canonical_dir(at.host, ssh::here(&root)).is_err() {
+                return Ok(None);
+            }
+            root
+        } else {
+            let Ok(dir) = crate::system::fs::canonicalize(&self.worktrees_dir) else {
+                return Ok(None);
+            };
+            let Some(first) = Path::new(path)
+                .strip_prefix(&dir)
+                .ok()
+                .and_then(|rel| rel.components().next())
+            else {
+                return Ok(None);
+            };
+            let root = dir.join(first);
+            // Gone already: git drops its record of the worktree by itself.
+            if !root.exists() {
+                return Ok(None);
+            }
+            root.to_string_lossy().into_owned()
+        };
+        let running = self
+            .store
+            .threads()
+            .into_iter()
+            .any(|t| t.project_id.as_deref() == Some(id) && self.runner.is_running(&t.id));
+        if running {
+            return Err("Stop this worktree's running tasks before removing it".into());
+        }
+        if !workspace::run_git(&root, &["status", "--porcelain"])?
+            .trim()
+            .is_empty()
+        {
+            return Err(
+                "This worktree has changes that aren't committed. Commit or discard them before removing it"
+                    .into(),
+            );
+        }
+        Ok(Some(root))
+    }
+
+    /// Removes the worktree at `root`. Its branch stays with its commits.
+    fn remove_worktree(&self, root: &str) -> Result<(), Error> {
+        let dir = self.worktrees_for(root)?;
+        let common = workspace::run_git(
+            root,
+            &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+        )?;
+        let git_dir = format!("--git-dir={}", common.trim());
+        workspace::run_git(&dir, &[&git_dir, "worktree", "remove", ssh::here(root)])?;
+        Ok(())
+    }
+
+    /// The folder `create_worktree` puts worktrees in, on the machine `root` is on, made if it
+    /// isn't there: Patchwork's own here, and the same place under the home folder of an SSH host.
+    fn worktrees_for(&self, root: &str) -> Result<String, Error> {
+        let Some(at) = ssh::split(root) else {
+            std::fs::create_dir_all(&self.worktrees_dir)
+                .map_err(|e| format!("Cannot create {}: {e}", self.worktrees_dir.display()))?;
+            return Ok(self.worktrees_dir.to_string_lossy().into_owned());
+        };
+        let dir = ssh::op::make_dirs(at.host, ".local/share/patchwork/worktrees")?;
+        Ok(ssh::root(at.host, &dir))
+    }
+
+    /// Removes the project, with its worktree if Patchwork made one.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the project is unknown, when its worktree cannot be removed, or when
+    /// the database cannot save the removal.
+    pub fn remove_project(&self, id: &str) -> Result<(), Error> {
+        let path = self.project_root(id)?;
+        let worktree = self.removable_worktree(id, &path)?;
+        // Each chat goes as one deleted by itself does: its agent stopped, and what it kept
+        // outside the database removed, while the project's folder is still there to find it in.
+        let chats: Vec<String> = self.store.with_threads(|threads| {
+            threads
+                .iter()
+                .filter(|t| t.project_id.as_deref() == Some(id))
+                .map(|t| t.id.clone())
+                .collect()
+        });
+        for chat in &chats {
+            self.forget_thread(chat);
+        }
+        if let Some(root) = worktree {
+            self.remove_worktree(&root)?;
+        }
+        // The chats before the project: a failure between the two leaves an empty project, not
+        // chats that belong to none.
+        self.store.delete_project_threads(id)?;
+        self.update_settings(|s| {
+            s.projects.retain(|p| p.id != id);
+            if s.active_project_id.as_deref() == Some(id) {
+                s.active_project_id = s.projects.first().map(|p| p.id.clone());
+            }
+        })?;
+        self.store.clear_state(&crate::threads::project_key(id))
+    }
+
+    /// Files of a project that a mention can refer to.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the project is unknown or its files cannot be listed.
+    pub fn list_files(&self, project_id: &str) -> Result<Vec<String>, Error> {
+        workspace::list_files(&self.project_root(project_id)?)
+    }
+
+    /// Ids of the projects and folders that were collapsed in the sidebar.
+    pub fn collapsed_sections(&self) -> Vec<String> {
+        self.store
+            .state(COLLAPSED_KEY)
+            .and_then(|json| serde_json::from_str(&json).ok())
+            .unwrap_or_default()
+    }
+
+    /// Saves which projects and folders the sidebar has collapsed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the list cannot be serialized or saved.
+    pub fn set_collapsed_sections(&self, ids: &[String]) -> Result<(), Error> {
+        let json = serde_json::to_string(ids).map_err(|e| e.to_string())?;
+        self.store.set_state(COLLAPSED_KEY, &json)
+    }
+
+    pub fn list_folders(&self) -> Vec<Folder> {
+        self.store.folders()
+    }
+
+    pub(crate) fn folder(&self, id: &str) -> Result<Folder, Error> {
+        self.store
+            .folders()
+            .into_iter()
+            .find(|f| f.id == id)
+            .ok_or_else(|| format!("unknown folder {id}").into())
+    }
+
+    /// Makes a folder named `name` in the project.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the project is unknown, when `name` is empty or invalid, or when the
+    /// database cannot save the folder.
+    pub fn create_folder(&self, project_id: &str, name: &str) -> Result<Folder, Error> {
+        self.add_folder(project_id, clean_name(name)?, None)
+    }
+
+    /// Creates the folder `name` that sorting tasks by provider puts `agent`'s tasks in.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `name` is empty or invalid, the project is unknown, or the database
+    /// cannot save the folder.
+    pub fn create_sort_folder(
+        &self,
+        project_id: &str,
+        name: &str,
+        agent: AgentKind,
+    ) -> Result<Folder, Error> {
+        self.add_folder(project_id, clean_name(name)?, Some(agent))
+    }
+
+    fn add_folder(
+        &self,
+        project_id: &str,
+        name: String,
+        sorted_by: Option<AgentKind>,
+    ) -> Result<Folder, Error> {
+        self.project_root(project_id)?;
+        let folder = Folder {
+            id: new_id(),
+            project_id: project_id.into(),
+            name,
+            sorted_by,
+        };
+        self.store.create_folder(folder.clone())?;
+        Ok(folder)
+    }
+
+    /// Renames the folder `id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `name` is empty or invalid, when the folder is unknown, or when the
+    /// database cannot save the new name.
+    pub fn rename_folder(&self, id: &str, name: &str) -> Result<(), Error> {
+        let name = clean_name(name)?;
+        self.folder(id)?;
+        self.store.rename_folder(id, &name)
+    }
+
+    /// Its tasks move to the project's top level.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the folder is unknown or the database cannot delete it.
+    pub fn remove_folder(&self, id: &str) -> Result<(), Error> {
+        self.folder(id)?;
+        self.store.delete_folder(id)
+    }
+}

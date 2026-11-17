@@ -9,10 +9,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{Entity, FocusHandle, Pixels, Point, ScrollHandle, Task, WeakEntity, Window, prelude::*};
-use patchwork_server::android::{
+use patchwork_core::android::{
     self, Avd, Boot, Device, MobileProject, RunMode, RunTarget, Sdk, Snapshot, Variant,
 };
-use patchwork_server::{Error, Server};
+use patchwork_core::{Error, Core};
 
 use super::create::Create;
 use super::log::LogPane;
@@ -55,7 +55,7 @@ pub(super) enum Run {
 
 pub struct AndroidPanel {
     pub(super) workspace: WeakEntity<Workspace>,
-    pub(super) server: Arc<Server>,
+    pub(super) core: Arc<Core>,
     pub project_id: String,
     pub(super) project: MobileProject,
     /// The SDK and devices as last read. None until the first read returns.
@@ -105,7 +105,7 @@ pub struct AndroidPanel {
 impl AndroidPanel {
     pub fn new(
         workspace: WeakEntity<Workspace>,
-        server: Arc<Server>,
+        core: Arc<Core>,
         project_id: String,
         project: MobileProject,
         window: &mut Window,
@@ -121,13 +121,13 @@ impl AndroidPanel {
             .detach();
         let poll = cx.spawn(async move |this, cx| {
             loop {
-                let Ok((server, root)) = this.update(cx, |this, _| {
-                    (Arc::clone(&this.server), this.project.root.clone())
+                let Ok((core, root)) = this.update(cx, |this, _| {
+                    (Arc::clone(&this.core), this.project.root.clone())
                 }) else {
                     break;
                 };
                 let snapshot = cx
-                    .background_spawn(async move { server.android_snapshot(&root) })
+                    .background_spawn(async move { core.android_snapshot(&root) })
                     .await;
                 if this
                     .update(cx, |this, cx| this.apply(snapshot, cx))
@@ -141,9 +141,9 @@ impl AndroidPanel {
         let focus = cx.focus_handle();
         window.focus(&focus, cx);
         let panel = Self {
-            selected: server.android_device(&project_id),
+            selected: core.android_device(&project_id),
             workspace,
-            server,
+            core,
             project_id,
             project,
             snapshot: None,
@@ -256,10 +256,10 @@ impl AndroidPanel {
         let current = self.screen.as_ref().map(|s| s.read(cx).serial.clone());
         match shown {
             Some(device) if current.as_ref() != Some(&device.serial) => {
-                let (server, serial) = (Arc::clone(&self.server), device.serial.clone());
+                let (core, serial) = (Arc::clone(&self.core), device.serial.clone());
                 let root = self.project.root.clone();
                 let name = device_key(device);
-                self.screen = Some(cx.new(|cx| DeviceScreen::new(server, root, serial, name, cx)));
+                self.screen = Some(cx.new(|cx| DeviceScreen::new(core, root, serial, name, cx)));
             }
             Some(_) => {}
             None => self.screen = None,
@@ -268,8 +268,8 @@ impl AndroidPanel {
 
     /// Reads the SDK and devices now, rather than at the next poll, after something changed them.
     pub(super) fn refresh(&mut self, cx: &mut Context<Self>) {
-        let (server, root) = (Arc::clone(&self.server), self.project.root.clone());
-        let task = cx.background_spawn(async move { server.android_snapshot(&root) });
+        let (core, root) = (Arc::clone(&self.core), self.project.root.clone());
+        let task = cx.background_spawn(async move { core.android_snapshot(&root) });
         cx.spawn(async move |this, cx| {
             let snapshot = task.await;
             this.update(cx, |this, cx| this.apply(snapshot, cx))
@@ -285,9 +285,9 @@ impl AndroidPanel {
         self.selected = Some(key.clone());
         self.sync_screen(cx);
         self.sync_log(cx);
-        let (server, project) = (Arc::clone(&self.server), self.project_id.clone());
+        let (core, project) = (Arc::clone(&self.core), self.project_id.clone());
         cx.background_spawn(async move {
-            if let Err(e) = server.set_android_device(&project, &key) {
+            if let Err(e) = core.set_android_device(&project, &key) {
                 log::warn!(error:% = e; "could not remember the device: {{error}}");
             }
         })
@@ -304,13 +304,13 @@ impl AndroidPanel {
         self.busy.insert(avd.to_string(), Busy::Starting);
         self.failure = None;
         self.confirm = None;
-        let (server, root) = (Arc::clone(&self.server), self.project.root.clone());
+        let (core, root) = (Arc::clone(&self.core), self.project.root.clone());
         let name = avd.to_string();
         let task = cx.background_spawn({
             let name = name.clone();
             async move {
-                let booting = server.start_emulator(&root, &name, boot)?;
-                server.await_boot(&root, &booting)?;
+                let booting = core.start_emulator(&root, &name, boot)?;
+                core.await_boot(&root, &booting)?;
                 Ok::<_, Error>(booting.serial)
             }
         });
@@ -341,11 +341,11 @@ impl AndroidPanel {
         self.busy.insert(avd.to_string(), Busy::Stopping);
         self.failure = None;
         self.stopping.insert(serial.clone());
-        let (server, root) = (Arc::clone(&self.server), self.project.root.clone());
+        let (core, root) = (Arc::clone(&self.core), self.project.root.clone());
         let name = avd.to_string();
         let task = cx.background_spawn({
             let serial = serial.clone();
-            async move { server.stop_emulator(&root, &serial) }
+            async move { core.stop_emulator(&root, &serial) }
         });
         cx.spawn(async move |this, cx| {
             let stopped = task.await;
@@ -368,11 +368,11 @@ impl AndroidPanel {
         self.busy.insert(avd.to_string(), Busy::Deleting);
         self.failure = None;
         self.confirm = None;
-        let (server, root) = (Arc::clone(&self.server), self.project.root.clone());
+        let (core, root) = (Arc::clone(&self.core), self.project.root.clone());
         let name = avd.to_string();
         let task = cx.background_spawn({
             let name = name.clone();
-            async move { server.delete_avd(&root, &name) }
+            async move { core.delete_avd(&root, &name) }
         });
         cx.spawn(async move |this, cx| {
             let deleted = task.await;
@@ -423,7 +423,7 @@ impl AndroidPanel {
         self.run = Run::Preparing;
         self.stop_asked = false;
         self.running_on = Some(serial.clone());
-        let (server, project) = (Arc::clone(&self.server), self.project.clone());
+        let (core, project) = (Arc::clone(&self.core), self.project.clone());
         let variant = self.variant.clone();
         let task = cx.background_spawn(async move {
             let target = RunTarget {
@@ -432,7 +432,7 @@ impl AndroidPanel {
                 variant: &variant,
                 mode: RunMode::Attached,
             };
-            server.android_run(&project, &target)
+            core.android_run(&project, &target)
         });
         cx.spawn(async move |this, cx| {
             let prepared = task.await;
@@ -489,8 +489,7 @@ impl AndroidPanel {
     /// Opens the field for the SDK's folder with the one in use in it.
     pub(super) fn edit_sdk(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let current = self
-            .server
-            .store
+            .core
             .settings()
             .android_sdk
             .or_else(|| {
@@ -511,8 +510,8 @@ impl AndroidPanel {
     /// Keeps the SDK folder typed in the field, and looks for the SDK again.
     pub(super) fn save_sdk(&mut self, cx: &mut Context<Self>) {
         let path = self.sdk_field.read(cx).content.clone();
-        let server = Arc::clone(&self.server);
-        let task = cx.background_spawn(async move { server.set_android_sdk(&path) });
+        let core = Arc::clone(&self.core);
+        let task = cx.background_spawn(async move { core.set_android_sdk(&path) });
         cx.spawn(async move |this, cx| {
             let saved = task.await;
             this.update(cx, |this, cx| {

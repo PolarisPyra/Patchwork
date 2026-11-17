@@ -18,7 +18,7 @@ impl SettingsDialog {
     }
 
     pub fn save_sigils(&mut self, sigils: Sigils, cx: &mut Context<Self>) {
-        save(&self.server, sigils, cx);
+        save(&self.core, sigils, cx);
         cx.notify();
     }
 

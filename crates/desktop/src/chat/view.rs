@@ -3,12 +3,12 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{Div, FontWeight, Role, SharedString, Window, div, prelude::*, px};
-use patchwork_server::threads::{MessageStatus, Thread};
+use patchwork_core::threads::{MessageStatus, Thread};
 use crate::ui::theme::{InScheme, Theme, fs_sm, fs_xl, fs_xs, radius, radius_sm, theme};
 use crate::ui::{agent_logo, button, display_title, format_tokens, icon, icon_button, tooltip};
 use crate::workspace::Workspace;
 use super::transcript::{follow_width, sync_transcript, transcript};
-use crate::ui::backdrop;
+use super::backdrop;
 use super::background;
 use super::find;
 use super::folder;
@@ -240,7 +240,7 @@ pub(super) fn floating(
     let open = w
         .project()
         .map(|p| p.path.clone())
-        .filter(|root| !patchwork_server::system::remote::is_remote(root))
+        .filter(|root| !patchwork_core::system::ssh::is_remote(root))
         .map(|root| {
             button("open-in-editor", "Open in editor")
                 .h(px(28.))
@@ -264,8 +264,7 @@ pub(super) fn floating(
                 .on_click(cx.listener(move |_, _, _, cx| {
                     let root = root.clone();
                     cx.background_spawn(async move {
-                        if let Err(e) = patchwork_server::workspace::open_in_editor(&root, "", None)
-                        {
+                        if let Err(e) = patchwork_core::workspace::open_in_editor(&root, "", None) {
                             log::warn!(error:% = e; "could not open the editor: {{error}}");
                         }
                     })

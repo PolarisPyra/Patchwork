@@ -6,8 +6,8 @@
 use gpui::{
     App, ClickEvent, FontWeight, Pixels, Point, Role, Window, div, point, prelude::*, px, relative,
 };
-use patchwork_server::system::device::Kind;
-use patchwork_server::threads::{MessageStatus, Role as MessageRole};
+use patchwork_core::system::device::Kind;
+use patchwork_core::threads::{MessageStatus, Role as MessageRole};
 
 use super::{Page, View, Workspace, is_busy};
 use crate::ui::menu::{Dismissed, Menu, MenuItem};
@@ -71,11 +71,7 @@ impl Workspace {
             .iter()
             .find(|p| p.host() == host.as_deref())
             .map(|p| p.id.clone());
-        if let Err(e) = self
-            .server
-            .store
-            .update_settings(|s| s.default_machine = host)
-        {
+        if let Err(e) = self.core.update_settings(|s| s.default_machine = host) {
             log::warn!(error:% = e; "could not record the machine: {{error}}");
         }
         if elsewhere && let Some(id) = first {
@@ -209,7 +205,7 @@ impl Workspace {
                             .text_size(px(fs_xs()))
                             .line_height(px(16.))
                             .text_color(t.text_muted)
-                            .child(patchwork_server::VERSION),
+                            .child(patchwork_core::VERSION),
                     ),
             )
     }

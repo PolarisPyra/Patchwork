@@ -19,14 +19,14 @@ impl Workspace {
         let onboarding = if let Some(onboarding) = &self.onboarding {
             onboarding.clone()
         } else {
-            let server = Arc::clone(&self.server);
-            let onboarding = cx.new(|cx| Onboarding::new(server, window, cx));
+            let core = Arc::clone(&self.core);
+            let onboarding = cx.new(|cx| Onboarding::new(core, window, cx));
             cx.subscribe_in(
                 &onboarding,
                 window,
                 |this, _, event, window, cx| match event {
                     OnboardingEvent::Changed => {
-                        this.settings = this.server.store.settings();
+                        this.settings = this.core.settings();
                         // Setup may have added projects and imported threads.
                         this.reload(cx);
                         if this.settings.onboarded {

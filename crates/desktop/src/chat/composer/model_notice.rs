@@ -5,9 +5,9 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, Div, Role, Stateful, div, prelude::*, px};
-use patchwork_server::provider::AgentKind;
-use patchwork_server::provider::api::{config, servers};
-use patchwork_server::threads::AttachmentKind;
+use patchwork_core::provider::AgentKind;
+use patchwork_core::provider::api::{config, servers};
+use patchwork_core::threads::AttachmentKind;
 
 use super::Composer;
 use super::menus::{Menu, Pick};

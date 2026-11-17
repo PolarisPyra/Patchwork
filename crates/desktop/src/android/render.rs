@@ -7,8 +7,8 @@ use gpui::{
     AnyElement, ExternalPaths, FontWeight, KeyDownEvent, Role, SharedString, Window, div,
     prelude::*, px, relative,
 };
-use patchwork_server::Error;
-use patchwork_server::android::{self, Sdk};
+use patchwork_core::Error;
+use patchwork_core::android::{self, Sdk};
 
 use super::state::AndroidPanel;
 use crate::ui::menu::Menu;

@@ -4,7 +4,7 @@
 // Rust guideline compliant 2026-11-10
 
 use gpui::{Window, prelude::*};
-use patchwork_server::threads::{Attachment, Role};
+use patchwork_core::threads::{Attachment, Role};
 
 use super::state::Composer;
 

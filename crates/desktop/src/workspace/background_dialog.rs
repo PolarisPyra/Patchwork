@@ -26,19 +26,19 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Ok(thread) = self.server.thread(id) else {
+        let Ok(thread) = self.core.thread(id) else {
             return;
         };
         if thread.parent.is_some() {
             return;
         }
-        let (server, shared) = (
-            Arc::clone(&self.server),
+        let (core, shared) = (
+            Arc::clone(&self.core),
             self.settings.chat_background.clone(),
         );
         let picker = cx.new(|cx| {
             BackgroundPicker::new(
-                server,
+                core,
                 "Background of this chat",
                 thread.background.clone(),
                 None,
@@ -52,8 +52,8 @@ impl Workspace {
             };
             match e {
                 PickerEvent::Picked(background) => {
-                    if let Err(e) = this.server.set_thread_background(&id, background.clone()) {
-                        let before = this.server.thread(&id).ok().and_then(|t| t.background);
+                    if let Err(e) = this.core.set_thread_background(&id, background.clone()) {
+                        let before = this.core.thread(&id).ok().and_then(|t| t.background);
                         picker.update(cx, |p, cx| p.failed(before, e.to_string(), cx));
                     }
                 }
@@ -61,8 +61,8 @@ impl Workspace {
                 // the one all chats share.
                 PickerEvent::PicturesChanged => {
                     this.backgrounds.reload();
-                    this.settings = this.server.store.settings();
-                    let value = this.server.thread(&id).ok().and_then(|t| t.background);
+                    this.settings = this.core.settings();
+                    let value = this.core.thread(&id).ok().and_then(|t| t.background);
                     let shared = this.settings.chat_background.clone();
                     picker.update(cx, |p, cx| {
                         p.set_value(value, Some(shared));

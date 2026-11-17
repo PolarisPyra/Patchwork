@@ -39,7 +39,7 @@ impl SettingsDialog {
             return;
         }
         let (changed, mut received) = mpsc::unbounded::<()>();
-        self.server.agents.subscribe(move |_| {
+        self.core.agents.subscribe(move |_| {
             let _ = changed.unbounded_send(());
         });
         cx.spawn(async move |this, cx| {
@@ -85,10 +85,10 @@ impl SettingsDialog {
             return;
         };
         let name = name.to_string();
-        let server = std::sync::Arc::clone(&self.server);
+        let core = std::sync::Arc::clone(&self.core);
         self.extensions.error = None;
         self.run(
-            move || server.agents.create(&name),
+            move || core.agents.create(&name),
             |d, out, cx| match out {
                 Ok(()) => {
                     d.cancel_draft(cx);
@@ -107,8 +107,8 @@ pub fn render(
 ) -> AnyElement {
     d.watch_agents(cx);
     let t = *theme(cx);
-    let agents = d.server.agents.list();
-    let dir = d.server.agents.dir().to_string_lossy().into_owned();
+    let agents = d.core.agents.list();
+    let dir = d.core.agents.dir().to_string_lossy().into_owned();
     let state = &d.extensions;
     let (query, primary_only) = (state.agent_query.trim().to_lowercase(), state.primary_only);
     let primaries = agents.iter().filter(|a| a.primary).count();

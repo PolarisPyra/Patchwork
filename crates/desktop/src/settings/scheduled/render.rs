@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use gpui::{AnyElement, FontWeight, SharedString, Window, div, prelude::*, px};
-use patchwork_server::scheduled::Task;
+use patchwork_core::scheduled::Task;
 
 use crate::settings::controls::{alert, switch};
 use crate::settings::{SettingsDialog, SettingsEvent};
@@ -105,7 +105,7 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                         .text_color(t.text_muted)
                         .child(meta(
                             "calendar-blank",
-                            patchwork_server::scheduled::describe(&task.schedule),
+                            patchwork_core::scheduled::describe(&task.schedule),
                         ))
                         .child(meta(
                             if task.project_id.is_some() {
@@ -158,10 +158,10 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                     .child(icon("play", 13.))
                     .child("Run")
                     .on_click(cx.listener(move |d, _, _, cx| {
-                        let (server, id) = (Arc::clone(&d.server), run_id.clone());
+                        let (core, id) = (Arc::clone(&d.core), run_id.clone());
                         d.scheduled.error = None;
                         d.run(
-                            move || server.run_scheduled_task(&id).map(drop),
+                            move || core.run_scheduled_task(&id).map(drop),
                             |d, out, cx| {
                                 d.scheduled.error = out.err().map(|e| e.to_string());
                                 cx.emit(SettingsEvent::ThreadsChanged);
@@ -193,12 +193,12 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                         &t,
                     )
                     .on_click(cx.listener(move |d, _, _, cx| {
-                        let server = Arc::clone(&d.server);
+                        let core = Arc::clone(&d.core);
                         let task = Task {
                             enabled: !enabled,
                             ..toggle.clone()
                         };
-                        d.scheduled_run(move || server.save_scheduled_task(task).map(drop), cx);
+                        d.scheduled_run(move || core.save_scheduled_task(task).map(drop), cx);
                     })),
                 )
                 .child(
@@ -211,11 +211,11 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                     )
                     .tooltip(tooltip("Delete task"))
                     .on_click(cx.listener(move |d, _, _, cx| {
-                        let (server, id) = (Arc::clone(&d.server), remove.clone());
+                        let (core, id) = (Arc::clone(&d.core), remove.clone());
                         if d.scheduled.editing.as_ref().is_some_and(|e| e.id == id) {
                             d.close_task(cx);
                         }
-                        d.scheduled_run(move || server.store.remove_scheduled_task(&id), cx);
+                        d.scheduled_run(move || core.remove_scheduled_task(&id), cx);
                     })),
                 ),
         )

@@ -4,7 +4,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, Div, Hsla, Role, SharedString, div, prelude::*, px};
-use patchwork_server::threads::{Message, ReviewStatus, TurnReview};
+use patchwork_core::threads::{Message, ReviewStatus, TurnReview};
 
 use crate::ui::markdown::markdown;
 use crate::ui::theme::{fs_sm, fs_xs, radius, Theme};

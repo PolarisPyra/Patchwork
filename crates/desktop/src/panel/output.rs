@@ -10,7 +10,7 @@ use gpui::{
     MouseDownEvent, MouseMoveEvent, Pixels, Point, Role, SharedString, StyledText, Task,
     UniformListScrollHandle, Window, div, font, prelude::*, px, uniform_list,
 };
-use patchwork_server::settings::{LogLevel, LoggingSettings};
+use patchwork_core::settings::{LogLevel, LoggingSettings};
 
 use super::Panel;
 use super::cells::ordered;
@@ -33,7 +33,7 @@ const PAD: (f32, f32) = (12., 4.);
 /// One read: the logs, when it looked for them, and the shown log's new part from its offset.
 type Read = (
     Option<Vec<String>>,
-    Option<(String, u64, Option<patchwork_server::logging::LogChunk>)>,
+    Option<(String, u64, Option<patchwork_core::logging::LogChunk>)>,
 );
 
 /// A log the Output view can show: its path in the launch's log folder, its name, and the setting
@@ -134,9 +134,9 @@ impl Panel {
                 };
                 let read = cx
                     .background_spawn(async move {
-                        let ids = list.then(patchwork_server::logging::channels);
+                        let ids = list.then(patchwork_core::logging::channels);
                         let chunk = reading.map(|(id, offset)| {
-                            let chunk = patchwork_server::logging::read(&id, offset)
+                            let chunk = patchwork_core::logging::read(&id, offset)
                                 .map_err(|e| {
                                     log::warn!(error:% = e; "could not read an output log: {{error}}");
                                 })

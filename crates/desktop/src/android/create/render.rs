@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, FontWeight, Role, ScrollHandle, SharedString, Window, div, prelude::*, px};
-use patchwork_server::android::SystemImage;
+use patchwork_core::android::SystemImage;
 
 use super::state::{Create, Install, Step};
 use crate::android::rows::radio_row;

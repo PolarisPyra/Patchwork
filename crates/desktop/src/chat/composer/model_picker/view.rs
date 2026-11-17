@@ -11,7 +11,7 @@ use gpui::{
     AnyElement, Focusable, FontWeight, MouseDownEvent, Role, SharedString, Window, div, prelude::*,
     px,
 };
-use patchwork_server::provider::AgentKind;
+use patchwork_core::provider::AgentKind;
 use crate::chat::composer::Composer;
 use crate::chat::composer::menus::Pick;
 use crate::ui::theme::{fs_sm, Theme};

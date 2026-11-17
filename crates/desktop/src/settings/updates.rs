@@ -9,7 +9,7 @@ use std::sync::{Arc, OnceLock};
 use gpui::{
     AnyElement, App, Div, ElementId, FontWeight, Role, SharedString, Stateful, div, prelude::*, px,
 };
-use patchwork_server::updates::{RELEASES_URL, ReleaseNotes, UpdateState, UpdateStatus};
+use patchwork_core::updates::{RELEASES_URL, ReleaseNotes, UpdateState, UpdateStatus};
 
 use crate::ui::markdown::markdown;
 use crate::settings::controls::{minutes_stepper, token_row};
@@ -97,7 +97,7 @@ fn releases() -> &'static [Release] {
                 Release {
                     version: version.to_string(),
                     date: rest.trim_start_matches(" - ").trim().to_string(),
-                    notes: patchwork_server::updates::notes(version, notes),
+                    notes: patchwork_core::updates::notes(version, notes),
                 }
             })
             .collect()
@@ -171,7 +171,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             })
     });
     let list: Vec<_> = list.collect();
-    let status = d.server.update_status();
+    let status = d.core.update_status();
     let failed = matches!(status.state, UpdateState::Failed { .. });
     let action = match &status.state {
         UpdateState::Ready { .. } => btn(
@@ -205,7 +205,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             btn("update-action", label, BtnKind::Plain, working, &t)
                 .child(label)
                 .when(!working, |b| {
-                    b.on_click(cx.listener(|d, _, _, _| Arc::clone(&d.server).check_for_updates()))
+                    b.on_click(cx.listener(|d, _, _, _| Arc::clone(&d.core).check_for_updates()))
                 })
         }
     };
@@ -232,7 +232,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                         .child(
                             div()
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .child(format!("Patchwork {}", patchwork_server::VERSION)),
+                                .child(format!("Patchwork {}", patchwork_core::VERSION)),
                         )
                         .child(
                             div()

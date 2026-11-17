@@ -10,7 +10,7 @@ use super::ring::ring;
 use super::state::peak;
 use super::state::limited_until;
 use gpui::{AnyElement, FontWeight, Role, SharedString, deferred, div, prelude::*, px, relative};
-use patchwork_server::provider::AgentKind;
+use patchwork_core::provider::AgentKind;
 use crate::ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
 use crate::ui::{
     agent_label, agent_logo, button, icon, now_ms, popup_shadow, resets_in, spinner, tooltip,

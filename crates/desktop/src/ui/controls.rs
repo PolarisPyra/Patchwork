@@ -18,8 +18,8 @@ pub fn icon(name: &str, size: f32) -> Icon {
 }
 
 /// The icon for a kind of machine: a desktop, a laptop, or a drive for anything else.
-pub fn kind_icon(kind: patchwork_server::system::device::Kind) -> &'static str {
-    use patchwork_server::system::device::Kind;
+pub fn kind_icon(kind: patchwork_core::system::device::Kind) -> &'static str {
+    use patchwork_core::system::device::Kind;
     match kind {
         Kind::Desktop => "desktop",
         Kind::Laptop => "laptop",

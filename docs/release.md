@@ -64,7 +64,7 @@ the update notes in `latest.json` are signed, so they keep the published words.
 The app installs a release only when its file matches the SHA-256 in `latest.json` and is signed
 with the release key. The publish job signs each file with the `TAURI_SIGNING_PRIVATE_KEY` secret
 (and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`), then checks the signature with `minisign` against
-`SIGNING_KEY` in `crates/server/src/updates/release.rs`, the key the app carries, and stops
+`SIGNING_KEY` in `crates/core/src/updates/release.rs`, the key the app carries, and stops
 before publishing if it does not check out. Changing the key means changing both, and copies
 already installed keep trusting the old one.
 

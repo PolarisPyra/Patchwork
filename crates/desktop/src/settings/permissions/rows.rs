@@ -7,7 +7,7 @@ use super::state::PERMISSION_KINDS;
 use super::state::EFFECTS;
 use super::state::kind_label;
 use gpui::{ClickEvent, Div, SharedString, Window, div, prelude::*, px};
-use patchwork_server::permissions::{PermissionRule, PermissionScope};
+use patchwork_core::permissions::{PermissionRule, PermissionScope};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, choice, segmented, select_box};
 use crate::ui::theme::{font_mono, radius_sm, theme};

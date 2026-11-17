@@ -2,7 +2,7 @@
 //! stopping emulators, creating a device, and running the app on the one picked: as a build
 //! variant, reloaded while its run stays attached, with its log.
 //!
-//! It draws what `patchwork_server::android` reads and asks it to act. A running device picked
+//! It draws what `patchwork_core::android` reads and asks it to act. A running device picked
 //! shows its screen in the panel, in a phone's frame.
 //!
 //! | File | Holds |

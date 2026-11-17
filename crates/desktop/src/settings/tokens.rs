@@ -6,8 +6,8 @@
 use std::collections::{HashMap, HashSet};
 
 use gpui::{AnyElement, ClickEvent, SharedString, div, prelude::*, px};
-use patchwork_server::provider::{AgentKind, ModelOption};
-use patchwork_server::settings::{Settings, TokenSettings};
+use patchwork_core::provider::{AgentKind, ModelOption};
+use patchwork_core::settings::{Settings, TokenSettings};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{choice, segmented, switch, token_row};
@@ -76,7 +76,7 @@ impl SettingsDialog {
             return;
         }
         self.run(
-            move || patchwork_server::provider::list_models(kind),
+            move || patchwork_core::provider::list_models(kind),
             move |d, list, _| {
                 d.tokens.models.insert(kind, list);
             },

@@ -202,7 +202,7 @@ impl Panel {
                 cx.listener({
                     let metrics = metrics.clone();
                     move |this, e: &MouseDownEvent, window, cx| {
-                        use patchwork_server::settings::RightClickBehavior as Behavior;
+                        use patchwork_core::settings::RightClickBehavior as Behavior;
                         window.focus(&this.term_focus, cx);
                         if this.report_mouse(Mouse::Press(2), e.position, e.modifiers, &metrics) {
                             this.mouse_held = Some(2);

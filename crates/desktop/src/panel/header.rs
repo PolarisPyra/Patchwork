@@ -131,7 +131,7 @@ impl Panel {
                         .into_any_element(),
                     );
                 }
-                let logs = patchwork_server::system::dirs().logs.clone();
+                let logs = patchwork_core::system::dirs().logs.clone();
                 tools.push(
                     tool("output-folder", "Open logs folder", "folder-open", cx)
                         .on_click(move |_, _, cx| {

@@ -4,8 +4,8 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, Div, FontWeight, Hsla, SharedString, div, prelude::*, px, rgb};
-use patchwork_server::settings::{Settings, TextSize};
-use patchwork_server::themes::Scheme;
+use patchwork_core::settings::{Settings, TextSize};
+use patchwork_core::themes::Scheme;
 
 use super::cards::{Extras, add_card, card, grid};
 use super::files::{Filed, file_tools};

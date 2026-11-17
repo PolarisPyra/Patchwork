@@ -4,8 +4,8 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{Div, div, prelude::*, px};
-use patchwork_server::provider::AgentKind;
-use patchwork_server::threads::{Role as MessageRole, Thread};
+use patchwork_core::provider::AgentKind;
+use patchwork_core::threads::{Role as MessageRole, Thread};
 
 use crate::ui::theme::{fs_sm, radius, Theme};
 use crate::ui::{BtnKind, btn, checkbox, compact_elapsed, format_tokens, now_ms};
@@ -82,8 +82,7 @@ impl Workspace {
         if ask.dont_ask {
             self.settings.tokens.ask_before_resume = false;
             if let Err(e) = self
-                .server
-                .store
+                .core
                 .update_settings(|s| s.tokens.ask_before_resume = false)
             {
                 log::warn!(error:% = e; "could not save the resume setting: {{error}}");

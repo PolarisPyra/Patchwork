@@ -5,8 +5,8 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, Div, FontWeight, Hsla, SharedString, div, prelude::*, px};
-use patchwork_server::provider::AgentKind;
-use patchwork_server::threads::{Message, StepStatus, ToolCall};
+use patchwork_core::provider::AgentKind;
+use patchwork_core::threads::{Message, StepStatus, ToolCall};
 
 use crate::chat::lineage::{is_active, status_label, title_of};
 use crate::chat::timeline::tool_label;

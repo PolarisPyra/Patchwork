@@ -4,7 +4,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, FontWeight, SharedString, Toggled, Window, div, prelude::*, px};
-use patchwork_server::provider::mcp::{self, McpServer, clis};
+use patchwork_core::provider::mcp::{self, McpServer, clis};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, letter_badge, switch};

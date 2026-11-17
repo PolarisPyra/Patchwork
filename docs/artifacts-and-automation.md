@@ -5,13 +5,13 @@ them changes how a turn is run.
 
 ## Scheduled tasks
 
-`crates/server/src/scheduled/` works out the next run from the shape of a schedule and the local
+`crates/core/src/scheduled/` works out the next run from the shape of a schedule and the local
 clock; there is no cron parser. The shapes are Codex's own: every few hours, every day, weekdays,
 or named days.
 
-- The row is in `scheduled_tasks` (`crates/server/src/persistence/scheduled.rs`), and saving a task
+- The row is in `scheduled_tasks` (`crates/core/src/persistence/scheduled.rs`), and saving a task
   reschedules it from now.
-- `Server::run_due_scheduled_tasks` starts the tasks whose time has come. The desktop app calls it
+- `Core::run_due_scheduled_tasks` starts the tasks whose time has come. The desktop app calls it
   every 30 seconds from a thread of its own (`start_scheduled_tasks` in
   `crates/desktop/src/main.rs`).
 - A task that starts makes an ordinary thread with the task's name, then sends the prompt as its
@@ -33,7 +33,7 @@ hooks/guard/
 A bundle that runs hooks alone is that one file. A bundle that also carries apps has a
 `plugin.json` beside it, with its hooks inline or in a `hooks.json` the manifest names.
 
-`crates/server/src/hooks/` reads the manifest from `.patchwork-plugin/plugin.json`,
+`crates/core/src/extensions/hooks/` reads the manifest from `.patchwork-plugin/plugin.json`,
 `.codex-plugin/plugin.json`, or a plain `plugin.json`, so a Codex bundle works as it is, and from
 a `hooks.json` for a folder with none of those. A bundle's name is its folder's unless the file
 gives `name`. `hooks` and `apps` are each either inline or a path, relative to the bundle
@@ -71,11 +71,11 @@ skip it, such as OpenCode for a hook after a tool call.
 
 ## Computer use
 
-`crates/server/src/computer/` gives Patchwork's own agent a screenshot and the pointer and keyboard
+`crates/core/src/computer/` gives Patchwork's own agent a screenshot and the pointer and keyboard
 under it. It is off until Settings → Permissions turns it on; `set_enabled` mirrors the setting so
 the tool list and the approval rules can ask without a database read.
 
-- `crates/server/src/computer/` captures the primary monitor. On Windows and macOS that is `xcap`.
+- `crates/core/src/computer/` captures the primary monitor. On Windows and macOS that is `xcap`.
   On Linux it is the desktop portal under Wayland, cut to the primary monitor that XWayland
   reports, and the root window under X11. It uses `zbus` and `x11rb`, which the app already builds
   for notifications and the clipboard. `xcap` is not used on Linux, since it would also build
@@ -88,5 +88,5 @@ the tool list and the approval rules can ask without a database read.
 - The tools are `computer_screenshot`, `computer_move`, `computer_click`, `computer_type`,
   `computer_key`, and `computer_scroll`. They are offered only when the setting is on, never in plan
   mode, and they ask under the `screen` permission kind unless a rule allows the screen.
-- `cargo test -p patchwork-server -- --ignored screenshot_captures_the_screen` takes a real
+- `cargo test -p patchwork-core -- --ignored screenshot_captures_the_screen` takes a real
   screenshot and checks the PNG header. It needs a display, so it is ignored by default.

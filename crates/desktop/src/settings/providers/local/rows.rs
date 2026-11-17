@@ -5,8 +5,8 @@
 use super::state::health_line;
 use super::state::ADDRESS_FIELD;
 use gpui::{AnyElement, Div, Focusable, FontWeight, SharedString, Window, div, prelude::*, px};
-use patchwork_server::provider::api::config::{self, ApiProvider, KeyChange, ProviderView};
-use patchwork_server::provider::api::servers;
+use patchwork_core::provider::api::config::{self, ApiProvider, KeyChange, ProviderView};
+use patchwork_core::provider::api::servers;
 use crate::settings::providers::PromptOf;
 use crate::settings::providers::rows::status_badge;
 use crate::settings::SettingsDialog;

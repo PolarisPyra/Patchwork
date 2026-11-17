@@ -3,7 +3,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use patchwork_server::threads::{Message, MessageStatus, Part, StepStatus, ToolCall};
+use patchwork_core::threads::{Message, MessageStatus, Part, StepStatus, ToolCall};
 
 use crate::ui::full_elapsed;
 

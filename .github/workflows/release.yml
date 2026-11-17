@@ -411,9 +411,9 @@ jobs:
           [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] \
             || { echo "::error::TAURI_SIGNING_PRIVATE_KEY is not set"; exit 1; }
           key=$(sed -n 's/^const SIGNING_KEY: &str = "\(.*\)";$/\1/p' \
-            crates/server/src/updates/release.rs)
+            crates/core/src/updates/release.rs)
           [ -n "$key" ] \
-            || { echo "::error::Could not read SIGNING_KEY from crates/server/src/updates/release.rs"; exit 1; }
+            || { echo "::error::Could not read SIGNING_KEY from crates/core/src/updates/release.rs"; exit 1; }
           cd release
           assets='[]'
           for name in Patchwork_amd64.AppImage Patchwork_x64.exe Patchwork_aarch64.dmg; do

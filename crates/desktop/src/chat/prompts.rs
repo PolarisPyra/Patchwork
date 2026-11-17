@@ -9,7 +9,7 @@ use gpui::{
     Div, Focusable, FontWeight, Keystroke, Role, SharedString, Stateful, Window, div, prelude::*,
     px,
 };
-use patchwork_server::threads::{ApprovalStatus, MessageStatus, Role as MessageRole};
+use patchwork_core::threads::{ApprovalStatus, MessageStatus, Role as MessageRole};
 
 use crate::ui::theme::{fs_md, fs_sm, fs_xs, radius, radius_sm, Theme};
 use crate::ui::button;
@@ -55,7 +55,7 @@ fn parse_choices(text: &str) -> Option<Vec<String>> {
 
 impl Workspace {
     /// The request whose questions the agent is waiting on. A secret is entered in its own card.
-    fn asking(&self) -> Option<&patchwork_server::threads::Approval> {
+    fn asking(&self) -> Option<&patchwork_core::threads::Approval> {
         self.thread
             .as_ref()?
             .messages
@@ -167,7 +167,7 @@ impl Workspace {
             return;
         };
         if let Err(e) = self
-            .server
+            .core
             .respond_approval(&thread_id, id, allow, answers, None)
         {
             self.error = Some(e.to_string());

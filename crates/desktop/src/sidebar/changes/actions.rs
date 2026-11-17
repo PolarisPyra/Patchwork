@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use gpui::{ClickEvent, Pixels, Point, PromptLevel, WeakEntity, Window, prelude::*};
-use patchwork_server::workspace::PullRequest;
+use patchwork_core::workspace::PullRequest;
 
 use crate::ui::menu::{Dismissed, Menu, MenuItem};
 use crate::ui::base_name;
@@ -23,7 +23,7 @@ impl ChangesView {
             }
             return;
         }
-        let (Some(server), Some(id)) = (self.server(cx), self.project_id.clone()) else {
+        let (Some(core), Some(id)) = (self.core(cx), self.project_id.clone()) else {
             return;
         };
         let thread = self.thread_id(cx);
@@ -57,10 +57,10 @@ impl ChangesView {
             let mut failed = None;
             if commit {
                 let project = id.clone();
-                let (server, id, thread) = (Arc::clone(&server), id.clone(), thread.clone());
+                let (core, id, thread) = (Arc::clone(&core), id.clone(), thread.clone());
                 match cx
                     .background_spawn(async move {
-                        server.commit_changes(&id, thread.as_deref(), &message)
+                        core.commit_changes(&id, thread.as_deref(), &message)
                     })
                     .await
                 {
@@ -82,11 +82,11 @@ impl ChangesView {
                     this.busy = Some("Pushing…".into());
                     cx.notify();
                 });
-                let (server, id) = (Arc::clone(&server), id.clone());
+                let (core, id) = (Arc::clone(&core), id.clone());
                 match cx
                     .background_spawn(async move {
-                        let root = server.project_root(&id)?;
-                        patchwork_server::workspace::push(&root)
+                        let root = core.project_root(&id)?;
+                        patchwork_core::workspace::push(&root)
                     })
                     .await
                 {
@@ -99,11 +99,9 @@ impl ChangesView {
                     this.busy = Some("Opening pull request…".into());
                     cx.notify();
                 });
-                let (server, id) = (Arc::clone(&server), id.clone());
+                let (core, id) = (Arc::clone(&core), id.clone());
                 match cx
-                    .background_spawn(
-                        async move { server.open_pull_request(&id, thread.as_deref()) },
-                    )
+                    .background_spawn(async move { core.open_pull_request(&id, thread.as_deref()) })
                     .await
                 {
                     Ok(pr) => done = Some((format!("Pull request #{}", pr.number), Some(pr))),
@@ -133,7 +131,7 @@ impl ChangesView {
     }
 
     pub(super) fn write_message(&mut self, cx: &mut Context<Self>) {
-        let (Some(server), Some(id)) = (self.server(cx), self.project_id.clone()) else {
+        let (Some(core), Some(id)) = (self.core(cx), self.project_id.clone()) else {
             return;
         };
         let thread = self.thread_id(cx);
@@ -142,7 +140,7 @@ impl ChangesView {
         cx.notify();
         let project = id.clone();
         let task =
-            cx.background_spawn(async move { server.write_commit_message(&id, thread.as_deref()) });
+            cx.background_spawn(async move { core.write_commit_message(&id, thread.as_deref()) });
         cx.spawn(async move |this, cx| {
             let written = task.await;
             this.update(cx, |this, cx| {
@@ -168,19 +166,19 @@ impl ChangesView {
     fn each_file(
         &mut self,
         files: Vec<String>,
-        step: fn(&str, &str) -> Result<(), patchwork_server::Error>,
+        step: fn(&str, &str) -> Result<(), patchwork_core::Error>,
         cx: &mut Context<Self>,
     ) {
-        let (Some(server), Some(id)) = (self.server(cx), self.project_id.clone()) else {
+        let (Some(core), Some(id)) = (self.core(cx), self.project_id.clone()) else {
             return;
         };
         self.error = None;
         let task = cx.background_spawn(async move {
-            let root = server.project_root(&id)?;
+            let root = core.project_root(&id)?;
             for file in &files {
                 step(&root, file)?;
             }
-            Ok::<_, patchwork_server::Error>(())
+            Ok::<_, patchwork_core::Error>(())
         });
         cx.spawn(async move |this, cx| {
             let done = task.await;
@@ -196,7 +194,7 @@ impl ChangesView {
     }
 
     pub(super) fn stage(&mut self, files: Vec<String>, cx: &mut Context<Self>) {
-        self.each_file(files, patchwork_server::workspace::accept_file, cx);
+        self.each_file(files, patchwork_core::workspace::accept_file, cx);
     }
 
     /// Reverts the files after one confirmation.
@@ -225,7 +223,7 @@ impl ChangesView {
                 return;
             }
             let _ = this.update(cx, |this, cx| {
-                this.each_file(files, patchwork_server::workspace::revert_file, cx);
+                this.each_file(files, patchwork_core::workspace::revert_file, cx);
             });
         })
         .detach();
@@ -233,14 +231,14 @@ impl ChangesView {
 
     /// Starts a task whose agent resolves the conflicts, given both sides of each.
     pub(super) fn resolve_with_agent(&mut self, cx: &mut Context<Self>) {
-        let (Some(server), Some(id)) = (self.server(cx), self.project_id.clone()) else {
+        let (Some(core), Some(id)) = (self.core(cx), self.project_id.clone()) else {
             return;
         };
         self.error = None;
         self.resolving = true;
         cx.notify();
         let project = id.clone();
-        let task = cx.background_spawn(async move { server.conflict_prompt(&id) });
+        let task = cx.background_spawn(async move { core.conflict_prompt(&id) });
         cx.spawn(async move |this, cx| {
             let prompt = task.await;
             this.update(cx, |this, cx| {
@@ -266,14 +264,14 @@ impl ChangesView {
     /// Sends the pull request's failures and comments to the thread that made the branch's newest
     /// commit, or starts a task with them when none did.
     pub(super) fn send_feedback(&mut self, number: u32, cx: &mut Context<Self>) {
-        let (Some(server), Some(id)) = (self.server(cx), self.project_id.clone()) else {
+        let (Some(core), Some(id)) = (self.core(cx), self.project_id.clone()) else {
             return;
         };
         self.pr_error = None;
         self.pr_busy = true;
         cx.notify();
         let project = id.clone();
-        let task = cx.background_spawn(async move { server.pull_request_feedback(&id) });
+        let task = cx.background_spawn(async move { core.pull_request_feedback(&id) });
         cx.spawn(async move |this, cx| {
             let feedback = task.await;
             this.update(cx, |this, cx| {
@@ -336,11 +334,11 @@ impl ChangesView {
             if answer.await != Ok(0) {
                 return;
             }
-            let Ok(Some(server)) = this.update(cx, |this, cx| this.server(cx)) else {
+            let Ok(Some(core)) = this.update(cx, |this, cx| this.core(cx)) else {
                 return;
             };
             let undone = cx
-                .background_spawn(async move { server.undo_reply(&thread_id, &message_id) })
+                .background_spawn(async move { core.undo_reply(&thread_id, &message_id) })
                 .await;
             let _ = this.update(cx, |this, cx| {
                 this.undo_error = undone.err().map(|e| e.to_string());

@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{Entity, FocusHandle, Pixels, Point, SharedString};
-use patchwork_server::gateway::Platform;
+use patchwork_core::gateway::Platform;
 use crate::ui::text_area::TextArea;
 
 /// A row the menu or the name field acts on.

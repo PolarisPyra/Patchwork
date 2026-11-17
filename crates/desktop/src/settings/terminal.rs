@@ -4,7 +4,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, FontWeight, SharedString, Window, div, prelude::*, px};
-use patchwork_server::settings::{CursorStyle, DetectLocale, RightClickBehavior, TerminalSettings};
+use patchwork_core::settings::{CursorStyle, DetectLocale, RightClickBehavior, TerminalSettings};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{section_heading, segmented, switch, token_row};

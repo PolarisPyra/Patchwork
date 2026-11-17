@@ -6,8 +6,8 @@ use std::sync::Arc;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use gpui::{App, FocusHandle, KeyDownEvent, Pixels, Point, Window, prelude::*};
-use patchwork_server::provider::{AgentKind, AgentStatus, detect_agent};
-use patchwork_server::usage::ProviderUsage;
+use patchwork_core::provider::{AgentKind, AgentStatus, detect_agent};
+use patchwork_core::usage::ProviderUsage;
 use crate::ui::now_ms;
 use crate::workspace::Workspace;
 
@@ -127,7 +127,7 @@ impl Workspace {
         let shown = self.shown_usage_agents();
         self.load_usage(false, &shown, cx);
         let task = cx.background_spawn(async {
-            patchwork_server::provider::api::config::providers()
+            patchwork_core::provider::api::config::providers()
                 .iter()
                 .any(|p| p.enabled && !p.models.is_empty())
         });
@@ -175,11 +175,11 @@ impl Workspace {
             if !self.usage.pending.insert(kind) {
                 continue;
             }
-            let server = Arc::clone(&self.server);
+            let core = Arc::clone(&self.core);
             let task = cx.background_spawn(async move {
                 let status = detect_agent(kind);
                 let usage =
-                    (status.installed && status.signed_in).then(|| server.usage.get(kind, refresh));
+                    (status.installed && status.signed_in).then(|| core.usage.get(kind, refresh));
                 Entry {
                     status: Some(status),
                     usage,
@@ -188,7 +188,7 @@ impl Workspace {
             cx.spawn(async move |this, cx| {
                 let entry = task.await;
                 this.update(cx, |this, cx| {
-                    // The server returns the last numbers when it skips a refresh, so the same
+                    // The core returns the last numbers when it skips a refresh, so the same
                     // reading time means nothing new came back.
                     let before = this
                         .usage

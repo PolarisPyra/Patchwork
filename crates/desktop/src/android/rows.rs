@@ -6,7 +6,7 @@ use gpui::{
     AnyElement, ClickEvent, ElementId, Role, SharedString, Stateful, Toggled, Window, div,
     prelude::*, px,
 };
-use patchwork_server::android::{self, Avd, Boot, Device, DeviceState};
+use patchwork_core::android::{self, Avd, Boot, Device, DeviceState};
 
 use super::state::{AndroidPanel, Busy, Confirm, Run, device_key};
 use super::tools::device_menu;

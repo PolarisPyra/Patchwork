@@ -5,7 +5,7 @@
 use super::pieces::is_open;
 use super::pieces::action_button;
 use gpui::{AnyElement, ClipboardItem, Div, FontWeight, Role, SharedString, div, prelude::*, px};
-use patchwork_server::threads::{Message, MessageStatus, Part, Role as MessageRole, Thread};
+use patchwork_core::threads::{Message, MessageStatus, Part, Role as MessageRole, Thread};
 use crate::ui::theme::{fs_md, fs_sm, fs_xs, radius, Theme};
 use crate::ui::{button, format_clock, full_elapsed, icon, now_ms};
 use crate::workspace::{ReplyNotice, Workspace};
@@ -90,7 +90,7 @@ pub(super) fn foot(
                 .into_any_element(),
         );
     }
-    if let Some(row) = interrupted::resume_row(&w.server, thread, m, t, cx) {
+    if let Some(row) = interrupted::resume_row(&w.core, thread, m, t, cx) {
         out.push(row.into_any_element());
     }
     if actions && !m.cut_off && !m.text.trim().is_empty() {

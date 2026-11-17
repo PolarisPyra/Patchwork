@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{App, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
-use patchwork_server::threads::{Attachment, Message};
+use patchwork_core::threads::{Attachment, Message};
 
 use crate::chat::goal::strip_action;
 use crate::ui::theme::{fs_sm, fs_xs, radius_sm, Theme};
@@ -145,7 +145,7 @@ impl Workspace {
             return;
         };
         match self
-            .server
+            .core
             .edit_queued(&edit.chat, &edit.id, text, attachments)
         {
             Ok(()) => self.set_composer_draft(edit.saved, cx),
@@ -165,7 +165,7 @@ impl Workspace {
         let id = id.to_string();
         self.change(
             "take the queued message back",
-            move |server| server.remove_queued(&thread, &id),
+            move |core| core.remove_queued(&thread, &id),
             cx,
         );
     }
@@ -174,8 +174,8 @@ impl Workspace {
         let Some(thread) = self.thread.as_ref().filter(|t| is_working(t)) else {
             return;
         };
-        let (server, thread, id) = (Arc::clone(&self.server), thread.id.clone(), id.to_string());
-        let task = cx.background_spawn(async move { server.steer_queued(&thread, &id) });
+        let (core, thread, id) = (Arc::clone(&self.core), thread.id.clone(), id.to_string());
+        let task = cx.background_spawn(async move { core.steer_queued(&thread, &id) });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             this.update(cx, |this, cx| {
@@ -214,8 +214,8 @@ impl Workspace {
         let Some(thread) = self.thread.as_ref().filter(|t| !is_working(t)) else {
             return;
         };
-        let (server, thread) = (Arc::clone(&self.server), thread.id.clone());
-        let task = cx.background_spawn(async move { server.resume_queued(&thread) });
+        let (core, thread) = (Arc::clone(&self.core), thread.id.clone());
+        let task = cx.background_spawn(async move { core.resume_queued(&thread) });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             this.update(cx, |this, cx| {

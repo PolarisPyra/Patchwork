@@ -8,7 +8,7 @@ use gpui::{
     AnyElement, Div, FontWeight, MouseButton, MouseDownEvent, Role, SharedString, div, prelude::*,
     px,
 };
-use patchwork_server::threads::Thread;
+use patchwork_core::threads::Thread;
 
 use super::menu::Target;
 use super::{empty_row, twistie};
@@ -297,7 +297,7 @@ fn archived_row(
                 let id = restore_id.clone();
                 this.change(
                     "restore the chat",
-                    move |server| server.set_thread_archived(&id, false),
+                    move |core| core.set_thread_archived(&id, false),
                     cx,
                 );
             })),

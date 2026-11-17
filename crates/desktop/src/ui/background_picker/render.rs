@@ -11,11 +11,10 @@ use gpui::{
     AnyElement, FocusHandle, FontWeight, KeyDownEvent, MouseButton, MouseDownEvent, ObjectFit,
     Role, SharedString, Toggled, Window, canvas, div, img, prelude::*, px, relative,
 };
-use patchwork_server::backgrounds::ChatBackground;
+use patchwork_core::backgrounds::ChatBackground;
 
 use super::state::{BackgroundPicker, CARD, GAP, PICTURE, SHARED_VEIL};
-use crate::orchestrator::{butterfly_preview, scene_preview};
-use crate::ui::backdrop::{PRESETS, preset_fill};
+use crate::ui::backdrop::{PRESETS, butterfly_preview, preset_fill, scene_preview};
 use crate::ui::menu::Menu;
 use crate::ui::theme::{Theme, applied, fs_sm, radius, radius_sm, theme};
 use crate::ui::{button, focus_ring, icon, spinner, tooltip};

@@ -21,8 +21,8 @@ impl Workspace {
     /// Resumes them all and closes the card.
     fn resume_interrupted(&mut self, cx: &mut Context<Self>) {
         self.interrupted = 0;
-        let server = Arc::clone(&self.server);
-        let task = cx.background_spawn(async move { server.resume_interrupted() });
+        let core = Arc::clone(&self.core);
+        let task = cx.background_spawn(async move { core.resume_interrupted() });
         cx.spawn(async move |this, cx| {
             task.await;
             this.update(cx, Workspace::reload)

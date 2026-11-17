@@ -8,8 +8,8 @@ use std::sync::Arc;
 use futures::StreamExt;
 use futures::channel::mpsc;
 use gpui::{AnyElement, FontWeight, PathPromptOptions, SharedString, Window, div, prelude::*, px};
-use patchwork_server::Server;
-use patchwork_server::skills::{self, Skill};
+use patchwork_core::Core;
+use patchwork_core::extensions::skills::{self, Skill};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{letter_badge, switch, token_row};
@@ -38,7 +38,7 @@ description: Draft release notes from the commits since the last tag
 Read template.md, then list the commits since the last tag…";
 
 /// The watch on the skills folder, stopped when the dialog closes.
-pub struct SkillsWatch(Arc<Server>);
+pub struct SkillsWatch(Arc<Core>);
 
 impl Drop for SkillsWatch {
     fn drop(&mut self) {
@@ -53,15 +53,15 @@ impl SettingsDialog {
         if self.extensions.skills_watch.is_some() {
             return;
         }
-        self.extensions.skills_watch = Some(SkillsWatch(Arc::clone(&self.server)));
+        self.extensions.skills_watch = Some(SkillsWatch(Arc::clone(&self.core)));
         let (changed, mut received) = mpsc::unbounded::<Vec<Skill>>();
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         self.run(
             move || {
-                let watched = server.watch_skills(move |list| {
+                let watched = core.watch_skills(move |list| {
                     let _ = changed.unbounded_send(list);
                 });
-                (skills::all(&server.store.settings()), watched.err())
+                (skills::all(&core.settings()), watched.err())
             },
             |d, (list, error), _| {
                 d.extensions.skills = Some(list);

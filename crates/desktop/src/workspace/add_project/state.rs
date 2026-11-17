@@ -4,10 +4,10 @@
 
 use std::sync::Arc;
 use gpui::{Entity, EventEmitter, FocusHandle, KeyDownEvent, ScrollHandle, Window, prelude::*};
-use patchwork_server::Server;
-use patchwork_server::projects::Project;
-use patchwork_server::system::browse::{self, DirEntry, DirListing, Machine};
-use patchwork_server::system::remote;
+use patchwork_core::Core;
+use patchwork_core::projects::Project;
+use patchwork_core::system::browse::{self, DirEntry, DirListing, Machine};
+use patchwork_core::system::ssh;
 use crate::ui::text_area::{Arrow, Changed, Submitted, TextArea};
 
 /// The dialog closed: with the project it added, or with none.
@@ -18,7 +18,7 @@ pub struct Closed(pub Option<Project>);
     reason = "each flag is a separate piece of view state"
 )]
 pub struct AddProject {
-    pub(super) server: Arc<Server>,
+    pub(super) core: Arc<Core>,
     pub(super) machines: Option<Vec<Machine>>,
     pub(super) browsing: bool,
     /// The SSH host whose folders are shown, or none for this computer's.
@@ -62,7 +62,7 @@ pub(super) fn with_sep(path: &str) -> String {
 impl AddProject {
     /// The dialog showing the folders of `host`, or of this computer when it is none.
     pub fn new(
-        server: Arc<Server>,
+        core: Arc<Core>,
         host: Option<String>,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -123,7 +123,7 @@ impl AddProject {
 
         // The machine opens at once, alongside the machine list.
         let mut dialog = Self {
-            server,
+            core,
             machines: None,
             browsing: true,
             host,
@@ -213,7 +213,7 @@ impl AddProject {
 
     pub(super) fn add(&mut self, cx: &mut Context<Self>) {
         let Some(path) = self.listing.as_ref().map(|l| match &self.host {
-            Some(host) => remote::root(host, &l.path),
+            Some(host) => ssh::root(host, &l.path),
             None => l.path.clone(),
         }) else {
             return;
@@ -223,8 +223,8 @@ impl AddProject {
         }
         self.adding = true;
         self.error = None;
-        let server = Arc::clone(&self.server);
-        let task = cx.background_spawn(async move { server.add_project(&path) });
+        let core = Arc::clone(&self.core);
+        let task = cx.background_spawn(async move { core.add_project(&path) });
         cx.spawn(async move |this, cx| {
             let added = task.await;
             this.update(cx, |this, cx| match added {

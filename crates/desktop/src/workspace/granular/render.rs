@@ -15,7 +15,7 @@ use crate::ui::dialog;
 use crate::ui::theme::{fs_md, fs_sm, radius, Theme, theme};
 use crate::ui::{BtnKind, agent_label, agent_logo, btn, button, icon, icon_button};
 use crate::workspace::Workspace;
-use patchwork_server::threads::delegates_sub_agents;
+use patchwork_core::threads::delegates_sub_agents;
 
 /// The height of every select on the card.
 const SELECT_HEIGHT: f32 = 32.;

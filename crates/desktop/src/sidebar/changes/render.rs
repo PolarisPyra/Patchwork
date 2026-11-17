@@ -6,8 +6,8 @@ use gpui::{
     AnyElement, Div, FontWeight, MouseButton, MouseDownEvent, Role, SharedString, Stateful, Window,
     div, list, prelude::*, px,
 };
-use patchwork_server::threads::AccessMode;
-use patchwork_server::workspace::FileChange;
+use patchwork_core::threads::AccessMode;
+use patchwork_core::workspace::FileChange;
 
 use crate::sidebar::graph;
 use crate::ui::menu::Menu;

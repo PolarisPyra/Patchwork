@@ -5,8 +5,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 use gpui::{Focusable, FollowMode, Window, prelude::*};
-use patchwork_server::events::{AgentEvent, AgentEventEnvelope};
-use patchwork_server::threads::{Attachment, NewThread, Part};
+use patchwork_core::events::{AgentEvent, AgentEventEnvelope};
+use patchwork_core::threads::{Attachment, NewThread, Part};
 use super::state::{Place, ReplyNotice, Workspace, end_thinking, message_mut};
 
 impl Workspace {
@@ -15,13 +15,11 @@ impl Workspace {
     pub fn change(
         &mut self,
         what: &'static str,
-        change: impl FnOnce(&patchwork_server::Server) -> Result<(), patchwork_server::Error>
-        + Send
-        + 'static,
+        change: impl FnOnce(&patchwork_core::Core) -> Result<(), patchwork_core::Error> + Send + 'static,
         cx: &mut Context<Self>,
     ) {
-        let server = Arc::clone(&self.server);
-        let task = cx.background_spawn(async move { change(&server) });
+        let core = Arc::clone(&self.core);
+        let task = cx.background_spawn(async move { change(&core) });
         cx.spawn(async move |this, cx| {
             let done = task.await;
             this.update(cx, |this, cx| {
@@ -29,7 +27,7 @@ impl Workspace {
                     log::warn!(what, error:% = e; "could not {{what}}: {{error}}");
                 }
                 // A project's name is in the settings.
-                this.settings = this.server.store.settings();
+                this.settings = this.core.settings();
                 this.reload(cx);
             })
         })
@@ -138,7 +136,7 @@ impl Workspace {
 
     /// Shows chat `id`, and whether it could be opened.
     fn show_thread(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
-        let opened = match self.server.thread(id) {
+        let opened = match self.core.thread(id) {
             Ok(thread) => {
                 // A chat opened from the orchestrator page is shown in place of the page.
                 self.page = super::Page::Chats;
@@ -156,9 +154,9 @@ impl Workspace {
                 self.open_folds.clear();
                 self.open_steps.clear();
                 self.open_agents.clear();
-                let (server, last) = (Arc::clone(&self.server), id.to_string());
+                let (core, last) = (Arc::clone(&self.core), id.to_string());
                 cx.background_spawn(async move {
-                    if let Err(e) = server.set_last_thread_id(&last) {
+                    if let Err(e) = core.set_last_thread_id(&last) {
                         log::warn!(error:% = e; "could not record the open chat: {{error}}");
                     }
                 })
@@ -187,10 +185,10 @@ impl Workspace {
     /// Opens `id` and sends it `text`, as the pull request's feedback does.
     pub fn send_to(&mut self, id: &str, text: String, cx: &mut Context<Self>) {
         self.reveal_thread(id, cx);
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         let id = id.to_string();
         let task =
-            cx.background_spawn(async move { server.send_message(id, text, Vec::new(), true) });
+            cx.background_spawn(async move { core.send_message(id, text, Vec::new(), true) });
         cx.spawn(async move |this, cx| {
             let sent = task.await;
             this.update(cx, |this, cx| {
@@ -223,22 +221,22 @@ impl Workspace {
         text: String,
         cx: &mut Context<Self>,
     ) {
-        let thread = match self.server.create_thread(new) {
+        let thread = match self.core.create_thread(new) {
             Ok(thread) => thread,
             Err(e) => {
                 self.error = Some(e.to_string());
                 return cx.notify();
             }
         };
-        if let Err(e) = self.server.rename_thread(&thread.id, title) {
+        if let Err(e) = self.core.rename_thread(&thread.id, title) {
             log::warn!(error:% = e; "could not name the thread: {{error}}");
         }
         self.reload(cx);
         self.reveal_thread(&thread.id, cx);
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         let id = thread.id;
         let task =
-            cx.background_spawn(async move { server.send_message(id, text, Vec::new(), false) });
+            cx.background_spawn(async move { core.send_message(id, text, Vec::new(), false) });
         cx.spawn(async move |this, cx| {
             let sent = task.await;
             this.update(cx, |this, cx| {
@@ -339,11 +337,11 @@ impl Workspace {
     }
 
     pub fn reload(&mut self, cx: &mut Context<Self>) {
-        self.threads = self.server.list_threads();
-        self.folders = self.server.list_folders();
-        self.chat_apps = self.server.thread_chat_apps();
+        self.threads = self.core.list_threads();
+        self.folders = self.core.list_folders();
+        self.chat_apps = self.core.thread_chat_apps();
         if let Some(id) = self.thread.as_ref().map(|t| t.id.clone()) {
-            match self.server.thread(&id) {
+            match self.core.thread(&id) {
                 Ok(thread) => self.thread = Some(thread),
                 // A failed read keeps the chat on screen; a deleted chat is gone from the list.
                 Err(e) if self.threads.iter().any(|t| t.id == id) => {
@@ -362,7 +360,7 @@ impl Workspace {
         let id = id.to_string();
         self.change(
             "archive the chat",
-            move |server| server.set_thread_archived(&id, true),
+            move |core| core.set_thread_archived(&id, true),
             cx,
         );
         cx.notify();
@@ -395,11 +393,11 @@ impl Workspace {
         let id = match (&self.thread, new) {
             (Some(thread), _) => thread.id.clone(),
             (None, None) => return,
-            (None, Some(new)) => match self.server.create_thread(new) {
+            (None, Some(new)) => match self.core.create_thread(new) {
                 Ok(thread) => {
                     let id = thread.id.clone();
                     if role.is_some()
-                        && let Err(e) = self.server.set_thread_role(&id, role)
+                        && let Err(e) = self.core.set_thread_role(&id, role)
                     {
                         log::warn!(error:% = e; "could not set the chat's agent: {{error}}");
                     }
@@ -412,10 +410,10 @@ impl Workspace {
                 }
             },
         };
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         let draft = (id.clone(), text.clone(), attachments.clone());
         let task =
-            cx.background_spawn(async move { server.send_message(id, text, attachments, queue) });
+            cx.background_spawn(async move { core.send_message(id, text, attachments, queue) });
         cx.spawn(async move |this, cx| {
             let sent = task.await;
             this.update(cx, |this, cx| {
@@ -442,10 +440,10 @@ impl Workspace {
         let Some(id) = self.thread.as_ref().map(|t| t.id.clone()) else {
             return;
         };
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         let command = command.to_string();
         let task =
-            cx.background_spawn(async move { server.send_message(id, command, Vec::new(), false) });
+            cx.background_spawn(async move { core.send_message(id, command, Vec::new(), false) });
         cx.spawn(async move |this, cx| {
             let sent = task.await;
             this.update(cx, |this, cx| {
@@ -461,7 +459,7 @@ impl Workspace {
 
     /// Starts a chat from the open one's history up to `message_id`, and opens it.
     pub fn fork(&mut self, thread_id: &str, message_id: &str, cx: &mut Context<Self>) {
-        match self.server.fork_thread(thread_id, message_id) {
+        match self.core.fork_thread(thread_id, message_id) {
             Ok(thread) => {
                 self.reload(cx);
                 self.open_thread(&thread.id, cx);
@@ -489,7 +487,7 @@ impl Workspace {
             .composer
             .read(cx)
             .new_thread(project.clone(), &self.settings);
-        let thread = match self.server.create_thread(new) {
+        let thread = match self.core.create_thread(new) {
             Ok(thread) => thread,
             Err(e) => return log::warn!(error:% = e; "could not start a chat: {{error}}"),
         };
@@ -504,7 +502,7 @@ impl Workspace {
                         .map(|t| t.id.clone()),
                 )
                 .collect();
-            if let Err(e) = self.server.reorder_threads(&ids, Some(folder)) {
+            if let Err(e) = self.core.reorder_threads(&ids, Some(folder)) {
                 log::warn!(error:% = e; "could not put the task in its folder: {{error}}");
             }
         }
@@ -513,7 +511,7 @@ impl Workspace {
         self.reveal_thread(&thread.id, cx);
         let editor = self.composer.read(cx).editor.clone();
         window.focus(&editor.read(cx).focus_handle(cx), cx);
-        if self.server.asks_granular(thread.project_id.as_deref()) {
+        if self.core.asks_granular(thread.project_id.as_deref()) {
             let scope = super::GranularScope::Chat(thread.id);
             self.open_granular_dialog(scope, None, window, cx);
         }
@@ -521,7 +519,7 @@ impl Workspace {
 
     pub fn stop(&mut self, cx: &mut Context<Self>) {
         if let Some(thread) = &self.thread {
-            self.server.cancel_turn(&thread.id);
+            self.core.cancel_turn(&thread.id);
         }
         cx.notify();
     }

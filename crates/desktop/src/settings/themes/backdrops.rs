@@ -11,18 +11,17 @@
 use std::sync::Arc;
 
 use gpui::{AnyElement, App, Entity, ObjectFit, Window, div, img, prelude::*, px};
-use patchwork_server::backgrounds::ChatBackground;
-use patchwork_server::settings::Theme as ThemeSetting;
-use patchwork_server::themes::{BackdropChoice, Scheme};
+use patchwork_core::backgrounds::ChatBackground;
+use patchwork_core::settings::Theme as ThemeSetting;
+use patchwork_core::themes::{BackdropChoice, Scheme};
 
 use super::cards::{DELETE, Extras, Tool, add_card, card, grid};
 use super::files::{Filed, file_tools};
 use super::generator_pick::generator_row;
 use super::{Kind, generator};
-use crate::orchestrator::{butterfly_preview, scene_preview};
 use crate::settings::controls::{alert, anchored};
 use crate::settings::{SettingsDialog, SettingsEvent};
-use crate::ui::backdrop::{PRESETS, preset_fill};
+use crate::ui::backdrop::{PRESETS, butterfly_preview, preset_fill, scene_preview};
 use crate::ui::background_picker::{BackgroundPicker, PickerEvent};
 use crate::ui::icon;
 use crate::ui::theme::{fs_sm, theme};
@@ -51,7 +50,7 @@ impl SettingsDialog {
             multiple: false,
             prompt: Some("Add background".into()),
         });
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         cx.spawn(async move |this, cx| {
             let Ok(Ok(Some(paths))) = picked.await else {
                 return;
@@ -61,8 +60,7 @@ impl SettingsDialog {
             };
             let imported = cx
                 .background_spawn(async move {
-                    server
-                        .import_background_image(&path)
+                    core.import_background_image(&path)
                         .map_err(|e| e.to_string())
                 })
                 .await;
@@ -207,9 +205,9 @@ impl SettingsDialog {
 
     /// Makes a picture of the chat background a chat drew, and puts it behind every chat.
     pub(super) fn keep_drawn_background(&mut self, id: String, cx: &mut Context<Self>) {
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         self.run(
-            move || server.import_drawn_background(&id),
+            move || core.import_drawn_background(&id),
             |d, drawn, cx| {
                 d.themes.writing[Kind::Picture as usize] = None;
                 match drawn {
@@ -234,10 +232,10 @@ fn picker(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> Entity<Ba
         picker.update(cx, |p, _| p.set_value(Some(value), None));
         return picker.clone();
     }
-    let server = Arc::clone(&d.server);
+    let core = Arc::clone(&d.core);
     let picker = cx.new(|cx| {
         BackgroundPicker::new(
-            server,
+            core,
             "Chat theme",
             Some(value),
             Some(ChatBackground::None),
@@ -252,7 +250,7 @@ fn picker(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> Entity<Ba
         }
         PickerEvent::Picked(None) => {}
         PickerEvent::PicturesChanged => {
-            d.settings = d.server.store.settings();
+            d.settings = d.core.settings();
             d.themes.loaded = false;
             cx.emit(SettingsEvent::Changed);
             cx.notify();
@@ -288,7 +286,7 @@ pub(in crate::settings) fn orchestrator_background_pane(
     let add_picture = add_card("add-backdrop", "Add background", &t)
         .on_click(cx.listener(|d, _, _, cx| d.add_backdrop_picture(cx)))
         .into_any_element();
-    let scenes_dir = d.server.scenes_dir();
+    let scenes_dir = d.core.scenes_dir();
     let new_scene = generator(d, Kind::Scene, "A koi pond at dusk", scenes_dir, window, cx);
     let generate_with = generator_row(d, &t, cx);
     div()
@@ -329,7 +327,7 @@ pub(in crate::settings) fn chat_background_pane(
         d.load_themes(cx);
     }
     let chat_background = picker(d, cx);
-    let pictures_dir = d.server.backgrounds_dir();
+    let pictures_dir = d.core.backgrounds_dir();
     let new_picture = generator(
         d,
         Kind::Picture,

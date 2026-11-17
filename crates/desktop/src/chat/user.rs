@@ -12,7 +12,7 @@ use gpui::{
     AnyElement, Div, ObjectFit, PromptLevel, SharedString, Stateful, Window, div, img, prelude::*,
     px, relative,
 };
-use patchwork_server::threads::{Attachment, AttachmentKind, Message};
+use patchwork_core::threads::{Attachment, AttachmentKind, Message};
 
 use crate::ui::markdown::{FindIn, markdown_found};
 use crate::ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
@@ -271,9 +271,9 @@ impl Workspace {
         if !has_project {
             return;
         }
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         let id = key.0.clone();
-        let task = cx.background_spawn(async move { server.checkpoints(&id) });
+        let task = cx.background_spawn(async move { core.checkpoints(&id) });
         cx.spawn(async move |this, cx| {
             let ids = task.await;
             let _ = this.update(cx, |this, cx| {
@@ -316,14 +316,14 @@ impl Workspace {
             &["Restore", "Cancel"],
             cx,
         );
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         let message_id = message_id.to_string();
         cx.spawn_in(window, async move |this, cx| {
             if answer.await != Ok(0) {
                 return;
             }
             let restored = cx
-                .background_spawn(async move { server.restore_checkpoint(&thread_id, &message_id) })
+                .background_spawn(async move { core.restore_checkpoint(&thread_id, &message_id) })
                 .await;
             let _ = this.update_in(cx, |this, window, cx| {
                 this.error = None;

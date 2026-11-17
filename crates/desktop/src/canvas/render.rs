@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{KeyDownEvent, Role, Window, div, prelude::*, px};
-use patchwork_server::threads::MessageStatus;
+use patchwork_core::threads::MessageStatus;
 use crate::ui::theme::{fs_sm, theme};
 use super::state::{Canvas, CanvasTab};
 

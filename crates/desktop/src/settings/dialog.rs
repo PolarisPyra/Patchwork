@@ -8,8 +8,8 @@ use gpui::{
     App, Entity, EventEmitter, FocusHandle, Focusable, Pixels, Point, ScrollHandle, SharedString,
     Window, prelude::*, px,
 };
-use patchwork_server::Server;
-use patchwork_server::settings::Settings;
+use patchwork_core::Core;
+use patchwork_core::settings::Settings;
 use crate::ui::menu::Menu;
 use crate::ui::text_area::TextArea;
 use super::controls::Field;
@@ -37,7 +37,7 @@ pub enum SettingsEvent {
     RestartToUpdate,
     /// Start a chat with this message, whose agent writes a theme, on this agent, model and
     /// effort when they were picked.
-    GenerateTheme(String, Option<patchwork_server::threads::AgentPick>),
+    GenerateTheme(String, Option<patchwork_core::threads::AgentPick>),
     Closed,
 }
 
@@ -189,7 +189,7 @@ pub(super) fn entry_of(id: &str) -> Option<(usize, &'static Entry, &'static Pane
 }
 
 pub struct SettingsDialog {
-    pub server: Arc<Server>,
+    pub core: Arc<Core>,
     pub settings: Settings,
     /// The pane showing, by id.
     pub(super) section: &'static str,
@@ -242,7 +242,7 @@ impl Focusable for SettingsDialog {
 impl SettingsDialog {
     /// Opens on the pane `section`, by id; None opens on General.
     pub fn new(
-        server: Arc<Server>,
+        core: Arc<Core>,
         section: Option<&str>,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -253,8 +253,8 @@ impl SettingsDialog {
             .and_then(entry_of)
             .map_or("general", |(_, _, pane)| pane.id);
         Self {
-            settings: server.store.settings(),
-            server,
+            settings: core.settings(),
+            core,
             section,
             last: HashMap::new(),
             focus,
@@ -290,12 +290,12 @@ impl SettingsDialog {
 
     /// Saves the settings as `change` leaves them.
     pub fn update(&mut self, change: impl FnOnce(&mut Settings), cx: &mut Context<Self>) {
-        let mut next = self.server.store.settings();
+        let mut next = self.core.settings();
         change(&mut next);
-        match self.server.save_settings(next) {
+        match self.core.save_settings(next) {
             Ok(()) => {
                 self.error = None;
-                self.settings = self.server.store.settings();
+                self.settings = self.core.settings();
                 cx.emit(SettingsEvent::Changed);
             }
             Err(e) => self.error = Some(e.to_string()),

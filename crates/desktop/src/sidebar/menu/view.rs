@@ -108,13 +108,13 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let server = Arc::clone(&self.server);
-        let made = cx.background_spawn(async move { server.create_worktree(&project_id) });
+        let core = Arc::clone(&self.core);
+        let made = cx.background_spawn(async move { core.create_worktree(&project_id) });
         cx.spawn_in(window, async move |this, cx| {
             let made = made.await;
             let _ = this.update_in(cx, |this, window, cx| match made {
                 Ok(project) => {
-                    this.settings = this.server.store.settings();
+                    this.settings = this.core.settings();
                     this.new_thread_in(Some(project.id), None, window, cx);
                 }
                 Err(e) => {
@@ -142,8 +142,8 @@ impl Workspace {
                 return;
             };
             let _ = this.update(cx, |this, cx| {
-                match this.server.relocate_project(&project_id, &path) {
-                    Ok(()) => this.settings = this.server.store.settings(),
+                match this.core.relocate_project(&project_id, &path) {
+                    Ok(()) => this.settings = this.core.settings(),
                     Err(e) => this.error = Some(e.to_string()),
                 }
                 this.reload(cx);

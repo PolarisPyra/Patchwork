@@ -9,10 +9,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{AnyElement, Entity, ExternalPaths, Role, SharedString, Window, div, prelude::*, px};
-use patchwork_server::backgrounds::BackgroundImage;
-use patchwork_server::logging::THEME_LOG;
-use patchwork_server::settings::{LogLevel, Theme as ThemeSetting};
-use patchwork_server::themes::{CodeTheme, SavedScene, Scheme, Theme, Unreadable};
+use patchwork_core::backgrounds::BackgroundImage;
+use patchwork_core::logging::THEME_LOG;
+use patchwork_core::settings::{LogLevel, Theme as ThemeSetting};
+use patchwork_core::themes::{CodeTheme, SavedScene, Scheme, Theme, Unreadable};
 
 pub(super) use self::backdrops::{chat_background_pane, orchestrator_background_pane};
 use self::cards::{Slot, add_card, grid, scheme_cards};
@@ -24,7 +24,7 @@ use self::look::{accent_row, schedule_rows};
 pub(super) use self::look::project_look;
 use self::reading::code_theme_cards;
 use super::{SettingsDialog, SettingsEvent};
-use crate::orchestrator::PreviewFlight;
+use crate::ui::backdrop::PreviewFlight;
 use crate::settings::controls::{alert, section_heading, switch, token_row};
 use crate::ui::background_picker::BackgroundPicker;
 use crate::ui::theme::{fs_sm, theme};
@@ -106,12 +106,12 @@ impl SettingsDialog {
     /// Reads what can be picked, off the UI thread.
     pub(super) fn load_themes(&mut self, cx: &mut Context<Self>) {
         self.themes.loaded = true;
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         self.run(
             move || {
-                let pictures = server.list_background_images().unwrap_or_default();
-                let files = (server.list_code_themes(), server.unreadable_themes());
-                (server.list_themes(), server.list_scenes(), pictures, files)
+                let pictures = core.list_background_images().unwrap_or_default();
+                let files = (core.list_code_themes(), core.unreadable_themes());
+                (core.list_themes(), core.list_scenes(), pictures, files)
             },
             |d, (themes, scenes, pictures, (codes, unreadable)), _| {
                 d.themes.themes = themes;
@@ -147,13 +147,13 @@ impl SettingsDialog {
         } else {
             Scheme::Light
         };
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         self.run(
             move || match kind {
-                Kind::Scheme => server.theme_prompt(&description),
-                Kind::Scene => server.scene_prompt(&description),
-                Kind::Code => server.code_theme_prompt(&description, scheme),
-                Kind::Picture => server.chat_background_prompt(&description, scheme),
+                Kind::Scheme => core.theme_prompt(&description),
+                Kind::Scene => core.scene_prompt(&description),
+                Kind::Code => core.code_theme_prompt(&description, scheme),
+                Kind::Picture => core.chat_background_prompt(&description, scheme),
             },
             move |d, (prompt, id), cx| {
                 d.themes.writing[kind as usize] = Some(id.clone());
@@ -168,7 +168,7 @@ impl SettingsDialog {
     /// Looks for the file a chat is writing until it is there, then lists what can be picked
     /// again. It gives up after ten minutes, or once the dialog is closed.
     fn await_themed(&mut self, kind: Kind, id: String, cx: &mut Context<Self>) {
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         cx.spawn(async move |this, cx| {
             let mut written = false;
             for _ in 0..LOOKS {
@@ -179,14 +179,14 @@ impl SettingsDialog {
                 if !waiting.unwrap_or(false) {
                     return;
                 }
-                let (server, id) = (Arc::clone(&server), id.clone());
+                let (core, id) = (Arc::clone(&core), id.clone());
                 written = cx
                     .background_spawn(async move {
                         match kind {
-                            Kind::Scheme => server.theme_written(&id),
-                            Kind::Scene => server.scene_written(&id),
-                            Kind::Code => server.code_theme_written(&id),
-                            Kind::Picture => server.chat_background_drawn(&id),
+                            Kind::Scheme => core.theme_written(&id),
+                            Kind::Scene => core.scene_written(&id),
+                            Kind::Code => core.code_theme_written(&id),
+                            Kind::Picture => core.chat_background_drawn(&id),
                         }
                     })
                     .await;
@@ -200,7 +200,7 @@ impl SettingsDialog {
                 let _ = this.update(cx, |d, cx| d.keep_drawn_background(id, cx));
                 return;
             }
-            let listed = Arc::clone(&server);
+            let listed = Arc::clone(&core);
             let (themes, scenes, codes) = cx
                 .background_spawn(async move {
                     let codes = listed.list_code_themes();
@@ -400,7 +400,7 @@ pub fn render(
     };
     let editing = editor(d, window, cx);
     let accent = accent_row(d, cx);
-    let themes_dir = d.server.themes_dir();
+    let themes_dir = d.core.themes_dir();
     let new_scheme = generator(
         d,
         Kind::Scheme,
@@ -438,7 +438,7 @@ pub fn code_theme_pane(
         Scheme::Light
     };
     let code = code_theme_cards(d, scheme, cx);
-    let code_dir = d.server.code_themes_dir();
+    let code_dir = d.core.code_themes_dir();
     let new_code = generator(
         d,
         Kind::Code,

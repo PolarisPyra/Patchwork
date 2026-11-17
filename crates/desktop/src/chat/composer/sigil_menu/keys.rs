@@ -6,7 +6,7 @@ use super::commands::{Runs, runs_of};
 use std::ops::Range;
 use std::sync::Arc;
 use gpui::{PromptLevel, Window, prelude::*};
-use patchwork_server::provider::AgentKind;
+use patchwork_core::provider::AgentKind;
 use crate::chat::composer::Composer;
 use crate::chat::composer::menus::Menu;
 use crate::ui::sigils::{SigilKind, Sigils};
@@ -166,7 +166,7 @@ impl Composer {
                     workspace.update(cx, |w, cx| {
                         w.change(
                             "change plan mode",
-                            move |server| server.set_thread_plan_mode(&id, on),
+                            move |core| core.set_thread_plan_mode(&id, on),
                             cx,
                         );
                     });
@@ -204,13 +204,13 @@ impl Composer {
             &["Clear", "Cancel"],
             cx,
         );
-        let server = Arc::clone(&workspace.read(cx).server);
+        let core = Arc::clone(&workspace.read(cx).core);
         cx.spawn_in(window, async move |this, cx| {
             if answer.await != Ok(0) {
                 return;
             }
             let cleared = cx
-                .background_spawn(async move { server.clear_thread(&id) })
+                .background_spawn(async move { core.clear_thread(&id) })
                 .await;
             let _ = this.update_in(cx, |this, window, cx| {
                 this.editor.update(cx, |e, cx| e.clear(window, cx));

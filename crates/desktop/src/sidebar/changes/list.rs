@@ -8,7 +8,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 
 use gpui::{AnyElement, SharedString, Window, div, prelude::*, px};
-use patchwork_server::workspace::FileChange;
+use patchwork_core::workspace::FileChange;
 
 use super::rows::{group_button, group_header, row_action};
 use super::state::ChangesView;

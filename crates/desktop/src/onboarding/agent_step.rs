@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Toggled, div, prelude::*, px};
-use patchwork_server::provider::AgentKind;
+use patchwork_core::provider::AgentKind;
 
 use super::{AGENT_KINDS, Onboarding, Probe};
 use super::rows::{choice_row, heading, key_id, picked, row_end, tick};
@@ -24,8 +24,7 @@ impl Onboarding {
     /// Detects one agent.
     fn detect(&mut self, kind: AgentKind, cx: &mut Context<Self>) {
         self.probes.entry(kind).or_default().checking = true;
-        let task =
-            cx.background_spawn(async move { patchwork_server::provider::detect_agent(kind) });
+        let task = cx.background_spawn(async move { patchwork_core::provider::detect_agent(kind) });
         cx.spawn(async move |this, cx| {
             let status = task.await;
             let _ = this.update(cx, |this, cx| {
@@ -49,8 +48,8 @@ impl Onboarding {
     fn install(&mut self, kind: AgentKind, cx: &mut Context<Self>) {
         self.installing.insert(kind);
         self.install_errors.remove(&kind);
-        let server = Arc::clone(&self.server);
-        let task = cx.background_spawn(async move { server.install_cli(kind) });
+        let core = Arc::clone(&self.core);
+        let task = cx.background_spawn(async move { core.install_cli(kind) });
         cx.spawn(async move |this, cx| {
             let installed = task.await;
             let _ = this.update(cx, |this, cx| {

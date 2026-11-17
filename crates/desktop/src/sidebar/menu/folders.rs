@@ -6,18 +6,18 @@ use super::types::SortUndo;
 use super::types::Target;
 use std::sync::Arc;
 use gpui::{Window, prelude::*};
-use patchwork_server::provider::AgentKind;
-use patchwork_server::threads::Thread;
+use patchwork_core::provider::AgentKind;
+use patchwork_core::threads::Thread;
 use crate::ui::{AGENT_KINDS, agent_label};
 use crate::workspace::Workspace;
 
 impl Workspace {
     /// Makes a folder called "New folder" in the project, opens the project, and names it.
     pub fn new_folder(&mut self, project_id: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let (server, project) = (Arc::clone(&self.server), project_id.to_string());
+        let (core, project) = (Arc::clone(&self.core), project_id.to_string());
         let made = {
             let project = project.clone();
-            cx.background_spawn(async move { server.create_folder(&project, "New folder") })
+            cx.background_spawn(async move { core.create_folder(&project, "New folder") })
         };
         cx.spawn_in(window, async move |this, cx| {
             let made = made.await;
@@ -69,17 +69,17 @@ impl Workspace {
             moves.push((ids, folder));
         }
         let project = project_id.to_string();
-        let sort = move |server: &patchwork_server::Server| {
+        let sort = move |core: &patchwork_core::Core| {
             // Every provider is tried, so one that fails does not leave the rest unsorted.
             let mut done = Ok(());
             for (ids, folder) in moves {
                 let sorted = match folder {
                     Ok(id) => Ok(id),
-                    Err(agent) => server
+                    Err(agent) => core
                         .create_sort_folder(&project, agent_label(agent), agent)
                         .map(|f| f.id),
                 }
-                .and_then(|folder| server.reorder_threads(&ids, Some(&folder)));
+                .and_then(|folder| core.reorder_threads(&ids, Some(&folder)));
                 if let Err(e) = sorted {
                     done = Err(e);
                 }
@@ -153,16 +153,16 @@ impl Workspace {
             list.sort_by_key(|t| rank(&t.id));
             moves.push((list.iter().map(|t| t.id.clone()).collect(), folder));
         }
-        let undo = move |server: &patchwork_server::Server| {
+        let undo = move |core: &patchwork_core::Core| {
             // Every step is tried, so one that fails does not leave the rest undone.
             let mut done = Ok(());
             for (ids, folder) in moves {
-                if let Err(e) = server.reorder_threads(&ids, folder.as_deref()) {
+                if let Err(e) = core.reorder_threads(&ids, folder.as_deref()) {
                     done = Err(e);
                 }
             }
             for id in agent_folders {
-                if let Err(e) = server.remove_folder(&id) {
+                if let Err(e) = core.remove_folder(&id) {
                     done = Err(e);
                 }
             }

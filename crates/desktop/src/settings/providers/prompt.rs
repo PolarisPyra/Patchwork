@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{Div, Focusable, Window, div, prelude::*, px};
-use patchwork_server::provider::api::config::{self, ApiProvider, KeyChange};
+use patchwork_core::provider::api::config::{self, ApiProvider, KeyChange};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
 use crate::ui::theme::theme;

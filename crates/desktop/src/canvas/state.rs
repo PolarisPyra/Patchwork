@@ -6,8 +6,8 @@ use gpui::{
     Entity, FocusHandle, ScrollHandle, SharedString, UniformListScrollHandle, WeakEntity, Window,
     prelude::*,
 };
-use patchwork_server::threads::{Message, MessageStatus, TurnTrees};
-use patchwork_server::workspace::{FileMedia, PreviewKind};
+use patchwork_core::threads::{Message, MessageStatus, TurnTrees};
+use patchwork_core::workspace::{FileMedia, PreviewKind};
 use crate::ui::text_area::{Submitted, TextArea};
 use crate::ui::highlight::{MAX_HIGHLIGHT_LINES, Run, highlight_file, split_lines};
 use crate::workspace::Workspace;
@@ -170,8 +170,8 @@ impl Canvas {
         let seq = self.load_seq;
         let (root, turn) = (self.root.clone(), self.turn(cx));
         let task = cx.background_spawn(async move {
-            use patchwork_server::orchestration::changes::checkpoint::turn_file_diff;
-            use patchwork_server::workspace as ws;
+            use patchwork_core::orchestration::changes::turn_files::turn_file_diff;
+            use patchwork_core::workspace as ws;
             let file = ws::read_file(&root, &path).map_err(|e| e.to_string());
             let diff = match &turn {
                 Some(turn) => turn_file_diff(&root, turn, &path),

@@ -8,8 +8,8 @@
 use std::sync::Arc;
 
 use gpui::{Div, Role, div, prelude::*, px};
-use patchwork_server::Server;
-use patchwork_server::threads::{Message, Thread};
+use patchwork_core::Core;
+use patchwork_core::threads::{Message, Thread};
 
 use crate::ui::theme::{fs_sm, Theme};
 use crate::ui::{BtnKind, btn, now_ms, resets_in};
@@ -21,8 +21,8 @@ impl Workspace {
         let Some(thread) = self.thread.as_ref().filter(|t| !is_working(t)) else {
             return;
         };
-        let (server, thread) = (Arc::clone(&self.server), thread.id.clone());
-        let task = cx.background_spawn(async move { server.resume_turn(&thread) });
+        let (core, thread) = (Arc::clone(&self.core), thread.id.clone());
+        let task = cx.background_spawn(async move { core.resume_turn(&thread) });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             this.update(cx, |this, cx| {
@@ -42,9 +42,9 @@ impl Workspace {
             return;
         };
         let result = if wait {
-            self.server.resume_at_limit_reset(&thread.id).map(|_| ())
+            self.core.resume_at_limit_reset(&thread.id).map(|_| ())
         } else {
-            self.server.cancel_limit_resume(&thread.id)
+            self.core.cancel_limit_resume(&thread.id)
         };
         if let Err(e) = result {
             self.error = Some(e.to_string());
@@ -57,7 +57,7 @@ impl Workspace {
 /// the Resume button, and for a reply a usage limit ended, resuming by itself once the limit
 /// resets.
 pub(super) fn resume_row(
-    server: &Server,
+    core: &Core,
     thread: &Thread,
     m: &Message,
     t: &Theme,
@@ -67,8 +67,8 @@ pub(super) fn resume_row(
         .resumable_reply()
         .filter(|last| last.id == m.id && !is_working(thread))?;
     let now = now_ms();
-    let waiting = server.limit_resume_at(&thread.id);
-    let reset = server.limit_reset(thread).filter(|_| waiting.is_none());
+    let waiting = core.limit_resume_at(&thread.id);
+    let reset = core.limit_reset(thread).filter(|_| waiting.is_none());
     Some(
         div()
             .flex()

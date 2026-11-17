@@ -3,8 +3,8 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{Entity, FocusHandle, prelude::*};
-use patchwork_server::Server;
-use patchwork_server::provider::{AgentKind, ModelOption};
+use patchwork_core::Core;
+use patchwork_core::provider::{AgentKind, ModelOption};
 use crate::chat::composer::Composer;
 use crate::ui::AGENT_KINDS;
 use crate::ui::text_area::TextArea;
@@ -45,18 +45,16 @@ pub fn row_key(kind: AgentKind, item: &ModelOption) -> String {
     )
 }
 
-pub fn read_favorites(server: &Server) -> Vec<String> {
-    server
-        .store
-        .state(FAVORITES_KEY)
+pub fn read_favorites(core: &Core) -> Vec<String> {
+    core.state(FAVORITES_KEY)
         .and_then(|json| serde_json::from_str(&json).ok())
         .unwrap_or_default()
 }
 
-pub(super) fn save_favorites(server: &Server, favorites: &[String]) {
+pub(super) fn save_favorites(core: &Core, favorites: &[String]) {
     let saved = serde_json::to_string(favorites)
         .map_err(|e| e.to_string().into())
-        .and_then(|json| server.store.set_state(FAVORITES_KEY, &json));
+        .and_then(|json| core.set_state(FAVORITES_KEY, &json));
     if let Err(e) = saved {
         log::warn!(error:% = e; "could not save the favorite models: {{error}}");
     }
@@ -170,9 +168,9 @@ impl Composer {
         }
         self.favorites = picker.favorites.clone();
         if let Some(workspace) = self.workspace.upgrade() {
-            let server = std::sync::Arc::clone(&workspace.read(cx).server);
+            let core = std::sync::Arc::clone(&workspace.read(cx).core);
             let favorites = self.favorites.clone();
-            cx.background_spawn(async move { save_favorites(&server, &favorites) })
+            cx.background_spawn(async move { save_favorites(&core, &favorites) })
                 .detach();
         }
         cx.notify();

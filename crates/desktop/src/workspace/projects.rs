@@ -5,8 +5,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 use gpui::{Entity, Window, prelude::*};
-use patchwork_server::projects::Project;
-use patchwork_server::workspace::ProjectChanged;
+use patchwork_core::projects::Project;
+use patchwork_core::workspace::ProjectChanged;
 use crate::workspace::add_project::{AddProject, Closed as AddProjectClosed};
 use super::state::{View, Workspace};
 use crate::sidebar::devices::{DevicesView, OpenDevice};
@@ -24,14 +24,14 @@ impl Workspace {
         };
         let (id, root) = (project.id.clone(), project.path.clone());
         let events = self.project_events.clone();
-        if let Err(e) = self.server.watch_project(&id, move |changed| {
+        if let Err(e) = self.core.watch_project(&id, move |changed| {
             let _ = events.unbounded_send(changed);
         }) {
             self.error = Some(e.to_string());
         }
         let task = cx.background_spawn(async move {
-            let branch = patchwork_server::workspace::git_branch(&root);
-            let changes = patchwork_server::workspace::git_changes(&root).unwrap_or_else(|e| {
+            let branch = patchwork_core::workspace::git_branch(&root);
+            let changes = patchwork_core::workspace::git_changes(&root).unwrap_or_else(|e| {
                 log::warn!(error:% = e; "could not list the changed files: {{error}}");
                 Vec::new()
             });
@@ -64,7 +64,7 @@ impl Workspace {
         if changed
             .paths
             .iter()
-            .any(|p| patchwork_server::android::is_marker(p))
+            .any(|p| patchwork_core::android::is_marker(p))
         {
             self.detect_mobile(cx);
         }
@@ -111,9 +111,9 @@ impl Workspace {
     /// Saves which projects and folders are folded away, off the UI thread.
     pub fn save_collapsed(&self, cx: &gpui::App) {
         let ids: Vec<String> = self.collapsed.iter().cloned().collect();
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         cx.background_spawn(async move {
-            if let Err(e) = server.set_collapsed_sections(&ids) {
+            if let Err(e) = core.set_collapsed_sections(&ids) {
                 log::warn!(error:% = e; "could not save the open sections: {{error}}");
             }
         })
@@ -128,11 +128,7 @@ impl Workspace {
             return;
         }
         self.settings.active_project_id.clone_from(&id);
-        if let Err(e) = self
-            .server
-            .store
-            .update_settings(|s| s.active_project_id = id)
-        {
+        if let Err(e) = self.core.update_settings(|s| s.active_project_id = id) {
             log::warn!(error:% = e; "could not record the active project: {{error}}");
         }
     }
@@ -195,8 +191,8 @@ impl Workspace {
             return;
         }
         let return_focus = window.focused(cx);
-        let server = Arc::clone(&self.server);
-        let dialog = cx.new(|cx| AddProject::new(server, host, window, cx));
+        let core = Arc::clone(&self.core);
+        let dialog = cx.new(|cx| AddProject::new(core, host, window, cx));
         cx.subscribe_in(
             &dialog,
             window,
@@ -240,12 +236,12 @@ impl Workspace {
     /// Adds the folders dropped on the sidebar as projects, off the main thread, and opens the
     /// last one added.
     pub fn add_dropped_folders(&mut self, paths: &[PathBuf], cx: &mut Context<Self>) {
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         let paths = paths.to_vec();
         let task = cx.background_spawn(async move {
             paths
                 .iter()
-                .map(|path| server.add_project(&path.to_string_lossy()))
+                .map(|path| core.add_project(&path.to_string_lossy()))
                 .collect::<Vec<_>>()
         });
         cx.spawn(async move |this, cx| {
@@ -270,7 +266,7 @@ impl Workspace {
             self.collapsed.insert(project.id.clone());
             self.save_collapsed(cx);
         }
-        self.settings = self.server.store.settings();
+        self.settings = self.core.settings();
         self.select_project(&project.id, cx);
     }
 }

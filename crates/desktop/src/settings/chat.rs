@@ -4,7 +4,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, div, prelude::*};
-use patchwork_server::settings::{ResumeAtLaunch, Settings};
+use patchwork_core::settings::{ResumeAtLaunch, Settings};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{segmented, switch, token_row};

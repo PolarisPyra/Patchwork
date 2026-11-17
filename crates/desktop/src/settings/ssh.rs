@@ -7,7 +7,7 @@
 use std::collections::{HashMap, HashSet};
 
 use gpui::{AnyElement, Focusable, FontWeight, SharedString, Window, div, prelude::*, px};
-use patchwork_server::system::ssh::{self, Host, Test};
+use patchwork_core::system::ssh::config::{self as ssh, Host, Test};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
