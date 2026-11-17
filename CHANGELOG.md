@@ -3,6 +3,27 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.94] - 2026-11-17
+
+**26.11.94** · 3 changes from 1 contributor
+
+- **Ask about another chat's progress.** Ask a chat app about another chat in your own words and get a short progress report.
+- **Chat personalities.** Choose a personality for chat app replies, including Butler, Hype, Pirate, and Terse.
+
+<details>
+<summary>Full changelog</summary>
+
+### Added
+
+- From a chat app, you can ask how another chat is going in your own words, such as "what's going on in the reverse engineering task", without naming its project. The agent finds the chat and replies with a short progress report: what it is working on, what is done, what is left, and anything waiting on you. by [PolarisPyra in #181](https://github.com/PolarisPyra/Patchwork/pull/181)
+- Chats started from a chat app now reply in a casual teammate's voice. Settings → Gateway service → Personality picks another one. Each personality is a Markdown file in the personalities folder of Patchwork's config folder, and Butler, Hype, Pirate and Terse come with it. The pane shows the folder's path and an example file. by [PolarisPyra in #184](https://github.com/PolarisPyra/Patchwork/pull/184)
+
+### Fixed
+
+- On a chat app's page in Settings → Gateway service, the "Paired with" line sat against the divider under the pairing code. It now has the same spacing as the rows above it. by [PolarisPyra in #182](https://github.com/PolarisPyra/Patchwork/pull/182)
+
+</details>
+
 ## [26.11.93] - 2026-11-17
 
 **26.11.93** · 3 changes from 1 contributor
