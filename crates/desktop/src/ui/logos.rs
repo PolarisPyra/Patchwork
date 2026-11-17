@@ -6,9 +6,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use base64::Engine;
 use gpui::{AnyElement, Image, ImageFormat, IntoElement, SharedString, Styled, img, px};
-use patchwork_server::gateway::Platform;
-use patchwork_server::provider::AgentKind;
-use patchwork_server::provider::api::config::ApiProvider;
+use patchwork_core::gateway::Platform;
+use patchwork_core::provider::AgentKind;
+use patchwork_core::provider::api::config::ApiProvider;
 use super::controls::{icon, mono_svg};
 
 /// An agent's mark. A one-colour mark takes the text colour.
@@ -91,7 +91,7 @@ pub(super) fn api_providers() -> Arc<HashMap<String, ApiProvider>> {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     Arc::clone(cached.get_or_insert_with(|| {
         Arc::new(
-            patchwork_server::provider::api::config::providers()
+            patchwork_core::provider::api::config::providers()
                 .into_iter()
                 .map(|p| (p.id.clone(), p))
                 .collect(),

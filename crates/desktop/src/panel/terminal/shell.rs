@@ -8,8 +8,8 @@ use std::time::Duration;
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedSender, unbounded};
 use gpui::{Bounds, FontWeight, Pixels, SharedString, Task, Window, font, prelude::*, px};
-use patchwork_server::settings::TerminalSettings;
-use patchwork_server::terminal::{AttachedTerminal, FrameSink, TerminalFrame};
+use patchwork_core::settings::TerminalSettings;
+use patchwork_core::terminal::{AttachedTerminal, FrameSink, TerminalFrame};
 
 use crate::panel::Panel;
 use crate::ui::theme::font_mono;
@@ -135,23 +135,23 @@ impl Panel {
         };
         self.starting = true;
         self.error = None;
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         let cwd = self.cwd.clone();
         let host = self.host.clone();
         let saved = self.picked.clone();
         let (sink, rx) = frames();
         let task = cx.background_spawn(async move {
             let path = chosen.or_else(|| {
-                let found = patchwork_server::terminal::shells();
+                let found = patchwork_core::terminal::shells();
                 saved.filter(|s| found.iter().any(|f| &f.path == s))
             });
-            let launch = patchwork_server::terminal::launch(
-                &server.store.settings(),
+            let launch = patchwork_core::terminal::launch(
+                &core.settings(),
                 cwd.as_deref().map(std::path::Path::new),
                 host.as_deref(),
                 path.as_deref(),
             )?;
-            server.terminals.spawn(launch, cols, rows, PAGE, sink)
+            core.terminals.spawn(launch, cols, rows, PAGE, sink)
         });
         cx.spawn(async move |this, cx| {
             let started = task.await;
@@ -188,17 +188,15 @@ impl Panel {
     /// terminal: the tab is there when the user opens it. It closes when the command succeeds and
     /// stays when it fails, as a shell does, and [`crate::panel::PanelEvent::RunFinished`] says
     /// how it ended.
-    pub fn run(&mut self, launch: patchwork_server::terminal::Launch, cx: &mut Context<Self>) {
+    pub fn run(&mut self, launch: patchwork_core::terminal::Launch, cx: &mut Context<Self>) {
         self.restore(cx);
         // Before the terminal has been shown it has no size; it takes its own once it is.
         let (cols, rows) = self.grid.unwrap_or(HIDDEN_GRID);
         self.error = None;
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         let (sink, rx) = frames();
-        let task =
-            cx.background_spawn(
-                async move { server.terminals.spawn(launch, cols, rows, PAGE, sink) },
-            );
+        let task = cx
+            .background_spawn(async move { core.terminals.spawn(launch, cols, rows, PAGE, sink) });
         cx.spawn(async move |this, cx| {
             let started = task.await;
             this.update(cx, |this, cx| {
@@ -235,13 +233,13 @@ impl Panel {
     fn restore(&mut self, cx: &mut Context<Self>) {
         if !self.restored {
             self.restored = true;
-            for info in self.server.terminals.list() {
+            for info in self.core.terminals.list() {
                 if !info.running && info.exit_code.is_none_or(|code| code == 0) {
                     self.close_in_background(info.id, cx);
                     continue;
                 }
                 let (sink, rx) = frames();
-                let Ok(attached) = self.server.terminals.attach(info.id, PAGE, sink) else {
+                let Ok(attached) = self.core.terminals.attach(info.id, PAGE, sink) else {
                     continue;
                 };
                 self.add_shell(attached, rx, cx);
@@ -282,11 +280,11 @@ impl Panel {
             }
         });
         let (input, mut typed) = unbounded::<String>();
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         let attachment = attached.attachment;
         let writer = cx.background_spawn(async move {
             while let Some(data) = typed.next().await {
-                if let Err(e) = server.terminals.write(id, attachment, &data) {
+                if let Err(e) = core.terminals.write(id, attachment, &data) {
                     log::warn!(
                         id:%, error:% = e;
                         "terminal {{id}}: could not type into it: {{error}}"
@@ -376,9 +374,9 @@ impl Panel {
     }
 
     fn close_in_background(&self, id: u32, cx: &mut Context<Self>) {
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         cx.background_spawn(async move {
-            if let Err(e) = server.terminals.close(id) {
+            if let Err(e) = core.terminals.close(id) {
                 log::warn!(id:%, error:% = e; "terminal {{id}}: could not close it: {{error}}");
             }
         })
@@ -421,12 +419,12 @@ impl Panel {
             shell.selection = None;
         }
         let shells: Vec<(u32, u32)> = self.shells.iter().map(|s| (s.id, s.attachment)).collect();
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         self.resize_timer = Some(cx.spawn(async move |_, cx| {
             cx.background_executor().timer(RESIZE_SETTLE).await;
             cx.background_spawn(async move {
                 for (id, attachment) in shells {
-                    if let Err(e) = server.terminals.resize(id, attachment, cols, rows) {
+                    if let Err(e) = core.terminals.resize(id, attachment, cols, rows) {
                         log::warn!(error:% = e; "could not resize a terminal: {{error}}");
                     }
                 }
@@ -440,9 +438,9 @@ impl Panel {
     }
 
     fn tell_size(&self, id: u32, attachment: u32, cols: u16, rows: u16, cx: &mut Context<Self>) {
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         cx.background_spawn(async move {
-            if let Err(e) = server.terminals.resize(id, attachment, cols, rows) {
+            if let Err(e) = core.terminals.resize(id, attachment, cols, rows) {
                 log::warn!(error:% = e; "could not resize a terminal: {{error}}");
             }
         })

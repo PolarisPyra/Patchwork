@@ -9,8 +9,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{AnyElement, ClickEvent, FontWeight, Role, SharedString, Window, div, prelude::*, px};
-use patchwork_server::gateway::{PairedUser, Platform, PlatformSettings, Status};
-use patchwork_server::system::now_ms;
+use patchwork_core::gateway::{PairedUser, Platform, PlatformSettings, Status};
+use patchwork_core::system::now_ms;
 
 use crate::settings::SettingsDialog;
 use crate::settings::gateway_setup::setup;
@@ -71,9 +71,9 @@ impl SettingsDialog {
 
     /// Reads which credentials are saved, off the main thread.
     pub(super) fn read_credentials(&mut self, cx: &mut Context<Self>) {
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         self.run(
-            move || server.gateway_credentials(),
+            move || core.gateway_credentials(),
             |d, saved, _| d.gateways.saved = Some(saved.into_iter().collect()),
             cx,
         );
@@ -87,9 +87,9 @@ impl SettingsDialog {
         value: String,
         cx: &mut Context<Self>,
     ) {
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         self.run(
-            move || server.set_gateway_credential(platform, key, &value),
+            move || core.set_gateway_credential(platform, key, &value),
             |d, out, cx| {
                 d.gateways.error = out.err().map(|e| e.to_string());
                 d.read_credentials(cx);
@@ -99,12 +99,11 @@ impl SettingsDialog {
     }
 
     fn remove_paired(&mut self, platform: Platform, id: String, cx: &mut Context<Self>) {
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         self.run(
             move || {
-                server
-                    .remove_gateway_user(platform, &id)
-                    .map(|()| server.gateway_users())
+                core.remove_gateway_user(platform, &id)
+                    .map(|()| core.gateway_users())
             },
             |d, out, _| match out {
                 Ok(users) => {
@@ -121,7 +120,7 @@ impl SettingsDialog {
     /// open.
     fn poll_gateways(&mut self, cx: &mut Context<Self>) {
         self.gateways.polling = true;
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         cx.spawn(async move |this, cx| {
             loop {
                 let open = this.read_with(cx, |d, _| d.section == "gateways");
@@ -129,19 +128,19 @@ impl SettingsDialog {
                     let _ = this.update(cx, |d, _| d.gateways.polling = false);
                     return;
                 }
-                let server = Arc::clone(&server);
-                let (statuses, code, users) = cx
+                let core = Arc::clone(&core);
+                let (statuses, pairing, users) = cx
                     .background_spawn(async move {
                         (
-                            server.gateway_status(),
-                            server.gateway_code(),
-                            server.gateway_users(),
+                            core.gateway_status(),
+                            core.gateway_code(),
+                            core.gateway_users(),
                         )
                     })
                     .await;
                 let applied = this.update(cx, |d, cx| {
                     d.gateways.statuses = statuses.into_iter().collect();
-                    d.gateways.code = code;
+                    d.gateways.code = pairing;
                     d.gateways.users = users;
                     cx.notify();
                 });
@@ -255,7 +254,7 @@ fn pairing_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEleme
         btn("gw-new-code", "New code", BtnKind::Plain, false, &t)
             .child("New code")
             .on_click(cx.listener(|d, _, _, cx| {
-                d.gateways.code = Some(d.server.new_gateway_code());
+                d.gateways.code = Some(d.core.new_gateway_code());
                 cx.notify();
             })),
     );

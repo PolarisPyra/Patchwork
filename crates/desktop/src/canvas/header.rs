@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{FontWeight, Role, SharedString, div, prelude::*, px};
-use patchwork_server::threads::Message;
+use patchwork_core::threads::Message;
 use crate::ui::highlight::file_label;
 use crate::ui::theme::{fs_lg, fs_sm, radius, Theme};
 use crate::ui::{BtnKind, badge, base_name, btn, dir_name, icon, icon_button, tooltip};
@@ -96,8 +96,7 @@ impl Canvas {
                         )
                     })
                     .when(
-                        self.path.is_some()
-                            && !patchwork_server::system::remote::is_remote(&self.root),
+                        self.path.is_some() && !patchwork_core::system::ssh::is_remote(&self.root),
                         |d| {
                             d.child(
                                 btn("open-in-editor", "Open in editor", BtnKind::Plain, false, t)
@@ -248,7 +247,7 @@ impl Canvas {
     pub(super) fn change(
         &self,
         cx: &Context<Self>,
-    ) -> Option<patchwork_server::workspace::FileChange> {
+    ) -> Option<patchwork_core::workspace::FileChange> {
         let path = self.path.as_ref()?;
         let w = self.workspace.upgrade()?;
         w.read(cx).changes.iter().find(|c| &c.path == path).cloned()

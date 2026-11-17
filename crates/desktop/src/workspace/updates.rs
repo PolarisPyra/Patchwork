@@ -5,8 +5,8 @@
 use std::sync::Arc;
 
 use gpui::{App, FontWeight, PromptLevel, Role, Window, deferred, div, prelude::*, px};
-use patchwork_server::Server;
-use patchwork_server::updates::{RELEASES_URL, RestartResult, UpdateState, restart_path};
+use patchwork_core::Core;
+use patchwork_core::updates::{RELEASES_URL, RestartResult, UpdateState, restart_path};
 
 use crate::ui::theme::{radius, radius_sm, Theme};
 use crate::ui::{BtnKind, btn, button, icon, popup_shadow};
@@ -14,8 +14,8 @@ use super::state::Workspace;
 
 /// Restarts into the installed update. Replies that are running resume after it; when Settings
 /// says a launch never resumes them, the user confirms the restart first.
-pub(super) fn restart_to_update(server: &Arc<Server>, window: &mut Window, cx: &mut App) {
-    match server.restart_to_update(false) {
+pub(super) fn restart_to_update(core: &Arc<Core>, window: &mut Window, cx: &mut App) {
+    match core.restart_to_update(false) {
         RestartResult::NothingReady => {}
         RestartResult::Restart => restart(cx),
         RestartResult::Busy { running } => {
@@ -33,10 +33,9 @@ pub(super) fn restart_to_update(server: &Arc<Server>, window: &mut Window, cx: &
                 &["Restart", "Cancel"],
                 cx,
             );
-            let server = Arc::clone(server);
+            let core = Arc::clone(core);
             cx.spawn(async move |cx| {
-                if answer.await == Ok(0) && server.restart_to_update(true) == RestartResult::Restart
-                {
+                if answer.await == Ok(0) && core.restart_to_update(true) == RestartResult::Restart {
                     cx.update(restart);
                 }
             })
@@ -69,7 +68,7 @@ impl Workspace {
         t: &Theme,
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement + use<>> {
-        let (version, ready) = match self.server.update_status().state {
+        let (version, ready) = match self.core.update_status().state {
             UpdateState::Ready { version } => (version, true),
             UpdateState::Available { version } => (version, false),
             UpdateState::Idle
@@ -124,7 +123,7 @@ impl Workspace {
                             .child(action)
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 if ready {
-                                    restart_to_update(&this.server, window, cx);
+                                    restart_to_update(&this.core, window, cx);
                                 } else {
                                     cx.open_url(RELEASES_URL);
                                 }
@@ -140,7 +139,7 @@ impl Workspace {
                             .hover(move |s| s.bg(hover).text_color(fg))
                             .child(icon("x", 14.))
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                if let Err(e) = this.server.dismiss_update(&version) {
+                                if let Err(e) = this.core.dismiss_update(&version) {
                                     log::warn!(error:% = e; "could not save the closed update card: {{error}}");
                                 }
                                 this.update_dismissed = Some(version.clone());

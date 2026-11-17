@@ -4,15 +4,10 @@
 // Rust guideline compliant 2026-10-09
 
 mod attachments;
-mod background;
-mod butterfly;
 mod cards;
+mod chips;
 mod pill;
 mod render;
-mod scene;
-mod sky;
 mod state;
 
-pub use background::{PreviewFlight, butterfly_backdrop, butterfly_preview};
-pub use scene::{scene_backdrop, scene_preview};
 pub use state::Orchestrator;

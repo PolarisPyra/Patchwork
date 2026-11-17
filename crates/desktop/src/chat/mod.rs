@@ -4,6 +4,7 @@
 // Rust guideline compliant 2026-10-09
 
 pub mod approvals;
+pub mod backdrop;
 pub mod background;
 pub mod checks;
 pub mod composer;

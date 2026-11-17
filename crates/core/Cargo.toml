@@ -1,0 +1,89 @@
+[package]
+name = "patchwork-core"
+description = "Patchwork backend: providers, persistence, usage, and thread import"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-system.workspace = true
+base64 = { workspace = true, default-features = true }
+serde_json = { workspace = true, default-features = true }
+toml = { workspace = true, default-features = true }
+serde = { workspace = true, default-features = true, features = ["derive", "rc"] }
+log = { workspace = true, default-features = true }
+uuid = { workspace = true, default-features = true, features = ["v4"] }
+libc = { workspace = true, default-features = true }
+# `alias` on a variant is for reading old saved names, and the bindings don't need it.
+# No statement cache: nothing calls `prepare_cached`, and it is the only default feature used here.
+rusqlite = { workspace = true, features = ["bundled", "fallible_uint"] }
+ureq = { workspace = true, default-features = true, features = ["json"] }
+# Chat app gateways: the websockets Discord, Slack and Mattermost send messages over.
+tungstenite = { workspace = true, features = ["handshake", "rustls-tls-webpki-roots"] }
+# API providers: keys in the system credential store, and the agent's file search tools.
+keyring = { workspace = true, default-features = true }
+ignore = { workspace = true, default-features = true }
+# The integrated terminal's pseudo-terminals, and the screen and modes a window gets back.
+portable-pty = { workspace = true, default-features = true }
+vt100 = { workspace = true, default-features = true }
+# Watching the open project for changes.
+notify = { workspace = true, default-features = true }
+globset = { workspace = true, default-features = true }
+regex = { workspace = true, default-features = true }
+# Debug log folder names and line times in local time.
+chrono = { workspace = true, features = ["clock"] }
+# Exporting the debug logs as one file to send with a bug report.
+# `deflate` would also build zopfli, a second compressor that only very high levels use.
+zip = { workspace = true, features = ["deflate-flate2-zlib-rs"] }
+# Computer use: a screenshot of the primary monitor, and the pointer and keyboard under it.
+enigo = { workspace = true, default-features = true }
+image = { workspace = true, features = ["png", "jpeg", "webp"] }
+# A chat background an agent drew as an SVG is kept as a picture.
+resvg.workspace = true
+# Chat background pictures are named after a hash of their bytes, so the same one is kept once.
+sha2 = { workspace = true, default-features = true }
+# Updates: a release's download is checked against the release key's signature.
+minisign-verify = { workspace = true, default-features = true }
+futures = { workspace = true, default-features = true }
+http = { workspace = true, default-features = true }
+prost = { workspace = true, features = ["derive", "std"] }
+tokio = { workspace = true, features = ["macros", "net", "rt", "sync", "time"] }
+tonic = { workspace = true, features = ["channel"] }
+tonic-prost.workspace = true
+
+# Screenshots. On Linux they are taken in src/computer/linux.rs with crates the app already builds, since
+# xcap would also build PipeWire, which needs newer headers than the AppImage's build machine has.
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+xcap.workspace = true
+
+# The PATH installers write to the registry, which a running app's own PATH never picks up.
+[target.'cfg(windows)'.dependencies]
+winreg = { workspace = true, default-features = true }
+# The job object a command runs in, which ends everything it started, and telling running
+# programs that the user's PATH changed.
+windows-sys = { workspace = true, default-features = true, features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb = { workspace = true, default-features = true, features = ["randr"] }
+zbus = { workspace = true, default-features = true }
+url = { workspace = true, default-features = true }
+
+[features]
+default = ["keychain"]
+# The system credential store: the Secret Service on Linux, which links libdbus, the Keychain and the
+# Credential Manager. The helper Patchwork copies to SSH hosts is built without it: it never keeps
+# a key, and a static build has no libdbus to link.
+keychain = [
+  "keyring/sync-secret-service",
+  "keyring/crypto-rust",
+  "keyring/apple-native",
+  "keyring/windows-native",
+]
+
+[lints]
+workspace = true

@@ -11,7 +11,7 @@ use std::sync::Arc;
 use gpui::{
     AnyElement, Hsla, Rgba, Role, SharedString, Toggled, Window, div, hsla, prelude::*, px, rgb,
 };
-use patchwork_server::themes::{Color, ThemeFile};
+use patchwork_core::themes::{Color, ThemeFile};
 
 use super::slider::{Range, slider};
 use crate::settings::SettingsDialog;
@@ -183,9 +183,9 @@ impl SettingsDialog {
         }
         editing.saving = true;
         let (id, file) = (editing.id.clone(), editing.file.clone());
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         self.run(
-            move || server.write_theme(&id, &file).map_err(|e| e.to_string()),
+            move || core.write_theme(&id, &file).map_err(|e| e.to_string()),
             |d, written, cx| {
                 if let Err(e) = written {
                     d.themes.error = Some(e);

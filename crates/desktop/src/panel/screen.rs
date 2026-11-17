@@ -38,9 +38,9 @@ impl Panel {
         }
         self.screen.busy = true;
         let task = cx.background_spawn(async {
-            let shot = patchwork_server::computer::screenshot()?;
+            let shot = patchwork_core::computer::screenshot()?;
             let image = Arc::new(Image::from_bytes(ImageFormat::Png, shot.png));
-            Ok::<_, patchwork_server::Error>((image, shot.screen_width, shot.screen_height))
+            Ok::<_, patchwork_core::Error>((image, shot.screen_width, shot.screen_height))
         });
         self.screen.capture = Some(cx.spawn(async move |this, cx| {
             let shot = task.await;

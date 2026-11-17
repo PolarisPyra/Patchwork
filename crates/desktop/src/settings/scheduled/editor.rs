@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{ClickEvent, Div, SharedString, Window, div, prelude::*, px};
-use patchwork_server::scheduled::{Schedule, Weekday};
+use patchwork_core::scheduled::{Schedule, Weekday};
 
 use crate::settings::controls::{FieldKind, chip, select_box, switch};
 use crate::settings::SettingsDialog;

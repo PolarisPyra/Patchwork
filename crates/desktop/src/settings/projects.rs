@@ -6,8 +6,8 @@
 use std::sync::Arc;
 
 use gpui::{AnyElement, FontWeight, SharedString, div, prelude::*, px};
-use patchwork_server::import::{ImportScan, ImportSource};
-use patchwork_server::provider::AgentKind;
+use patchwork_core::import::{ImportScan, ImportSource};
+use patchwork_core::provider::AgentKind;
 
 use crate::settings::controls::{alert, section_heading, switch, token_row};
 use crate::settings::themes::project_look;
@@ -62,12 +62,12 @@ pub(crate) fn import_sources(agents: &[AgentKind]) -> Vec<ImportSource> {
 
 impl SettingsDialog {
     fn scan_imports(&mut self, sources: Vec<ImportSource>, cx: &mut Context<Self>) {
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         self.run(
             move || {
                 sources
                     .into_iter()
-                    .map(|s| server.scan_imports(s))
+                    .map(|s| core.scan_imports(s))
                     .collect::<Vec<_>>()
             },
             |d, scans, _| {
@@ -83,16 +83,16 @@ impl SettingsDialog {
     fn import_from(&mut self, source: ImportSource, cx: &mut Context<Self>) {
         self.projects.busy = Some(source);
         self.projects.import_error = None;
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         self.run(
-            move || server.import_threads(&[source]),
+            move || core.import_threads(&[source]),
             move |d, out, cx| {
                 d.projects.busy = None;
                 if let Err(e) = out {
                     d.projects.import_error = Some(e.to_string());
                 }
                 // Importing adds projects and threads on the backend.
-                d.settings = d.server.store.settings();
+                d.settings = d.core.settings();
                 cx.emit(SettingsEvent::Changed);
                 cx.emit(SettingsEvent::ThreadsChanged);
                 d.scan_imports(vec![source], cx);
@@ -103,14 +103,14 @@ impl SettingsDialog {
 
     fn remove_project(&mut self, id: String, cx: &mut Context<Self>) {
         self.projects.error = None;
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         self.run(
-            move || server.remove_project(&id),
+            move || core.remove_project(&id),
             |d, out, cx| {
                 if let Err(e) = out {
                     d.projects.error = Some(e.to_string());
                 }
-                d.settings = d.server.store.settings();
+                d.settings = d.core.settings();
                 cx.emit(SettingsEvent::Changed);
                 cx.emit(SettingsEvent::ThreadsChanged);
             },

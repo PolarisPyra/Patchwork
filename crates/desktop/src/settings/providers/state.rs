@@ -5,8 +5,8 @@
 use std::sync::Arc;
 use std::collections::{HashMap, HashSet};
 use gpui::{Context, PathPromptOptions};
-use patchwork_server::provider::api::config::{self, ApiProvider, KeyChange, ProviderView};
-use patchwork_server::provider::{AgentKind, AgentStatus, ModelOption};
+use patchwork_core::provider::api::config::{self, ApiProvider, KeyChange, ProviderView};
+use patchwork_core::provider::{AgentKind, AgentStatus, ModelOption};
 use crate::settings::SettingsDialog;
 use super::cli;
 use super::form;
@@ -74,7 +74,7 @@ impl SettingsDialog {
 
     pub(super) fn detect(&mut self, kind: AgentKind, cx: &mut Context<Self>) {
         self.run(
-            move || patchwork_server::provider::detect_agent(kind),
+            move || patchwork_core::provider::detect_agent(kind),
             move |d, status, _| {
                 d.providers.status.insert(kind, Some(status));
             },
@@ -136,7 +136,7 @@ impl SettingsDialog {
                 continue;
             }
             self.run(
-                move || patchwork_server::provider::list_models(kind),
+                move || patchwork_core::provider::list_models(kind),
                 move |d, list, _| {
                     d.providers.models.insert(kind, list);
                 },
@@ -148,9 +148,9 @@ impl SettingsDialog {
     pub(super) fn install(&mut self, kind: AgentKind, cx: &mut Context<Self>) {
         self.providers.installing.insert(kind);
         self.providers.install_errors.remove(&kind);
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         self.run(
-            move || server.install_cli(kind),
+            move || core.install_cli(kind),
             move |d, done, cx| {
                 d.providers.installing.remove(&kind);
                 match done {

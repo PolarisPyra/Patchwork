@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use gpui::{Window, prelude::*};
-use patchwork_server::permissions::PermissionScope;
+use patchwork_core::permissions::PermissionScope;
 use crate::workspace::palette::{Action, Closed, Palette};
 use crate::ui::theme::theme;
 use super::state::Workspace;
@@ -58,11 +58,11 @@ impl Workspace {
         if self.settings_dialog.is_some() {
             return;
         }
-        let server = Arc::clone(&self.server);
-        let dialog = cx.new(|cx| crate::settings::SettingsDialog::new(server, section, window, cx));
+        let core = Arc::clone(&self.core);
+        let dialog = cx.new(|cx| crate::settings::SettingsDialog::new(core, section, window, cx));
         cx.subscribe_in(&dialog, window, |this, _, event, window, cx| match event {
             crate::settings::SettingsEvent::Changed => {
-                this.settings = this.server.store.settings();
+                this.settings = this.core.settings();
                 // "Run setup again" leaves Settings for the setup.
                 if !this.settings.onboarded {
                     this.settings_dialog = None;
@@ -77,7 +77,7 @@ impl Workspace {
                 this.generate_theme(prompt.clone(), pick.as_ref(), cx);
             }
             crate::settings::SettingsEvent::RestartToUpdate => {
-                super::updates::restart_to_update(&this.server, window, cx);
+                super::updates::restart_to_update(&this.core, window, cx);
             }
             crate::settings::SettingsEvent::Closed => {
                 this.settings_dialog = None;
@@ -119,7 +119,7 @@ impl Workspace {
 
     /// Light when the window is dark, else dark. A picked theme gives way to it.
     pub(super) fn toggle_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        use patchwork_server::settings::Theme as ThemeSetting;
+        use patchwork_core::settings::Theme as ThemeSetting;
         let setting = if theme(cx).is_dark() {
             ThemeSetting::Light
         } else {
@@ -127,7 +127,7 @@ impl Workspace {
         };
         self.settings.theme = setting;
         self.settings.theme_id = None;
-        let saved = self.server.store.update_settings(|s| {
+        let saved = self.core.update_settings(|s| {
             s.theme = setting;
             s.theme_id = None;
         });
@@ -142,10 +142,10 @@ impl Workspace {
     fn generate_theme(
         &mut self,
         prompt: String,
-        pick: Option<&patchwork_server::threads::AgentPick>,
+        pick: Option<&patchwork_core::threads::AgentPick>,
         cx: &mut Context<Self>,
     ) {
-        use patchwork_server::orchestration::Target;
+        use patchwork_core::orchestration::Target;
         let new = self.composer.read(cx).new_thread(None, &self.settings);
         let mut new = match pick {
             Some(pick) => new.picked(pick, &self.settings),
@@ -153,10 +153,11 @@ impl Workspace {
         };
         // The effort is the one picked in Settings, never the one left in the composer.
         new.effort = pick.and_then(|pick| pick.effort.clone());
-        let server = Arc::clone(&self.server);
-        let sent = cx.background_spawn(async move {
-            server.dispatch_to(&prompt, &Target::New(None), &new, &[])
-        });
+        let core = Arc::clone(&self.core);
+        let sent =
+            cx.background_spawn(
+                async move { core.dispatch_to(&prompt, &Target::New(None), &new, &[]) },
+            );
         cx.spawn(async move |this, cx| {
             let sent = sent.await;
             let _ = this.update(cx, |this, cx| {
@@ -176,9 +177,9 @@ impl Workspace {
     /// settings list what can be picked again.
     pub(super) fn watch_themes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let (sender, mut received) = futures::channel::mpsc::unbounded::<()>();
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         cx.background_spawn(async move {
-            let watched = server.watch_themes(move || {
+            let watched = core.watch_themes(move || {
                 let _ = sender.unbounded_send(());
             });
             if let Err(e) = watched {
@@ -205,10 +206,10 @@ impl Workspace {
     /// Draws the app in what the theme settings come to. The theme's file is read off the UI
     /// thread.
     pub(super) fn apply_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         cx.spawn_in(window, async move |this, cx| {
             let applied = cx
-                .background_spawn(async move { server.applied_theme() })
+                .background_spawn(async move { core.applied_theme() })
                 .await;
             let _ = this.update_in(cx, |this, window, cx| {
                 let was = crate::ui::theme::applied(cx);

@@ -64,10 +64,10 @@ impl Workspace {
         let name = renaming.field.read(cx).content.trim().to_string();
         if save && !name.is_empty() && name != renaming.current {
             let target = renaming.target.clone();
-            let rename = move |server: &patchwork_server::Server| match &target {
-                Target::Thread(id) => server.rename_thread(id, &name),
-                Target::Project(id) => server.rename_project(id, &name),
-                Target::Folder(id) => server.rename_folder(id, &name),
+            let rename = move |core: &patchwork_core::Core| match &target {
+                Target::Thread(id) => core.rename_thread(id, &name),
+                Target::Project(id) => core.rename_project(id, &name),
+                Target::Folder(id) => core.rename_folder(id, &name),
                 Target::Archived(_) | Target::Many(_) => Ok(()),
             };
             self.change("rename it", rename, cx);

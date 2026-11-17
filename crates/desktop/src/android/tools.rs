@@ -11,7 +11,7 @@ use gpui::{
     AnyElement, App, ClickEvent, Entity, FontWeight, Role, SharedString, Task, Window, div,
     prelude::*, px,
 };
-use patchwork_server::android::{Device, NetworkSpeed, StateAction, WifiDevice};
+use patchwork_core::android::{Device, NetworkSpeed, StateAction, WifiDevice};
 
 use super::state::AndroidPanel;
 use crate::ui::menu::MenuItem;
@@ -87,8 +87,8 @@ impl AndroidPanel {
                         let serial = serial.clone();
                         let _ = this.update(cx, |this, cx| {
                             let root = this.project.root.clone();
-                            this.device_action("Rotating", None, cx, move |server| {
-                                server.android_rotate(&root, &serial)
+                            this.device_action("Rotating", None, cx, move |core| {
+                                core.android_rotate(&root, &serial)
                             });
                         });
                     }
@@ -127,7 +127,7 @@ impl AndroidPanel {
                             "Setting the network speed",
                             Some(format!("Network: {}", speed.label())),
                             cx,
-                            move |server| server.android_set_network(&root, &serial, speed),
+                            move |core| core.android_set_network(&root, &serial, speed),
                         );
                     });
                 });
@@ -179,9 +179,9 @@ impl AndroidPanel {
         let Some(Sheet::States { serial, .. }) = &self.sheet else {
             return;
         };
-        let (server, root) = (Arc::clone(&self.server), self.project.root.clone());
+        let (core, root) = (Arc::clone(&self.core), self.project.root.clone());
         let serial = serial.clone();
-        let task = cx.background_spawn(async move { server.android_saved_states(&root, &serial) });
+        let task = cx.background_spawn(async move { core.android_saved_states(&root, &serial) });
         cx.spawn(async move |this, cx| {
             let read = task.await;
             this.update(cx, |this, cx| {
@@ -211,24 +211,24 @@ impl AndroidPanel {
             StateAction::Load => ("Loading the state", format!("Loaded {name}")),
             StateAction::Delete => ("Deleting the state", format!("Deleted {name}")),
         };
-        self.device_action(doing, Some(done), cx, move |server| {
-            server.android_saved_state(&root, &serial, action, &name)
+        self.device_action(doing, Some(done), cx, move |core| {
+            core.android_saved_state(&root, &serial, action, &name)
         });
     }
 
     pub(super) fn open_pair(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let address = field("Address, as 192.168.1.20:37251", "Pairing address", cx);
-        let code = field("Six-digit code", "Pairing code", cx);
+        let pairing = field("Six-digit code", "Pairing code", cx);
         focus(&address, window, cx);
         let find = cx.spawn(async move |this, cx| {
             loop {
-                let Ok((server, root)) = this.update(cx, |this, _| {
-                    (Arc::clone(&this.server), this.project.root.clone())
+                let Ok((core, root)) = this.update(cx, |this, _| {
+                    (Arc::clone(&this.core), this.project.root.clone())
                 }) else {
                     break;
                 };
                 let read = cx
-                    .background_spawn(async move { server.android_wifi_devices(&root) })
+                    .background_spawn(async move { core.android_wifi_devices(&root) })
                     .await;
                 let open = this.update(cx, |this, cx| {
                     let Some(Sheet::Pair { found, .. }) = &mut this.sheet else {
@@ -252,7 +252,7 @@ impl AndroidPanel {
         self.sheet = Some(Sheet::Pair {
             found: Vec::new(),
             address,
-            code,
+            code: pairing,
             _find: find,
         });
         cx.notify();
@@ -266,7 +266,7 @@ impl AndroidPanel {
             "Connecting to the phone",
             Some(format!("Connected to {address}")),
             cx,
-            move |server| server.android_connect(&root, &address),
+            move |core| core.android_connect(&root, &address),
         );
     }
 
@@ -292,7 +292,7 @@ impl AndroidPanel {
                     "Setting the location",
                     Some(format!("Location: {latitude}, {longitude}")),
                     cx,
-                    move |server| server.android_set_location(&root, &serial, latitude, longitude),
+                    move |core| core.android_set_location(&root, &serial, latitude, longitude),
                 );
             }
             Some(Sheet::States { name, .. }) => {
@@ -308,9 +308,7 @@ impl AndroidPanel {
                 let address = address.read(cx).content.trim().to_string();
                 let code = code.read(cx).content.trim().to_string();
                 let root = self.project.root.clone();
-                self.pair(cx, move |server| {
-                    server.android_pair(&root, &address, &code)
-                });
+                self.pair(cx, move |core| core.android_pair(&root, &address, &code));
             }
             None => {}
         }
@@ -320,15 +318,13 @@ impl AndroidPanel {
     fn pair(
         &mut self,
         cx: &mut Context<Self>,
-        act: impl FnOnce(&patchwork_server::Server) -> Result<(), patchwork_server::Error>
-        + Send
-        + 'static,
+        act: impl FnOnce(&patchwork_core::Core) -> Result<(), patchwork_core::Error> + Send + 'static,
     ) {
         self.working = Some("Pairing with the phone".into());
         self.failure = None;
         self.notice = None;
-        let server = Arc::clone(&self.server);
-        let task = cx.background_spawn(async move { act(&server) });
+        let core = Arc::clone(&self.core);
+        let task = cx.background_spawn(async move { act(&core) });
         cx.spawn(async move |this, cx| {
             let paired = task.await;
             this.update(cx, |this, cx| {

@@ -8,8 +8,8 @@ use gpui::{
     ClickEvent, Div, FontWeight, MouseButton, MouseDownEvent, Role, SharedString, Stateful, div,
     prelude::*, px,
 };
-use patchwork_server::projects::Project;
-use patchwork_server::threads::Thread;
+use patchwork_core::projects::Project;
+use patchwork_core::threads::Thread;
 use crate::ui::theme::{fs_md, theme};
 use crate::ui::{button, icon, icon_button, scrollbar};
 use crate::workspace::Workspace;

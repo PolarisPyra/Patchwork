@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use gpui::{AnyElement, Role, Window, div, prelude::*, px};
-use patchwork_server::import::{ImportScan, ImportSource};
+use patchwork_core::import::{ImportScan, ImportSource};
 
 use super::{IMPORTS_STEP, ImportProgress, ImportResult, Onboarding, OnboardingEvent};
 use super::rows::{choice_row, heading, key_id, row_end, tick};
@@ -29,8 +29,8 @@ impl Onboarding {
         let run = self.scan_run;
         self.scans.clear();
         for kind in self.sources() {
-            let server = Arc::clone(&self.server);
-            let task = cx.background_spawn(async move { server.scan_imports(kind) });
+            let core = Arc::clone(&self.core);
+            let task = cx.background_spawn(async move { core.scan_imports(kind) });
             cx.spawn(async move |this, cx| {
                 let scan = task.await;
                 let _ = this.update(cx, |this, cx| {
@@ -97,7 +97,7 @@ impl Onboarding {
         self.import_error = None;
         let projects_before = self.settings.projects.len();
         self.tally.get_or_insert((0, projects_before));
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         cx.spawn_in(window, async move |this, cx| {
             let total = kinds.len();
             for (index, kind) in kinds.into_iter().enumerate() {
@@ -105,9 +105,9 @@ impl Onboarding {
                     this.importing = Some(ImportProgress { kind, index, total });
                     cx.notify();
                 });
-                let server = Arc::clone(&server);
+                let core = Arc::clone(&core);
                 let out = cx
-                    .background_spawn(async move { server.import_threads(&[kind]) })
+                    .background_spawn(async move { core.import_threads(&[kind]) })
                     .await;
                 let failed = this.update(cx, |this, cx| match out {
                     Ok(count) => {
@@ -129,8 +129,8 @@ impl Onboarding {
                 }
             }
             let _ = this.update_in(cx, |this, window, cx| {
-                // Importing adds projects and threads on the server.
-                this.settings = this.server.store.settings();
+                // Importing adds projects and threads on the core.
+                this.settings = this.core.settings();
                 cx.emit(OnboardingEvent::Changed);
                 if let Some((threads, before)) = this.tally {
                     this.imported = Some(ImportResult {

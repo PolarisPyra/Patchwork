@@ -13,7 +13,7 @@ use super::state::scope_name;
 use super::state::defaults_changed;
 use super::state::scope_rules;
 use gpui::{AnyElement, ClickEvent, FontWeight, Window, div, prelude::*, px};
-use patchwork_server::permissions::{Effect, PermissionKind, PermissionScope, default_rules};
+use patchwork_core::permissions::{Effect, PermissionKind, PermissionScope, default_rules};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{choice, segmented, switch, token_row};
 use crate::ui::theme::theme;

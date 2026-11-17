@@ -5,7 +5,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px, relative};
-use patchwork_server::threads::{BackgroundTask, TaskStatus};
+use patchwork_core::threads::{BackgroundTask, TaskStatus};
 
 use crate::ui::theme::{fs_sm, radius, Theme};
 use crate::ui::{button, icon, now_ms, spinner, tooltip};
@@ -39,7 +39,7 @@ impl Workspace {
         let Some(thread) = self.thread.as_ref().map(|t| t.id.clone()) else {
             return;
         };
-        if let Err(e) = self.server.stop_subagent(&thread, tool_id) {
+        if let Err(e) = self.core.stop_subagent(&thread, tool_id) {
             self.error = Some(e.to_string());
         }
         cx.notify();

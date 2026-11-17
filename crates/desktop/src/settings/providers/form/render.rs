@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, Div, FontWeight, Role, Toggled, Window, div, prelude::*, px};
-use patchwork_server::provider::api::config::KeyStore;
+use patchwork_core::provider::api::config::KeyStore;
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};

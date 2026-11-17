@@ -9,7 +9,7 @@ use gpui::{
     AnyElement, Div, Focusable, FontWeight, Role, SharedString, Stateful, Toggled, Window, div,
     prelude::*, px,
 };
-use patchwork_server::Server;
+use patchwork_core::Core;
 
 use super::{Onboarding, OnboardingEvent};
 use super::rows::picked;
@@ -21,21 +21,21 @@ impl Onboarding {
     /// Runs a project change in the background, then reads the projects again.
     pub(super) fn run_project(
         &mut self,
-        task: impl FnOnce(&Server) -> Result<(), patchwork_server::Error> + Send + 'static,
+        task: impl FnOnce(&Core) -> Result<(), patchwork_core::Error> + Send + 'static,
         done: impl FnOnce(&mut Self, &mut Context<Self>) + 'static,
         cx: &mut Context<Self>,
     ) {
         self.busy = true;
         self.project_error = None;
-        let server = Arc::clone(&self.server);
-        let work = cx.background_spawn(async move { task(&server) });
+        let core = Arc::clone(&self.core);
+        let work = cx.background_spawn(async move { task(&core) });
         cx.spawn(async move |this, cx| {
             let out = work.await;
             let _ = this.update(cx, |this, cx| {
                 this.busy = false;
                 match out {
                     Ok(()) => {
-                        this.settings = this.server.store.settings();
+                        this.settings = this.core.settings();
                         cx.emit(OnboardingEvent::Changed);
                         done(this, cx);
                     }

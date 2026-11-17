@@ -15,7 +15,7 @@ use gpui::{
     AnyElement, App, Div, Focusable, FontWeight, Role, SharedString, Window, div, list, prelude::*,
     px, relative,
 };
-use patchwork_server::workspace::HunkAction;
+use patchwork_core::workspace::HunkAction;
 use crate::canvas::Canvas;
 use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, tooltip};

@@ -1,0 +1,406 @@
+//! What a turn sends an agent CLI: the turn's spec, its prompt and images, its arguments, environment and stdin, and the lines that steer, interrupt or answer it.
+
+// Rust guideline compliant 2026-10-09
+
+use crate::Error;
+use std::collections::HashMap;
+use std::path::Path;
+use serde_json::Value;
+use crate::threads::{AccessMode, AttachmentKind, Attachment, image_media_type};
+use super::{antigravity, api, claude, codex, opencode, AgentKind};
+use super::Parsed;
+
+/// What one turn runs with.
+#[derive(Debug)]
+pub struct TurnSpec<'a> {
+    /// The project's folder, on the SSH host when [`Self::host`] is set.
+    pub root: &'a str,
+    /// The SSH host the project is on, for a remote project.
+    pub host: Option<&'a str>,
+    /// The thread the turn runs in, which Patchwork's own tools act for.
+    pub thread_id: &'a str,
+    pub session_id: Option<&'a str>,
+    pub model: Option<&'a str>,
+    /// The model that reads images, when `model` cannot. Only Patchwork's own agent uses it.
+    pub vision_model: Option<&'a crate::settings::VisionModel>,
+    pub text: &'a str,
+    pub mode: AccessMode,
+    /// Plan mode: the agent plans and proposes a plan, without changing files.
+    pub plan: bool,
+    /// Reasoning effort, e.g. "high"; None leaves the CLI's default.
+    pub effort: Option<&'a str>,
+    /// The context size at which the agent compacts mid-task; 0 leaves it to the agent.
+    pub compact_window: u64,
+    /// Patchwork's own agent runs without a limit on its steps of tool calls.
+    pub unlimited_steps: bool,
+    /// Tokens Patchwork's own agent may spend on the turn; 0 sets no limit.
+    pub token_limit: u64,
+    pub attachments: &'a [Attachment],
+    /// The image attachments, read from disk by `load_images`.
+    pub images: &'a [Image],
+    /// Instructions added to the agent's own: Patchwork's in Codex's and the API agent's turn input,
+    /// and only the user's system prompt for OpenCode and Antigravity.
+    pub instructions: Option<&'a str>,
+    /// Patchwork's skills folder, which the agent loads skills from.
+    pub skills_dir: Option<&'a str>,
+    /// The kinds the thread's permission rules guard, for the one agent told at launch what to
+    /// ask about: `opencode run`. The rest ask Patchwork at each call (see `permissions::hook`).
+    pub guarded: &'a [crate::permissions::Guarded],
+    /// The custom agents the turn's CLI can start as its own subagents, by name.
+    pub agents: &'a [crate::extensions::agents::Agent],
+    /// The enabled hooks the agent runs on its own events.
+    pub hooks: &'a [crate::extensions::hooks::AgentHook],
+}
+
+/// An attached image, base64-encoded for the agent's input.
+#[derive(Debug, Clone)]
+pub struct Image {
+    pub media_type: &'static str,
+    pub data: String,
+}
+
+/// Largest image sent to an agent; the agents reject bigger ones.
+const MAX_IMAGE_BYTES: u64 = 5 * 1024 * 1024;
+
+/// Reads and encodes every image attachment.
+///
+/// # Errors
+///
+/// Returns an error when an image attachment is not a supported image type, cannot be read, or is
+/// larger than 5 MB.
+pub fn load_images(attachments: &[Attachment]) -> Result<Vec<Image>, Error> {
+    use base64::Engine;
+    attachments
+        .iter()
+        .filter(|a| a.kind == AttachmentKind::Image)
+        .map(|a| {
+            let media_type = image_media_type(&a.path).ok_or("Not an image")?;
+            let size = std::fs::metadata(&a.path)
+                .map_err(|e| format!("{}: {e}", a.name))?
+                .len();
+            if size > MAX_IMAGE_BYTES {
+                return Err(format!("{} is larger than 5 MB", a.name).into());
+            }
+            let bytes = std::fs::read(&a.path).map_err(|e| format!("{}: {e}", a.name))?;
+            let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+            Ok::<_, Error>(Image { media_type, data })
+        })
+        .collect()
+}
+
+/// The prompt the agent reads: the message, then the paths of what was attached,
+/// so the agent can open files and folders with its own tools.
+#[must_use]
+pub fn prompt(spec: &TurnSpec) -> String {
+    prompt_text(spec.text, spec.attachments)
+}
+
+/// `text` without the attachment list that `prompt_text` appends.
+pub(crate) fn without_attachments(text: &str) -> &str {
+    text.split_once("\n\nAttached:\n")
+        .map_or(text, |(text, _)| text)
+        .trim_end()
+}
+
+pub(super) fn prompt_text(text: &str, attachments: &[Attachment]) -> String {
+    if attachments.is_empty() {
+        return text.to_string();
+    }
+    let lines: Vec<String> = attachments
+        .iter()
+        .map(|a| {
+            let kind = match a.kind {
+                AttachmentKind::Image => "image",
+                AttachmentKind::File => "file",
+                AttachmentKind::Folder => "folder",
+            };
+            format!("- {} ({kind})", a.path)
+        })
+        .collect();
+    format!("{text}\n\nAttached:\n{}", lines.join("\n"))
+        .trim_start()
+        .to_string()
+}
+
+/// A message's content as a provider receives it: its text, attachments, and decoded images.
+#[derive(Debug, Clone, Copy)]
+pub struct Prompt<'a> {
+    pub text: &'a str,
+    pub attachments: &'a [Attachment],
+    pub images: &'a [Image],
+}
+
+#[must_use]
+pub fn steer_input(
+    agent: AgentKind,
+    prompt: Prompt<'_>,
+    session_id: Option<&str>,
+    turn_id: Option<&str>,
+) -> Option<String> {
+    let Prompt {
+        text,
+        attachments,
+        images,
+    } = prompt;
+    match agent {
+        AgentKind::Claude => Some(claude::steer_message(
+            &prompt_text(text, attachments),
+            images,
+        )),
+        AgentKind::Codex => Some(codex::steer_input(
+            session_id?,
+            turn_id?,
+            &prompt_text(text, attachments),
+            attachments,
+        )),
+        AgentKind::Antigravity => None,
+        // `opencode run` reads one message per run; later ones start the next turn.
+        AgentKind::OpenCode => opencode::uses_serve()
+            .then(|| opencode::steer_line(&prompt_text(text, attachments), attachments)),
+        AgentKind::Api => Some(api::steer_line(&prompt_text(text, attachments), images)),
+    }
+}
+
+/// The stdin line that pauses the agent's goal, for agents that pursue it on their own.
+#[must_use]
+pub fn goal_pause(agent: AgentKind, session_id: &str) -> Option<String> {
+    (agent == AgentKind::Codex).then(|| codex::goal_pause(session_id))
+}
+
+/// The stdin line that stops the agent's reply without ending its process, for agents that can.
+/// Codex needs the id of the turn it is running.
+#[must_use]
+pub fn interrupt(
+    agent: AgentKind,
+    session_id: Option<&str>,
+    turn_id: Option<&str>,
+) -> Option<String> {
+    match agent {
+        AgentKind::Claude => Some(claude::interrupt()),
+        AgentKind::Codex => Some(codex::interrupt(session_id?, turn_id?)),
+        AgentKind::Api => Some(api::interrupt()),
+        // `opencode run` reads nothing once it starts; only the bridge to `opencode serve` can.
+        AgentKind::OpenCode => opencode::uses_serve().then(opencode::interrupt_line),
+        AgentKind::Antigravity => None,
+    }
+}
+
+/// The stdin line that stops one subagent, for agents that can.
+#[must_use]
+pub fn stop_subagent(agent: AgentKind, task_id: &str) -> Option<String> {
+    (agent == AgentKind::Claude).then(|| claude::stop_task(task_id))
+}
+
+/// `/goal`, alone or with arguments, which runs as a turn of its own.
+#[must_use]
+pub fn is_goal_command(text: &str) -> bool {
+    text.trim_start()
+        .strip_prefix("/goal")
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with(char::is_whitespace))
+}
+
+/// What a `/goal` message asks: `/goal` alone shows the goal; `clear` (or one of Claude's aliases
+/// for it), `pause`, and `resume` act on it; anything else is a new objective.
+#[derive(Debug)]
+pub enum GoalCommand<'a> {
+    Show,
+    Clear,
+    Pause,
+    Resume,
+    Set(&'a str),
+}
+
+/// The words after `/goal`, or None when `text` is no `/goal` message.
+#[must_use]
+pub fn goal_argument(text: &str) -> Option<&str> {
+    is_goal_command(text).then(|| text.trim()["/goal".len()..].trim())
+}
+
+/// What the `/goal` message `text` asks, or None when it is none.
+#[must_use]
+pub fn goal_command(text: &str) -> Option<GoalCommand<'_>> {
+    let arg = goal_argument(text)?;
+    Some(match arg.to_lowercase().as_str() {
+        "" => GoalCommand::Show,
+        "clear" | "stop" | "off" | "reset" | "none" | "cancel" => GoalCommand::Clear,
+        "pause" => GoalCommand::Pause,
+        "resume" => GoalCommand::Resume,
+        _ => GoalCommand::Set(arg),
+    })
+}
+
+/// Command-line arguments for one turn.
+#[must_use]
+pub fn turn_args(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
+    match agent {
+        AgentKind::Claude => [
+            claude::turn_args(spec),
+            crate::provider::mcp::overrides::overrides(agent, spec.root, spec.thread_id),
+        ]
+        .concat(),
+        AgentKind::Codex => [
+            codex::turn_args(),
+            crate::provider::mcp::overrides::overrides(agent, spec.root, spec.thread_id),
+            crate::provider::hooks::codex_args(spec),
+            codex::agents_args(spec),
+            codex::compact_args(spec),
+        ]
+        .concat(),
+        AgentKind::Antigravity => antigravity::turn_args(spec),
+        AgentKind::OpenCode => opencode::turn_args(spec),
+        AgentKind::Api => api::turn_args(),
+    }
+}
+
+/// Environment for one turn's agent process, on top of the app's own.
+#[must_use]
+pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)> {
+    match agent {
+        // The bridge sets up its own server, which inherits this environment. 2.x takes the
+        // system prompt from the bridge, as an instruction entry on the session.
+        AgentKind::OpenCode if opencode::uses_serve() => opencode::config_content([
+            opencode::skills_config(spec),
+            opencode::agents_config(spec),
+            opencode::todo_config(),
+            crate::provider::mcp::overrides::opencode_config(spec.thread_id),
+        ])
+        .map(|config| ("OPENCODE_CONFIG_CONTENT", config))
+        .into_iter()
+        .collect(),
+        AgentKind::OpenCode => std::iter::once(("PWD", spec.root.to_string()))
+            .chain(
+                opencode::config_content([
+                    opencode::permission_config(spec),
+                    opencode::agents_config(spec),
+                    opencode::instructions_config(spec),
+                    crate::provider::mcp::overrides::opencode_config(spec.thread_id),
+                ])
+                .map(|config| ("OPENCODE_CONFIG_CONTENT", config)),
+            )
+            .collect(),
+        AgentKind::Antigravity => crate::provider::hooks::antigravity_env(spec),
+        AgentKind::Claude | AgentKind::Codex | AgentKind::Api => Vec::new(),
+    }
+}
+
+/// Lines written to the agent's stdin when the turn starts. Empty means the
+/// agent takes no input, and stdin is closed.
+#[must_use]
+pub fn turn_input(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
+    match agent {
+        // Claude only runs `/goal` from a text-only message, so a goal names its attachments by
+        // path and Claude opens them with its own tools.
+        AgentKind::Claude if is_goal_command(spec.text) => {
+            vec![claude::user_message(&prompt(spec), &[])]
+        }
+        AgentKind::Claude => vec![claude::user_message(&prompt(spec), spec.images)],
+        AgentKind::Codex => codex::turn_input(spec),
+        // The OpenCode bridge reads its turn from stdin, and answers and steers after it.
+        AgentKind::OpenCode if opencode::uses_serve() => vec![opencode::bridge_request(spec)],
+        // Patchwork's own agent reads its turn from stdin, and answers and steers after it.
+        AgentKind::Api => vec![api::bridge_request(spec)],
+        // Both read the prompt from their arguments, and stdin is closed so they do not wait on it.
+        AgentKind::Antigravity | AgentKind::OpenCode => vec![],
+    }
+}
+
+/// Maps one line of the agent's JSONL output.
+#[must_use]
+pub fn parse_line(agent: AgentKind, v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
+    let parsed = match agent {
+        AgentKind::Claude => claude::parse(v, spec.root, message_id),
+        AgentKind::Codex => codex::parse(v, spec, message_id),
+        AgentKind::Antigravity => antigravity::parse(v, spec, message_id),
+        AgentKind::OpenCode => opencode::parse(v, spec, message_id),
+        AgentKind::Api => api::parse(v, message_id),
+    };
+    parsed
+        .into_iter()
+        .map(|p| unasked(agent, spec, p))
+        .collect()
+}
+
+/// An approval the access mode would not have asked the user for, which the agent sent only
+/// because a permission rule may cover it, as a check for the rules.
+fn unasked(agent: AgentKind, spec: &TurnSpec, parsed: Parsed) -> Parsed {
+    let Parsed::Approval {
+        title,
+        detail,
+        reply,
+        questions,
+        target,
+    } = parsed
+    else {
+        return parsed;
+    };
+    match target {
+        Some(target) if questions.is_empty() && !mode_asks(agent, spec, &target) => Parsed::Check {
+            title,
+            detail,
+            reply,
+            target,
+        },
+        // Claude's full access still sends questions here, and calls no rule answers, such as
+        // leaving plan mode, which are allowed at once.
+        None if questions.is_empty()
+            && agent == AgentKind::Claude
+            && spec.mode == AccessMode::FullAccess =>
+        {
+            Parsed::Send(claude::approval_reply(&reply, true, &HashMap::new()))
+        }
+        target => Parsed::Approval {
+            title,
+            detail,
+            reply,
+            questions,
+            target,
+        },
+    }
+}
+
+/// Whether the access mode has the agent ask the user about `target`.
+fn mode_asks(agent: AgentKind, spec: &TurnSpec, target: &crate::permissions::Target) -> bool {
+    match (agent, spec.mode) {
+        (_, AccessMode::FullAccess) => false,
+        // Accept edits takes edits inside the folder without asking.
+        (AgentKind::Claude, AccessMode::AutoAcceptEdits)
+            if target.kind == crate::permissions::PermissionKind::Edit =>
+        {
+            let root = Path::new(spec.root);
+            !target
+                .resources
+                .iter()
+                .all(|r| crate::system::fs::is_inside(root, r))
+        }
+        // Claude reads in its own folder without asking.
+        (AgentKind::Claude, _) if target.kind == crate::permissions::PermissionKind::Folder => {
+            let root = Path::new(spec.root);
+            !target
+                .resources
+                .iter()
+                .all(|r| crate::system::fs::is_inside(root, r))
+        }
+        (AgentKind::OpenCode, mode) => opencode::mode_asks(mode, target.kind),
+        _ => true,
+    }
+}
+
+/// The stdin line answering an approval, from the `reply` the parser attached to it.
+#[must_use]
+pub fn approval_reply(
+    agent: AgentKind,
+    reply: &Value,
+    allow: bool,
+    answers: &HashMap<String, Vec<String>>,
+) -> String {
+    match agent {
+        AgentKind::Claude => claude::approval_reply(reply, allow, answers),
+        AgentKind::Codex => codex::approval_reply(reply, allow, answers),
+        AgentKind::OpenCode if opencode::uses_serve() => {
+            opencode::approval_reply(reply, allow, answers)
+        }
+        AgentKind::Api => api::approval_reply(reply, allow, answers),
+        // Antigravity and `opencode run` run headless and never ask.
+        AgentKind::Antigravity | AgentKind::OpenCode => String::new(),
+    }
+}

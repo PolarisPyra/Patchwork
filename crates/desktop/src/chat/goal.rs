@@ -5,8 +5,8 @@
 
 use std::sync::Arc;
 use gpui::{FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
-use patchwork_server::provider::AgentKind;
-use patchwork_server::threads::{Goal, GoalStatus};
+use patchwork_core::provider::AgentKind;
+use patchwork_core::threads::{Goal, GoalStatus};
 
 use crate::ui::theme::{fs_sm, fs_xs, radius_sm, Theme};
 use crate::ui::{button, format_tokens, full_elapsed, icon, now_ms, tooltip};
@@ -101,8 +101,8 @@ impl Workspace {
             error: None,
             ran: false,
         });
-        let server = Arc::clone(&self.server);
-        let task = cx.background_spawn(async move { server.stop_goal(&id) });
+        let core = Arc::clone(&self.core);
+        let task = cx.background_spawn(async move { core.stop_goal(&id) });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             this.update(cx, |this, cx| {

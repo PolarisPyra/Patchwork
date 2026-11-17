@@ -11,12 +11,11 @@ use gpui::{
     ClipboardEntry, Entity, EventEmitter, FocusHandle, KeyDownEvent, Pixels, Point, Window,
     prelude::*,
 };
-use patchwork_server::Server;
-use patchwork_server::backgrounds::{BackgroundImage, ChatBackground, RemovedBackground};
-use patchwork_server::themes::SavedScene;
+use patchwork_core::Core;
+use patchwork_core::backgrounds::{BackgroundImage, ChatBackground, RemovedBackground};
+use patchwork_core::themes::SavedScene;
 
-use crate::orchestrator::PreviewFlight;
-use crate::ui::backdrop::PRESETS;
+use crate::ui::backdrop::{PRESETS, PreviewFlight};
 use crate::ui::menu::{Menu, MenuItem};
 
 /// How long a deleted picture can be brought back from the picker.
@@ -41,7 +40,7 @@ pub enum PickerEvent {
 }
 
 pub struct BackgroundPicker {
-    pub(super) server: Arc<Server>,
+    pub(super) core: Arc<Core>,
     pub(super) label: &'static str,
     pub(super) value: Option<ChatBackground>,
     /// What the first choice picks: "No background" in Settings, and for one chat None, the
@@ -76,7 +75,7 @@ fn is_picture(path: &str) -> bool {
 
 impl BackgroundPicker {
     pub fn new(
-        server: Arc<Server>,
+        core: Arc<Core>,
         label: &'static str,
         value: Option<ChatBackground>,
         cleared: Option<ChatBackground>,
@@ -84,7 +83,7 @@ impl BackgroundPicker {
         cx: &mut Context<Self>,
     ) -> Self {
         let mut this = Self {
-            server,
+            core,
             label,
             value,
             cleared,
@@ -117,11 +116,9 @@ impl BackgroundPicker {
     }
 
     fn load_images(&mut self, cx: &mut Context<Self>) {
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         let task =
-            cx.background_spawn(
-                async move { (server.list_background_images(), server.list_scenes()) },
-            );
+            cx.background_spawn(async move { (core.list_background_images(), core.list_scenes()) });
         cx.spawn(async move |this, cx| {
             let (images, scenes) = task.await;
             let _ = this.update(cx, |p, cx| {
@@ -213,14 +210,14 @@ impl BackgroundPicker {
     /// Saves the pictures `load` brings in, off the main thread, and picks the last.
     fn add(
         &mut self,
-        load: impl FnOnce(&Server) -> Result<Vec<String>, patchwork_server::Error> + Send + 'static,
+        load: impl FnOnce(&Core) -> Result<Vec<String>, patchwork_core::Error> + Send + 'static,
         cx: &mut Context<Self>,
     ) {
         self.importing = true;
         self.error = None;
         cx.notify();
-        let server = Arc::clone(&self.server);
-        let task = cx.background_spawn(async move { load(&server) });
+        let core = Arc::clone(&self.core);
+        let task = cx.background_spawn(async move { load(&core) });
         cx.spawn(async move |this, cx| {
             let added = task.await;
             let _ = this.update(cx, |p, cx| {
@@ -317,7 +314,7 @@ impl BackgroundPicker {
     /// offering to take that back.
     pub fn remove_picture(&mut self, file: &str, name: String, cx: &mut Context<Self>) {
         self.error = None;
-        match self.server.remove_background_image(file) {
+        match self.core.remove_background_image(file) {
             Ok(removed) => {
                 self.undo = Some((name.clone(), removed));
                 self.load_images(cx);
@@ -377,7 +374,7 @@ impl BackgroundPicker {
         let Some((_, removed)) = self.undo.take() else {
             return;
         };
-        match self.server.restore_background_image(&removed) {
+        match self.core.restore_background_image(&removed) {
             Ok(()) => {
                 self.load_images(cx);
                 cx.emit(PickerEvent::PicturesChanged);

@@ -6,8 +6,8 @@
 use std::sync::Arc;
 
 use gpui::{App, Entity, MouseButton, Role, Window, div, prelude::*, px};
-use patchwork_server::Server;
-use patchwork_server::settings::Settings;
+use patchwork_core::Core;
+use patchwork_core::settings::Settings;
 
 use super::Workspace;
 use crate::panel::{Panel, PanelEvent, PanelTab};
@@ -20,24 +20,23 @@ const PANEL_HEIGHT_KEY: &str = "patchwork-panel-height";
 
 /// The panel, closed, and its height as the user left it.
 pub(super) fn new_panel(
-    server: Arc<Server>,
+    core: Arc<Core>,
     settings: &Settings,
     window: &mut Window,
     cx: &mut Context<Workspace>,
 ) -> (Entity<Panel>, f32) {
-    let height = server
-        .store
+    let height = core
         .state(PANEL_HEIGHT_KEY)
         .and_then(|h| h.parse().ok())
         .unwrap_or(PANEL_DEFAULT);
-    let panel = cx.new(|cx| Panel::new(server, settings, cx));
+    let panel = cx.new(|cx| Panel::new(core, settings, cx));
     cx.subscribe_in(
         &panel,
         window,
         |this, _, e: &PanelEvent, window, cx| match e {
             PanelEvent::Close => this.close_panel(window, cx),
             PanelEvent::SettingsChanged => {
-                this.settings = this.server.store.settings();
+                this.settings = this.core.settings();
                 cx.notify();
             }
             PanelEvent::RunFinished { code, output } => {
@@ -73,7 +72,7 @@ impl Workspace {
     /// Runs the command `launch` starts in a new terminal tab, without opening the panel.
     pub fn run_in_terminal(
         &mut self,
-        launch: patchwork_server::terminal::Launch,
+        launch: patchwork_core::terminal::Launch,
         cx: &mut Context<Self>,
     ) {
         self.sync_panel(cx);
@@ -157,7 +156,7 @@ impl Workspace {
 
     pub(super) fn keep_panel_height(&self) {
         let height = self.panel_height.round().to_string();
-        if let Err(e) = self.server.store.set_state(PANEL_HEIGHT_KEY, &height) {
+        if let Err(e) = self.core.set_state(PANEL_HEIGHT_KEY, &height) {
             log::warn!(error:% = e; "could not keep the panel's height: {{error}}");
         }
     }

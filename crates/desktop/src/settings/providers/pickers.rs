@@ -3,8 +3,8 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, Div, Stateful, div, prelude::*, px};
-use patchwork_server::provider::AgentKind;
-use patchwork_server::settings::VisionModel;
+use patchwork_core::provider::AgentKind;
+use patchwork_core::settings::VisionModel;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{choice, select_box, tile, tile_grid};
 use crate::ui::theme::theme;

@@ -1,27 +1,29 @@
 # Patchwork
 
-Native desktop app in Rust: the UI is drawn with GPUI, over the backend in `crates/server`. Run everything from the repo root.
+Native desktop app in Rust: the UI is drawn with GPUI, over its core in `crates/core`. Run everything from the repo root.
 
 ## Layout
 
 - Cargo workspace:
-  - `crates/desktop` (package `patchwork`): the app. It calls `Server` directly.
-  - `crates/server` (`patchwork-server`): providers, persistence, usage, thread import.
+  - `crates/desktop` (package `patchwork`): the app. It calls `Core` directly.
+  - `crates/core` (`patchwork-core`): providers, persistence, usage, thread import.
+  - `crates/system` (`patchwork-system`): the machine-level helpers and the one `Error`. It knows nothing of threads or providers; the core re-exports it as `crate::system`.
+  - `crates/remote` (`patchwork-remote`): the helper Patchwork runs on a machine reached over SSH. The app's end of that connection is `crates/system/src/ssh/`.
 - The app's version is `[workspace.package] version` in the root `Cargo.toml`.
 
 ### `crates/desktop/src`
 
 - `src/` holds `main.rs` and folders, never loose files. A folder is one piece of UI (`chat`, `sidebar`, `settings`, `canvas`, `panel`, `workspace`, `onboarding`), with its state and entry view in their own files (`state.rs`, `render.rs`, `view.rs`). A sub-feature takes the same shape one level down: `chat/composer/`, `settings/{providers,extensions,mcp}/`.
-- `ui/` holds only what two or more features use: the shared controls in `ui/controls.rs` (`button`, `icon_button`, `spinner`, `scrollbar`, …), the colours and sizes in `ui/theme.rs`, the embedded icons and fonts in `ui/assets.rs`, and the shared menus, dialogs and text tools.
+- `ui/` holds only what two or more features use: the shared controls in `ui/controls.rs` (`button`, `icon_button`, `spinner`, `scrollbar`, …), the colours and sizes in `ui/theme/`, the embedded icons and fonts in `ui/assets.rs`, and the shared menus, dialogs and text tools.
 - New code goes in the feature that uses it. Move it up into `ui/` once a second feature needs it, and down into the feature when only one is left.
 - `ui/assets.rs` embeds the fonts, icons and provider logos in the root `assets/`.
 
-### `crates/server/src`
+### `crates/core/src`
 
-- Folders are domains, not layers. `lib.rs` holds only the module list, `Server`, and `Server::open`; every other module is one domain (`threads`, `projects`, `settings`, `permissions`, `hooks`, `scheduled`, `provider`, `orchestration`, …) and holds its types, its `impl Server` operations, and its logic, so a type is `crate::threads::Thread`. A folder domain splits them into `types.rs` and one file per concern, named for what it does (`threads/{lifecycle,list,options}.rs`, `updates/check.rs`), never a catch-all such as `ops.rs`; a one-file domain such as `projects.rs` keeps the same order: types first, then the operations, then the logic. There is no `types/` or `server/` folder. A helper another domain calls is `pub(crate)`.
-- Machine-level helpers that no domain owns live in `system/`: the command and environment programs run with, login shells, the home folder and path resolution, opening files on the desktop.
-- A domain's files may reach down to `system/`, `logging/` and other domains' types, never up into `orchestration/` or a `Server` operation; `persistence/` stores what it is given and decides nothing.
-- An area that exists on both sides keeps the same name on each: `crates/server/src/threads/`, `crates/desktop/src/sidebar/` reads `crate::threads`.
+- Folders are domains, not layers. `lib.rs` holds only the module list, `Core`, and `Core::open`; every other module is one domain (`threads`, `projects`, `settings`, `permissions`, `extensions`, `scheduled`, `provider`, `orchestration`, …) and holds its types, its `impl Core` operations, and its logic, so a type is `crate::threads::Thread`. A folder domain splits them into `types.rs` and one file per concern, named for what it does (`threads/{lifecycle,list,options}.rs`, `updates/check.rs`), never a catch-all such as `ops.rs`; a one-file domain such as `projects.rs` keeps the same order: types first, then the operations, then the logic. There is no `types/` or `server/` folder. A helper another domain calls is `pub(crate)`.
+- Machine-level helpers that no domain owns live in `crates/system`, which the core reads as `crate::system`: the command and environment programs run with, login shells, the home folder and path resolution, opening files on the desktop.
+- A domain's files may reach down to `crate::system`, `logging/` and other domains' types, never up into `orchestration/` or a `Core` operation; `persistence/` stores what it is given and decides nothing.
+- An area that exists on both sides keeps the same name on each: `crates/core/src/threads/`, `crates/desktop/src/sidebar/` reads `crate::threads`.
 
 ### Both crates
 
@@ -49,7 +51,7 @@ CI runs the check form of each of the last three on every push to `main`.
 
 ## Rust
 
-- Keep logic in `crates/server`. The app draws state and calls `Server` operations; it decides nothing the server could.
+- Keep logic in `crates/core`. The app draws state and calls `Core` operations; it decides nothing the core could.
 - No `unwrap()`/`expect()` in app code: return errors instead. Tests are the exception.
 - Use the `log` macros (`log::warn!`, `log::error!`), which the app writes to its log file, not `println!`/`eprintln!`.
 - Never block the UI thread. Move heavy or blocking work to a background task and apply the result on the UI thread.

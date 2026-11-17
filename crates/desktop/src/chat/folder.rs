@@ -38,7 +38,7 @@ impl Workspace {
         self.folder_check = Some((path.clone(), None));
         let task = cx.background_spawn({
             let path = path.clone();
-            async move { patchwork_server::projects::folder_found(&path) }
+            async move { patchwork_core::projects::folder_found(&path) }
         });
         cx.spawn(async move |this, cx| {
             let mut found = task.await;
@@ -62,9 +62,7 @@ impl Workspace {
                 cx.background_executor().timer(RECHECK).await;
                 let path = path.clone();
                 found = cx
-                    .background_spawn(
-                        async move { patchwork_server::projects::folder_found(&path) },
-                    )
+                    .background_spawn(async move { patchwork_core::projects::folder_found(&path) })
                     .await;
             }
         })
@@ -82,7 +80,7 @@ impl Workspace {
             multiple: false,
             prompt: None,
         });
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         cx.spawn(async move |this, cx| {
             let Ok(Ok(Some(paths))) = picked.await else {
                 return;
@@ -91,13 +89,13 @@ impl Workspace {
                 return;
             };
             let moved = cx
-                .background_spawn(async move { server.relocate_project(&id, &path) })
+                .background_spawn(async move { core.relocate_project(&id, &path) })
                 .await;
             let _ = this.update(cx, |this, cx| {
                 if let Err(e) = moved {
                     this.error = Some(e.to_string());
                 }
-                this.settings = this.server.store.settings();
+                this.settings = this.core.settings();
                 this.folder_check = None;
                 this.reload(cx);
             });

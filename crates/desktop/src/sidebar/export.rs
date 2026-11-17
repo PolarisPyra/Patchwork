@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 use gpui::{prelude::*};
-use patchwork_server::threads::{Message, Part, Role, Thread};
+use patchwork_core::threads::{Message, Part, Role, Thread};
 
 use crate::ui::{agent_label, display_title, slug_file_name};
 use crate::workspace::Workspace;
@@ -73,22 +73,22 @@ fn thread_markdown(thread: &Thread) -> String {
 
 impl Workspace {
     pub(super) fn export_thread(&mut self, id: &str, cx: &mut Context<Self>) {
-        let thread = match self.server.thread(id) {
+        let thread = match self.core.thread(id) {
             Ok(thread) => thread,
             Err(e) => {
                 return log::warn!(error:% = e; "could not read the chat to export it: {{error}}");
             }
         };
-        let home = patchwork_server::system::fs::home_dir().unwrap_or_default();
+        let home = patchwork_core::system::fs::home_dir().unwrap_or_default();
         let name = slug_file_name(&display_title(&thread.title), "chat");
         let picked = cx.prompt_for_new_path(&home, Some(&name));
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         cx.background_spawn(async move {
             let Ok(Ok(Some(path))) = picked.await else {
                 return;
             };
             let path = path.to_string_lossy().into_owned();
-            if let Err(e) = server.save_text_file(&path, &thread_markdown(&thread)) {
+            if let Err(e) = core.save_text_file(&path, &thread_markdown(&thread)) {
                 log::warn!(error:% = e; "could not export the chat: {{error}}");
             }
         })

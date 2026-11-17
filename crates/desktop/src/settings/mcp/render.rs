@@ -4,7 +4,7 @@
 
 use std::collections::BTreeMap;
 use gpui::{AnyElement, Window, div, prelude::*, px};
-use patchwork_server::provider::mcp::ToolInfo;
+use patchwork_core::provider::mcp::ToolInfo;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert, chip, list_box};
 use crate::ui::theme::{fs_sm, radius, theme};

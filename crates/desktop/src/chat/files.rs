@@ -7,9 +7,9 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use gpui::{Div, ObjectFit, Role, SharedString, div, img, prelude::*, px};
-use patchwork_server::orchestration::changes::checkpoint::{TurnFile, TurnFileState, turn_files};
-use patchwork_server::threads::Message;
-use patchwork_server::workspace::{FileChange, FileMedia, PreviewKind, file_media, missing_files};
+use patchwork_core::orchestration::changes::turn_files::{TurnFile, TurnFileState, turn_files};
+use patchwork_core::threads::Message;
+use patchwork_core::workspace::{FileChange, FileMedia, PreviewKind, file_media, missing_files};
 
 use crate::canvas::CanvasTab;
 use crate::ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
@@ -327,7 +327,7 @@ fn produced_file(
                 .size(px(24.))
                 // A file of a project on an SSH host has no copy here for an app to open.
                 .children(
-                    root.filter(|r| !deleted && !patchwork_server::system::remote::is_remote(r))
+                    root.filter(|r| !deleted && !patchwork_core::system::ssh::is_remote(r))
                         .map(|root| {
                             button(
                         SharedString::from(format!("card-app-{}-{}", m.id, file.path)),
@@ -341,7 +341,7 @@ fn produced_file(
                     .tooltip(tooltip("Open in its app"))
                     .child(icon("arrow-square-out", 14.))
                     .on_click(move |_, _, cx| {
-                        match patchwork_server::workspace::resolve_inside(&root, &rel) {
+                        match patchwork_core::workspace::resolve_inside(&root, &rel) {
                             Ok(file) => cx.open_with_system(&file),
                             Err(e) => {
                                 log::warn!(rel:%, error:% = e; "could not open {{rel}}: {{error}}");

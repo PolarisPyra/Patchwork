@@ -10,8 +10,8 @@ use gpui::{
     Div, FocusHandle, deferred, FontWeight, Role, SharedString, Stateful, Window, div, prelude::*,
     px, relative,
 };
-use patchwork_server::provider::AgentKind;
-use patchwork_server::threads::{Role as MessageRole, StepStatus, Thread, ToolCall};
+use patchwork_core::provider::AgentKind;
+use patchwork_core::threads::{Role as MessageRole, StepStatus, Thread, ToolCall};
 
 use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_lg, Theme};
 use crate::ui::{
@@ -113,7 +113,7 @@ impl Workspace {
         let Some(thread) = self.thread.as_ref().map(|t| t.id.clone()) else {
             return;
         };
-        if let Err(e) = self.server.stop_subagent(&thread, tool_id) {
+        if let Err(e) = self.core.stop_subagent(&thread, tool_id) {
             self.error = Some(e.to_string());
         }
         cx.notify();

@@ -12,7 +12,7 @@ use gpui::{
     Div, Entity, FocusHandle, Focusable, KeyDownEvent, ListOffset, Role, Stateful, TextLayout,
     Window, div, point, prelude::*, px,
 };
-use patchwork_server::threads::{Message, Role as MessageRole, Thread};
+use patchwork_core::threads::{Message, Role as MessageRole, Thread};
 
 use crate::ui::markdown::{FindIn, find_in};
 use crate::ui::text_area::{Changed, Submitted, SubmittedBack, TextArea};

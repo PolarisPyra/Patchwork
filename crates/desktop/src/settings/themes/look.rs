@@ -6,7 +6,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, ClickEvent, Role, SharedString, Toggled, div, prelude::*, px, rgb};
-use patchwork_server::themes::{Color, Density, Follow, ProjectLook, clock_minutes, clock_text};
+use patchwork_core::themes::{Color, Density, Follow, ProjectLook, clock_minutes, clock_text};
 
 use super::cards::{Extras, card, grid};
 use super::reading::titled;

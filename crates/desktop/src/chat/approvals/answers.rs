@@ -7,9 +7,9 @@ use super::card::suggested_rules;
 use std::collections::HashMap;
 use std::sync::Arc;
 use gpui::prelude::*;
-use patchwork_server::permissions::{PermissionKind, PermissionScope, RuleRef};
-use patchwork_server::Server;
-use patchwork_server::threads::{Approval, ApprovalStatus};
+use patchwork_core::permissions::{PermissionKind, PermissionScope, RuleRef};
+use patchwork_core::Core;
+use patchwork_core::threads::{Approval, ApprovalStatus};
 use crate::workspace::Workspace;
 
 impl Workspace {
@@ -46,7 +46,7 @@ impl Workspace {
     }
 
     /// Answers a permission request; `always` also saves its suggested rules there, after the
-    /// answer, so the server answers the other waiting requests they cover rather than this one.
+    /// answer, so the core answers the other waiting requests they cover rather than this one.
     pub(super) fn respond_permission(
         &mut self,
         approval_id: &str,
@@ -75,14 +75,14 @@ impl Workspace {
         });
         self.allow_menu = None;
         if let Err(e) =
-            self.server
+            self.core
                 .respond_approval(&thread_id, &approval.id, allow, HashMap::new(), rule)
         {
             log::warn!(error:% = e; "could not answer the approval: {{error}}");
             return;
         }
         if let Some(scope) = always.filter(|_| !rules.is_empty()) {
-            self.save_rules(|server| server.save_permission_rules(&scope, rules), cx);
+            self.save_rules(|core| core.save_permission_rules(&scope, rules), cx);
         }
         cx.notify();
     }
@@ -90,13 +90,13 @@ impl Workspace {
     /// Saves a change to the permission rules, and shows the rules as saved.
     pub(super) fn save_rules(
         &mut self,
-        change: impl FnOnce(&Arc<Server>) -> Result<(), patchwork_server::Error>,
+        change: impl FnOnce(&Arc<Core>) -> Result<(), patchwork_core::Error>,
         cx: &mut Context<Self>,
     ) {
-        if let Err(e) = change(&self.server) {
+        if let Err(e) = change(&self.core) {
             log::warn!(error:% = e; "could not save the rule: {{error}}");
         }
-        self.settings = self.server.store.settings();
+        self.settings = self.core.settings();
         cx.notify();
     }
 

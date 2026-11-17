@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use gpui::{AnyElement, Div, Hsla, Role, SharedString, div, prelude::*, px};
-use patchwork_server::threads::{CheckStatus, Message, TurnChecks};
+use patchwork_core::threads::{CheckStatus, Message, TurnChecks};
 
 use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme};
 use crate::ui::{BtnKind, btn, button, full_elapsed, icon, spinner, tooltip};
@@ -32,9 +32,9 @@ impl Workspace {
         self.checks.errors.remove(&message_id);
         self.checks.rerunning.insert(message_id.clone());
         self.checks.open.insert(message_id.clone());
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         let id = message_id.clone();
-        let task = cx.background_spawn(async move { server.run_checks(&thread_id, &id) });
+        let task = cx.background_spawn(async move { core.run_checks(&thread_id, &id) });
         cx.spawn(async move |this, cx| {
             let started = task.await;
             let _ = this.update(cx, |this, cx| {
@@ -57,8 +57,7 @@ impl Workspace {
             .insert(project_id.to_string(), on);
         let id = project_id.to_string();
         if let Err(e) = self
-            .server
-            .store
+            .core
             .update_settings(|s| _ = s.checks.projects.insert(id, on))
         {
             log::warn!(error:% = e; "could not save the checks setting: {{error}}");

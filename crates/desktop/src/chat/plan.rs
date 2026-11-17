@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use gpui::{Div, FontWeight, Role, Stateful, div, prelude::*, px, relative};
-use patchwork_server::threads::{
+use patchwork_core::threads::{
     ApprovalStatus, MessageStatus, NewThread, Part, PlanStep, Role as MessageRole, StepStatus,
 };
 
@@ -148,7 +148,7 @@ impl Workspace {
                 .collect();
             self.start_thread(new, &title, text, cx);
         } else {
-            if let Err(e) = self.server.set_thread_plan_mode(&id, false) {
+            if let Err(e) = self.core.set_thread_plan_mode(&id, false) {
                 self.error = Some(e.to_string());
             }
             self.send(text, Vec::new(), None, None, cx);

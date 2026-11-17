@@ -9,8 +9,8 @@ use gpui::{
     App, Div, FocusHandle, FontWeight, KeyDownEvent, ListOffset, Pixels, Window, div, prelude::*,
     px,
 };
-use patchwork_server::orchestration::{Upkeep, upkeep};
-use patchwork_server::threads::{Message, Role as MessageRole};
+use patchwork_core::orchestration::{Upkeep, upkeep};
+use patchwork_core::threads::{Message, Role as MessageRole};
 
 use crate::ui::theme::{fs_lg, fs_md, radius_lg, Theme};
 use crate::ui::{button, popup_shadow};
@@ -54,7 +54,7 @@ pub fn starts_turn(m: &Message) -> bool {
     m.role == MessageRole::User && upkeep(&m.text).is_none()
 }
 
-/// A message that has the agent drop its goal, in any of the forms the server sends or reads.
+/// A message that has the agent drop its goal, in any of the forms the core sends or reads.
 pub fn is_goal_clear(text: &str) -> bool {
     upkeep(text) == Some(Upkeep::GoalClear)
 }

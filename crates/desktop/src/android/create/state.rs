@@ -8,8 +8,8 @@ use std::sync::mpsc::Sender;
 use futures::StreamExt;
 use futures::channel::mpsc::unbounded;
 use gpui::{Entity, ScrollHandle, Window, prelude::*};
-use patchwork_server::Error;
-use patchwork_server::android::{self, HardwareProfile, InstallEvent, SystemImage};
+use patchwork_core::Error;
+use patchwork_core::android::{self, HardwareProfile, InstallEvent, SystemImage};
 
 use crate::android::state::AndroidPanel;
 use crate::ui::text_area::{Submitted, TextArea};

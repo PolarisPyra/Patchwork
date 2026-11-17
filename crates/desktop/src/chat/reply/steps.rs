@@ -4,7 +4,7 @@
 
 use std::ops::Range;
 use gpui::{Div, Role, SharedString, div, prelude::*, px};
-use patchwork_server::threads::{Message, MessageStatus, StepStatus};
+use patchwork_core::threads::{Message, MessageStatus, StepStatus};
 use crate::ui::theme::{font_mono, fs_md, fs_sm, fs_xs, radius_sm, Theme};
 use crate::ui::{button, icon, spinner};
 use crate::workspace::Workspace;

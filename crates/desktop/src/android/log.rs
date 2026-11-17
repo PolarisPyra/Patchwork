@@ -11,7 +11,7 @@ use gpui::{
     ScrollStrategy, SharedString, Task, UniformListScrollHandle, Window, div, prelude::*, px,
     uniform_list,
 };
-use patchwork_server::android::{LogLevel, LogLine, Logcat};
+use patchwork_core::android::{LogLevel, LogLine, Logcat};
 
 use super::state::AndroidPanel;
 use crate::ui::menu::MenuItem;
@@ -76,11 +76,11 @@ impl AndroidPanel {
             self.failure = Some("Start or connect the device picked to read its log.".into());
             return cx.notify();
         };
-        let (server, serial) = (Arc::clone(&self.server), device.serial.clone());
+        let (core, serial) = (Arc::clone(&self.core), device.serial.clone());
         let (project, variant) = (self.project.clone(), self.variant.clone());
         let task = cx.background_spawn({
             let serial = serial.clone();
-            async move { server.android_logcat(&project, &serial, &variant) }
+            async move { core.android_logcat(&project, &serial, &variant) }
         });
         cx.spawn(async move |this, cx| {
             let opened = task.await;

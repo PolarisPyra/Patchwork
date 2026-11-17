@@ -9,7 +9,7 @@ use gpui::{
     ScrollHandle, SharedString, Window, div, point, prelude::*, px,
 };
 
-use patchwork_server::threads::{MessageStatus, Role as MessageRole};
+use patchwork_core::threads::{MessageStatus, Role as MessageRole};
 
 use crate::ui::text_area::{Arrow, Changed, Submitted, TextArea};
 use crate::settings::shortcuts::key_label;
@@ -62,7 +62,7 @@ pub fn items(w: &Workspace) -> Vec<Item> {
         hint,
         action,
     };
-    let new_key = key_label(&w.server, "chat.new");
+    let new_key = key_label(&w.core, "chat.new");
     let project = w.project();
     let mut items = vec![item(
         "Actions",
@@ -117,7 +117,7 @@ pub fn items(w: &Workspace) -> Vec<Item> {
     items.push(item(
         "Actions",
         "Open settings".into(),
-        key_label(&w.server, "settings.open"),
+        key_label(&w.core, "settings.open"),
         Action::OpenSettings,
     ));
     items.push(item(

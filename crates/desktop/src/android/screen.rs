@@ -11,8 +11,8 @@ use gpui::{
     MouseUpEvent, Pixels, Point, RenderImage, Role, ScrollDelta, ScrollEvent, SharedString, Size,
     Task, Window, canvas, div, img, prelude::*, px, rgb,
 };
-use patchwork_server::android::{ScreenFrame, ScreenInput, ScreenSender};
-use patchwork_server::{Error, Server};
+use patchwork_core::android::{ScreenFrame, ScreenInput, ScreenSender};
+use patchwork_core::{Error, Core};
 
 use crate::ui::theme::{fs_sm, theme};
 use crate::ui::{button, icon_button, spinner, tooltip};
@@ -67,7 +67,7 @@ pub struct DeviceScreen {
 
 impl DeviceScreen {
     pub fn new(
-        server: Arc<Server>,
+        core: Arc<Core>,
         root: std::path::PathBuf,
         serial: String,
         name: String,
@@ -75,7 +75,7 @@ impl DeviceScreen {
     ) -> Self {
         let opening = cx.background_spawn({
             let serial = serial.clone();
-            async move { server.android_screen(&root, &serial) }
+            async move { core.android_screen(&root, &serial) }
         });
         let stream = cx.spawn(async move |this, cx| {
             let mut screen = match opening.await {

@@ -3,8 +3,8 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{Entity, SharedString, WeakEntity, Window, anchored, deferred, div, point, prelude::*, px};
-use patchwork_server::provider::ModelOption;
-use patchwork_server::threads::Granular;
+use patchwork_core::provider::ModelOption;
+use patchwork_core::threads::Granular;
 
 use super::state::{Part, Slot, agent_of, edit, pick_of, set_agent, starter_of};
 use crate::chat::composer::{effort_label, efforts};

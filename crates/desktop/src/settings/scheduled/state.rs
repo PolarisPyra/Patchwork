@@ -6,10 +6,10 @@ use std::sync::Arc;
 
 use chrono::{Local, TimeZone};
 use gpui::{AnyElement, ClickEvent, Div, FontWeight, SharedString, Window, div, prelude::*, px};
-use patchwork_server::provider::AgentKind;
-use patchwork_server::scheduled::{RunOutcome, Schedule, Run, Task, Weekday};
-use patchwork_server::system::now_ms;
-use patchwork_server::threads::AccessMode;
+use patchwork_core::provider::AgentKind;
+use patchwork_core::scheduled::{RunOutcome, Schedule, Run, Task, Weekday};
+use patchwork_core::system::now_ms;
+use patchwork_core::threads::AccessMode;
 
 use crate::settings::controls::choice;
 use crate::settings::SettingsDialog;
@@ -190,9 +190,9 @@ pub(super) fn labelled(label: &'static str, control: impl IntoElement, t: &Theme
 
 impl SettingsDialog {
     pub(super) fn list_scheduled(&mut self, cx: &mut Context<Self>) {
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         self.run(
-            move || server.store.scheduled_tasks(),
+            move || core.scheduled_tasks(),
             |d, tasks, _| d.scheduled.tasks = Some(tasks),
             cx,
         );
@@ -201,7 +201,7 @@ impl SettingsDialog {
     /// Runs `work` off the main thread, shows its error, then lists the tasks again.
     pub(super) fn scheduled_run(
         &mut self,
-        work: impl FnOnce() -> Result<(), patchwork_server::Error> + Send + 'static,
+        work: impl FnOnce() -> Result<(), patchwork_core::Error> + Send + 'static,
         cx: &mut Context<Self>,
     ) {
         self.scheduled.error = None;
@@ -248,10 +248,10 @@ impl SettingsDialog {
         if std::mem::replace(&mut self.scheduled.saving, true) {
             return;
         }
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         self.scheduled.error = None;
         self.run(
-            move || server.save_scheduled_task(task),
+            move || core.save_scheduled_task(task),
             |d, out, cx| {
                 d.scheduled.saving = false;
                 match out {

@@ -11,10 +11,10 @@ use gpui::{
     AppContext, Context, Entity, Focusable, Pixels, Point, SharedString, Subscription, WeakEntity,
     Window, hsla,
 };
-use patchwork_server::orchestration::{Dispatched, Target};
-use patchwork_server::threads::{Ask, Attachment, asks};
+use patchwork_core::orchestration::{Dispatched, Target};
+use patchwork_core::threads::{Ask, Attachment, asks};
 
-use super::butterfly::Flight;
+use crate::ui::backdrop::Flight;
 use crate::chat::composer::Composer;
 use crate::ui::display_title;
 use crate::ui::menu::Menu;
@@ -29,7 +29,7 @@ pub(super) const PLACEHOLDER: &str = "Do something in a project";
 
 /// What became of a request.
 pub(super) enum Outcome {
-    /// The server is starting its chat or sending it on.
+    /// The core is starting its chat or sending it on.
     Routing,
     /// A chat has it, or one in each of several projects.
     Routed(Dispatched),

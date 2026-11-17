@@ -2,33 +2,34 @@
 
 ## Repo layout
 
-The repo is split into `crates/server` and `crates/desktop`:
+The repo is a Cargo workspace of `crates/system`, `crates/core`, `crates/desktop` and `crates/remote`:
 
-- `crates/server` — the backend, a Rust crate with no UI dependency
-  - `src/lib.rs` — the module list, `Server`, and how it opens. Every other module is one domain, holding its wire types, its `impl Server` operations and its logic: a folder domain splits them into `types.rs` (re-exported from the folder) and one file per concern, named for what it does (`threads/{lifecycle,list,options}.rs`), and a one-file domain keeps them in that order:
-  - `src/threads/` — threads and their messages; `src/projects.rs` — projects and their folders; `src/settings.rs` — the settings
+- `crates/system` (`patchwork-system`) — the user's machine, with no knowledge of threads or providers: the programs Patchwork starts and their environment, login shells, paths, opening files on the desktop, machines reached over SSH (`ssh/`: the app's end of the connection, and the user's `~/.ssh/config`), and the one `Error`. The core re-exports it as `patchwork_core::system`.
+- `crates/core` — the backend, a Rust crate with no UI dependency
+  - `src/lib.rs` — the module list, `Core`, and how it opens. Every other module is one domain, holding its wire types, its `impl Core` operations and its logic: a folder domain splits them into `types.rs` (re-exported from the folder) and one file per concern, named for what it does (`threads/{lifecycle,list,options}.rs`), and a one-file domain keeps them in that order:
+  - `src/threads/` — threads and their messages; `src/projects.rs` — projects and their folders; `src/settings/` — the settings
   - `src/provider/` — one module per agent CLI (`claude/`, `codex/`, `antigravity.rs`, `opencode/`, `api/`), finding and probing them (`locate.rs`, `probe.rs`), what a turn sends them (`turn.rs`) and reads back (`parsed.rs`), and handing each one its hooks (`hooks.rs`)
   - `src/orchestration/` — runs turns, grouped by feature, one folder each, with `orchestration/mod.rs` as the index: `turn/` (the `Runner`, starting and ending a turn, its process, turns cut off by a restart), `messages/` (sending, steering and queueing), `output/` (reading agent output into agent events and streaming them), `approvals/`, `changes/` (which files each reply changed, and per-turn checkpoints), `tasks/` (background tasks and subagents), and `goal/`
   - `src/permissions/` — the rules Patchwork answers approvals by, and the permission hook Codex and Antigravity run
-  - `src/hooks/` — bundles of hooks
+  - `src/extensions/` — what the user adds to their agents: `agents.rs`, `skills.rs`, and bundles of hooks (`hooks/`)
   - `src/persistence/` — SQLite store and schema migrations
   - `src/import/` — reads each CLI's saved sessions for importing
   - `src/usage/` — subscription usage limits per provider
   - `src/scheduled/` — scheduled tasks and the next run of each, from its shape and the local clock
   - `src/computer/` — a screenshot, and the pointer and keyboard under it
-  - `src/workspace/` — git and file access; `src/watch.rs` — watches the open project for file changes (see [File changes](#file-changes))
-  - `src/system/` — the user's machine: the programs Patchwork starts and their environment, login shells, paths, opening files on the desktop
+  - `src/workspace/` — git and file access, and `watch.rs`, which watches the open project for file changes (see [File changes](#file-changes))
+  - `src/source_control.rs` — the `Core` operations over a project's git state
   - `src/logging/` — the debug logs
   - `src/events.rs` — the agent events the backend streams to the UI, which the provider parsers produce and `orchestration/` publishes
   - `src/backgrounds.rs` — chat backgrounds
-- `crates/desktop` — the app, drawn with GPUI (package `patchwork`). It calls `Server` directly and applies its agent events on the UI thread.
-  - `src/main.rs` — opens the server and the window; `src/workspace/` — the window: its toolbar, regions and resizing
+- `crates/desktop` — the app, drawn with GPUI (package `patchwork`). It calls `Core` directly and applies its agent events on the UI thread.
+  - `src/main.rs` — opens the core and the window; `src/workspace/` — the window: its toolbar, regions and resizing
   - `src/{chat,sidebar,settings,canvas,panel,onboarding}/` — UI, one folder per feature
-  - `src/ui/` — what the features share: the controls (`controls.rs`), the colours and sizes (`theme.rs`), the icons and fonts it embeds from `assets/` (`assets.rs`), the text field every input is (`text_area/`), Markdown (`markdown.rs`), chat backgrounds (`backdrop.rs`), and the shared menus, dialogs and text tools
+  - `src/ui/` — what the features share: the controls (`controls.rs`), the colours and sizes (`theme/`), the icons and fonts it embeds from `assets/` (`assets.rs`), the text field every input is (`text_area/`), Markdown (`markdown.rs`), the background presets and animated scenes (`backdrop/`), and the shared menus, dialogs and text tools
 
 ## Data model
 
-Everything the sidebar shows comes from one SQLite database, `patchwork.db`, in the data folder. The store loads it into memory at startup and writes each change through before it is visible (`crates/server/src/persistence/store.rs`).
+Everything the sidebar shows comes from one SQLite database, `patchwork.db`, in the data folder. The store loads it into memory at startup and writes each change through before it is visible (`crates/core/src/persistence/store.rs`).
 
 | Table | What it holds |
 | --- | --- |
@@ -47,15 +48,15 @@ Where a thread runs:
 
 Sidebar order is the `position` column. A new thread gets `-created_at`, so the newest is first until it is dragged. Dropping rows calls `reorder_threads`, which numbers that list `0..n`.
 
-Schema changes go in as a new entry appended to `MIGRATIONS` in `crates/server/src/persistence/migrations/runner.rs`. Never edit one that has shipped.
+Schema changes go in as a new entry appended to `MIGRATIONS` in `crates/core/src/persistence/migrations/runner.rs`. Never edit one that has shipped.
 
 ## File changes
 
 The open project is watched for changes, and the UI never polls git.
 
-- **Watching** (`crates/server/src/watch.rs`). On Linux, inotify watches one folder at a time, so its `linux` module adds a watch for each folder git keeps. On macOS and Windows, FSEvents and ReadDirectoryChangesW cover a whole tree with one watch, so its `tree` module watches the project root. On every platform, its `Filter` drops paths git ignores, `node_modules`, `target`, and everything in `.git` below its top level. The top level is kept because commits, staging, and checkouts change it.
-- **Refreshing.** Events are merged until 250 ms pass without one, or for at most 1 s. Then `Server::watch_project` runs one `git status`. It runs one `git diff HEAD --numstat` for line counts only when a tracked file changed. The result goes to the UI as a `project-changed` event. Git runs with `GIT_OPTIONAL_LOCKS=0`, so its own reads do not rewrite `.git/index` and trigger another refresh.
-- **Which files a reply changed** (`crates/server/src/orchestration/changes/attribution.rs`).
+- **Watching** (`crates/core/src/workspace/watch.rs`). On Linux, inotify watches one folder at a time, so its `linux` module adds a watch for each folder git keeps. On macOS and Windows, FSEvents and ReadDirectoryChangesW cover a whole tree with one watch, so its `tree` module watches the project root. On every platform, its `Filter` drops paths git ignores, `node_modules`, `target`, and everything in `.git` below its top level. The top level is kept because commits, staging, and checkouts change it.
+- **Refreshing.** Events are merged until 250 ms pass without one, or for at most 1 s. Then `Core::watch_project` runs one `git status`. It runs one `git diff HEAD --numstat` for line counts only when a tracked file changed. The result goes to the UI as a `project-changed` event. Git runs with `GIT_OPTIONAL_LOCKS=0`, so its own reads do not rewrite `.git/index` and trigger another refresh.
+- **Which files a reply changed** (`crates/core/src/orchestration/changes/attribution.rs`).
   - **Edit tools.** They name their files, and those files are listed as soon as the tool reports them.
   - **Other changes.** Changes made any other way, such as a shell `rm`, are found by comparing `git status` with how it stood when the reply started.
   - **Who made a change.** No platform reports which process wrote a file. A change therefore counts only if it happened while one of the reply's calls that could write it was running:
@@ -79,17 +80,17 @@ other than how it reads. It is off by default and turned on in Settings → Chec
 app's. There is one default for projects that have not answered, and a project can answer for
 itself: a suite too slow to run every time can be off while the others are on.
 
-- **What runs** (`crates/server/src/checks/detect.rs`). The first of: a `check` script in `package.json`, else its `test` script, run with the package manager the lockfile names when that tool is installed; `cargo test`; `python -m pytest`; `go test ./...`; a Makefile's `check` or `test` target; `mix test`. A project with none of them has nothing to check, and its replies show no card at all.
-- **When** (`crates/server/src/orchestration/turn/end.rs`). When a turn finishes with `Complete` and its reply changed at least one file. A stopped or failed turn changed nothing to judge.
-- **How** (`crates/server/src/checks/run.rs`). Through the same shell an agent's commands run in, in the project folder, with `CI=1` and colour off. Output keeps its last 16 KB; the process group is killed at 5 minutes, and that is never a pass.
-- **What it means** (`TurnChecks` in `crates/server/src/threads/messages.rs`). `passed`, `failed`, `timedOut`, or `notRun`, with the command, how long it took, one `CheckFailure` per thing that failed (`crates/server/src/checks/parse.rs` reads cargo's, Node's, Jest's, Vitest's, pytest's and Go's shapes), and the tail of the output. A check that did not finish is `timedOut` or `notRun`, never `passed`. A check left running when the app closed is `notRun` at the next start (`turn/recovery.rs`).
+- **What runs** (`crates/core/src/checks/detect.rs`). The first of: a `check` script in `package.json`, else its `test` script, run with the package manager the lockfile names when that tool is installed; `cargo test`; `python -m pytest`; `go test ./...`; a Makefile's `check` or `test` target; `mix test`. A project with none of them has nothing to check, and its replies show no card at all.
+- **When** (`crates/core/src/orchestration/turn/end.rs`). When a turn finishes with `Complete` and its reply changed at least one file. A stopped or failed turn changed nothing to judge.
+- **How** (`crates/core/src/checks/run.rs`). Through the same shell an agent's commands run in, in the project folder, with `CI=1` and colour off. Output keeps its last 16 KB; the process group is killed at 5 minutes, and that is never a pass.
+- **What it means** (`TurnChecks` in `crates/core/src/threads/messages.rs`). `passed`, `failed`, `timedOut`, or `notRun`, with the command, how long it took, one `CheckFailure` per thing that failed (`crates/core/src/checks/parse.rs` reads cargo's, Node's, Jest's, Vitest's, pytest's and Go's shapes), and the tail of the output. A check that did not finish is `timedOut` or `notRun`, never `passed`. A check left running when the app closed is `notRun` at the next start (`turn/recovery.rs`).
 - **What a reply shows** (`crates/desktop/src/chat/checks.rs`). Under the files a reply changed: the outcome, each failure by name, and the output behind a disclosure. Its button runs the command again; its footer turns the project's checks on or off without leaving the chat. A reply shows a card only when checks ran or are running for it, so with them off there is no card at all: the switch is in Settings → Checks, which is one place to look rather than a card in every reply saying it did not check. The result arrives as a `checksRecorded` event, saved on the message like an approval.
 - **Asking another way**. The command palette's "Run checks for the open task" runs them for the reply on screen, whether or not the project has them on, and the card it produces is where they can be turned on.
 
 ## Approvals and questions
 
 An agent that wants permission, or an answer, sends a request the turn then waits on
-(`crates/server/src/orchestration/approvals/`). The user's answer normally goes back down the
+(`crates/core/src/orchestration/approvals/`). The user's answer normally goes back down the
 process's stdin, or through the hook waiter, and the turn carries on.
 
 - **When no turn is waiting** (`answer.rs`, `answer_in_new_turn`). The app closed under the request,
@@ -103,7 +104,7 @@ process's stdin, or through the hook waiter, and the turn carries on.
 
 ## Config location
 
-`crates/server/src/system/dirs.rs` splits Patchwork's files by who owns them, each in a `patchwork` folder inside the platform's own:
+`crates/system/src/dirs.rs` splits Patchwork's files by who owns them, each in a `patchwork` folder inside the platform's own:
 
 | Holds | Linux | macOS | Windows |
 |---|---|---|---|

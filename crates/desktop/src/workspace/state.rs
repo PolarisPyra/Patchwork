@@ -11,13 +11,13 @@ use gpui::{
     Task, AnyElement, Entity, FocusHandle, Focusable, ListAlignment, ListState, ScrollHandle,
     Subscription, WeakEntity, Window, div, prelude::*,
 };
-use patchwork_server::Server;
-use patchwork_server::gateway::{ChatApps, ChatPlace};
-use patchwork_server::permissions::PermissionKind;
-use patchwork_server::projects::{Folder, Project};
-use patchwork_server::settings::Settings;
-use patchwork_server::threads::{Message, MessageStatus, Part, Thread};
-use patchwork_server::workspace::{FileChange, ProjectChanged};
+use patchwork_core::Core;
+use patchwork_core::gateway::{ChatApps, ChatPlace};
+use patchwork_core::permissions::PermissionKind;
+use patchwork_core::projects::{Folder, Project};
+use patchwork_core::settings::Settings;
+use patchwork_core::threads::{Message, MessageStatus, Part, Thread};
+use patchwork_core::workspace::{FileChange, ProjectChanged};
 use crate::canvas::Canvas;
 use crate::chat::approvals::AllowChoice;
 use crate::chat::composer::Composer;
@@ -84,7 +84,7 @@ pub enum ReplyNotice {
     reason = "each flag is a separate piece of view state"
 )]
 pub struct Workspace {
-    pub server: Arc<Server>,
+    pub core: Arc<Core>,
     pub settings: Settings,
     /// Every thread, each with only the messages the task list reads.
     pub threads: Vec<Arc<Thread>>,
@@ -161,7 +161,7 @@ pub struct Workspace {
     pub(super) canvas_resizing: Option<(f32, f32)>,
     /// The mobile app in the open project, the project it was last looked for in, and the
     /// Android panel, which takes the file panel's place while it is open.
-    pub mobile: Option<patchwork_server::android::MobileProject>,
+    pub mobile: Option<patchwork_core::android::MobileProject>,
     pub(super) mobile_for: Option<String>,
     pub(crate) android: Option<Entity<crate::android::AndroidPanel>>,
     /// The terminal and Output panel under the chat, whether it shows, its height, and the drag
@@ -194,7 +194,7 @@ pub struct Workspace {
     pub rail: crate::chat::rail::RailState,
     pub proposed: crate::chat::proposed::ProposedPlans,
     pub user: crate::chat::user::UserState,
-    pub backgrounds: crate::ui::backdrop::Backgrounds,
+    pub backgrounds: crate::chat::backdrop::Backgrounds,
     pub checks: crate::chat::checks::ChecksState,
     pub secrets: crate::chat::secret::SecretState,
     /// The resume prompt, while it waits for an answer.
@@ -249,13 +249,13 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    pub fn new(server: Arc<Server>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let settings = server.store.settings();
-        let collapsed = server.collapsed_sections().into_iter().collect();
-        let update_dismissed = server.dismissed_update();
-        let threads = server.list_threads();
-        let chat_apps = server.thread_chat_apps();
-        let folders = server.list_folders();
+    pub fn new(core: Arc<Core>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let settings = core.settings();
+        let collapsed = core.collapsed_sections().into_iter().collect();
+        let update_dismissed = core.dismissed_update();
+        let threads = core.list_threads();
+        let chat_apps = core.thread_chat_apps();
+        let folders = core.list_folders();
         let workspace = cx.entity().downgrade();
         let composer = cx.new(|cx| Composer::new(workspace.clone(), window, cx));
         let changes_view = cx.new(|cx| ChangesView::new(workspace, window, cx));
@@ -295,11 +295,10 @@ impl Workspace {
         let orchestrator = cx.new(|cx| Orchestrator::new(&entity, composer.clone(), window, cx));
         let status_region =
             cx.new(|cx| Region::new(&entity, |w, _, cx| w.status_bar(cx).into_any_element(), cx));
-        let (panel, panel_height) =
-            panel_area::new_panel(Arc::clone(&server), &settings, window, cx);
+        let (panel, panel_height) = panel_area::new_panel(Arc::clone(&core), &settings, window, cx);
         let themed_project = settings.active_project_id.clone();
         let mut this = Self {
-            server,
+            core,
             settings,
             threads,
             folders,
@@ -375,7 +374,7 @@ impl Workspace {
             rail: crate::chat::rail::RailState::new(cx),
             proposed: crate::chat::proposed::ProposedPlans::default(),
             user: crate::chat::user::UserState::default(),
-            backgrounds: crate::ui::backdrop::Backgrounds::default(),
+            backgrounds: crate::chat::backdrop::Backgrounds::default(),
             streamed: HashSet::new(),
             // Every row is measured up front, or the scrollbar thumb jumps as rows scroll in.
             transcript_list: ListState::new(0, ListAlignment::Top, gpui::px(800.)).measure_all(),
@@ -407,7 +406,7 @@ impl Workspace {
             sort_undo: HashMap::new(),
         };
         let last = this
-            .server
+            .core
             .last_thread_id()
             .filter(|id| this.threads.iter().any(|t| &t.id == id));
         if let Some(id) = last {

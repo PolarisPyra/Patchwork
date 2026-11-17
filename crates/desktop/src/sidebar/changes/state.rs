@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{Entity, Pixels, Point, ScrollHandle, WeakEntity, Window, prelude::*};
-use patchwork_server::workspace::{GitCommit, GitSyncState, PullRequest};
+use patchwork_core::workspace::{GitCommit, GitSyncState, PullRequest};
 
 use crate::ui::text_area::{Changed, Submitted, TextArea};
 use crate::ui::menu::Menu;
@@ -205,8 +205,8 @@ impl ChangesView {
         }
     }
 
-    pub(super) fn server(&self, cx: &Context<Self>) -> Option<Arc<patchwork_server::Server>> {
-        Some(Arc::clone(&self.workspace.upgrade()?.read(cx).server))
+    pub(super) fn core(&self, cx: &Context<Self>) -> Option<Arc<patchwork_core::Core>> {
+        Some(Arc::clone(&self.workspace.upgrade()?.read(cx).core))
     }
 
     fn has_changes(&self, cx: &Context<Self>) -> bool {
@@ -251,15 +251,12 @@ impl ChangesView {
     }
 
     fn load_sync(&mut self, cx: &mut Context<Self>) {
-        let (Some(server), Some(id)) = (self.server(cx), self.project_id.clone()) else {
+        let (Some(core), Some(id)) = (self.core(cx), self.project_id.clone()) else {
             return;
         };
         let task = cx.background_spawn(async move {
-            let root = server.project_root(&id)?;
-            Ok::<_, patchwork_server::Error>((
-                id,
-                patchwork_server::workspace::git_sync_state(&root),
-            ))
+            let root = core.project_root(&id)?;
+            Ok::<_, patchwork_core::Error>((id, patchwork_core::workspace::git_sync_state(&root)))
         });
         cx.spawn(async move |this, cx| {
             let read = task.await;
@@ -290,12 +287,12 @@ impl ChangesView {
     }
 
     fn load_log(&mut self, cx: &mut Context<Self>) {
-        let (Some(server), Some(id)) = (self.server(cx), self.project_id.clone()) else {
+        let (Some(core), Some(id)) = (self.core(cx), self.project_id.clone()) else {
             return;
         };
         let limit = PAGE * self.pages;
         let task = cx.background_spawn(async move {
-            let log = server.git_log(&id, 0, limit);
+            let log = core.git_log(&id, 0, limit);
             (id, log)
         });
         cx.spawn(async move |this, cx| {
@@ -332,9 +329,10 @@ impl ChangesView {
             self.missing.clear();
             return;
         }
-        let task = cx.background_spawn(async move {
-            patchwork_server::workspace::missing_files(&root, &files)
-        });
+        let task =
+            cx.background_spawn(
+                async move { patchwork_core::workspace::missing_files(&root, &files) },
+            );
         cx.spawn(async move |this, cx| {
             let missing = task.await;
             this.update(cx, |this, cx| {

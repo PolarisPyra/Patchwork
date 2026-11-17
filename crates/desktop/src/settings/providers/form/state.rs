@@ -6,7 +6,7 @@ use std::io::Cursor;
 
 use base64::Engine;
 use gpui::{Focusable, PathPromptOptions, Window, prelude::*, px};
-use patchwork_server::provider::api::config::{
+use patchwork_core::provider::api::config::{
     self, ApiModel, ApiProvider, KeyChange, KeyStore, ModelsQuery, ProviderView,
 };
 

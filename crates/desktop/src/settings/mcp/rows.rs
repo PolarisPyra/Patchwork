@@ -3,8 +3,8 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, FontWeight, SharedString, div, img, prelude::*, px};
-use patchwork_server::provider::AgentKind;
-use patchwork_server::provider::mcp::ToolInfo;
+use patchwork_core::provider::AgentKind;
+use patchwork_core::provider::mcp::ToolInfo;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::letter_badge;
 use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius_sm, Theme};

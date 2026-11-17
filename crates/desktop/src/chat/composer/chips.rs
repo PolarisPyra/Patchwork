@@ -8,7 +8,7 @@ use gpui::{
     AnyElement, ClickEvent, Div, Focusable, PathBuilder, Stateful, Window, canvas, div, point,
     prelude::*, px,
 };
-use patchwork_server::threads::Thread;
+use patchwork_core::threads::Thread;
 use crate::ui::pill::pill_chip;
 use crate::ui::theme::Theme;
 use crate::ui::{above, icon};
@@ -148,13 +148,13 @@ impl Composer {
             _ => {}
         }
         workspace.update(cx, |w, cx| {
-            let server = Arc::clone(&w.server);
+            let core = Arc::clone(&w.core);
             let done = match pick {
-                Pick::Model(agent, model) => server.set_thread_model(&id, agent, model),
-                Pick::Effort(effort) => server.set_thread_effort(&id, effort.as_deref()),
-                Pick::Compact(window) => server.set_thread_compact_window(&id, window),
-                Pick::Access(mode) => server.set_thread_access_mode(&id, mode),
-                Pick::Role(role) => server.set_thread_role(&id, role),
+                Pick::Model(agent, model) => core.set_thread_model(&id, agent, model),
+                Pick::Effort(effort) => core.set_thread_effort(&id, effort.as_deref()),
+                Pick::Compact(window) => core.set_thread_compact_window(&id, window),
+                Pick::Access(mode) => core.set_thread_access_mode(&id, mode),
+                Pick::Role(role) => core.set_thread_role(&id, role),
                 Pick::CompactNow => {
                     w.send_command("/compact", cx);
                     Ok(())

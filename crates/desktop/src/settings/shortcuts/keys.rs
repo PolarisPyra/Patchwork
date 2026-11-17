@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use gpui::{Action, App, KeyBinding, KeyBindingContextPredicate, KeyDownEvent, NoAction};
-use patchwork_server::Server;
+use patchwork_core::Core;
 
 /// Where the user's keys are kept: a command's key, or null for one they unbound.
 pub(super) const STATE_KEY: &str = "keybindings";
@@ -223,10 +223,8 @@ pub(super) const FIXED_KEYS: &[(&str, &[&str], &str)] = &[
 
 pub(super) type Overrides = HashMap<String, Option<String>>;
 
-pub(super) fn load(server: &Server) -> Overrides {
-    server
-        .store
-        .state(STATE_KEY)
+pub(super) fn load(core: &Core) -> Overrides {
+    core.state(STATE_KEY)
         .and_then(|json| serde_json::from_str(&json).ok())
         .unwrap_or_default()
 }
@@ -244,8 +242,8 @@ pub(super) fn key_for(overrides: &Overrides, id: &str) -> Option<String> {
 }
 
 /// A command's key as the palette shows it, "Ctrl T", or None when it has none.
-pub fn key_label(server: &Server, id: &str) -> Option<String> {
-    key_for(&load(server), id).map(|key| format_key(&key).join(" "))
+pub fn key_label(core: &Core, id: &str) -> Option<String> {
+    key_for(&load(core), id).map(|key| format_key(&key).join(" "))
 }
 
 fn is_fixed(id: &str) -> bool {
@@ -385,8 +383,8 @@ const SKIP_SHELL: &[&str] = &[
 /// Builds the window's keymap: moving focus, quitting, the text fields' keys, and each command's
 /// key as the user left it. In a terminal, Tab and the commands' keys other than the panel's,
 /// search's and settings' go to the shell.
-pub fn bind_keys(server: &Server, cx: &mut App) {
-    let overrides = load(server);
+pub fn bind_keys(core: &Core, cx: &mut App) {
+    let overrides = load(core);
     cx.clear_key_bindings();
     cx.bind_keys([
         KeyBinding::new("tab", crate::FocusNext, None),

@@ -10,8 +10,8 @@ use gpui::{
     AnyElement, Bounds, Div, FontWeight, Hsla, MouseButton, MouseDownEvent, PathBuilder, Pixels,
     Point, Role, SharedString, Window, canvas, div, point, prelude::*, px,
 };
-use patchwork_server::threads::Thread;
-use patchwork_server::workspace::GitCommit;
+use patchwork_core::threads::Thread;
+use patchwork_core::workspace::GitCommit;
 
 use super::changes::ChangesView;
 use crate::ui::menu::MenuItem;

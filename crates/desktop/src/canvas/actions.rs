@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 use gpui::{ClipboardItem, PromptLevel, Window, prelude::*, px};
-use patchwork_server::workspace::HunkAction;
+use patchwork_core::workspace::HunkAction;
 use crate::ui::base_name;
 use super::diff::{Review, review_message};
 use super::state::Canvas;
@@ -44,7 +44,7 @@ impl Canvas {
         };
         self.run_action(
             move |root| {
-                patchwork_server::workspace::accept_file(root, &path).map_err(|e| e.to_string())
+                patchwork_core::workspace::accept_file(root, &path).map_err(|e| e.to_string())
             },
             cx,
         );
@@ -68,7 +68,7 @@ impl Canvas {
             let _ = this.update(cx, |this, cx| {
                 this.run_action(
                     move |root| {
-                        patchwork_server::workspace::revert_file(root, &path)
+                        patchwork_core::workspace::revert_file(root, &path)
                             .map_err(|e| e.to_string())
                     },
                     cx,
@@ -93,14 +93,8 @@ impl Canvas {
         let run = move |this: &mut Self, cx: &mut Context<Self>| {
             this.run_action(
                 move |root| {
-                    patchwork_server::workspace::apply_hunk(
-                        root,
-                        &path,
-                        turn.as_ref(),
-                        &hunk,
-                        action,
-                    )
-                    .map_err(|e| e.to_string())
+                    patchwork_core::workspace::apply_hunk(root, &path, turn.as_ref(), &hunk, action)
+                        .map_err(|e| e.to_string())
                 },
                 cx,
             );
@@ -131,7 +125,7 @@ impl Canvas {
         self.action_error = None;
         let root = self.root.clone();
         let task = cx.background_spawn(async move {
-            patchwork_server::workspace::open_in_editor(&root, &path, None)
+            patchwork_core::workspace::open_in_editor(&root, &path, None)
         });
         cx.spawn(async move |this, cx| {
             if let Err(e) = task.await {

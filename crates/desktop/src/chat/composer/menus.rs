@@ -7,9 +7,9 @@ use gpui::{
     AnyElement, FocusHandle, KeyDownEvent, MouseDownEvent, Role, SharedString, Window, div,
     prelude::*, px,
 };
-use patchwork_server::agents::Agent;
-use patchwork_server::provider::{AgentKind, ModelOption};
-use patchwork_server::threads::AccessMode;
+use patchwork_core::extensions::agents::Agent;
+use patchwork_core::provider::{AgentKind, ModelOption};
+use patchwork_core::threads::AccessMode;
 
 use super::{Composer, Picks};
 use crate::ui::theme::{fs_sm, fs_xs, Theme};
@@ -491,7 +491,7 @@ impl Composer {
             name.to_string_lossy().into_owned(),
         );
         cx.background_spawn(async move {
-            if let Err(e) = patchwork_server::workspace::open_in_editor(&dir, &name, None) {
+            if let Err(e) = patchwork_core::workspace::open_in_editor(&dir, &name, None) {
                 log::warn!(error:% = e; "could not open the agent: {{error}}");
             }
         })

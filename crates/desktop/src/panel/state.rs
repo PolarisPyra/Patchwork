@@ -4,9 +4,9 @@
 
 use std::sync::Arc;
 use gpui::{App, Entity, EventEmitter, FocusHandle, Pixels, Point, Task, Window, prelude::*};
-use patchwork_server::Server;
-use patchwork_server::settings::{LogLevel, LoggingSettings, Settings, TerminalSettings};
-use patchwork_server::terminal::TerminalShell;
+use patchwork_core::Core;
+use patchwork_core::settings::{LogLevel, LoggingSettings, Settings, TerminalSettings};
+use patchwork_core::terminal::TerminalShell;
 use crate::ui::menu::Menu;
 use super::output::OutputState;
 use super::screen::ScreenState;
@@ -46,7 +46,7 @@ pub(super) enum MenuFor {
     reason = "each flag is a separate piece of view state"
 )]
 pub struct Panel {
-    pub(super) server: Arc<Server>,
+    pub(super) core: Arc<Core>,
     pub tab: PanelTab,
     /// Whether the window shows the panel now.
     pub(super) visible: bool,
@@ -97,10 +97,10 @@ pub struct Panel {
 impl EventEmitter<PanelEvent> for Panel {}
 
 impl Panel {
-    pub fn new(server: Arc<Server>, settings: &Settings, cx: &mut Context<Self>) -> Self {
-        let picked = server.store.state(SHELL_KEY);
+    pub fn new(core: Arc<Core>, settings: &Settings, cx: &mut Context<Self>) -> Self {
+        let picked = core.state(SHELL_KEY);
         Self {
-            server,
+            core,
             tab: PanelTab::Terminal,
             visible: false,
             focus: cx.focus_handle(),
@@ -227,7 +227,7 @@ impl Panel {
     }
 
     pub(super) fn find_shells(&mut self, cx: &mut Context<Self>) {
-        let task = cx.background_spawn(async { patchwork_server::terminal::shells() });
+        let task = cx.background_spawn(async { patchwork_core::terminal::shells() });
         cx.spawn(async move |this, cx| {
             let found = task.await;
             this.update(cx, |this, cx| {
@@ -239,7 +239,7 @@ impl Panel {
     }
 
     pub(super) fn pick_shell(&mut self, path: String, cx: &mut Context<Self>) {
-        if let Err(e) = self.server.store.set_state(SHELL_KEY, &path) {
+        if let Err(e) = self.core.set_state(SHELL_KEY, &path) {
             log::warn!(error:% = e; "could not keep the terminal's shell: {{error}}");
         }
         self.picked = Some(path.clone());
@@ -252,9 +252,9 @@ impl Panel {
         level: LogLevel,
         cx: &mut Context<Self>,
     ) {
-        let mut next = self.server.store.settings();
+        let mut next = self.core.settings();
         *setting(&mut next.logging) = level;
-        match self.server.save_settings(next) {
+        match self.core.save_settings(next) {
             Ok(()) => {
                 *setting(&mut self.logging) = level;
                 cx.emit(PanelEvent::SettingsChanged);

@@ -5,7 +5,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, Div, FontWeight, SharedString, div, prelude::*, px};
-use patchwork_server::hooks::{self, HookEvent, Bundle, Hook, HookHandler};
+use patchwork_core::extensions::hooks::{self, HookEvent, Bundle, Hook, HookHandler};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{switch, tildify, token_row};
@@ -90,7 +90,7 @@ fn handler_text(handler: &HookHandler) -> String {
 
 impl SettingsDialog {
     fn list_bundles(&mut self, cx: &mut Context<Self>) {
-        let settings = self.server.store.settings();
+        let settings = self.core.settings();
         self.run(
             move || hooks::list(&settings),
             |d, list, _| d.extensions.bundles = Some(list),

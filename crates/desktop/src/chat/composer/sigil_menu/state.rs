@@ -41,9 +41,9 @@ impl Composer {
             self.sigil.files.clear();
             return;
         };
-        let server = Arc::clone(&w.server);
+        let core = Arc::clone(&w.core);
         let listed = project.clone();
-        let task = cx.background_spawn(async move { server.list_files(&project) });
+        let task = cx.background_spawn(async move { core.list_files(&project) });
         cx.spawn(async move |this, cx| {
             let files = task.await;
             this.update(cx, |this, cx| {
@@ -73,7 +73,8 @@ impl Composer {
             return;
         };
         let settings = workspace.read(cx).settings.clone();
-        let task = cx.background_spawn(async move { patchwork_server::skills::all(&settings) });
+        let task =
+            cx.background_spawn(async move { patchwork_core::extensions::skills::all(&settings) });
         cx.spawn(async move |this, cx| {
             let skills = task.await;
             this.update(cx, |this, cx| {

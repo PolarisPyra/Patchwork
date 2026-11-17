@@ -9,7 +9,7 @@ use super::commands::file_items;
 use super::commands::token;
 use super::commands::{Runs, runs_of};
 use gpui::{AnyElement, FontWeight, Role, SharedString, deferred, div, prelude::*, px, relative};
-use patchwork_server::provider::{AgentKind, ProviderSlashCommand};
+use patchwork_core::provider::{AgentKind, ProviderSlashCommand};
 use crate::chat::composer::Composer;
 use crate::chat::composer::menus::Roles;
 use crate::ui::sigils::{SigilKind, Sigils};

@@ -109,15 +109,15 @@ impl Orchestrator {
             .iter()
             .map(|path| path.to_string_lossy().into_owned())
             .collect();
-        // The server is read once this update is over, as a drop can land inside the
+        // The core is read once this update is over, as a drop can land inside the
         // workspace's own update.
         let workspace = self.workspace.clone();
         cx.spawn(async move |this, cx| {
-            let Ok(server) = workspace.read_with(cx, |w, _| Arc::clone(&w.server)) else {
+            let Ok(core) = workspace.read_with(cx, |w, _| Arc::clone(&w.core)) else {
                 return;
             };
             let loaded = cx
-                .background_spawn(async move { server.attach_paths(&paths) })
+                .background_spawn(async move { core.attach_paths(&paths) })
                 .await;
             let _ = this.update(cx, |this, cx| {
                 for attachment in loaded {

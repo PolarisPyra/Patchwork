@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 
 use gpui::{AnyElement, Focusable, FontWeight, Window, div, prelude::*, px};
-use patchwork_server::provider::mcp::{self, McpServer};
+use patchwork_core::provider::mcp::{self, McpServer};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
@@ -243,7 +243,7 @@ impl SettingsDialog {
                     };
                     mcp::save(&name, previous, server)?;
                 }
-                Ok::<(), patchwork_server::Error>(())
+                Ok::<(), patchwork_core::Error>(())
             },
             |d, out, cx| match out {
                 Ok(()) => d.close_mcp_form(cx),

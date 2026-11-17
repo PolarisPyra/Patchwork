@@ -4,7 +4,7 @@
 
 use std::collections::HashSet;
 use std::ops::Range;
-use patchwork_server::provider::{AgentKind, ProviderSlashCommand};
+use patchwork_core::provider::{AgentKind, ProviderSlashCommand};
 use crate::ui::sigils::{SigilKind, Sigils, default_sigil};
 
 /// Most files the menu offers at once.

@@ -2,8 +2,8 @@
 
 // Rust guideline compliant 2026-10-09
 
-use patchwork_server::provider::cli_info::InfoCommand;
-use patchwork_server::provider::{AgentKind, ModelOption, antigravity, claude, codex, opencode};
+use patchwork_core::provider::cli_info::InfoCommand;
+use patchwork_core::provider::{AgentKind, ModelOption, antigravity, claude, codex, opencode};
 
 /// The field the rows are searched with.
 pub(super) const SEARCH_FIELD: &str = "cli-search";
@@ -123,7 +123,7 @@ pub(super) fn cli_models(models: Vec<ModelOption>) -> Vec<Model> {
 
 /// Reads the CLI. Claude Code's gates and catalog come from its caches, Codex's from the binary,
 /// OpenCode's rows are the settings in its config files, and Antigravity shows none.
-pub(super) fn read(kind: AgentKind) -> Result<Info, patchwork_server::Error> {
+pub(super) fn read(kind: AgentKind) -> Result<Info, patchwork_core::Error> {
     match kind {
         AgentKind::Claude => claude::cli::info().map(|i| Info {
             path: i.path,
@@ -206,7 +206,7 @@ pub(super) fn read(kind: AgentKind) -> Result<Info, patchwork_server::Error> {
 pub(super) fn run_command(
     kind: AgentKind,
     command: InfoCommand,
-) -> Result<String, patchwork_server::Error> {
+) -> Result<String, patchwork_core::Error> {
     match kind {
         AgentKind::Claude => claude::cli::command(command),
         AgentKind::Codex => codex::cli::command(command),

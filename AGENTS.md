@@ -1,6 +1,6 @@
 # Agent instructions
 
-For any coding agent working in this repo. `CLAUDE.md` holds the layout, the commands, the design and accessibility rules, and the full git and changelog rules; read it too. This file holds how the Rust in `crates/server` and `crates/desktop` is written.
+For any coding agent working in this repo. `CLAUDE.md` holds the layout, the commands, the design and accessibility rules, and the full git and changelog rules; read it too. This file holds how the Rust in `crates/core` and `crates/desktop` is written.
 
 The lints in the root `Cargo.toml` already catch `unwrap()`, `println!`, undocumented `unsafe`, missing `Debug`, and most style questions. This file is for what a lint cannot see.
 
@@ -22,8 +22,8 @@ All three pass, with no warnings left behind. If one fails, report its output. N
 
 ## Where code goes
 
-- **Logic lives in `crates/server`.** The app draws state and calls `Server` operations. If the server could decide it, the app does not.
-- **A server folder is a domain** (`threads`, `updates`, `workspace`), holding its types, its `impl Server` operations and its logic. A desktop folder is one piece of UI.
+- **Logic lives in `crates/core`.** The app draws state and calls `Core` operations. If the server could decide it, the app does not.
+- **A server folder is a domain** (`threads`, `updates`, `workspace`), holding its types, its `impl Core` operations and its logic. A desktop folder is one piece of UI.
 - **A file is named for its one concern**: `threads/lifecycle.rs`, `updates/check.rs`, `git/remote.rs`. Never a catch-all such as `ops.rs`, `utils.rs` or `helpers.rs`. If you cannot name a file, it holds more than one thing.
 - **Split at about 600 lines or two clear concerns**, into `name/mod.rs` plus one file per concern. Don't create a file under about 40 lines; put the code in its only user.
 - **The top of `crates/desktop/src` is `main.rs` and folders**, never loose files. A server domain small enough for one file stays one file, such as `projects.rs`.
@@ -53,7 +53,7 @@ pub(crate) use run::git;
 
 ## Errors
 
-- A fallible function returns `Result<T, Error>`. There is one `Error` (`crates/server/src/error.rs`), which the app uses as `patchwork_server::Error`; add a variant when a caller needs to tell the failure apart, and use a message otherwise.
+- A fallible function returns `Result<T, Error>`. There is one `Error` (`crates/system/src/error.rs`), which the app uses as `patchwork_core::Error`; add a variant when a caller needs to tell the failure apart, and use a message otherwise.
 - The message is shown to a person. Write it for them: what could not be done and, when they can fix it, how ("Give the provider a name").
 - Propagate with `?`. Don't swallow an error; if it truly cannot matter, log it with `log::warn!` and say why in the message.
 - No `unwrap()` or `expect()` outside tests. A lock that may be poisoned uses `unwrap_or_else(PoisonError::into_inner)`.

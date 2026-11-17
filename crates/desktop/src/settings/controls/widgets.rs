@@ -12,7 +12,7 @@ use crate::ui::menu::MenuItem;
 use crate::settings::SettingsDialog;
 use crate::ui::theme::{fs_sm, radius, radius_sm, Theme};
 use crate::ui::{button, icon};
-use patchwork_server::threads::AccessMode;
+use patchwork_core::threads::AccessMode;
 
 /// The access modes a chat can start with, and their names.
 pub const ACCESS_MODES: [(AccessMode, &str); 4] = [

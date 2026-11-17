@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 use gpui::{Global, prelude::*};
-use patchwork_server::provider::api::config::{
+use patchwork_core::provider::api::config::{
     self, ApiModel, ApiProvider, DiscoveredServer, ProviderHealth,
 };
 use crate::settings::providers::form;
@@ -174,7 +174,7 @@ impl SettingsDialog {
     pub(super) fn repair(
         &mut self,
         id: String,
-        task: impl FnOnce() -> Result<(), patchwork_server::Error> + Send + 'static,
+        task: impl FnOnce() -> Result<(), patchwork_core::Error> + Send + 'static,
         cx: &mut Context<Self>,
     ) {
         let local = &mut self.providers.local;

@@ -6,9 +6,9 @@ use gpui::{
     Anchor, AnyElement, Div, FontWeight, MouseButton, Role, SharedString, anchored, deferred, div,
     point, prelude::*, px,
 };
-use patchwork_server::permissions::{Effect, PermissionRule, PermissionScope};
-use patchwork_server::system::new_id;
-use patchwork_server::threads::{Approval, ApprovalStatus, Message};
+use patchwork_core::permissions::{Effect, PermissionRule, PermissionScope};
+use patchwork_core::system::new_id;
+use patchwork_core::threads::{Approval, ApprovalStatus, Message};
 use crate::chat::secret::secret_card;
 use crate::settings::permissions::{kind_label, scope_name};
 use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme};

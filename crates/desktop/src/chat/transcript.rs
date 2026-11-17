@@ -9,8 +9,8 @@ use gpui::{
     AnyElement, Div, FollowMode, ListAlignment, ListState, Role, SharedString, Window, div, list,
     prelude::*, px,
 };
-use patchwork_server::orchestration::{Upkeep, upkeep};
-use patchwork_server::threads::{Message, MessageStatus, Part, Role as MessageRole, Thread};
+use patchwork_core::orchestration::{Upkeep, upkeep};
+use patchwork_core::threads::{Message, MessageStatus, Part, Role as MessageRole, Thread};
 
 use crate::ui::theme::{fs_xs, Theme};
 use crate::ui::{format_tokens, list_scrollbar, spinner};

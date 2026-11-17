@@ -4,8 +4,8 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{EventEmitter, FontWeight, Role, SharedString, Window, div, prelude::*, px};
-use patchwork_server::system::browse::{self, Machine};
-use patchwork_server::system::device::{self, Kind};
+use patchwork_core::system::browse::{self, Machine};
+use patchwork_core::system::device::{self, Kind};
 
 use crate::ui::theme::{fs_md, fs_sm, radius_sm, theme};
 use crate::ui::{button, icon, icon_button, kind_icon, spinner};

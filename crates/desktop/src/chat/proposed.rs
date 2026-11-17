@@ -78,16 +78,16 @@ impl Workspace {
     /// Asks where to save the plan, and writes it there.
     fn download_plan(&mut self, title: &str, text: String, cx: &mut Context<Self>) {
         self.proposed.menu = None;
-        let home = patchwork_server::system::fs::home_dir().unwrap_or_default();
+        let home = patchwork_core::system::fs::home_dir().unwrap_or_default();
         let picked = cx.prompt_for_new_path(&home, Some(&slug_file_name(title, "plan")));
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         cx.spawn(async move |this, cx| {
             let Ok(Ok(Some(path))) = picked.await else {
                 return;
             };
             let path = path.to_string_lossy().into_owned();
             let saved = cx
-                .background_spawn(async move { server.save_text_file(&path, &text) })
+                .background_spawn(async move { core.save_text_file(&path, &text) })
                 .await;
             if let Err(e) = saved {
                 let _ = this.update(cx, |this, cx| {

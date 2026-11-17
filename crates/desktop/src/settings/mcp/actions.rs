@@ -4,8 +4,8 @@
 
 use std::time::Duration;
 use gpui::Context;
-use patchwork_server::provider::mcp::clis;
-use patchwork_server::provider::mcp;
+use patchwork_core::provider::mcp::clis;
+use patchwork_core::provider::mcp;
 use crate::settings::SettingsDialog;
 
 impl SettingsDialog {
@@ -43,7 +43,7 @@ impl SettingsDialog {
     /// Runs an MCP change off the main thread, shows its error, and reads the servers again.
     pub(super) fn mcp_run(
         &mut self,
-        work: impl FnOnce() -> Result<(), patchwork_server::Error> + Send + 'static,
+        work: impl FnOnce() -> Result<(), patchwork_core::Error> + Send + 'static,
         cx: &mut Context<Self>,
     ) {
         self.mcp.error = None;
@@ -69,7 +69,7 @@ impl SettingsDialog {
                 let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
                     return Err("That is not an MCP config file".into());
                 };
-                patchwork_server::workspace::open_in_editor(
+                patchwork_core::workspace::open_in_editor(
                     &dir.to_string_lossy(),
                     &name.to_string_lossy(),
                     None,

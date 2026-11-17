@@ -6,7 +6,7 @@
 use std::ops::Range;
 
 use gpui::{FontStyle, HighlightStyle, Hsla, StyledText, UnderlineStyle, div, prelude::*, px, rgb};
-use patchwork_server::settings::{CursorStyle, TerminalSettings};
+use patchwork_core::settings::{CursorStyle, TerminalSettings};
 
 use super::input::ensure_contrast;
 use super::terminal::Metrics;

@@ -6,7 +6,7 @@
 use std::sync::{Arc, OnceLock};
 
 use gpui::{AnyElement, FocusHandle, FontWeight, Role, SharedString, Toggled, div, img, prelude::*, px};
-use patchwork_server::settings::{LogLevel, LoggingSettings};
+use patchwork_core::settings::{LogLevel, LoggingSettings};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{alert, anchored, choice, section_heading, switch, token_row};
@@ -68,18 +68,18 @@ struct Logo {
 }
 
 /// The app icon picked in General, as an asset path.
-pub(super) fn app_icon(s: &patchwork_server::settings::Settings) -> SharedString {
+pub(super) fn app_icon(s: &patchwork_core::settings::Settings) -> SharedString {
     let id = s.logo.clone().unwrap_or_else(|| logos().1.clone());
     SharedString::from(format!("app-icons/{id}.svg"))
 }
 
 /// Puts the app icon picked in `s` in the desktop's launcher, title bar and taskbar, off the UI
 /// thread.
-pub(crate) fn show_app_icon(s: &patchwork_server::settings::Settings, cx: &gpui::App) {
+pub(crate) fn show_app_icon(s: &patchwork_core::settings::Settings, cx: &gpui::App) {
     use gpui::AssetSource;
     match crate::ui::assets::Assets.load(&app_icon(s)) {
         Ok(Some(svg)) => cx
-            .background_spawn(async move { patchwork_server::system::set_launcher_icon(&svg) })
+            .background_spawn(async move { patchwork_core::system::set_launcher_icon(&svg) })
             .detach(),
         Ok(None) => log::warn!("the picked app icon is missing"),
         Err(e) => log::warn!(error:% = e; "the picked app icon cannot be read: {{error}}"),
@@ -115,9 +115,9 @@ impl SettingsDialog {
     /// Asks where to save a zip of the logs, and writes it there.
     fn export_logs(&mut self, cx: &mut Context<Self>) {
         let stamp = chrono::Local::now().format("%Y%m%dT%H%M%S");
-        let home = patchwork_server::system::fs::home_dir().unwrap_or_default();
+        let home = patchwork_core::system::fs::home_dir().unwrap_or_default();
         let picked = cx.prompt_for_new_path(&home, Some(&format!("patchwork-logs-{stamp}.zip")));
-        let server = Arc::clone(&self.server);
+        let core = Arc::clone(&self.core);
         cx.spawn(async move |this, cx| {
             let Ok(Ok(Some(path))) = picked.await else {
                 return;
@@ -129,9 +129,9 @@ impl SettingsDialog {
             });
             let exported = cx
                 .background_spawn(async move {
-                    let mut system = patchwork_server::logging::system::report().clone();
-                    system["settings"] = serde_json::json!(server.store.settings());
-                    patchwork_server::logging::export(&path, &system)
+                    let mut system = patchwork_core::logging::system::report().clone();
+                    system["settings"] = serde_json::json!(core.settings());
+                    patchwork_core::logging::export(&path, &system)
                 })
                 .await;
             let _ = this.update(cx, |d, cx| {
@@ -155,7 +155,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                       title: &'static str,
                       desc: Option<&'static str>,
                       on: bool,
-                      flip: fn(&mut patchwork_server::settings::Settings, bool),
+                      flip: fn(&mut patchwork_core::settings::Settings, bool),
                       cx: &mut Context<SettingsDialog>| {
         token_row(title, desc, &t).child(
             switch(id, title, on, &t)
@@ -214,7 +214,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                             .on_click(cx.listener(move |d, _, _, cx| {
                                 let id = id.clone();
                                 d.update(|s| s.logo = Some(id), cx);
-                                show_app_icon(&d.server.store.settings(), cx);
+                                show_app_icon(&d.core.settings(), cx);
                             }))
                             .into_any_element()
                     })
@@ -267,7 +267,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
     let log_rows: Vec<_> = log_rows.collect();
 
     let exporting = d.general.exporting;
-    let logs_dir = patchwork_server::system::dirs().logs.clone();
+    let logs_dir = patchwork_core::system::dirs().logs.clone();
     div()
         .flex()
         .flex_col()

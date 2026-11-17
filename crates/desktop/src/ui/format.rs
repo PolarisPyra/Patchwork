@@ -22,11 +22,7 @@ pub fn display_title(title: &str) -> String {
     }
 }
 
-pub fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_millis() as u64)
-}
+pub use patchwork_core::system::now_ms;
 
 /// Compact age: "now", "5m", "3h", "2d".
 pub fn format_relative(ts: u64) -> String {

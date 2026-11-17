@@ -7,8 +7,8 @@
 use std::sync::Arc;
 
 use gpui::{AnyElement, Div, Hsla, Role, SharedString, Stateful, div, hsla, prelude::*, px};
-use patchwork_server::projects::Project;
-use patchwork_server::threads::{Standing, Thread};
+use patchwork_core::projects::Project;
+use patchwork_core::threads::{Standing, Thread};
 
 use super::render::{glass, ink, warm};
 use super::state::{Orchestrator, Outcome, Request};

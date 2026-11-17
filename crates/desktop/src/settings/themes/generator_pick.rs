@@ -4,7 +4,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, ClickEvent, Role, SharedString, div, prelude::*, px};
-use patchwork_server::threads::AgentPick;
+use patchwork_core::threads::AgentPick;
 
 use crate::chat::composer::{effort_label, efforts};
 use crate::settings::SettingsDialog;
@@ -50,7 +50,7 @@ impl SettingsDialog {
 
     /// What a chat on `agent` runs when no model is picked: the agent's model for new chats, else
     /// its CLI's own, as "Default (name)".
-    fn default_model_label(&self, agent: patchwork_server::provider::AgentKind) -> String {
+    fn default_model_label(&self, agent: patchwork_core::provider::AgentKind) -> String {
         let models = self.tokens.models.get(&agent);
         let name = match self.settings.tokens.default_models.get(&agent) {
             Some(id) => Some(

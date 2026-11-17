@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use gpui::{App, Global};
-use patchwork_server::Server;
+use patchwork_core::Core;
 
 const STATE_KEY: &str = "sigils";
 
@@ -115,9 +115,8 @@ impl Sigils {
 
 /// The saved sigils. Two kinds sharing a character would be ambiguous, so a clash falls back to
 /// the defaults.
-pub fn load(server: &Server) -> Sigils {
-    let saved: HashMap<String, String> = server
-        .store
+pub fn load(core: &Core) -> Sigils {
+    let saved: HashMap<String, String> = core
         .state(STATE_KEY)
         .and_then(|json| serde_json::from_str(&json).ok())
         .unwrap_or_default();
@@ -138,14 +137,14 @@ pub fn load(server: &Server) -> Sigils {
 }
 
 /// Saves `sigils`, keeping only the ones changed, and makes them the ones the composer reads.
-pub fn save(server: &Server, sigils: Sigils, cx: &mut App) {
+pub fn save(core: &Core, sigils: Sigils, cx: &mut App) {
     let changed: HashMap<&str, String> = SIGIL_KINDS
         .iter()
         .filter(|&&(k, _, _)| sigils.of(k) != default_sigil(k))
         .map(|&(k, key, _)| (key, sigils.of(k).to_string()))
         .collect();
     let json = serde_json::to_string(&changed).unwrap_or_else(|_| "{}".into());
-    if let Err(e) = server.store.set_state(STATE_KEY, &json) {
+    if let Err(e) = core.set_state(STATE_KEY, &json) {
         log::warn!(error:% = e; "could not save the sigils: {{error}}");
     }
     cx.set_global(sigils);

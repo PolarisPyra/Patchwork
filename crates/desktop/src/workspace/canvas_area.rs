@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{MouseButton, Role, Window, div, prelude::*, px};
-use patchwork_server::threads::Message;
+use patchwork_core::threads::Message;
 use crate::canvas::{CANVAS_MAX_FRACTION, CANVAS_MIN, Canvas, CanvasTab};
 use crate::ui::theme::{ACTIVITY_BAR_W, theme};
 use super::state::Workspace;
@@ -61,7 +61,7 @@ impl Workspace {
             return;
         };
         let (id, root) = (project.id.clone(), std::path::PathBuf::from(&project.path));
-        let task = cx.background_spawn(async move { patchwork_server::android::detect(&root) });
+        let task = cx.background_spawn(async move { patchwork_core::android::detect(&root) });
         cx.spawn(async move |this, cx| {
             let found = task.await;
             this.update(cx, |this, cx| {
@@ -95,11 +95,12 @@ impl Workspace {
         let (Some(project), Some(mobile)) = (self.project(), self.mobile.clone()) else {
             return;
         };
-        let (id, server) = (project.id.clone(), std::sync::Arc::clone(&self.server));
+        let (id, core) = (project.id.clone(), std::sync::Arc::clone(&self.core));
         let workspace = cx.entity().downgrade();
-        self.android = Some(cx.new(|cx| {
-            crate::android::AndroidPanel::new(workspace, server, id, mobile, window, cx)
-        }));
+        self.android =
+            Some(cx.new(|cx| {
+                crate::android::AndroidPanel::new(workspace, core, id, mobile, window, cx)
+            }));
         cx.notify();
     }
 

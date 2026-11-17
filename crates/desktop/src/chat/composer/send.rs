@@ -6,8 +6,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use gpui::{App, AppContext as _, ClipboardEntry, Context, Focusable, PathPromptOptions, Window};
-use patchwork_server::Server;
-use patchwork_server::threads::{Attachment, GoalStatus, NewThread, is_long_paste};
+use patchwork_core::Core;
+use patchwork_core::threads::{Attachment, GoalStatus, NewThread, is_long_paste};
 use crate::workspace::{Workspace, is_working};
 use super::state::Composer;
 use super::sigil_menu;
@@ -71,8 +71,7 @@ impl Composer {
         if workspace.read(cx).answering_in_composer() {
             if !text.is_empty() || !self.attachments.is_empty() {
                 let attachments = std::mem::take(&mut self.attachments);
-                let answer =
-                    patchwork_server::threads::answer_with_attachments(&text, &attachments);
+                let answer = patchwork_core::threads::answer_with_attachments(&text, &attachments);
                 workspace.update(cx, |w, cx| w.answer_question(answer, cx));
                 self.editor.update(cx, |e, cx| e.clear(window, cx));
                 cx.notify();
@@ -101,7 +100,7 @@ impl Composer {
         workspace.update(cx, |w, cx| {
             // A granular chat is asked what it runs with before its first message goes, unless
             // its project says.
-            if w.thread.is_none() && w.server.asks_granular(new.project_id.as_deref()) {
+            if w.thread.is_none() && w.core.asks_granular(new.project_id.as_deref()) {
                 let first = (text, attachments, queue);
                 w.start_granular_chat(new, picks.role, first, window, cx);
             } else {
@@ -191,23 +190,23 @@ impl Composer {
             .iter()
             .map(|path| path.to_string_lossy().into_owned())
             .collect();
-        self.attach_with(move |server| Ok(server.attach_paths(&paths)), cx);
+        self.attach_with(move |core| Ok(core.attach_paths(&paths)), cx);
     }
 
     /// Attaches what `load` brings in, which it reads off the main thread.
     fn attach_with(
         &mut self,
-        load: impl FnOnce(&Server) -> Result<Vec<Attachment>, patchwork_server::Error> + Send + 'static,
+        load: impl FnOnce(&Core) -> Result<Vec<Attachment>, patchwork_core::Error> + Send + 'static,
         cx: &mut Context<Self>,
     ) {
-        // The server is read once this update is over: a drop on the chat attaches from inside
+        // The core is read once this update is over: a drop on the chat attaches from inside
         // the workspace's own update, where reading the workspace panics.
         let workspace = self.workspace.clone();
         cx.spawn(async move |this, cx| {
-            let Ok(server) = workspace.read_with(cx, |w, _| Arc::clone(&w.server)) else {
+            let Ok(core) = workspace.read_with(cx, |w, _| Arc::clone(&w.core)) else {
                 return;
             };
-            let loaded = cx.background_spawn(async move { load(&server) }).await;
+            let loaded = cx.background_spawn(async move { load(&core) }).await;
             let _ = this.update(cx, |this, cx| {
                 match loaded {
                     Ok(attachments) => {
@@ -266,13 +265,13 @@ impl Composer {
             .map(|path| path.to_string_lossy().into_owned())
             .collect();
         self.attach_with(
-            move |server| {
-                let mut attachments = server.attach_paths(&paths);
+            move |core| {
+                let mut attachments = core.attach_paths(&paths);
                 for picture in &pictures {
-                    attachments.push(server.attach_image(picture)?);
+                    attachments.push(core.attach_image(picture)?);
                 }
                 for text in &texts {
-                    attachments.push(server.attach_text(text)?);
+                    attachments.push(core.attach_text(text)?);
                 }
                 Ok(attachments)
             },

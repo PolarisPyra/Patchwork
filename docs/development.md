@@ -46,14 +46,14 @@ The `commit-msg` hook checks each commit's `Changelog:` paragraph; see
 The `pre-push` hook runs `cargo fmt --all -- --check`, clippy with `-D warnings` and
 `node --check` on the website's two scripts before each push, on the files in the working tree. It
 takes about 2 seconds when nothing has changed since the last build and about 5 after a change to
-`crates/server`. `git push --no-verify` skips it; CI runs the same checks and the tests either way
+`crates/core`. `git push --no-verify` skips it; CI runs the same checks and the tests either way
 ([CI and deploys](ci.md)).
 
 ## Tests
 
 ```sh
 cargo test --workspace                    # unit tests (parsers, importers, persistence, git)
-cargo test -p patchwork-server -- --ignored  # live turns against the real agent CLIs
+cargo test -p patchwork-core -- --ignored  # live turns against the real agent CLIs
 ```
 
 The `--ignored` tests start real agent CLIs, so they need Claude Code, Codex, or Antigravity

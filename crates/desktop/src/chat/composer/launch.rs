@@ -4,9 +4,9 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, ClickEvent, Window, div, prelude::*, px};
-use patchwork_server::provider::AgentKind;
-use patchwork_server::settings::Settings;
-use patchwork_server::threads::NewThread;
+use patchwork_core::provider::AgentKind;
+use patchwork_core::settings::Settings;
+use patchwork_core::threads::NewThread;
 
 use super::menus::{Menu, Pick, Row, effort_label, efforts};
 use super::model_picker::ordered;

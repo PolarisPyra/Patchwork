@@ -6,8 +6,8 @@
 use std::sync::Arc;
 
 use gpui::{Entity, FocusHandle, Focusable, SharedString, Window, prelude::*};
-use patchwork_server::provider::AgentKind;
-use patchwork_server::threads::{
+use patchwork_core::provider::AgentKind;
+use patchwork_core::threads::{
     AgentPick, Attachment, Granular, NewThread, Reserves, delegates_sub_agents, runs_sub_agents_at,
 };
 
@@ -212,8 +212,7 @@ impl Workspace {
     ) {
         let (title, value, agent_fixed, default_for) = match &scope {
             GranularScope::Chat(id) => {
-                let (Ok(thread), Ok(value)) =
-                    (self.server.thread(id), self.server.thread_granular(id))
+                let (Ok(thread), Ok(value)) = (self.core.thread(id), self.core.thread_granular(id))
                 else {
                     return;
                 };
@@ -225,7 +224,7 @@ impl Workspace {
                 // A new chat in a project with nothing set can set it.
                 let default_for = thread
                     .project_id
-                    .filter(|id| !started && self.server.project_granular(id).is_none());
+                    .filter(|id| !started && self.core.project_granular(id).is_none());
                 (
                     "Granular chat settings".to_string(),
                     value,
@@ -237,13 +236,10 @@ impl Workspace {
                 let Some(project) = self.settings.projects.iter().find(|p| &p.id == id) else {
                     return;
                 };
-                let value = self
-                    .server
-                    .project_granular(id)
-                    .unwrap_or_else(|| Granular {
-                        main: self.default_pick(None),
-                        reserves: Reserves::default(),
-                    });
+                let value = self.core.project_granular(id).unwrap_or_else(|| Granular {
+                    main: self.default_pick(None),
+                    reserves: Reserves::default(),
+                });
                 (
                     format!("Default {} settings", project.name),
                     value,
@@ -264,7 +260,7 @@ impl Workspace {
             first,
             default: default_for
                 .as_deref()
-                .and_then(|id| self.server.project_granular(id)),
+                .and_then(|id| self.core.project_granular(id)),
             default_for,
             saving: false,
             error: None,
@@ -282,7 +278,7 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let thread = match self.server.create_thread(new) {
+        let thread = match self.core.create_thread(new) {
             Ok(thread) => thread,
             Err(e) => {
                 log::warn!(error:% = e; "could not start a chat: {{error}}");
@@ -293,7 +289,7 @@ impl Workspace {
         };
         let id = thread.id.clone();
         if role.is_some()
-            && let Err(e) = self.server.set_thread_role(&id, role)
+            && let Err(e) = self.core.set_thread_role(&id, role)
         {
             log::warn!(error:% = e; "could not set the chat's agent: {{error}}");
         }
@@ -310,15 +306,15 @@ impl Workspace {
         };
         dialog.saving = true;
         dialog.menu = None;
-        let (server, scope, value) = (
-            Arc::clone(&self.server),
+        let (core, scope, value) = (
+            Arc::clone(&self.core),
             dialog.scope.clone(),
             dialog.value.clone(),
         );
         let task = cx.background_spawn(async move {
             match &scope {
-                GranularScope::Chat(id) => server.set_thread_granular(id, value),
-                GranularScope::Project(id) => server.set_project_granular(id, value),
+                GranularScope::Chat(id) => core.set_thread_granular(id, value),
+                GranularScope::Project(id) => core.set_project_granular(id, value),
             }
         });
         cx.spawn_in(window, async move |this, cx| {
@@ -349,14 +345,14 @@ impl Workspace {
             return;
         };
         let changed = if dialog.default.as_ref() == Some(&dialog.value) {
-            self.server.clear_project_granular_default(id)
+            self.core.clear_project_granular_default(id)
         } else {
-            self.server
+            self.core
                 .set_project_granular_default(id, dialog.value.clone())
         };
         match changed {
             Ok(()) => {
-                dialog.default = self.server.project_granular(id);
+                dialog.default = self.core.project_granular(id);
                 // As saved, without the picks that could never act.
                 if let Some(saved) = &dialog.default {
                     dialog.value = saved.clone();

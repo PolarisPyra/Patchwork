@@ -7,7 +7,7 @@ use gpui::{
     AnyElement, FontWeight, ListHorizontalSizingBehavior, ObjectFit, Role, StyledText, div, img,
     prelude::*, px, relative, uniform_list,
 };
-use patchwork_server::threads::{Message, StepStatus};
+use patchwork_core::threads::{Message, StepStatus};
 use crate::ui::theme::{font_mono, fs_md, fs_sm, Theme, theme};
 use crate::ui::{BtnKind, base_name, btn, icon, spinner, tooltip};
 use super::state::{Canvas, CanvasTab};

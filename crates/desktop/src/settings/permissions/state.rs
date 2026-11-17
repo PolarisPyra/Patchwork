@@ -3,11 +3,11 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{Div, FontWeight, div, prelude::*, px};
-use patchwork_server::permissions::{
+use patchwork_core::permissions::{
     Effect, PermissionKind, PermissionRule, PermissionScope, PermissionSettings, ScopeRules,
 };
-use patchwork_server::projects::Project;
-use patchwork_server::system::new_id;
+use patchwork_core::projects::Project;
+use patchwork_core::system::new_id;
 use crate::settings::SettingsDialog;
 use crate::ui::theme::{fs_sm, Theme};
 

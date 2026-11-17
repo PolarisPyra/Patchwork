@@ -7,8 +7,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use gpui::{AnyElement, ClickEvent, ExternalPaths, Role, Toggled, Window, div, prelude::*, px};
-use patchwork_server::android::{self, Device, DeviceState, Framework, Reload, Variant};
-use patchwork_server::{Error, Server};
+use patchwork_core::android::{self, Device, DeviceState, Framework, Reload, Variant};
+use patchwork_core::{Error, Core};
 
 use super::state::{AndroidPanel, Run};
 use crate::ui::menu::{Menu, MenuItem};
@@ -21,12 +21,12 @@ const INTERRUPT: &str = "\u{3}";
 impl AndroidPanel {
     /// Reads the variants the app can be built as, and the one last picked for the project.
     pub(super) fn load_variants(&self, cx: &mut Context<Self>) {
-        let (server, id) = (Arc::clone(&self.server), self.project_id.clone());
+        let (core, id) = (Arc::clone(&self.core), self.project_id.clone());
         let project = self.project.clone();
         let task = cx.background_spawn(async move {
             (
                 android::variants(&project),
-                server.android_variant(&id, &project),
+                core.android_variant(&id, &project),
             )
         });
         cx.spawn(async move |this, cx| {
@@ -50,9 +50,9 @@ impl AndroidPanel {
         if self.log.take().is_some() {
             self.open_log(cx);
         }
-        let (server, id) = (Arc::clone(&self.server), self.project_id.clone());
+        let (core, id) = (Arc::clone(&self.core), self.project_id.clone());
         cx.background_spawn(async move {
-            if let Err(e) = server.set_android_variant(&id, &variant) {
+            if let Err(e) = core.set_android_variant(&id, &variant) {
                 log::warn!(error:% = e; "could not remember the build variant: {{error}}");
             }
         })
@@ -138,8 +138,8 @@ impl AndroidPanel {
                         return;
                     };
                     let root = self.project.root.clone();
-                    return self.device_action("Reloading the app", None, cx, move |server| {
-                        server.android_reload(&root, &serial)
+                    return self.device_action("Reloading the app", None, cx, move |core| {
+                        core.android_reload(&root, &serial)
                     });
                 }
                 None => None,
@@ -172,13 +172,13 @@ impl AndroidPanel {
         doing: &str,
         done: Option<String>,
         cx: &mut Context<Self>,
-        act: impl FnOnce(&Server) -> Result<(), Error> + Send + 'static,
+        act: impl FnOnce(&Core) -> Result<(), Error> + Send + 'static,
     ) {
         self.working = Some(doing.to_string());
         self.failure = None;
         self.notice = None;
-        let server = Arc::clone(&self.server);
-        let task = cx.background_spawn(async move { act(&server) });
+        let core = Arc::clone(&self.core);
+        let task = cx.background_spawn(async move { act(&core) });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             this.update(cx, |this, cx| {
@@ -225,9 +225,9 @@ impl AndroidPanel {
             &format!("Installing {names}"),
             Some(format!("Installed {names}")),
             cx,
-            move |server| {
+            move |core| {
                 apks.iter()
-                    .try_for_each(|apk| server.android_install(&root, &serial, apk))
+                    .try_for_each(|apk| core.android_install(&root, &serial, apk))
             },
         );
     }

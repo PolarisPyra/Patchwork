@@ -3,9 +3,9 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::Hsla;
-use patchwork_server::provider::AgentKind;
-use patchwork_server::provider::mcp::clis::CliGroup;
-use patchwork_server::provider::mcp::{McpServer, ServerView, ToolInfo};
+use patchwork_core::provider::AgentKind;
+use patchwork_core::provider::mcp::clis::CliGroup;
+use patchwork_core::provider::mcp::{McpServer, ServerView, ToolInfo};
 use crate::ui::theme::Theme;
 use crate::ui::agent_label;
 use super::form::Draft;

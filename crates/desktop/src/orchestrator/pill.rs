@@ -7,9 +7,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use gpui::{AppContext, Context, Window};
-use patchwork_server::Server;
-use patchwork_server::orchestration::Target;
-use patchwork_server::threads::{AskKind, NewThread};
+use patchwork_core::Core;
+use patchwork_core::orchestration::Target;
+use patchwork_core::threads::{AskKind, NewThread};
 
 use super::render::Place;
 use super::state::{Orchestrator, Outcome, PLACEHOLDER, Picker, Waiting};
@@ -38,15 +38,15 @@ impl Orchestrator {
         self.field.read(cx).content.trim().to_string()
     }
 
-    /// The server, and the chat a request starts when it names none: in the project picked under
+    /// The core, and the chat a request starts when it names none: in the project picked under
     /// the pill.
-    fn launch(&self, cx: &Context<Self>) -> Option<(Arc<Server>, NewThread)> {
+    fn launch(&self, cx: &Context<Self>) -> Option<(Arc<Core>, NewThread)> {
         let workspace = self.workspace.upgrade()?;
         let workspace = workspace.read(cx);
         let composer = self.composer.read(cx);
         let project = composer.launch_project(&workspace.settings);
         let new = composer.launch_thread(project, &workspace.settings);
-        Some((Arc::clone(&workspace.server), new))
+        Some((Arc::clone(&workspace.core), new))
     }
 
     /// Turns the pill to the question at `index`, keeping a request half written for later.
@@ -270,9 +270,9 @@ impl Orchestrator {
             }
             _ => HashMap::new(),
         };
-        let server = Arc::clone(&workspace.read(cx).server);
+        let core = Arc::clone(&workspace.read(cx).core);
         if let Err(e) =
-            server.respond_approval(&ask.thread_id, &ask.approval_id, allow, answers, None)
+            core.respond_approval(&ask.thread_id, &ask.approval_id, allow, answers, None)
         {
             log::warn!(error:% = e; "could not answer an agent from the orchestrator: {{error}}");
         }
@@ -282,7 +282,7 @@ impl Orchestrator {
     /// new chat in the project picked under the pill, and lists it.
     pub(super) fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.text(cx);
-        let Some((server, new)) = self.launch(cx).filter(|_| !text.is_empty()) else {
+        let Some((core, new)) = self.launch(cx).filter(|_| !text.is_empty()) else {
             return;
         };
         let target = self
@@ -293,10 +293,8 @@ impl Orchestrator {
         let attachments = std::mem::take(&mut self.attachments);
         let id = self.list(&text);
         self.field.update(cx, |field, cx| field.clear(window, cx));
-        let task =
-            cx.background_spawn(
-                async move { server.dispatch_to(&text, &target, &new, &attachments) },
-            );
+        let task = cx
+            .background_spawn(async move { core.dispatch_to(&text, &target, &new, &attachments) });
         cx.spawn(async move |this, cx| {
             let outcome = task.await;
             this.update(cx, |this, cx| {

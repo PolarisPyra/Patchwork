@@ -5,8 +5,8 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 use gpui::{AnyElement, Div, FontWeight, SharedString, Stateful, Window, div, prelude::*, px};
-use patchwork_server::hooks::Bundle;
-use patchwork_server::skills::Skill;
+use patchwork_core::extensions::hooks::Bundle;
+use patchwork_core::extensions::skills::Skill;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert, chip, segmented};
 use crate::ui::theme::{font_mono, fs_xs, radius_sm, Theme, theme};
@@ -64,7 +64,7 @@ impl SettingsDialog {
                 let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
                     return Err("That is not a file".into());
                 };
-                patchwork_server::workspace::open_in_editor(
+                patchwork_core::workspace::open_in_editor(
                     &dir.to_string_lossy(),
                     &name.to_string_lossy(),
                     None,

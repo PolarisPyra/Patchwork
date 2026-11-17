@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/server", "crates/desktop", "crates/remote"]
+members = ["crates/system", "crates/core", "crates/desktop", "crates/remote"]
 # A bare `cargo run` or `cargo build` is for the app.
 default-members = ["crates/desktop"]
 
@@ -18,7 +18,8 @@ categories = ["development-tools"]
 # Every crate the workspace uses, so all members resolve to the same version. Features are turned
 # on by the member that needs them.
 [workspace.dependencies]
-patchwork-server = { path = "crates/server" }
+patchwork-core = { path = "crates/core" }
+patchwork-system = { path = "crates/system" }
 
 base64 = { version = "0.22", default-features = false }
 chrono = { version = "0.4", default-features = false }
@@ -50,6 +51,7 @@ serde_json = { version = "1.0", default-features = false }
 sha2 = { version = "0.10", default-features = false }
 syntect = { version = "5.3", default-features = false, features = ["parsing", "regex-onig"] }
 thiserror = { version = "2", default-features = false }
+time = { version = "0.3", default-features = false }
 tokio = { version = "1", default-features = false }
 toml = { version = "1.1", default-features = false }
 tonic = { version = "0.14", default-features = false }

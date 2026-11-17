@@ -7,8 +7,11 @@
 
 // Rust guideline compliant 2026-10-09
 
-use patchwork_server::system::remote::serve;
-use patchwork_server::{harness, permissions, provider};
+use patchwork_core::{harness, permissions, provider};
+use patchwork_system::ssh;
+
+mod answer;
+mod serve;
 
 #[expect(
     clippy::print_stderr,
@@ -21,17 +24,17 @@ fn main() {
     };
     let run: fn() -> i32 = match arg.as_str() {
         // A command Patchwork runs in a project on this host, until the connection ends.
-        serve::EXEC_ARG => serve::exec,
+        ssh::EXEC_ARG => serve::exec,
         // The launch files Patchwork copies here for an agent.
-        serve::UNPACK_ARG => serve::unpack,
+        ssh::UNPACK_ARG => serve::unpack,
         // A short command, such as git, described on the command line.
-        serve::RUN_ARG => serve::run_inline,
+        ssh::RUN_ARG => serve::run_inline,
         // A question about this host's folders, on stdin.
-        serve::OP_ARG => serve::answer,
+        ssh::op::OP_ARG => answer::answer,
         // The same questions, one per line, for as long as Patchwork keeps the connection.
-        serve::OPS_ARG => serve::answer_all,
+        ssh::OPS_ARG => answer::answer_all,
         // A terminal's shell on a Windows host.
-        serve::SHELL_ARG => serve::shell,
+        ssh::SHELL_ARG => serve::shell,
         // An OpenCode turn's bridge to `opencode serve`.
         provider::opencode::bridge::BRIDGE_ARG => provider::opencode::bridge::run,
         // An API provider's turn, run as Patchwork's own agent.
