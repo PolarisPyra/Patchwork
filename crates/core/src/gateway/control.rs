@@ -21,6 +21,7 @@ use super::telegram::Telegram;
 use super::types::{Binding, Connector, PlatformSettings, Status};
 use crate::provider::api::config::{delete_secret, read_secret, store_secret};
 use crate::system::now_ms;
+use crate::vault;
 use crate::{Error, Core};
 
 /// How long a pairing code works, in milliseconds.
@@ -178,6 +179,18 @@ impl Core {
             .collect();
         self.gateway.stop_all();
         if wanted.is_empty() {
+            return;
+        }
+        // A locked vault gives no credentials, and what it guards stays off until it is opened:
+        // no chat app may reach Patchwork before then, with a credential or without one.
+        if matches!(
+            vault::status(),
+            vault::Status::Waiting | vault::Status::Locked(_)
+        ) {
+            let mut state = self.gateway.lock();
+            for (platform, _) in wanted {
+                state.statuses.insert(platform, Status::Locked);
+            }
             return;
         }
         if !self.gateway.forwarding() {

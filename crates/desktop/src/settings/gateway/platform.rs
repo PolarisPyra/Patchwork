@@ -19,6 +19,7 @@ const FIELD_WIDTH: f32 = 260.;
 fn status_line(status: &Status) -> (String, bool) {
     match status {
         Status::Off => ("Off".to_string(), false),
+        Status::Locked => ("Unlock the vault to connect".to_string(), false),
         Status::Connecting => ("Connecting…".to_string(), false),
         Status::Connected(name) => (format!("Connected as {name}"), false),
         Status::Error(error) => (error.clone(), true),

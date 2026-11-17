@@ -44,6 +44,7 @@ fn tiles(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
         let (state, dot) = match status {
             _ if !enabled => ("off", None),
             Status::Off => ("on", Some(t.border_strong)),
+            Status::Locked => ("waiting for the vault", Some(t.border_strong)),
             Status::Connecting => ("connecting", Some(t.warning)),
             Status::Connected(_) => ("connected", Some(t.success)),
             Status::Error(_) => ("failed", Some(t.danger)),
