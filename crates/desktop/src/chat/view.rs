@@ -7,7 +7,7 @@ use patchwork_server::threads::{MessageStatus, Thread};
 use crate::ui::theme::{InScheme, Theme, fs_sm, fs_xl, fs_xs, radius, radius_sm, theme};
 use crate::ui::{agent_logo, button, display_title, format_tokens, icon, icon_button, tooltip};
 use crate::workspace::Workspace;
-use super::transcript::{sync_transcript, transcript};
+use super::transcript::{follow_width, sync_transcript, transcript};
 use crate::ui::backdrop;
 use super::background;
 use super::find;
@@ -64,6 +64,7 @@ pub fn render(
     if !held {
         sync_transcript(w);
     }
+    follow_width(w, cx);
     let body = match &w.thread {
         Some(thread) if held && !thread.messages.is_empty() => div().flex_1().into_any_element(),
         Some(thread) if !thread.messages.is_empty() => {

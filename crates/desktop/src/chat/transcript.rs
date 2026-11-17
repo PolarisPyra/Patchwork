@@ -3,8 +3,12 @@
 // Rust guideline compliant 2026-10-09
 
 use std::sync::Arc;
+use std::time::Duration;
 
-use gpui::{AnyElement, Div, FollowMode, Role, SharedString, Window, div, list, prelude::*, px};
+use gpui::{
+    AnyElement, Div, FollowMode, ListAlignment, ListState, Role, SharedString, Window, div, list,
+    prelude::*, px,
+};
 use patchwork_server::orchestration::{Upkeep, upkeep};
 use patchwork_server::threads::{Message, MessageStatus, Part, Role as MessageRole, Thread};
 
@@ -140,6 +144,48 @@ pub fn sync_transcript(w: &mut Workspace) {
     }
     w.transcript_rows = (Some(thread.id.clone()), rows);
     w.transcript_pieces = cut;
+}
+
+/// How long the transcript's width holds before every row is measured again.
+const WIDTH_SETTLE: Duration = Duration::from_millis(150);
+
+/// While the transcript's width keeps changing, as when the window or the sidebar is dragged, it
+/// is drawn from a list that lays out only the rows in reach. A new width throws away every row's
+/// height, and the list that measures them all would lay out every row on every frame. Once the
+/// width holds, every row is measured again, once.
+pub fn follow_width(w: &mut Workspace, cx: &mut Context<Workspace>) {
+    let width = w.transcript_list.viewport_bounds().size.width;
+    // A list just handed over has not been laid out yet.
+    if width == px(0.) {
+        return;
+    }
+    let last = std::mem::replace(&mut w.transcript_width, width);
+    if last == width || last == px(0.) {
+        return;
+    }
+    if w.transcript_settle.is_none() {
+        let in_reach = ListState::new(0, ListAlignment::Top, px(800.));
+        w.transcript_list = handed_over(&w.transcript_list, in_reach);
+    }
+    w.transcript_settle = Some(cx.spawn(async move |this, cx| {
+        cx.background_executor().timer(WIDTH_SETTLE).await;
+        let _ = this.update(cx, |w, cx| {
+            w.transcript_settle = None;
+            let all = ListState::new(0, ListAlignment::Top, px(800.)).measure_all();
+            w.transcript_list = handed_over(&w.transcript_list, all);
+            cx.notify();
+        });
+    }));
+}
+
+/// `to`, holding `from`'s rows and scrolled where `from` is.
+fn handed_over(from: &ListState, to: ListState) -> ListState {
+    to.reset(from.item_count());
+    to.set_follow_mode(FollowMode::Tail);
+    if !from.is_following_tail() {
+        to.scroll_to(from.logical_scroll_top());
+    }
+    to
 }
 
 impl Workspace {
