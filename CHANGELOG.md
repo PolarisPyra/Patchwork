@@ -3,6 +3,28 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.91] - 2026-11-17
+
+**26.11.91** · 3 changes from 1 contributor
+
+- **Chat app gateways.** Connect Patchwork to Telegram, Discord, Slack, and other apps, then start or continue chats from them.
+- **SSH error reporting.** SSH chats now report errors instead of hanging when the helper stops or the port is taken.
+- **API key protection.** Patchwork now reports a problem and preserves other stored keys when saving an API key fails.
+
+<details>
+<summary>Full changelog</summary>
+
+### Added
+
+- Settings → Gateways connects Patchwork to Telegram, Discord, Slack, Matrix, Mattermost, Signal, IRC, email, text messages and QQ, with setup steps for each. After you pair, messaging the bot starts a chat on your computer, and the chat app shows its replies, progress and approval requests, along with what you type on the computer. Right-click a chat and pick Continue on to carry it on from a chat app, and a logo beside it in the sidebar shows the app it came from or continues on. by [PolarisPyra in #169](https://github.com/PolarisPyra/Patchwork/pull/169)
+
+### Fixed
+
+- Dragging the window's corner to resize Patchwork made a long chat stutter, at times down to about 20 frames a second. The chat now stays smooth while the window resizes. by [PolarisPyra in #172](https://github.com/PolarisPyra/Patchwork/pull/172)
+- A chat on an SSH machine waited forever when Patchwork's helper on that machine stopped answering, and its permission requests never arrived when the port they use was already taken there. The chat now reports an error in both cases. Saving an API key while the stored keys could not be read replaced every other key; Patchwork now reports the problem and leaves the stored keys alone. by [PolarisPyra in #173](https://github.com/PolarisPyra/Patchwork/pull/173)
+
+</details>
+
 ## [26.11.90] - 2026-11-16
 
 **26.11.90** · 2 changes from 1 contributor
