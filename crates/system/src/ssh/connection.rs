@@ -42,6 +42,9 @@ static UNREACHABLE: Mutex<Option<HashMap<String, (Instant, String)>>> = Mutex::n
 struct Master {
     checked: Instant,
     tunnel: bool,
+    /// Whether this master was asked for the tunnel since it was last checked, so one whose
+    /// host refuses it is not asked again by every command.
+    asked: bool,
     /// The master's process, as it named itself when last checked.
     pid: Option<u32>,
     /// Whether this copy of Patchwork started it, rather than found it running.
@@ -199,8 +202,9 @@ pub fn relay_reaches(host: &str) -> Result<(), Error> {
         return Ok(());
     }
     Err(format!(
-        "Port {port} on {host} is in use, so Patchwork's permission hook cannot reach this \
-         machine from there. Restart Patchwork to pick another port."
+        "{host} did not give Patchwork port {port}, so its permission hook cannot reach this \
+         machine from there. The port is in use on {host}, or {host} does not allow port \
+         forwarding. Restarting Patchwork picks another port."
     )
     .into())
 }
@@ -225,7 +229,7 @@ fn ensure(host: &str) -> Result<(), Error> {
     let known = masters(|m| m.get(host).copied());
     if let Some(master) = known
         && master.checked.elapsed() < RECHECK
-        && (master.tunnel || !relay)
+        && (master.tunnel || master.asked || !relay)
     {
         return Ok(());
     }
@@ -242,7 +246,7 @@ fn ensure(host: &str) -> Result<(), Error> {
     // Another command may have started this host's master while this one waited.
     if let Some(master) = masters(|m| m.get(host).copied())
         && master.checked.elapsed() < RECHECK
-        && (master.tunnel || !relay)
+        && (master.tunnel || master.asked || !relay)
     {
         return Ok(());
     }
@@ -283,6 +287,7 @@ fn ensure(host: &str) -> Result<(), Error> {
             Master {
                 checked: Instant::now(),
                 tunnel,
+                asked: relay,
                 pid,
                 started_here,
             },

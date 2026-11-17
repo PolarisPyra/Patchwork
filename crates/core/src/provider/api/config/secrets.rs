@@ -38,7 +38,10 @@ pub(super) fn headers_secret(id: &str) -> String {
 pub(crate) fn store_secret(name: &str, value: &str) -> Result<KeyStore, Error> {
     keys().insert(name.to_string(), value.to_string());
     if entry(name).and_then(|e| e.set_password(value)).is_ok() {
-        set_file_key(name, None)?;
+        // The secret is saved. A keys file that cannot be read keeps its stale copy, at worst.
+        if let Err(e) = set_file_key(name, None) {
+            log::warn!(error:% = e; "could not clear a secret from the keys file: {{error}}");
+        }
         return Ok(KeyStore::Keychain);
     }
     set_file_key(name, Some(value))?;
@@ -100,6 +103,9 @@ fn file_keys() -> Result<HashMap<String, String>, Error> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(HashMap::new()),
         Err(e) => return Err(format!("Cannot read {}: {e}", path.display()).into()),
     };
+    if text.trim().is_empty() {
+        return Ok(HashMap::new());
+    }
     serde_json::from_str(&text)
         .map_err(|e| format!("{} is not valid JSON: {e}", path.display()).into())
 }
