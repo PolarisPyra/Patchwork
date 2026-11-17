@@ -12,7 +12,7 @@ use patchwork_core::gateway::ChatAppCall;
 use patchwork_core::vault::{Method, Saved, Status, status};
 use zeroize::{Zeroize, Zeroizing};
 
-use self::rows::{activity_rows, idle_row, protected_row, recovery_row, saved_rows};
+use self::rows::{activity_rows, idle_row, protected_row, recovery_row, saved_rows, screen_row};
 use super::controls::{FieldKind, alert, token_row, vault_notice};
 use super::dialog::{SettingsDialog, SettingsEvent};
 use crate::ui::theme::{fs_sm, theme};
@@ -483,21 +483,29 @@ fn waiting_rows(
 }
 
 /// The rows of an open vault: what protects it, its password and recovery key, the saved
-/// secrets and what the chat apps did.
+/// secrets and what the chat apps did. A vault that has no key yet (`method` is None) has
+/// only the fields that set its password.
 fn open_rows(
     d: &mut SettingsDialog,
-    method: Method,
+    method: Option<Method>,
     window: &mut Window,
     cx: &mut Context<SettingsDialog>,
 ) -> Vec<AnyElement> {
     let t = *theme(cx);
-    let has_password = method == Method::Password;
-    if d.security.read.is_none() {
+    let has_password = method == Some(Method::Password);
+    if method.is_some() && d.security.read.is_none() {
         d.read_secrets(cx);
     }
-    let mut rows = vec![protected_row(d, method, cx)];
+    let mut rows: Vec<AnyElement> = method
+        .map(|method| protected_row(d, method, cx))
+        .into_iter()
+        .collect();
     if has_password {
         rows.push(idle_row(d, cx));
+        // Only Linux has the listener for the screen and for sleep.
+        if cfg!(target_os = "linux") {
+            rows.push(screen_row(d, cx));
+        }
         rows.push(password_row(
             d,
             CURRENT,
@@ -540,18 +548,8 @@ fn open_rows(
     }
     rows.extend(saved_rows(d, window, cx));
     rows.extend(activity_rows(d, cx));
-    // Without a keychain or a password, whoever reads the config folder reads the secrets.
-    let notice = if method == Method::File {
-        Some(alert(
-            "security-vault",
-            "No system keychain: a key file in Patchwork's config folder unlocks these secrets. \
-             Set a password to lock them.",
-            t.warning,
-        ))
-    } else {
-        vault_notice("security-vault", &t)
-    };
-    rows.extend(notice.map(IntoElement::into_any_element));
+    // Without a keychain or a password, nothing locks the secrets: the notice says so.
+    rows.extend(vault_notice("security-vault", &t).map(IntoElement::into_any_element));
     rows
 }
 
@@ -573,7 +571,8 @@ pub(super) fn render(
             .into_any_element();
         }
         Status::Waiting => waiting_rows(d, window, cx),
-        Status::Open(method) => open_rows(d, method, window, cx),
+        Status::Unset => open_rows(d, None, window, cx),
+        Status::Open(method) => open_rows(d, Some(method), window, cx),
     };
     div()
         .id("security")

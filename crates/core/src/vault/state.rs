@@ -13,11 +13,10 @@ use chacha20poly1305::XChaCha20Poly1305;
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use zeroize::Zeroizing;
 
-use super::crypt::{DATA_KEY, KEY_LEN, cipher, data_key, decode_key, err, new_key, seal};
+use super::crypt::{DATA_KEY, KEY_LEN, cipher, data_key, decode_key, err, held, new_key, seal};
 use super::known;
 use crate::Error;
 use crate::persistence::DB_FILE;
-use crate::system::fs::write_private;
 
 /// The credential store's service name for everything Patchwork saves.
 const SERVICE: &str = "dev.patchwork.ade";
@@ -29,7 +28,8 @@ const KEY_ENTRY: &str = if cfg!(debug_assertions) {
     "vault-key:patchwork"
 };
 
-/// The wrapping key's file in the config folder, on a system without a credential store.
+/// The wrapping key's file in the config folder, which an earlier version wrote on a system
+/// without a credential store. It is read until the vault has a password, never written.
 pub(super) const KEY_FILE: &str = "vault.key";
 
 /// How long a read or write waits for another Patchwork to finish with the database.
@@ -40,7 +40,8 @@ const BUSY: Duration = Duration::from_secs(5);
 pub enum Method {
     /// The system credential store.
     Keychain,
-    /// A file in the config folder, which anything running as the user can read.
+    /// A file in the config folder, which anything running as the user can read. An earlier
+    /// version made these: no vault starts with one, and setting a password removes it.
     File,
     /// Nothing: the key is derived from a password the user enters each run.
     Password,
@@ -71,17 +72,20 @@ pub enum Status {
     Locked(String),
     /// The vault has a password, which was not entered yet. Nothing can be read or saved.
     Waiting,
+    /// The vault has no key yet: the system has no credential store, and no password was
+    /// set. Nothing can be saved until one is.
+    Unset,
     Open(Method),
 }
 
 pub(super) struct Vault {
     pub(super) conn: Connection,
-    pub(super) cipher: XChaCha20Poly1305,
+    pub(super) cipher: Box<XChaCha20Poly1305>,
     pub(super) method: Method,
     pub(super) config: PathBuf,
 }
 
-/// A vault that waits for its password.
+/// A vault that waits for its password, or for a password to be set.
 pub(super) struct Sealed {
     pub(super) conn: Connection,
     pub(super) config: PathBuf,
@@ -91,6 +95,7 @@ pub(super) enum State {
     Closed,
     Locked(String),
     Waiting(Sealed),
+    Unset(Sealed),
     Open(Vault),
 }
 
@@ -127,38 +132,37 @@ fn wrapping_key(method: Method, config: &Path) -> Result<Zeroizing<[u8; KEY_LEN]
     decode_key(&Zeroizing::new(text))
 }
 
-/// A wrapping key for a new vault, and what keeps it: the credential store's, which every
-/// database of this build shares, or a new one in the config folder's file without a store.
-pub(super) fn new_wrapping_key(config: &Path) -> Result<(Method, Zeroizing<[u8; KEY_LEN]>), Error> {
-    let kept = key_entry().and_then(|entry| match entry.get_password() {
-        Ok(text) => Ok(Zeroizing::new(text)),
+/// The credential store's wrapping key, which every database of this build shares, made on
+/// its first use.
+///
+/// # Errors
+///
+/// Returns an error when the system has no credential store, or its key is damaged.
+pub(super) fn keychain_key() -> Result<Zeroizing<[u8; KEY_LEN]>, Error> {
+    let entry = key_entry().map_err(|e| no_keychain(&e))?;
+    let text = match entry.get_password() {
+        Ok(text) => Zeroizing::new(text),
         Err(keyring::Error::NoEntry) => {
             let text = Zeroizing::new(STANDARD.encode(new_key().as_ref()));
-            entry.set_password(&text)?;
+            entry.set_password(&text).map_err(|e| no_keychain(&e))?;
             // A store that takes a key and cannot give it back would lock the vault for good.
-            entry.get_password().map(Zeroizing::new)
+            entry
+                .get_password()
+                .map(Zeroizing::new)
+                .map_err(|e| no_keychain(&e))?
         }
-        Err(e) => Err(e),
-    });
-    match kept {
-        Ok(text) => {
-            if let Ok(key) = decode_key(&text) {
-                return Ok((Method::Keychain, key));
-            }
-            log::warn!("the vault's key in the system keychain is damaged; using a key file");
-        }
-        Err(e) => {
-            log::warn!(error:% = e; "no system keychain for the vault ({{error}}); using a key file");
-        }
-    }
-    let key = new_key();
-    let text = Zeroizing::new(STANDARD.encode(key.as_ref()));
-    write_private(&config.join(KEY_FILE), &text)?;
-    Ok((Method::File, key))
+        Err(e) => return Err(no_keychain(&e)),
+    };
+    decode_key(&text).map_err(|_damaged| "The vault's key in the system keychain is damaged".into())
+}
+
+fn no_keychain(e: &keyring::Error) -> Error {
+    format!("The system keychain cannot keep the vault's key: {e}").into()
 }
 
 /// Opens the vault in the database of `data`, making it on the first run. A vault with a
-/// password waits for it.
+/// password waits for it, and a system without a credential store makes none until a password
+/// is set.
 fn unlock(data: &Path, config: &Path) -> Result<State, Error> {
     let mut conn = Connection::open(data.join(DB_FILE)).map_err(err)?;
     conn.busy_timeout(BUSY).map_err(err)?;
@@ -186,7 +190,15 @@ fn unlock(data: &Path, config: &Path) -> Result<State, Error> {
             .map_err(|_wrong_key| "The vault's key does not open this database")?;
         (method, key)
     } else {
-        let (method, wrapping) = new_wrapping_key(&config)?;
+        let wrapping = match keychain_key() {
+            Ok(wrapping) => wrapping,
+            Err(e) => {
+                drop(tx);
+                log::warn!(error:% = e; "the vault needs a password: {{error}}");
+                return Ok(State::Unset(Sealed { conn, config }));
+            }
+        };
+        let method = Method::Keychain;
         let key = new_key();
         let (nonce, wrapped) = seal(&cipher(&wrapping), DATA_KEY, key.as_ref())?;
         tx.execute(
@@ -197,7 +209,7 @@ fn unlock(data: &Path, config: &Path) -> Result<State, Error> {
         (method, key)
     };
     tx.commit().map_err(err)?;
-    let cipher = cipher(&key);
+    let cipher = held(&key);
     Ok(State::Open(Vault {
         conn,
         cipher,
@@ -220,6 +232,7 @@ pub(crate) fn open(data: &Path, config: &Path) {
             log::info!("the vault waits for its password");
             Status::Waiting
         }
+        State::Unset(_) => Status::Unset,
         State::Locked(why) => {
             log::warn!(error:% = why; "the vault is locked for this run: {{error}}");
             Status::Locked(why.clone())

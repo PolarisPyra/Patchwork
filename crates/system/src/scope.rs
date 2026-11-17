@@ -318,10 +318,14 @@ fn raise_oom_score(cmd: &mut Command) {
     #[cfg(target_os = "linux")]
     {
         use std::os::unix::process::CommandExt;
-        // SAFETY: the hook runs between fork and exec, and only calls open, write and
+        // SAFETY: the hook runs between fork and exec, and only calls prctl, open, write and
         // close, which are async-signal-safe and allocate nothing.
         unsafe {
             cmd.pre_exec(|| {
+                // Patchwork keeps its memory from being dumped (`memory::deny_dumps`), which
+                // also takes the score's file from a copy of it. The program about to start
+                // can be dumped again anyway.
+                libc::prctl(libc::PR_SET_DUMPABLE, libc::c_ulong::from(1_u8));
                 let fd = libc::open(c"/proc/self/oom_score_adj".as_ptr(), libc::O_WRONLY);
                 if fd >= 0 {
                     libc::write(fd, b"800".as_ptr().cast(), 3);

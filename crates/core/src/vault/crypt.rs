@@ -40,6 +40,20 @@ pub(super) fn cipher(key: &[u8; KEY_LEN]) -> XChaCha20Poly1305 {
     XChaCha20Poly1305::new(Key::from_slice(key))
 }
 
+/// The cipher the open vault keeps, where the swap file never gets its key: in memory that
+/// does not move and is not written out.
+#[expect(
+    clippy::unnecessary_box_returns,
+    reason = "the box is what keeps the pinned key at one address"
+)]
+pub(super) fn held(key: &[u8; KEY_LEN]) -> Box<XChaCha20Poly1305> {
+    let held = Box::new(cipher(key));
+    if let Err(e) = crate::system::memory::pin(&*held) {
+        log::warn!(error:% = e; "the vault's key could be written to the swap file: {{error}}");
+    }
+    held
+}
+
 /// `value` sealed as `name`: the nonce it was sealed with, and the sealed bytes.
 pub(super) fn seal(
     cipher: &XChaCha20Poly1305,

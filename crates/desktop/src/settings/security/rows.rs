@@ -8,7 +8,7 @@ use patchwork_core::gateway::ChatAppCall;
 use patchwork_core::vault::Method;
 
 use super::{ASK, Change, password_field};
-use crate::settings::controls::{list_box, section_heading, segmented, token_row};
+use crate::settings::controls::{list_box, section_heading, segmented, switch, token_row};
 use crate::settings::dialog::SettingsDialog;
 use crate::ui::theme::{Theme, font_mono, fs_sm, radius_sm, theme};
 use crate::ui::{BtnKind, btn, format_relative, icon_button, platform_logo, tooltip};
@@ -72,6 +72,18 @@ pub(super) fn idle_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> 
             &t,
             |d, mins, cx| d.update(|s| s.vault.lock_after_mins = mins, cx),
             cx,
+        ))
+        .into_any_element()
+}
+
+/// Whether the vault locks when the screen is locked or the computer goes to sleep.
+pub(super) fn screen_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
+    const TITLE: &str = "Lock with the screen and on sleep";
+    let t = *theme(cx);
+    let on = d.settings.vault.lock_with_screen;
+    token_row(TITLE, None, &t)
+        .child(switch("security-screen", TITLE, on, &t).on_click(
+            cx.listener(move |d, _, _, cx| d.update(|s| s.vault.lock_with_screen = !on, cx)),
         ))
         .into_any_element()
 }
@@ -207,9 +219,9 @@ pub(super) fn saved_rows(
     if old > 0 {
         let busy = d.security.busy;
         let desc = if old == 1 {
-            "1 secret is also in the system keychain or api-keys.json".to_string()
+            "1 secret is also in the system keychain".to_string()
         } else {
-            format!("{old} secrets are also in the system keychain or api-keys.json")
+            format!("{old} secrets are also in the system keychain")
         };
         rows.push(
             token_row("Old copies", Some(&desc), &t)

@@ -17,6 +17,7 @@ use patchwork_core::permissions::PermissionKind;
 use patchwork_core::projects::{Folder, Project};
 use patchwork_core::settings::Settings;
 use patchwork_core::threads::{Message, MessageStatus, Part, Thread};
+use patchwork_core::vault::{Method, Status};
 use patchwork_core::workspace::{FileChange, ProjectChanged};
 use crate::canvas::Canvas;
 use crate::chat::approvals::AllowChoice;
@@ -448,9 +449,13 @@ impl Workspace {
         // The composer starts focused, so typing and the app's keys work before any click.
         let composer = this.composer.read(cx).editor.focus_handle(cx);
         window.focus(&composer, cx);
-        // A vault with a password opens nothing saved until it is entered.
+        // A vault with a password opens nothing saved until it is entered, and one without a
+        // keychain to keep its key needs a password set.
         if this.settings.onboarded
-            && patchwork_core::vault::status() == patchwork_core::vault::Status::Waiting
+            && matches!(
+                patchwork_core::vault::status(),
+                Status::Waiting | Status::Unset | Status::Open(Method::File)
+            )
         {
             this.open_settings(Some("security"), window, cx);
         }

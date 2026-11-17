@@ -13,21 +13,34 @@ use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
-use super::crypt::{DATA_KEY, KEY_LEN, SALT_LEN, cipher, data_key, derive, err, new_key, seal, unseal};
+use super::crypt::{
+    DATA_KEY, KEY_LEN, SALT_LEN, cipher, data_key, derive, err, held, new_key, seal, unseal,
+};
 use super::known;
 use super::recovery::new_recovery;
 use super::state::{
-    KEY_FILE, Method, Sealed, State, Status, Vault, new_wrapping_key, set_status, state, status,
+    KEY_FILE, Method, Sealed, State, Status, Vault, keychain_key, set_status, state, status,
 };
 use crate::{Core, Error, provider, settings};
 
 /// How a vault with a password is kept shut.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct VaultSettings {
     /// The minutes without a key or the mouse in Patchwork's window after which the vault
     /// locks. 0 never locks it.
     pub lock_after_mins: u32,
+    /// Whether the vault locks when the screen is locked or the computer goes to sleep.
+    pub lock_with_screen: bool,
+}
+
+impl Default for VaultSettings {
+    fn default() -> Self {
+        Self {
+            lock_after_mins: 0,
+            lock_with_screen: true,
+        }
+    }
 }
 
 /// The fewest characters a password has.
@@ -112,22 +125,29 @@ impl Core {
     /// Sets the vault's password, or changes it from `current`, and gives the new recovery
     /// key, which opens the vault when the password is lost. It is kept nowhere: the user
     /// writes it down now. From then on the vault opens only once the password is entered.
-    /// This blocks while the key is derived.
+    /// A vault that had no key yet is made by this, and what waited for it starts. This blocks
+    /// while the key is derived, and for that vault while the chat apps connect.
     ///
     /// # Errors
     ///
     /// Returns an error when the vault is not open, `current` is not its password, `new` is
     /// too short, or the database cannot be written.
-    pub fn set_vault_password(&self, current: &str, new: &str) -> Result<String, Error> {
-        set_password(current, new)
+    pub fn set_vault_password(self: &Arc<Self>, current: &str, new: &str) -> Result<String, Error> {
+        let made = status() == Status::Unset;
+        let shown = set_password(current, new)?;
+        // The password is set by now, and the recovery key has to reach the user.
+        if made && let Err(e) = self.vault_opened() {
+            log::warn!(error:% = e; "the vault was made, and its settings were not read: {{error}}");
+        }
+        Ok(shown)
     }
 
-    /// Removes the vault's password: the system keychain keeps its key, or a key file.
+    /// Removes the vault's password: the system keychain keeps its key.
     ///
     /// # Errors
     ///
-    /// Returns an error when the vault is not open, `current` is not its password, or the
-    /// database cannot be written.
+    /// Returns an error when the vault is not open, `current` is not its password, the system
+    /// has no keychain, or the database cannot be written.
     pub fn remove_vault_password(&self, current: &str) -> Result<(), Error> {
         remove_password(current)
     }
@@ -139,7 +159,7 @@ pub(super) fn with_conn<T>(
 ) -> Result<T, Error> {
     let state = state();
     let conn = match &*state {
-        State::Waiting(sealed) => &sealed.conn,
+        State::Waiting(sealed) | State::Unset(sealed) => &sealed.conn,
         State::Open(vault) => &vault.conn,
         State::Closed | State::Locked(_) => return Err("Patchwork's vault is not open".into()),
     };
@@ -178,7 +198,7 @@ pub(super) fn open_with(key: &[u8; KEY_LEN]) {
         State::Waiting(Sealed { conn, config }) => {
             let vault = Vault {
                 conn,
-                cipher: cipher(key),
+                cipher: held(key),
                 method: Method::Password,
                 config,
             };
@@ -231,7 +251,7 @@ fn rekey(
         return Err("Patchwork's vault is not open".into());
     };
     let key = new_key();
-    let next = cipher(&key);
+    let next = held(&key);
     let tx = vault
         .conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -304,15 +324,20 @@ fn set_password(current: &str, new: &str) -> Result<String, Error> {
     change_password(new)
 }
 
-/// Makes `new` the password of the open vault, whatever kept its key, and gives the new
-/// recovery key.
+/// Makes `new` the password of the open vault, whatever kept its key, or of a vault that had
+/// no key yet, and gives the new recovery key.
 pub(super) fn change_password(new: &str) -> Result<String, Error> {
-    let config = config()?;
     let before = status();
     let mut salt = [0; SALT_LEN];
     OsRng.fill_bytes(&mut salt);
     let wrapping = derive(new, &salt)?;
     let (shown, recovery) = new_recovery();
+    if before == Status::Unset {
+        make(&wrapping, &salt, &recovery)?;
+        set_confirmed(Some(Instant::now()));
+        return Ok(shown);
+    }
+    let config = config()?;
     rekey(Method::Password, &wrapping, Some(&salt), Some(&recovery))?;
     set_confirmed(Some(Instant::now()));
     if before == Status::Open(Method::File) {
@@ -324,10 +349,52 @@ pub(super) fn change_password(new: &str) -> Result<String, Error> {
     Ok(shown)
 }
 
-/// Removes the password of the open vault, whose key the keychain or a key file then keeps.
+/// Makes the vault of a system without a credential store, opened by a password from its
+/// first secret on.
+fn make(wrapping: &[u8; KEY_LEN], salt: &[u8], recovery: &[u8; KEY_LEN]) -> Result<(), Error> {
+    let key = new_key();
+    let (nonce, wrapped) = seal(&cipher(wrapping), DATA_KEY, key.as_ref())?;
+    let (recovery_nonce, recovery_key) = seal(&cipher(recovery), DATA_KEY, key.as_ref())?;
+    let mut state = state();
+    let State::Unset(sealed) = &*state else {
+        return Err("The vault already has a key".into());
+    };
+    sealed
+        .conn
+        .execute(
+            "INSERT INTO vault (id, method, nonce, wrapped_key, salt, recovery_nonce, recovery_key)
+             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                Method::Password.name(),
+                nonce,
+                wrapped,
+                salt,
+                recovery_nonce,
+                recovery_key
+            ],
+        )
+        .map_err(err)?;
+    if let State::Unset(Sealed { conn, config }) = std::mem::replace(&mut *state, State::Closed) {
+        let vault = Vault {
+            conn,
+            cipher: held(&key),
+            method: Method::Password,
+            config,
+        };
+        known::refresh(&vault);
+        *state = State::Open(vault);
+    }
+    drop(state);
+    set_status(Status::Open(Method::Password));
+    log::info!("the vault was made, opened by its password");
+    Ok(())
+}
+
+/// Removes the password of the open vault, whose key the keychain then keeps. A system
+/// without one keeps the password.
 fn remove_password(current: &str) -> Result<(), Error> {
-    let config = config()?;
     data_key_with(current)?;
-    let (method, wrapping) = new_wrapping_key(&config)?;
-    rekey(method, &wrapping, None, None)
+    let wrapping =
+        keychain_key().map_err(|e| format!("The vault keeps its password on this system. {e}"))?;
+    rekey(Method::Keychain, &wrapping, None, None)
 }
