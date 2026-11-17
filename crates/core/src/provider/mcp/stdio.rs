@@ -6,6 +6,7 @@ use crate::Error;
 use std::collections::BTreeMap;
 use std::io::{BufReader, Write};
 use std::process::{Child, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -19,6 +20,8 @@ pub(super) struct StdioServer {
     /// holds up neither a caller nor the thread reading its answers.
     stdin: mpsc::Sender<String>,
     pub(super) waiters: Waiters,
+    /// Set once the server's output has ended, after which no request is answered.
+    closed: Arc<AtomicBool>,
     pub(super) stderr: Arc<Mutex<String>>,
 }
 
@@ -56,6 +59,7 @@ impl StdioServer {
         let stdout = child.stdout.take().ok_or("No stdout")?;
         let stderr_pipe = child.stderr.take().ok_or("No stderr")?;
         let waiters: Waiters = Arc::default();
+        let closed = Arc::new(AtomicBool::new(false));
         let stderr: Arc<Mutex<String>> = Arc::default();
         {
             let stderr = Arc::clone(&stderr);
@@ -76,6 +80,7 @@ impl StdioServer {
         };
         {
             let (waiters, stdin) = (Arc::clone(&waiters), stdin.clone());
+            let closed = Arc::clone(&closed);
             std::thread::spawn(move || {
                 for line in crate::system::lossy_lines(BufReader::new(stdout)) {
                     let Ok(v) = serde_json::from_str::<Value>(&line) else {
@@ -106,7 +111,8 @@ impl StdioServer {
                         _ => {}
                     }
                 }
-                // The server exited: wake everyone still waiting.
+                // The server exited: wake everyone still waiting, and turn down who asks next.
+                closed.store(true, Ordering::SeqCst);
                 waiters
                     .lock()
                     .unwrap_or_else(PoisonError::into_inner)
@@ -117,6 +123,7 @@ impl StdioServer {
             child: Mutex::new(child),
             stdin,
             waiters,
+            closed,
             stderr,
         })
     }
@@ -143,7 +150,14 @@ impl StdioServer {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .insert(id, tx);
-        if let Err(e) = self.send(message) {
+        // Checked after the waiter is in, so one the reader's last sweep missed is not left
+        // waiting for an answer that cannot come.
+        let sent = if self.closed.load(Ordering::SeqCst) {
+            Err("The MCP server closed".into())
+        } else {
+            self.send(message)
+        };
+        if let Err(e) = sent {
             self.waiters
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)

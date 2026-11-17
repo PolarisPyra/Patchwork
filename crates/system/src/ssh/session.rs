@@ -31,7 +31,7 @@ const MOST_UNANSWERED: u8 = 2;
 
 /// How long a session may take over one answer. A helper stuck on the host, on a folder that
 /// no longer answers for one, is ended then, and the request goes to a helper of its own.
-const ANSWER_LIMIT: Duration = Duration::from_secs(60);
+const ANSWER_LIMIT: Duration = Duration::from_secs(300);
 
 /// A host's session and how it has fared.
 #[derive(Default)]
