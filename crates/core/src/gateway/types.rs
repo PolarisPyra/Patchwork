@@ -66,6 +66,9 @@ impl PlatformSettings {
 pub enum Status {
     #[default]
     Off,
+    /// Switched on, and waiting for the vault to be unlocked: its password was not entered, or
+    /// its key could not be had.
+    Locked,
     Connecting,
     /// Connected, as the bot or account named.
     Connected(String),
