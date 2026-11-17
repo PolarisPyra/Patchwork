@@ -205,6 +205,9 @@ pub struct Workspace {
     pub streamed: HashSet<String>,
     /// The transcript, drawn a screenful at a time, and the chat and items it last held.
     pub transcript_list: ListState,
+    /// The transcript's width last laid out, and, while it keeps changing, the wait for it to hold.
+    pub transcript_width: gpui::Pixels,
+    pub transcript_settle: Option<Task<()>>,
     /// The wait for the clock or the sun to change the theme.
     pub(super) theme_switch: Option<Task<()>>,
     /// The project whose look the app is drawn in.
@@ -376,6 +379,8 @@ impl Workspace {
             streamed: HashSet::new(),
             // Every row is measured up front, or the scrollbar thumb jumps as rows scroll in.
             transcript_list: ListState::new(0, ListAlignment::Top, gpui::px(800.)).measure_all(),
+            transcript_width: gpui::px(0.),
+            transcript_settle: None,
             theme_switch: None,
             themed_project,
             transcript_rows: (None, Vec::new()),
