@@ -9,7 +9,9 @@ name: Release
 # reads. The finalize job then commits the version and the notes to main and points the website
 # at the release, which the Site workflow deploys, and the announce job posts it on Discord. docs/release.md explains it.
 #
-# Run it by hand (Actions → Release → Run workflow) to build all three without publishing.
+# Run it by hand (Actions → Release → Run workflow) to build all three without publishing. The
+# daily scheduled run does the same on main, which saves the Rust caches the tag builds restore:
+# a tag's own run can't save one that the next tag could read.
 #
 # Actions are pinned to commits; the comment after each names the version it was.
 
@@ -17,6 +19,8 @@ on:
   push:
     tags: ["[0-9]*.[0-9]*.[0-9]*"]
   workflow_dispatch:
+  schedule:
+    - cron: "23 7 * * *"
 
 permissions:
   contents: read
@@ -190,7 +194,7 @@ jobs:
 
   linux:
     needs: notes
-    if: ${{ !cancelled() && (needs.notes.result == 'success' || github.event_name == 'workflow_dispatch') }}
+    if: ${{ !cancelled() && (needs.notes.result == 'success' || github.event_name != 'push') }}
     # The oldest Ubuntu runner, so the AppImage links against an older glibc and runs on newer
     # distributions too.
     runs-on: ubuntu-22.04
@@ -248,7 +252,7 @@ jobs:
 
   windows:
     needs: notes
-    if: ${{ !cancelled() && (needs.notes.result == 'success' || github.event_name == 'workflow_dispatch') }}
+    if: ${{ !cancelled() && (needs.notes.result == 'success' || github.event_name != 'push') }}
     runs-on: windows-2022
     timeout-minutes: 45
     steps:
@@ -284,10 +288,13 @@ jobs:
 
   macos:
     needs: notes
-    if: ${{ !cancelled() && (needs.notes.result == 'success' || github.event_name == 'workflow_dispatch') }}
-    # macos-15 runs on Apple silicon, so the build is native arm64.
+    if: ${{ !cancelled() && (needs.notes.result == 'success' || github.event_name != 'push') }}
+    # macos-15 runs on Apple silicon, so the build is native arm64. When GitHub has no arm64 Mac
+    # free, the job waits about 15 minutes, is cancelled with "The job was not acquired by Runner
+    # of type hosted even after multiple attempts", and nothing publishes; re-run the failed jobs.
+    # The wait doesn't count toward the timeout. A cold build takes about 17 minutes.
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -311,16 +318,23 @@ jobs:
 
       # Patchwork.app holds the binary, its icon made from the logo, and the Info.plist naming
       # them. It is signed ad hoc, not with a developer certificate.
+      #
+      # Both helpers build in one cargo run, which compiles their build scripts and proc macros
+      # once, beside the app's build. They use their own target dir, as two cargo runs on one
+      # would wait on each other's lock, and fill the cores the app's last crates leave idle.
       - name: Build the disk image
         run: |
+          cargo build --release -p patchwork-remote --target-dir target/remote \
+            --target aarch64-apple-darwin --target x86_64-apple-darwin &
+          helpers=$!
           cargo build --release -p patchwork
+          wait $helpers
           version=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
           app=dmg/Patchwork.app
           mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" icon.iconset
           cp target/release/patchwork "$app/Contents/MacOS/"
           for arch in aarch64 x86_64; do
-            cargo build --release -p patchwork-remote --target $arch-apple-darwin
-            cp target/$arch-apple-darwin/release/patchwork-remote \
+            cp target/remote/$arch-apple-darwin/release/patchwork-remote \
               "$app/Contents/MacOS/patchwork-remote-macos-$arch"
           done
           for size in 16 32 128 256 512; do
