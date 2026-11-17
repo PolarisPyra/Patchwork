@@ -13,7 +13,7 @@ use super::types::Incoming;
 use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::permissions::{Effect, PermissionRule, PermissionScope, RuleRef};
 use crate::system::new_id;
-use crate::threads::{Approval, ApprovalStatus, NewThread, Question};
+use crate::threads::{Approval, ApprovalStatus, NewThread, Part, Question, Role, Thread};
 use crate::{Error, Core};
 
 /// Words that allow what the agent asks.
@@ -25,7 +25,47 @@ const ALWAYS: &str = "always";
 /// Words that turn down what the agent asks.
 const DENY: &[&str] = &["deny", "no", "n", "reject", "cancel"];
 
+/// What the agent of a chat run from a chat app is told about talking over one.
+const CHAT_APP: &str = "You are talking with the person over a chat app while they are away from \
+Patchwork. Lead with the answer.
+When they ask how something is going, report it the way a coworker gives a standup update: what \
+it is working on, what is done, what is left, and anything stuck or waiting on them, in a few \
+short lines with real names, numbers and file names. Say it plainly when something is broken or \
+you do not know.
+Chat apps show little Markdown, so keep formatting light: short paragraphs, a few bullets at \
+most, no tables or headings.";
+
+/// How it talks when no personality is chosen.
+const VOICE: &str = "Talk like a teammate in a team chat: plain words, short sentences, first \
+person, a bit of dry humor when it fits, and no filler, sign-offs or corporate tone.";
+
 impl Core {
+    /// `text` with how to talk over a chat app after it, in the chosen personality, for a chat run
+    /// from a chat app that has no custom agent's role. It goes with the message that starts the
+    /// agent's session, and again after the agent compacted its context on its own, since the
+    /// summary it goes on from can leave it out.
+    pub(crate) fn chat_app_voice(&self, thread_id: &str, text: String, fresh: bool) -> String {
+        let (plain, compacted) = self.store.with_threads(|threads| {
+            threads
+                .iter()
+                .find(|t| t.id == thread_id)
+                .map_or((false, false), |t| (t.role.is_none(), compacted(t)))
+        });
+        if !(fresh || compacted) || !plain || self.bound_chats(thread_id).is_empty() {
+            return text;
+        }
+        let voice = self
+            .store
+            .settings()
+            .gateway
+            .personality
+            .and_then(|name| self.personality(&name))
+            .unwrap_or_else(|| VOICE.to_string());
+        format!(
+            "{text}\n\n<chat-app>\n{CHAT_APP}\n</chat-app>\n<personality>\n{voice}\n</personality>"
+        )
+    }
+
     /// Handles a message from a chat app, on the thread of its connection.
     pub(super) fn gateway_incoming(self: &Arc<Self>, message: &Incoming) {
         if !self.is_paired(message.platform, &message.user) {
@@ -339,4 +379,16 @@ fn answers(questions: &[Question], text: &str) -> HashMap<String, Vec<String>> {
             (question.id.clone(), answer)
         })
         .collect()
+}
+
+/// Whether the agent of `thread` compacted its context on its own in the replies to the message
+/// before the newest, so the summary it now goes on from may have left out how to talk.
+fn compacted(thread: &Thread) -> bool {
+    thread
+        .messages
+        .iter()
+        .rev()
+        .skip_while(|m| m.role == Role::User)
+        .take_while(|m| m.role != Role::User)
+        .any(|m| m.parts.iter().any(|p| matches!(p, Part::Compaction { .. })))
 }

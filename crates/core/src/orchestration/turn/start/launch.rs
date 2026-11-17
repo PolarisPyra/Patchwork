@@ -174,6 +174,7 @@ impl Runner {
         // And with the roles of the custom agents it summons as "&name", and the chat's own.
         let (text, switched) = core.summon_agents(&thread_id, text, session_id.is_none());
         core.told_role(&thread_id, switched);
+        let text = core.chat_app_voice(&thread_id, text, session_id.is_none());
         let text = match context {
             Some(context) => format!("{context}{text}"),
             None => text,

@@ -1,5 +1,5 @@
-//! The rows above the chat apps: what chats started from a chat app may do, and the project
-//! they open in.
+//! The rows above the chat apps: what chats started from a chat app may do, the project they
+//! open in, and who they talk as.
 
 // Rust guideline compliant 2026-10-09
 
@@ -9,7 +9,7 @@ use crate::settings::SettingsDialog;
 use crate::settings::controls::{ACCESS_MODES, choice, segmented, select_box, token_row};
 use crate::ui::theme::theme;
 
-/// What chats started from a chat app may do, and the project they open in.
+/// What chats started from a chat app may do, the project they open in, and who they talk as.
 pub(super) fn general(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> Vec<AnyElement> {
     let t = *theme(cx);
     let gateway = d.settings.gateway.clone();
@@ -62,5 +62,48 @@ pub(super) fn general(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) 
             d.toggle_menu("gw-project", "Project", items, e.position(), window, cx);
         })),
     );
-    vec![access.into_any_element(), project.into_any_element()]
+    let personalities = d.gateways.personalities.clone();
+    let chosen = gateway.personality.clone();
+    let current = chosen.clone().unwrap_or_else(|| "Patchwork".to_string());
+    let personality = token_row("Personality", None, &t).child(
+        select_box(
+            "gw-personality",
+            "Personality",
+            current,
+            d.menu_open("gw-personality"),
+            &t,
+        )
+        .w(px(200.))
+        .on_click(cx.listener(move |d, e: &ClickEvent, window, cx| {
+            let weak = cx.entity().downgrade();
+            let own = choice(weak.clone(), "Patchwork", chosen.is_none(), |d, cx| {
+                d.menu = None;
+                d.update(|s| s.gateway.personality = None, cx);
+            });
+            let items = std::iter::once(own)
+                .chain(personalities.iter().map(|p| {
+                    let name = p.name.clone();
+                    let checked = chosen.as_ref() == Some(&p.name);
+                    choice(weak.clone(), p.name.clone(), checked, move |d, cx| {
+                        let name = name.clone();
+                        d.menu = None;
+                        d.update(|s| s.gateway.personality = Some(name), cx);
+                    })
+                }))
+                .collect();
+            d.toggle_menu(
+                "gw-personality",
+                "Personality",
+                items,
+                e.position(),
+                window,
+                cx,
+            );
+        })),
+    );
+    vec![
+        access.into_any_element(),
+        project.into_any_element(),
+        personality.into_any_element(),
+    ]
 }

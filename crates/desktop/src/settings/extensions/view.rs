@@ -4,12 +4,12 @@
 
 use std::collections::HashSet;
 use std::path::PathBuf;
-use gpui::{AnyElement, Div, FontWeight, SharedString, Stateful, Window, div, prelude::*, px};
+use gpui::{AnyElement, Div, SharedString, Stateful, Window, div, prelude::*, px};
 use patchwork_core::extensions::hooks::Bundle;
 use patchwork_core::extensions::skills::Skill;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert, chip, segmented};
-use crate::ui::theme::{font_mono, fs_xs, radius_sm, Theme, theme};
+use crate::ui::theme::{Theme, theme};
 use crate::ui::icon;
 use super::agents;
 use super::skills;
@@ -163,35 +163,6 @@ pub(super) fn empty(text: impl Into<SharedString>, t: &Theme) -> Div {
         .justify_center()
         .text_color(t.text_muted)
         .child(text.into())
-}
-
-/// How a folder is laid out, under an "Example" heading.
-pub(super) fn example(text: &'static str, t: &Theme) -> Div {
-    div()
-        .child(
-            div()
-                .mt(px(20.))
-                .mb(px(6.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .child("Example"),
-        )
-        .child(
-            div()
-                .rounded(px(radius_sm()))
-                .border_1()
-                .border_color(t.border_strong)
-                .bg(t.bg_editor)
-                .px(px(12.))
-                .py(px(10.))
-                .font_family(font_mono())
-                .text_size(px(fs_xs()))
-                .line_height(gpui::relative(1.6))
-                .text_color(t.text_muted)
-                .children(
-                    text.lines()
-                        .map(|line| div().whitespace_nowrap().child(line.to_string())),
-                ),
-        )
 }
 
 pub fn render(

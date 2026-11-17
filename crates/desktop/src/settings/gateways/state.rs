@@ -1,5 +1,5 @@
-//! The pane's state: the connections' status, the saved credentials and the paired people,
-//! and the operations that read and change them off the main thread.
+//! The pane's state: the connections' status, the saved credentials, the paired people and the
+//! personalities on offer, and the operations that read and change them off the main thread.
 
 // Rust guideline compliant 2026-10-09
 
@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::prelude::*;
-use patchwork_core::gateway::{PairedUser, Platform, PlatformSettings, Status};
+use patchwork_core::gateway::{PairedUser, Personality, Platform, PlatformSettings, Status};
 
 use crate::settings::SettingsDialog;
 
@@ -31,6 +31,9 @@ pub struct GatewaysState {
     pub(super) users: Vec<PairedUser>,
     /// The pairing code and when it stops working, in epoch milliseconds.
     pub(super) code: Option<(String, u64)>,
+    /// The personalities a chat app's chats can talk in, and the folder they are in.
+    pub(super) personalities: Vec<Personality>,
+    pub(super) personalities_dir: String,
     /// Why the last credential or removal failed.
     pub(super) error: Option<String>,
 }
@@ -181,12 +184,14 @@ impl SettingsDialog {
                     return;
                 }
                 let core = Arc::clone(&core);
-                let (statuses, pairing, users) = cx
+                let (statuses, pairing, users, personalities, dir) = cx
                     .background_spawn(async move {
                         (
                             core.gateway_status(),
                             core.gateway_code(),
                             core.gateway_users(),
+                            core.personalities(),
+                            core.personalities_dir().to_string_lossy().into_owned(),
                         )
                     })
                     .await;
@@ -194,6 +199,8 @@ impl SettingsDialog {
                     d.gateways.statuses = statuses.into_iter().collect();
                     d.gateways.code = pairing;
                     d.gateways.users = users;
+                    d.gateways.personalities = personalities;
+                    d.gateways.personalities_dir = dir;
                     cx.notify();
                 });
                 if applied.is_err() {
