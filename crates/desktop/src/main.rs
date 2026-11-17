@@ -364,11 +364,17 @@ fn main() {
             let _ = window.update(cx, |_, window, cx| {
                 let focused = Arc::clone(&core);
                 focused.set_window_focused(window.is_window_active());
+                focused.note_activity();
                 cx.observe_window_activation(window, move |_, window, _| {
                     focused.set_window_focused(window.is_window_active());
+                    focused.note_activity();
                 })
                 .detach();
             });
+            // A vault that locks when Patchwork is left alone counts from the last key.
+            let typed = Arc::clone(&core);
+            cx.intercept_keystrokes(move |_, _, _| typed.note_activity())
+                .detach();
             cx.on_system_notification_response(move |response, cx| {
                 let thread_id = response
                     .tag

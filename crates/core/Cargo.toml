@@ -24,7 +24,7 @@ libc = { workspace = true, default-features = true }
 # No statement cache: nothing calls `prepare_cached`, and it is the only default feature used here.
 rusqlite = { workspace = true, features = ["bundled", "fallible_uint"] }
 ureq = { workspace = true, default-features = true, features = ["json"] }
-# Chat app gateways: the websockets Discord, Slack and Mattermost send messages over.
+# The gateway: the websockets Discord, Slack and Mattermost send messages over.
 tungstenite = { workspace = true, features = ["handshake", "rustls-tls-webpki-roots"] }
 # API providers: keys in the system credential store, and the agent's file search tools.
 keyring = { workspace = true, default-features = true }

@@ -72,10 +72,10 @@ pub enum Status {
     Error(String),
 }
 
-/// Someone allowed to use Patchwork from a chat app.
+/// A pairing: who sent a chat app's bot a pairing code, and may use Patchwork from there.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PairedUser {
+pub struct Pairing {
     pub platform: Platform,
     /// Their id on the platform.
     pub id: String,
@@ -85,6 +85,23 @@ pub struct PairedUser {
     /// The conversation they last wrote from, where a thread can be continued for them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chat: Option<String>,
+}
+
+/// Something a chat app had Patchwork do, for the list in Settings. What it was given stays out:
+/// that holds prompts and settings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatAppCall {
+    /// Epoch milliseconds.
+    pub at: u64,
+    /// The chat app it came from, when the conversation is still bound.
+    pub platform: Option<Platform>,
+    /// The pairings in that conversation, by name.
+    pub who: String,
+    pub capability: String,
+    /// What the capability may do: `read`, `act`, `change` or `confirm`.
+    pub permission: String,
+    pub ok: bool,
 }
 
 /// A conversation on a chat app and the thread it talks to.
@@ -105,12 +122,12 @@ pub struct ChatApps {
     pub chats: Vec<Binding>,
 }
 
-/// A conversation on a chat app a thread can be continued in: a paired person's latest one.
+/// A conversation on a chat app a thread can be continued in: a pairing's latest one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChatPlace {
     pub platform: Platform,
     pub chat: String,
-    /// The paired person's name.
+    /// The pairing's name.
     pub name: String,
 }
 
@@ -124,8 +141,8 @@ pub struct Incoming {
     /// The conversation it came in, which replies go to.
     pub chat: String,
     /// The sender's id on the platform.
-    pub user: String,
-    /// The sender's name, for the list of paired users.
+    pub sender: String,
+    /// The sender's name, for the list of pairings.
     pub name: String,
     pub text: String,
     /// The bytes of the files sent with it; those that are pictures are attached.

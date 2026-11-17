@@ -329,6 +329,8 @@ pub(crate) fn invoke(ctx: &Ctx<'_>, id: &str, args: &Value) -> Result<String, Er
             "chat app could not run {{capability}}: {{error}}"
         ),
     }
+    ctx.core
+        .note_capability(from, id, capability.permission.name(), result.is_ok());
     result
 }
 

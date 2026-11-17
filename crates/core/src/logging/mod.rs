@@ -53,5 +53,6 @@ pub use files::{session_dir, channels, LogChunk, read, export};
 pub use render::{now_text};
 #[doc(inline)]
 pub use scrub::{Json, redact};
+pub(crate) use scrub::{hide, set_known};
 #[doc(inline)]
 pub use thread_log::{THREAD_LOG, ThreadLog};

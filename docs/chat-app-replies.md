@@ -1,8 +1,18 @@
 # Chat app replies
 
-How the agent of a chat started from a chat app (Settings → Gateway service) answers questions
+How the agent of a chat started from a chat app (Settings → Gateway) answers questions
 about other chats, and how it is told to talk: the `read_chat` tool, the chat-app note, and the
 personalities folder.
+
+Five words are kept apart throughout:
+
+| Word | What it is |
+|---|---|
+| Gateway | The whole service that connects chat apps to Patchwork: Settings → Gateway. |
+| Chat app | Telegram, Discord and the others. `Platform` in the code. |
+| The bot | Patchwork's own account on a chat app: the one whose token is saved, and that is sent the pairing code. |
+| Pairing | Who may talk to that bot: the entry a pairing code makes, saved under `gateway.pairings`. |
+| Conversation | A chat on the chat app's side. A chat is always one of Patchwork's own. |
 
 ## Reading another chat's progress
 
@@ -122,7 +132,7 @@ personalities/
 time the folder is needed and does not exist, it is created with the four examples above
 (`EXAMPLES`). It is never filled again, so a deleted example stays deleted.
 
-Settings → Gateway service → Personality picks one. The choice is saved as
+Settings → Gateway → Personality picks one. The choice is saved as
 `gateway.personality`, the file's name, or none for Patchwork's own voice. The pane reads the
 folder again every second while it is open, so a new file shows in the menu without reopening
 Settings. The Personalities section at the bottom of the pane shows the folder's path and an
@@ -160,10 +170,13 @@ Every call goes through `registry::invoke`:
    first one returned instead of running again (`Ran` in `registry.rs`). Reads are not held back.
 6. The log gets `chat app ran <id>` or `chat app could not run <id>: <error>`, with the chat and
    the permission. Arguments are not logged, since they hold prompts and settings.
+7. The call is added to the last 200 kept in the app state (`gateway.activity`): when, the chat
+   app, the pairings in that conversation, the capability, its permission and whether it
+   worked. Settings lists the latest under Security, as "Chat app activity".
 
 ### Who is asked, by access mode
 
-The access mode is the dispatcher chat's own, the one in Settings → Gateway service (`gateway.access`).
+The access mode is the dispatcher chat's own, the one in Settings → Gateway (`gateway.access`).
 Changing it there, or with `set_setting`, reaches the conversations that already have a dispatcher
 with their next message.
 
@@ -172,7 +185,7 @@ with their next message.
 | `read` | Reads only | Runs | Runs |
 | `act` | What the person does from the chat list: start, message, stop or answer a chat. The chats ask for themselves, by their own access | Runs | Runs |
 | `change` | Changes a setting, a color scheme, a project's name, a chat's options; sends a project file; brings in chats; turns an MCP server or hook bundle on or off | Asks | Runs |
-| `confirm` | Cannot be taken back: deleting a chat, a color scheme or a scheduled task, removing a project or an MCP server, unpairing a person, installing an update or an agent, turning a chat app on or off, making a pairing code | Asks | Asks |
+| `confirm` | Cannot be taken back: deleting a chat, a color scheme or a scheduled task, removing a project or an MCP server, removing a pairing, installing an update or an agent, turning a chat app on or off, making a pairing code | Asks | Asks |
 
 A `change` that widens what Patchwork may do also asks outside Supervised (`Ctx::escalate`): the
 settings `gateway.access`, `computerUse`, `androidUse`, `systemPrompts`, `unlimitedSteps`,
@@ -201,7 +214,7 @@ answer it. A denied call fails with "The user declined this call", and nothing i
 | `themes` | `list_themes`, `read_theme`, `preview_theme`, `save_theme`, `apply_theme`, `delete_theme` |
 | `usage` | `usage_limits`, `resume_chat_at_reset` |
 | `notifications` | `set_chat_notices`, `unmute_all_chats` |
-| `chat-apps` | `gateway_status`, `restart_gateway`, `set_chat_app_enabled`, `make_pairing_code`, `unpair_user` |
+| `gateway` | `gateway_status`, `restart_gateway`, `set_chat_app_enabled`, `make_pairing_code`, `remove_pairing` |
 | `providers` | `list_providers`, `install_agent` |
 | `integrations` | `list_mcp_servers`, `restart_mcp_server`, `set_mcp_server_enabled`, `remove_mcp_server`, `list_agents`, `list_hooks`, `set_hook_enabled` |
 | `extensions` | `list_models`, `list_skills`, `set_skill_enabled` |

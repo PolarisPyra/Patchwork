@@ -177,6 +177,7 @@ pub struct Settings {
     pub android_use: bool,
     /// The chat apps Patchwork answers on.
     pub gateway: crate::gateway::GatewaySettings,
+    pub vault: crate::vault::VaultSettings,
 }
 
 impl Settings {

@@ -52,7 +52,7 @@ const INDEX: &[(&str, &[&str])] = &[
             "Goal met",
             "Failed",
             "Usage runs out",
-            "Send to gateway service",
+            "Send to chat apps",
             "Away after",
             "Muted",
         ],
@@ -156,7 +156,7 @@ const INDEX: &[(&str, &[&str])] = &[
         ],
     ),
     (
-        "gateways",
+        "gateway",
         &[
             "Access",
             "Telegram",
@@ -166,7 +166,7 @@ const INDEX: &[(&str, &[&str])] = &[
             "Mattermost",
             "Signal",
             "QQ",
-            "Paired apps",
+            "Pairings",
         ],
     ),
 ];

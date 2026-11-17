@@ -40,7 +40,7 @@ const SECTIONS: &[&str] = &[
     "scheduled",
     "terminal",
     "ssh",
-    "gateways",
+    "gateway",
 ];
 
 /// What a file's name holds when it is likely to keep keys or passwords.

@@ -42,7 +42,7 @@ pub(super) fn set_chat_app(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error>
     let platform = platform(args)?;
     let on = args["enabled"].as_bool().unwrap_or(true);
     if on {
-        let saved = ctx.core.gateway_credentials();
+        let saved = ctx.core.chat_app_credentials();
         let missing: Vec<&str> = platform
             .credentials()
             .iter()
@@ -76,7 +76,7 @@ pub(super) fn set_chat_app(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error>
     reason = "every capability's handler has one signature"
 )]
 pub(super) fn pairing_code(ctx: &Ctx<'_>, _: &Value) -> Result<String, Error> {
-    let (code, expires) = ctx.core.new_gateway_code();
+    let (code, expires) = ctx.core.new_pairing_code();
     Ok(json!({
         "code": code,
         "works_for_minutes": expires.saturating_sub(now_ms()) / 60_000,

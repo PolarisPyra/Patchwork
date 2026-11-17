@@ -35,10 +35,10 @@ impl Core {
         apps
     }
 
-    /// The conversations a thread can be continued in: each paired person's latest one, on a
+    /// The conversations a thread can be continued in: each pairing's latest one, on a
     /// chat app that is connected now.
     #[must_use]
-    pub fn gateway_places(&self) -> Vec<ChatPlace> {
+    pub fn chat_places(&self) -> Vec<ChatPlace> {
         let connected: Vec<Platform> = self
             .gateway
             .lock()
@@ -48,16 +48,16 @@ impl Core {
             .map(|(platform, _)| *platform)
             .collect();
         let mut places: Vec<ChatPlace> = Vec::new();
-        for user in self.gateway_users() {
-            let Some(chat) = user.chat else { continue };
+        for paired in self.pairings() {
+            let Some(chat) = paired.chat else { continue };
             let known = places
                 .iter()
-                .any(|p| p.platform == user.platform && p.chat == chat);
-            if connected.contains(&user.platform) && !known {
+                .any(|p| p.platform == paired.platform && p.chat == chat);
+            if connected.contains(&paired.platform) && !known {
                 places.push(ChatPlace {
-                    platform: user.platform,
+                    platform: paired.platform,
                     chat,
-                    name: user.name,
+                    name: paired.name,
                 });
             }
         }

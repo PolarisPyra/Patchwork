@@ -130,7 +130,7 @@ impl Matrix {
                     platform: Platform::Matrix,
                     id: event["event_id"].as_str().map(str::to_string),
                     chat: room.clone(),
-                    user: sender.to_string(),
+                    sender: sender.to_string(),
                     name: sender.to_string(),
                     text: text.trim().to_string(),
                     files,

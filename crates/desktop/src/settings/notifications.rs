@@ -1,5 +1,5 @@
 //! Settings → Notifications: which events notify on the desktop and on the chat apps, when the
-//! chat apps hear about them, and the chats and projects muted from the gateway service.
+//! chat apps hear about them, and the chats and projects muted on the chat apps.
 
 // Rust guideline compliant 2026-10-09
 
@@ -58,7 +58,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .border_b_1()
         .border_color(t.border)
         .child(column("Desktop"))
-        .child(column("Gateway service"));
+        .child(column("Chat apps"));
     let rows = EVENTS.iter().map(|&(kind, title)| {
         let desktop = n.desktop.allows(kind);
         let chat_apps = n.chat_apps.allows(kind);
@@ -81,7 +81,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             .child(cell(
                 switch(
                     format!("notify-chat-apps-{title}"),
-                    format!("{title} on the gateway service"),
+                    format!("{title} on chat apps"),
                     chat_apps,
                     &t,
                 )
@@ -104,9 +104,9 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .child(header)
         .children(rows.collect::<Vec<_>>());
 
-    let when = token_row("Send to gateway service", None, &t).child(segmented(
+    let when = token_row("Send to chat apps", None, &t).child(segmented(
         "notify-when",
-        "Send to gateway service",
+        "Send to chat apps",
         n.chat_apps_when,
         &WHEN,
         &t,
@@ -152,7 +152,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .flex_col()
         .child(section_heading("Events", true, &t))
         .child(events)
-        .child(section_heading("Gateway service", false, &t))
+        .child(section_heading("Chat apps", false, &t))
         .child(when)
         .children(away)
         .children(unmute)

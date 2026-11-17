@@ -52,6 +52,7 @@ impl Render for Workspace {
             // again once the press is over.
             .capture_any_mouse_down(cx.listener(|this, _: &MouseDownEvent, _, _| {
                 this.picking.clicked = None;
+                this.core.note_activity();
             }))
             // Tab with nothing in particular focused jumps to the composer, as "Jump to the
             // composer" says; from any control it moves on.

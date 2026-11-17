@@ -188,7 +188,7 @@ impl Discord {
             platform: Platform::Discord,
             id: data["id"].as_str().map(str::to_string),
             chat: data["channel_id"].as_str()?.to_string(),
-            user: author["id"].as_str()?.to_string(),
+            sender: author["id"].as_str()?.to_string(),
             name: author["username"].as_str().unwrap_or_default().to_string(),
             text: text.trim().to_string(),
             files,
@@ -262,7 +262,7 @@ impl Discord {
             platform: Platform::Discord,
             id: data["id"].as_str().map(str::to_string),
             chat: data["channel_id"].as_str()?.to_string(),
-            user: user.get("id")?.as_str()?.to_string(),
+            sender: user.get("id")?.as_str()?.to_string(),
             name: user
                 .get("username")
                 .and_then(Value::as_str)

@@ -159,10 +159,10 @@ pub(super) fn gateway_status(ctx: &Ctx<'_>, _: &Value) -> Result<String, Error> 
             json!({"platform": platform.id(), "name": platform.label(), "status": format!("{status:?}")})
         })
         .collect();
-    let users: Vec<Value> = core
-        .gateway_users()
+    let paired: Vec<Value> = core
+        .pairings()
         .into_iter()
-        .map(|u| json!({"platform": u.platform.id(), "user_id": u.id, "name": u.name}))
+        .map(|u| json!({"platform": u.platform.id(), "id": u.id, "name": u.name}))
         .collect();
     let usual = settings
         .gateway
@@ -172,7 +172,7 @@ pub(super) fn gateway_status(ctx: &Ctx<'_>, _: &Value) -> Result<String, Error> 
         .map(|p| p.name.clone());
     Ok(json!({
         "platforms": platforms,
-        "paired": users,
+        "paired": paired,
         "access": settings.gateway.access,
         "usual_project": usual,
         "personality": settings.gateway.personality,
@@ -197,16 +197,16 @@ pub(super) fn unpair(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
         .into_iter()
         .find(|p| p.id() == name)
         .ok_or("No chat app is called that; gateway_status lists them")?;
-    let id = text(args, "user_id");
+    let id = text(args, "id");
     if !ctx
         .core
-        .gateway_users()
+        .pairings()
         .iter()
         .any(|u| u.platform == platform && u.id == id)
     {
         return Err("No one with that id is paired there; gateway_status lists them".into());
     }
-    ctx.core.remove_gateway_user(platform, id)?;
+    ctx.core.remove_pairing(platform, id)?;
     Ok(format!(
         "{id} can no longer use Patchwork from {}.",
         platform.label()

@@ -209,7 +209,7 @@ impl Workspace {
         window.prevent_default();
         // Chat apps connect and drop without telling the window, so where a chat can be continued
         // is read now.
-        self.chat_places = self.core.gateway_places();
+        self.chat_places = self.core.chat_places();
         self.context_menu = Some(ContextMenu {
             at: event.position,
             target,

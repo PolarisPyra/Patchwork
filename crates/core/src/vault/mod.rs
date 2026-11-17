@@ -9,6 +9,8 @@
 //! With a password set, the wrapping key is derived from the password with Argon2id and kept
 //! nowhere: the vault waits, each run, until the password is entered. Setting, changing or
 //! removing the password seals every secret under a new data key, so no earlier key opens it.
+//! Setting it also seals the data key under a recovery key, which the user is shown once and
+//! Patchwork keeps nowhere: it opens the vault when the password is lost.
 //!
 //! A vault that cannot be unlocked is never replaced: it stays locked for the run, and nothing
 //! can be saved until the wrapping key is back.
@@ -16,11 +18,14 @@
 // Rust guideline compliant 2026-10-09
 
 mod crypt;
+mod known;
 mod password;
+mod recovery;
 mod secrets;
 mod state;
 
+pub use password::VaultSettings;
 pub use secrets::Saved;
-pub(crate) use secrets::{get, put, remove};
+pub(crate) use secrets::{get, put, remove, take_old};
 pub(crate) use state::open;
 pub use state::{Method, Status, status};

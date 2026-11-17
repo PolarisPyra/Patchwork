@@ -2,8 +2,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::borrow::Cow;
 use std::fmt;
-use std::sync::LazyLock;
+use std::sync::{LazyLock, PoisonError, RwLock};
 use regex::Regex;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
@@ -93,12 +94,42 @@ static SECRETS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
     .collect()
 });
 
-/// `text` with the keys, tokens and passwords in it replaced.
+/// The values of the secrets Patchwork holds, longest first, for [`hide`] to replace.
+static KNOWN: RwLock<Vec<String>> = RwLock::new(Vec::new());
+
+/// Sets the values [`hide`] replaces, in place of the ones before. Nothing is logged while
+/// the list is held, since every logged line reads it.
+pub(crate) fn set_known(mut values: Vec<String>) {
+    values.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
+    values.dedup();
+    let mut known = KNOWN.write().unwrap_or_else(PoisonError::into_inner);
+    std::mem::swap(&mut *known, &mut values);
+    drop(known);
+    zeroize::Zeroize::zeroize(&mut values);
+}
+
+/// `text` with every value of a secret Patchwork holds replaced, whatever it looks like.
+#[must_use]
+pub(crate) fn hide(text: &str) -> Cow<'_, str> {
+    let known = KNOWN.read().unwrap_or_else(PoisonError::into_inner);
+    let mut out = Cow::Borrowed(text);
+    for value in known.iter() {
+        if out.contains(value.as_str()) {
+            out = Cow::Owned(out.replace(value.as_str(), "[REDACTED]"));
+        }
+    }
+    out
+}
+
+/// `text` with the keys, tokens and passwords in it replaced: the ones Patchwork holds, and
+/// anything shaped like one.
 #[must_use]
 pub fn redact(text: &str) -> String {
-    SECRETS.iter().fold(text.to_string(), |text, (re, with)| {
-        re.replace_all(&text, *with).into_owned()
-    })
+    SECRETS
+        .iter()
+        .fold(hide(text).into_owned(), |text, (re, with)| {
+            re.replace_all(&text, *with).into_owned()
+        })
 }
 
 /// The first `max` characters, and how many more there were.

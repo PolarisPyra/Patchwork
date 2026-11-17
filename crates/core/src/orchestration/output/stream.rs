@@ -436,6 +436,7 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
             msg.status = *status;
             msg.error.clone_from(error);
             msg.finished_at = Some(now_ms());
+            msg.hide_secrets();
             // Unanswered requests lapse with the turn.
             msg.approvals
                 .iter_mut()

@@ -149,7 +149,9 @@ Tasks run right in your project folder. Settings live in `~/.config/patchwork` a
 [Architecture](docs/architecture.md)). API keys, chat app tokens and other secrets are
 encrypted in Patchwork's database; the key that opens them is in your system keychain, or in a file
 only you can read if there isn't one. Set a password in Settings, under Security, and they open
-only once you enter it after each start. [Agent CLIs](docs/agent-clis.md) lists every file Patchwork reads from
+only once you enter it after each start. Patchwork gives you a recovery key with the password, for
+the day you lose it, and can lock the secrets by itself when you leave it alone. Values it holds
+are replaced with `[REDACTED]` in its logs and in the replies it saves. [Agent CLIs](docs/agent-clis.md) lists every file Patchwork reads from
 your agents.
 
 ## Contributing

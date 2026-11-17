@@ -14,6 +14,7 @@ use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use zeroize::Zeroizing;
 
 use super::crypt::{DATA_KEY, KEY_LEN, cipher, data_key, decode_key, err, new_key, seal};
+use super::known;
 use crate::Error;
 use crate::persistence::DB_FILE;
 use crate::system::fs::write_private;
@@ -211,6 +212,7 @@ pub(crate) fn open(data: &Path, config: &Path) {
     let opened = unlock(data, config).unwrap_or_else(|e| State::Locked(e.to_string()));
     set_status(match &opened {
         State::Open(vault) => {
+            known::refresh(vault);
             log::info!(method = vault.method.name(); "the vault is open, its key kept by {{method}}");
             Status::Open(vault.method)
         }

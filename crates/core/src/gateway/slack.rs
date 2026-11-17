@@ -123,7 +123,7 @@ impl Slack {
                 .map(str::to_string),
             chat: event["channel"].as_str()?.to_string(),
             name: user.clone(),
-            user,
+            sender: user,
             text: text.trim().to_string(),
             files,
         })
@@ -149,7 +149,7 @@ impl Slack {
                 .as_str()
                 .map(str::to_string),
             chat,
-            user: user["id"].as_str()?.to_string(),
+            sender: user["id"].as_str()?.to_string(),
             name: user["username"].as_str().unwrap_or_default().to_string(),
             text: reply.to_string(),
             files: Vec::new(),

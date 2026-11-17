@@ -13,6 +13,7 @@ mod approvals;
 pub(crate) mod capabilities;
 pub mod changes;
 pub(crate) mod goal;
+mod lock;
 mod messages;
 mod output;
 mod tasks;

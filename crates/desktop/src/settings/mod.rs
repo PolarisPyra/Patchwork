@@ -9,7 +9,7 @@ pub(crate) mod controls;
 mod chat;
 mod dialog;
 mod extensions;
-mod gateways;
+mod gateway;
 mod general;
 mod keys;
 mod mcp;

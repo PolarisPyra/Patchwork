@@ -88,12 +88,12 @@ impl Core {
             );
             return;
         }
-        if !self.is_paired(message.platform, &message.user) {
+        if !self.is_paired(message.platform, &message.sender) {
             self.pair(message);
             return;
         }
         let (platform, chat) = (message.platform, message.chat.as_str());
-        self.note_chat(platform, &message.user, chat);
+        self.note_chat(platform, &message.sender, chat);
         let thread = self
             .bound_thread(platform, chat)
             .filter(|id| self.store.thread(id).is_some());
@@ -123,7 +123,7 @@ impl Core {
         let now = Instant::now();
         let (key, by_id) = match &message.id {
             Some(id) => (id.clone(), true),
-            None => (format!("{}\n{}", message.user, message.text), false),
+            None => (format!("{}\n{}", message.sender, message.text), false),
         };
         let mut state = self.gateway.lock();
         let again = state.seen.iter().any(|seen| {
@@ -153,14 +153,14 @@ impl Core {
     fn pair(&self, message: &Incoming) {
         let (platform, chat) = (message.platform, message.chat.as_str());
         if self.take_gateway_code(&message.text) {
-            match self.add_gateway_user(platform, &message.user, &message.name, chat) {
+            match self.add_pairing(platform, &message.sender, &message.name, chat) {
                 Ok(()) => self.say(
                     platform,
                     chat,
                     "Paired. Send a message to start a chat in Patchwork, or /help for what else you can do.",
                 ),
                 Err(error) => {
-                    log::warn!(error:% = error; "could not save a paired gateway user: {{error}}");
+                    log::warn!(error:% = error; "could not save a pairing: {{error}}");
                 }
             }
             return;
@@ -169,12 +169,12 @@ impl Core {
             .gateway
             .lock()
             .told
-            .insert((platform, message.user.clone()));
+            .insert((platform, message.sender.clone()));
         if first {
             self.say(
                 platform,
                 chat,
-                "To use Patchwork here, make a pairing code in Settings → Gateways on your computer and send it here.",
+                "To use Patchwork here, make a pairing code in Settings → Gateway on your computer and send it here.",
             );
         }
     }

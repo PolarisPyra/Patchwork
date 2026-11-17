@@ -1,4 +1,4 @@
-//! Telling the paired people when a chat no conversation continues finishes, meets its goal,
+//! Telling the pairings when a chat no conversation continues finishes, meets its goal,
 //! fails or asks something,
 //! and answering what it asks from the conversation they were told in.
 
@@ -27,7 +27,7 @@ pub(super) struct Notice {
 }
 
 impl Core {
-    /// Tells the paired people about `event` of a thread no conversation continues, when the
+    /// Tells the pairings about `event` of a thread no conversation continues, when the
     /// settings ask for it there and, unless they say always, you are away.
     pub(super) fn notify(&self, thread_id: &str, event: &AgentEvent) {
         if let AgentEvent::ApprovalResolved {
@@ -59,7 +59,7 @@ impl Core {
         };
         match event {
             AgentEvent::ApprovalRequested { approval, .. } => {
-                for place in self.gateway_places() {
+                for place in self.chat_places() {
                     self.show_request(&thread, approval, place.platform, &place.chat);
                 }
             }
@@ -81,7 +81,7 @@ impl Core {
                     label: "Continue when it resets".to_string(),
                     reply: format!("/resume {thread_id}"),
                 };
-                for place in self.gateway_places() {
+                for place in self.chat_places() {
                     self.say_with(
                         place.platform,
                         &place.chat,
@@ -114,7 +114,7 @@ impl Core {
         }
     }
 
-    /// Sends `text` to the paired people, with buttons to continue the chat or mute it.
+    /// Sends `text` to the pairings, with buttons to continue the chat or mute it.
     fn tell_finished(&self, thread: &Thread, text: &str) {
         let mut buttons = vec![
             Button {
@@ -132,7 +132,7 @@ impl Core {
                 reply: format!("/mute project {project}"),
             });
         }
-        for place in self.gateway_places() {
+        for place in self.chat_places() {
             self.say_with(place.platform, &place.chat, text, &buttons);
         }
     }

@@ -6,7 +6,9 @@
 use rusqlite::{OptionalExtension, params};
 
 use super::crypt::{err, seal, unseal};
-use super::state::{State, state};
+use super::known;
+use super::password::needs_password;
+use super::state::{State, Status, state, status};
 use crate::gateway::Platform;
 use crate::{Core, Error, provider};
 
@@ -35,9 +37,13 @@ impl Core {
     }
 
     /// The value of the saved secret `name`, for Settings to show when asked. No tool an agent
-    /// or a chat app has reaches this.
+    /// or a chat app has reaches this. None while the vault's password has to be entered
+    /// first (see `secret_needs_password`).
     #[must_use]
     pub fn reveal_secret(&self, name: &str) -> Option<String> {
+        if needs_password() {
+            return None;
+        }
         get(name)
     }
 
@@ -92,6 +98,39 @@ fn label(name: &str) -> String {
         .map_or((name, "API key"), |id| (id, "headers"));
     let provider = provider::api::config::provider(id).map_or_else(|| id.to_string(), |p| p.name);
     format!("{provider} {what}")
+}
+
+/// Copies every secret an earlier version left in its stores into the vault, so the vault
+/// holds them all, and not only the ones read so far. The copies stay where they were
+/// until `remove_old_secret_copies`.
+pub(crate) fn take_old() {
+    if !matches!(status(), Status::Open(_)) {
+        return;
+    }
+    let mut old: Vec<String> = Vec::new();
+    for provider in provider::api::config::providers() {
+        old.push(format!("{}:headers", provider.id));
+        old.push(provider.id);
+    }
+    for platform in Platform::ALL {
+        let id = platform.id();
+        old.extend(
+            platform
+                .credentials()
+                .iter()
+                .map(|field| format!("gateway:{id}:{}", field.key)),
+        );
+    }
+    let before = names().len();
+    for name in &old {
+        let _ = provider::api::config::read_secret(name);
+    }
+    // Listing the MCP servers reads each one's saved values.
+    let _ = provider::mcp::list();
+    let taken = names().len().saturating_sub(before);
+    if taken > 0 {
+        log::info!(taken; "copied {{taken}} secrets from the old stores into the vault");
+    }
 }
 
 /// The name of every saved secret. One saved empty stands for a removed one, and is left out.
@@ -174,6 +213,7 @@ pub(crate) fn put(name: &str, value: &str) -> Result<(), Error> {
             params![name, nonce, sealed],
         )
         .map_err(err)?;
+    known::refresh(vault);
     Ok(())
 }
 
@@ -191,5 +231,6 @@ pub(crate) fn remove(name: &str) -> Result<(), Error> {
         .conn
         .execute("DELETE FROM secrets WHERE name = ?1", [name])
         .map_err(err)?;
+    known::refresh(vault);
     Ok(())
 }
