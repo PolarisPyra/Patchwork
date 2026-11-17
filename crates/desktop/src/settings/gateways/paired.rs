@@ -1,0 +1,135 @@
+//! The pairing code a new person sends a bot, and the people already paired.
+
+// Rust guideline compliant 2026-10-09
+
+use gpui::{AnyElement, FontWeight, Role, SharedString, div, prelude::*, px};
+use patchwork_core::gateway::Platform;
+use patchwork_core::system::now_ms;
+
+use crate::settings::SettingsDialog;
+use crate::settings::controls::{list_box, token_row};
+use crate::ui::theme::{font_mono, fs_sm, roomy, theme};
+use crate::ui::{BtnKind, btn, icon, icon_button};
+
+/// The milliseconds in a minute, for the pairing code's time left.
+const MINUTE_MS: u64 = 60_000;
+
+/// The one-time code a new person sends a bot to pair, the button that makes one, and who has
+/// paired on `platform`.
+pub(super) fn pairing_row(
+    d: &SettingsDialog,
+    platform: Platform,
+    cx: &mut Context<SettingsDialog>,
+) -> AnyElement {
+    let t = *theme(cx);
+    let code = d
+        .gateways
+        .code
+        .clone()
+        .filter(|(_, until)| *until > now_ms());
+    let shown = code.map(|(code, until)| {
+        let minutes = until.saturating_sub(now_ms()).div_ceil(MINUTE_MS);
+        div()
+            .id("gw-code")
+            .role(Role::Status)
+            .aria_label(format!("Pairing code {code}, {minutes} min left"))
+            .flex()
+            .items_center()
+            .gap(px(8.))
+            .child(
+                div()
+                    .font_family(font_mono())
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(code),
+            )
+            .child(
+                div()
+                    .text_size(px(fs_sm()))
+                    .text_color(t.text_muted)
+                    .child(format!("{minutes} min")),
+            )
+    });
+    let pairing = token_row("Pairing code", None, &t).children(shown).child(
+        btn("gw-new-code", "New code", BtnKind::Plain, false, &t)
+            .child("New code")
+            .on_click(cx.listener(|d, _, _, cx| {
+                d.gateways.code = Some(d.core.new_gateway_code());
+                cx.notify();
+            })),
+    );
+    let names: Vec<&str> = d
+        .gateways
+        .users
+        .iter()
+        .filter(|u| u.platform == platform)
+        .map(|u| u.name.as_str())
+        .collect();
+    let paired = (!names.is_empty()).then(|| {
+        let text = format!("Paired with {}", names.join(", "));
+        div()
+            .id("gw-paired-now")
+            .role(Role::Status)
+            .aria_label(text.clone())
+            .flex()
+            .items_center()
+            .gap(px(6.))
+            .py(px(roomy(10.)))
+            .text_color(t.success)
+            .child(icon("check-circle", 15.).text_color(t.success))
+            .child(text)
+    });
+    div()
+        .flex()
+        .flex_col()
+        .child(pairing)
+        .children(paired)
+        .into_any_element()
+}
+
+/// The people who can use Patchwork from a chat app.
+pub(super) fn paired(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
+    let t = *theme(cx);
+    if d.gateways.users.is_empty() {
+        return div()
+            .py(px(10.))
+            .text_color(t.text_muted)
+            .child("No apps are paired")
+            .into_any_element();
+    }
+    let rows = d
+        .gateways
+        .users
+        .iter()
+        .map(|user| {
+            let (platform, id) = (user.platform, user.id.clone());
+            let name = format!("{} on {}", user.name, platform.label());
+            div()
+                .flex()
+                .items_center()
+                .gap(px(12.))
+                .px(px(12.))
+                .py(px(8.))
+                .child(div().min_w_0().flex_1().truncate().child(name.clone()))
+                .child(
+                    icon_button(
+                        SharedString::from(format!("gw-unpair-{}-{}", platform.id(), user.id)),
+                        format!("Remove {name}"),
+                        "x",
+                        14.,
+                        cx,
+                    )
+                    .on_click(cx.listener(move |d, _, _, cx| {
+                        d.remove_paired(platform, id.clone(), cx);
+                    })),
+                )
+                .into_any_element()
+        })
+        .collect();
+    div()
+        .id("gw-paired")
+        .role(Role::List)
+        .aria_label("Paired apps")
+        .mt(px(6.))
+        .child(list_box(rows, &t))
+        .into_any_element()
+}

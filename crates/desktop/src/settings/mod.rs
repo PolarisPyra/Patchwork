@@ -9,7 +9,6 @@ pub(crate) mod controls;
 mod chat;
 mod dialog;
 mod extensions;
-mod gateway_setup;
 mod gateways;
 mod general;
 mod keys;
