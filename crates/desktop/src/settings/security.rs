@@ -204,25 +204,36 @@ impl SettingsDialog {
         cx.notify();
     }
 
-    /// Asks where to save the recovery key just made, and writes it there.
+    /// Saves the recovery key just made to the Downloads folder, or to the home folder
+    /// when there is none.
+    ///
+    /// It asks nothing: a save dialog that fails to open would leave the key unsaved.
     fn download_key(&mut self, cx: &mut Context<Self>) {
         let Some(key) = self.security.new_key.clone() else {
             return;
         };
-        let home = patchwork_core::system::fs::home_dir().unwrap_or_default();
-        let picked = cx.prompt_for_new_path(&home, Some("patchwork-recovery-key.txt"));
+        let (folder, done) = match dirs::download_dir().filter(|d| d.is_dir()) {
+            Some(folder) => (folder, "Saved to Downloads as patchwork_recoverykey.txt"),
+            None => (
+                patchwork_core::system::fs::home_dir().unwrap_or_default(),
+                "Saved to your home folder as patchwork_recoverykey.txt",
+            ),
+        };
+        let path = folder.join("patchwork_recoverykey.txt");
+        self.security.error = None;
+        self.security.done = None;
         let core = Arc::clone(&self.core);
         cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(path))) = picked.await else {
-                return;
-            };
             let saved = cx
                 .background_spawn(async move { core.save_recovery_key(&path, &key) })
                 .await;
             let _ = this.update(cx, |d, cx| {
                 match saved {
-                    Ok(()) => d.security.done = Some("Recovery key saved"),
-                    Err(e) => d.security.error = Some(e.to_string()),
+                    Ok(()) => d.security.done = Some(done),
+                    Err(e) => {
+                        log::warn!(error:% = e; "could not save the recovery key: {{error}}");
+                        d.security.error = Some(e.to_string());
+                    }
                 }
                 cx.notify();
             });
