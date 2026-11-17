@@ -3,6 +3,21 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.92] - 2026-11-17
+
+**26.11.92** · 1 change from 1 contributor
+
+- **Stable chat and accessible turn markers.** Messages stay in place while resizing; screen readers read markers as a slider and announce compacted context.
+
+<details>
+<summary>Full changelog</summary>
+
+### Fixed
+
+- Your messages in a chat jumped left and right while the window or the sidebar was resized, and the turn markers on the right edge of the chat could disappear afterwards. Messages now stay in place and the markers stay on screen. The markers' previews also keep underscores and number signs in the words you typed, and screen readers read the markers as a slider and announce when a chat's context is compacted. by [PolarisPyra in #175](https://github.com/PolarisPyra/Patchwork/pull/175)
+
+</details>
+
 ## [26.11.91] - 2026-11-17
 
 **26.11.91** · 3 changes from 1 contributor
