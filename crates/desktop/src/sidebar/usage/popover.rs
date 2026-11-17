@@ -44,9 +44,11 @@ pub fn footer(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>) -> AnyE
                         b.bg(hover).text_color(fg)
                     } else {
                         b.text_color(t.text_muted)
-                            .hover(move |s| s.bg(hover).text_color(fg))
                     }
                 })
+                // Kept while open too: GPUI only tracks the pointer for an element with a hover
+                // style, and a stale "hovered" leaves the label bright after the popover closes.
+                .hover(move |s| s.bg(hover).text_color(fg))
                 .on_click(cx.listener(crate::workspace::Workspace::toggle_usage))
                 .child(icon("chart-bar", 18.))
                 .child("Usage"),
