@@ -14,6 +14,7 @@ mod net;
 mod notify;
 mod options;
 mod outbound;
+mod personalities;
 mod platform;
 mod qq;
 mod records;
@@ -23,5 +24,6 @@ mod telegram;
 mod types;
 
 pub use hub::Hub;
+pub use personalities::Personality;
 pub use platform::{Field, Need, Platform};
 pub use types::{Binding, ChatApps, ChatPlace, GatewaySettings, PairedUser, PlatformSettings, Status};

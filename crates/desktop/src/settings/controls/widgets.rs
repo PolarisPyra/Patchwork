@@ -10,7 +10,7 @@ use gpui::{
 };
 use crate::ui::menu::MenuItem;
 use crate::settings::SettingsDialog;
-use crate::ui::theme::{fs_sm, radius, radius_sm, Theme};
+use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme};
 use crate::ui::{button, icon};
 use patchwork_core::threads::AccessMode;
 
@@ -420,4 +420,33 @@ pub fn tildify(path: &str) -> String {
         }
         _ => path.to_string(),
     }
+}
+
+/// How a folder is laid out, under an "Example" heading.
+pub fn example(text: &'static str, t: &Theme) -> Div {
+    div()
+        .child(
+            div()
+                .mt(px(20.))
+                .mb(px(6.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .child("Example"),
+        )
+        .child(
+            div()
+                .rounded(px(radius_sm()))
+                .border_1()
+                .border_color(t.border_strong)
+                .bg(t.bg_editor)
+                .px(px(12.))
+                .py(px(10.))
+                .font_family(font_mono())
+                .text_size(px(fs_xs()))
+                .line_height(gpui::relative(1.6))
+                .text_color(t.text_muted)
+                .children(
+                    text.lines()
+                        .map(|line| div().whitespace_nowrap().child(line.to_string())),
+                ),
+        )
 }

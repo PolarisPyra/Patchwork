@@ -20,6 +20,9 @@ pub struct GatewaySettings {
     pub access: AccessMode,
     /// The project chats started from a chat app open in; none starts them as chats.
     pub project_id: Option<String>,
+    /// The personality, from the personalities folder, that chats started from a chat app talk
+    /// in; none gives them Patchwork's own.
+    pub personality: Option<String>,
 }
 
 impl Default for GatewaySettings {
@@ -28,6 +31,7 @@ impl Default for GatewaySettings {
             platforms: HashMap::new(),
             access: AccessMode::Supervised,
             project_id: None,
+            personality: None,
         }
     }
 }

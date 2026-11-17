@@ -12,9 +12,21 @@ use super::general::general;
 use super::paired::paired;
 use super::platform::page;
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{alert, section_heading, tile, tile_grid};
+use crate::settings::controls::{alert, example, section_heading, tile, tile_grid, token_row};
 use crate::ui::theme::theme;
 use crate::ui::platform_logo;
+
+/// How the personalities folder is laid out: one Markdown file per personality, named like it,
+/// holding how it talks.
+const PERSONALITIES_EXAMPLE: &str = "personalities/
+├── Butler.md
+└── Pirate.md
+
+Pirate.md
+Talk like a ship's first mate reporting to the captain: salty, cheerful
+and short, with a little nautical slang (\"aye\", \"the hold\", \"smooth
+sailing\"). Keep it readable: the slang never hides a file name, a
+number or what is broken.";
 
 /// One tile per chat app, with a dot for each one that is on; a click opens its settings.
 fn tiles(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
@@ -94,5 +106,8 @@ pub fn render(
                 .clone()
                 .map(|e| alert("gw-error", e, t.danger)),
         )
+        .child(section_heading("Personalities", false, &t))
+        .child(token_row("Folder", Some(&d.gateways.personalities_dir), &t))
+        .child(example(PERSONALITIES_EXAMPLE, &t))
         .into_any_element()
 }
