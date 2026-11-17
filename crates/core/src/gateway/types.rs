@@ -205,6 +205,16 @@ pub(crate) trait Connector: Send + Sync {
         Err("This chat app takes no files from Patchwork".into())
     }
 
+    /// Deletes the messages in `chat` that the platform lets Patchwork delete, and says whether
+    /// that was all of them.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the platform deletes nothing for Patchwork or stops partway.
+    fn clear(&self, _chat: &str) -> Result<bool, Error> {
+        Err("This chat app does not let Patchwork delete messages".into())
+    }
+
     /// Shows that Patchwork is writing in `chat`, where the platform can.
     fn typing(&self, _chat: &str) {}
 
