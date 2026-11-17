@@ -43,13 +43,19 @@ impl Slack {
             .header("Authorization", &format!("Bearer {token}"))
             .send_json(body)
             .map_err(|e| failed("Slack could not be reached", e, token))?;
-        let body = json("Slack", response)?;
-        if body["ok"].as_bool() == Some(true) {
-            Ok(body)
-        } else {
-            let reason = body["error"].as_str().unwrap_or("no reason given");
-            Err(format!("Slack refused the request: {reason}").into())
-        }
+        result(response)
+    }
+
+    /// Calls the Web API method `method` with the bot token and `fields` as a form, for the
+    /// methods that take no JSON.
+    fn call_form(&self, method: &str, fields: &[(&str, &str)]) -> Result<Value, Error> {
+        let response = self
+            .http
+            .post(&format!("{API}/{method}"))
+            .header("Authorization", &format!("Bearer {}", self.bot))
+            .send_form(fields.iter().copied())
+            .map_err(|e| failed("Slack could not be reached", e, &self.bot))?;
+        result(response)
     }
 
     /// Handles one Socket Mode envelope, acknowledging it first as Slack asks.
@@ -195,6 +201,37 @@ impl Connector for Slack {
         Ok(sent["ts"].as_str().map(str::to_string))
     }
 
+    fn send_file(&self, chat: &str, name: &str, bytes: &[u8], caption: &str) -> Result<(), Error> {
+        let length = bytes.len().to_string();
+        let upload = self.call_form(
+            "files.getUploadURLExternal",
+            &[("filename", name), ("length", &length)],
+        )?;
+        let (Some(url), Some(id)) = (upload["upload_url"].as_str(), upload["file_id"].as_str())
+        else {
+            return Err("Slack gave no place to upload the file".into());
+        };
+        let response = self
+            .http
+            .post(url)
+            .header("Content-Type", "text/plain; charset=utf-8")
+            .send(bytes)
+            .map_err(|e| failed("Slack could not be reached", e, &self.bot))?;
+        if !response.status().is_success() {
+            return Err(format!("Slack refused the file: {}", response.status()).into());
+        }
+        let files = json!([{"id": id, "title": name}]).to_string();
+        self.call_form(
+            "files.completeUploadExternal",
+            &[
+                ("files", &files),
+                ("channel_id", chat),
+                ("initial_comment", caption),
+            ],
+        )
+        .map(drop)
+    }
+
     fn edit(&self, chat: &str, id: &str, text: &str) -> Result<(), Error> {
         self.call(
             "chat.update",
@@ -202,5 +239,16 @@ impl Connector for Slack {
             &json!({"channel": chat, "ts": id, "text": text}),
         )
         .map(drop)
+    }
+}
+
+/// The answer to a Web API call, or the reason Slack gave for refusing it.
+fn result(response: ureq::http::Response<ureq::Body>) -> Result<Value, Error> {
+    let body = json("Slack", response)?;
+    if body["ok"].as_bool() == Some(true) {
+        Ok(body)
+    } else {
+        let reason = body["error"].as_str().unwrap_or("no reason given");
+        Err(format!("Slack refused the request: {reason}").into())
     }
 }

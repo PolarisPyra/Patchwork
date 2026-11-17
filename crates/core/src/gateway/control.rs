@@ -57,6 +57,13 @@ impl Core {
             .collect()
     }
 
+    /// A platform's saved credential named `key`, to show in Settings. This reads the system
+    /// credential store, which can block.
+    #[must_use]
+    pub fn gateway_credential(&self, platform: Platform, key: &str) -> Option<String> {
+        token(platform, key)
+    }
+
     /// Saves a platform's credential, or removes it when `value` is empty, and reconnects. This
     /// writes the system credential store, which can block.
     ///

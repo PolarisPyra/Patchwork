@@ -1,6 +1,7 @@
 //! The tools a chat's agent drives other chats with.
 //!
-//! It can list the project's chats, start one on any agent, message one, and wait for its reply.
+//! It can list the project's chats (every project's, in a chat run from a chat app), start one on
+//! any agent, message one, and wait for its reply.
 //! Offered on Patchwork's own server to every chat a person started, unless Settings → Chat
 //! turns them off.
 
@@ -29,6 +30,12 @@ pub fn is_tool(tool: &str) -> bool {
     [LIST, START, SEND, WAIT].contains(&tool)
 }
 
+/// Whether `list_chats` shows `thread` the chats of every project: a chat run from a chat app,
+/// where the person is away from Patchwork and asks about all of it.
+pub(crate) fn sees_every_project(core: &Core, thread: &Thread) -> bool {
+    !core.bound_chats(&thread.id).is_empty()
+}
+
 /// Whether the agent of `thread` is given the tools: a chat a person started, with them on.
 pub(crate) fn offered(core: &Core, thread: &Thread) -> bool {
     thread.parent.is_none() && !core.store.settings().chat_tools_off
@@ -45,10 +52,15 @@ impl Core {
             return Vec::new();
         }
         let id = json!({"type": "string", "description": "The chat's id, from list_chats or start_chat."});
+        let list = if sees_every_project(self, &thread) {
+            "List the other chats in every Patchwork project, with each one's id, title, project, agent, model, whether it is replying and, when it is, what it is doing now. Use it to answer questions about what is running. Only the chats in this chat's project can be messaged or waited on."
+        } else {
+            "List the other chats in this project, with each one's id, title, agent, model, whether it is replying and, when it is, what it is doing now."
+        };
         vec![
             json!({
                 "name": LIST,
-                "description": "List the other chats in this project, with each one's id, title, agent, model and whether it is replying.",
+                "description": list,
                 "inputSchema": {"type": "object", "properties": {}},
             }),
             json!({

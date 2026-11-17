@@ -3,11 +3,14 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::fmt::Write as _;
 use std::sync::Arc;
 
 use super::hub::Place;
 use super::types::Incoming;
 use crate::Core;
+use crate::system::now_ms;
+use crate::threads::{Role, Standing};
 
 /// How many threads `/threads` lists.
 const LISTED: usize = 10;
@@ -22,8 +25,12 @@ const HELP: &str = "Messages go to the agent in this conversation's Patchwork ch
 /use <number>: switch to a chat from /threads
 /stop: stop the agent
 /status: show the chat and what it is doing
+/running: list every chat that is working
+/diff: get what the last reply changed as a file
+/model, /agent, /access, /plan: show or change what this chat runs with
+/unmute: hear from every muted chat again
 
-When the agent asks before acting, reply allow or deny, or press a button. When it asks a question, reply with the numbers of the answers, one line per question.";
+When the agent asks before acting, reply allow, always or deny, or press a button. When it asks a question, reply with the numbers of the answers, one line per question.";
 
 impl Core {
     /// Answers a command Patchwork handles, and says whether it was one.
@@ -168,9 +175,73 @@ impl Core {
                 }
                 None => "No chat yet. Your next message starts one.".to_string(),
             },
+            "running" => self.running(),
+            "diff" => match self.send_diff(platform, chat, thread) {
+                Some(text) => text,
+                None => return true,
+            },
+            "mute" => self.mute_notices(rest),
+            "unmute" => self.unmute_notices(),
+            "resume" => self.resume_at_reset(rest),
+            "model" | "agent" | "plan" | "access" => self.thread_option(&word, rest, thread),
+            "answer" => {
+                let (id, reply) = rest.split_once(char::is_whitespace).unwrap_or((rest, ""));
+                self.answer_by_id(platform, chat, id, reply.trim());
+                return true;
+            }
+            "open" => match self.continue_on_chat(rest, platform, chat) {
+                Ok(()) => return true,
+                Err(error) => format!("Patchwork could not open that chat: {error}"),
+            },
             _ => return false,
         };
         self.say(platform, chat, &reply);
         true
+    }
+
+    /// The chats people started that are replying now: each one's title, project, what it is
+    /// doing and for how long.
+    fn running(&self) -> String {
+        let projects = self.store.settings().projects;
+        let now = now_ms();
+        let lines: Vec<String> = self
+            .store
+            .threads()
+            .into_iter()
+            .filter(|t| {
+                t.parent.is_none()
+                    && (self.runner.is_running(&t.id) || self.runner.is_starting(&t.id))
+            })
+            .map(|t| {
+                let mut line = format!("• {}", t.title);
+                if let Some(p) = t
+                    .project_id
+                    .as_ref()
+                    .and_then(|id| projects.iter().find(|p| &p.id == id))
+                {
+                    let _ = write!(line, " in {}", p.name);
+                }
+                let doing = if t.standing() == Standing::Waiting {
+                    "waiting for an answer".to_string()
+                } else {
+                    t.doing()
+                };
+                let _ = write!(line, ": {doing}");
+                if let Some(reply) = t.messages.iter().rfind(|m| m.role == Role::Assistant) {
+                    let minutes = now.saturating_sub(reply.created_at) / 60_000;
+                    let _ = match minutes {
+                        0 => write!(line, ", under a minute"),
+                        1..60 => write!(line, ", {minutes} min"),
+                        _ => write!(line, ", {} h {} min", minutes / 60, minutes % 60),
+                    };
+                }
+                line
+            })
+            .collect();
+        if lines.is_empty() {
+            "Nothing is running.".to_string()
+        } else {
+            lines.join("\n")
+        }
     }
 }

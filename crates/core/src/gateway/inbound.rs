@@ -7,14 +7,20 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::hub::Place;
+use super::outbound::savable;
 use super::platform::Platform;
 use super::types::Incoming;
 use crate::events::{AgentEvent, AgentEventEnvelope};
+use crate::permissions::{Effect, PermissionRule, PermissionScope, RuleRef};
+use crate::system::new_id;
 use crate::threads::{Approval, ApprovalStatus, NewThread, Question};
 use crate::{Error, Core};
 
 /// Words that allow what the agent asks.
 const ALLOW: &[&str] = &["allow", "yes", "y", "ok", "approve"];
+
+/// The word that allows what the agent asks, and requests like it from now on.
+const ALWAYS: &str = "always";
 
 /// Words that turn down what the agent asks.
 const DENY: &[&str] = &["deny", "no", "n", "reject", "cancel"];
@@ -38,6 +44,9 @@ impl Core {
             && let Some(approval) = self.waiting_approval(id)
         {
             self.answer(platform, chat, id, &approval, text);
+            return;
+        }
+        if !command && self.answer_notice(platform, chat, text) {
             return;
         }
         if command && self.gateway_command(message, thread.as_deref()) {
@@ -93,7 +102,7 @@ impl Core {
     }
 
     /// Answers the agent's request with the user's reply.
-    fn answer(
+    pub(super) fn answer(
         self: &Arc<Self>,
         platform: Platform,
         chat: &str,
@@ -110,6 +119,10 @@ impl Core {
             return;
         }
         let word = text.to_lowercase();
+        if word == ALWAYS && savable(approval) {
+            self.allow_always(platform, chat, thread_id, approval);
+            return;
+        }
         let decision = if DENY.contains(&word.as_str()) {
             Some((false, HashMap::new()))
         } else if approval.questions.is_empty() {
@@ -136,6 +149,67 @@ impl Core {
                 &format!("Patchwork could not answer: {error}"),
             );
         }
+    }
+
+    /// Allows the agent's request and saves rules that allow requests like it from now on, in
+    /// the thread's project or, outside one, in every chat.
+    fn allow_always(
+        self: &Arc<Self>,
+        platform: Platform,
+        chat: &str,
+        thread_id: &str,
+        approval: &Approval,
+    ) {
+        let project = self.store.thread(thread_id).and_then(|t| t.project_id);
+        let name = project.as_ref().map_or_else(
+            || "Chats".to_string(),
+            |id| {
+                self.store
+                    .settings()
+                    .projects
+                    .into_iter()
+                    .find(|p| &p.id == id)
+                    .map_or_else(|| "this project".to_string(), |p| p.name)
+            },
+        );
+        let scope = project.map_or(PermissionScope::Chats, PermissionScope::Project);
+        let rules: Vec<PermissionRule> = approval
+            .kind
+            .iter()
+            .flat_map(|kind| {
+                approval.suggestions.iter().map(|pattern| PermissionRule {
+                    id: new_id(),
+                    kind: *kind,
+                    pattern: pattern.clone(),
+                    effect: Effect::Allow,
+                })
+            })
+            .collect();
+        let rule = rules.first().map(|r| RuleRef {
+            scope: scope.clone(),
+            rule_id: Some(r.id.clone()),
+        });
+        self.gateway
+            .lock()
+            .answered
+            .insert(approval.id.clone(), (platform, chat.to_string()));
+        if let Err(error) =
+            self.respond_approval(thread_id, &approval.id, true, HashMap::new(), rule)
+        {
+            self.gateway.lock().answered.remove(&approval.id);
+            self.say(
+                platform,
+                chat,
+                &format!("Patchwork could not answer: {error}"),
+            );
+            return;
+        }
+        // Saved after the answer, so the rules answer the other requests waiting, not this one.
+        let saved = match self.save_permission_rules(&scope, rules) {
+            Ok(()) => format!("Patchwork will allow this in {name} from now on."),
+            Err(error) => format!("Allowed this once. Patchwork could not save the rule: {error}"),
+        };
+        self.say(platform, chat, &saved);
     }
 
     /// Sends the message to `thread`, or to a new thread when the chat has none.

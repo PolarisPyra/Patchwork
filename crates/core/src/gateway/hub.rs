@@ -9,6 +9,7 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 use std::time::Duration;
 
+use super::notify::Notice;
 use super::platform::Platform;
 use super::types::{Connector, Incoming, Listener, Status};
 use crate::Core;
@@ -61,6 +62,8 @@ pub(super) struct State {
     /// The conversation each request was answered from, by approval id, until the other chats
     /// are told.
     pub answered: HashMap<String, (Platform, String)>,
+    /// The requests sent to chat apps from chats no conversation continues, oldest first.
+    pub notices: Vec<Notice>,
 }
 
 /// What the forwarding thread sends out to chat apps.

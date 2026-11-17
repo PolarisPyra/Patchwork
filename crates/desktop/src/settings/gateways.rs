@@ -8,7 +8,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use gpui::{AnyElement, ClickEvent, FontWeight, Role, SharedString, Window, div, prelude::*, px};
+use gpui::{
+    AnyElement, ClickEvent, FontWeight, Role, SharedString, Toggled, Window, div, prelude::*, px,
+};
 use patchwork_core::gateway::{PairedUser, Platform, PlatformSettings, Status};
 use patchwork_core::system::now_ms;
 
@@ -19,7 +21,7 @@ use crate::settings::controls::{
     switch, tile, tile_grid, token_row,
 };
 use crate::ui::theme::{font_mono, fs_lg, fs_sm, theme};
-use crate::ui::{BtnKind, btn, icon_button, platform_logo};
+use crate::ui::{BtnKind, btn, icon, icon_button, platform_logo};
 
 /// How often the open pane reads the connections' status again.
 const POLL_EVERY: Duration = Duration::from_secs(1);
@@ -39,6 +41,10 @@ pub struct GatewaysState {
     selected: Option<Platform>,
     /// The credentials that are saved, by platform and key, once they have been read.
     saved: Option<HashSet<(Platform, &'static str)>>,
+    /// The saved credentials shown in the clear, by platform and key.
+    revealed: HashMap<(Platform, &'static str), String>,
+    /// The credentials saved since the pane opened, by platform and key.
+    just_saved: HashSet<(Platform, &'static str)>,
     users: Vec<PairedUser>,
     /// The pairing code and when it stops working, in epoch milliseconds.
     code: Option<(String, u64)>,
@@ -87,15 +93,62 @@ impl SettingsDialog {
         value: String,
         cx: &mut Context<Self>,
     ) {
+        let shown = value.trim();
+        let removed = shown.is_empty();
+        if removed {
+            self.hide_credential(platform, key, cx);
+        } else if let Some(text) = self.gateways.revealed.get_mut(&(platform, key)) {
+            *text = shown.to_string();
+        }
+        self.gateways.just_saved.remove(&(platform, key));
         let core = Arc::clone(&self.core);
         self.run(
             move || core.set_gateway_credential(platform, key, &value),
-            |d, out, cx| {
+            move |d, out, cx| {
+                if out.is_ok() && !removed {
+                    d.gateways.just_saved.insert((platform, key));
+                }
                 d.gateways.error = out.err().map(|e| e.to_string());
                 d.read_credentials(cx);
             },
             cx,
         );
+    }
+
+    /// Shows a saved credential in the clear, read off the main thread, or masks it again.
+    fn toggle_credential(&mut self, platform: Platform, key: &'static str, cx: &mut Context<Self>) {
+        if self.gateways.revealed.contains_key(&(platform, key)) {
+            self.hide_credential(platform, key, cx);
+            cx.notify();
+            return;
+        }
+        let core = Arc::clone(&self.core);
+        self.run(
+            move || core.gateway_credential(platform, key),
+            move |d, text, cx| {
+                let Some(text) = text else {
+                    return;
+                };
+                d.gateways.revealed.insert((platform, key), text);
+                d.mask_credential(platform, key, false, cx);
+            },
+            cx,
+        );
+    }
+
+    /// Masks a credential and forgets its shown text.
+    fn hide_credential(&mut self, platform: Platform, key: &'static str, cx: &mut Context<Self>) {
+        self.gateways.revealed.remove(&(platform, key));
+        self.mask_credential(platform, key, true, cx);
+    }
+
+    fn mask_credential(&self, platform: Platform, key: &str, masked: bool, cx: &mut Context<Self>) {
+        if let Some(area) = self.field_area(&format!("gw-{}-{key}", platform.id())) {
+            area.update(cx, |a, cx| {
+                a.masked = masked;
+                cx.notify();
+            });
+        }
     }
 
     fn remove_paired(&mut self, platform: Platform, id: String, cx: &mut Context<Self>) {
@@ -220,8 +273,13 @@ fn general(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> Vec<AnyE
     vec![access.into_any_element(), project.into_any_element()]
 }
 
-/// The one-time code a new person sends a bot to pair, and the button that makes one.
-fn pairing_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
+/// The one-time code a new person sends a bot to pair, the button that makes one, and who has
+/// paired on `platform`.
+fn pairing_row(
+    d: &SettingsDialog,
+    platform: Platform,
+    cx: &mut Context<SettingsDialog>,
+) -> AnyElement {
     let t = *theme(cx);
     let code = d
         .gateways
@@ -258,7 +316,33 @@ fn pairing_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEleme
                 cx.notify();
             })),
     );
-    pairing.into_any_element()
+    let names: Vec<&str> = d
+        .gateways
+        .users
+        .iter()
+        .filter(|u| u.platform == platform)
+        .map(|u| u.name.as_str())
+        .collect();
+    let paired = (!names.is_empty()).then(|| {
+        let text = format!("Paired with {}", names.join(", "));
+        div()
+            .id("gw-paired-now")
+            .role(Role::Status)
+            .aria_label(text.clone())
+            .flex()
+            .items_center()
+            .gap(px(6.))
+            .pb(px(8.))
+            .text_color(t.success)
+            .child(icon("check-circle", 15.).text_color(t.success))
+            .child(text)
+    });
+    div()
+        .flex()
+        .flex_col()
+        .child(pairing)
+        .children(paired)
+        .into_any_element()
 }
 
 /// One platform: its switch and status, its tokens, and its server and account.
@@ -293,9 +377,9 @@ fn platform(
         .text_size(px(fs_sm()))
         .text_color(if failed { t.danger } else { t.text_muted })
         .child(line);
-    let switch_label = format!("Answer on {label}");
+    let switch_label = format!("Enable {label} gateway");
     let mut rows = vec![
-        token_row(switch_label.clone(), None, &t)
+        token_row("Enable gateway", None, &t)
             .child(line)
             .child(
                 switch(format!("gw-{id}-enabled"), switch_label, enabled, &t).on_click(
@@ -319,11 +403,13 @@ fn platform(
             .as_ref()
             .is_some_and(|s| s.contains(&(platform, key)));
         let name = format!("{label} {}", credential.label.to_lowercase());
+        let shown = d.gateways.revealed.get(&(platform, key)).cloned();
+        let revealed = shown.is_some();
         let field = d
             .field(
                 format!("gw-{id}-{key}"),
                 name.clone(),
-                "",
+                shown.as_deref().unwrap_or_default(),
                 if saved {
                     "Saved"
                 } else {
@@ -338,48 +424,70 @@ fn platform(
                 window,
                 cx,
             )
-            .w(px(FIELD_WIDTH))
-            .flex_none();
+            .w_full();
+        // The field takes its own line under the label, wide enough for a whole token.
         rows.push(
             token_row(credential.label, None, &t)
+                .flex_wrap()
                 .when(saved, |row| {
+                    let (icon, action) = if revealed {
+                        ("eye-slash", "Hide")
+                    } else {
+                        ("eye", "Show")
+                    };
                     row.child(
                         icon_button(
-                            SharedString::from(format!("gw-{id}-{key}-remove")),
-                            format!("Remove {name}"),
-                            "x",
+                            SharedString::from(format!("gw-{id}-{key}-show")),
+                            format!("Show {name}"),
+                            icon,
                             14.,
                             cx,
                         )
+                        .aria_toggled(if revealed {
+                            Toggled::True
+                        } else {
+                            Toggled::False
+                        })
+                        .tooltip(crate::ui::tooltip(format!(
+                            "{action} {}",
+                            credential.label.to_lowercase()
+                        )))
                         .on_click(cx.listener(move |d, _, _, cx| {
-                            d.save_credential(platform, key, String::new(), cx);
+                            d.toggle_credential(platform, key, cx);
                         })),
                     )
                 })
                 .child(field)
+                .child(credential_actions(d, platform, key, &name, saved, cx))
                 .into_any_element(),
         );
     }
     for field in platform.settings() {
         let key = field.key;
-        let input = d.text_field(
-            format!("gw-{id}-{key}"),
-            format!("{label} {}", field.label.to_lowercase()),
-            settings.value(key),
-            field.placeholder,
-            Some(FIELD_WIDTH),
-            move |d, text, cx| {
-                d.set_platform(
-                    platform,
-                    |s| {
-                        s.values.insert(key.to_string(), text.trim().to_string());
-                    },
-                    cx,
-                );
-            },
-            window,
-            cx,
-        );
+        let input = d
+            .field(
+                format!("gw-{id}-{key}"),
+                format!("{label} {}", field.label.to_lowercase()),
+                settings.value(key),
+                field.placeholder,
+                FieldKind {
+                    mono: true,
+                    ..Default::default()
+                },
+                move |d, text, cx| {
+                    d.set_platform(
+                        platform,
+                        |s| {
+                            s.values.insert(key.to_string(), text.trim().to_string());
+                        },
+                        cx,
+                    );
+                },
+                window,
+                cx,
+            )
+            .w(px(FIELD_WIDTH))
+            .flex_none();
         rows.push(
             token_row(field.label, None, &t)
                 .child(input)
@@ -387,6 +495,73 @@ fn platform(
         );
     }
     rows
+}
+
+/// The buttons under a credential's field that clear it and save it, and whether it saved.
+fn credential_actions(
+    d: &SettingsDialog,
+    platform: Platform,
+    key: &'static str,
+    name: &str,
+    saved: bool,
+    cx: &mut Context<SettingsDialog>,
+) -> impl IntoElement {
+    let t = *theme(cx);
+    let id = platform.id();
+    let field = SharedString::from(format!("gw-{id}-{key}"));
+    let done = d.gateways.just_saved.contains(&(platform, key)).then(|| {
+        div()
+            .id(SharedString::from(format!("gw-{id}-{key}-saved")))
+            .role(Role::Status)
+            .aria_label(format!("{name} saved"))
+            .flex()
+            .items_center()
+            .gap(px(4.))
+            .text_size(px(fs_sm()))
+            .text_color(t.success)
+            .child(icon("check", 13.).text_color(t.success))
+            .child("Saved")
+    });
+    let cleared = field.clone();
+    div()
+        .w_full()
+        .flex()
+        .items_center()
+        .justify_end()
+        .gap(px(8.))
+        .pt(px(6.))
+        .children(done)
+        .child(
+            btn(
+                SharedString::from(format!("gw-{id}-{key}-clear")),
+                format!("Clear {name}"),
+                BtnKind::Plain,
+                false,
+                &t,
+            )
+            .child("Clear")
+            .on_click(cx.listener(move |d, _, _, cx| {
+                if let Some(area) = d.field_area(&cleared) {
+                    area.update(cx, |a, cx| a.set_text("", cx));
+                }
+                d.gateways.just_saved.remove(&(platform, key));
+                if saved {
+                    d.save_credential(platform, key, String::new(), cx);
+                }
+                cx.notify();
+            })),
+        )
+        .child(
+            btn(
+                SharedString::from(format!("gw-{id}-{key}-save")),
+                format!("Save {name}"),
+                BtnKind::Primary,
+                false,
+                &t,
+            )
+            .child("Save")
+            .on_click(cx.listener(move |d, _, _, cx| d.commit_field(&field, cx))),
+        )
 }
 
 /// One tile per chat app, with a dot for each one that is on; a click opens its settings.
@@ -466,7 +641,7 @@ fn page(
         );
     let steps = setup(each, cx);
     let rows = platform(d, each, window, cx);
-    let pairing = pairing_row(d, cx);
+    let pairing = pairing_row(d, each, cx);
     div()
         .id("gw-platform")
         .role(Role::Group)

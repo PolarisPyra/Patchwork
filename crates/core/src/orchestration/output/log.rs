@@ -308,6 +308,8 @@ fn describe(event: &AgentEvent) -> Option<(LogLevel, &'static str, Option<&str>,
         }
         AgentEvent::TitleUpdated { title } => (Debug, "title", None, title.clone()),
         AgentEvent::ChatAppsChanged => (Debug, "chat apps changed", None, String::new()),
+        AgentEvent::Notice { notice } => (Debug, "desktop notice", None, notice.title.clone()),
+        AgentEvent::OptionsChanged => (Debug, "options changed", None, String::new()),
         AgentEvent::ThreadDeleted => (Info, "chat deleted", None, String::new()),
     })
 }

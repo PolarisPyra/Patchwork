@@ -200,6 +200,39 @@ impl Connector for Matrix {
         self.put_message(chat, &json!({"msgtype": "m.text", "body": text}))
     }
 
+    fn send_file(&self, chat: &str, name: &str, bytes: &[u8], caption: &str) -> Result<(), Error> {
+        let url = format!(
+            "{}/_matrix/media/v3/upload?filename={}",
+            self.server,
+            encode(name)
+        );
+        let response = self
+            .http
+            .post(&url)
+            .header("Authorization", &self.auth())
+            .header("Content-Type", "text/plain; charset=utf-8")
+            .send(bytes)
+            .map_err(|e| failed("The homeserver could not be reached", e, &self.token))?;
+        let uploaded = json("The homeserver", response)?;
+        let uri = uploaded["content_uri"]
+            .as_str()
+            .ok_or("The homeserver did not say where it kept the file")?;
+        if !caption.is_empty() {
+            self.put_message(chat, &json!({"msgtype": "m.text", "body": caption}))?;
+        }
+        self.put_message(
+            chat,
+            &json!({
+                "msgtype": "m.file",
+                "body": name,
+                "filename": name,
+                "url": uri,
+                "info": {"mimetype": "text/plain", "size": bytes.len()},
+            }),
+        )
+        .map(drop)
+    }
+
     fn edit(&self, chat: &str, id: &str, text: &str) -> Result<(), Error> {
         let content = json!({
             "msgtype": "m.text",

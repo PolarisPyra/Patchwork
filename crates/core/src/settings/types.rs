@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, HashMap};
 use serde::{Deserialize, Serialize};
 
 use crate::backgrounds::ChatBackground;
+use crate::notifications::NotificationSettings;
 use crate::permissions::PermissionSettings;
 use crate::projects::Project;
 use crate::provider::AgentKind;
@@ -438,25 +439,6 @@ pub enum ResumeAtLaunch {
     Ask,
     /// Leaves each for its own Resume button.
     Never,
-}
-
-/// Desktop notifications shown while Patchwork is not the focused window.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
-pub struct NotificationSettings {
-    /// When a task's goal is met.
-    pub goal_complete: bool,
-    /// When an agent finishes replying in a task that is not pursuing a goal.
-    pub task_complete: bool,
-}
-
-impl Default for NotificationSettings {
-    fn default() -> Self {
-        Self {
-            goal_complete: true,
-            task_complete: true,
-        }
-    }
 }
 
 /// Settings that trade a little convenience for fewer tokens spent.

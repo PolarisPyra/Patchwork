@@ -113,6 +113,28 @@ impl Thread {
         step.or_else(|| reply.text.lines().rev().find_map(one_line))
     }
 
+    /// What a replying chat is doing now: its running tool step, else its running plan step,
+    /// else writing.
+    pub(crate) fn doing(&self) -> String {
+        let Some(reply) = self.messages.iter().rfind(|m| m.role == Role::Assistant) else {
+            return "starting".into();
+        };
+        reply
+            .tools
+            .iter()
+            .rfind(|t| t.status == StepStatus::Running)
+            .map(|t| t.summary.clone())
+            .or_else(|| {
+                reply
+                    .plan
+                    .iter()
+                    .find(|s| s.status == StepStatus::Running)
+                    .map(|s| s.text.clone())
+            })
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| "writing".into())
+    }
+
     /// The agent's last reply, leaving out messages still queued behind it.
     fn last_reply(&self) -> Option<&Message> {
         self.messages

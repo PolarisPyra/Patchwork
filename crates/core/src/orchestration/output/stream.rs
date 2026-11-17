@@ -168,6 +168,8 @@ pub(in crate::orchestration) fn event_message(event: &AgentEvent) -> Option<&str
         | AgentEvent::ThreadDeleted
         | AgentEvent::TitleUpdated { .. }
         | AgentEvent::ChatAppsChanged
+        | AgentEvent::Notice { .. }
+        | AgentEvent::OptionsChanged
         | AgentEvent::MessageRemoved { .. } => None,
         AgentEvent::MessageEdited { message } => Some(&message.id),
         AgentEvent::TextDelta { message_id, .. }
@@ -478,6 +480,8 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
         | AgentEvent::ThreadDeleted
         | AgentEvent::TitleUpdated { .. }
         | AgentEvent::ChatAppsChanged
+        | AgentEvent::Notice { .. }
+        | AgentEvent::OptionsChanged
         | AgentEvent::MessageRemoved { .. }
         | AgentEvent::MessageEdited { .. } => {}
     }

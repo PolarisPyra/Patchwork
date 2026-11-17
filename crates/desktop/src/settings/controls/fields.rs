@@ -209,7 +209,7 @@ impl SettingsDialog {
     }
 
     /// Saves a field's text when it differs from what the settings hold.
-    fn commit_field(&mut self, key: &SharedString, cx: &mut Context<Self>) {
+    pub(in crate::settings) fn commit_field(&mut self, key: &SharedString, cx: &mut Context<Self>) {
         let Some(field) = self.fields.get(key) else {
             return;
         };
