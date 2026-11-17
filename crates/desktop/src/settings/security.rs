@@ -151,6 +151,8 @@ impl SettingsDialog {
         }
         if self.core.secret_needs_password() {
             self.security.asking = Some(name);
+            // The field that asks takes the focus when it is drawn.
+            self.security.focused = false;
             return cx.notify();
         }
         let core = Arc::clone(&self.core);
@@ -319,11 +321,13 @@ fn password_field(
         RECOVERY => d.security.recovery.clone(),
         _ => d.security.ask.clone(),
     };
+    // The one field without a label beside it says what it takes.
+    let placeholder = if key == ASK { title } else { "" };
     d.field(
         key,
         title,
         &value,
-        "",
+        placeholder,
         kind,
         move |d, text, _| {
             let text = Zeroizing::new(text);
