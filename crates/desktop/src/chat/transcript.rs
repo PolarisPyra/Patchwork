@@ -141,6 +141,7 @@ pub fn sync_transcript(w: &mut Workspace) {
     } else {
         list.reset(rows.len());
         list.set_follow_mode(FollowMode::Tail);
+        w.rail.clear();
     }
     w.transcript_rows = (Some(thread.id.clone()), rows);
     w.transcript_pieces = cut;
@@ -153,7 +154,10 @@ const WIDTH_SETTLE: Duration = Duration::from_millis(150);
 /// is drawn from a list that lays out only the rows in reach. A new width throws away every row's
 /// height, and the list that measures them all would lay out every row on every frame. Once the
 /// width holds, every row is measured again, once.
-pub fn follow_width(w: &mut Workspace, cx: &mut Context<Workspace>) {
+///
+/// A list just handed over has no bounds until it is laid out, so what reads them, as the turn
+/// rail does, is drawn again on the frame after.
+pub fn follow_width(w: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) {
     let width = w.transcript_list.viewport_bounds().size.width;
     // A list just handed over has not been laid out yet.
     if width == px(0.) {
@@ -166,13 +170,19 @@ pub fn follow_width(w: &mut Workspace, cx: &mut Context<Workspace>) {
     if w.transcript_settle.is_none() {
         let in_reach = ListState::new(0, ListAlignment::Top, px(800.));
         w.transcript_list = handed_over(&w.transcript_list, in_reach);
+        // This frame lays it out.
+        cx.on_next_frame(window, |_, _, cx| cx.notify());
     }
-    w.transcript_settle = Some(cx.spawn(async move |this, cx| {
+    w.transcript_settle = Some(cx.spawn_in(window, async move |this, cx| {
         cx.background_executor().timer(WIDTH_SETTLE).await;
-        let _ = this.update(cx, |w, cx| {
+        let _ = this.update_in(cx, |w, window, cx| {
             w.transcript_settle = None;
             let all = ListState::new(0, ListAlignment::Top, px(800.)).measure_all();
             w.transcript_list = handed_over(&w.transcript_list, all);
+            // The next frame lays it out.
+            cx.on_next_frame(window, |_, window, cx| {
+                cx.on_next_frame(window, |_, _, cx| cx.notify());
+            });
             cx.notify();
         });
     }));
@@ -243,12 +253,11 @@ enum Compaction {
     Stopped,
 }
 
-/// The state of the `/compact` at `index`, read from the reply after it.
-fn compaction_state(rows: &[&Message], index: usize, busy: bool) -> Compaction {
-    let reply = rows.get(index + 1);
+/// The state of a `/compact`, read from the reply after it.
+fn compaction_state(reply: Option<&Message>, busy: bool) -> Compaction {
     // A /compact sent during a turn compacts where the turn is, and the turn's reply streams on
     // once it is done.
-    let went_on = |r: &&Message| {
+    let went_on = |r: &Message| {
         r.parts
             .iter()
             .position(|p| matches!(p, Part::Compaction { .. }))
@@ -277,6 +286,7 @@ fn compacted_divider(
     row: SharedString,
     state: Compaction,
     before: Option<u64>,
+    top: bool,
     t: &Theme,
 ) -> gpui::Stateful<Div> {
     let rule = || div().h(px(1.)).flex_1().bg(t.border);
@@ -293,20 +303,25 @@ fn compacted_divider(
             None => "Context compacted".into(),
         }),
     };
-    div().id(row).px(px(24.)).child(
-        div().flex().pb(px(20.)).child(
-            div()
-                .flex()
-                .w_full()
-                .items_center()
-                .gap(px(12.))
-                .text_size(px(fs_xs()))
-                .text_color(t.text_subtle)
-                .child(rule())
-                .child(label)
-                .child(rule()),
-        ),
-    )
+    div()
+        .id(row)
+        .role(Role::Status)
+        .px(px(24.))
+        .when(top, |d| d.pt(px(24.)))
+        .child(
+            div().flex().pb(px(20.)).child(
+                div()
+                    .flex()
+                    .w_full()
+                    .items_center()
+                    .gap(px(12.))
+                    .text_size(px(fs_xs()))
+                    .text_color(t.text_subtle)
+                    .child(rule())
+                    .child(label)
+                    .child(rule()),
+            ),
+        )
 }
 
 pub fn transcript(
@@ -363,7 +378,7 @@ pub fn transcript(
                 .flex()
                 .flex_col()
                 // The rail's strips reach 44px in from the edge when they widen.
-                .when(rail.is_some(), |d| d.pr(px(28.)))
+                .when(rail::has_rail(w, &shown), |d| d.pr(px(28.)))
                 .text_size(px(crate::ui::theme::fs_md()))
                 .child(rows),
         )
@@ -389,15 +404,18 @@ fn transcript_row(
     let Some(&Row { message, piece, .. }) = rows.get(i) else {
         return gpui::Empty.into_any_element();
     };
-    let shown: Vec<&Message> = thread
+    // The message, with the one before it and the one after.
+    let mut around = thread
         .messages
         .iter()
         .map(Arc::as_ref)
         .filter(|m| !m.queued)
-        .collect();
-    let Some(&m) = shown.get(message) else {
+        .skip(message.saturating_sub(1));
+    let previous = if message > 0 { around.next() } else { None };
+    let Some(m) = around.next() else {
         return gpui::Empty.into_any_element();
     };
+    let next = around.next();
     let first = i == 0 || rows[i - 1].message != message;
     let last = rows.get(i + 1).is_none_or(|next| next.message != message);
     let row = SharedString::from(match piece {
@@ -406,9 +424,14 @@ fn transcript_row(
         Piece::Step { step, from, .. } => format!("row-{}-{step}-{from}", m.id),
         Piece::Foot => format!("row-{}-foot", m.id),
     });
+    // Whatever the chat's first message draws as keeps the gap above it.
+    let top = first && message == 0;
     if m.role == MessageRole::User && rail::is_goal_clear(&m.text) {
         // The green notice in the reply already says the goal was cleared.
-        return div().id(row).into_any_element();
+        return div()
+            .id(row)
+            .when(top, |d| d.pt(px(24.)))
+            .into_any_element();
     }
     if m.role == MessageRole::User && upkeep(&m.text) == Some(Upkeep::Compact) {
         let was = before
@@ -416,10 +439,9 @@ fn transcript_row(
             .copied()
             .flatten()
             .filter(|_| w.settings.tokens.show_usage);
-        return compacted_divider(row, compaction_state(&shown, message, busy), was, t)
+        return compacted_divider(row, compaction_state(next, busy), was, top, t)
             .into_any_element();
     }
-    let previous = message.checked_sub(1).and_then(|p| shown.get(p).copied());
     // The divider above a /compact already says how it went, so its reply shows nothing more
     // unless it said or did something besides compacting.
     let only_compacts = m.text.trim().is_empty()
@@ -454,7 +476,7 @@ fn transcript_row(
                 .flex()
                 .flex_col()
                 .when(last, |d| d.pb(px(20.)))
-                .when(first && message == 0, |d| d.pt(px(24.)))
+                .when(top, |d| d.pt(px(24.)))
                 .when(m.role != MessageRole::User, |d| d.max_w(px(820.)))
                 .child(body),
         )
