@@ -3,6 +3,30 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.97] - 2026-11-17
+
+**26.11.97** · 3 changes from 1 contributor
+
+- **Download recovery key.** Save your recovery key to a text file that only your user account can read.
+- **Show passwords individually.** Show or hide each password field separately instead of all at once.
+
+<details>
+<summary>Full changelog</summary>
+
+### Added
+
+- Settings → Security now has a Download button next to a new recovery key. It saves the key to a text file that only your user account can read. by [PolarisPyra in #190](https://github.com/PolarisPyra/Patchwork/pull/190)
+
+### Changed
+
+- In Settings → Security, each password field now has its own eye button that shows or hides only that field. It replaces the single button beside Remove password, which showed every field at once. by [PolarisPyra in #191](https://github.com/PolarisPyra/Patchwork/pull/191)
+
+### Removed
+
+- Settings → Gateway no longer has an eye button beside each chat app's token field. A token stays hidden while you type it, and once saved you can view it in Settings → Security. by [PolarisPyra in #192](https://github.com/PolarisPyra/Patchwork/pull/192)
+
+</details>
+
 ## [26.11.96] - 2026-11-17
 
 **26.11.96** · 2 changes from 1 contributor
