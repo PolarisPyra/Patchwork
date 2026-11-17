@@ -6,7 +6,7 @@ use gpui::{AnyElement, Div, FontWeight, Role, Toggled, Window, div, prelude::*, 
 use patchwork_core::provider::api::config::KeyStore;
 
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{FieldKind, alert};
+use crate::settings::controls::{FieldKind, alert, vault_notice};
 use crate::ui::theme::{fs_sm, radius_sm, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, icon_button, provider_logo};
 
@@ -38,11 +38,7 @@ pub fn render(
         form.busy,
         form.confirm_remove,
     );
-    let key_value = if form.key.is_empty() {
-        form.saved_key.clone().unwrap_or_default()
-    } else {
-        form.key.clone()
-    };
+    let key_value = form.key.clone();
     let typed_key = !form.key.is_empty();
     let error = form.error.clone();
     let saved = !draft.id.is_empty();
@@ -50,8 +46,16 @@ pub fn render(
         "Key will be removed"
     } else {
         match (has_key, draft.key_store) {
-            (true, Some(KeyStore::Keychain)) => "Saved in the system keychain",
-            (true, Some(KeyStore::File)) => "Saved in Patchwork's config folder",
+            (true, Some(_))
+                if patchwork_core::vault::status()
+                    == patchwork_core::vault::Status::Open(
+                        patchwork_core::vault::Method::Password,
+                    ) =>
+            {
+                "Saved, locked by your password"
+            }
+            (true, Some(KeyStore::Keychain)) => "Saved, locked by the system keychain",
+            (true, Some(KeyStore::File)) => "Saved, locked by a key file",
             _ => "sk-…",
         }
     };
@@ -110,12 +114,7 @@ pub fn render(
                 ..Default::default()
             },
             |f, text| {
-                // The stored key put in to be seen is not a new key.
-                if f.saved_key.as_deref() == Some(text.as_str()) {
-                    return;
-                }
                 f.key = text;
-                f.saved_key = None;
                 f.clear_key = false;
             },
             window,
@@ -361,6 +360,7 @@ pub fn render(
                 })),
         )
         .children(headers)
+        .children(vault_notice("form-vault", &t))
         .children(error.map(|e| alert("form-error", e, t.danger)))
         .child(
             div()

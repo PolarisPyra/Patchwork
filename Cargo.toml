@@ -21,7 +21,9 @@ categories = ["development-tools"]
 patchwork-core = { path = "crates/core" }
 patchwork-system = { path = "crates/system" }
 
+argon2 = { version = "0.6", default-features = false }
 base64 = { version = "0.22", default-features = false }
+chacha20poly1305 = { version = "0.10", default-features = false }
 chrono = { version = "0.4", default-features = false }
 dirs = { version = "6", default-features = false }
 embed-resource = { version = "3", default-features = false }
@@ -69,6 +71,7 @@ winreg = { version = "0.56", default-features = false }
 x11rb = { version = "0.13", default-features = false }
 xcap = { version = "0.9", default-features = false }
 zbus = { version = "5", default-features = false }
+zeroize = { version = "1", default-features = false }
 zip = { version = "9", default-features = false }
 
 # Debug builds of the app are optimized too: unoptimized, GPUI takes about 50ms to lay out a

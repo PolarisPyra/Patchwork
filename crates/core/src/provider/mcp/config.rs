@@ -341,7 +341,7 @@ fn remove_file(name: &str) -> Result<(), Error> {
 }
 
 /// Starts, in the background, each enabled server that is not running as configured.
-pub(super) fn restart_changed() {
+pub(crate) fn restart_changed() {
     std::thread::spawn(|| {
         let _ = live_servers();
     });

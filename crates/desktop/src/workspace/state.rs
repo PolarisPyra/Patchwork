@@ -448,6 +448,12 @@ impl Workspace {
         // The composer starts focused, so typing and the app's keys work before any click.
         let composer = this.composer.read(cx).editor.focus_handle(cx);
         window.focus(&composer, cx);
+        // A vault with a password opens nothing saved until it is entered.
+        if this.settings.onboarded
+            && patchwork_core::vault::status() == patchwork_core::vault::Status::Waiting
+        {
+            this.open_settings(Some("security"), window, cx);
+        }
         this
     }
 

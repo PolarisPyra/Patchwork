@@ -21,9 +21,11 @@ pub(crate) use models::connection;
 #[doc(inline)]
 pub use models::{ModelsQuery, default_model, fetch_models, models, resolve};
 pub(super) use secrets::with_headers;
-pub(crate) use secrets::{delete_secret, read_secret, store_secret};
+pub(crate) use secrets::{
+    delete_secret, forget_secrets, old_copies, read_secret, remove_old_copies, store_secret,
+};
 #[doc(inline)]
-pub use secrets::{key, stored_key};
+pub use secrets::key;
 #[doc(inline)]
 pub use store::{init, list, move_to, provider, providers, remove, save, sessions_dir};
 #[doc(inline)]

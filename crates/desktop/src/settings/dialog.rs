@@ -21,6 +21,7 @@ use super::permissions;
 use super::projects;
 use super::providers;
 use super::scheduled;
+use super::security;
 use super::shortcuts;
 use super::ssh;
 use super::themes;
@@ -153,6 +154,14 @@ pub(super) const ENTRIES: &[Entry] = &[
         }],
     },
     Entry {
+        label: "Security",
+        icon: "fingerprint",
+        panes: &[Pane {
+            id: "security",
+            label: "Security",
+        }],
+    },
+    Entry {
         label: "Projects",
         icon: "folder-simple",
         panes: &[
@@ -231,6 +240,7 @@ pub struct SettingsDialog {
     pub(super) ssh: ssh::SshState,
     pub(super) themes: themes::ThemesState,
     pub(super) scheduled: scheduled::ScheduledState,
+    pub(super) security: security::SecurityState,
     pub(super) tokens: tokens::TokensState,
     pub(super) updates: updates::UpdatesState,
 }
@@ -287,6 +297,7 @@ impl SettingsDialog {
             ssh: ssh::SshState::default(),
             themes: themes::ThemesState::default(),
             scheduled: scheduled::ScheduledState::default(),
+            security: security::SecurityState::default(),
             tokens: tokens::TokensState::default(),
             updates: updates::UpdatesState::default(),
         }

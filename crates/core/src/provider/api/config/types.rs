@@ -29,7 +29,7 @@ pub struct ApiProvider {
     /// Reads the key from this environment variable instead of a stored key.
     #[serde(default)]
     pub key_env: Option<String>,
-    /// Where the stored key is; set by Patchwork, never by the UI.
+    /// What protects the stored key; set by Patchwork, never by the UI.
     #[serde(default)]
     pub key_store: Option<KeyStore>,
     /// A logo chosen for it, as an image `data:` URL; replaces the preset's.
@@ -65,10 +65,12 @@ pub struct Header {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+/// What protects a saved key. The key is encrypted in the vault, whose own key is kept by one
+/// of these; a key saved by an earlier version is in the store itself until it is first read.
 pub enum KeyStore {
     /// The system credential store.
     Keychain,
-    /// `api-keys.json`, for systems without a credential store.
+    /// A file in the config folder, for systems without a credential store.
     File,
 }
 

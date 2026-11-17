@@ -25,8 +25,9 @@ pub use config::{
 };
 use config::{
     CALL_TIMEOUT, MAX_NAME, MAX_TOOLS, POLL, PROTOCOL, REQUEST_TIMEOUT, RETRY_AFTER, START_TIMEOUT,
-    STDERR_TAIL, read_config, resolved, restart_changed,
+    STDERR_TAIL, read_config, resolved,
 };
+pub(crate) use config::restart_changed;
 #[doc(inline)]
 pub use pool::{tool_budget, turn_tools, probe, call};
 use pool::{pool, live_servers, Notices, announce, Answer, Waiters};

@@ -146,8 +146,10 @@ that goes away with the chat.
 
 Tasks run right in your project folder. Settings live in `~/.config/patchwork` and app state in
 `~/.local/share/patchwork` (macOS and Windows use their own folders, see
-[Architecture](docs/architecture.md)). API keys go in your system keychain, or a file only you can
-read if there isn't one. [Agent CLIs](docs/agent-clis.md) lists every file Patchwork reads from
+[Architecture](docs/architecture.md)). API keys, chat app tokens and other secrets are
+encrypted in Patchwork's database; the key that opens them is in your system keychain, or in a file
+only you can read if there isn't one. Set a password in Settings, under Security, and they open
+only once you enter it after each start. [Agent CLIs](docs/agent-clis.md) lists every file Patchwork reads from
 your agents.
 
 ## Contributing

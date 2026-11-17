@@ -46,8 +46,8 @@ impl Core {
         list
     }
 
-    /// The platform credentials that are saved, by platform and key. This reads the system
-    /// credential store, which can block.
+    /// The platform credentials that are saved, by platform and key. This reads the vault, and
+    /// the system credential store for one an earlier version saved, which can block.
     #[must_use]
     pub fn gateway_credentials(&self) -> Vec<(Platform, &'static str)> {
         Platform::ALL
@@ -57,15 +57,8 @@ impl Core {
             .collect()
     }
 
-    /// A platform's saved credential named `key`, to show in Settings. This reads the system
-    /// credential store, which can block.
-    #[must_use]
-    pub fn gateway_credential(&self, platform: Platform, key: &str) -> Option<String> {
-        token(platform, key)
-    }
-
     /// Saves a platform's credential, or removes it when `value` is empty, and reconnects. This
-    /// writes the system credential store, which can block.
+    /// writes the vault, which can block.
     ///
     /// # Errors
     ///

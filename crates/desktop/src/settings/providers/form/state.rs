@@ -10,6 +10,8 @@ use patchwork_core::provider::api::config::{
     self, ApiModel, ApiProvider, KeyChange, KeyStore, ModelsQuery, ProviderView,
 };
 
+use patchwork_core::vault::{Method, Status, status};
+
 use crate::settings::SettingsDialog;
 use super::render::{render};
 
@@ -107,8 +109,11 @@ pub fn describe(view: &ProviderView) -> String {
     };
     let key = match (&p.key_env, p.key_store) {
         (Some(env), _) => format!("key from ${env}"),
-        (None, Some(KeyStore::Keychain)) => "key in system keychain".into(),
-        (None, Some(KeyStore::File)) => "key in Patchwork's config folder".into(),
+        (None, Some(_)) if status() == Status::Open(Method::Password) => {
+            "key locked by your password".into()
+        }
+        (None, Some(KeyStore::Keychain)) => "key locked by the system keychain".into(),
+        (None, Some(KeyStore::File)) => "key locked by a key file".into(),
         (None, None) => "no key".into(),
     };
     format!("{models} · {key}")
@@ -153,8 +158,6 @@ pub struct Form {
     pub(super) has_key: bool,
     pub(super) key: String,
     pub(super) show_key: bool,
-    /// The stored key, fetched when the eye first shows it. It is shown, not edited.
-    pub(super) saved_key: Option<String>,
     pub(super) clear_key: bool,
     pub(super) use_env: bool,
     pub(super) advanced: bool,
@@ -221,7 +224,6 @@ impl SettingsDialog {
             has_key,
             key: String::new(),
             show_key: false,
-            saved_key: None,
             clear_key: false,
             use_env,
             advanced,
@@ -330,28 +332,11 @@ impl SettingsDialog {
         };
         form.show_key = !form.show_key;
         let (show, field) = (form.show_key, form.field("key"));
-        let fetch = show && form.has_key && form.key.is_empty() && form.saved_key.is_none();
-        let id = form.draft.id.clone();
         if let Some(area) = self.field_area(&field) {
             area.update(cx, |a, cx| {
                 a.masked = !show;
                 cx.notify();
             });
-        }
-        if fetch {
-            self.run(
-                move || config::stored_key(&id),
-                move |d, key, cx| {
-                    let key = key.unwrap_or_default();
-                    if let Some(area) = d.field_area(&field) {
-                        area.update(cx, |a, cx| a.set_text(&key, cx));
-                    }
-                    if let Some(f) = d.form_mut() {
-                        f.saved_key = Some(key);
-                    }
-                },
-                cx,
-            );
         }
         cx.notify();
     }

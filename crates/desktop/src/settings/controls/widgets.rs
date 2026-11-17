@@ -361,6 +361,30 @@ pub fn alert(
         .child(text.into())
 }
 
+/// What a pane that saves secrets says when neither the system keychain nor a password locks
+/// them: they are locked by a key file, wait for the password, or cannot be unlocked this run.
+pub fn vault_notice(id: impl Into<SharedString>, t: &Theme) -> Option<Stateful<Div>> {
+    use patchwork_core::vault::{Method, Status, status};
+    match status() {
+        Status::Locked(why) => Some(alert(
+            id,
+            format!("Saved secrets are locked, and new ones cannot be saved: {why}"),
+            t.danger,
+        )),
+        Status::Open(Method::File) => Some(alert(
+            id,
+            "No system keychain: secrets are locked by a key file in Patchwork's config folder",
+            t.warning,
+        )),
+        Status::Waiting => Some(alert(
+            id,
+            "Saved secrets are locked until the password is entered in Settings, under Security",
+            t.danger,
+        )),
+        Status::Open(Method::Keychain | Method::Password) | Status::Closed => None,
+    }
+}
+
 /// A filter chip, filled when it is the one showing (`chip`). The caller adds what it shows.
 pub fn chip(
     id: impl Into<SharedString>,

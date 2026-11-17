@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use super::seal::sealed;
 use super::types::Settings;
 use crate::extensions::skills;
 use crate::permissions;
@@ -56,7 +57,7 @@ impl Core {
     ///
     /// Returns an error when the settings cannot be written to the database.
     pub fn update_settings<R>(&self, f: impl FnOnce(&mut Settings) -> R) -> Result<R, Error> {
-        let changed = self.store.update_settings(f)?;
+        let changed = self.store.update_settings_as(f, sealed)?;
         follow(&self.store.settings());
         Ok(changed)
     }

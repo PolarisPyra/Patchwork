@@ -20,6 +20,7 @@ pub(crate) mod projects;
 mod providers;
 mod render;
 mod scheduled;
+mod security;
 pub mod shortcuts;
 mod sigils;
 mod ssh;
