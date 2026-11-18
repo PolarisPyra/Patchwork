@@ -405,6 +405,13 @@ fn bash(
         .unwrap_or(BASH_TIMEOUT)
         .clamp(1, MAX_BASH_TIMEOUT);
     let cmd = bash_command(command, Path::new(&from.root))?;
+    // A task in its own worktree can't write its project's folder or another project's.
+    let cmd = match core.worktree_sandbox(&from.thread_id) {
+        Some((read_only, writable)) => {
+            crate::system::sandbox::read_only(cmd, &read_only, &writable)
+        }
+        None => cmd,
+    };
     let (mut child, range) = contained::spawn(cmd, Stdio::null())
         .map_err(|e| format!("Failed to run the command: {e}"))?;
     let (Some(out), Some(err)) = (child.stdout.take(), child.stderr.take()) else {

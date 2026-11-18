@@ -132,7 +132,7 @@ impl Runner {
                     )
                     .into());
                 }
-                project.path.clone()
+                core.turn_root(&thread, id, &project.path)
             } else {
                 let dir = core.chat_dir(&thread_id);
                 std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -329,7 +329,15 @@ impl Runner {
         let (mut cmd, scope) = if remote {
             (provider::remote_turn_command(agent)?, None)
         } else {
-            scope::scoped(provider::turn_command(agent)?)
+            let command = provider::turn_command(agent)?;
+            // A task in its own worktree can't write its project's folder or another project's.
+            let command = match core.worktree_sandbox(&thread_id) {
+                Some((read_only, writable)) => {
+                    crate::system::sandbox::read_only(command, &read_only, &writable)
+                }
+                None => command,
+            };
+            scope::scoped(command)
         };
         if let Some(shell) = provider::agent_shell(agent) {
             // Claude Code on Windows runs its commands in Git Bash, and refuses to start when it

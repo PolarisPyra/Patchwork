@@ -24,6 +24,7 @@ use crate::chat::approvals::AllowChoice;
 use crate::chat::composer::Composer;
 use crate::chat::files::ReplyFiles;
 use crate::chat::goal::GoalClear;
+use crate::chat::worktree::WorktreeStrip;
 use crate::chat::lineage::Lineage;
 use crate::chat::plan::ShownPlan;
 use crate::chat::prompts::Answering;
@@ -127,6 +128,8 @@ pub struct Workspace {
     pub plan_fold_queued: Option<String>,
     pub goal_clear: Option<GoalClear>,
     pub goal_closed: Option<u64>,
+    /// The open task's worktree and the strip that offers merging it.
+    pub worktree: Option<WorktreeStrip>,
     /// A redraw is due in a second, for the elapsed times on screen.
     pub(super) ticking: bool,
     pub queue_open: bool,
@@ -325,6 +328,7 @@ impl Workspace {
             plan_fold_queued: None,
             goal_clear: None,
             goal_closed: None,
+            worktree: None,
             ticking: false,
             queue_open: true,
             queue_scroll: ScrollHandle::new(),

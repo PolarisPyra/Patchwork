@@ -13,6 +13,7 @@ use super::background;
 use super::header::header;
 use super::folder;
 use super::goal;
+use super::worktree;
 use super::plan;
 use super::prompts;
 use super::queue;
@@ -81,6 +82,7 @@ pub fn render(
     let prompt = w.prompt().map(|p| prompts::choice_panel(w, p, &t, cx));
     let queued = queue::queued_strip(w, &t, cx);
     let goal = goal::goal_banner(w, &t, cx);
+    let worktree = worktree::worktree_strip(w, &t, cx);
     let missing = folder::missing_folder(w, &t, cx);
     let resume = resume::resume_prompt(w, &t, cx);
     let backdrop = backdrop::chat_backdrop(w, &t, cx);
@@ -120,6 +122,7 @@ pub fn render(
                     .children(prompt)
                     .children(queued)
                     .children(goal)
+                    .children(worktree)
                     .child(w.composer.clone()),
             )
         });

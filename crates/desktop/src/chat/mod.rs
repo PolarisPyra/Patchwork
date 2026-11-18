@@ -30,6 +30,7 @@ pub mod timeline;
 mod transcript;
 pub mod user;
 mod view;
+pub mod worktree;
 
 pub use transcript::{Pieces, Row};
 pub use view::{OPEN_HOLD, render};
