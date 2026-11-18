@@ -148,25 +148,65 @@ pub(super) fn bots_section(
                                 .child(said),
                         ),
                 )
-                // In the same columns as the marks on its runs' rows, which sit 8px further in.
+                // The archive button takes the chat app's place while the row is hovered, as a
+                // chat's row trades its time for it, and the agent's logo stays in the column of
+                // the logos on the rows below.
                 .child(
                     div()
                         .flex_none()
                         .flex()
                         .items_center()
                         .gap(px(6.))
-                        .mr(px(8.))
-                        .children(bot.chat_app.map(|platform| {
-                            let in_use = mine.iter().any(|th| {
-                                w.chat_apps
-                                    .get(&th.id)
-                                    .is_some_and(|apps| apps.in_use(now_ms()))
-                            });
-                            let presence = chat_app_presence(w, platform, in_use);
-                            let label =
-                                format!("{}: {}", platform.label(), presence_word(presence));
-                            phone_mark("chat-app", label, presence, &t)
-                        }))
+                        .child(
+                            div()
+                                .w(px(20.))
+                                .flex_none()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .group_hover(group.clone(), gpui::Styled::invisible)
+                                        .children(bot.chat_app.map(|platform| {
+                                            let in_use = mine.iter().any(|th| {
+                                                w.chat_apps
+                                                    .get(&th.id)
+                                                    .is_some_and(|apps| apps.in_use(now_ms()))
+                                            });
+                                            let presence = chat_app_presence(w, platform, in_use);
+                                            let label = format!(
+                                                "{}: {}",
+                                                platform.label(),
+                                                presence_word(presence)
+                                            );
+                                            phone_mark("chat-app", label, presence, &t)
+                                        })),
+                                )
+                                .child(
+                                    button(
+                                        SharedString::from(format!("archive-bot:{}", bot.id)),
+                                        format!("Archive {}", bot.name),
+                                    )
+                                    .absolute()
+                                    .size(px(20.))
+                                    .justify_center()
+                                    .rounded(px(radius_sm()))
+                                    .text_color(t.text_muted)
+                                    .hover(move |s| s.bg(btn_hover).text_color(fg))
+                                    .opacity(0.)
+                                    .group_hover(group, |s| s.opacity(1.))
+                                    .focus(|s| s.opacity(1.))
+                                    .child(icon("archive", 15.))
+                                    .on_click(cx.listener(
+                                        move |this, _, _, cx| {
+                                            cx.stop_propagation();
+                                            this.set_bot_archived(&archive, true, cx);
+                                        },
+                                    )),
+                                ),
+                        )
                         .child(
                             div()
                                 .id("agent")
@@ -177,31 +217,8 @@ pub(super) fn bots_section(
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .group_hover(group.clone(), gpui::Styled::invisible)
                                 .child(agent_logo(bot.agent, bot.model.as_deref(), 14.)),
                         ),
-                )
-                .child(
-                    button(
-                        SharedString::from(format!("archive-bot:{}", bot.id)),
-                        format!("Archive {}", bot.name),
-                    )
-                    .absolute()
-                    // Over the agent's logo.
-                    .right(px(14.))
-                    .size(px(20.))
-                    .justify_center()
-                    .rounded(px(radius_sm()))
-                    .text_color(t.text_muted)
-                    .hover(move |s| s.bg(btn_hover).text_color(fg))
-                    .opacity(0.)
-                    .group_hover(group, |s| s.opacity(1.))
-                    .focus(|s| s.opacity(1.))
-                    .child(icon("archive", 15.))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.set_bot_archived(&archive, true, cx);
-                    })),
                 )
                 .on_click(cx.listener(move |this, _, _, cx| this.open_bot(&id, cx)))
                 .on_mouse_down(
