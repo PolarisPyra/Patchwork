@@ -14,39 +14,60 @@ use crate::sidebar::devices::{DevicesView, OpenDevice};
 impl Workspace {
     /// Reads the project's branch and changed files off the main thread, and watches the project
     /// so they stay current whoever changes its files: an agent, an editor, or git in a terminal.
+    /// Source Control shows the open task's worktree when it works in one.
     pub fn load_git(&mut self, cx: &mut Context<Self>) {
+        self.read_git(true, cx);
+    }
+
+    /// Like [`Self::load_git`], but asks where the branch stands (over the network) only when
+    /// `sync` is set or Source Control's folder changed, as it does on moving to another task.
+    pub(crate) fn read_git(&mut self, sync: bool, cx: &mut Context<Self>) {
         let Some(project) = self.project() else {
             self.branch = None;
             self.changes.clear();
+            self.git_root = None;
             self.changes_view
                 .update(cx, |v, cx| v.refresh(None, true, cx));
             return;
         };
-        let (id, root) = (project.id.clone(), project.path.clone());
-        let events = self.project_events.clone();
-        if let Err(e) = self.core.watch_project(&id, move |changed| {
-            let _ = events.unbounded_send(changed);
-        }) {
-            self.error = Some(e.to_string());
-        }
+        let id = project.id.clone();
+        let thread = self.thread.as_ref().map(|t| t.id.clone());
+        let (core, events) = (Arc::clone(&self.core), self.project_events.clone());
+        let read = id.clone();
         let task = cx.background_spawn(async move {
+            let root = core.source_root(&read, thread.as_deref())?;
+            let watched = core.watch_project(&read, thread.as_deref(), move |changed| {
+                let _ = events.unbounded_send(changed);
+            });
             let branch = patchwork_core::workspace::git_branch(&root);
             let changes = patchwork_core::workspace::git_changes(&root).unwrap_or_else(|e| {
                 log::warn!(error:% = e; "could not list the changed files: {{error}}");
                 Vec::new()
             });
-            (branch, changes)
+            Ok::<_, patchwork_core::Error>((root, watched, branch, changes))
         });
         cx.spawn(async move |this, cx| {
-            let (branch, changes) = task.await;
+            let read = task.await;
             this.update(cx, |this, cx| {
                 if this.project().map(|p| &p.id) != Some(&id) {
                     return;
                 }
+                let (root, watched, branch, changes) = match read {
+                    Ok(read) => read,
+                    Err(e) => {
+                        this.error = Some(e.to_string());
+                        return cx.notify();
+                    }
+                };
+                if let Err(e) = watched {
+                    this.error = Some(e.to_string());
+                }
+                let moved = this.git_root.as_ref() != Some(&root);
+                this.git_root = Some(root);
                 this.branch = branch;
                 this.changes = changes;
                 this.changes_view
-                    .update(cx, |v, cx| v.refresh(Some(id), true, cx));
+                    .update(cx, |v, cx| v.refresh(Some(id), sync || moved, cx));
                 cx.notify();
             })
         })

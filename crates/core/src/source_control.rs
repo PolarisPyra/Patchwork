@@ -40,6 +40,22 @@ struct CommitRecord {
 }
 
 impl Core {
+    /// The folder Source Control shows for project `project_id`: the worktree of the open task
+    /// `thread_id` when the task is the project's and works in one, else the project's folder.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the project is unknown.
+    pub fn source_root(&self, project_id: &str, thread_id: Option<&str>) -> Result<String, Error> {
+        let task = thread_id
+            .and_then(|id| self.store.thread(id))
+            .filter(|t| t.project_id.as_deref() == Some(project_id));
+        match task {
+            Some(task) => self.thread_root(&task.id),
+            None => self.project_root(project_id),
+        }
+    }
+
     /// Stages every change and commits it with `message`, or with one a model writes from the
     /// staged patch when `message` is blank. The commit is recorded as the open thread's, with
     /// its replies whose changes it took in, for the graph. Returns the commit's short hash and
@@ -55,7 +71,7 @@ impl Core {
         thread_id: Option<&str>,
         message: &str,
     ) -> Result<(String, String), Error> {
-        let root = self.project_root(project_id)?;
+        let root = self.source_root(project_id, thread_id)?;
         workspace::stage_all(&root)?;
         let message = match message.trim() {
             "" => self.staged_message(&root, thread_id)?,
@@ -143,10 +159,11 @@ impl Core {
     pub fn git_log(
         &self,
         project_id: &str,
+        thread_id: Option<&str>,
         skip: usize,
         limit: usize,
     ) -> Result<Vec<GitCommit>, Error> {
-        let root = self.project_root(project_id)?;
+        let root = self.source_root(project_id, thread_id)?;
         let mut commits = workspace::git_log(&root, skip, limit)?;
         for commit in &mut commits {
             if let Some(record) = self.commit_record(&commit.hash) {
@@ -168,8 +185,9 @@ impl Core {
     pub fn pull_request_feedback(
         &self,
         project_id: &str,
+        thread_id: Option<&str>,
     ) -> Result<(Option<String>, String), Error> {
-        let root = self.project_root(project_id)?;
+        let root = self.source_root(project_id, thread_id)?;
         let pr = workspace::pull_request_view(&root)?;
         let number = pr["number"].as_u64().unwrap_or_default();
         let mut sections = Vec::new();
@@ -274,8 +292,12 @@ impl Core {
     ///
     /// Returns an error when the project is unknown, when `git` fails, or when no file has a
     /// conflict.
-    pub fn conflict_prompt(&self, project_id: &str) -> Result<String, Error> {
-        let root = self.project_root(project_id)?;
+    pub fn conflict_prompt(
+        &self,
+        project_id: &str,
+        thread_id: Option<&str>,
+    ) -> Result<String, Error> {
+        let root = self.source_root(project_id, thread_id)?;
         let files = workspace::run_git(
             &root,
             &["diff", "--name-only", "--relative", "--diff-filter=U"],
@@ -353,7 +375,7 @@ impl Core {
         project_id: &str,
         thread_id: Option<&str>,
     ) -> Result<String, Error> {
-        let root = self.project_root(project_id)?;
+        let root = self.source_root(project_id, thread_id)?;
         workspace::stage_all(&root)?;
         self.staged_message(&root, thread_id)
     }
@@ -378,7 +400,7 @@ impl Core {
         project_id: &str,
         thread_id: Option<&str>,
     ) -> Result<PullRequest, Error> {
-        let root = self.project_root(project_id)?;
+        let root = self.source_root(project_id, thread_id)?;
         let (base, summary) = workspace::branch_summary(&root)?;
         let text = self
             .write(thread_id, PR_PROMPT, PR_SCHEMA, &summary)

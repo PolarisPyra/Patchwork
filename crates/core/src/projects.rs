@@ -61,9 +61,10 @@ pub struct Folder {
 const COLLAPSED_KEY: &str = "collapsed_sections";
 
 impl Core {
-    /// Watches the project for changes, in place of any project watched before. After each
-    /// settled burst it runs one `git status`, adds what replies under way there changed to
-    /// them, and passes the result to `on_change`.
+    /// Watches the folder Source Control shows for the project, which is the open task
+    /// `thread_id`'s worktree when it has one, in place of any folder watched before. After each
+    /// settled burst it runs one `git status`, adds what replies under way in the project's own
+    /// folder changed to them, and passes the result to `on_change`.
     ///
     /// # Errors
     ///
@@ -71,16 +72,22 @@ impl Core {
     pub fn watch_project(
         self: &Arc<Self>,
         project_id: &str,
+        thread_id: Option<&str>,
         on_change: impl Fn(crate::workspace::ProjectChanged) + Send + 'static,
     ) -> Result<(), Error> {
+        let root = self.source_root(project_id, thread_id)?;
         let mut current = self
             .project_watch
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if current.as_ref().is_some_and(|(id, _)| id == project_id) {
+        if current
+            .as_ref()
+            .is_some_and(|(id, watched, _)| id == project_id && *watched == root)
+        {
             return Ok(());
         }
-        let root = self.project_root(project_id)?;
+        // Replies are credited with what changes in the project's folder, where they run.
+        let in_project = root == self.project_root(project_id)?;
         let folder = root.clone();
         // The watcher lives in the core, so it holds the core weakly.
         let core = Arc::downgrade(self);
@@ -90,7 +97,7 @@ impl Core {
                 return;
             };
             let changes = workspace::git_changes(&root).ok();
-            if let Some(changes) = &changes {
+            if let Some(changes) = changes.as_ref().filter(|_| in_project) {
                 core.note_project_changes(&id, changes, &burst);
             }
             on_change(crate::workspace::ProjectChanged {
@@ -105,7 +112,7 @@ impl Core {
         } else {
             watch::ProjectWatcher::start(&PathBuf::from(&folder), on_burst)?
         };
-        *current = Some((project_id.to_string(), watcher));
+        *current = Some((project_id.to_string(), folder, watcher));
         Ok(())
     }
 
@@ -215,7 +222,7 @@ impl Core {
                 .project_watch
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if watch.as_ref().is_some_and(|(watched, _)| watched == id) {
+            if watch.as_ref().is_some_and(|(watched, _, _)| watched == id) {
                 *watch = None;
             }
             drop(watch);

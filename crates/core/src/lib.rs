@@ -69,8 +69,8 @@ pub struct Core {
     /// One folder per bot, which holds the files it knows.
     bots_dir: PathBuf,
     sink: EventSink,
-    /// The watcher on the active project, with that project's id.
-    project_watch: std::sync::Mutex<Option<(String, watch::ProjectWatcher)>>,
+    /// The watcher on the active project, with that project's id and the folder it watches.
+    project_watch: std::sync::Mutex<Option<(String, String, watch::ProjectWatcher)>>,
     /// The watcher on the skills folder, while Settings shows the skills.
     skills_watch: std::sync::Mutex<Option<skills::Watcher>>,
     themes_watch: std::sync::Mutex<Option<themes::Watcher>>,

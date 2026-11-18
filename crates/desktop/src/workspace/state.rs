@@ -120,6 +120,8 @@ pub struct Workspace {
     pub(super) orchestrator_tasks: bool,
     pub(super) orchestrator: Entity<Orchestrator>,
     pub branch: Option<String>,
+    /// The folder Source Control last read: the open task's worktree, or the project's folder.
+    pub git_root: Option<String>,
     /// The project's uncommitted files, as git reports them.
     pub changes: Vec<FileChange>,
     /// The reply whose "Show changes" was clicked: its files lead the Changes view.
@@ -338,6 +340,7 @@ impl Workspace {
             orchestrator_tasks: true,
             orchestrator,
             branch: None,
+            git_root: None,
             changes: Vec::new(),
             change_focus: None,
             allow_menu: None,
