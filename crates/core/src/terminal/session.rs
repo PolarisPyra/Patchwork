@@ -81,7 +81,6 @@ struct State {
 
 struct Follower {
     attachment: u32,
-    page: String,
     sink: FrameSink,
 }
 
@@ -99,8 +98,8 @@ impl std::fmt::Debug for Terminals {
 }
 
 impl Terminals {
-    /// Starts the shell [`super::launch`] picked at the size of the view, attached to `page`,
-    /// whose frames go to `sink`. It blocks while the shell starts, so call it off the main thread.
+    /// Starts the shell [`super::launch`] picked at the size of the view, its frames going to
+    /// `sink`. It blocks while the shell starts, so call it off the main thread.
     ///
     /// # Errors
     ///
@@ -111,7 +110,6 @@ impl Terminals {
         mut launch: Launch,
         cols: u16,
         rows: u16,
-        page: &str,
         sink: FrameSink,
     ) -> Result<AttachedTerminal, Error> {
         let id = self.next.fetch_add(1, Ordering::Relaxed) + 1;
@@ -175,11 +173,7 @@ impl Terminals {
                 screen: String::new(),
                 trimmed: false,
                 model: vt100::Parser::new(view.rows, view.cols, 0),
-                followers: vec![Follower {
-                    attachment,
-                    page: page.to_string(),
-                    sink,
-                }],
+                followers: vec![Follower { attachment, sink }],
                 controller: Some(attachment),
                 closing: false,
                 retry_at: None,
@@ -225,24 +219,20 @@ impl Terminals {
         list
     }
 
-    /// Attaches `page` to terminal `id`: the screen so far, then its frames go to `sink`. The
-    /// page types into the shell from now on.
+    /// Attaches a view to terminal `id`: the screen so far, then its frames go to `sink`. The
+    /// view types into the shell from now on.
     ///
     /// # Errors
     ///
     /// Returns an error when the terminal has closed or is closing.
-    pub fn attach(&self, id: u32, page: &str, sink: FrameSink) -> Result<AttachedTerminal, Error> {
+    pub fn attach(&self, id: u32, sink: FrameSink) -> Result<AttachedTerminal, Error> {
         let term = self.get(id)?;
         let mut state = term.lock();
         if state.closing {
             return Err("The terminal has closed".into());
         }
         let attachment = self.attachments.fetch_add(1, Ordering::Relaxed) + 1;
-        state.followers.push(Follower {
-            attachment,
-            page: page.to_string(),
-            sink,
-        });
+        state.followers.push(Follower { attachment, sink });
         state.controller = Some(attachment);
         state.invalidate();
         Ok(AttachedTerminal {
@@ -256,13 +246,6 @@ impl Terminals {
     pub fn detach(&self, id: u32, attachment: u32) {
         if let Ok(term) = self.get(id) {
             term.lock().unfollow(|f| f.attachment == attachment);
-        }
-    }
-
-    /// Detaches every terminal from `page`, as it loads again or closes.
-    pub fn release_page(&self, page: &str) {
-        for term in self.terms() {
-            term.lock().unfollow(|f| f.page == page);
         }
     }
 

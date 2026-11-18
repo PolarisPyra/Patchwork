@@ -14,9 +14,6 @@ use patchwork_core::terminal::{AttachedTerminal, FrameSink, TerminalFrame};
 use crate::panel::Panel;
 use crate::ui::theme::font_mono;
 
-/// The page this window's shells are attached as.
-const PAGE: &str = "native";
-
 /// How long the size waits to settle before the shell is told: each resize makes it redraw its
 /// prompt, so a drag would leave a trail of stale prompts behind.
 const RESIZE_SETTLE: Duration = Duration::from_millis(100);
@@ -151,7 +148,7 @@ impl Panel {
                 host.as_deref(),
                 path.as_deref(),
             )?;
-            core.terminals.spawn(launch, cols, rows, PAGE, sink)
+            core.terminals.spawn(launch, cols, rows, sink)
         });
         cx.spawn(async move |this, cx| {
             let started = task.await;
@@ -195,8 +192,8 @@ impl Panel {
         self.error = None;
         let core = Arc::clone(&self.core);
         let (sink, rx) = frames();
-        let task = cx
-            .background_spawn(async move { core.terminals.spawn(launch, cols, rows, PAGE, sink) });
+        let task =
+            cx.background_spawn(async move { core.terminals.spawn(launch, cols, rows, sink) });
         cx.spawn(async move |this, cx| {
             let started = task.await;
             this.update(cx, |this, cx| {
@@ -239,7 +236,7 @@ impl Panel {
                     continue;
                 }
                 let (sink, rx) = frames();
-                let Ok(attached) = self.core.terminals.attach(info.id, PAGE, sink) else {
+                let Ok(attached) = self.core.terminals.attach(info.id, sink) else {
                     continue;
                 };
                 self.add_shell(attached, rx, cx);
