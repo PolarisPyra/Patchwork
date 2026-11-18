@@ -229,24 +229,26 @@ impl Core {
             .any(|id| id == thread_id)
     }
 
-    /// Whether `thread_id` was started from a chat app, so it runs in the background: the window
-    /// neither lists it nor notifies about it. Dispatchers count, since only chat apps start them.
+    /// Whether `thread_id` was started from a chat app before chat apps had bots, so it runs in
+    /// the background: the window neither lists it nor notifies about it. A chat app's bot's
+    /// runs are listed under the bot.
     pub(crate) fn in_background(&self, thread_id: &str) -> bool {
         self.background_threads().iter().any(|id| id == thread_id)
     }
 
-    /// The ids of every thread started from a chat app. See `in_background`.
+    /// The ids of every thread a chat app started that is not a bot's run. See `in_background`.
     pub(crate) fn background_threads(&self) -> Vec<String> {
         let mut ids = self.read_list::<String>(OPENED);
         ids.extend(self.read_list::<String>(DISPATCHERS));
+        let runs: Vec<String> = self.store.with_threads(|threads| {
+            threads
+                .iter()
+                .filter(|t| t.bot_id.is_some() && ids.contains(&t.id))
+                .map(|t| t.id.clone())
+                .collect()
+        });
+        ids.retain(|id| !runs.contains(id));
         ids
-    }
-
-    /// Records that a chat app started `thread_id`.
-    pub(super) fn mark_opened(&self, thread_id: &str) -> Result<(), Error> {
-        self.change_list(OPENED, |list: &mut Vec<String>| {
-            list.push(thread_id.to_string());
-        })
     }
 
     /// Makes `thread_id` a dispatcher.

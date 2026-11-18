@@ -109,7 +109,7 @@ pub(super) struct Chat {
 }
 
 /// Where a new thread opens.
-pub(super) enum Place {
+pub(crate) enum Place {
     /// Outside any project.
     Chat,
     /// In the project with this id.
@@ -243,6 +243,7 @@ fn run(core: &Weak<Core>, platform: Platform, connector: &dyn Connector, stop: &
             return;
         };
         hub.gateway.set_status(platform, stop, Status::Connecting);
+        hub.connection_changed();
         drop(hub);
         let reached = AtomicBool::new(false);
         let connected = |name: String| {
@@ -251,6 +252,7 @@ fn run(core: &Weak<Core>, platform: Platform, connector: &dyn Connector, stop: &
             if let Some(hub) = core.upgrade() {
                 hub.gateway
                     .set_status(platform, stop, Status::Connected(name));
+                hub.connection_changed();
             }
         };
         let inbox = |message: Incoming| {
@@ -279,11 +281,23 @@ fn run(core: &Weak<Core>, platform: Platform, connector: &dyn Connector, stop: &
                 if let Some(hub) = core.upgrade() {
                     hub.gateway
                         .set_status(platform, stop, Status::Error(error.to_string()));
+                    hub.connection_changed();
                 }
                 pause(retry, stop);
                 retry = (retry * 2).min(MAX_RETRY);
             }
         }
+    }
+}
+
+impl Core {
+    /// Tells the window that a chat app connected, dropped or was switched off, so the
+    /// sidebar shows where each one stands.
+    pub(super) fn connection_changed(&self) {
+        self.emit(AgentEventEnvelope {
+            thread_id: String::new(),
+            event: AgentEvent::ChatAppsChanged,
+        });
     }
 }
 

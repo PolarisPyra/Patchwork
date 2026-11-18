@@ -15,7 +15,7 @@ fn load(inner: &Inner) -> Result<Vec<Bot>, Error> {
         .conn
         .prepare(
             "SELECT id, name, instructions, agent, model, effort, access_mode, projects, created_at,
-                    archived_at, background, blocked
+                    archived_at, background, blocked, chat_app, thread_id
              FROM bots ORDER BY created_at",
         )
         .map_err(err)?;
@@ -50,6 +50,11 @@ fn load(inner: &Inner) -> Result<Vec<Bot>, Error> {
                         servers: Vec::new(),
                     }),
                 },
+                // A platform that cannot be read answers none.
+                chat_app: row
+                    .get::<_, Option<String>>(12)?
+                    .and_then(|s| serde_json::from_str(&s).ok()),
+                thread_id: row.get(13)?,
             })
         })
         .map_err(err)?;
@@ -79,14 +84,15 @@ impl Store {
             .execute(
                 "INSERT INTO bots
                      (id, name, instructions, agent, model, effort, access_mode, projects,
-                      created_at, archived_at, background, blocked)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                      created_at, archived_at, background, blocked, chat_app, thread_id)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
                  ON CONFLICT (id) DO UPDATE SET name = excluded.name,
                      instructions = excluded.instructions, agent = excluded.agent,
                      model = excluded.model, effort = excluded.effort,
                      access_mode = excluded.access_mode, projects = excluded.projects,
                      archived_at = excluded.archived_at, background = excluded.background,
-                     blocked = excluded.blocked",
+                     blocked = excluded.blocked, chat_app = excluded.chat_app,
+                     thread_id = excluded.thread_id",
                 params![
                     bot.id,
                     bot.name,
@@ -100,6 +106,8 @@ impl Store {
                     bot.archived_at,
                     bot.background.as_ref().map(json),
                     json(&bot.blocked),
+                    bot.chat_app.as_ref().map(json),
+                    bot.thread_id,
                 ],
             )
             .map_err(err)?;

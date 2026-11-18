@@ -47,7 +47,7 @@ impl Workspace {
             let _ = this.update(cx, |this, cx| match made {
                 Ok(bot) => {
                     this.reload_bots(cx);
-                    this.go_to(&Place::Bot(bot.id), cx);
+                    this.open_bot_page(&bot.id, cx);
                 }
                 Err(e) => {
                     this.error = Some(e.to_string());
@@ -58,9 +58,26 @@ impl Workspace {
         .detach();
     }
 
-    /// Opens bot `id`'s page.
+    /// Opens bot `id`'s chat, or its page before it has one.
     pub fn open_bot(&mut self, id: &str, cx: &mut Context<Self>) {
+        match self.bot_chat(id) {
+            Some(chat) => self.open_thread(&chat, cx),
+            None => self.open_bot_page(id, cx),
+        }
+    }
+
+    /// Opens bot `id`'s page.
+    pub fn open_bot_page(&mut self, id: &str, cx: &mut Context<Self>) {
         self.go_to(&Place::Bot(id.to_string()), cx);
+    }
+
+    /// The id of bot `id`'s chat, while it is listed and not archived.
+    pub fn bot_chat(&self, id: &str) -> Option<String> {
+        let chat = self.bots.iter().find(|b| b.id == id)?.thread_id.as_ref()?;
+        self.threads
+            .iter()
+            .any(|t| &t.id == chat && t.archived_at.is_none())
+            .then(|| chat.clone())
     }
 
     /// Shows bot `id`'s page, and whether the bot exists.
@@ -148,8 +165,8 @@ impl Workspace {
         .detach();
     }
 
-    /// Starts a run of the bot shown on `text` and `attachments` with the composer's picks in
-    /// `new`, in the project picked on its page, and opens it. False when no bot is shown or a
+    /// Sends `text` and `attachments` to the chat of the bot shown, starting it with the
+    /// composer's picks in `new` in the project picked on its page, and opens it. False when no bot is shown or a
     /// run is already starting, so the composer keeps the message.
     pub fn send_to_bot(
         &mut self,

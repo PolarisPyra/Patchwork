@@ -402,9 +402,24 @@ impl Workspace {
     }
 
     pub fn reload(&mut self, cx: &mut Context<Self>) {
-        self.threads = self.core.list_threads();
+        let threads = self.core.list_threads();
         self.folders = self.core.list_folders();
         self.chat_apps = self.core.thread_chat_apps();
+        self.chat_app_status = self.core.gateway_status();
+        // A chat app's first message makes its bot, and a bot's new thread may be its chat.
+        let changed = threads
+            .iter()
+            .any(|t| t.bot_id.is_some() && !self.threads.iter().any(|known| known.id == t.id));
+        self.threads = threads;
+        if changed
+            || self.threads.iter().any(|t| {
+                t.bot_id
+                    .as_ref()
+                    .is_some_and(|id| !self.bots.iter().any(|b| &b.id == id))
+            })
+        {
+            self.reload_bots(cx);
+        }
         if let Some(id) = self.thread.as_ref().map(|t| t.id.clone()) {
             match self.core.thread(&id) {
                 Ok(thread) => self.thread = Some(thread),

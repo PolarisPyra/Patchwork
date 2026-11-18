@@ -51,6 +51,8 @@ pub(super) enum Act {
     OpenFolder,
     Remove,
     Restore,
+    /// Show a bot's page: its instructions, files, tools and runs.
+    Details,
     /// Stop continuing the chat in this conversation on a chat app.
     StopOn(Platform, String),
 }

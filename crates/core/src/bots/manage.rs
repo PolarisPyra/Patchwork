@@ -6,6 +6,7 @@ use super::types::{BlockedTools, Bot};
 use crate::Core;
 use crate::backgrounds::ChatBackground;
 use crate::Error;
+use crate::gateway::Platform;
 use crate::system::{new_id, now_ms};
 use crate::threads::AccessMode;
 
@@ -36,22 +37,10 @@ impl Core {
     /// Returns an error when the bot cannot be saved.
     pub fn create_bot(&self) -> Result<Bot, Error> {
         let settings = self.store.settings();
-        let taken: Vec<String> = self.bots().into_iter().map(|b| b.name).collect();
-        // One more number than there are bots always leaves a name free.
-        let name = (1..=taken.len() + 1)
-            .map(|n| {
-                if n == 1 {
-                    "Bot".to_string()
-                } else {
-                    format!("Bot {n}")
-                }
-            })
-            .find(|name| !taken.iter().any(|t| t.eq_ignore_ascii_case(name)))
-            .unwrap_or_else(|| "Bot".into());
         let agent = settings.default_agent();
         let bot = Bot {
             id: new_id(),
-            name,
+            name: self.free_bot_name("Bot"),
             instructions: String::new(),
             agent,
             model: settings.tokens.default_models.get(&agent).cloned(),
@@ -63,9 +52,81 @@ impl Core {
             archived_at: None,
             background: None,
             blocked: BlockedTools::default(),
+            chat_app: None,
+            thread_id: None,
         };
         self.store.save_bot(&bot)?;
         Ok(bot)
+    }
+
+    /// The bot that answers messages from `platform`, made when there is none and brought
+    /// back to the sidebar when it was archived.
+    ///
+    /// A new one is named for the platform and starts on the agent new chats start on, with
+    /// the access chat apps are given and the project they work in.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the bot cannot be saved.
+    pub(crate) fn chat_app_bot(&self, platform: Platform) -> Result<Bot, Error> {
+        if let Some(mut bot) = self
+            .bots()
+            .into_iter()
+            .find(|b| b.chat_app == Some(platform))
+        {
+            if bot.archived_at.is_some() {
+                bot.archived_at = None;
+                self.store.save_bot(&bot)?;
+            }
+            return Ok(bot);
+        }
+        let settings = self.store.settings();
+        let agent = settings.default_agent();
+        let bot = Bot {
+            id: new_id(),
+            name: self.free_bot_name(platform.label()),
+            instructions: String::new(),
+            agent,
+            model: settings.tokens.default_models.get(&agent).cloned(),
+            effort: None,
+            access_mode: settings.gateway.access,
+            projects: settings
+                .gateway
+                .project_id
+                .iter()
+                .filter(|id| {
+                    settings
+                        .projects
+                        .iter()
+                        .any(|p| &p.id == *id && p.host().is_none())
+                })
+                .cloned()
+                .collect(),
+            created_at: i64::try_from(now_ms()).unwrap_or(i64::MAX),
+            archived_at: None,
+            background: None,
+            blocked: BlockedTools::default(),
+            chat_app: Some(platform),
+            thread_id: None,
+        };
+        self.store.save_bot(&bot)?;
+        Ok(bot)
+    }
+
+    /// `base`, or `base` with the first number after it that no bot's name has.
+    fn free_bot_name(&self, base: &str) -> String {
+        let taken: Vec<String> = self.bots().into_iter().map(|b| b.name).collect();
+        // One more number than there are bots always leaves a name free.
+        (1..=taken.len() + 1)
+            .map(|n| {
+                if n == 1 {
+                    base.to_string()
+                } else {
+                    format!("{base} {n}")
+                }
+            })
+            .find(|name| !taken.iter().any(|t| t.eq_ignore_ascii_case(name)))
+            .unwrap_or_else(|| base.into())
     }
 
     /// Saves the changes to a bot that exists, and returns it as saved.
@@ -86,6 +147,8 @@ impl Core {
         bot.archived_at = saved.archived_at;
         bot.background.clone_from(&saved.background);
         bot.blocked.clone_from(&saved.blocked);
+        bot.chat_app = saved.chat_app;
+        bot.thread_id.clone_from(&saved.thread_id);
         bot.name = bot.name.trim().to_string();
         if bot.name.is_empty() {
             return Err("A bot needs a name".into());

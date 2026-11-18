@@ -28,5 +28,6 @@ pub use hub::Hub;
 pub use personalities::Personality;
 pub use platform::{Field, Need, Platform};
 pub use types::{
-    Binding, ChatAppCall, ChatApps, ChatPlace, GatewaySettings, Pairing, PlatformSettings, Status,
+    Binding, ChatAppCall, ChatApps, ChatPlace, GatewaySettings, Pairing, PlatformSettings,
+    Presence, Status,
 };

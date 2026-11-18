@@ -100,6 +100,11 @@ pub struct Workspace {
     pub bot_page: Option<Entity<crate::bots::BotPage>>,
     /// The chat apps each thread came from or has on it now, by thread id.
     pub chat_apps: HashMap<String, ChatApps>,
+    /// Where each chat app's connection stands; one that is not listed is off.
+    pub chat_app_status: Vec<(
+        patchwork_core::gateway::Platform,
+        patchwork_core::gateway::Status,
+    )>,
     /// Projects and folders (`folder:<id>`) whose rows are closed.
     pub collapsed: HashSet<String>,
     /// The archive view's closed groups, its own so closing one leaves the task list as it was.
@@ -264,6 +269,7 @@ impl Workspace {
         let update_dismissed = core.dismissed_update();
         let threads = core.list_threads();
         let chat_apps = core.thread_chat_apps();
+        let chat_app_status = core.gateway_status();
         let folders = core.list_folders();
         let bots = core.bots();
         let workspace = cx.entity().downgrade();
@@ -317,6 +323,7 @@ impl Workspace {
             bot_page: None,
             collapsed,
             chat_apps,
+            chat_app_status,
             archived_collapsed: HashSet::new(),
             thread: None,
             view: Some(View::Tasks),

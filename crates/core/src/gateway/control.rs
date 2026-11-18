@@ -164,6 +164,12 @@ impl Core {
     /// Stops every connection and opens the ones the settings turn on. This reads the system
     /// credential store, which can block.
     pub fn restart_gateway(self: &Arc<Self>) {
+        self.reopen_connections();
+        self.connection_changed();
+    }
+
+    /// See `restart_gateway`.
+    fn reopen_connections(self: &Arc<Self>) {
         // One restart at a time, each reading the settings once it has its turn: the last one
         // to run opens what the newest settings ask for, and no platform is opened twice.
         let _turn = self

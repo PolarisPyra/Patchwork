@@ -75,6 +75,27 @@ pub enum Status {
     Error(String),
 }
 
+impl Status {
+    /// How a chat app's connection shows beside its bot: online while connected and `in_use`,
+    /// away while connected but idle or still connecting, offline otherwise.
+    #[must_use]
+    pub fn presence(&self, in_use: bool) -> Presence {
+        match self {
+            Self::Connected(_) if in_use => Presence::Online,
+            Self::Connected(_) | Self::Connecting | Self::Locked => Presence::Away,
+            Self::Off | Self::Error(_) => Presence::Offline,
+        }
+    }
+}
+
+/// How a chat app shows beside its bot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Presence {
+    Online,
+    Away,
+    Offline,
+}
+
 /// A pairing: who sent a chat app's bot a pairing code, and may use Patchwork from there.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
