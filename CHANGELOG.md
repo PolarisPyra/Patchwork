@@ -3,6 +3,21 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.108] - 2026-11-18
+
+**26.11.108** · 1 change from 1 contributor
+
+- **Stop now ends agent commands.** Stop now ends all commands the agent started, including background ones, in API provider chats.
+
+<details>
+<summary>Full changelog</summary>
+
+### Fixed
+
+- In chats with an API provider, pressing Stop left the commands the agent had started running, including ones in the background, and the Stop button stayed up while pressing it again did nothing. Stop now ends those commands as well. by [PolarisPyra in #224](https://github.com/PolarisPyra/Patchwork/pull/224)
+
+</details>
+
 ## [26.11.107] - 2026-11-18
 
 **26.11.107** · 2 changes from 1 contributor
