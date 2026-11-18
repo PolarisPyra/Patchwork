@@ -3,16 +3,14 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{
-    App, ClickEvent, FontWeight, Pixels, Point, Role, Window, div, point, prelude::*, px, relative,
-};
+use gpui::{App, ClickEvent, FontWeight, Pixels, Point, Role, Window, div, point, prelude::*, px};
 use patchwork_core::system::device::Kind;
 use patchwork_core::threads::{MessageStatus, Role as MessageRole};
 
 use super::{Page, View, Workspace, is_busy};
 use crate::ui::menu::{Dismissed, Menu, MenuItem};
 use crate::ui::theme::{ACTIVITY_BAR_W, fs_xs, radius, radius_sm, STATUSBAR_H, TOOLBAR_H, Theme, theme};
-use crate::ui::{agent_label, button, display_title, icon, kind_icon, spinner};
+use crate::ui::{agent_label, button, icon, kind_icon, spinner};
 
 /// The machine button's size, the same as the activity bar's buttons.
 const MACHINE_BUTTON: f32 = 28.;
@@ -379,24 +377,6 @@ impl Workspace {
                     }),
             )
             .child(div().flex_1())
-            // The orchestrator page belongs to no chat, so the open one is not named on it.
-            .when_some(
-                thread.filter(|_| self.page == Page::Chats),
-                |bar, thread| {
-                    bar.child(
-                        div()
-                            .h(px(20.))
-                            .min_w_0()
-                            .max_w(relative(0.4))
-                            .flex()
-                            .items_center()
-                            .gap(px(4.))
-                            .pr(px(6.))
-                            .child(icon("circle-fill", 8.).text_color(t.accent))
-                            .child(div().truncate().child(display_title(&thread.title))),
-                    )
-                },
-            )
             .child(
                 button(
                     "open-changes",
