@@ -390,7 +390,7 @@ pub fn avatar(id: &str, name: &str, mood: Mood, size: f32) -> impl IntoElement {
             let (cx0, cy0) = (f32::from(mid.x) + pose.dx, f32::from(mid.y) + pose.dy);
             // Breathing in makes it a little taller and narrower.
             let (sx, sy) = (1. - pose.breath * 0.5, 1. + pose.breath);
-            // Leave room for the sway, and below a big one for its shadow.
+            // Leave room for the sway.
             let full = size / 2. * if small { 0.92 } else { 0.8 };
             let (sin, cos) = pose.lean.sin_cos();
             // A point of the cube, from -1 to 1 each way, placed on the screen.
@@ -398,17 +398,6 @@ pub fn avatar(id: &str, name: &str, mood: Mood, size: f32) -> impl IntoElement {
                 let (x, y) = (x * full * sx, y * full * sy);
                 [cx0 + x * cos - y * sin, cy0 + x * sin + y * cos]
             };
-            if !small {
-                // The shadow shrinks as it hops up.
-                let hop = 1. + (pose.dy / size).min(0.) * 4.;
-                oval(
-                    window,
-                    point(mid.x, mid.y + px(full * 1.12)),
-                    full * 0.75 * hop,
-                    full * 0.12 * hop,
-                    hsla(0., 0., 0., 0.18),
-                );
-            }
             let half = HALF_WIDTH;
             let top_point = put(0., -1.);
             let (top_left, top_right) = (put(-half, -0.5), put(half, -0.5));
