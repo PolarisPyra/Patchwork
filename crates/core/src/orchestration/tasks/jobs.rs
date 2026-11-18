@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 
 use crate::Core;
-use crate::harness::tools::{BASH_TIMEOUT, MAX_BASH_TIMEOUT, bash_command, outcome};
+use crate::harness::tools::{BASH_TIMEOUT, MAX_BASH_TIMEOUT, bash_command, outcome, shell_file};
 use crate::events::AgentEvent;
 use crate::orchestration::output::stream::publish;
 use crate::system::contained::{self, Range, STOP_GRACE};
@@ -240,9 +240,14 @@ impl Job {
 }
 
 impl crate::orchestration::Runner {
-    /// Drops the output kept for the thread's ended jobs, as the thread is deleted.
+    /// Drops the output kept for the thread's ended jobs, and its shell, as the thread is deleted.
     pub(crate) fn forget_jobs(&self, thread_id: &str) {
         self.jobs.forget(thread_id);
+        if let Err(e) = std::fs::remove_file(shell_file(thread_id))
+            && e.kind() != std::io::ErrorKind::NotFound
+        {
+            log::warn!("Could not remove the thread's shell file: {e}");
+        }
     }
 }
 
@@ -404,7 +409,14 @@ fn bash(
         .as_u64()
         .unwrap_or(BASH_TIMEOUT)
         .clamp(1, MAX_BASH_TIMEOUT);
-    let cmd = bash_command(command, Path::new(&from.root))?;
+    // A command sent to the background leaves the shell to the commands that wait for theirs.
+    let keep = args["run_in_background"] != true;
+    let cmd = bash_command(
+        command,
+        Path::new(&from.root),
+        &shell_file(&from.thread_id),
+        keep,
+    )?;
     let (mut child, range) = contained::spawn(cmd, Stdio::null())
         .map_err(|e| format!("Failed to run the command: {e}"))?;
     let (Some(out), Some(err)) = (child.stdout.take(), child.stderr.take()) else {

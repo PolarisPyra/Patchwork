@@ -16,4 +16,4 @@ pub use describe::{definitions, display_name, summary, shown, approval, writes};
 pub use dispatch::{MAX_RESULT, cap, run};
 #[doc(inline)]
 pub use shell::{BASH_TIMEOUT, MAX_BASH_TIMEOUT, outcome};
-pub(crate) use shell::bash_command;
+pub(crate) use shell::{bash_command, shell_file};
