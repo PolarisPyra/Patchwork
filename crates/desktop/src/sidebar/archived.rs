@@ -307,6 +307,7 @@ fn bots_group(w: &Workspace, bots: &[&Bot], cx: &mut Context<Workspace>) -> Div 
     let (btn_hover, fg) = (t.border_strong, t.text);
     let rows = bots.iter().map(|bot| {
         let restore = bot.id.clone();
+        let target = Target::Bot(bot.id.clone());
         div()
             .id(SharedString::from(format!("archived-bot:{}", bot.id)))
             .role(Role::TreeItem)
@@ -340,6 +341,12 @@ fn bots_group(w: &Workspace, bots: &[&Bot], cx: &mut Context<Workspace>) -> Div 
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.set_bot_archived(&restore, false, cx);
                 })),
+            )
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, e: &MouseDownEvent, window, cx| {
+                    this.open_context_menu(target.clone(), e, window, cx);
+                }),
             )
     });
     let rows: Vec<_> = rows.collect();
