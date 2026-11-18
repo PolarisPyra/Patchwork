@@ -27,7 +27,12 @@ pub enum Step<'a> {
     /// A compaction, and whether the agent is still at it: the reply streams with nothing after
     /// it yet.
     Compaction(bool),
+    /// A Patchwork tool a chat-app bot ran, drawn as a pill so its history reads at a glance.
+    Note(&'a ToolCall),
 }
+
+/// The prefix of the tools Patchwork's own MCP server gives an agent.
+pub const PATCHWORK_TOOL: &str = "mcp__patchwork__";
 
 /// Calls that keep a plan the composer already shows, so the turn does not repeat it.
 const HIDDEN_TOOLS: [&str; 5] = [
@@ -39,7 +44,8 @@ const HIDDEN_TOOLS: [&str; 5] = [
 ];
 
 /// The reply's parts as steps. A reply saved before parts were kept shows its calls, then its text.
-pub fn steps_of(message: &Message) -> Vec<Step<'_>> {
+/// With `notes`, each Patchwork tool is a [`Step::Note`] of its own.
+pub fn steps_of(message: &Message, notes: bool) -> Vec<Step<'_>> {
     // By id, as a long turn has hundreds of calls to look up.
     let mut tools = std::collections::HashMap::new();
     for t in message
@@ -54,7 +60,7 @@ pub fn steps_of(message: &Message) -> Vec<Step<'_>> {
     if message.parts.is_empty() {
         for t in &message.tools {
             if let Some(tool) = tool(&t.id) {
-                push_entry(&mut steps, Entry::Tool(tool));
+                push_entry(&mut steps, Entry::Tool(tool), notes);
             }
         }
         if !message.text.trim().is_empty() {
@@ -106,13 +112,20 @@ pub fn steps_of(message: &Message) -> Vec<Step<'_>> {
                 None => continue,
             },
         };
-        push_entry(&mut steps, entry);
+        push_entry(&mut steps, entry, notes);
     }
     steps
 }
 
 /// Adds a call or a block of reasoning to the step it continues, or starts a step with it.
-fn push_entry<'a>(steps: &mut Vec<Step<'a>>, entry: Entry<'a>) {
+fn push_entry<'a>(steps: &mut Vec<Step<'a>>, entry: Entry<'a>, notes: bool) {
+    if let Entry::Tool(tool) = entry
+        && notes
+        && tool.name.starts_with(PATCHWORK_TOOL)
+    {
+        steps.push(Step::Note(tool));
+        return;
+    }
     // A subagent is its own card, however many of them ran in a row.
     if let Entry::Tool(tool) = entry
         && tool.subagent.is_some()
@@ -161,7 +174,7 @@ fn size_of(step: &Step) -> usize {
         Step::Agents(tools) => tools.len(),
         Step::Approvals(ids) => ids.len(),
         Step::Text(_) | Step::Plan(_) => 1,
-        Step::Compaction(_) => 0,
+        Step::Compaction(_) | Step::Note(_) => 0,
     }
 }
 
@@ -254,10 +267,10 @@ pub fn fold_head_of(message: &Message, actions: usize, open: bool) -> FoldSummar
 }
 
 /// Which steps a turn shows. A closed fold keeps the steps after it, subagents still working,
-/// questions the agent asked, and compactions.
+/// questions the agent asked, compactions, and Patchwork tool notes.
 pub fn shown(message: &Message, step: &Step, i: usize, hidden: usize) -> bool {
     i >= hidden
-        || matches!(step, Step::Compaction(_))
+        || matches!(step, Step::Compaction(_) | Step::Note(_))
         || matches!(step, Step::Agents(tools) if tools.iter().any(|t| is_running(t)))
         || matches!(step, Step::Approvals(ids) if ids.iter().any(|id| message
             .approvals

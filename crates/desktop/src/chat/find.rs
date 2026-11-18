@@ -52,7 +52,7 @@ fn texts_of(m: &Message) -> Vec<Cow<'_, str>> {
             &m.text,
         ))];
     }
-    steps_of(m)
+    steps_of(m, false)
         .into_iter()
         .filter_map(|s| match s {
             Step::Text(text) => Some(Cow::Borrowed(text)),

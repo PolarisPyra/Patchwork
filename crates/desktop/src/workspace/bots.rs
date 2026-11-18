@@ -66,6 +66,11 @@ impl Workspace {
         }
     }
 
+    /// Whether the open chat is a chat-app bot's, which shows each Patchwork tool as a note.
+    pub fn shows_notes(&self) -> bool {
+        self.chat_bot().is_some_and(|b| b.chat_app.is_some())
+    }
+
     /// Opens bot `id`'s page.
     pub fn open_bot_page(&mut self, id: &str, cx: &mut Context<Self>) {
         self.go_to(&Place::Bot(id.to_string()), cx);

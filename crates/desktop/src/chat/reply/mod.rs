@@ -5,6 +5,7 @@
 
 mod pieces;
 mod frame;
+mod note;
 mod steps;
 
 pub use pieces::{is_open, pieces_of, reply_piece};

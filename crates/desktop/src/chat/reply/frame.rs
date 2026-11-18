@@ -162,7 +162,7 @@ fn notice_text(notice: &ReplyNotice) -> String {
 /// The reply's head line: "Working for 12s" while it streams, else its fold.
 pub(super) fn head(w: &Workspace, m: &Message, t: &Theme, cx: &mut Context<Workspace>) -> Div {
     let streaming = m.status == MessageStatus::Streaming;
-    let steps = steps_of(m);
+    let steps = steps_of(m, w.shows_notes());
     let layout = fold_layout_of(m, &steps, streaming);
     let open = is_open(w, m);
     let head_box = |row: AnyElement| {
