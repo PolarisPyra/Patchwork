@@ -83,6 +83,22 @@ impl Workspace {
                     "git-branch",
                     Act::WorktreeTask,
                 ));
+                if !remote {
+                    let in_place = self.settings.edit_in_place.iter().any(|p| p == id);
+                    items.push(if in_place {
+                        item(
+                            "Give tasks their own worktree",
+                            "git-branch",
+                            Act::EditInPlace(false),
+                        )
+                    } else {
+                        item(
+                            "Edit tasks in the project folder",
+                            "folder",
+                            Act::EditInPlace(true),
+                        )
+                    });
+                }
                 if self.settings.granular_chats {
                     items.push(item("Granular settings…", "gauge", Act::Granular));
                 }
@@ -283,6 +299,11 @@ impl Workspace {
             }
             (Target::Project(id), Act::WorktreeTask) => {
                 return self.new_task_in_worktree(id.clone(), window, cx);
+            }
+            (Target::Project(id), Act::EditInPlace(on)) => {
+                let (id, on) = (id.clone(), *on);
+                let change = move |core: &patchwork_core::Core| core.set_edits_in_place(&id, on);
+                return self.change("change where the project's tasks work", change, cx);
             }
             (Target::Project(id), Act::ChangeFolder) => {
                 return self.change_project_folder(id.clone(), cx);

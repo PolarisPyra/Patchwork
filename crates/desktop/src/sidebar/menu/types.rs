@@ -44,6 +44,8 @@ pub(super) enum Act {
     Export,
     OpenLogs,
     WorktreeTask,
+    /// New tasks in the project edit its folder (true) or get a worktree each (false).
+    EditInPlace(bool),
     ChangeFolder,
     OpenFolder,
     Remove,

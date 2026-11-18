@@ -45,7 +45,7 @@ impl Workspace {
         let (Some(thread), Some(project)) = (&self.thread, self.project()) else {
             return;
         };
-        let root = project.path.clone();
+        let root = self.thread_folder().unwrap_or_else(|| project.path.clone());
         let generation = self.changes_generation;
         let stale: Vec<_> = thread
             .messages

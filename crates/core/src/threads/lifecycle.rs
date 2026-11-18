@@ -241,12 +241,24 @@ impl Core {
         self.runner.cancel(id, None);
         self.runner.forget_jobs(id);
         self.remove_checkpoints(id);
+        self.remove_thread_worktree(id);
         self.remove_api_session(id);
         crate::logging::THREAD_LOG.forget(id);
     }
 
     /// Permanently deletes a thread and its messages.
     pub fn delete_thread(&self, id: &str) {
+        // Its subagents' threads go with it, and stop first: they work in its worktree, which
+        // goes with it.
+        let children: Vec<_> = self
+            .store
+            .threads()
+            .into_iter()
+            .filter(|t| t.parent.as_ref().is_some_and(|p| p.thread_id == id))
+            .collect();
+        for child in &children {
+            self.forget_thread(&child.id);
+        }
         self.forget_thread(id);
         if self
             .store
@@ -258,18 +270,11 @@ impl Core {
         if let Err(e) = self.store.delete_thread(id) {
             log::warn!(error:% = e; "failed to delete thread: {{error}}");
         }
-        // Its subagents' threads go with it.
-        let children = self
-            .store
-            .threads()
-            .into_iter()
-            .filter(|t| t.parent.as_ref().is_some_and(|p| p.thread_id == id));
-        children.for_each(|child| {
-            self.forget_thread(&child.id);
+        for child in &children {
             if let Err(e) = self.store.delete_thread(&child.id) {
                 log::warn!(error:% = e; "failed to delete a subagent's thread: {{error}}");
             }
-        });
+        }
     }
 
     /// Clears a chat: any running turn is cancelled, then its messages and agent session are
