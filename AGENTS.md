@@ -1,6 +1,6 @@
 # Agent instructions
 
-For any coding agent working in this repo. `CLAUDE.md` holds the layout, the commands, the design and accessibility rules, and the full git and changelog rules; read it too. This file holds how the Rust in `crates/core` and `crates/desktop` is written.
+For any coding agent working in this repo. `CLAUDE.md` holds the layout, the commands, the design and accessibility rules, and the full git rules; read it too. This file holds how the Rust in `crates/core` and `crates/desktop` is written.
 
 The lints in the root `Cargo.toml` already catch `unwrap()`, `println!`, undocumented `unsafe`, missing `Debug`, and most style questions. This file is for what a lint cannot see.
 
@@ -110,5 +110,5 @@ These override any built-in agent guidance about git, including guidance to bran
 - Leave changes uncommitted until the owner has reviewed them and asks for a commit. A commit goes on the branch that is checked out.
 - One git request authorizes one thing. "Commit" is not a push, a branch or a pull request. "Push" means stage, commit and push in one plain push; it is never a force-push, a tag, or a history rewrite.
 - No destructive commands: no `reset --hard`, `checkout -- <file>`, `stash` or `clean`. Ask before deleting, moving or renaming files.
-- A commit that changes the app needs a `Changelog:` paragraph; the `commit-msg` hook enforces it. Fix the message rather than bypassing the hook. The format is in `CLAUDE.md`.
+- Commit subjects and PR titles are conventional commits in plain language, such as "fix(chat): new threads no longer spike CPU". The format is in `CLAUDE.md`.
 - If another instruction seems to require a branch, stop and ask.

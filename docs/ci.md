@@ -8,12 +8,11 @@ secrets it reads, and how long it takes.
 | Workflow | Starts on | What it does |
 | --- | --- | --- |
 | CI (`ci.yml`) | Every PR, and each push to `main` that changes more than `site/`, `docs/` or `*.md` | One job, `check`: rustfmt, clippy with `-D warnings`, `cargo test --workspace` |
-| PR Changelog (`pr-changelog.yml`) | A PR opened, edited or pushed to | Runs the `commit-msg` hook on the PR's title and body |
 | Site (`site.yml`) | A PR or a push to `main` that changes `site/`, `.github/deploy/` or the workflow | Checks the pages; on `main`, deploys `site/` to Cloudflare Pages and checks the deployed page |
 | Release (`release.yml`) | A pushed tag `YY.M.N`, or by hand | Writes the notes, builds the three apps, signs and publishes them, commits the version to `main` ([Releasing](release.md)) |
 | Audit (`audit.yml`) | Mondays, and a push to `main` that changes `Cargo.lock` | `cargo audit` |
 
-The ruleset on `main` requires a PR, squash merging, and the `check` and `Changelog` checks.
+The ruleset on `main` requires a PR, squash merging, and the `check` check.
 GitHub offers merge queues only for repositories an organization owns, and this one belongs to a
 user account, so there is none. A PR's checks run on its merge with `main` as it was at the last
 push to the PR, and CI runs once more on `main` after the merge.
@@ -51,7 +50,7 @@ as above.
 | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | Site | Deploying to the `patchwork-site` Pages project. Without the token the workflow fails. |
 | `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Release | Signing the release's files |
 | `RELEASE_DEPLOY_KEY` | Release | Pushing the release commit to `main` without a PR |
-| `DEEPSEEK_API_KEY` | Release | The highlights in the notes; without it the notes are the full list |
+| `ANTHROPIC_API_KEY` | Release | The highlights in the notes; without it the notes are the full list |
 | `DISCORD_RELEASE_WEBHOOK_URL` | Release | Announcing the release; without it nothing is posted |
 
 ## Timings

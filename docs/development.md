@@ -40,9 +40,6 @@ rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl x86_64-pc
 git config core.hooksPath scripts/hooks
 ```
 
-The `commit-msg` hook checks each commit's `Changelog:` paragraph; see
-[Changelog style](changelog-style.md).
-
 The `pre-push` hook runs `cargo fmt --all -- --check`, clippy with `-D warnings` and
 `node --check` on the website's two scripts before each push, on the files in the working tree. It
 takes about 2 seconds when nothing has changed since the last build and about 5 after a change to

@@ -105,11 +105,11 @@ Measure lag in a debug build you started:
 ## Git
 
 - Don't commit until I've reviewed the change and say so, and don't push until I ask.
-- Every change reaches `main` through a PR that is squash-merged, so it lands as one commit whose subject is the PR title plus "(#N)". A ruleset on `main` requires the PR, CI and the PR Changelog check; only the release workflow pushes to `main` directly. One PR per change: two features are two PRs, each with its own entry.
+- Every change reaches `main` through a PR that is squash-merged, so it lands as one commit whose subject is the PR title plus "(#N)". A ruleset on `main` requires the PR and CI; only the release workflow pushes to `main` directly. One PR per change: two features are two PRs.
 - "Push to git", or just "push", covers the whole job without asking again or waiting for review:
   1. Run `git pull --rebase origin main` (each release's workflow pushes "Release YY.M.N" to `main`, so the remote is often one ahead), then make a branch per change from `origin/main`.
-  2. Commit each change on its branch with its `Changelog:` paragraph, and push the branch.
-  3. Open the PR with `gh pr create`: the title is the commit subject, and the body fills in `.github/pull_request_template.md`, with the same `Changelog:` line at the start of a line. The release notes read it from there.
+  2. Commit each change on its branch and push the branch.
+  3. Open the PR with `gh pr create`: the title is the commit subject, and the body fills in `.github/pull_request_template.md`. The release notes read both.
   4. Run `gh pr merge --squash --auto --delete-branch`, so it merges once the checks pass.
   5. Switch back to `main`, run `git pull --rebase origin main`, and `git cherry-pick` each branch's commit, so the working tree still has the change while its PR waits on the checks. A later `git pull --rebase origin main` drops that commit once the squash-merge is on the remote.
 
@@ -118,9 +118,9 @@ Measure lag in a debug build you started:
   That is all a push is. Say what went up.
 - "Release" means: run `git pull --rebase origin main`, then tag `origin/main` (local `main` may hold a commit whose PR has not merged) with the next `YY.M.N` (the next N this month, or 0 in a new month) and push the tag. The Release workflow writes the notes, builds and publishes, then commits the version and the `CHANGELOG.md` section to `main` as "Release YY.M.N" (`docs/release.md`). Never set the version or write the changelog section yourself.
 - Force-pushing, moving or deleting a pushed tag, and rewriting pushed history still need their own ask.
-- Commit subjects are short, sentence-case, and imperative, with no prefix. Describe the user-visible change, for example "Nudge the header project dropdown 2px left".
-- `CHANGELOG.md` is user-facing: the app shows it in Settings → Updates. Every commit that changes the app needs a paragraph in its message starting with `Changelog:` and its group (Added, Changed, Fixed, Removed, or Security), written for users by the rules in `docs/changelog-style.md`: what they see or can do now, where, and what is different, for example "Changelog: Changed: Every loading indicator now uses the steady spinner from the thread list: plan steps, background tasks, … The old one rotated and looked like it shook." A Fixed entry says what went wrong and what happens now, never "again" or "back". Run every `Changelog:` paragraph through the declauding skill before committing it. A change users can't notice gets `Changelog: none`, and so does a follow-up to a change that hasn't been released yet. The `commit-msg` hook (`git config core.hooksPath scripts/hooks`) enforces both; if it turns a commit down, fix the message rather than bypassing the hook.
-- Keep internal CI and tooling changes out of the changelog. Commit them separately from app changes, so they only touch `.github/`, `scripts/`, `docs/`, or `*.md`, which need no `Changelog:` paragraph. If an internal change has to touch app files, write `Changelog: none`.
+- Commit subjects and PR titles are conventional commits in plain language: `type(scope): what users see now`, for example "fix(chat): new threads no longer spike CPU". The type is `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `ci`, or `chore`; the scope is the area (`chat`, `sidebar`, `settings`, `core`, `release`, …). The release notes count the `fix` and `perf` commits no highlight covers.
+- The PR body says the problem in a sentence or two, then how the change fixes it, as `.github/pull_request_template.md` lays out. The release highlights read its first 300 characters, so lead with what users see. Run it through the declauding skill before opening the PR.
+- Keep internal CI and tooling changes in their own commits, typed `ci`, `docs`, or `chore`.
 - Never watch GitHub Actions runs unless I ask.
 
 ## Finishing

@@ -23,28 +23,26 @@ const MAX_CHANGES: usize = 10;
 
 /// Shapes a release's section of CHANGELOG.md into the notes the app shows.
 ///
-/// The section's folded "Full changelog" is unfolded, so a release with no highlights still
-/// shows its changes, and the list stops after [`MAX_CHANGES`] entries.
+/// The notes end where the folded "Full changelog" starts, and link to the release's page for it.
+/// Notes without highlights are the full list alone, which stops after [`MAX_CHANGES`] entries.
 #[must_use]
 pub fn notes(version: &str, body: &str) -> ReleaseNotes {
-    // A section written without highlights is the list alone, with no fold around it.
-    let mut in_list = !body.contains("<details>");
+    let page = format!("https://github.com/PolarisPyra/Patchwork/releases/tag/{version}");
+    if let Some((summary, _)) = body.split_once("<details>") {
+        return ReleaseNotes {
+            text: summary.trim().to_string(),
+            more: Some(page),
+        };
+    }
     let mut changes = 0;
     let mut text = String::new();
     for line in body.lines() {
         let line = line.trim_end();
-        if line == "<details>" {
-            in_list = true;
-            continue;
-        }
-        if line == "</details>" || line.starts_with("<summary>") {
-            continue;
-        }
-        if in_list && line.starts_with("- ") {
+        if line.starts_with("- ") || line.starts_with("* ") {
             changes += 1;
         }
-        // Past the limit, the groups' headings go with their entries.
-        if changes > MAX_CHANGES || (changes == MAX_CHANGES && line.starts_with("### ")) {
+        // Past the limit, the headings go with their entries.
+        if changes > MAX_CHANGES || (changes == MAX_CHANGES && line.starts_with('#')) {
             continue;
         }
         if line.is_empty() && (text.is_empty() || text.ends_with("\n\n")) {
@@ -55,8 +53,7 @@ pub fn notes(version: &str, body: &str) -> ReleaseNotes {
     }
     ReleaseNotes {
         text: text.trim_end().to_string(),
-        more: (changes > MAX_CHANGES)
-            .then(|| format!("https://github.com/PolarisPyra/Patchwork/releases/tag/{version}")),
+        more: (changes > MAX_CHANGES).then_some(page),
     }
 }
 
